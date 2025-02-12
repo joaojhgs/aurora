@@ -1,17 +1,10 @@
-import getpass
+from dotenv import load_dotenv, dotenv_values
 import os
-
-def _set_env(var: str):
-    if not os.environ.get(var):
-        os.environ[var] = getpass.getpass(f"{var}: ")
-
 
 if __name__ == '__main__':
     print("Starting...")
-
     # Make sure the OPENAI_API_KEY is set before importing modules that will use it
-    _set_env("OPENAI_API_KEY")
-
+    load_dotenv()
     from RealtimeSTT import AudioToTextRecorder
     from modules.chatbot_graph import stream_graph_updates
 
@@ -48,9 +41,8 @@ if __name__ == '__main__':
         stream_graph_updates(text)
         
     with AudioToTextRecorder(
-        spinner=False,
         wakeword_backend="oww",
-        model="small",
+        model="medium",
         language="pt",
         wake_words_sensitivity=0.35,
         openwakeword_model_paths="modules/openwakeword/jarvis.onnx",

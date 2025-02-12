@@ -14,7 +14,7 @@ class State(TypedDict):
 
 graph_builder = StateGraph(State)
 
-llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ["OPENAI_API_KEY"])
+llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ['OPEN_API_KEY'])
 
 def chatbot(state: State):
     return {"messages": [llm.invoke(state["messages"])]}
