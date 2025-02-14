@@ -1,13 +1,13 @@
 from dotenv import load_dotenv, dotenv_values
-import os
+from modules.tts import play
 
 if __name__ == '__main__':
     print("Starting...")
     # Make sure the OPENAI_API_KEY is set before importing modules that will use it
     load_dotenv()
     from RealtimeSTT import AudioToTextRecorder
-    from modules.chatbot_graph import stream_graph_updates
-
+    from modules.langgraph.chatbot import stream_graph_updates
+    
     detected = False
 
     say_wakeword_str = "Listening for wakeword 'Jarvis'."
