@@ -1,4 +1,4 @@
-from dotenv import load_dotenv, dotenv_values
+from dotenv import load_dotenv
 from modules.tts import play
 
 if __name__ == '__main__':
@@ -7,7 +7,7 @@ if __name__ == '__main__':
     load_dotenv()
     from RealtimeSTT import AudioToTextRecorder
     from modules.langgraph.chatbot import stream_graph_updates
-    
+    play("Meu nome é jarvis, como posso te ajudar?")
     detected = False
 
     say_wakeword_str = "Listening for wakeword 'Jarvis'."
@@ -45,7 +45,7 @@ if __name__ == '__main__':
         model="medium",
         language="pt",
         wake_words_sensitivity=0.35,
-        openwakeword_model_paths="modules/openwakeword/jarvis.onnx",
+        openwakeword_model_paths="modules/voice_models/jarvis.onnx",
         on_wakeword_detected=on_wakeword_detected,
         on_recording_start=on_recording_start,
         on_recording_stop=on_recording_stop,

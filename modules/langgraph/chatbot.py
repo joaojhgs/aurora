@@ -9,6 +9,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.base import BaseStore
 from modules.langgraph.memory_store import store
+from modules.tts import play
+from langchain_core.messages.ai import AIMessageChunk
+
 graph_builder = StateGraph(State)
 
 # Init tools
@@ -72,11 +75,16 @@ except Exception:
 
 # The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
 def stream_graph_updates(user_input: str):
-    for event in graph.stream(
-        {"messages": [{"role": "user", "content": user_input}]},
-        # Hard coded thread id, it will keep all interactions saved in memory in the same thread
-        {"configurable": {"thread_id": "1"}}
+    def generate_responses(user_input: str):
+        for message in graph.stream(
+            input={"messages": [{"role": "user", "content": user_input}]},
+            # Hard coded thread id, it will keep all interactions saved in memory in the same thread
+            config={"configurable": {"thread_id": "1"}},
+            stream_mode="messages"
         ):
-        for value in event.values():
-            print("Assistant:", value["messages"][-1].content)
+            if isinstance(message[0], AIMessageChunk):
+                print(message[0].content)
+                yield message[0].content
+    # generate_responses(user_input)
+    play(generate_responses(user_input))
     
