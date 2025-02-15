@@ -2,15 +2,17 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
 import os
 
-from modules.langgraph.tools.brave_search import init_brave_search_tool
+from modules.langgraph.tools.brave_search import search_brave_tool
+from modules.langgraph.tools.upsert_memory import upsert_memory_tool
 from modules.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
-
+from langgraph.store.base import BaseStore
+from modules.langgraph.memory_store import store
 graph_builder = StateGraph(State)
 
 # Init tools
-tools = [init_brave_search_tool()]
+tools = [search_brave_tool, upsert_memory_tool]
 
 # Init LLM
 llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ['OPENAI_API_KEY'])
@@ -23,8 +25,24 @@ tool_node = ToolNode(tools=tools)
 graph_builder.add_node("tools", tool_node)
 
 # Def the chatbot node
-def chatbot(state: State):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+def chatbot(state: State, store: BaseStore):
+    # Vector search for the history of memories
+    
+    items = store.search(
+        ("main", "memories"), query=state["messages"][-1].content, limit=3
+    )
+    print("memory items", items)
+    memories = "\n".join(f"{item.value['text']} (score: {item.score})" for item in items)
+    memories = f"## Similar memories\n{memories}" if memories else ""
+    
+    return {
+            "messages": [
+                llm_with_tools.invoke([
+                    {"role": "system", "content": f"You are a helpful assistant called Jarvis.\n{memories}"},
+                    *state["messages"]
+                ])
+            ]
+        }
 
 graph_builder.add_node("chatbot", chatbot)
 
@@ -42,7 +60,7 @@ graph_builder.set_entry_point("chatbot")
 memory = MemorySaver()
 
 # Compile the graph
-graph = graph_builder.compile(checkpointer=memory)
+graph = graph_builder.compile(checkpointer=memory, store=store)
 
 # Save the graph
 try:
@@ -61,12 +79,4 @@ def stream_graph_updates(user_input: str):
         ):
         for value in event.values():
             print("Assistant:", value["messages"][-1].content)
-
-# def stream_graph_updates_with_text(user_input: str):
-#     print("Assistant:")
-#     def generator():
-#         for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
-#             for value in event.values():
-#                 print(value["messages"][-1].content)
-#                 yield value["messages"][-1].content
     
