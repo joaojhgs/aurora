@@ -1,56 +1,24 @@
-from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
-import os
-
-from modules.langgraph.tools.brave_search import search_brave_tool
-from modules.langgraph.tools.upsert_memory import upsert_memory_tool
-from modules.langgraph.tools.openrecall_search import openrecall_search_tool
-
-
 from modules.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.store.base import BaseStore
+from modules.langgraph.agents.chatbot import chatbot
+from modules.langgraph.tools.tools import tools
+
 from modules.langgraph.memory_store import store
 from modules.text_to_speech.tts import play
 from langchain_core.messages.ai import AIMessageChunk
 
 graph_builder = StateGraph(State)
 
-# Init tools
-tools = [search_brave_tool, upsert_memory_tool, openrecall_search_tool]
-
-# Init LLM
-llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ['OPENAI_API_KEY'])
-
-# Bind tools to the LLM
-llm_with_tools = llm.bind_tools(tools)
-
 # Init tools node
 tool_node = ToolNode(tools=tools)
 graph_builder.add_node("tools", tool_node)
 
-# Def the chatbot node
-def chatbot(state: State, store: BaseStore):
-    # Vector search for the history of memories
-    
-    items = store.search(
-        ("main", "memories"), query=state["messages"][-1].content, limit=3
-    )
-    memories = "\n".join(f"{item.value['text']} (score: {item.score})" for item in items)
-    memories = f"## Similar memories\n{memories}" if memories else ""
-    
-    return {
-            "messages": [
-                llm_with_tools.invoke([
-                    {"role": "system", "content": f"You are a helpful assistant called Jarvis.\n{memories}"},
-                    *state["messages"]
-                ])
-            ]
-        }
-
+# Add the chatbot agent node
 graph_builder.add_node("chatbot", chatbot)
 
+# Connect the chatbot agent and the tool nodes
 graph_builder.add_conditional_edges(
     "chatbot",
     tools_condition,

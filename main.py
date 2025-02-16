@@ -8,7 +8,7 @@ if __name__ == '__main__':
     # Make sure the OPENAI_API_KEY is set before importing modules that will use it
     load_dotenv()
     from RealtimeSTT import AudioToTextRecorder
-    from modules.langgraph.chatbot import stream_graph_updates
+    from modules.langgraph.graph import stream_graph_updates
     play("Meu nome é jarvis, como posso te ajudar?")
     
     open_recall_thread = Thread(target=openrecall_app)
