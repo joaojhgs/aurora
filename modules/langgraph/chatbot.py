@@ -75,7 +75,7 @@ except Exception:
 
 # The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
 def stream_graph_updates(user_input: str):
-    def generate_responses(user_input: str):
+    def generate_response(user_input: str):
         for message in graph.stream(
             input={"messages": [{"role": "user", "content": user_input}]},
             # Hard coded thread id, it will keep all interactions saved in memory in the same thread
@@ -85,6 +85,7 @@ def stream_graph_updates(user_input: str):
             if isinstance(message[0], AIMessageChunk):
                 print(message[0].content)
                 yield message[0].content
-    # generate_responses(user_input)
-    play(generate_responses(user_input))
+    response = generate_response(user_input)
+    print("Jarvis:", response)
+    play(response)
     

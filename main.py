@@ -15,9 +15,6 @@ if __name__ == '__main__':
     def on_wakeword_detected():
         global detected
         detected = True
-
-    def on_recording_stop():
-        print ("Transcribing...")
     
     def on_wakeword_timeout():
         global detected
@@ -27,13 +24,6 @@ if __name__ == '__main__':
 
     def on_wakeword_detection_start():
         print(f"\n{say_wakeword_str}")
-
-    def on_recording_start():
-        print ("Recording...")
-
-    def on_vad_detect_start():
-        print()
-        print()
 
     def text_detected(text):
         print(f">> {text}")
@@ -47,11 +37,8 @@ if __name__ == '__main__':
         wake_words_sensitivity=0.35,
         openwakeword_model_paths="modules/voice_models/jarvis.onnx",
         on_wakeword_detected=on_wakeword_detected,
-        on_recording_start=on_recording_start,
-        on_recording_stop=on_recording_stop,
         on_wakeword_timeout=on_wakeword_timeout,
         on_wakeword_detection_start=on_wakeword_detection_start,
-        on_vad_detect_start=on_vad_detect_start,
         wake_word_buffer_duration=1,
         ) as recorder:
 
