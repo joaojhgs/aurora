@@ -1,7 +1,8 @@
-from RealtimeTTS import TextToAudioStream, PiperEngine, PiperVoice
+from RealtimeTTS import TextToAudioStream, PiperVoice
+from modules.text_to_speech.piper_engine import PiperEngine
 import os
 
-file_root = os.path.dirname(os.path.abspath(__file__))
+file_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 voice = PiperVoice(
     model_file=file_root + "/voice_models/pt_BR-faber-medium.onnx",

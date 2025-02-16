@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from modules.tts import play
+from modules.text_to_speech.tts import play
 
 if __name__ == '__main__':
     print("Starting...")

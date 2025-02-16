@@ -9,7 +9,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.base import BaseStore
 from modules.langgraph.memory_store import store
-from modules.tts import play
+from modules.text_to_speech.tts import play
 from langchain_core.messages.ai import AIMessageChunk
 
 graph_builder = StateGraph(State)
