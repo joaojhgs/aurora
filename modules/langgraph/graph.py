@@ -1,8 +1,9 @@
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, END
 from modules.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 from modules.langgraph.agents.chatbot import chatbot
+from modules.langgraph.agents.voice_assistant import voice_assistant
 from modules.langgraph.tools.tools import tools
 
 from modules.langgraph.memory_store import store
@@ -18,6 +19,14 @@ graph_builder.add_node("tools", tool_node)
 # Add the chatbot agent node
 graph_builder.add_node("chatbot", chatbot)
 
+# Add the voice assistant agent node
+# graph_builder.add_node("voice_assistant", voice_assistant)
+
+# def custom_router(state: State):
+#     if(tools_condition(state) == 'tools'):
+#         return "tools"
+#     return "voice_assistant"
+
 # Connect the chatbot agent and the tool nodes
 graph_builder.add_conditional_edges(
     "chatbot",
@@ -26,6 +35,9 @@ graph_builder.add_conditional_edges(
 
 # Add an edge from the tools node to the chatbot node
 graph_builder.add_edge("tools", "chatbot")
+
+# # Conectar o voice_agent ao final do grafo
+# graph_builder.add_edge("voice_assistant", END)
 
 # Set the entry point to the chatbot
 graph_builder.set_entry_point("chatbot")
@@ -53,6 +65,7 @@ def stream_graph_updates(user_input: str):
             stream_mode="messages"
         ):
             if isinstance(message[0], AIMessageChunk):
+                
                 yield message[0].content
     response = ''.join(chunk for chunk in generate_response(user_input))
     
