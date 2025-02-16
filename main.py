@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
 from modules.text_to_speech.tts import play
+from modules.openrecall.openrecall.app import init_main as openrecall_app
+from threading import Thread
 
 if __name__ == '__main__':
     print("Starting...")
@@ -8,6 +10,10 @@ if __name__ == '__main__':
     from RealtimeSTT import AudioToTextRecorder
     from modules.langgraph.chatbot import stream_graph_updates
     play("Meu nome é jarvis, como posso te ajudar?")
+    
+    open_recall_thread = Thread(target=openrecall_app)
+    open_recall_thread.start()
+    
     detected = False
 
     say_wakeword_str = "Listening for wakeword 'Jarvis'."

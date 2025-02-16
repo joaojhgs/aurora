@@ -1,0 +1,3 @@
+[submodule "modules/openrecall"]
+	path = modules/openrecall
+	url = https://github.com/openrecall/openrecall.git
