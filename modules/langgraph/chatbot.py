@@ -4,6 +4,9 @@ import os
 
 from modules.langgraph.tools.brave_search import search_brave_tool
 from modules.langgraph.tools.upsert_memory import upsert_memory_tool
+from modules.langgraph.tools.openrecall_search import openrecall_search_tool
+
+
 from modules.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
@@ -15,7 +18,7 @@ from langchain_core.messages.ai import AIMessageChunk
 graph_builder = StateGraph(State)
 
 # Init tools
-tools = [search_brave_tool, upsert_memory_tool]
+tools = [search_brave_tool, upsert_memory_tool, openrecall_search_tool]
 
 # Init LLM
 llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ['OPENAI_API_KEY'])
@@ -34,7 +37,6 @@ def chatbot(state: State, store: BaseStore):
     items = store.search(
         ("main", "memories"), query=state["messages"][-1].content, limit=3
     )
-    print("memory items", items)
     memories = "\n".join(f"{item.value['text']} (score: {item.score})" for item in items)
     memories = f"## Similar memories\n{memories}" if memories else ""
     
@@ -83,9 +85,9 @@ def stream_graph_updates(user_input: str):
             stream_mode="messages"
         ):
             if isinstance(message[0], AIMessageChunk):
-                print(message[0].content)
                 yield message[0].content
-    response = generate_response(user_input)
+    response = ''.join(chunk for chunk in generate_response(user_input))
+    
     print("Jarvis:", response)
     play(response)
     
