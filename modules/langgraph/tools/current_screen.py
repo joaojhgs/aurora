@@ -11,4 +11,5 @@ def current_screen_tool(
     Or if the LLM deems the current screen context can be usefull to answer a question
     """
     entries = record_current_screenshot()
+    print(entries)
     return entries
