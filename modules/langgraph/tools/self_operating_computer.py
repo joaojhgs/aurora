@@ -10,7 +10,9 @@ def self_operating_computer_tool(
     """
     This tool allow the LLM to pass forward the user request to another agent called "self-operating-computer", which sole purpose it to control the computer and achieve it's objective
     The LLM should use this tool whenever it deems the user is asking for something that can be achieved by controlling the computer
-    The input should be the user query turned into an "objective
+    The input should be the user query turned into an "objective"
+    This tool should be called only once with the full objective alongside all necessary context/text, not split in parts
+    Ex: "Save the following poem using word: "Lorem Ipsum Dolor Sit Amet"
     """
     # Start the self-operating-computer agent in a new thread
     thread = Thread(target=operate, args=("o1-with-ocr", objective, False, False))
