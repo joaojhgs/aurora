@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-# from modules.openrecall.openrecall.database import search_entries
+from modules.openrecall.openrecall.database import search_entries
 
 @tool
 def openrecall_search_tool(
@@ -11,6 +11,6 @@ def openrecall_search_tool(
     The LLM should fill the content input with the user query adapted for a semantic search in the database
     """
 
-    # results = search_entries(input, 3)
-    # filtered_results = [(app, title, text, timestamp) for app, title, text, timestamp, id, embedding in results]
-    # return filtered_results   
+    results = search_entries(input, 3)
+    filtered_results = [(app, title, text, timestamp) for app, title, text, timestamp, id, embedding in results]
+    return filtered_results   
