@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from modules.text_to_speech.tts import play
-from modules.openrecall.openrecall.app import init_main as openrecall_app
+# from modules.openrecall.openrecall.app import init_main as openrecall_app
 from threading import Thread
 
 if __name__ == '__main__':
@@ -11,8 +11,8 @@ if __name__ == '__main__':
     from modules.langgraph.graph import stream_graph_updates
     play("Meu nome é jarvis, como posso te ajudar?")
     
-    open_recall_thread = Thread(target=openrecall_app)
-    open_recall_thread.start()
+    # open_recall_thread = Thread(target=openrecall_app)
+    # open_recall_thread.start()
     
     detected = False
 

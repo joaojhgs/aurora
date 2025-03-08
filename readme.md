@@ -59,8 +59,27 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 Install dependencies:
 
+Install PortAudio:
+
+```bash
+sudo apt install portaudio19-dev
+```
+Or
+
+```bash
+brew install portaudio
+brew link portaudio
+```
+
+Install all Lib requirements:
 ```bash
 pip install -r requirements.txt
+```
+
+Optionally install cuda libraries for faster inference:
+```bash
+sudo apt-get install libcudnn9-cuda-12
+pip install torch==2.6.0+cu118 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu118
 ```
 
 Run the assistant:
