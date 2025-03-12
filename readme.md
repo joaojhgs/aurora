@@ -50,38 +50,38 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 ---
 
 ## TODO LIST
-- [] Update all current tools to improve it further from MVP
-   - [] Add OmniParserV2 and Magma using llama.cpp server to allow local usage and better interactions with the screenshots and openrecall
-   - [] Improve openrecall search feature
+- [ ] Update all current tools to improve it further from MVP
+   - [ ] Add OmniParserV2 and Magma using llama.cpp server to allow local usage and better interactions with the screenshots and openrecall
+   - [ ] Improve openrecall search feature
       - [] Add to the embbedings a simple AI generated description of the screenshot besides the OCR (using Magma)
-      - [] Potentially replace openrecall doctr OCR with OmniParserV2
-      - [] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
-   - [] Update openrecall code to be able to detect active window titles on linux as well
-   - [] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
-- [] Add productivity tools
-   - [] Jira
-   - [] Slack
-   - [] Github
-   - [] Calendar
-   - [] Gmail
-- [] Upgrade logic that defines which tools are available to the coordinator agent
-   - [] Use tool descriptions to RAG match what are the possible best tools for the user request
+      - [ ] Potentially replace openrecall doctr OCR with OmniParserV2
+      - [ ] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
+   - [ ] Update openrecall code to be able to detect active window titles on linux as well
+   - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
+- [ ] Add productivity tools
+   - [ ] Jira
+   - [ ] Slack
+   - [ ] Github
+   - [ ] Calendar
+   - [ ] Gmail
+- [ ] Upgrade logic that defines which tools are available to the coordinator agent
+   - [ ] Use tool descriptions to RAG match what are the possible best tools for the user request
       (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
-- [] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
+- [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
 
 # Long term vision:
 
-- [] Turn Aurora into a server-client architecture
-   - [] Allow server to receive and process audio using the RealtimeSTT and stream back the TTS audio to the client
-   - [] Allow clients to have it's own local tools that can be called by the server (either custom framework or using MCP)
-   - [] Create code for low-cost physical clients such as ESP32
+- [ ] Turn Aurora into a server-client architecture
+   - [ ] Allow server to receive and process audio using the RealtimeSTT and stream back the TTS audio to the client
+   - [ ] Allow clients to have it's own local tools that can be called by the server (either custom framework or using MCP)
+   - [ ] Create code for low-cost physical clients such as ESP32
 
 The Idea here is to allow for low-cost and easily built interfaces that you can interact with your Jarvis across your home and private network.
 
 Also by allowing client side tools aside from the ones we can use on the Desktop, we allow the assistant to potentially control real world appliances, or even multiple devices/desktops.
 
-- [] Integrations with Home Assistant
-   - [] Allow for tool calling with smart home appliances
+- [ ] Integrations with Home Assistant
+   - [ ] Allow for tool calling with smart home appliances
 
 ## Installation and Usage
 
