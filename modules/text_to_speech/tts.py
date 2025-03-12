@@ -13,5 +13,18 @@ engine = PiperEngine(piper_path="piper", voice=voice)
 stream = TextToAudioStream(engine, frames_per_buffer=256)
 
 def play (text):
+    # Stop any async audio and clears any text that was in queue
+    stream.stop()
     stream.feed(text)
     stream.play_async()
+
+def stop():
+    stream.stop()
+
+def pause():
+    # Pauses allowing it to resume later
+    stream.pause()
+
+def resume():
+    # Resume speaking previous text
+    stream.resume()
