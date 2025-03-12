@@ -7,6 +7,8 @@ from typing import Optional
 from RealtimeTTS import BaseEngine
 from queue import Queue
 
+from modules.helpers.getUseCuda import getUseCuda
+
 # This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
 class PiperVoice:
     """
@@ -104,6 +106,10 @@ class PiperEngine(BaseEngine):
         # If a JSON config file is available, add it.
         if self.voice.config_file:
             cmd_list.extend(["-c", self.voice.config_file])
+
+        # If CUDA is set for TTS
+        if(getUseCuda('USE_CUDA_TTS')):
+            cmd_list.extend(["--cuda"])
 
         # Debug: show the exact command (helpful for troubleshooting)
         if self.debug:

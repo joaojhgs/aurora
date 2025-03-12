@@ -112,8 +112,10 @@ pip install -r requirements.txt
 
 Optionally install cuda libraries for faster inference:
 ```bash
-sudo apt-get install libcudnn9-cuda-12
-pip install torch==2.6.0+cu118 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu118
+sudo apt-get install libcudnn9-cuda-11
+pip install torch==2.6.0+cu118 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
+# Install lib for PiperTTS with CUDA
+pip install onnxruntime-gpu
 ```
 
 Run the assistant:
