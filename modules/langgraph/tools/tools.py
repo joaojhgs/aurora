@@ -26,3 +26,7 @@ if(os.environ['BRAVE_SEARCH_ACTIVATE_PLUGIN'] == 'true'):
 if(os.environ['GMAIL_ACTIVATE_PLUGIN'] == "true"):
     from modules.langgraph.tools.gmail_toolkit import gmail_tools
     tools.extend(gmail_tools)
+
+if(os.environ['GCALENDAR_ACTIVATE_PLUGIN'] == "true"):
+    from modules.langgraph.tools.gcalendar_toolkit import gcalendar_tools
+    tools.extend(gcalendar_tools)
