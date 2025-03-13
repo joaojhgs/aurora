@@ -42,10 +42,10 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 - **Speech-to-Text**: [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS) (Uses whisper under the hood)
 - **Large Language Model**: [Llama 3](https://ai.meta.com/llama/) or [Mistral 7B](https://mistral.ai/)
 - **Tool Orchestration**: [LangChain](https://www.langchain.com/) and [Langgraph](https://langchain-ai.github.io/langgraph/)
-- **Semantic Search**: [OpenRecall](https://github.com/open-recall/open-recall)
-- **Browser Automation**: [browser-use](https://github.com/browser-use/browser-use)
+- **Semantic Timeline Search**: [OpenRecall](https://github.com/open-recall/open-recall)
+- **Browser Automation**: [browser-use](https://github.com/browser-use/browser-use) (Coming soon)
 - **Text-to-Speech**: [Piper](https://github.com/rhasspy/piper)
-- **Audio Processing**: [PyAudio](https://pypi.org/project/PyAudio/) or [SoundDevice](https://python-sounddevice.readthedocs.io/)
+- **Audio Processing**: [PyAudio](https://pypi.org/project/PyAudio/)
 
 ---
 
