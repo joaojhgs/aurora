@@ -175,3 +175,7 @@ cython_debug/
 .pypirc
 
 screenshots
+
+*credentials.json
+
+*token.json
