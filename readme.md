@@ -59,11 +59,11 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - [ ] Update openrecall code to be able to detect active window titles on linux as well
    - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
 - [ ] Add productivity tools
-   - [ ] Jira
+   - [x] Jira
    - [ ] Slack
-   - [ ] Github
-   - [ ] Calendar
-   - [ ] Gmail
+   - [x] Github
+   - [x] Calendar
+   - [x] Gmail
 - [ ] Upgrade logic that defines which tools are available to the coordinator agent
    - [ ] Use tool descriptions to RAG match what are the possible best tools for the user request
       (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
@@ -88,7 +88,7 @@ Also by allowing client side tools aside from the ones we can use on the Desktop
 1. Clone the repository:
    ```bash
    git clone https://github.com/joaojhgs/aurora.git
-   cd aurora-voice-assistant
+   cd aurora
    ```
 
 Install dependencies:

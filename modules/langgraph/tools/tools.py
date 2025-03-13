@@ -30,3 +30,7 @@ if(os.environ['GMAIL_ACTIVATE_PLUGIN'] == "true"):
 if(os.environ['GCALENDAR_ACTIVATE_PLUGIN'] == "true"):
     from modules.langgraph.tools.gcalendar_toolkit import gcalendar_tools
     tools.extend(gcalendar_tools)
+
+if(os.environ['GITHUB_ACTIVATE_PLUGIN'] == "true"):
+    from modules.langgraph.tools.github_toolkit import github_tools
+    tools.extend(github_tools)
