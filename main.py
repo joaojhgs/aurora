@@ -1,8 +1,7 @@
 from dotenv import load_dotenv
 from modules.helpers.getUseCuda import getUseCuda
 from modules.text_to_speech.tts import pause, play
-# from modules.openrecall.openrecall.app import init_main as openrecall_app
-# from threading import Thread
+
 import os
 
 if __name__ == '__main__':
@@ -13,8 +12,11 @@ if __name__ == '__main__':
     from modules.langgraph.graph import stream_graph_updates
     play("Meu nome é jarvis, como posso te ajudar?")
     
-    # open_recall_thread = Thread(target=openrecall_app)
-    # open_recall_thread.start()
+    if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
+        from modules.openrecall.openrecall.app import init_main as openrecall_app
+        from threading import Thread
+        open_recall_thread = Thread(target=openrecall_app, daemon=True)
+        open_recall_thread.start()
     
     detected = False
 
@@ -50,7 +52,6 @@ if __name__ == '__main__':
         on_wakeword_detection_start=on_wakeword_detection_start,
         wake_word_buffer_duration=1,
         device=getUseCuda("USE_CUDA_STT"),
-        gpu_device_index=0 if os.environ["USE_CUDA_STT"].lower() == "true" else -1,
         ) as recorder:
 
         while (True):
