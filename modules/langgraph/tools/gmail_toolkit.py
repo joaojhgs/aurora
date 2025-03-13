@@ -1,17 +1,10 @@
 from langchain_google_community import GmailToolkit
 from langchain_google_community.gmail.utils import (
     build_resource_service,
-    get_gmail_credentials,
 )
-import os
+from modules.helpers.getGoogleCredentials import google_credentials
 
-credentials = get_gmail_credentials(
-    token_file=os.environ['GMAIL_TOKEN_FILE'],
-    scopes=["https://mail.google.com/"],
-    client_secrets_file=os.getenv('GMAIL_CREDENTIALS_FILE'),
-)
-
-api_resource = build_resource_service(credentials=credentials)
+api_resource = build_resource_service(credentials=google_credentials)
 
 toolkit = GmailToolkit()
 
