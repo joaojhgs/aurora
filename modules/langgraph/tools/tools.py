@@ -26,6 +26,10 @@ if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
 if(os.environ['BRAVE_SEARCH_ACTIVATE_PLUGIN'] == 'true'):
     from modules.langgraph.tools.brave_search import search_brave_tool
     tools.append(search_brave_tool)
+else:
+    from modules.langgraph.tools.duckduckgo_search import duckduckgo_search_tool
+    tools.append(duckduckgo_search_tool)
+
 
 if(os.environ['GMAIL_ACTIVATE_PLUGIN'] == "true"):
     from modules.langgraph.tools.gmail_toolkit import gmail_tools
