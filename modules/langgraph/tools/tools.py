@@ -39,6 +39,10 @@ if(os.environ['GITHUB_ACTIVATE_PLUGIN'] == "true"):
     from modules.langgraph.tools.github_toolkit import github_tools
     tools.extend(github_tools)
 
+if(os.environ['SLACK_ACTIVATE_PLUGIN'] == "true"):
+    from modules.langgraph.tools.slack_toolkit import slack_tools
+    tools.extend(slack_tools)
+
 tool_lookup: Dict[str, Callable] = {}
 
 for tool in tools:
@@ -68,7 +72,7 @@ def get_tools(query: str, top_k: int = 5) -> List[Callable]:
         query=query,
         limit=top_k
     )
-    
+
     # Get unique tool names from results
     tool_names = set(result.key for result in results)
     # Return corresponding tool functions
