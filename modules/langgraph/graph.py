@@ -4,7 +4,6 @@ from modules.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 from modules.langgraph.agents.chatbot import chatbot
-from modules.langgraph.agents.voice_assistant import voice_assistant
 from modules.langgraph.tools.tools import tools
 from pydantic import BaseModel
 from langchain_core.messages import AnyMessage
@@ -21,14 +20,6 @@ graph_builder.add_node("tools", tool_node)
 
 # Add the chatbot agent node
 graph_builder.add_node("chatbot", chatbot)
-
-# Add the voice assistant agent node
-# graph_builder.add_node("voice_assistant", voice_assistant)
-
-# def custom_router(state: State):
-#     if(tools_condition(state) == 'tools'):
-#         return "tools"
-#     return "voice_assistant"
 
 # Connect the chatbot agent and the tool nodes
 graph_builder.add_conditional_edges(
