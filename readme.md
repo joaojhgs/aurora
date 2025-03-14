@@ -4,10 +4,10 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 ---
 
-## Planned Features
+## Features
 
 1. **Wakeword Detection**:
-   - Activate the assistant with a custom wakeword (e.g., "Aurora").
+   - Activate the assistant with a custom wakeword (e.g., "Jarvis").
    - Offline and low-latency detection using **OpenWakeWord**.
 
 2. **Real-Time Speech-to-Text (STT)**:
@@ -34,6 +34,11 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - No cloud dependencies or data sharing.
    - Kinda, using OpenAI while development, but local LLMs are nativelly supported with langchain
 
+8. **Modular Tooling and Integrations**:
+   - All integrations and tools are available through *plugins* which you can activate through the envs
+   - Only install dependencies for the plugins you'll want to use, keeping the sizes low
+   - Easy setup, just need to activate it and fill the correct env credentials if necessary
+
 ---
 
 ## Libraries and Tools
@@ -58,14 +63,14 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
       - [ ] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
    - [ ] Update openrecall code to be able to detect active window titles on linux as well
    - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
-- [ ] Add productivity tools
+- [x] Add productivity tools
    - [x] Jira
-   - [ ] Slack
-   - [x] Github
+   - [x] Slack (Setup requires creating an app, interaction requires specifying channel ids, potentially too cumbersome)
+   - [x] Github (Setup is a bit too cumbersome, needs creating a new app and specifying only one repo that you want to interact with)
    - [x] Calendar
    - [x] Gmail
-- [ ] Upgrade logic that defines which tools are available to the coordinator agent
-   - [ ] Use tool descriptions to RAG match what are the possible best tools for the user request
+- [x] Upgrade logic that defines which tools are available to the coordinator agent
+   - [x] Use tool descriptions to RAG match what are the possible best tools for the user request
       (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
 - [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
 
