@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 from modules.helpers.getUseCuda import getUseCuda
-from modules.text_to_speech.tts import pause, play
 
 import os
 
@@ -8,8 +7,11 @@ if __name__ == '__main__':
     print("Starting...")
     # Make sure the OPENAI_API_KEY is set before importing modules that will use it
     load_dotenv()
+
     from RealtimeSTT import AudioToTextRecorder
+    from modules.text_to_speech.tts import pause, play
     from modules.langgraph.graph import stream_graph_updates
+
     play("Meu nome é jarvis, como posso te ajudar?")
     
     if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
@@ -44,7 +46,7 @@ if __name__ == '__main__':
     with AudioToTextRecorder(
         wakeword_backend="oww",
         model="medium",
-        language="pt",
+        language=os.getenv('STT_LANGUAGE') if os.getenv('STT_LANGUAGE') else '',
         wake_words_sensitivity=0.35,
         openwakeword_model_paths="modules/voice_models/jarvis.onnx",
         on_wakeword_detected=on_wakeword_detected,
