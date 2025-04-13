@@ -64,6 +64,7 @@ class ChatLlamaCpp(BaseChatModel):
     This is an model wrapper override, copied from the langchain package, it was modified to remove the "logprobs"
     parameter, which breaks the llama-cpp-python library old versions (installation with CUDA 11.8).
 
+    It also tries to import from either llama_cpp or llama_cpp_cuda, depending on the user prefered installation.
     """
 
     client: Any = None  #: :meta private:
