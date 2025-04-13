@@ -90,13 +90,13 @@ Also by allowing client side tools aside from the ones we can use on the Desktop
 
 ## Installation and Usage
 
-1. Clone the repository:
+#### 1. Clone the repository:
    ```bash
    git clone https://github.com/joaojhgs/aurora.git
    cd aurora
    ```
 
-Install dependencies:
+#### 2. Install dependencies:
 
 Install PortAudio:
 
@@ -123,13 +123,63 @@ pip install torch==2.6.0+cu118 torchaudio==2.6.0 torchvision==0.21.0 --index-url
 pip install onnxruntime-gpu
 ```
 
-Run the assistant:
+#### 3. Initial Configuration
+
+Clone the `.env.file` and rename it to `.env` in the root directory, then configure the assistant;
+The assistant won't start if any required envs are not filled.
+
+* Most of the main configurations come with defaults that will work out of the box for the English language;
+
+* CUDA is turned off by default, fine control over it is possible using the envs;
+
+Currently we have support for OpenAI and LLAMA-CPP for the main LLM drive of the assistant.
+
+*  Embbeddings are still reliant on OpenAI for now, support for local coming soon.
+
+*  Set only one "MODEL" env, either OpenAI model or LLAMA-CPP model;
+
+##### 3.1 Running Local Models
+If you want to run local models with LLAMA-CPP, you'll have to install some aditional dependencies as follows:
+
+Below are some common backends, their build commands and any additional environment variables required.
+
+<details open>
+<summary>OpenBLAS (CPU)</summary>
+
+To install with OpenBLAS, set the `GGML_BLAS` and `GGML_BLAS_VENDOR` environment variables before installing:
+
+```bash
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+```
+</details>
+
+<details>
+<summary>CUDA (GPU)</summary>
+
+To install with CUDA support, set the `GGML_CUDA=on` environment variable before installing:
+
+```bash
+ python -m pip install llama-cpp-python --prefer-binary --extra-index-url=https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cu118
+```
+
+Unfortunally due to the project limiting the CUDA version to v11.8, we need to install an older version of the `llama-cpp-python` lib, which doesn't have support to some recent models like gemma-2 and gemma-3.
+
+LLAMA and LLAMA2 will work.
+
+Model option: [LLAMA2-7B-Q4](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf)
+
+We should be able to use cuda v12.* soon.
+</details>
+
+You can find more backend instalations to run your models at the original `llama-cpp-python` [repository](https://github.com/abetlen/llama-cpp-python?tab=readme-ov-file#supported-backends).
+
+#### 4. Run the assistant:
 
 ```bash
 python aurora.py
 ```
 
-Why Aurora?
+## Why Aurora?
 Aurora redefines how users interact with their computers by combining voice-based interfaces with powerful local automation tools. It enhances productivity without compromising privacy, offering a seamless blend of natural language processing, semantic search, and browser automation. By leveraging open-source tools, Aurora ensures transparency and customization, making it a versatile assistant for both personal and professional use.
 
 Contributing

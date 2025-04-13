@@ -81,8 +81,9 @@ def stream_graph_updates(user_input: str):
         input={"messages": [{"role": "user", "content": user_input}]},
         # Hard coded thread id, it will keep all interactions saved in memory in the same thread
         config={"configurable": {"thread_id": "1"}},
-        stream_mode="values"
+        stream_mode="values",
     )
+    print(response)
     text = response['messages'][-1].content
     if(text != "END"):
         print("\nJarvis:", response['messages'][-1].content)

@@ -2,6 +2,7 @@ import os
 
 from langchain_openai import ChatOpenAI
 from langgraph.store.base import BaseStore
+from modules.langgraph.ChatLlamaCpp import ChatLlamaCpp
 from modules.langgraph.state import State
 from modules.langgraph.tools.tools import get_tools
 
@@ -10,10 +11,32 @@ The chatbot agent is the main agent coordinator in the graph.
 """
 
 # Init LLM
-llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=os.environ['OPENAI_API_KEY'])
+llm = None
+
+if os.environ.get('OPENAI_MODEL'):
+    llm = ChatOpenAI(
+        model=os.environ['OPENAI_CHAT_MODEL'],
+        api_key=os.environ['OPENAI_API_KEY']
+    )
+elif os.environ.get('LLAMMA_CPP_MODEL_PATH'):
+    llm = ChatLlamaCpp(
+        temperature=0.5,
+        model_path=os.environ.get('LLAMMA_CPP_MODEL_PATH'),
+        n_ctx=2048,
+        n_gpu_layers=8,
+        n_batch=1000,  # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
+        max_tokens=256,
+        repeat_penalty=1.5,
+        top_p=0.5,
+        disable_streaming=True,
+    )
 
 # Def the chatbot node
 def chatbot(state: State, store: BaseStore):
+    # Check if llm is initialized
+    if llm is None:
+        raise ValueError("The language model (llm) is not initialized.")
+
     # Vector search for the history of memories
     
     items = store.search(
@@ -38,6 +61,7 @@ def chatbot(state: State, store: BaseStore):
                             "Be as concise as possible and provide the user with the most relevant information.\n"
                             "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
                             "Make sure to provide the user with the most relevant information and be concise."
+                            "Alway respond in the language of the user"
                             f"{memories}"
                             f"\nCurrent time: {os.popen('date').read().strip()}"
                         )

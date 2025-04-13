@@ -179,3 +179,7 @@ screenshots
 *credentials.json
 
 *token.json
+
+*.gguf
+
+.vscode/*
