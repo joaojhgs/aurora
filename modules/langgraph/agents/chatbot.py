@@ -23,7 +23,7 @@ elif os.environ.get('LLAMMA_CPP_MODEL_PATH'):
         temperature=0.5,
         model_path=os.environ.get('LLAMMA_CPP_MODEL_PATH'),
         n_ctx=2048,
-        n_gpu_layers=8,
+        n_gpu_layers=4,
         n_batch=1000,  # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
         max_tokens=256,
         repeat_penalty=1.5,
@@ -66,7 +66,7 @@ def chatbot(state: State, store: BaseStore):
                             f"\nCurrent time: {os.popen('date').read().strip()}"
                         )
                     },
-                    *state["messages"]
+                    *state["messages"][:-3]
                 ])
             ]
         }

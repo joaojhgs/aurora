@@ -116,9 +116,19 @@ pip install -r requirements.txt
 ```
 
 Optionally install cuda libraries for faster inference:
+
+**CUDA 11.8**
 ```bash
 sudo apt-get install libcudnn9-cuda-11
 pip install torch==2.6.0+cu118 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
+# Install lib for PiperTTS with CUDA
+pip install onnxruntime-gpu
+```
+
+**CUDA 12.4 (Recommended)**
+```bash
+sudo apt-get install libcudnn9-cuda-12
+pip install torch==2.6.0+cu124 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
 # Install lib for PiperTTS with CUDA
 pip install onnxruntime-gpu
 ```
@@ -156,19 +166,28 @@ CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-py
 <details>
 <summary>CUDA (GPU)</summary>
 
-To install with CUDA support, set the `GGML_CUDA=on` environment variable before installing:
+**CUDA 12.4 (Recommended)**
 
+Official support for pre-built wheels (up to version 3.4, supports gemma2)
 ```bash
- python -m pip install llama-cpp-python --prefer-binary --extra-index-url=https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cu118
+python -m pip install llama-cpp-python --no-cache-dir --prefer-binary --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/
 ```
+Model option: [Gemma-2-2B-Q6](https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/blob/main/gemma-2-2b-it-Q6_K_L.gguf)
 
-Unfortunally due to the project limiting the CUDA version to v11.8, we need to install an older version of the `llama-cpp-python` lib, which doesn't have support to some recent models like gemma-2 and gemma-3.
+Unnoficial support for pre-built wheels (up to version 3.8, supports gemma3)
+```bash
+python -m pip install https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.3.8+cu124-cp311-cp311-linux_x86_64.whl
+```
+Model options:
 
-LLAMA and LLAMA2 will work.
-
+[Gemma-3-4B-IT-Q8](https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q8_K.gguf?download=true)
+**CUDA 11.8**
+```bash
+python -m pip install llama-cpp-python --prefer-binary --extra-index-url=https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cu118
+```
+(Doesn't support recent models like gemma due to version support limitation)
 Model option: [LLAMA2-7B-Q4](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf)
 
-We should be able to use cuda v12.* soon.
 </details>
 
 You can find more backend instalations to run your models at the original `llama-cpp-python` [repository](https://github.com/abetlen/llama-cpp-python?tab=readme-ov-file#supported-backends).

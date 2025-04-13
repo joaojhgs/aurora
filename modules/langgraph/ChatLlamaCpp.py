@@ -172,14 +172,23 @@ class ChatLlamaCpp(BaseChatModel):
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
         """Validate that llama-cpp-python library is installed."""
+        Llama = None
+        LlamaGrammar = None
+        
+        # First try the standard llama_cpp import
         try:
             from llama_cpp import Llama, LlamaGrammar
         except ImportError:
-            raise ImportError(
-                "Could not import llama-cpp-python library. "
-                "Please install the llama-cpp-python library to "
-                "use this embedding model: pip install llama-cpp-python"
-            )
+            # If that fails, try the CUDA-specific import
+            try:
+                from llama_cpp_cuda import Llama, LlamaGrammar
+            except ImportError:
+                # If both fail, raise an error
+                raise ImportError(
+                    "Could not import llama-cpp-python library. "
+                    "Please install the llama-cpp-python library to "
+                    "use this embedding model: pip install llama-cpp-python"
+                )
 
         model_path = self.model_path
         model_param_names = [
