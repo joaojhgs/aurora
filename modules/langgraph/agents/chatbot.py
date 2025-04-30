@@ -20,14 +20,17 @@ if os.environ.get('OPENAI_MODEL'):
     )
 elif os.environ.get('LLAMMA_CPP_MODEL_PATH'):
     llm = ChatLlamaCpp(
-        temperature=0.5,
+        chat_format="chatml-function-calling",
+        min_p=0.0,
+        top_p=0.95,
+        temperature=1.0,
+        top_k=64,
+        repeat_penalty=1.0,
         model_path=os.environ.get('LLAMMA_CPP_MODEL_PATH'),
         n_ctx=2048,
-        n_gpu_layers=4,
+        n_gpu_layers=0,
         n_batch=1000,  # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
-        max_tokens=256,
-        repeat_penalty=1.5,
-        top_p=0.5,
+        max_tokens=256*2,
         disable_streaming=True,
     )
 
@@ -66,7 +69,7 @@ def chatbot(state: State, store: BaseStore):
                             f"\nCurrent time: {os.popen('date').read().strip()}"
                         )
                     },
-                    *state["messages"][:-3]
+                    *state["messages"],
                 ])
             ]
         }
