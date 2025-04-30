@@ -174,7 +174,7 @@ python -m pip install llama-cpp-python --no-cache-dir --prefer-binary --extra-in
 ```
 Model option: [Gemma-2-2B-Q6](https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/blob/main/gemma-2-2b-it-Q6_K_L.gguf)
 
-Unnoficial support for pre-built wheels (up to version 3.8, supports gemma3)
+Unnoficial support for pre-built wheels (up to version 3.8, supports gemma3 non-multi-modal)
 ```bash
 python -m pip install https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.3.8+cu124-cp311-cp311-linux_x86_64.whl
 ```

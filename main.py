@@ -54,6 +54,7 @@ if __name__ == '__main__':
         on_wakeword_detection_start=on_wakeword_detection_start,
         wake_word_buffer_duration=1,
         device=getUseCuda("USE_CUDA_STT"),
+        silero_deactivity_detection=os.getenv('SILERO_DEACTIVATION_DETECTION', 'false') == 'true',
         ) as recorder:
 
         while (True):
