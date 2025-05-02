@@ -8,10 +8,10 @@ if __name__ == '__main__':
     # Make sure the OPENAI_API_KEY is set before importing modules that will use it
     load_dotenv()
 
-    from RealtimeSTT import AudioToTextRecorder
-    from modules.text_to_speech.tts import pause, play
-    from modules.langgraph.graph import stream_graph_updates
-
+    from modules.speech_to_text.audio_recorder import AudioToTextRecorder
+    from modules.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_text_detected, on_recording_stop
+    from modules.text_to_speech.tts import play
+    
     play("Meu nome é jarvis, como posso te ajudar?")
     
     if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
@@ -19,29 +19,6 @@ if __name__ == '__main__':
         from threading import Thread
         open_recall_thread = Thread(target=openrecall_app, daemon=True)
         open_recall_thread.start()
-    
-    detected = False
-
-    say_wakeword_str = "Listening for wakeword 'Jarvis'."
-
-    def on_wakeword_detected():
-        global detected
-        detected = True
-        pause()
-    
-    def on_wakeword_timeout():
-        global detected
-        if not detected:
-            print(f"Timeout. {say_wakeword_str}")
-        detected = False
-
-    def on_wakeword_detection_start():
-        print(f"\n{say_wakeword_str}")
-
-    def text_detected(text):
-        print(f">> {text}")
-        # Send the transcribed text to the chatbot module
-        stream_graph_updates(text)
         
     with AudioToTextRecorder(
         wakeword_backend="oww",
@@ -52,10 +29,13 @@ if __name__ == '__main__':
         on_wakeword_detected=on_wakeword_detected,
         on_wakeword_timeout=on_wakeword_timeout,
         on_wakeword_detection_start=on_wakeword_detection_start,
+        on_recording_start=on_recording_start,
+        on_recording_stop=on_recording_stop,
         wake_word_buffer_duration=1,
         device=getUseCuda("USE_CUDA_STT"),
-        silero_deactivity_detection=os.getenv('SILERO_DEACTIVATION_DETECTION', 'false') == 'true',
+        silero_deactivity_detection=os.getenv('STT_SILERO_DEACTIVITY_DETECTION', 'false') == 'true',
+        openwakeword_speedx_noise_reduction=os.getenv('STT_WAKEWORD_SPEEDX_NOISE_REDUCTION', 'false') == 'true',
         ) as recorder:
 
         while (True):
-            recorder.text(text_detected)
+            recorder.text(on_text_detected)
