@@ -10,6 +10,8 @@ play("Meu nome é jarvis, como posso te ajudar?")
 
 detected = False
 
+original_volume = None
+
 say_wakeword_str = "Listening for wakeword 'Jarvis'."
 
 def on_wakeword_detected():
@@ -44,6 +46,16 @@ def check_bluetooth_headphones():
         print(f"Error checking Bluetooth headphones: {e}")
         return False
 
+def get_system_volume():
+    try:
+        cmd = "pactl get-sink-volume 0"
+        result = subprocess.run(cmd.split(), stdout=subprocess.PIPE, text=True)
+        volume = result.stdout.split()[4]
+        return volume
+    except Exception as e:
+        print(f"Error getting system volume: {e}")
+        return None
+
 def set_system_volume(volume):
     try:
         cmd = "pactl set-sink-volume 0"
@@ -53,8 +65,10 @@ def set_system_volume(volume):
 
 def on_recording_start():
     if not check_bluetooth_headphones():
+        global original_volume
+        original_volume = get_system_volume()
         set_system_volume("-40%")
 
 def on_recording_stop():
     if not check_bluetooth_headphones():
-        set_system_volume("+40%")
+        set_system_volume(original_volume)
