@@ -1,8 +1,17 @@
 from RealtimeTTS import TextToAudioStream, PiperVoice
+from modules.speech_to_text.stt import reduce_volume_except_current, restore_volume_except_current
 from modules.text_to_speech.piper_engine import PiperEngine
 import os
 
+
 file_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def on_audio_stream_start():
+    reduce_volume_except_current()
+
+def on_audio_stream_stop():
+    # Restore the system volume when the audio stream stops
+    restore_volume_except_current()
 
 def get_voice():
     model_file = file_root + os.getenv('TTS_MODEL_FILE_PATH', '/voice_models/en_US-lessac-medium.onnx')
@@ -11,7 +20,8 @@ def get_voice():
 
 voice = get_voice()
 engine = PiperEngine(piper_path="piper", voice=voice)
-stream = TextToAudioStream(engine, frames_per_buffer=256)
+
+stream = TextToAudioStream(engine, frames_per_buffer=256, on_audio_stream_start=on_audio_stream_start, on_audio_stream_stop=on_audio_stream_stop)
 
 def play(text):
     # Stop any async audio and clears any text that was in queue

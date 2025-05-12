@@ -9,8 +9,9 @@ if __name__ == '__main__':
     load_dotenv()
 
     from modules.speech_to_text.audio_recorder import AudioToTextRecorder
-    from modules.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_text_detected, on_recording_stop
+    from modules.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_recording_stop
     from modules.text_to_speech.tts import play
+    from modules.langgraph.graph import stream_graph_updates
     
     play("Meu nome é jarvis, como posso te ajudar?")
     
@@ -19,6 +20,11 @@ if __name__ == '__main__':
         from threading import Thread
         open_recall_thread = Thread(target=openrecall_app, daemon=True)
         open_recall_thread.start()
+        
+    def on_text_detected(text):
+        print(f">> {text}")
+        # Send the transcribed text to the chatbot module
+        stream_graph_updates(text)
         
     with AudioToTextRecorder(
         wakeword_backend="oww",
