@@ -13,7 +13,7 @@ The chatbot agent is the main agent coordinator in the graph.
 # Init LLM
 llm = None
 
-if os.environ.get('OPENAI_MODEL'):
+if os.environ.get('OPENAI_CHAT_MODEL'):
     llm = ChatOpenAI(
         model=os.environ['OPENAI_CHAT_MODEL'],
         api_key=os.environ['OPENAI_API_KEY']
