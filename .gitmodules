@@ -1,3 +1,7 @@
 [submodule "modules/openrecall"]
 	path = modules/openrecall
 	url = https://github.com/joaojhgs/openrecall.git
+
+[submodule "modules/ui"]
+	path = modules/ui
+	url = https://github.com/joaojhgs/joaojhgs/aurora_ui.git
