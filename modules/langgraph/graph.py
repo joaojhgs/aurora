@@ -10,6 +10,7 @@ from langchain_core.messages import AnyMessage
 
 from modules.langgraph.memory_store import store
 from modules.text_to_speech.tts import play
+from enum import Enum
 
 graph_builder = StateGraph(State)
 
@@ -75,18 +76,64 @@ except Exception:
     pass
 
 # The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
-def stream_graph_updates(user_input: str):
+def stream_graph_updates(user_input: str, ttsResult: bool = True):
+    # Handle custom UIMessage objects
+    input_content = user_input
+    
 
+    if hasattr(user_input, 'text'):
+        input_content = user_input.text
+        print(f"Graph: Processing input from custom object: {input_content[:30]}...")
+    else:
+        print(f"Graph: Processing input: {str(user_input)[:30]}...")
+
+    # Invoke the graph with the user input
     response = graph.invoke(
-        input={"messages": [{"role": "user", "content": user_input}]},
+        input={"messages": [{"role": "user", "content": input_content}]},
         # Hard coded thread id, it will keep all interactions saved in memory in the same thread
         config={"configurable": {"thread_id": "1"}},
         stream_mode="values",
     )
-    print(response)
+    
+    # Get the LLM response text
     text = response['messages'][-1].content
-    if(text != "END"):
-        print("\nJarvis:", response['messages'][-1].content)
-        play(text)
+    
+    if text != "END":
+        print(f"\nJarvis: {text}...")
+        # Play the text through TTS - this is used for STT messages that need speech output
+        if(ttsResult): play(text) 
+    else:
+        print("Graph: Response was END, not sending to TTS")
+    
+    return text
+
+# New function for text input that doesn't use TTS
+def process_text_input(user_input: str):
+    """Process text input from UI without using TTS"""
+    # Handle custom UIMessage objects
+    input_content = user_input
+    if hasattr(user_input, 'text'):
+        input_content = user_input.text
+        print(f"Graph: Processing UI text input from object: {input_content[:30]}...")
+    else:
+        print(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
+
+    # Invoke the graph with the user input
+    response = graph.invoke(
+        input={"messages": [{"role": "user", "content": input_content}]},
+        # Hard coded thread id, it will keep all interactions saved in memory in the same thread
+        config={"configurable": {"thread_id": "1"}},
+        stream_mode="values",
+    )
+    
+    # Get the LLM response text
+    text = response['messages'][-1].content
+    
+    if text != "END":
+        print(f"\nJarvis (UI text response): {text[:100]}...")
+        # No TTS for UI text input
+    else:
+        print("Graph: Response was END, not processing further")
+    
     return text
     

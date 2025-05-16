@@ -29,6 +29,12 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 6. **Text-to-Speech (TTS)**:
    - Generate natural-sounding audio responses using **Piper** (offline TTS).
 
+7. **Modern User Interface**:
+   - Graphical user interface with both text and voice input options
+   - Dark mode and light mode support
+   - Real-time status indicators for listening, processing, and speaking states
+   - Message history with timestamps
+
 7. **Local and Privacy-Focused**:
    - All processing happens locally, ensuring data privacy and security.
    - No cloud dependencies or data sharing.
@@ -195,8 +201,28 @@ You can find more backend instalations to run your models at the original `llama
 #### 4. Run the assistant:
 
 ```bash
-python aurora.py
+python main.py
 ```
+
+## UI Usage
+
+Aurora provides both voice and text interaction:
+
+1. **Voice Input**:
+   - Say the wake word "Jarvis" to activate voice recognition
+   - Speak your command or query
+   - The UI status will update to show "Listening", "Processing", and "Speaking" states
+
+2. **Text Input**:
+   - Type your message in the text box
+   - Press Enter to send (or use Shift+Enter for a new line)
+   - Click the "Send" button
+
+3. **UI Controls**:
+   - Use the "Stop Speaking" button to stop the assistant's voice output
+   - Use the "Toggle Dark Mode" button to switch between light and dark themes
+
+All interactions and responses are displayed in the message history with timestamps.
 
 ## Why Aurora?
 Aurora redefines how users interact with their computers by combining voice-based interfaces with powerful local automation tools. It enhances productivity without compromising privacy, offering a seamless blend of natural language processing, semantic search, and browser automation. By leveraging open-source tools, Aurora ensures transparency and customization, making it a versatile assistant for both personal and professional use.
