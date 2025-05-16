@@ -4,4 +4,4 @@
 
 [submodule "modules/ui"]
 	path = modules/ui
-	url = https://github.com/joaojhgs/joaojhgs/aurora_ui.git
+	url = https://github.com/joaojhgs/aurora_ui.git
