@@ -183,3 +183,5 @@ screenshots
 *.gguf
 
 .vscode/*
+
+*.db
