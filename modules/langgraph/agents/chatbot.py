@@ -45,7 +45,7 @@ def chatbot(state: State, store: BaseStore):
     items = store.search(
         ("main", "memories"), query=state["messages"][-1].content, limit=3
     )
-    memories = "\n".join(f"{item.value['text']} (score: {item.score})" for item in items)
+    memories = "\n".join(f"{item.value['text']} (score: {item.value['_search_score']})" for item in items)
     memories = f"## Similar memories\n{memories}" if memories else ""
 
     # RAG Search tools to bind for each chatbot call
