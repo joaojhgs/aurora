@@ -7,6 +7,7 @@ from typing import Optional
 from RealtimeTTS import BaseEngine
 from queue import Queue
 
+from modules.config.config_manager import config_manager
 from modules.helpers.getUseCuda import getUseCuda
 
 # This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
@@ -53,10 +54,10 @@ class PiperEngine(BaseEngine):
                                         If that's not set, defaults to 'piper.exe'.
             voice (Optional[PiperVoice]): A PiperVoice instance with the model and optional config.
         """
-        # If piper_path is None, check environment variable or default to 'piper.exe'.
+        # If piper_path is None, check config manager or default to 'piper.exe'.
         if piper_path is None:
-            env_path = os.environ.get("PIPER_PATH")
-            self.piper_path = env_path if env_path else "piper.exe"
+            config_path = config_manager.get("text_to_speech.piper_path", "")
+            self.piper_path = config_path if config_path else "piper.exe"
         else:
             self.piper_path = piper_path
 
@@ -75,7 +76,7 @@ class PiperEngine(BaseEngine):
         Returns:
             tuple: (format, channels, rate)
         """
-        return pyaudio.paInt16, 1, int(os.environ['TTS_MODEL_SAMPLE_RATE'])
+        return pyaudio.paInt16, 1, int(config_manager.get('text_to_speech.model_sample_rate', 24000))
 
     def synthesize(self, text: str) -> bool:
         """
@@ -129,7 +130,7 @@ class PiperEngine(BaseEngine):
             # Open the synthesized WAV file and (optionally) validate audio properties.
             with wave.open(output_wav_path, "rb") as wf:
                 # If you require specific WAV properties, check them:
-                if wf.getnchannels() != 1 or wf.getframerate() != int(os.environ['TTS_MODEL_SAMPLE_RATE']) or wf.getsampwidth() != 2:
+                if wf.getnchannels() != 1 or wf.getframerate() != int(config_manager.get('text_to_speech.model_sample_rate', 24000)) or wf.getsampwidth() != 2:
                     print(f"Unexpected WAV properties: "
                         f"Channels={wf.getnchannels()}, "
                         f"Rate={wf.getframerate()}, "

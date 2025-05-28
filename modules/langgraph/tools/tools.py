@@ -5,7 +5,7 @@ from modules.langgraph.tools.upsert_memory import upsert_memory_tool
 from modules.langgraph.tools.current_screen import current_screen_tool
 
 from modules.langgraph.memory_store import store
-import os
+from modules.config.config_manager import config_manager
 from typing import List, Dict, Callable
 
 print("\nInitializing all tools and plugins...\n")
@@ -18,15 +18,15 @@ tools = [current_screen_tool, resume_tts_tool, stop_tts_tool]
 
 # Only import if plugin is activated
 
-if(os.environ['JIRA_ACTIVATE_PLUGIN'] == "true"):
+if config_manager.get('plugins.jira.activate', False):
     from modules.langgraph.tools.jira_toolkit import jira_tools
     tools.extend(jira_tools)
 
-if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
+if config_manager.get('plugins.openrecall.activate', False):
     from modules.langgraph.tools.openrecall_search import openrecall_search_tool
     tools.append(openrecall_search_tool)
 
-if(os.environ['BRAVE_SEARCH_ACTIVATE_PLUGIN'] == 'true'):
+if config_manager.get('plugins.brave_search.activate', False):
     from modules.langgraph.tools.brave_search import search_brave_tool
     tools.append(search_brave_tool)
 else:
@@ -34,19 +34,19 @@ else:
     tools.append(duckduckgo_search_tool)
 
 
-if(os.environ['GMAIL_ACTIVATE_PLUGIN'] == "true"):
+if config_manager.get('plugins.gmail.activate', False):
     from modules.langgraph.tools.gmail_toolkit import gmail_tools
     tools.extend(gmail_tools)
 
-if(os.environ['GCALENDAR_ACTIVATE_PLUGIN'] == "true"):
+if config_manager.get('plugins.gcalendar.activate', False):
     from modules.langgraph.tools.gcalendar_toolkit import gcalendar_tools
     tools.extend(gcalendar_tools)
 
-if(os.environ['GITHUB_ACTIVATE_PLUGIN'] == "true"):
+if config_manager.get('plugins.github.activate', False):
     from modules.langgraph.tools.github_toolkit import github_tools
     tools.extend(github_tools)
 
-if(os.environ['SLACK_ACTIVATE_PLUGIN'] == "true"):
+if config_manager.get('plugins.slack.activate', False):
     from modules.langgraph.tools.slack_toolkit import slack_tools
     tools.extend(slack_tools)
 

@@ -1,4 +1,5 @@
-.env
+.env*
+!.env.file
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -185,3 +186,6 @@ screenshots
 .vscode/*
 
 *.db
+
+# Local configuration files
+config.json

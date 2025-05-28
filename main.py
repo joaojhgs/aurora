@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from modules.config.config_manager import config_manager
 from modules.helpers.getUseCuda import getUseCuda
 
 import os
@@ -7,13 +8,19 @@ from threading import Thread
 
 if __name__ == '__main__':
     print("Starting...")
-    # Make sure the OPENAI_API_KEY is set before importing modules that will use it
+    # Load environment variables
+    # This is kept even with the new config manager to deal with development environments 
+    # And third party services that rely on environment variables, such as langsmith and OpenAi.
+    
     load_dotenv()
+    
+    config_manager.migrate_from_env()
+    
     window = None
     app = None
     
-    # Check if the environment variable is set to activate the UI
-    if(os.environ['AURORA_UI_ACTIVATE'] == 'true'):
+    # Check if the UI should be activated
+    if config_manager.get('ui.activate'):
         from modules.ui.aurora_ui import AuroraUI
         from PyQt6.QtWidgets import QApplication
         
@@ -35,7 +42,7 @@ if __name__ == '__main__':
     # Initial greeting
     play("Olá, meu nome é Jarvis")
     
-    if(os.environ['OPENRECALL_ACTIVATE_PLUGIN'] == 'true'):
+    if config_manager.get('plugins.openrecall.activate'):
         from modules.openrecall.openrecall.app import init_main as openrecall_app
         from threading import Thread
         open_recall_thread = Thread(target=openrecall_app, daemon=True)
@@ -56,7 +63,7 @@ if __name__ == '__main__':
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
-            language=os.getenv('STT_LANGUAGE') if os.getenv('STT_LANGUAGE') else '',
+            language=config_manager.get('speech_to_text.language', ''),
             wake_words_sensitivity=0.35,
             openwakeword_model_paths="modules/voice_models/jarvis.onnx",
             on_wakeword_detected=on_wakeword_detected,
@@ -65,9 +72,9 @@ if __name__ == '__main__':
             on_recording_start=on_recording_start,
             on_recording_stop=on_recording_stop,
             wake_word_buffer_duration=1,
-            device=getUseCuda("USE_CUDA_STT"),
-            silero_deactivity_detection=os.getenv('STT_SILERO_DEACTIVITY_DETECTION', 'false') == 'true',
-            openwakeword_speedx_noise_reduction=os.getenv('STT_WAKEWORD_SPEEDX_NOISE_REDUCTION', 'false') == 'true',
+            device=getUseCuda("cuda.use_cuda_stt"),
+            silero_deactivity_detection=config_manager.get('speech_to_text.silero_deactivity_detection', False),
+            openwakeword_speedx_noise_reduction=config_manager.get('speech_to_text.wakeword_speedx_noise_reduction', False),
             ) as recorder:
             
             while True:
