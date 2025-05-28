@@ -5,6 +5,7 @@ from langgraph.store.base import BaseStore
 from modules.langgraph.ChatLlamaCpp import ChatLlamaCpp
 from modules.langgraph.state import State
 from modules.langgraph.tools.tools import get_tools
+from modules.config.config_manager import config_manager
 
 """
 The chatbot agent is the main agent coordinator in the graph.
@@ -13,12 +14,11 @@ The chatbot agent is the main agent coordinator in the graph.
 # Init LLM
 llm = None
 
-if os.environ.get('OPENAI_CHAT_MODEL'):
+if config_manager.get('llm.openai_chat_model'):
     llm = ChatOpenAI(
-        model=os.environ['OPENAI_CHAT_MODEL'],
-        api_key=os.environ['OPENAI_API_KEY']
+        model=config_manager.get('llm.openai_chat_model'),
     )
-elif os.environ.get('LLAMMA_CPP_MODEL_PATH'):
+elif config_manager.get('llm.llama_cpp_model_path'):
     llm = ChatLlamaCpp(
         chat_format="chatml-function-calling",
         min_p=0.0,
@@ -26,7 +26,7 @@ elif os.environ.get('LLAMMA_CPP_MODEL_PATH'):
         temperature=1.0,
         top_k=64,
         repeat_penalty=1.0,
-        model_path=os.environ.get('LLAMMA_CPP_MODEL_PATH'),
+        model_path=config_manager.get('llm.llama_cpp_model_path'),
         n_ctx=2048,
         n_gpu_layers=0,
         n_batch=1000,  # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.

@@ -9,11 +9,12 @@ from langchain.embeddings import init_embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
+from modules.config.config_manager import config_manager
 
 
 def get_embeddings():
     """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
-    use_local = os.environ.get('USE_LOCAL_EMBEDDINGS', 'false').lower() == 'true'
+    use_local = config_manager.get('embeddings.use_local', False)
     
     if use_local:
         # Use local HuggingFace embeddings

@@ -141,20 +141,49 @@ pip install onnxruntime-gpu
 
 #### 3. Initial Configuration
 
-Clone the `.env.file` and rename it to `.env` in the root directory, then configure the assistant;
-The assistant won't start if any required envs are not filled.
+Aurora uses a hybrid configuration system with both `config.json` and `.env` files:
 
-* Most of the main configurations come with defaults that will work out of the box for the English language;
+##### 3.1 Configuration Files Setup
 
-* CUDA is turned off by default, fine control over it is possible using the envs;
+**Main Configuration (`config.json`)**:
+- Most settings are now managed through the `config.json` file
+- Includes UI settings, LLM models, speech settings, CUDA options, and plugin configurations
+- Validated with JSON schema to prevent configuration errors
+- Falls back to safe defaults if validation fails
 
-Currently we have support for OpenAI and LLAMA-CPP for the main LLM drive of the assistant.
+**Environment Variables (`.env`)**:
+- Clone the `.env.file` and rename it to `.env` in the root directory
+- Contains development settings and configuration for third party software that works with envs such as:
+  - `OPENAI_API_KEY` - Your OpenAI API key for embeddings and chat models (if you decide to use any)
+  - Langsmith logging and tracing for development
 
-*  Embbeddings are still reliant on OpenAI for now, support for local coming soon.
+**This will eventually be improved and consolidated** 
 
-*  Set only one "MODEL" env, either OpenAI model or LLAMA-CPP model;
+##### 3.2 Configuration Overview
 
-##### 3.1 Running Local Models
+* Most configurations come with defaults that work out of the box for English language
+* CUDA is turned off by default, fine control is available in `config.json`
+* Currently supports OpenAI and LLAMA-CPP for the main LLM
+* Embeddings support both local (HuggingFace) and OpenAI options
+* Set only one LLM model: either `openai_chat_model` or `llama_cpp_model_path` in `config.json`
+
+**Key Configuration Sections in `config.json`:**
+- `ui`: Interface settings (activation, dark mode, debug mode)
+- `llm`: Language model configuration (local or OpenAI models)
+- `embeddings`: Choose between local or OpenAI embeddings
+- `speech_to_text`: STT language, detection settings, noise reduction
+- `text_to_speech`: Voice model paths, sample rates, Piper configuration
+- `cuda`: Fine-grained CUDA acceleration control for different components
+- `plugins`: Enable/disable and configure various productivity integrations
+- `google`: Google services credentials configuration
+
+**Environment Variables (`.env`) contain:**
+- `OPENAI_API_KEY`: Required for OpenAI models and embeddings
+- Plugin API keys: `JIRA_API_TOKEN`, `BRAVE_API_KEY`, `SLACK_USER_TOKEN`, etc.
+- GitHub app credentials: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`
+- Service account files: `GOOGLE_CREDENTIALS_FILE`
+
+##### 3.3 Running Local Models
 If you want to run local models with LLAMA-CPP, you'll have to install some aditional dependencies as follows:
 
 Below are some common backends, their build commands and any additional environment variables required.
@@ -198,7 +227,15 @@ Model option: [LLAMA2-7B-Q4](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGU
 
 You can find more backend instalations to run your models at the original `llama-cpp-python` [repository](https://github.com/abetlen/llama-cpp-python?tab=readme-ov-file#supported-backends).
 
-#### 4. Run the assistant:
+#### 4. Configuration Validation
+
+Aurora automatically validates your `config.json` file against a JSON schema when starting up:
+- Invalid configurations automatically fall back to safe defaults
+- Configuration errors are logged for easy debugging
+- Runtime validation prevents invalid configuration changes
+- You can validate your current config anytime using the config manager
+
+#### 5. Run the assistant:
 
 ```bash
 python main.py
