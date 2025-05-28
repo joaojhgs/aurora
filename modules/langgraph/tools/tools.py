@@ -4,6 +4,13 @@ from modules.langgraph.tools.stop_tts import stop_tts_tool
 from modules.langgraph.tools.upsert_memory import upsert_memory_tool
 from modules.langgraph.tools.current_screen import current_screen_tool
 
+# Scheduler tools
+from modules.langgraph.tools.scheduler_tool import (
+    schedule_task_tool, 
+    list_scheduled_tasks_tool, 
+    cancel_scheduled_task_tool
+)
+
 from modules.langgraph.memory_store import store
 from modules.config.config_manager import config_manager
 from typing import List, Dict, Callable
@@ -13,8 +20,15 @@ print("\nInitializing all tools and plugins...\n")
 # Make memory upsert is always active so that the chatbot can always store something new it deems worthwhile
 always_active_tools = [upsert_memory_tool]
 
-# Export all tools to bind to LLM
-tools = [current_screen_tool, resume_tts_tool, stop_tts_tool]
+# Export all tools to bind to LLM - scheduler tools are always available
+tools = [
+    current_screen_tool, 
+    resume_tts_tool, 
+    stop_tts_tool,
+    schedule_task_tool,
+    list_scheduled_tasks_tool,
+    cancel_scheduled_task_tool
+]
 
 # Only import if plugin is activated
 
