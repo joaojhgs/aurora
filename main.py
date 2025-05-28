@@ -6,6 +6,8 @@ import os
 import sys
 from threading import Thread
 
+from modules.helpers.runAsyncInThread import run_async_in_thread
+
 if __name__ == '__main__':
     print("Starting...")
     # Load environment variables
@@ -39,6 +41,34 @@ if __name__ == '__main__':
     from modules.text_to_speech.tts import play
     from modules.langgraph.graph import stream_graph_updates
     
+    # Initialize the scheduler system
+    print("Initializing scheduler system...")
+    from modules.scheduler import get_cron_service
+    import asyncio
+    
+    async def init_scheduler():
+        """Initialize the scheduler service"""
+        cron = get_cron_service()
+        await cron.initialize()
+        print("Scheduler system initialized and running.")
+    
+    # Start scheduler in background thread
+    def start_scheduler():
+        """Start the scheduler in its own event loop"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(init_scheduler())
+        # Keep the loop running for scheduled tasks
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            loop.close()
+    
+    scheduler_thread = Thread(target=start_scheduler, daemon=True)
+    scheduler_thread.start()
+    
     # Initial greeting
     play("Olá, meu nome é Jarvis")
     
@@ -55,7 +85,7 @@ if __name__ == '__main__':
             window.process_stt_message(text)
         else:
             # Fallback if UI isn't initialized
-            stream_graph_updates(text)
+            run_async_in_thread(stream_graph_updates(text))
     
     # Create and start the audio recorder in a separate thread
     def start_recorder():

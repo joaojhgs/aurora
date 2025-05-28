@@ -76,7 +76,7 @@ except Exception:
     pass
 
 # The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
-def stream_graph_updates(user_input: str, ttsResult: bool = True):
+async def stream_graph_updates(user_input: str, ttsResult: bool = True):
     # Handle custom UIMessage objects
     input_content = user_input
     
@@ -88,7 +88,7 @@ def stream_graph_updates(user_input: str, ttsResult: bool = True):
         print(f"Graph: Processing input: {str(user_input)[:30]}...")
 
     # Invoke the graph with the user input
-    response = graph.invoke(
+    response = await graph.ainvoke(
         input={"messages": [{"role": "user", "content": input_content}]},
         # Hard coded thread id, it will keep all interactions saved in memory in the same thread
         config={"configurable": {"thread_id": "1"}},
@@ -108,7 +108,7 @@ def stream_graph_updates(user_input: str, ttsResult: bool = True):
     return text
 
 # New function for text input that doesn't use TTS
-def process_text_input(user_input: str):
+async def process_text_input(user_input: str):
     """Process text input from UI without using TTS"""
     # Handle custom UIMessage objects
     input_content = user_input
@@ -119,7 +119,7 @@ def process_text_input(user_input: str):
         print(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
 
     # Invoke the graph with the user input
-    response = graph.invoke(
+    response = await graph.ainvoke(
         input={"messages": [{"role": "user", "content": input_content}]},
         # Hard coded thread id, it will keep all interactions saved in memory in the same thread
         config={"configurable": {"thread_id": "1"}},
