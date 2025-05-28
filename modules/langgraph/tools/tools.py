@@ -11,6 +11,13 @@ from modules.langgraph.tools.scheduler_tool import (
     cancel_scheduled_task_tool
 )
 
+# Pomodoro tools
+from modules.langgraph.tools.pomodoro_tool import (
+    start_pomodoro_tool,
+    stop_pomodoro_tool,
+    pomodoro_status_tool
+)
+
 from modules.langgraph.memory_store import store
 from modules.config.config_manager import config_manager
 from typing import List, Dict, Callable
@@ -20,14 +27,17 @@ print("\nInitializing all tools and plugins...\n")
 # Make memory upsert is always active so that the chatbot can always store something new it deems worthwhile
 always_active_tools = [upsert_memory_tool]
 
-# Export all tools to bind to LLM - scheduler tools are always available
+# Export all tools to bind to LLM - scheduler and pomodoro tools are always available
 tools = [
     current_screen_tool, 
     resume_tts_tool, 
     stop_tts_tool,
     schedule_task_tool,
     list_scheduled_tasks_tool,
-    cancel_scheduled_task_tool
+    cancel_scheduled_task_tool,
+    start_pomodoro_tool,
+    stop_pomodoro_tool,
+    pomodoro_status_tool
 ]
 
 # Only import if plugin is activated
