@@ -1,6 +1,29 @@
 # Aurora: Intelligent Voice Assistant for Local Automation and Productivity
 
-Aurora is an intelligent voice assistant designed to enhance productivity through local, privacy-focused automation. It leverages real-time speech-to-text, a large language model (LLM), and open-source tools to provide a seamless and intuitive user experience. Aurora integrates with tools like **OpenRecall** for semantic search of daily activities and **browser-use** for browser automation, enabling users to interact with their computer in a hands-free, voice-driven manner.
+Aurora is an intelligent voice assistant designed to enhance productivity through local, privacy-focused automation. It leverages real-time speech-to-text, a large language model (LLM), and open-source tools to provide a seamless and intuitive user experience.
+
+**It's objective is to be the privacy-first swiss knife of assistants, allowing unprecedentedly easy extension and addition of tools for productivity, every day life and work life.**
+
+---
+
+## 📋 Table of Contents
+
+- [Features](#features)
+- [Installation and Usage](#installation-and-usage)
+  - [1. Clone the repository](#1-clone-the-repository)
+  - [2. Install dependencies](#2-install-dependencies)
+  - [3. Initial Configuration](#3-initial-configuration)
+    - [3.1 Configuration Files Setup](#31-configuration-files-setup)
+    - [3.2 Configuration Overview](#32-configuration-overview)
+    - [3.3 Running Local Models](#33-running-local-models)
+  - [4. Configuration Validation](#4-configuration-validation)
+  - [5. Run the assistant](#5-run-the-assistant)
+- [Libraries and Tools](#libraries-and-tools)
+- [Architecture](#architecture)
+- [TODO LIST](#todo-list)
+- [Long Term Vision](#long-term-vision)
+- [Why Aurora?](#why-aurora)
+- [Contributing](#contributing)
 
 ---
 
@@ -14,7 +37,7 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Convert user speech into text using **Whisper** (OpenAI's lightweight model for local processing).
 
 3. **Large Language Model (LLM) Integration**:
-   - Use **Llama 3** or **Mistral 7B** (quantized for efficiency) to process user queries and generate responses.
+   - Use local-first **Llama 3**, **Mistral 7B** or **Gemma 2 and 3** (quantized for efficiency) to process user queries and generate responses.
    - Orchestrate tool calls (e.g., OpenRecall, browser-use) using **LangChain** and **Langgraph**.
 
 4. **Semantic Search with OpenRecall**:
@@ -22,9 +45,9 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Enable queries like, "What did I research about interfaces at 2 PM?"
    - Enrich the assistant context by adding past activities when necessary
 
-5. **Browser Automation**:
-   - Control web browsers (e.g., open tabs, fill forms, click elements) using the **browser-use** framework.
-   - The assistant will interpret your request, deem wether it should call the browser-use or not, and finally re-structure your request so that it's carried out correctly.
+5.~~Browser Automation:~~
+   - ~~Control web browsers (e.g., open tabs, fill forms, click elements) using the **browser-use** framework.~~
+   - ~~The assistant will interpret your request, deem wether it should call the browser-use or not, and finally re-structure your request so that it's carried out correctly.~~
 
 6. **Text-to-Speech (TTS)**:
    - Generate natural-sounding audio responses using **Piper** (offline TTS).
@@ -46,53 +69,6 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Easy setup, just need to activate it and fill the correct env credentials if necessary
 
 ---
-
-## Libraries and Tools
-
-- **Wakeword Detection**: [Openwakeword](https://github.com/dscripka/openWakeWord)
-- **Speech-to-Text**: [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS) (Uses whisper under the hood)
-- **Large Language Model**: [Llama 3](https://ai.meta.com/llama/) or [Mistral 7B](https://mistral.ai/)
-- **Tool Orchestration**: [LangChain](https://www.langchain.com/) and [Langgraph](https://langchain-ai.github.io/langgraph/)
-- **Semantic Timeline Search**: [OpenRecall](https://github.com/open-recall/open-recall)
-- **Browser Automation**: [browser-use](https://github.com/browser-use/browser-use) (Coming soon)
-- **Text-to-Speech**: [Piper](https://github.com/rhasspy/piper)
-- **Audio Processing**: [PyAudio](https://pypi.org/project/PyAudio/)
-
----
-
-## TODO LIST
-- [ ] Update all current tools to improve it further from MVP
-   - [ ] Add OmniParserV2 and Magma using llama.cpp server to allow local usage and better interactions with the screenshots and openrecall
-   - [ ] Improve openrecall search feature
-      - [] Add to the embbedings a simple AI generated description of the screenshot besides the OCR (using Magma)
-      - [ ] Potentially replace openrecall doctr OCR with OmniParserV2
-      - [ ] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
-   - [ ] Update openrecall code to be able to detect active window titles on linux as well
-   - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
-- [x] Add productivity tools
-   - [x] Jira
-   - [x] Slack (Setup requires creating an app, interaction requires specifying channel ids, potentially too cumbersome)
-   - [x] Github (Setup is a bit too cumbersome, needs creating a new app and specifying only one repo that you want to interact with)
-   - [x] Calendar
-   - [x] Gmail
-- [x] Upgrade logic that defines which tools are available to the coordinator agent
-   - [x] Use tool descriptions to RAG match what are the possible best tools for the user request
-      (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
-- [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
-
-# Long term vision:
-
-- [ ] Turn Aurora into a server-client architecture
-   - [ ] Allow server to receive and process audio using the RealtimeSTT and stream back the TTS audio to the client
-   - [ ] Allow clients to have it's own local tools that can be called by the server (either custom framework or using MCP)
-   - [ ] Create code for low-cost physical clients such as ESP32
-
-The Idea here is to allow for low-cost and easily built interfaces that you can interact with your Jarvis across your home and private network.
-
-Also by allowing client side tools aside from the ones we can use on the Desktop, we allow the assistant to potentially control real world appliances, or even multiple devices/desktops.
-
-- [ ] Integrations with Home Assistant
-   - [ ] Allow for tool calling with smart home appliances
 
 ## Installation and Usage
 
@@ -241,28 +217,263 @@ Aurora automatically validates your `config.json` file against a JSON schema whe
 python main.py
 ```
 
-## UI Usage
+## Libraries and Tools
 
-Aurora provides both voice and text interaction:
+Aurora leverages a comprehensive stack of open-source technologies, organized by functionality to provide a complete voice assistant experience while maintaining privacy and local processing capabilities.
 
-1. **Voice Input**:
-   - Say the wake word "Jarvis" to activate voice recognition
-   - Speak your command or query
-   - The UI status will update to show "Listening", "Processing", and "Speaking" states
+### 🎤 Audio Processing & Voice Recognition
 
-2. **Text Input**:
-   - Type your message in the text box
-   - Press Enter to send (or use Shift+Enter for a new line)
-   - Click the "Send" button
+- **Wake Word Detection**: [OpenWakeWord](https://github.com/dscripka/openWakeWord) - Local, offline wake word detection with low latency
+- **Speech-to-Text**: [RealtimeSTT](https://github.com/KoljaB/RealtimeSTT) - Real-time speech recognition with Whisper integration
+- **STT Engine**: [faster-whisper](https://github.com/guillaumekln/faster-whisper) - Optimized Whisper implementation using CTranslate2
+- **Audio Capture**: [PyAudio](https://pypi.org/project/PyAudio/) - Cross-platform audio I/O library
 
-3. **UI Controls**:
-   - Use the "Stop Speaking" button to stop the assistant's voice output
-   - Use the "Toggle Dark Mode" button to switch between light and dark themes
+### 🗣️ Text-to-Speech
 
-All interactions and responses are displayed in the message history with timestamps.
+- **TTS Engine**: [Piper TTS](https://github.com/rhasspy/piper) - Fast, local neural text-to-speech
+- **Real-time TTS**: [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS) - Streaming text-to-speech output
+
+### 🧠 Language Models & AI
+
+- **LLM Integration**: [LangChain](https://www.langchain.com/) - Framework for LLM application development
+- **Workflow Orchestration**: [LangGraph](https://langchain-ai.github.io/langgraph/) - Graph-based agent workflow management
+- **Local LLM Support**: Custom `ChatLlamaCpp` implementation for local model inference
+- **OpenAI Integration**: [openai](https://github.com/openai/openai-python) - OpenAI API client for cloud models
+- **Model Serving**: [Ollama](https://ollama.ai/) - Local LLM serving platform
+- **Embeddings**: [sentence-transformers](https://www.sbert.net/) - Local semantic embeddings generation
+
+### 💾 Data Storage & Memory
+
+- **Database**: [SQLite](https://www.sqlite.org/) with [aiosqlite](https://aiosqlite.omnilib.dev/) - Async local database
+- **Vector Storage**: [sqlite-vec](https://github.com/asg017/sqlite-vec) - Vector similarity search in SQLite
+
+### 🖥️ User Interface
+
+- **GUI Framework**: [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) - Modern cross-platform GUI
+- **Real-time Updates**: Threaded UI with live status indicators and message history
+- **Dark/Light Themes**: Adaptive UI theming support
+- **Input Methods**: Both text and voice input with visual feedback
+
+### 🔍 Semantic Search & Screen Analysis
+
+- **OpenRecall Integration**: [OpenRecall](https://github.com/open-recall/open-recall) - Screenshot indexing and semantic search
+- **OCR Engine**: [python-doctr](https://github.com/mindee/doctr) - Document text recognition
+- **Screen Capture**: [mss](https://github.com/BoboTiG/python-mss) - Multi-monitor screenshot capture
+- **Computer Vision**: [Pillow](https://python-pillow.org/) - Image processing and manipulation
+- **Text Similarity**: [rapidfuzz](https://github.com/maxbachmann/RapidFuzz) - Fast string matching
+
+### 🌐 Web & API Integration
+
+- **Search Engines**: 
+  - [duckduckgo-search](https://github.com/deedy5/duckduckgo_search) - Privacy-focused search (default)
+  - [Brave Search API](https://brave.com/search/api/) - Brave Search integration (optional)
+
+### 🛠️ Productivity & Business Tools
+
+**Atlassian Integration**:
+- **Jira**: [atlassian-python-api](https://github.com/atlassian-api/atlassian-python-api) - Issue tracking and project management
+
+**Google Workspace**:
+- **Gmail**: [langchain-google-community](https://github.com/langchain-ai/langchain-google) - Email management
+- **Calendar**: Google Calendar API integration for scheduling and event management
+
+**Developer Tools**:
+- **GitHub**: [pygithub](https://github.com/PyGithub/PyGithub) - Repository management and automation
+- **Slack**: [slack-sdk](https://github.com/slackapi/python-slack-sdk) - Team communication and notifications
+
+### ⚙️ System & Configuration
+
+- **Environment Management**: [python-dotenv](https://github.com/theskumar/python-dotenv) - Environment variable handling
+- **Configuration**: Hybrid JSON + environment variable system with validation
+- **Plugin Architecture**: Conditional dependency loading based on configuration
+- **Cross-Platform**: Windows, macOS, and Linux support with platform-specific optimizations
+- **CUDA Support**: Optional GPU acceleration for TTS, STT, and OCR components
+
+### 📦 Development & Build Tools
+
+- **Package Management**: Standard pip with `requirements.txt`
+- **Code Quality**: Type hints with [typing-extensions](https://github.com/python/typing_extensions)
+- **Progress Tracking**: [tqdm](https://github.com/tqdm/tqdm) - Progress bars for long operations
+- **Logging**: [coloredlogs](https://coloredlogs.readthedocs.io/) - Enhanced logging with colors
+- **Terminal UI**: [halo](https://github.com/manrajgrover/halo) - Elegant terminal spinners
+
+### 🔒 Privacy & Security
+
+- **Local Processing**: All core functionality runs locally without cloud dependencies
+- **Optional Cloud**: OpenAI integration available but not required
+- **Credential Management**: Secure environment variable storage for API keys
+- **Data Privacy**: No telemetry or data collection; all processing remains on-device
+- **Modular Plugins**: Only load and install dependencies for features you actually use
+
+This comprehensive technology stack ensures Aurora provides enterprise-grade functionality while maintaining user privacy and system performance through intelligent local processing and selective cloud integration.
+
+---
+
+## Architecture
+
+Aurora is built with a modular, plugin-based architecture that prioritizes privacy, extensibility, and local processing. The system follows a clear data flow from voice input to intelligent response generation, with each component designed to be independently configurable and replaceable.
+
+### System Overview
+
+```mermaid
+graph TB
+    %% Entry Points
+    Start([Main Entry Point<br/>main.py]) --> UI_Check{UI Mode?}
+    UI_Check -->|Yes| UI[PyQt6 UI<br/>aurora_ui.py]
+    UI_Check -->|No| STT_Direct[Direct STT Processing]
+    
+    %% Configuration System
+    Config[Configuration Manager<br/>config_manager.py] --> Schema[JSON Schema<br/>Validation]
+    Config --> EnvVars[Environment Variables<br/>.env file]
+    Config --> ConfigJSON[Configuration File<br/>config.json]
+    
+    %% Audio Processing Chain
+    UI --> AudioInput[Audio Input]
+    STT_Direct --> AudioInput
+    AudioInput --> WakeWord[Wake Word Detection<br/>OpenWakeWord]
+    WakeWord --> STT[Speech-to-Text<br/>audio_recorder.py<br/>Whisper/RealtimeSTT]
+    
+    %% Core LLM Processing
+    STT --> Graph[LangGraph Orchestrator<br/>graph.py]
+    Graph --> LLM[Large Language Model<br/>Llama 3 / Mistral 7B]
+    
+    %% Plugin System & Tools
+    Graph --> ToolLoader[Dynamic Tool Loader<br/>tools.py]
+    ToolLoader --> PluginCheck{Plugin<br/>Enabled?}
+    
+    %% Available Tools/Plugins
+    PluginCheck -->|OpenRecall| OpenRecall[Screenshot Indexing<br/>& Semantic Search]
+    PluginCheck -->|Browser| Browser[Browser Automation<br/>browser-use]
+    PluginCheck -->|Productivity| Productivity[Jira, Slack, Gmail<br/>Calendar, GitHub]
+    PluginCheck -->|Custom| CustomTools[Custom Tools<br/>& Integrations]
+    
+    %% Memory & Storage Systems
+    Graph --> Memory[Memory Store<br/>memory_store.py<br/>Vector Embeddings]
+    Graph --> Database[Database Manager<br/>database_manager.py<br/>Message History]
+    
+    %% Response Generation
+    LLM --> ResponseGen[Response Generation]
+    OpenRecall --> ResponseGen
+    Browser --> ResponseGen
+    Productivity --> ResponseGen
+    CustomTools --> ResponseGen
+    Memory --> ResponseGen
+    
+    %% Output Systems
+    ResponseGen --> TTS[Text-to-Speech<br/>tts.py<br/>Piper Engine]
+    ResponseGen --> UIUpdate[UI Response Display]
+    
+    TTS --> AudioOut[Audio Output]
+    UIUpdate --> UI
+    
+    %% Data Persistence
+    Database --> MessageStore[(SQLite Database<br/>Conversation History)]
+    Memory --> VectorStore[(Vector Database<br/>Embeddings & Context)]
+    
+    %% Configuration Flow
+    Config -.-> Graph
+    Config -.-> STT
+    Config -.-> TTS
+    Config -.-> ToolLoader
+    Config -.-> UI
+    
+    %% Styling
+    classDef entryPoint fill:#e1f5fe
+    classDef processing fill:#f3e5f5
+    classDef storage fill:#e8f5e8
+    classDef plugin fill:#fff3e0
+    classDef output fill:#fce4ec
+    
+    class Start,UI_Check entryPoint
+    class STT,Graph,LLM,ResponseGen processing
+    class Database,Memory,MessageStore,VectorStore storage
+    class OpenRecall,Browser,Productivity,CustomTools,ToolLoader plugin
+    class TTS,AudioOut,UIUpdate output
+```
+
+### Key Architectural Components
+
+#### 1. **Configuration Management**
+- **Centralized Configuration**: The `config_manager.py` handles all system settings through JSON schema validation
+- **Hybrid Configuration**: Combines `config.json` for structured settings and `.env` for sensitive credentials
+- **Plugin Activation**: Configuration-driven plugin system that loads only required dependencies
+
+#### 2. **Audio Processing Pipeline**
+- **Wake Word Detection**: Always-listening background service using OpenWakeWord
+- **Speech-to-Text**: Real-time transcription with Whisper through RealtimeTTS
+- **Threaded Architecture**: Non-blocking audio processing to maintain UI responsiveness
+
+#### 3. **LangGraph Orchestration**
+- **Intelligent Routing**: LangGraph coordinates between LLM reasoning and tool execution
+- **Dynamic Tool Selection**: RAG-based tool matching using vector embeddings of tool descriptions
+- **Context Management**: Maintains conversation context and integrates historical data
+
+![Aurora System Architecture](graph.png)
+
+#### 4. **Plugin System**
+- **Modular Design**: Each integration is a separate plugin with independent dependencies
+- **Conditional Loading**: Plugins are loaded only when enabled in configuration
+- **Extensible Architecture**: New tools can be added without modifying core system
+
+#### 5. **Memory & Storage**
+- **Vector Storage**: Embeddings-based memory for semantic search and context retrieval
+- **Message Persistence**: SQLite database for conversation history and system state
+- **Efficient Retrieval**: Optimized queries for both recent context and long-term memory
+
+#### 6. **User Interface**
+- **Dual Mode Operation**: Supports both GUI (PyQt6) and headless command-line operation
+- **Real-time Feedback**: Visual indicators for system state (listening, processing, speaking)
+- **Flexible Input**: Both voice and text input methods supported
+
+### Data Flow
+
+1. **Input Processing**: Voice input → Wake word detection → Speech-to-text transcription
+2. **Intent Understanding**: Text → LangGraph → LLM analysis → Tool selection
+3. **Action Execution**: Selected tools execute with context from memory and database
+4. **Response Generation**: Tool results → LLM synthesis → Natural language response
+5. **Output Delivery**: Response → Text-to-speech → Audio output + UI display
+6. **Persistence**: Conversation and context saved to database and vector store
+
+This architecture ensures Aurora remains privacy-focused (all processing local), extensible (plugin system), and efficient (threaded processing with intelligent caching).
+
+---
+
+## TODO LIST
+- [ ] Update all current tools to improve it further from MVP
+   - [ ] Add OmniParserV2 and Magma using llama.cpp server to allow local usage and better interactions with the screenshots and openrecall
+   - [ ] Improve openrecall search feature
+      - [] Add to the embbedings a simple AI generated description of the screenshot besides the OCR (using Magma)
+      - [ ] Potentially replace openrecall doctr OCR with OmniParserV2
+      - [ ] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
+   - [ ] Update openrecall code to be able to detect active window titles on linux as well
+   - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
+- [x] Add productivity tools
+   - [x] Jira
+   - [x] Slack (Setup requires creating an app, interaction requires specifying channel ids, potentially too cumbersome)
+   - [x] Github (Setup is a bit too cumbersome, needs creating a new app and specifying only one repo that you want to interact with)
+   - [x] Calendar
+   - [x] Gmail
+- [x] Upgrade logic that defines which tools are available to the coordinator agent
+   - [x] Use tool descriptions to RAG match what are the possible best tools for the user request
+      (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
+- [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
+
+# Long term vision:
+
+- [ ] Turn Aurora into a server-client architecture
+   - [ ] Allow server to receive and process audio using the RealtimeSTT and stream back the TTS audio to the client
+   - [ ] Allow clients to have it's own local tools that can be called by the server (either custom framework or using MCP)
+   - [ ] Create code for low-cost physical clients such as ESP32
+
+The Idea here is to allow for low-cost and easily built interfaces that you can interact with your Jarvis across your home and private network.
+
+Also by allowing client side tools aside from the ones we can use on the Desktop, we allow the assistant to potentially control real world appliances, or even multiple devices/desktops.
+
+- [ ] Integrations with Home Assistant
+   - [ ] Allow for tool calling with smart home appliances
 
 ## Why Aurora?
 Aurora redefines how users interact with their computers by combining voice-based interfaces with powerful local automation tools. It enhances productivity without compromising privacy, offering a seamless blend of natural language processing, semantic search, and browser automation. By leveraging open-source tools, Aurora ensures transparency and customization, making it a versatile assistant for both personal and professional use.
 
-Contributing
+## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
