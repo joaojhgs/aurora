@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import QApplication
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modules.ui.aurora_ui import AuroraUI
-from modules.database import get_message_history_service
+from app.database import get_message_history_service
 
 
 def test_database_integration():

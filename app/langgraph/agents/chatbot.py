@@ -2,10 +2,10 @@ import os
 
 from langchain_openai import ChatOpenAI
 from langgraph.store.base import BaseStore
-from modules.langgraph.ChatLlamaCpp import ChatLlamaCpp
-from modules.langgraph.state import State
-from modules.langgraph.tools.tools import get_tools
-from modules.config.config_manager import config_manager
+from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
+from app.langgraph.state import State
+from app.langgraph.tools.tools import get_tools
+from app.config.config_manager import config_manager
 
 """
 The chatbot agent is the main agent coordinator in the graph.

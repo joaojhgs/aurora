@@ -8,7 +8,7 @@ original_volume = None
 say_wakeword_str = "Listening for wakeword 'Jarvis'."
 
 def on_wakeword_detected():
-    from modules.text_to_speech.tts import pause
+    from app.text_to_speech.tts import pause
     global detected
     detected = True
     pause()

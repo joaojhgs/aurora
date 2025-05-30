@@ -1,7 +1,7 @@
 from langchain_google_community.calendar.utils import (
     get_google_credentials,
 )
-from modules.config.config_manager import config_manager
+from app.config.config_manager import config_manager
 
 scopes = []
 

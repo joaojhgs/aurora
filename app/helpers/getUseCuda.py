@@ -1,4 +1,4 @@
-from modules.config.config_manager import config_manager
+from app.config.config_manager import config_manager
 
 def getUseCuda(config_key: str):
     """Get CUDA configuration from config manager"""

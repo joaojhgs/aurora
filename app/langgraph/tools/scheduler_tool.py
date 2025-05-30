@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from langchain_core.tools import tool
 
-from modules.scheduler import get_cron_service
+from app.scheduler import get_cron_service
 
 
 @tool()
@@ -179,7 +179,7 @@ def speak_reminder(**kwargs) -> Dict[str, Any]:
     This is the primary callback for speech reminders.
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         job_id = kwargs.get('job_id', 'unknown')
         job_name = kwargs.get('job_name', 'unknown')
@@ -211,7 +211,7 @@ def daily_greeting(**kwargs) -> Dict[str, Any]:
     A daily greeting that can be scheduled.
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         greetings = [
             "Good morning! Hope you have a wonderful day ahead!",
@@ -245,7 +245,7 @@ def hourly_time_announcement(**kwargs) -> Dict[str, Any]:
     Announce the current time (useful for hourly reminders).
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         now = datetime.now()
         time_str = now.strftime("%I:%M %p")
@@ -274,7 +274,7 @@ def break_reminder(**kwargs) -> Dict[str, Any]:
     Remind the user to take a break.
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         reminders = [
             "Time for a break! Step away from the screen and stretch a bit.",
@@ -308,7 +308,7 @@ def water_reminder(**kwargs) -> Dict[str, Any]:
     Remind the user to drink water.
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         reminders = [
             "Don't forget to stay hydrated! Time for some water.",
@@ -342,7 +342,7 @@ def motivational_message(**kwargs) -> Dict[str, Any]:
     Deliver a motivational message.
     """
     try:
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         messages = [
             "You're doing great! Keep up the excellent work!",
@@ -384,35 +384,35 @@ def _get_callback_for_action(action: str, message: str = None, **kwargs) -> tupl
     
     if action in ["speak", "say"]:
         # Use the local speak_reminder callback
-        return "modules.langgraph.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
+        return "app.langgraph.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
     
     elif action == "reminder":
         # Use the local speak_reminder callback with reminder prefix
         reminder_text = f"Reminder: {message}" if message else "Scheduled reminder"
-        return "modules.langgraph.tools.scheduler_tool.speak_reminder", {"message": reminder_text}
+        return "app.langgraph.tools.scheduler_tool.speak_reminder", {"message": reminder_text}
     
     elif action in ["greeting", "daily_greeting"]:
         # Use the local daily_greeting callback
-        return "modules.langgraph.tools.scheduler_tool.daily_greeting", {}
+        return "app.langgraph.tools.scheduler_tool.daily_greeting", {}
     
     elif action == "break_reminder":
         # Use the local break_reminder callback
         callback_args = {"message": message} if message else {}
-        return "modules.langgraph.tools.scheduler_tool.break_reminder", callback_args
+        return "app.langgraph.tools.scheduler_tool.break_reminder", callback_args
     
     elif action == "water_reminder":
         # Use the local water_reminder callback
         callback_args = {"message": message} if message else {}
-        return "modules.langgraph.tools.scheduler_tool.water_reminder", callback_args
+        return "app.langgraph.tools.scheduler_tool.water_reminder", callback_args
     
     elif action in ["motivational", "motivational_message"]:
         # Use the local motivational_message callback
         callback_args = {"message": message} if message else {}
-        return "modules.langgraph.tools.scheduler_tool.motivational_message", callback_args
+        return "app.langgraph.tools.scheduler_tool.motivational_message", callback_args
     
     elif action in ["time_announcement", "hourly_time_announcement"]:
         # Use the local hourly_time_announcement callback
-        return "modules.langgraph.tools.scheduler_tool.hourly_time_announcement", {}
+        return "app.langgraph.tools.scheduler_tool.hourly_time_announcement", {}
     
     elif action == "callback":
         # Advanced usage - user can specify custom callback

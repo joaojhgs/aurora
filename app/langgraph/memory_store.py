@@ -9,7 +9,7 @@ from langchain.embeddings import init_embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
-from modules.config.config_manager import config_manager
+from app.config.config_manager import config_manager
 
 
 def get_embeddings():

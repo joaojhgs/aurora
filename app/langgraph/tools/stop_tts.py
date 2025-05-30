@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
 
-from modules.text_to_speech.tts import stop
+from app.text_to_speech.tts import stop
 
 @tool
 def stop_tts_tool():

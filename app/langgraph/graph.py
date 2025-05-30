@@ -1,15 +1,15 @@
 from typing import Any, Literal, Union
 from langgraph.graph import StateGraph, END
-from modules.langgraph.state import State
+from app.langgraph.state import State
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
-from modules.langgraph.agents.chatbot import chatbot
-from modules.langgraph.tools.tools import tools
+from app.langgraph.agents.chatbot import chatbot
+from app.langgraph.tools.tools import tools
 from pydantic import BaseModel
 from langchain_core.messages import AnyMessage
 
-from modules.langgraph.memory_store import store
-from modules.text_to_speech.tts import play
+from app.langgraph.memory_store import store
+from app.text_to_speech.tts import play
 from enum import Enum
 
 graph_builder = StateGraph(State)
