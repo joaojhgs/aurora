@@ -57,7 +57,7 @@ async def start_pomodoro_tool(
         await cron.schedule_from_text(
             name="pomodoro_work_end",
             schedule_text=f"in {work_minutes} minutes",
-            callback="modules.langgraph.tools.pomodoro_tool.work_session_end",
+            callback="app.langgraph.tools.pomodoro_tool.work_session_end",
             callback_args={}
         )
         
@@ -261,7 +261,7 @@ def break_session_end(**kwargs) -> Dict[str, Any]:
             await cron.schedule_from_text(
                 name="pomodoro_work_end",
                 schedule_text=f"in {work_minutes} minutes",
-                callback="modules.langgraph.tools.pomodoro_tool.work_session_end",
+                callback="app.langgraph.tools.pomodoro_tool.work_session_end",
                 callback_args={}
             )
         
