@@ -1,12 +1,12 @@
 from dotenv import load_dotenv
-from modules.config.config_manager import config_manager
-from modules.helpers.getUseCuda import getUseCuda
+from app.config.config_manager import config_manager
+from app.helpers.getUseCuda import getUseCuda
 
 import os
 import sys
 from threading import Thread
 
-from modules.helpers.runAsyncInThread import run_async_in_thread
+from app.helpers.runAsyncInThread import run_async_in_thread
 
 if __name__ == '__main__':
     print("Starting...")
@@ -36,14 +36,14 @@ if __name__ == '__main__':
         window.hook_into_systems()
         print("UI hooks initialized.")
     
-    from modules.speech_to_text.audio_recorder import AudioToTextRecorder
-    from modules.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_recording_stop
-    from modules.text_to_speech.tts import play
-    from modules.langgraph.graph import stream_graph_updates
+    from app.speech_to_text.audio_recorder import AudioToTextRecorder
+    from app.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_recording_stop
+    from app.text_to_speech.tts import play
+    from app.langgraph.graph import stream_graph_updates
     
     # Initialize the scheduler system
     print("Initializing scheduler system...")
-    from modules.scheduler import get_cron_service
+    from app.scheduler import get_cron_service
     import asyncio
     
     async def init_scheduler():
@@ -95,7 +95,7 @@ if __name__ == '__main__':
             model="medium",
             language=config_manager.get('speech_to_text.language', ''),
             wake_words_sensitivity=0.35,
-            openwakeword_model_paths="modules/voice_models/jarvis.onnx",
+            openwakeword_model_paths="app/voice_models/jarvis.onnx",
             on_wakeword_detected=on_wakeword_detected,
             on_wakeword_timeout=on_wakeword_timeout,
             on_wakeword_detection_start=on_wakeword_detection_start,

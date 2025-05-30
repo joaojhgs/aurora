@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from langchain_core.tools import tool
 
-from modules.scheduler import get_cron_service
+from app.scheduler import get_cron_service
 
 
 # Simple in-memory storage for current Pomodoro session
@@ -171,7 +171,7 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
         
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         cycle = _current_session["cycle"]
         total_cycles = _current_session["total_cycles"]
@@ -202,7 +202,7 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
             await cron.schedule_from_text(
                 name="pomodoro_break_end",
                 schedule_text=f"in {break_minutes} minutes",
-                callback="modules.langgraph.tools.pomodoro_tool.break_session_end",
+                callback="app.langgraph.tools.pomodoro_tool.break_session_end",
                 callback_args={}
             )
         
@@ -234,7 +234,7 @@ def break_session_end(**kwargs) -> Dict[str, Any]:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
         
-        from modules.text_to_speech.tts import play
+        from app.text_to_speech.tts import play
         
         session_type = _current_session["type"]
         work_minutes = _current_session.get("work_minutes", 25)

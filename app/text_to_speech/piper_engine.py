@@ -7,8 +7,8 @@ from typing import Optional
 from RealtimeTTS import BaseEngine
 from queue import Queue
 
-from modules.config.config_manager import config_manager
-from modules.helpers.getUseCuda import getUseCuda
+from app.config.config_manager import config_manager
+from app.helpers.getUseCuda import getUseCuda
 
 # This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
 class PiperVoice:

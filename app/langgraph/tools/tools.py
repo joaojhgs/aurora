@@ -1,25 +1,25 @@
-from modules.langgraph.tools.resume_tts import resume_tts_tool
-from modules.langgraph.tools.stop_tts import stop_tts_tool
+from app.langgraph.tools.resume_tts import resume_tts_tool
+from app.langgraph.tools.stop_tts import stop_tts_tool
 
-from modules.langgraph.tools.upsert_memory import upsert_memory_tool
-from modules.langgraph.tools.current_screen import current_screen_tool
+from app.langgraph.tools.upsert_memory import upsert_memory_tool
+from app.langgraph.tools.current_screen import current_screen_tool
 
 # Scheduler tools
-from modules.langgraph.tools.scheduler_tool import (
+from app.langgraph.tools.scheduler_tool import (
     schedule_task_tool, 
     list_scheduled_tasks_tool, 
     cancel_scheduled_task_tool
 )
 
 # Pomodoro tools
-from modules.langgraph.tools.pomodoro_tool import (
+from app.langgraph.tools.pomodoro_tool import (
     start_pomodoro_tool,
     stop_pomodoro_tool,
     pomodoro_status_tool
 )
 
-from modules.langgraph.memory_store import store
-from modules.config.config_manager import config_manager
+from app.langgraph.memory_store import store
+from app.config.config_manager import config_manager
 from typing import List, Dict, Callable
 
 print("\nInitializing all tools and plugins...\n")
@@ -43,35 +43,35 @@ tools = [
 # Only import if plugin is activated
 
 if config_manager.get('plugins.jira.activate', False):
-    from modules.langgraph.tools.jira_toolkit import jira_tools
+    from app.langgraph.tools.jira_toolkit import jira_tools
     tools.extend(jira_tools)
 
 if config_manager.get('plugins.openrecall.activate', False):
-    from modules.langgraph.tools.openrecall_search import openrecall_search_tool
+    from app.langgraph.tools.openrecall_search import openrecall_search_tool
     tools.append(openrecall_search_tool)
 
 if config_manager.get('plugins.brave_search.activate', False):
-    from modules.langgraph.tools.brave_search import search_brave_tool
+    from app.langgraph.tools.brave_search import search_brave_tool
     tools.append(search_brave_tool)
 else:
-    from modules.langgraph.tools.duckduckgo_search import duckduckgo_search_tool
+    from app.langgraph.tools.duckduckgo_search import duckduckgo_search_tool
     tools.append(duckduckgo_search_tool)
 
 
 if config_manager.get('plugins.gmail.activate', False):
-    from modules.langgraph.tools.gmail_toolkit import gmail_tools
+    from app.langgraph.tools.gmail_toolkit import gmail_tools
     tools.extend(gmail_tools)
 
 if config_manager.get('plugins.gcalendar.activate', False):
-    from modules.langgraph.tools.gcalendar_toolkit import gcalendar_tools
+    from app.langgraph.tools.gcalendar_toolkit import gcalendar_tools
     tools.extend(gcalendar_tools)
 
 if config_manager.get('plugins.github.activate', False):
-    from modules.langgraph.tools.github_toolkit import github_tools
+    from app.langgraph.tools.github_toolkit import github_tools
     tools.extend(github_tools)
 
 if config_manager.get('plugins.slack.activate', False):
-    from modules.langgraph.tools.slack_toolkit import slack_tools
+    from app.langgraph.tools.slack_toolkit import slack_tools
     tools.extend(slack_tools)
 
 tool_lookup: Dict[str, Callable] = {}

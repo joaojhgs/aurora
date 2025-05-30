@@ -16,7 +16,7 @@ The Aurora Scheduler Module provides a comprehensive cron job system that integr
 ### Using the High-Level CronService
 
 ```python
-from modules.scheduler import CronService, get_cron_service
+from app.scheduler import CronService, get_cron_service
 
 # Get the singleton service
 cron = get_cron_service()
@@ -34,7 +34,7 @@ job_id = cron.schedule_relative(
 ### Using the SchedulerManager Directly
 
 ```python
-from modules.scheduler import SchedulerManager
+from app.scheduler import SchedulerManager
 
 scheduler = SchedulerManager()
 await scheduler.initialize()

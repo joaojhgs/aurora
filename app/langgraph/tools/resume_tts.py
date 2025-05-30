@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
 
-from modules.text_to_speech.tts import resume
+from app.text_to_speech.tts import resume
 
 @tool
 def resume_tts_tool():

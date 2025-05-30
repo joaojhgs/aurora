@@ -1,7 +1,7 @@
 from RealtimeTTS import TextToAudioStream, PiperVoice
-from modules.speech_to_text.stt import reduce_volume_except_current, restore_volume_except_current
-from modules.text_to_speech.piper_engine import PiperEngine
-from modules.config.config_manager import config_manager
+from app.speech_to_text.stt import reduce_volume_except_current, restore_volume_except_current
+from app.text_to_speech.piper_engine import PiperEngine
+from app.config.config_manager import config_manager
 import os
 
 
