@@ -6,6 +6,8 @@ from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
 from app.langgraph.state import State
 from app.langgraph.tools.tools import get_tools
 from app.config.config_manager import config_manager
+from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
+from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 """
 The chatbot agent is the main agent coordinator in the graph.
@@ -14,25 +16,124 @@ The chatbot agent is the main agent coordinator in the graph.
 # Init LLM
 llm = None
 
-if config_manager.get('llm.openai_chat_model'):
-    llm = ChatOpenAI(
-        model=config_manager.get('llm.openai_chat_model'),
-    )
-elif config_manager.get('llm.llama_cpp_model_path'):
-    llm = ChatLlamaCpp(
-        chat_format="chatml-function-calling",
-        min_p=0.0,
-        top_p=0.95,
-        temperature=1.0,
-        top_k=64,
-        repeat_penalty=1.0,
-        model_path=config_manager.get('llm.llama_cpp_model_path'),
-        n_ctx=2048,
-        n_gpu_layers=0,
-        n_batch=1000,  # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
-        max_tokens=256*2,
-        disable_streaming=True,
-    )
+# Get the configured LLM provider
+provider = config_manager.get('llm.provider', 'openai')
+
+if provider == 'openai':
+    openai_options = config_manager.get_section('llm.third_party.openai.options')
+    if openai_options and openai_options.get('model'):
+        llm = ChatOpenAI(**openai_options)
+        log_info(f"Initialized OpenAI LLM with model: {openai_options['model']}")
+
+elif provider == 'huggingface_endpoint':
+    hf_endpoint_options = config_manager.get_section('llm.third_party.huggingface_endpoint.options')
+    
+    if hf_endpoint_options and hf_endpoint_options.get('endpoint_url') and hf_endpoint_options.get('access_token'):
+        try:
+            from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+            
+            # Prepare options for HuggingFaceEndpoint (rename access_token to huggingfacehub_api_token)
+            endpoint_options = hf_endpoint_options.copy()
+            if 'access_token' in endpoint_options:
+                endpoint_options['huggingfacehub_api_token'] = endpoint_options.pop('access_token')
+            if 'max_tokens' in endpoint_options:
+                endpoint_options['max_new_tokens'] = endpoint_options.pop('max_tokens')
+            
+            # Create HuggingFace endpoint and chat interface
+            hf_endpoint = HuggingFaceEndpoint(**endpoint_options)
+            llm = ChatHuggingFace(llm=hf_endpoint)
+            log_info(f"Initialized HuggingFace Endpoint LLM with URL: {hf_endpoint_options['endpoint_url']}")
+        except ImportError:
+            log_warning("langchain-huggingface not available. Install with: pip install langchain-huggingface")
+        except Exception as e:
+            log_error(f"Failed to initialize HuggingFace Endpoint: {e}")
+
+elif provider == 'huggingface_pipeline':
+    hf_pipeline_options = config_manager.get_section('llm.local.huggingface_pipeline.options')
+    
+    if hf_pipeline_options and hf_pipeline_options.get('model'):
+        try:
+            from langchain_huggingface import HuggingFacePipeline, ChatHuggingFace
+            
+            # Get device configuration from hardware acceleration settings
+            use_hardware_acceleration = config_manager.get('hardware_acceleration.llm', True)
+            device_value = 0 if use_hardware_acceleration else -1  # 0 for GPU, -1 for CPU
+            
+            # Prepare options for HuggingFacePipeline
+            pipeline_options = hf_pipeline_options.copy()
+            model_id = pipeline_options.pop('model')
+            
+            # Get nested kwargs with defaults
+            pipeline_kwargs = pipeline_options.pop('pipeline_kwargs', {})
+            model_kwargs = pipeline_options.pop('model_kwargs', {})
+            
+            # Move remaining options to model_kwargs if not in pipeline_kwargs
+            for key, value in pipeline_options.items():
+                if key not in ['temperature', 'max_tokens']:  # These will be handled by ChatHuggingFace
+                    model_kwargs[key] = value
+            
+            # Create HuggingFace pipeline
+            pipeline = HuggingFacePipeline.from_model_id(
+                model_id=model_id,
+                task="text-generation",
+                device=device_value,
+                pipeline_kwargs=pipeline_kwargs,
+                model_kwargs=model_kwargs
+            )
+            
+            log_info('HuggingFace Pipeline initialized successfully, initializing ChatHuggingFace...')
+            llm = ChatHuggingFace(llm=pipeline, verbose=True, model_id=model_id)
+            device_name = "GPU" if use_hardware_acceleration else "CPU"
+            log_info(f"Initialized HuggingFace Pipeline LLM with model: {model_id} on device: {device_name}")
+            
+        except ImportError as e:
+            log_error(f"Missing dependencies for HuggingFace Pipeline: {e}")
+        except Exception as e:
+            log_error(f"Failed to initialize HuggingFace Pipeline: {e}")
+            llm = None
+
+elif provider == 'llama_cpp':
+    llama_options = config_manager.get_section('llm.local.llama_cpp.options')
+    model_path = llama_options.get('model_path') if llama_options else None
+    
+    if model_path:
+        # Prepare options for ChatLlamaCpp (ensure disable_streaming is set)
+        llama_init_options = llama_options.copy()
+        llama_init_options['disable_streaming'] = True
+        
+        llm = ChatLlamaCpp(**llama_init_options)
+        log_info(f"Initialized Llama.cpp LLM with model: {model_path}")
+
+# Fallback: try legacy configuration for backward compatibility
+if llm is None:
+    log_warning("Primary LLM initialization failed, attempting legacy configuration fallback")
+    if config_manager.get('llm.openai_chat_model'):
+        llm = ChatOpenAI(
+            model=config_manager.get('llm.openai_chat_model'),
+        )
+        log_info("Initialized OpenAI LLM using legacy configuration")
+    elif config_manager.get('llm.llama_cpp_model_path'):
+        llm = ChatLlamaCpp(
+            chat_format="chatml-function-calling",
+            min_p=0.0,
+            top_p=0.95,
+            temperature=1.0,
+            top_k=64,
+            repeat_penalty=1.0,
+            model_path=config_manager.get('llm.llama_cpp_model_path'),
+            n_ctx=2048,
+            n_gpu_layers=0,
+            n_batch=1000,
+            max_tokens=256*2,
+            disable_streaming=True,
+        )
+        log_info("Initialized Llama.cpp LLM using legacy configuration")
+
+# Final check to ensure LLM is initialized
+if llm is not None:
+    log_info(f"LLM successfully initialized with provider: {provider}")
+else:
+    log_error(f"Failed to initialize LLM with provider: {provider}")
 
 # Def the chatbot node
 def chatbot(state: State, store: BaseStore):
