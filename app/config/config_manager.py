@@ -72,6 +72,7 @@ class ConfigManager:
     def get(self, key_path: str, default: Any = None) -> Any:
         """
         Get configuration value using dot notation (e.g., 'ui.activate')
+        Can also retrieve entire sections (e.g., 'llm.third_party.openai')
         """
         keys = key_path.split('.')
         value = self._config
@@ -82,6 +83,13 @@ class ConfigManager:
             return value
         except (KeyError, TypeError):
             return default
+    
+    def get_section(self, section_path: str, default: Any = None) -> Any:
+        """
+        Get an entire configuration section using dot notation.
+        This is an alias for get() but provides clearer intent when retrieving sections.
+        """
+        return self.get(section_path, default)
     
     def set(self, key_path: str, value: Any, save: bool = True):
         """
@@ -120,12 +128,23 @@ class ConfigManager:
             self._notify_observers(key_path, old_value, value)
     
     def update_section(self, section: str, values: Dict[str, Any], save: bool = True):
-        """Update an entire configuration section"""
-        if section not in self._config:
-            self._config[section] = {}
+        """Update an entire configuration section using dot notation"""
+        keys = section.split('.')
+        config_ref = self._config
         
         with self.config_lock:
-            self._config[section].update(values)
+            # Navigate to the parent of the target section
+            for key in keys[:-1]:
+                if key not in config_ref:
+                    config_ref[key] = {}
+                config_ref = config_ref[key]
+            
+            # Update the target section
+            if keys[-1] not in config_ref:
+                config_ref[keys[-1]] = {}
+            
+            config_ref[keys[-1]].update(values)
+            
             if save:
                 self.save_config()
             
@@ -159,9 +178,51 @@ class ConfigManager:
                 "debug": False
             },
             "llm": {
-                "llama_cpp_model_path": "",
-                "openai_model": "",
-                "openai_chat_model": ""
+                "provider": "openai",
+                "third_party": {
+                    "openai": {
+                        "options": {
+                            "model": "gpt-4o",
+                            "temperature": 0.7,
+                            "max_tokens": 512
+                        }
+                    },
+                    "huggingface_endpoint": {
+                        "options": {
+                            "endpoint_url": "",
+                            "model": "",
+                            "access_token": "",
+                            "temperature": 0.7,
+                            "max_tokens": 512
+                        }
+                    }
+                },
+                "local": {
+                    "huggingface_pipeline": {
+                        "options": {
+                            "model": "microsoft/DialoGPT-medium",
+                            "device": "auto",
+                            "temperature": 0.7,
+                            "max_tokens": 512,
+                            "torch_dtype": "auto"
+                        }
+                    },
+                    "llama_cpp": {
+                        "options": {
+                            "model_path": "",
+                            "temperature": 1.0,
+                            "max_tokens": 512,
+                            "n_ctx": 2048,
+                            "n_gpu_layers": 0,
+                            "n_batch": 1000,
+                            "top_p": 0.95,
+                            "top_k": 64,
+                            "repeat_penalty": 1.0,
+                            "min_p": 0.0,
+                            "chat_format": "chatml-function-calling"
+                        }
+                    }
+                }
             },
             "embeddings": {
                 "use_local": False
@@ -226,9 +287,16 @@ class ConfigManager:
             'AURORA_UI_ACTIVATE': ('ui.activate', lambda x: x.lower() == 'true'),
             'AURORA_DARK_MODE': ('ui.dark_mode', lambda x: x.lower() == 'true'),
             'AURORA_UI_DEBUG': ('ui.debug', lambda x: x.lower() == 'true'),
-            'LLAMMA_CPP_MODEL_PATH': ('llm.llama_cpp_model_path', str),
-            'OPENAI_MODEL': ('llm.openai_model', str),
-            'OPENAI_CHAT_MODEL': ('llm.openai_chat_model', str),
+            'LLM_PROVIDER': ('llm.provider', str),
+            'LLAMMA_CPP_MODEL_PATH': ('llm.local.llama_cpp.options.model_path', str),
+            'OPENAI_MODEL': ('llm.third_party.openai.options.model', str),
+            'OPENAI_CHAT_MODEL': ('llm.third_party.openai.options.model', str),
+            'HUGGINGFACE_ACCESS_TOKEN': ('llm.third_party.huggingface_endpoint.options.access_token', str),
+            'HUGGINGFACE_ENDPOINT_URL': ('llm.third_party.huggingface_endpoint.options.endpoint_url', str),
+            'HUGGINGFACE_MODEL_NAME': ('llm.third_party.huggingface_endpoint.options.model', str),
+            'HUGGINGFACE_PIPELINE_MODEL': ('llm.local.huggingface_pipeline.options.model', str),
+            'HUGGINGFACE_PIPELINE_DEVICE': ('llm.local.huggingface_pipeline.options.device', str),
+            'HUGGINGFACE_PIPELINE_TORCH_DTYPE': ('llm.local.huggingface_pipeline.options.torch_dtype', str),
             'USE_LOCAL_EMBEDDINGS': ('embeddings.use_local', lambda x: x.lower() == 'true'),
             'STT_LANGUAGE': ('speech_to_text.language', str),
             'STT_SILERO_DEACTIVITY_DETECTION': ('speech_to_text.silero_deactivity_detection', lambda x: x.lower() == 'true'),
@@ -284,7 +352,7 @@ class ConfigManager:
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "required": ["ui", "llm", "embeddings", "speech_to_text", "text_to_speech", "cuda", "plugins", "google"],
+            "required": ["ui", "llm", "embeddings", "speech_to_text", "text_to_speech", "hardware_acceleration", "plugins", "google"],
             "properties": {
                 "ui": {
                     "type": "object",
@@ -298,11 +366,107 @@ class ConfigManager:
                 },
                 "llm": {
                     "type": "object",
-                    "required": ["llama_cpp_model_path", "openai_model", "openai_chat_model"],
+                    "required": ["provider", "third_party", "local"],
                     "properties": {
-                        "llama_cpp_model_path": {"type": "string"},
-                        "openai_model": {"type": "string"},
-                        "openai_chat_model": {"type": "string"}
+                        "provider": {
+                            "type": "string",
+                            "enum": ["openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"]
+                        },
+                        "third_party": {
+                            "type": "object",
+                            "required": ["openai", "huggingface_endpoint"],
+                            "properties": {
+                                "openai": {
+                                    "type": "object",
+                                    "required": ["options"],
+                                    "properties": {
+                                        "options": {
+                                            "type": "object",
+                                            "required": ["model", "temperature", "max_tokens"],
+                                            "properties": {
+                                                "model": {"type": "string"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                                                "max_tokens": {"type": "integer", "minimum": 1}
+                                            },
+                                            "additionalProperties": False
+                                        }
+                                    },
+                                    "additionalProperties": False
+                                },
+                                "huggingface_endpoint": {
+                                    "type": "object",
+                                    "required": ["options"],
+                                    "properties": {
+                                        "options": {
+                                            "type": "object",
+                                            "required": ["endpoint_url", "model", "access_token", "temperature", "max_tokens"],
+                                            "properties": {
+                                                "endpoint_url": {"type": "string"},
+                                                "model": {"type": "string"},
+                                                "access_token": {"type": "string"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                                                "max_tokens": {"type": "integer", "minimum": 1}
+                                            },
+                                            "additionalProperties": False
+                                        }
+                                    },
+                                    "additionalProperties": False
+                                }
+                            },
+                            "additionalProperties": False
+                        },
+                        "local": {
+                            "type": "object",
+                            "required": ["huggingface_pipeline", "llama_cpp"],
+                            "properties": {
+                                "huggingface_pipeline": {
+                                    "type": "object",
+                                    "required": ["options"],
+                                    "properties": {
+                                        "options": {
+                                            "type": "object",
+                                            "required": ["model"],
+                                            "properties": {
+                                                "model": {"type": "string"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                                                "max_tokens": {"type": "integer", "minimum": 1},
+                                                "torch_dtype": {"type": "string"},
+                                                "pipeline_kwargs": {"type": "object"},
+                                                "model_kwargs": {"type": "object"}
+                                            },
+                                            "additionalProperties": True
+                                        }
+                                    },
+                                    "additionalProperties": False
+                                },
+                                "llama_cpp": {
+                                    "type": "object",
+                                    "required": ["options"],
+                                    "properties": {
+                                        "options": {
+                                            "type": "object",
+                                            "required": ["model_path", "temperature", "max_tokens", "n_ctx", "n_gpu_layers", "n_batch", "top_p", "top_k", "repeat_penalty", "min_p", "chat_format"],
+                                            "properties": {
+                                                "model_path": {"type": "string"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                                                "max_tokens": {"type": "integer", "minimum": 1},
+                                                "n_ctx": {"type": "integer", "minimum": 1},
+                                                        "n_gpu_layers": {"type": "integer", "minimum": 0},
+                                                "n_batch": {"type": "integer", "minimum": 1},
+                                                "top_p": {"type": "number", "minimum": 0, "maximum": 1},
+                                                "top_k": {"type": "integer", "minimum": 1},
+                                                "repeat_penalty": {"type": "number", "minimum": 0},
+                                                "min_p": {"type": "number", "minimum": 0, "maximum": 1},
+                                                "chat_format": {"type": "string"}
+                                            },
+                                            "additionalProperties": False
+                                        }
+                                    },
+                                    "additionalProperties": False
+                                }
+                            },
+                            "additionalProperties": False
+                        }
                     },
                     "additionalProperties": False
                 },
@@ -335,14 +499,15 @@ class ConfigManager:
                     },
                     "additionalProperties": False
                 },
-                "cuda": {
+                "hardware_acceleration": {
                     "type": "object",
-                    "required": ["use_cuda_tts", "use_cuda_stt", "use_cuda_ocr_bg", "use_cuda_ocr_curr"],
+                    "required": ["tts", "stt", "ocr_bg", "ocr_curr", "llm"],
                     "properties": {
-                        "use_cuda_tts": {"type": "boolean"},
-                        "use_cuda_stt": {"type": "boolean"},
-                        "use_cuda_ocr_bg": {"type": "boolean"},
-                        "use_cuda_ocr_curr": {"type": "boolean"}
+                        "tts": {"type": "boolean"},
+                        "stt": {"type": "boolean"},
+                        "ocr_bg": {"type": "boolean"},
+                        "ocr_curr": {"type": "boolean"},
+                        "llm": {"type": "boolean"}
                     },
                     "additionalProperties": False
                 },
@@ -457,20 +622,39 @@ class ConfigManager:
         errors = []
         
         # Validate LLM configuration
-        if not self.get('llm.openai_chat_model') and not self.get('llm.llama_cpp_model_path'):
-            errors.append("No LLM configured. Set either openai_chat_model or llama_cpp_model_path")
+        provider = self.get('llm.provider')
+        if not provider:
+            errors.append("No LLM provider specified")
+        else:
+            if provider == 'openai':
+                if not self.get('llm.third_party.openai.options.model'):
+                    errors.append("OpenAI model not specified")
+            elif provider == 'huggingface_endpoint':
+                if not self.get('llm.third_party.huggingface_endpoint.options.endpoint_url'):
+                    errors.append("HuggingFace endpoint URL not specified")
+                if not self.get('llm.third_party.huggingface_endpoint.options.access_token'):
+                    errors.append("HuggingFace access token not specified")
+            elif provider == 'huggingface_pipeline':
+                if not self.get('llm.local.huggingface_pipeline.options.model'):
+                    errors.append("HuggingFace Pipeline model not specified")
+            elif provider == 'llama_cpp':
+                model_path = self.get('llm.local.llama_cpp.options.model_path')
+                if not model_path:
+                    errors.append("Llama.cpp model path not specified")
+                elif not os.path.exists(model_path):
+                    errors.append(f"Llama.cpp model file not found: {model_path}")
         
         # Validate TTS model paths exist
         tts_model = self.get('text_to_speech.model_file_path')
         if tts_model and not os.path.exists(tts_model.lstrip('/')):
             errors.append(f"TTS model file not found: {tts_model}")
         
-        # Validate CUDA configuration
-        cuda_keys = ['use_cuda_tts', 'use_cuda_stt', 'use_cuda_ocr_bg', 'use_cuda_ocr_curr']
-        for key in cuda_keys:
-            value = self.get(f'cuda.{key}')
+        # Validate hardware acceleration configuration
+        hw_accel_keys = ['tts', 'stt', 'ocr_bg', 'ocr_curr', 'llm']
+        for key in hw_accel_keys:
+            value = self.get(f'hardware_acceleration.{key}')
             if not isinstance(value, bool):
-                errors.append(f"CUDA setting cuda.{key} must be boolean, got {type(value)}")
+                errors.append(f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}")
         
         return errors
 

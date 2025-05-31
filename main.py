@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from app.config.config_manager import config_manager
-from app.helpers.getUseCuda import getUseCuda
+from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 
 import os
@@ -103,7 +103,7 @@ if __name__ == '__main__':
             on_recording_start=on_recording_start,
             on_recording_stop=on_recording_stop,
             wake_word_buffer_duration=1,
-            device=getUseCuda("cuda.use_cuda_stt"),
+            device=getUseHardwareAcceleration("stt"),
             silero_deactivity_detection=config_manager.get('speech_to_text.silero_deactivity_detection', False),
             openwakeword_speedx_noise_reduction=config_manager.get('speech_to_text.wakeword_speedx_noise_reduction', False),
             # No need for CLI STT indication if UI is activated

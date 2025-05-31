@@ -16,6 +16,7 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
     - [3.1 Configuration Files Setup](#31-configuration-files-setup)
     - [3.2 Configuration Overview](#32-configuration-overview)
     - [3.3 Running Local Models](#33-running-local-models)
+    - [3.4 LLM Provider Configuration](#34-llm-provider-configuration)
   - [4. Configuration Validation](#4-configuration-validation)
   - [5. Run the assistant](#5-run-the-assistant)
 - [Libraries and Tools](#libraries-and-tools)
@@ -37,7 +38,10 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Convert user speech into text using **Whisper** (OpenAI's lightweight model for local processing).
 
 3. **Large Language Model (LLM) Integration**:
-   - Use local-first **Llama 3**, **Mistral 7B** or **Gemma 2 and 3** (quantized for efficiency) to process user queries and generate responses.
+   - **Multi-Provider Support**: Choose from OpenAI, HuggingFace Pipeline (local), HuggingFace Endpoint (remote), or Llama.cpp
+   - **Local Models**: Use **Llama 3**, **Mistral 7B**, **Gemma 2 and 3** (quantized for efficiency) or any HuggingFace model locally
+   - **Remote Models**: Access HuggingFace Inference Endpoints for cloud-based inference
+   - **Structured Configuration**: Organized LLM settings with provider-specific parameter control
    - Orchestrate tool calls (e.g., OpenRecall, browser-use) using **LangChain** and **Langgraph**.
 
 4. **Semantic Search with OpenRecall**:

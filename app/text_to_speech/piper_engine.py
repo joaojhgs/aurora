@@ -8,8 +8,8 @@ from RealtimeTTS import BaseEngine
 from queue import Queue
 
 from app.config.config_manager import config_manager
-from app.helpers.getUseCuda import getUseCuda
 from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
+from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 # This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
 class PiperVoice:
@@ -110,7 +110,7 @@ class PiperEngine(BaseEngine):
             cmd_list.extend(["-c", self.voice.config_file])
 
         # If CUDA is set for TTS
-        if(getUseCuda('USE_CUDA_TTS')):
+        if(getUseHardwareAcceleration('tts')):
             cmd_list.extend(["--cuda"])
 
         # Debug: show the exact command (helpful for troubleshooting)
