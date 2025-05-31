@@ -49,6 +49,7 @@ import platform
 import pyaudio
 import logging
 import struct
+from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 import base64
 import queue
 import halo
@@ -658,14 +659,14 @@ class AudioToTextRecorder:
             if mp.get_start_method(allow_none=True) is None:
                 mp.set_start_method("spawn")
         except RuntimeError as e:
-            logging.info(f"Start method has already been set. Details: {e}")
+            log_info(f"Start method has already been set. Details: {e}")
 
-        logging.info("Starting RealTimeSTT")
+        log_info("Starting RealTimeSTT")
 
         if use_extended_logging:
-            logging.info("RealtimeSTT was called with these parameters:")
+            log_debug("RealtimeSTT was called with these parameters:")
             for param, value in locals().items():
-                logging.info(f"{param}: {value}")
+                log_debug(f"{param}: {value}")
 
         self.interrupt_stop_event = mp.Event()
         self.was_interrupted = mp.Event()
@@ -698,7 +699,7 @@ class AudioToTextRecorder:
 
         # Start audio data reading process
         if self.use_microphone.value:
-            logging.info("Initializing audio recording"
+            log_info("Initializing audio recording"
                          " (creating pyAudio input stream,"
                          f" sample rate: {self.sample_rate}"
                          f" buffer size: {self.buffer_size}"
@@ -719,7 +720,7 @@ class AudioToTextRecorder:
         # Initialize the realtime transcription model
         if self.enable_realtime_transcription and not self.use_main_model_for_realtime:
             try:
-                logging.info("Initializing faster_whisper realtime "
+                log_info("Initializing faster_whisper realtime "
                              f"transcription model {self.realtime_model_type}, "
                              f"default device: {self.device}, "
                              f"compute type: {self.compute_type}, "
@@ -1441,7 +1442,7 @@ class AudioToTextRecorder:
 
                     if start_time:
                         if self.print_transcription_time:
-                            print(f"Model {self.main_model_type} completed transcription in {transcription_time:.2f} seconds")
+                            log_info(f"Model {self.main_model_type} completed transcription in {transcription_time:.2f} seconds")
                         else:
                             logging.debug(f"Model {self.main_model_type} completed transcription in {transcription_time:.2f} seconds")
                     return transcription
@@ -1695,7 +1696,7 @@ class AudioToTextRecorder:
             if self.is_shut_down:
                 return
 
-            print("\033[91mRealtimeSTT shutting down\033[0m")
+            log_info("RealtimeSTT shutting down")
 
             # Force wait_audio() and text() to exit
             self.is_shut_down = True

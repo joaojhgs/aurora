@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from app.config.config_manager import config_manager
 from app.helpers.getUseCuda import getUseCuda
+from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 
 import os
 import sys
@@ -9,7 +10,7 @@ from threading import Thread
 from app.helpers.runAsyncInThread import run_async_in_thread
 
 if __name__ == '__main__':
-    print("Starting...")
+    log_info("Starting Aurora...")
     # Load environment variables
     # This is kept even with the new config manager to deal with development environments 
     # And third party services that rely on environment variables, such as langsmith and OpenAi.
@@ -32,9 +33,9 @@ if __name__ == '__main__':
 
         # Initialize the UI-STT-TTS hooks
         # This MUST happen before any TTS/STT operations
-        print("Initializing UI hooks...")
+        log_info("Initializing UI hooks...")
         window.hook_into_systems()
-        print("UI hooks initialized.")
+        log_info("UI hooks initialized.")
     
     from app.speech_to_text.audio_recorder import AudioToTextRecorder
     from app.speech_to_text.stt import on_recording_start, on_wakeword_detected, on_wakeword_timeout, on_wakeword_detection_start, on_recording_stop
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     from app.langgraph.graph import stream_graph_updates
     
     # Initialize the scheduler system
-    print("Initializing scheduler system...")
+    log_info("Initializing scheduler system...")
     from app.scheduler import get_cron_service
     import asyncio
     
@@ -50,7 +51,7 @@ if __name__ == '__main__':
         """Initialize the scheduler service"""
         cron = get_cron_service()
         await cron.initialize()
-        print("Scheduler system initialized and running.")
+        log_info("Scheduler system initialized and running.")
     
     # Start scheduler in background thread
     def start_scheduler():
@@ -79,7 +80,7 @@ if __name__ == '__main__':
         open_recall_thread.start()
         
     def on_text_detected(text):
-        print(f">> STT detected: {text}")
+        log_debug(f">> STT detected: {text}")
         # Let the UI know this is coming from STT before sending to the LLM
         if window:
             window.process_stt_message(text)
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     
     # Create and start the audio recorder in a separate thread
     def start_recorder():
-        print("Starting audio recorder...")
+        log_info("Starting audio recorder...")
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
@@ -105,6 +106,8 @@ if __name__ == '__main__':
             device=getUseCuda("cuda.use_cuda_stt"),
             silero_deactivity_detection=config_manager.get('speech_to_text.silero_deactivity_detection', False),
             openwakeword_speedx_noise_reduction=config_manager.get('speech_to_text.wakeword_speedx_noise_reduction', False),
+            # No need for CLI STT indication if UI is activated
+            spinner=not config_manager.get('ui.activate', False),
             ) as recorder:
             
             while True:

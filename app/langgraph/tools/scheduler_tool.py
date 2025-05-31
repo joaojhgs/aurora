@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from langchain_core.tools import tool
 
 from app.scheduler import get_cron_service
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
 
 @tool()
@@ -189,7 +190,7 @@ def speak_reminder(**kwargs) -> Dict[str, Any]:
         if not message:
             message = f"This is a scheduled reminder: {job_name}"
         
-        print(f"[{datetime.now()}] Speaking reminder: {message}")
+        log_info(f"[{datetime.now()}] Speaking reminder: {message}")
         play(message)
         
         return {
@@ -199,7 +200,7 @@ def speak_reminder(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in speak_reminder: {e}")
+        log_error(f"Error in speak_reminder: {e}")
         return {
             'success': False,
             'message': f'Failed to speak reminder: {e}'
@@ -223,7 +224,7 @@ def daily_greeting(**kwargs) -> Dict[str, Any]:
         
         greeting = random.choice(greetings)
         
-        print(f"[{datetime.now()}] Daily greeting: {greeting}")
+        log_info(f"[{datetime.now()}] Daily greeting: {greeting}")
         play(greeting)
         
         return {
@@ -233,7 +234,7 @@ def daily_greeting(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in daily_greeting: {e}")
+        log_error(f"Error in daily_greeting: {e}")
         return {
             'success': False,
             'message': f'Failed to deliver daily greeting: {e}'
@@ -252,7 +253,7 @@ def hourly_time_announcement(**kwargs) -> Dict[str, Any]:
         
         message = f"The time is now {time_str}"
         
-        print(f"[{datetime.now()}] Time announcement: {message}")
+        log_info(f"Time announcement: {message}")
         play(message)
         
         return {
@@ -262,7 +263,7 @@ def hourly_time_announcement(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in hourly_time_announcement: {e}")
+        log_error(f"Error in hourly_time_announcement: {e}")
         return {
             'success': False,
             'message': f'Failed to announce time: {e}'
@@ -286,7 +287,7 @@ def break_reminder(**kwargs) -> Dict[str, Any]:
         
         reminder = kwargs.get('message', random.choice(reminders))
         
-        print(f"[{datetime.now()}] Break reminder: {reminder}")
+        log_info(f"Break reminder: {reminder}")
         play(reminder)
         
         return {
@@ -296,7 +297,7 @@ def break_reminder(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in break_reminder: {e}")
+        log_error(f"Error in break_reminder: {e}")
         return {
             'success': False,
             'message': f'Failed to deliver break reminder: {e}'
@@ -320,7 +321,7 @@ def water_reminder(**kwargs) -> Dict[str, Any]:
         
         reminder = kwargs.get('message', random.choice(reminders))
         
-        print(f"[{datetime.now()}] Water reminder: {reminder}")
+        log_info(f"Water reminder: {reminder}")
         play(reminder)
         
         return {
@@ -330,7 +331,7 @@ def water_reminder(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in water_reminder: {e}")
+        log_error(f"Error in water_reminder: {e}")
         return {
             'success': False,
             'message': f'Failed to deliver water reminder: {e}'
@@ -356,7 +357,7 @@ def motivational_message(**kwargs) -> Dict[str, Any]:
         
         message = kwargs.get('message', random.choice(messages))
         
-        print(f"[{datetime.now()}] Motivational message: {message}")
+        log_info(f"Motivational message: {message}")
         play(message)
         
         return {
@@ -366,7 +367,7 @@ def motivational_message(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in motivational_message: {e}")
+        log_error(f"Error in motivational_message: {e}")
         return {
             'success': False,
             'message': f'Failed to deliver motivational message: {e}'

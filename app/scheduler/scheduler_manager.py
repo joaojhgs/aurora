@@ -14,6 +14,7 @@ from croniter import croniter
 from pathlib import Path
 
 from ..database import SchedulerDatabaseService, CronJob, ScheduleType, JobStatus
+from ..helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 
 
 class SchedulerManager:
@@ -31,18 +32,18 @@ class SchedulerManager:
         """Initialize the scheduler database and load jobs"""
         await self.db_service.initialize()
         await self._load_jobs()
-        print("Scheduler initialization completed")
+        log_info("Scheduler initialization completed")
     
     def start(self):
         """Start the scheduler in a separate thread"""
         if self._running:
-            print("Scheduler is already running")
+            log_info("Scheduler is already running")
             return
         
         self._running = True
         self._thread = threading.Thread(target=self._run_scheduler, daemon=True)
         self._thread.start()
-        print("Scheduler started in background thread")
+        log_info("Scheduler started in background thread")
     
     def stop(self):
         """Stop the scheduler"""
@@ -52,7 +53,7 @@ class SchedulerManager:
         self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
-        print("Scheduler stopped")
+        log_info("Scheduler stopped")
     
     def _run_scheduler(self):
         """Main scheduler loop running in separate thread"""
@@ -63,7 +64,7 @@ class SchedulerManager:
         try:
             self._loop.run_until_complete(self._scheduler_loop())
         except Exception as e:
-            print(f"Scheduler error: {e}")
+            log_error(f"Scheduler error: {e}")
         finally:
             self._loop.close()
     
@@ -82,7 +83,7 @@ class SchedulerManager:
                 await asyncio.sleep(1)  # Check every second
                 
             except Exception as e:
-                print(f"Error in scheduler loop: {e}")
+                log_error(f"Error in scheduler loop: {e}")
                 await asyncio.sleep(5)  # Wait longer on errors
     
     async def _load_jobs(self):
@@ -100,14 +101,14 @@ class SchedulerManager:
                     
                     self._jobs_cache[job.id] = job
             
-            print(f"Loaded {len(self._jobs_cache)} active jobs")
+            log_info(f"Loaded {len(self._jobs_cache)} active jobs")
             
         except Exception as e:
-            print(f"Error loading jobs: {e}")
+            log_error(f"Error loading jobs: {e}")
     
     async def _execute_job(self, job: CronJob):
         """Execute a single job"""
-        print(f"Executing job: {job.name} ({job.id})")
+        log_debug(f"Executing job: {job.name} ({job.id})")
         
         try:
             # Update status to running
@@ -141,7 +142,7 @@ class SchedulerManager:
             
         except Exception as e:
             error_msg = f"Execution error: {str(e)}"
-            print(f"Job execution failed: {error_msg}")
+            log_error(f"Job execution failed: {error_msg}")
             job.update_status(JobStatus.FAILED, error_msg)
             
             if job.can_retry():
@@ -200,7 +201,7 @@ class SchedulerManager:
                 return self._parse_absolute_time(job.schedule_value)
             
         except Exception as e:
-            print(f"Error calculating next run time for job {job.name}: {e}")
+            log_error(f"Error calculating next run time for job {job.name}: {e}")
             return None
     
     def _parse_relative_time(self, relative_time: str) -> Optional[datetime]:

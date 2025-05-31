@@ -11,6 +11,7 @@ import threading
 
 from .scheduler_manager import SchedulerManager
 from ..database import CronJob, ScheduleType
+from ..helpers.aurora_logger import log_info, log_error, log_warning
 
 
 class CronService:
@@ -27,7 +28,7 @@ class CronService:
             await self.scheduler_manager.initialize()
             self.scheduler_manager.start()
             self._initialized = True
-            print("Cron service initialized")
+            log_info("Cron service initialized")
     
     async def schedule_relative(
         self,
@@ -141,7 +142,7 @@ class CronService:
     async def _schedule_job_async(self, scheduler_method, callback, **kwargs) -> Optional[str]:
         """Helper to schedule jobs asynchronously"""
         if not self._initialized:
-            print("Warning: CronService not initialized. Call initialize() first.")
+            log_warning("Warning: CronService not initialized. Call initialize() first.")
             return None
         
         try:
@@ -158,7 +159,7 @@ class CronService:
             return job_id
             
         except Exception as e:
-            print(f"Error scheduling job: {e}")
+            log_error(f"Error scheduling job: {e}")
             return None
     
     def _parse_callback(self, callback) -> tuple[str, str]:
@@ -231,7 +232,7 @@ class CronService:
         if self.scheduler_manager:
             self.scheduler_manager.stop()
         self._executor.shutdown(wait=True)
-        print("Cron service shutdown")
+        log_info("Cron service shutdown")
     
     async def schedule_from_text(
         self,
@@ -298,11 +299,11 @@ class CronService:
                     **kwargs
                 )
             else:
-                print(f"Could not parse schedule text: {schedule_text}")
+                log_warning(f"Could not parse schedule text: {schedule_text}")
                 return None
                 
         except Exception as e:
-            print(f"Error parsing schedule text '{schedule_text}': {e}")
+            log_error(f"Error parsing schedule text '{schedule_text}': {e}")
             return None
     
     def _parse_schedule_text(self, text: str) -> tuple[ScheduleType, str]:

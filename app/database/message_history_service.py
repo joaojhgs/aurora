@@ -9,6 +9,8 @@ from datetime import datetime, date
 from typing import List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from app.helpers.aurora_logger import log_info, log_debug, log_error
+
 from .database_manager import DatabaseManager
 from .models import Message, MessageType
 
@@ -27,7 +29,7 @@ class MessageHistoryService:
         if not self._initialized:
             await self.db_manager.initialize()
             self._initialized = True
-            print(f"Message history service initialized with session: {self._current_session_id}")
+            log_info(f"Message history service initialized with session: {self._current_session_id}")
     
     def _run_async(self, coro):
         """Run async function in executor for UI thread compatibility"""
@@ -41,7 +43,7 @@ class MessageHistoryService:
                 # No event loop running, run directly
                 return loop.run_until_complete(coro)
         except Exception as e:
-            print(f"Error running async operation: {e}")
+            log_error(f"Error running async operation: {e}")
             return None
     
     def store_user_text_message(self, content: str) -> Optional[Message]:
@@ -123,7 +125,7 @@ class MessageHistoryService:
     def start_new_session(self) -> str:
         """Start a new session and return the session ID"""
         self._current_session_id = str(uuid.uuid4())
-        print(f"Started new message session: {self._current_session_id}")
+        log_info(f"Started new message session: {self._current_session_id}")
         return self._current_session_id
     
     def get_current_session_id(self) -> str:
@@ -135,10 +137,10 @@ class MessageHistoryService:
         messages = self.get_today_messages()
         
         if not messages:
-            print("No messages found for today")
+            log_debug("No messages found for today")
             return
         
-        print(f"Loading {len(messages)} messages from today")
+        log_info(f"Loading {len(messages)} messages from today")
         
         for message in messages:
             is_user = message.is_user_message()
@@ -147,7 +149,7 @@ class MessageHistoryService:
             # Add message to UI
             add_message_callback(message.content, is_user, source_type)
         
-        print("Today's messages loaded successfully")
+        log_info("Today's messages loaded successfully")
     
     def cleanup_old_data(self, days_to_keep: int = 30) -> int:
         """Clean up old messages"""

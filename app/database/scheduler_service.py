@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .models import CronJob, JobStatus, ScheduleType
 from .migration_manager import MigrationManager
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
 
 class SchedulerDatabaseService:
@@ -31,7 +32,7 @@ class SchedulerDatabaseService:
     
     async def initialize(self):
         """Initialize the scheduler database and run migrations"""
-        print(f"Initializing scheduler database at: {self.db_path}")
+        log_info(f"Initializing scheduler database at: {self.db_path}")
         
         # Ensure database file exists
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -39,7 +40,7 @@ class SchedulerDatabaseService:
         # Run migrations
         await self.migration_manager.run_migrations()
         
-        print("Scheduler database initialization completed")
+        log_info("Scheduler database initialization completed")
     
     async def add_job(self, job: CronJob) -> bool:
         """Add a new job to the database"""
@@ -56,11 +57,11 @@ class SchedulerDatabaseService:
                 """, values)
                 await db.commit()
             
-            print(f"Added job: {job.name} (next run: {job.next_run_time})")
+            log_info(f"Added job: {job.name} (next run: {job.next_run_time})")
             return True
             
         except Exception as e:
-            print(f"Error adding job: {e}")
+            log_error(f"Error adding job: {e}")
             return False
     
     async def update_job(self, job: CronJob) -> bool:
@@ -82,7 +83,7 @@ class SchedulerDatabaseService:
             return True
             
         except Exception as e:
-            print(f"Error updating job: {e}")
+            log_error(f"Error updating job: {e}")
             return False
     
     async def get_job(self, job_id: str) -> Optional[CronJob]:
@@ -98,7 +99,7 @@ class SchedulerDatabaseService:
                 return None
                 
         except Exception as e:
-            print(f"Error getting job: {e}")
+            log_error(f"Error getting job: {e}")
             return None
     
     async def get_all_jobs(self) -> List[CronJob]:
@@ -112,7 +113,7 @@ class SchedulerDatabaseService:
                 return [CronJob.from_dict(dict(row)) for row in rows]
                 
         except Exception as e:
-            print(f"Error getting all jobs: {e}")
+            log_error(f"Error getting all jobs: {e}")
             return []
     
     async def get_active_jobs(self) -> List[CronJob]:
@@ -130,7 +131,7 @@ class SchedulerDatabaseService:
                 return [CronJob.from_dict(dict(row)) for row in rows]
                 
         except Exception as e:
-            print(f"Error getting active jobs: {e}")
+            log_error(f"Error getting active jobs: {e}")
             return []
     
     async def get_ready_jobs(self) -> List[CronJob]:
@@ -153,21 +154,20 @@ class SchedulerDatabaseService:
                 return [job for job in jobs if job.is_ready_to_run()]
                 
         except Exception as e:
-            print(f"Error getting ready jobs: {e}")
+            log_error(f"Error getting ready jobs: {e}")
             return []
     
     async def delete_job(self, job_id: str) -> bool:
         """Delete a job"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
-                await db.commit()
+            async with aiosqlite.connect(self.db_path) as db:            await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
+            await db.commit()
             
-            print(f"Deleted job: {job_id}")
+            log_info(f"Deleted job: {job_id}")
             return True
             
         except Exception as e:
-            print(f"Error deleting job: {e}")
+            log_error(f"Error deleting job: {e}")
             return False
     
     async def deactivate_job(self, job_id: str) -> bool:
@@ -181,11 +181,11 @@ class SchedulerDatabaseService:
                 """, (datetime.now().isoformat(), job_id))
                 await db.commit()
             
-            print(f"Deactivated job: {job_id}")
+            log_info(f"Deactivated job: {job_id}")
             return True
             
         except Exception as e:
-            print(f"Error deactivating job: {e}")
+            log_error(f"Error deactivating job: {e}")
             return False
     
     async def get_job_history(self, limit: int = 50) -> List[CronJob]:
@@ -204,7 +204,7 @@ class SchedulerDatabaseService:
                 return [CronJob.from_dict(dict(row)) for row in rows]
                 
         except Exception as e:
-            print(f"Error getting job history: {e}")
+            log_error(f"Error getting job history: {e}")
             return []
     
     async def cleanup_old_jobs(self, days_to_keep: int = 30) -> int:
@@ -224,5 +224,5 @@ class SchedulerDatabaseService:
                 return cursor.rowcount
                 
         except Exception as e:
-            print(f"Error cleaning up old jobs: {e}")
+            log_error(f"Error cleaning up old jobs: {e}")
             return 0

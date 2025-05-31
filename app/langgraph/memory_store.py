@@ -9,6 +9,7 @@ from langchain.embeddings import init_embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 from app.config.config_manager import config_manager
 
 
@@ -24,7 +25,7 @@ def get_embeddings():
             "model_name": "all-MiniLM-L6-v2",
             "version": "local"
         }
-        print("Using local HuggingFace embeddings (all-MiniLM-L6-v2)")
+        log_info("Using local HuggingFace embeddings (all-MiniLM-L6-v2)")
     else:
         # Use OpenAI embeddings
         embeddings = init_embeddings("openai:text-embedding-3-small")
@@ -33,7 +34,7 @@ def get_embeddings():
             "model_name": "text-embedding-3-small",
             "version": "openai"
         }
-        print("Using OpenAI embeddings (text-embedding-3-small)")
+        log_info("Using OpenAI embeddings (text-embedding-3-small)")
     
     return embeddings, model_info
 
@@ -77,10 +78,10 @@ def check_and_update_embedding_model(store: 'SQLiteVecStore', current_model_info
     stored_signature = result[0] if result else None
     
     if stored_signature != current_signature:
-        print(f"Embedding model change detected!")
-        print(f"  Previous: {stored_signature or 'None'}")
-        print(f"  Current:  {current_signature}")
-        print(f"  Re-embedding all data in {store.table} table...")
+        log_info(f"Embedding model change detected!")
+        log_info(f"  Previous: {stored_signature or 'None'}")
+        log_info(f"  Current:  {current_signature}")
+        log_info(f"  Re-embedding all data in {store.table} table...")
         
         # Check if the table exists
         cursor = temp_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", 
@@ -88,7 +89,7 @@ def check_and_update_embedding_model(store: 'SQLiteVecStore', current_model_info
         table_exists = cursor.fetchone() is not None
         
         if not table_exists:
-            print(f"  Table {store.table} doesn't exist yet, skipping re-embedding")
+            log_debug(f"  Table {store.table} doesn't exist yet, skipping re-embedding")
             temp_connection.close()
             
             # Update model signature for empty database
@@ -120,7 +121,7 @@ def check_and_update_embedding_model(store: 'SQLiteVecStore', current_model_info
         temp_connection.close()
         
         if existing_data:
-            print(f"  Found {len(existing_data)} items to re-embed")
+            log_info(f"  Found {len(existing_data)} items to re-embed")
             
             # Extract texts and metadatas for re-embedding
             texts = []
@@ -137,11 +138,11 @@ def check_and_update_embedding_model(store: 'SQLiteVecStore', current_model_info
             table_name = store.table
             
             if os.path.exists(db_path):
-                print(f"  Recreating database {db_path} for new embedding dimensions...")
+                log_info(f"  Recreating database {db_path} for new embedding dimensions...")
                 os.remove(db_path)
             
             # Create a new vector store with the current embeddings using real data
-            print(f"  Re-embedding {len(texts)} items with new model...")
+            log_info(f"  Re-embedding {len(texts)} items with new model...")
             new_vector_store = SQLiteVec.from_texts(
                 texts=texts,
                 metadatas=metadatas,
@@ -150,10 +151,10 @@ def check_and_update_embedding_model(store: 'SQLiteVecStore', current_model_info
                 db_file=db_path
             )
             
-            print(f"  Successfully re-embedded {len(existing_data)} items with new dimensions")
+            log_info(f"  Successfully re-embedded {len(existing_data)} items with new dimensions")
             
         else:
-            print(f"  No existing data found in {store.table}")
+            log_debug(f"  No existing data found in {store.table}")
             
             # Still need to recreate database for dimension consistency
             db_path = store.db_file
@@ -219,7 +220,7 @@ class SQLiteVecStore(BaseStore):
         # Close the temporary connection
         temp_connection.close()
         
-        print(f"Initialized SQLiteVec store: {db_file} (table: {table})")
+        log_info(f"Initialized SQLiteVec store: {db_file} (table: {table})")
     
     def _get_vector_store(self):
         """Create a new SQLiteVec instance for the current thread."""
@@ -372,7 +373,7 @@ class SQLiteVecStore(BaseStore):
             return None
             
         except Exception as e:
-            print(f"Error getting item {namespace}/{key}: {e}")
+            log_error(f"Error getting item {namespace}/{key}: {e}")
             return None
     
     def delete(
@@ -404,10 +405,10 @@ class SQLiteVecStore(BaseStore):
             cursor.execute(f"DELETE FROM {self.table} WHERE id = ?", (doc_id,))
             connection.commit()
             
-            print(f"Deleted tool {namespace}/{key} from database")
+            log_info(f"Deleted tool {namespace}/{key} from database")
             
         except Exception as e:
-            print(f"Error deleting item {namespace}/{key}: {e}")
+            log_error(f"Error deleting item {namespace}/{key}: {e}")
             # Try alternative approach - delete by metadata matching
             try:
                 # If direct delete fails, we can try to find and delete by metadata
@@ -417,9 +418,9 @@ class SQLiteVecStore(BaseStore):
                     AND json_extract(metadata, '$.key') = ?
                 """, (namespace_str, key))
                 connection.commit()
-                print(f"Deleted tool {namespace}/{key} using metadata matching")
+                log_info(f"Deleted tool {namespace}/{key} using metadata matching")
             except Exception as e2:
-                print(f"Alternative delete method also failed for {namespace}/{key}: {e2}")
+                log_error(f"Alternative delete method also failed for {namespace}/{key}: {e2}")
                 pass
     
     def list(
@@ -471,7 +472,7 @@ class SQLiteVecStore(BaseStore):
             return items
             
         except Exception as e:
-            print(f"Error listing items in {namespace}: {e}")
+            log_error(f"Error listing items in {namespace}: {e}")
             return []
     
     def search(
@@ -528,7 +529,7 @@ class SQLiteVecStore(BaseStore):
             return items
             
         except Exception as e:
-            print(f"Error searching in {namespace} with query '{query}': {e}")
+            log_error(f"Error searching in {namespace} with query '{query}': {e}")
             return []
 
 
@@ -549,18 +550,18 @@ tools_store = SQLiteVecStore(
 )
 
 # Check if embedding model changed and re-embed if necessary
-print("Checking for embedding model changes...")
+log_info("Checking for embedding model changes...")
 memories_reembedded = check_and_update_embedding_model(memories_store, model_info)
 tools_reembedded = check_and_update_embedding_model(tools_store, model_info)
 
 if memories_reembedded or tools_reembedded:
-    print("Embedding model update completed!")
+    log_info("Embedding model update completed!")
     if memories_reembedded:
-        print("  ✅ Memories re-embedded successfully")
+        log_info("  ✅ Memories re-embedded successfully")
     if tools_reembedded:
-        print("  ✅ Tools re-embedded successfully")
+        log_info("  ✅ Tools re-embedded successfully")
 else:
-    print("Embedding model unchanged - no re-embedding needed")
+    log_info("Embedding model unchanged - no re-embedding needed")
 
 # Combined store that routes operations to the appropriate store based on namespace
 class CombinedSQLiteVecStore(BaseStore):
@@ -625,4 +626,4 @@ class CombinedSQLiteVecStore(BaseStore):
 # Create the combined store for backward compatibility
 store = CombinedSQLiteVecStore(memories_store, tools_store)
 
-print("SQLiteVec-based memory and tools storage initialized successfully")
+log_info("SQLiteVec-based memory and tools storage initialized successfully")
