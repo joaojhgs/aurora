@@ -8,6 +8,7 @@ import re
 import aiosqlite
 from typing import List, Tuple
 from pathlib import Path
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
 
 class MigrationManager:
@@ -58,7 +59,7 @@ class MigrationManager:
     
     async def apply_migration(self, version: str, filename: str):
         """Apply a single migration"""
-        print(f"Applying migration {version}: {os.path.basename(filename)}")
+        log_info(f"Applying migration {version}: {os.path.basename(filename)}")
         
         with open(filename, 'r') as f:
             migration_sql = f.read()
@@ -87,15 +88,15 @@ class MigrationManager:
         ]
         
         if not pending_migrations:
-            print("No pending migrations")
+            log_info("No pending migrations")
             return
         
-        print(f"Running {len(pending_migrations)} pending migrations...")
+        log_info(f"Running {len(pending_migrations)} pending migrations...")
         
         for version, filename in pending_migrations:
             await self.apply_migration(version, filename)
         
-        print("All migrations completed successfully")
+        log_info("All migrations completed successfully")
     
     def create_migration(self, name: str, content: str) -> str:
         """Create a new migration file"""
@@ -118,5 +119,5 @@ class MigrationManager:
             f.write(f"-- Created at: {Path().cwd()}\n\n")
             f.write(content)
         
-        print(f"Created migration: {filename}")
+        log_info(f"Created migration: {filename}")
         return str(file_path)

@@ -9,6 +9,7 @@ from queue import Queue
 
 from app.config.config_manager import config_manager
 from app.helpers.getUseCuda import getUseCuda
+from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 
 # This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
 class PiperVoice:
@@ -89,7 +90,7 @@ class PiperEngine(BaseEngine):
             bool: True if successful, False otherwise.
         """
         if not self.voice:
-            print("No voice set. Please provide a PiperVoice configuration.")
+            log_error("No voice set. Please provide a PiperVoice configuration.")
             return False
 
         # Create a unique temporary WAV file.
@@ -114,7 +115,7 @@ class PiperEngine(BaseEngine):
 
         # Debug: show the exact command (helpful for troubleshooting)
         if self.debug:
-            print(f"Running Piper with args: {cmd_list}")
+            log_debug(f"Running Piper with args: {cmd_list}")
 
         try:
             # Pass the text via STDIN directly to Piper.
@@ -131,7 +132,7 @@ class PiperEngine(BaseEngine):
             with wave.open(output_wav_path, "rb") as wf:
                 # If you require specific WAV properties, check them:
                 if wf.getnchannels() != 1 or wf.getframerate() != int(config_manager.get('text_to_speech.model_sample_rate', 24000)) or wf.getsampwidth() != 2:
-                    print(f"Unexpected WAV properties: "
+                    log_warning(f"Unexpected WAV properties: "
                         f"Channels={wf.getnchannels()}, "
                         f"Rate={wf.getframerate()}, "
                         f"Width={wf.getsampwidth()}")
@@ -144,11 +145,11 @@ class PiperEngine(BaseEngine):
             return True
 
         except FileNotFoundError:
-            print(f"Error: Piper executable not found at '{self.piper_path}'.")
+            log_error(f"Error: Piper executable not found at '{self.piper_path}'.")
             return False
         except subprocess.CalledProcessError as e:
             # Piper returned an error code; show the stderr output for troubleshooting.
-            print(f"Error running Piper: {e.stderr.decode('utf-8', errors='replace')}")
+            log_error(f"Error running Piper: {e.stderr.decode('utf-8', errors='replace')}")
             return False
         finally:
             # Clean up the temporary WAV file after reading it.

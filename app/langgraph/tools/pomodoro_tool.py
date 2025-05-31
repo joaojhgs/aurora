@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from langchain_core.tools import tool
 
 from app.scheduler import get_cron_service
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
 
 # Simple in-memory storage for current Pomodoro session
@@ -224,7 +225,7 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in work_session_end: {e}")
+        log_error(f"Error in work_session_end: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -283,5 +284,5 @@ def break_session_end(**kwargs) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error in break_session_end: {e}")
+        log_error(f"Error in break_session_end: {e}")
         return {"success": False, "message": str(e)}

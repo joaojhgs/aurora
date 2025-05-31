@@ -8,6 +8,7 @@ import aiosqlite
 from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
 from .models import Message, MessageType
 from .migration_manager import MigrationManager
@@ -32,7 +33,7 @@ class DatabaseManager:
     
     async def initialize(self):
         """Initialize the database and run migrations"""
-        print(f"Initializing database at: {self.db_path}")
+        log_info(f"Initializing database at: {self.db_path}")
         
         # Ensure database file exists
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -40,7 +41,7 @@ class DatabaseManager:
         # Run migrations
         await self.migration_manager.run_migrations()
         
-        print("Database initialization completed")
+        log_info("Database initialization completed")
     
     async def store_message(self, message: Message) -> bool:
         """Store a message in the database"""
@@ -63,7 +64,7 @@ class DatabaseManager:
                 await db.commit()
                 return True
         except Exception as e:
-            print(f"Error storing message: {e}")
+            log_error(f"Error storing message: {e}")
             return False
     
     async def get_messages_for_date(self, target_date: date = None) -> List[Message]:
@@ -97,7 +98,7 @@ class DatabaseManager:
                 
                 return messages
         except Exception as e:
-            print(f"Error retrieving messages for date {target_date}: {e}")
+            log_error(f"Error retrieving messages for date {target_date}: {e}")
             return []
     
     async def get_recent_messages(self, limit: int = 50) -> List[Message]:
@@ -125,7 +126,7 @@ class DatabaseManager:
                 # Return in chronological order (oldest first)
                 return list(reversed(messages))
         except Exception as e:
-            print(f"Error retrieving recent messages: {e}")
+            log_error(f"Error retrieving recent messages: {e}")
             return []
     
     async def get_message_by_id(self, message_id: str) -> Optional[Message]:
@@ -147,7 +148,7 @@ class DatabaseManager:
                 
                 return None
         except Exception as e:
-            print(f"Error retrieving message {message_id}: {e}")
+            log_error(f"Error retrieving message {message_id}: {e}")
             return None
     
     async def delete_message(self, message_id: str) -> bool:
@@ -158,7 +159,7 @@ class DatabaseManager:
                 await db.commit()
                 return True
         except Exception as e:
-            print(f"Error deleting message {message_id}: {e}")
+            log_error(f"Error deleting message {message_id}: {e}")
             return False
     
     async def get_message_count_for_date(self, target_date: date = None) -> int:
@@ -179,7 +180,7 @@ class DatabaseManager:
                 result = await cursor.fetchone()
                 return result[0] if result else 0
         except Exception as e:
-            print(f"Error getting message count for date {target_date}: {e}")
+            log_error(f"Error getting message count for date {target_date}: {e}")
             return 0
     
     async def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
@@ -196,7 +197,7 @@ class DatabaseManager:
                 await db.commit()
                 return cursor.rowcount
         except Exception as e:
-            print(f"Error cleaning up old messages: {e}")
+            log_error(f"Error cleaning up old messages: {e}")
             return 0
     
     async def get_session_messages(self, session_id: str) -> List[Message]:
@@ -221,5 +222,5 @@ class DatabaseManager:
                 
                 return messages
         except Exception as e:
-            print(f"Error retrieving session messages: {e}")
+            log_error(f"Error retrieving session messages: {e}")
             return []

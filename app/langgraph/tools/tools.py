@@ -21,8 +21,9 @@ from app.langgraph.tools.pomodoro_tool import (
 from app.langgraph.memory_store import store
 from app.config.config_manager import config_manager
 from typing import List, Dict, Callable
+from app.helpers.aurora_logger import log_info, log_debug, log_error
 
-print("\nInitializing all tools and plugins...\n")
+log_info("Initializing all tools and plugins...\n")
 
 # Make memory upsert is always active so that the chatbot can always store something new it deems worthwhile
 always_active_tools = [upsert_memory_tool]
@@ -84,7 +85,7 @@ def sync_tools_with_database():
     - Remove tools that are in database but no longer active  
     - Update existing tools if their descriptions changed
     """
-    print("Synchronizing tools with database...")
+    log_info("Synchronizing tools with database...")
     
     # Get currently active tools
     active_tools = {}
@@ -94,19 +95,19 @@ def sync_tools_with_database():
             "description": tool.description
         }
     
-    print(f"DEBUG: Found {len(active_tools)} active tools:")
+    log_debug(f"DEBUG: Found {len(active_tools)} active tools:")
     for name in active_tools.keys():
-        print(f"  - '{name}'")
+        log_debug(f"  - '{name}'")
     
     # Get existing tools from database
     try:
         existing_items = store.list(("tools",), limit=1000)  # Get all tools
         existing_tools = {item.key: item.value for item in existing_items}
-        print(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
+        log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
         for name in existing_tools.keys():
-            print(f"  - '{name}'")
+            log_debug(f"  - '{name}'")
     except Exception as e:
-        print(f"Error getting existing tools from database: {e}")
+        log_error(f"Error getting existing tools from database: {e}")
         existing_tools = {}
     
     # Find tools to add (active but not in database)
@@ -116,7 +117,7 @@ def sync_tools_with_database():
             tools_to_add.append((name, tool_data))
         elif existing_tools[name].get("description") != tool_data["description"]:
             # Tool exists but description changed - update it
-            print(f"Updating tool '{name}' with new description")
+            log_info(f"Updating tool '{name}' with new description")
             store.put(("tools",), name, tool_data, ["name", "description"])
     
     # Find tools to remove (in database but not active)
@@ -124,19 +125,19 @@ def sync_tools_with_database():
     for name in existing_tools.keys():
         if name not in active_tools:
             tools_to_remove.append(name)
-            print(f"DEBUG: Will remove '{name}' (not in active tools)")
+            log_debug(f"DEBUG: Will remove '{name}' (not in active tools)")
     
     # Add new tools
     for name, tool_data in tools_to_add:
-        print(f"Adding new tool to database: {name}")
+        log_info(f"Adding new tool to database: {name}")
         store.put(("tools",), name, tool_data, ["name", "description"])
     
     # Remove inactive tools
     for name in tools_to_remove:
-        print(f"Removing inactive tool from database: {name}")
+        log_info(f"Removing inactive tool from database: {name}")
         store.delete(("tools",), name)
     
-    print(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
+    log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
 
 # Build tool lookup table and sync with database
@@ -169,7 +170,7 @@ def get_tools(query: str, top_k: int = 5) -> List[Callable]:
         limit=top_k
     )
     
-    print(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
+    log_debug(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
 
     # Get unique tool names from results
     tool_names = set(result.key for result in results)

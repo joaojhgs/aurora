@@ -1,4 +1,5 @@
 from app.config.config_manager import config_manager
+from app.helpers.aurora_logger import log_error
 from typing import Any, Dict, List
 
 class ConfigAPI:
@@ -18,7 +19,7 @@ class ConfigAPI:
             config_manager.set(key_path, value)
             return True
         except Exception as e:
-            print(f"Error updating config: {e}")
+            log_error(f"Error updating config: {e}")
             return False
     
     @staticmethod

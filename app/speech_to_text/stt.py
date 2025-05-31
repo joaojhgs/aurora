@@ -1,5 +1,6 @@
 import subprocess
 import os
+from app.helpers.aurora_logger import log_error, log_info, log_debug
 
 detected = False
 
@@ -16,11 +17,11 @@ def on_wakeword_detected():
 def on_wakeword_timeout():
     global detected
     if not detected:
-        print(f"Timeout. {say_wakeword_str}")
+        log_info(f"Timeout. {say_wakeword_str}")
     detected = False
 
 def on_wakeword_detection_start():
-    print(f"\n{say_wakeword_str}")
+    log_info(f"{say_wakeword_str}")
 
 def check_bluetooth_headphones():
     try:
@@ -32,7 +33,7 @@ def check_bluetooth_headphones():
         )
         return "Connected: yes" in result.stdout
     except Exception as e:
-        print(f"Error checking Bluetooth headphones: {e}")
+        log_error(f"Error checking Bluetooth headphones: {e}")
         return False
 
 def get_system_volume():
@@ -42,7 +43,7 @@ def get_system_volume():
         volume = result.stdout.split()[4]
         return volume
     except Exception as e:
-        print(f"Error getting system volume: {e}")
+        log_error(f"Error getting system volume: {e}")
         return None
 
 def set_system_volume(volume):
@@ -50,7 +51,7 @@ def set_system_volume(volume):
         cmd = "pactl set-sink-volume 0"
         subprocess.call(cmd.split() + [f"{volume}"])
     except Exception as e:
-        print(f"Error setting system volume: {e}")
+        log_error(f"Error setting system volume: {e}")
         
         
 def reduce_system_volume():
@@ -117,7 +118,7 @@ def reduce_volume_except_current():
                 subprocess.run(["pactl", "set-sink-input-volume", sink_index, "-40%"])
                 
     except Exception as e:
-        print(f"Error reducing volume for other processes: {e}")
+        log_error(f"Error reducing volume for other processes: {e}")
 
 def restore_volume_except_current():
     global original_volumes
@@ -127,4 +128,4 @@ def restore_volume_except_current():
             subprocess.run(["pactl", "set-sink-input-volume", input_index, volume])
         original_volumes.clear()
     except Exception as e:
-        print(f"Error restoring volume for other processes: {e}")
+        log_error(f"Error restoring volume for other processes: {e}")

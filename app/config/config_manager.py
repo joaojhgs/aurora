@@ -2,10 +2,10 @@ import json
 import os
 from typing import Any, Dict, Optional, Callable, List
 from threading import Lock
-import logging
 from pathlib import Path
 import jsonschema
 from jsonschema import validate, ValidationError
+from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
 
 class ConfigManager:
     """
@@ -44,19 +44,19 @@ class ConfigManager:
                 try:
                     self._validate_config(config_data)
                     self._config = config_data
-                    logging.info("Configuration loaded and validated from config.json")
+                    log_info("Configuration loaded and validated from config.json")
                 except ValidationError as e:
-                    logging.error(f"Configuration validation failed: {e.message}")
-                    logging.warning("Using default configuration due to validation errors")
+                    log_error(f"Configuration validation failed: {e.message}")
+                    log_warning("Using default configuration due to validation errors")
                     self._config = self._get_default_config()
                     self.save_config()  # Save the valid default config
                     
             else:
                 self._config = self._get_default_config()
                 self.save_config()
-                logging.info("Created default configuration file")
+                log_info("Created default configuration file")
         except Exception as e:
-            logging.error(f"Error loading config: {e}")
+            log_error(f"Error loading config: {e}")
             self._config = self._get_default_config()
     
     def save_config(self):
@@ -65,9 +65,9 @@ class ConfigManager:
             # Note: Don't acquire lock here as it might be called from within a locked context
             with open(self.config_file, 'w') as f:
                 json.dump(self._config, f, indent=2)
-            logging.info("Configuration saved to config.json")
+            log_info("Configuration saved to config.json")
         except Exception as e:
-            logging.error(f"Error saving config: {e}")
+            log_error(f"Error saving config: {e}")
     
     def get(self, key_path: str, default: Any = None) -> Any:
         """
@@ -148,7 +148,7 @@ class ConfigManager:
             try:
                 observer(key_path, old_value, new_value)
             except Exception as e:
-                logging.error(f"Error notifying observer: {e}")
+                log_error(f"Error notifying observer: {e}")
     
     def _get_default_config(self) -> Dict:
         """Return default configuration structure"""
@@ -268,11 +268,11 @@ class ConfigManager:
                     self.set(config_path, converted_value, save=False)
                     migrated = True
                 except (ValueError, TypeError) as e:
-                    logging.warning(f"Failed to convert {env_var}={env_value}: {e}")
+                    log_warning(f"Failed to convert {env_var}={env_value}: {e}")
         
         if migrated:
             self.save_config()
-            logging.info("Migrated environment variables to config.json")
+            log_info("Migrated environment variables to config.json")
     
     def get_config_dict(self) -> Dict[str, Any]:
         """Get a copy of the entire configuration dictionary"""

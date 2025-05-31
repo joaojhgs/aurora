@@ -11,6 +11,7 @@ from langchain_core.messages import AnyMessage
 from app.langgraph.memory_store import store
 from app.text_to_speech.tts import play
 from enum import Enum
+from app.helpers.aurora_logger import log_info, log_debug
 
 graph_builder = StateGraph(State)
 
@@ -83,9 +84,9 @@ async def stream_graph_updates(user_input: str, ttsResult: bool = True):
 
     if hasattr(user_input, 'text'):
         input_content = user_input.text
-        print(f"Graph: Processing input from custom object: {input_content[:30]}...")
+        log_debug(f"Graph: Processing input from custom object: {input_content[:30]}...")
     else:
-        print(f"Graph: Processing input: {str(user_input)[:30]}...")
+        log_debug(f"Graph: Processing input: {str(user_input)[:30]}...")
 
     # Invoke the graph with the user input
     response = await graph.ainvoke(
@@ -99,11 +100,11 @@ async def stream_graph_updates(user_input: str, ttsResult: bool = True):
     text = response['messages'][-1].content
     
     if text != "END":
-        print(f"\nJarvis: {text}...")
+        log_info(f"Jarvis: {text}...")
         # Play the text through TTS - this is used for STT messages that need speech output
         if(ttsResult): play(text) 
     else:
-        print("Graph: Response was END, not sending to TTS")
+        log_debug("Graph: Response was END, not sending to TTS")
     
     return text
 
@@ -114,9 +115,9 @@ async def process_text_input(user_input: str):
     input_content = user_input
     if hasattr(user_input, 'text'):
         input_content = user_input.text
-        print(f"Graph: Processing UI text input from object: {input_content[:30]}...")
+        log_debug(f"Graph: Processing UI text input from object: {input_content[:30]}...")
     else:
-        print(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
+        log_debug(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
 
     # Invoke the graph with the user input
     response = await graph.ainvoke(
@@ -130,10 +131,10 @@ async def process_text_input(user_input: str):
     text = response['messages'][-1].content
     
     if text != "END":
-        print(f"\nJarvis (UI text response): {text[:100]}...")
+        log_info(f"Jarvis (UI text response): {text[:100]}...")
         # No TTS for UI text input
     else:
-        print("Graph: Response was END, not processing further")
+        log_debug("Graph: Response was END, not processing further")
     
     return text
     
