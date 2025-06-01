@@ -201,9 +201,7 @@ class ConfigManager:
                     "huggingface_pipeline": {
                         "options": {
                             "model": "microsoft/DialoGPT-medium",
-                            "device": "auto",
                             "temperature": 0.7,
-                            "max_tokens": 512,
                             "torch_dtype": "auto"
                         }
                     },
@@ -225,7 +223,7 @@ class ConfigManager:
                 }
             },
             "embeddings": {
-                "use_local": False
+                "use_local": True
             },
             "speech_to_text": {
                 "language": "",
@@ -238,11 +236,12 @@ class ConfigManager:
                 "model_sample_rate": 22050,
                 "piper_path": ""
             },
-            "cuda": {
-                "use_cuda_tts": False,
-                "use_cuda_stt": False,
-                "use_cuda_ocr_bg": False,
-                "use_cuda_ocr_curr": True
+            "hardware_acceleration": {
+                "tts": False,
+                "stt": False,
+                "ocr_bg": False,
+                "ocr_curr": False,
+                "llm": False
             },
             # Plugins configuration
             "plugins": {

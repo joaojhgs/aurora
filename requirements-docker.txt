@@ -1,0 +1,11 @@
+# Aurora Voice Assistant - Docker Requirements
+#
+# Minimal requirements for containerized deployment
+# These are installed inside the Docker container
+
+# Core runtime (minimal for container)
+-r requirements-runtime.txt
+
+# Container-specific tools
+gunicorn>=21.0.0
+supervisor>=4.2.0

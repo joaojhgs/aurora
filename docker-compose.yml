@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  aurora:
+    build: .
+    image: aurora:latest
+    container_name: aurora
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - AURORA_ENV=production
+      - AURORA_LOG_LEVEL=INFO
+      - AURORA_CONFIG_PATH=/app/config
+    restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd  # Audio devices (Linux only)
+    networks:
+      - aurora-network
+
+  # Optional: Database service for production
+  # postgres:
+  #   image: postgres:15
+  #   container_name: aurora-db
+  #   environment:
+  #     POSTGRES_DB: aurora
+  #     POSTGRES_USER: aurora
+  #     POSTGRES_PASSWORD: secure_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - aurora-network
+
+networks:
+  aurora-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

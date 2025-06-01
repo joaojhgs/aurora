@@ -5,7 +5,7 @@ from app.config.config_manager import config_manager
 import os
 
 
-file_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def on_audio_stream_start():
     reduce_volume_except_current()

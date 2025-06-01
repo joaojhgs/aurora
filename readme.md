@@ -10,15 +10,9 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 - [Features](#features)
 - [Installation and Usage](#installation-and-usage)
-  - [1. Clone the repository](#1-clone-the-repository)
-  - [2. Install dependencies](#2-install-dependencies)
-  - [3. Initial Configuration](#3-initial-configuration)
-    - [3.1 Configuration Files Setup](#31-configuration-files-setup)
-    - [3.2 Configuration Overview](#32-configuration-overview)
-    - [3.3 Running Local Models](#33-running-local-models)
-    - [3.4 LLM Provider Configuration](#34-llm-provider-configuration)
-  - [4. Configuration Validation](#4-configuration-validation)
-  - [5. Run the assistant](#5-run-the-assistant)
+  - [🚀 Quick Start](#-quick-start)
+  - [📚 Need More Details?](#-need-more-details)
+  - [📦 Model Management](#-model-management)
 - [Libraries and Tools](#libraries-and-tools)
 - [Architecture](#architecture)
 - [TODO LIST](#todo-list)
@@ -76,150 +70,75 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 ## Installation and Usage
 
-#### 1. Clone the repository:
+### 🚀 Quick Start
+
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/joaojhgs/aurora.git
    cd aurora
    ```
 
-#### 2. Install dependencies:
+2. **Run the guided setup:**
+   ```bash
+   # Linux/macOS
+   ./setup.sh
+   
+   # Windows  
+   setup.bat
+   ```
+   
+   The setup script will:
+   - ✅ Check Python version compatibility (requires Python 3.9-3.11)
+   - ✅ Detect your hardware and install optimal packages
+   - ✅ Install all dependencies automatically
+   - ✅ Guide you through configuration
 
-Install PortAudio:
+3. **Configure your environment:**
+   - Copy `.env.file` to `.env` and add any API keys you want to use
+   - Modify `config.json` if needed (defaults work for most users)
 
-```bash
-sudo apt install portaudio19-dev
-```
-Or
+4. **Run Aurora:**
+   ```bash
+   python main.py
+   ```
 
-```bash
-brew install portaudio
-brew link portaudio
-```
+### 📚 Need More Details?
 
-Install all Lib requirements:
-```bash
-pip install -r requirements.txt
-```
+- **Complete Installation Guide**: See [docs/INSTALL.md](docs/INSTALL.md) for:
+  - Manual installation options
+  - Advanced hardware acceleration setup
+  - Troubleshooting and configuration details
+  - Platform-specific instructions
+  
+- **Python Version Requirements**: Aurora requires Python 3.9-3.11 (Python 3.12+ causes dependency conflicts)
 
-Optionally install cuda libraries for faster inference:
+- **Model Management**: Aurora includes models for offline operation - see [Model Management](#-model-management) below
 
-**CUDA 11.8**
-```bash
-sudo apt-get install libcudnn9-cuda-11
-pip install torch==2.6.0+cu118 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
-# Install lib for PiperTTS with CUDA
-pip install onnxruntime-gpu
-```
+### 📦 Model Management
 
-**CUDA 12.4 (Recommended)**
-```bash
-sudo apt-get install libcudnn9-cuda-12
-pip install torch==2.6.0+cu124 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
-# Install lib for PiperTTS with CUDA
-pip install onnxruntime-gpu
-```
+Aurora stores model files in dedicated directories at the project root:
 
-#### 3. Initial Configuration
+**Chat Models** (`chat_models/`):
+- Large language models in GGUF format (2-4GB each)
+- Configure in `config.json`: `"llama_cpp_model_path": "chat_models/model-name.gguf"`
+- Included: Gemma 2B/3B, Llama 2 7B models
+- Download more from [Hugging Face GGUF models](https://huggingface.co/models?library=gguf)
 
-Aurora uses a hybrid configuration system with both `config.json` and `.env` files:
+**Voice Models** (`voice_models/`):
+- Text-to-speech (Piper) and wake word models
+- Configure in `config.json`: `"model_file_path": "/voice_models/voice-name.onnx"`
+- Included: English, Portuguese voices + Jarvis wake word
+- Download more from [Piper Voices](https://github.com/rhasspy/piper/blob/master/VOICES.md)
 
-##### 3.1 Configuration Files Setup
+**Model Directory Features**:
+- ✅ **Excluded from builds**: Large files don't bloat packages
+- ✅ **Git ignored**: Models managed separately from code
+- ✅ **User controlled**: Choose models based on your hardware
+- ✅ **Privacy focused**: All models run locally
 
-**Main Configuration (`config.json`)**:
-- Most settings are now managed through the `config.json` file
-- Includes UI settings, LLM models, speech settings, CUDA options, and plugin configurations
-- Validated with JSON schema to prevent configuration errors
-- Falls back to safe defaults if validation fails
+*See `chat_models/README.md` and `voice_models/README.md` for detailed model information.*
 
-**Environment Variables (`.env`)**:
-- Clone the `.env.file` and rename it to `.env` in the root directory
-- Contains development settings and configuration for third party software that works with envs such as:
-  - `OPENAI_API_KEY` - Your OpenAI API key for embeddings and chat models (if you decide to use any)
-  - Langsmith logging and tracing for development
-
-**This will eventually be improved and consolidated** 
-
-##### 3.2 Configuration Overview
-
-* Most configurations come with defaults that work out of the box for English language
-* CUDA is turned off by default, fine control is available in `config.json`
-* Currently supports OpenAI and LLAMA-CPP for the main LLM
-* Embeddings support both local (HuggingFace) and OpenAI options
-* Set only one LLM model: either `openai_chat_model` or `llama_cpp_model_path` in `config.json`
-
-**Key Configuration Sections in `config.json`:**
-- `ui`: Interface settings (activation, dark mode, debug mode)
-- `llm`: Language model configuration (local or OpenAI models)
-- `embeddings`: Choose between local or OpenAI embeddings
-- `speech_to_text`: STT language, detection settings, noise reduction
-- `text_to_speech`: Voice model paths, sample rates, Piper configuration
-- `cuda`: Fine-grained CUDA acceleration control for different components
-- `plugins`: Enable/disable and configure various productivity integrations
-- `google`: Google services credentials configuration
-
-**Environment Variables (`.env`) contain:**
-- `OPENAI_API_KEY`: Required for OpenAI models and embeddings
-- Plugin API keys: `JIRA_API_TOKEN`, `BRAVE_API_KEY`, `SLACK_USER_TOKEN`, etc.
-- GitHub app credentials: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`
-- Service account files: `GOOGLE_CREDENTIALS_FILE`
-
-##### 3.3 Running Local Models
-If you want to run local models with LLAMA-CPP, you'll have to install some aditional dependencies as follows:
-
-Below are some common backends, their build commands and any additional environment variables required.
-
-<details open>
-<summary>OpenBLAS (CPU)</summary>
-
-To install with OpenBLAS, set the `GGML_BLAS` and `GGML_BLAS_VENDOR` environment variables before installing:
-
-```bash
-CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
-```
-</details>
-
-<details>
-<summary>CUDA (GPU)</summary>
-
-**CUDA 12.4 (Recommended)**
-
-Official support for pre-built wheels (up to version 3.4, supports gemma2)
-```bash
-python -m pip install llama-cpp-python --no-cache-dir --prefer-binary --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/
-```
-Model option: [Gemma-2-2B-Q6](https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/blob/main/gemma-2-2b-it-Q6_K_L.gguf)
-
-Unnoficial support for pre-built wheels (up to version 3.8, supports gemma3 non-multi-modal)
-```bash
-python -m pip install https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.3.8+cu124-cp311-cp311-linux_x86_64.whl
-```
-Model options:
-
-[Gemma-3-4B-IT-Q8](https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q8_K.gguf?download=true)
-**CUDA 11.8**
-```bash
-python -m pip install llama-cpp-python --prefer-binary --extra-index-url=https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cu118
-```
-(Doesn't support recent models like gemma due to version support limitation)
-Model option: [LLAMA2-7B-Q4](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf)
-
-</details>
-
-You can find more backend instalations to run your models at the original `llama-cpp-python` [repository](https://github.com/abetlen/llama-cpp-python?tab=readme-ov-file#supported-backends).
-
-#### 4. Configuration Validation
-
-Aurora automatically validates your `config.json` file against a JSON schema when starting up:
-- Invalid configurations automatically fall back to safe defaults
-- Configuration errors are logged for easy debugging
-- Runtime validation prevents invalid configuration changes
-- You can validate your current config anytime using the config manager
-
-#### 5. Run the assistant:
-
-```bash
-python main.py
-```
+---
 
 ## Libraries and Tools
 
