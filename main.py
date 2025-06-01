@@ -96,7 +96,7 @@ if __name__ == '__main__':
             model="medium",
             language=config_manager.get('speech_to_text.language', ''),
             wake_words_sensitivity=0.35,
-            openwakeword_model_paths="app/voice_models/jarvis.onnx",
+            openwakeword_model_paths="voice_models/jarvis.onnx",
             on_wakeword_detected=on_wakeword_detected,
             on_wakeword_timeout=on_wakeword_timeout,
             on_wakeword_detection_start=on_wakeword_detection_start,

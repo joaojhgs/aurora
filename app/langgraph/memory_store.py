@@ -5,8 +5,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union, Sequence
 from pathlib import Path
 
-from langchain.embeddings import init_embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
 from app.helpers.aurora_logger import log_info, log_debug, log_error
@@ -18,6 +16,7 @@ def get_embeddings():
     use_local = config_manager.get('embeddings.use_local', False)
     
     if use_local:
+        from langchain_huggingface import HuggingFaceEmbeddings
         # Use local HuggingFace embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         model_info = {
@@ -27,6 +26,7 @@ def get_embeddings():
         }
         log_info("Using local HuggingFace embeddings (all-MiniLM-L6-v2)")
     else:
+        from langchain.embeddings import init_embeddings
         # Use OpenAI embeddings
         embeddings = init_embeddings("openai:text-embedding-3-small")
         model_info = {

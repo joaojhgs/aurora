@@ -181,11 +181,17 @@ screenshots
 
 *token.json
 
+# Large model files
 *.gguf
+*.onnx
+
+# Model directories (large files, user-managed)
+chat_models/
+voice_models/
 
 .vscode/*
 
 *.db
 
 # Local configuration files
-config.json
+config.json*

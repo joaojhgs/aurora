@@ -1,0 +1,87 @@
+# Aurora Voice Assistant - Requirements for Direct Script Execution
+# 
+# This file contains all runtime dependencies needed to run Aurora
+# Install with: pip install -r requirements-runtime.txt
+#
+# For other installation methods, see:
+# - pip install -e .[runtime]              # Same as this file
+# - pip install -e .[core]                 # Minimal working setup
+# - pip install -e .[third-party]          # With API providers
+# - pip install -e .[full-third-party]     # All features + API providers
+
+# Configuration & Logging
+python-dotenv>=1.0.0
+coloredlogs>=15.0.0
+click>=8.1.0
+colorama>=0.4.6
+
+# Basic utilities
+psutil>=5.0.0
+tenacity>=9.0.0
+
+# Core data handling
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+jsonschema>=4.24.0
+
+# Audio Processing & Speech Recognition
+faster-whisper==1.1.1
+RealtimeSTT==0.3.94
+PyAudio==0.2.14
+openwakeword==0.6.0
+webrtcvad-wheels==2.0.14
+
+# Text-to-Speech
+piper-tts==1.2.0
+piper-phonemize==1.1.0
+realtimetts==0.4.47
+
+# Machine Learning & AI Core (CPU)
+torch==2.6.0
+torchaudio==2.6.0
+torchvision==0.21.0
+numpy==1.26.4
+scipy==1.15.1
+onnxruntime==1.20.1
+
+# LangChain & LLM Framework
+langchain==0.3.25
+langchain-core==0.3.62
+langchain-community==0.3.24
+langchain-text-splitters==0.3.8
+langgraph==0.4.6
+langgraph-checkpoint==2.0.26
+langgraph-sdk==0.1.51
+langsmith==0.3.8
+
+# Database & Storage
+aiosqlite>=0.19.0
+sqlite-vec
+SQLAlchemy==2.0.38
+
+# Scheduling & Automation
+croniter==6.0.0
+
+# Web & Network
+requests==2.32.3
+aiohttp==3.11.12
+httpx==0.28.1
+urllib3==2.3.0
+duckduckgo-search==7.5.2
+
+# Utilities
+halo==0.0.31
+tqdm==4.67.1
+emoji==2.14.0
+regex==2024.11.6
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+
+# ML Text Processing
+ctranslate2==4.5.0
+tokenizers==0.21.0
+tiktoken==0.8.0
+sentence-transformers==3.0.0
+transformers
+huggingface-hub==0.30.2
+Pillow>=10.3.0

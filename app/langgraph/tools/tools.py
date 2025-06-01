@@ -2,7 +2,6 @@ from app.langgraph.tools.resume_tts import resume_tts_tool
 from app.langgraph.tools.stop_tts import stop_tts_tool
 
 from app.langgraph.tools.upsert_memory import upsert_memory_tool
-from app.langgraph.tools.current_screen import current_screen_tool
 
 # Scheduler tools
 from app.langgraph.tools.scheduler_tool import (
@@ -30,7 +29,6 @@ always_active_tools = [upsert_memory_tool]
 
 # Export all tools to bind to LLM - scheduler and pomodoro tools are always available
 tools = [
-    current_screen_tool, 
     resume_tts_tool, 
     stop_tts_tool,
     schedule_task_tool,
@@ -42,6 +40,10 @@ tools = [
 ]
 
 # Only import if plugin is activated
+
+if config_manager.get('plugins.openrecall.activate', False):
+    from app.langgraph.tools.current_screen import current_screen_tool
+    tools.append(current_screen_tool)
 
 if config_manager.get('plugins.jira.activate', False):
     from app.langgraph.tools.jira_toolkit import jira_tools

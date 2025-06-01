@@ -1,0 +1,504 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurora"
+version = "0.1.0"
+description = "Intelligent Voice Assistant for Local Automation and Productivity"
+readme = "readme.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Aurora Team"}
+]
+keywords = [
+    "voice-assistant", 
+    "ai", 
+    "automation", 
+    "speech-recognition", 
+    "text-to-speech", 
+    "llm", 
+    "langchain", 
+    "privacy-first"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Office/Business",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+requires-python = ">=3.9,<3.12"
+
+# Minimal core dependencies - only essential runtime requirements
+dependencies = [
+    # Configuration & Logging (always needed)
+    "python-dotenv>=1.0.0",
+    "coloredlogs>=15.0.0",
+    "click>=8.1.0",
+    "colorama>=0.4.6",
+    
+    # Basic utilities (always needed)
+    "psutil>=5.0.0",
+    "tenacity>=9.0.0",
+    
+    # Core data handling
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "jsonschema>=4.24.0",
+]
+
+[project.optional-dependencies]
+# ============================================================================
+# APPROACH 1: Direct Script Execution - Full Runtime Dependencies
+# ============================================================================
+# For developers and advanced users who want full control
+runtime = [
+    # Audio Processing & Speech Recognition
+    "faster-whisper==1.1.1",
+    "RealtimeSTT==0.3.94",
+    "PyAudio==0.2.14",
+    "openwakeword==0.6.0",
+    "webrtcvad-wheels==2.0.14",
+    
+    # Text-to-Speech
+    "piper-tts==1.2.0",
+    "piper-phonemize==1.1.0",
+    "realtimetts==0.4.47",
+    
+    # Machine Learning & AI Core (NO TORCH - added separately)
+    "numpy==1.26.4",
+    "scipy==1.15.1",
+    "onnxruntime==1.20.1",
+    
+    # LangChain & LLM Framework
+    "langchain==0.3.25",
+    "langchain-core==0.3.62",
+    "langchain-community==0.3.24",
+    "langchain-text-splitters==0.3.8",
+    "langgraph==0.4.6",
+    "langgraph-checkpoint==2.0.26",
+    "langgraph-sdk==0.1.51",
+    "langsmith==0.3.8",
+    
+    # Database & Storage
+    "aiosqlite>=0.19.0",
+    "sqlite-vec",
+    "SQLAlchemy==2.0.38",
+    
+    # Scheduling & Automation
+    "croniter==6.0.0",
+    
+    # Web & Network
+    "requests==2.32.3",
+    "aiohttp==3.11.12",
+    "httpx==0.28.1",
+    "urllib3==2.3.0",
+    "duckduckgo-search==7.5.2",
+    
+    # Utilities
+    "halo==0.0.31",
+    "tqdm==4.67.1",
+    "emoji==2.14.0",
+    "regex==2024.11.6",
+    "Jinja2==3.1.6",
+    "MarkupSafe==3.0.2",
+    
+    # ML Text Processing
+    "ctranslate2==4.5.0",
+    "tokenizers==0.21.0",
+    "tiktoken==0.8.0",
+    "sentence-transformers==3.0.0",
+    "transformers",
+    "huggingface-hub==0.30.2",
+    "Pillow>=10.3.0",
+]
+
+# ============================================================================
+# TORCH DEPENDENCIES - Choose based on hardware
+# ============================================================================
+# Default CPU torch (compatible with most systems)
+torch-cpu = [
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+]
+
+# Note: runtime-no-torch section removed - 'runtime' no longer includes torch by default
+
+# ============================================================================
+# APPROACH 2: Executable Building - PyInstaller Support
+# ============================================================================
+# For building standalone executables for novice users
+build = [
+    "pyinstaller>=6.0.0",
+    "auto-py-to-exe>=2.4.0",  # GUI for PyInstaller
+    "pyinstaller-hooks-contrib>=2024.0",
+]
+
+# Executable runtime (lighter than full runtime)
+exe-runtime = [
+    "aurora[runtime]",  # Include all runtime dependencies
+]
+
+# ============================================================================
+# APPROACH 3: Container Support
+# ============================================================================
+container = [
+    "gunicorn>=21.0.0",  # For production WSGI server
+    "supervisor>=4.2.0",  # Process management in containers
+]
+
+# ============================================================================
+# HARDWARE ACCELERATION OPTIONS
+# ============================================================================
+# CUDA acceleration support
+# Note: CUDA packages installed via wheel installer with custom index URL
+cuda = [
+    "onnxruntime-gpu",
+    # torch, torchaudio, torchvision CUDA versions installed separately by setup script
+]
+
+# ROCm (AMD) acceleration support  
+# Note: ROCm packages installed via wheel installer with custom index URL
+rocm = [
+    "onnxruntime",
+    # torch, torchaudio ROCm versions installed separately by setup script
+]
+
+# Metal (Apple Silicon) acceleration support
+metal = [
+    # Note: Uses CPU torch packages as Metal acceleration happens at llama-cpp-python level
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+    "onnxruntime",
+]
+
+# Vulkan (cross-platform) acceleration support  
+vulkan = [
+    # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
+    "torch==2.6.0",
+    "torchaudio==2.6.0", 
+    "torchvision==0.21.0",
+    "onnxruntime",
+]
+
+# SYCL (Intel GPU) acceleration support
+sycl = [
+    # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0", 
+    "onnxruntime",
+]
+
+# RPC (remote/distributed) acceleration support
+rpc = [
+    # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+    "onnxruntime",
+]
+
+# ============================================================================
+# LLM BACKENDS  
+# ============================================================================
+# Note: llama-cpp-python is handled separately by wheel installer
+# These groups are deprecated - use installation scripts or wheel installer directly
+
+# OpenAI integration
+openai = [
+    "openai==1.82.0",
+    "langchain-openai==0.3.18",
+]
+
+# Local embeddings
+embeddings-local = [
+    "langchain-huggingface==0.2.0",
+]
+
+# ============================================================================
+# OPTIONAL MODULES (from modules/ folder)
+# ============================================================================
+# UI Module (PyQt6 interface)
+ui = [
+    "PyQt6==6.6.1",
+    "PyQt6-Qt6==6.6.1", 
+    "PyQt6-sip==13.6.0",
+    "markdown==3.8",
+]
+
+# Google Workspace integration (Gmail, Calendar)
+google = [
+    "langchain-google-community==2.0.7",
+]
+
+# Productivity tools
+jira = [
+    "atlassian-python-api",
+]
+
+github = [
+    "pygithub",
+]
+
+slack = [
+    "slack-sdk",
+    "beautifulsoup4==4.13.3",
+]
+
+# Search engines
+brave-search = [
+    "brave-search",
+]
+
+# OpenRecall integration dependencies (from modules/openrecall)
+openrecall = [
+    "Flask==3.0.3",
+    "mss==9.0.1",
+    "shapely==2.0.4",
+    "h5py==3.11.0", 
+    "rapidfuzz==3.9.3",
+    "python-doctr @ git+https://github.com/koenvaneijk/doctr.git@af711bc04eb8876a7189923fb51ec44481ee18cd",
+]
+
+# Platform-specific dependencies for OpenRecall
+openrecall-windows = [
+    "pywin32",
+]
+
+openrecall-macos = [
+    "pyobjc==10.3",
+]
+
+# ============================================================================
+# DEVELOPMENT DEPENDENCIES
+# ============================================================================
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "pre-commit",
+    "ipython",
+    "jupyter",
+]
+
+test = [
+    "pytest==8.3.5",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock",
+    "httpx[testing]",
+]
+
+# ============================================================================
+# CONVENIENCE BUNDLES - GRANULAR CUDA/CPU OPTIONS
+# ============================================================================
+
+# ============================================================================
+# SIMPLIFIED INSTALLATION OPTIONS
+# ============================================================================
+
+# ============================================================================
+# 1. CORE INSTALLATION - Bare minimum dependencies only
+# ============================================================================
+# Absolute minimum - just what's required for Aurora to start
+# Note: Still requires configuring an LLM provider (third-party or local)
+core = [
+    "aurora[runtime,torch-cpu]",  
+]
+
+# ============================================================================
+# 2. THIRD-PARTY PROVIDERS - Use external API services (OpenAI, Anthropic)
+# ============================================================================
+# Third-party providers with API keys (recommended for beginners)
+third-party = [
+    "aurora[runtime,torch-cpu,openai]",  
+]
+
+# Third-party providers with additional features
+third-party-full = [
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+]
+
+# ============================================================================
+# 3. LOCAL EXECUTION - Run models on your hardware
+# ============================================================================
+# Local models using HuggingFace transformers (automatic device handling)
+local-huggingface = [
+    "aurora[runtime,torch-cpu,embeddings-local]",  
+]
+
+# Local models using HuggingFace transformers with GPU acceleration
+# Note: PyTorch GPU packages installed separately by setup script
+local-huggingface-gpu = [
+    "aurora[runtime,embeddings-local]",  # No torch - PyTorch installed separately by wheel installer
+]
+
+# Local models using optimized llama-cpp backend (CPU only)  
+local-llama-cpu = [
+    "aurora[runtime,embeddings-local]",
+    # Note: llama-cpp-python[cpu] installed separately by setup script
+]
+
+# Local models using optimized llama-cpp backend with GPU acceleration
+# Note: Specific backend (CUDA/ROCm/Metal) chosen during setup
+local-llama-gpu = [
+    "aurora[runtime,embeddings-local]",  # No torch conflicts, GPU backend chosen during setup
+    # Note: llama-cpp-python with specific acceleration installed by setup script
+]
+
+# ============================================================================
+# 4. COMPLETE INSTALLATIONS - All features included
+# ============================================================================
+# All features with third-party providers (easiest setup)
+full-third-party = [
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+]
+
+# All features with local HuggingFace models
+full-local-huggingface = [
+    "aurora[runtime,torch-cpu,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+]
+
+# All features with local HuggingFace models + GPU acceleration
+# Note: PyTorch GPU packages installed separately by setup script
+full-local-huggingface-gpu = [
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",  # No torch - PyTorch installed separately
+]
+
+# All features with optimized llama-cpp backend (CPU)
+full-local-llama-cpu = [
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    # Note: llama-cpp-python[cpu] installed separately by setup script
+]
+
+# All features with optimized llama-cpp backend + GPU acceleration
+full-local-llama-gpu = [
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    # Note: llama-cpp-python with specific GPU backend installed by setup script
+]
+
+# ============================================================================
+# LEGACY COMPATIBILITY - Deprecated (use new options above)
+# ============================================================================
+# All features - auto-detect hardware (legacy compatibility)
+all = [
+    "aurora[full-llama-cuda]",  # Default to CUDA for backwards compatibility
+]
+
+# ============================================================================
+# 5. DEVELOPMENT INSTALLATIONS - For contributors and advanced users
+# ============================================================================
+# Development with third-party providers (fastest setup for development)
+dev-third-party = [
+    "aurora[runtime,torch-cpu,openai,dev,test,build,container]",
+]
+
+# Development with local models (CPU - good for testing)
+dev-local-cpu = [
+    "aurora[runtime,torch-cpu,embeddings-local,dev,test,build,container]",
+]
+
+# Development with local models + GPU (for ML/AI development)
+# Note: PyTorch GPU packages installed separately by setup script
+dev-local-gpu = [
+    "aurora[runtime,embeddings-local,dev,test,build,container]",  # No torch - PyTorch installed separately
+]
+
+[project.urls]
+"Homepage" = "https://github.com/aurora-ai/aurora"
+"Bug Reports" = "https://github.com/aurora-ai/aurora/issues"
+"Source" = "https://github.com/aurora-ai/aurora"
+"Documentation" = "https://github.com/aurora-ai/aurora/blob/main/readme.md"
+
+[project.scripts]
+aurora = "main:main"
+aurora-build = "scripts.build:main"
+aurora-setup = "scripts.setup:main"
+
+[tool.setuptools]
+packages = ["app", "modules"]
+
+[tool.setuptools.package-data]
+app = [
+    "database/migrations/*.sql",
+]
+# Model files are now stored at root level and excluded from package builds
+# voice_models/ and chat_models/ directories contain large model files
+# Users should download/manage these separately
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "faster_whisper.*",
+    "RealtimeSTT.*",
+    "realtimetts.*",
+    "openwakeword.*",
+    "pvporcupine.*",
+    "pyaudio.*",
+    "mss.*",
+    "PyQt6.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config", 
+    "--verbose",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]

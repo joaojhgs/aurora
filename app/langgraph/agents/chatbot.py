@@ -1,12 +1,10 @@
 import os
 
-from langchain_openai import ChatOpenAI
 from langgraph.store.base import BaseStore
-from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
 from app.langgraph.state import State
 from app.langgraph.tools.tools import get_tools
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_info, log_debug, log_error, log_warning
+from app.helpers.aurora_logger import log_info, log_error, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 """
@@ -20,6 +18,7 @@ llm = None
 provider = config_manager.get('llm.provider', 'openai')
 
 if provider == 'openai':
+    from langchain_openai import ChatOpenAI
     openai_options = config_manager.get_section('llm.third_party.openai.options')
     if openai_options and openai_options.get('model'):
         llm = ChatOpenAI(**openai_options)
@@ -56,8 +55,8 @@ elif provider == 'huggingface_pipeline':
             from langchain_huggingface import HuggingFacePipeline, ChatHuggingFace
             
             # Get device configuration from hardware acceleration settings
-            use_hardware_acceleration = config_manager.get('hardware_acceleration.llm', True)
-            device_value = 0 if use_hardware_acceleration else -1  # 0 for GPU, -1 for CPU
+            use_hardware_acceleration = getUseHardwareAcceleration('llm')
+            device_value = 0 if use_hardware_acceleration == "cuda" else -1  # 0 for GPU, -1 for CPU
             
             # Prepare options for HuggingFacePipeline
             pipeline_options = hf_pipeline_options.copy()
@@ -93,6 +92,8 @@ elif provider == 'huggingface_pipeline':
             llm = None
 
 elif provider == 'llama_cpp':
+    from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
+    
     llama_options = config_manager.get_section('llm.local.llama_cpp.options')
     model_path = llama_options.get('model_path') if llama_options else None
     
@@ -104,30 +105,6 @@ elif provider == 'llama_cpp':
         llm = ChatLlamaCpp(**llama_init_options)
         log_info(f"Initialized Llama.cpp LLM with model: {model_path}")
 
-# Fallback: try legacy configuration for backward compatibility
-if llm is None:
-    log_warning("Primary LLM initialization failed, attempting legacy configuration fallback")
-    if config_manager.get('llm.openai_chat_model'):
-        llm = ChatOpenAI(
-            model=config_manager.get('llm.openai_chat_model'),
-        )
-        log_info("Initialized OpenAI LLM using legacy configuration")
-    elif config_manager.get('llm.llama_cpp_model_path'):
-        llm = ChatLlamaCpp(
-            chat_format="chatml-function-calling",
-            min_p=0.0,
-            top_p=0.95,
-            temperature=1.0,
-            top_k=64,
-            repeat_penalty=1.0,
-            model_path=config_manager.get('llm.llama_cpp_model_path'),
-            n_ctx=2048,
-            n_gpu_layers=0,
-            n_batch=1000,
-            max_tokens=256*2,
-            disable_streaming=True,
-        )
-        log_info("Initialized Llama.cpp LLM using legacy configuration")
 
 # Final check to ensure LLM is initialized
 if llm is not None:

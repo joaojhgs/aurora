@@ -1,0 +1,33 @@
+# Aurora Voice Assistant - Development Requirements
+#
+# This file contains dependencies needed for Aurora development
+# Install with: pip install -r requirements-dev.txt
+#
+# Or use: pip install -e .[dev-full]
+
+# Include runtime dependencies
+-r requirements-runtime.txt
+
+# Development tools
+pytest==8.3.5
+pytest-asyncio
+pytest-cov
+pytest-mock
+black
+flake8
+mypy
+pre-commit
+ipython
+jupyter
+
+# Build tools
+pyinstaller>=6.0.0
+auto-py-to-exe>=2.4.0
+pyinstaller-hooks-contrib>=2024.0
+
+# Container tools
+gunicorn>=21.0.0
+supervisor>=4.2.0
+
+# Testing tools
+httpx[testing]
