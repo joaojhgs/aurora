@@ -444,7 +444,7 @@ class ConfigManager:
                                     "properties": {
                                         "options": {
                                             "type": "object",
-                                            "required": ["model_path", "temperature", "max_tokens", "n_ctx", "n_gpu_layers", "n_batch", "top_p", "top_k", "repeat_penalty", "min_p", "chat_format"],
+                                            "required": ["model_path", "temperature", "max_tokens", "n_ctx", "n_gpu_layers", "n_batch", "top_p", "top_k", "repeat_penalty", "min_p"],
                                             "properties": {
                                                 "model_path": {"type": "string"},
                                                 "temperature": {"type": "number", "minimum": 0, "maximum": 2},
@@ -458,7 +458,7 @@ class ConfigManager:
                                                 "min_p": {"type": "number", "minimum": 0, "maximum": 1},
                                                 "chat_format": {"type": "string"}
                                             },
-                                            "additionalProperties": False
+                                            "additionalProperties": True
                                         }
                                     },
                                     "additionalProperties": False

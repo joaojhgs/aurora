@@ -93,7 +93,8 @@ elif provider == 'huggingface_pipeline':
 
 elif provider == 'llama_cpp':
     from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
-    
+    # Import handler to register it on the directory of chat formats
+    from app.langgraph.ChatLlamaCppFnHandler import *
     llama_options = config_manager.get_section('llm.local.llama_cpp.options')
     model_path = llama_options.get('model_path') if llama_options else None
     
@@ -101,7 +102,7 @@ elif provider == 'llama_cpp':
         # Prepare options for ChatLlamaCpp (ensure disable_streaming is set)
         llama_init_options = llama_options.copy()
         llama_init_options['disable_streaming'] = True
-        
+
         llm = ChatLlamaCpp(**llama_init_options)
         log_info(f"Initialized Llama.cpp LLM with model: {model_path}")
 
@@ -130,8 +131,8 @@ def chatbot(state: State, store: BaseStore):
     # Reduce the top_k parameter to reduce token usage
     # Be carefull to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
     # It might need adjusting depending on how much plugins you are using as well, +plugins = +tools to load
-    llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 8))
-    
+    llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 8), tool_choice="auto")
+    print(state["messages"])
     return {
             "messages": [
                 llm_with_tools.invoke([
@@ -143,11 +144,15 @@ def chatbot(state: State, store: BaseStore):
                             "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
                             "Make sure to provide the user with the most relevant information and be concise."
                             "Alway respond in the language of the user"
+                            "You can call tools to get information or execute actions.\n"
+                            "Make sure to respond the user after finishing calling all necessary tools to gather data and/or execute actions"
+                            "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
+                            "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
                             f"{memories}"
                             f"\nCurrent time: {os.popen('date').read().strip()}"
                         )
                     },
-                    *state["messages"],
+                    *state["messages"][-3:]
                 ])
             ]
         }

@@ -354,37 +354,37 @@ class ChatLlamaCpp(BaseChatModel):
         """
         formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
         tool_names = [ft["function"]["name"] for ft in formatted_tools]
-        if tool_choice:
-            if isinstance(tool_choice, dict):
-                if not any(
-                    tool_choice["function"]["name"] == name for name in tool_names
-                ):
-                    raise ValueError(
-                        f"Tool choice {tool_choice=} was specified, but the only "
-                        f"provided tools were {tool_names}."
-                    )
-            elif isinstance(tool_choice, str):
-                chosen = [
-                    f for f in formatted_tools if f["function"]["name"] == tool_choice
-                ]
-                if not chosen:
-                    raise ValueError(
-                        f"Tool choice {tool_choice=} was specified, but the only "
-                        f"provided tools were {tool_names}."
-                    )
-            elif isinstance(tool_choice, bool):
-                if len(formatted_tools) > 1:
-                    raise ValueError(
-                        "tool_choice=True can only be specified when a single tool is "
-                        f"passed in. Received {len(tools)} tools."
-                    )
-                tool_choice = formatted_tools[0]
-            else:
-                raise ValueError(
-                    """Unrecognized tool_choice type. Expected dict having format like 
-                    this {"type": "function", "function": {"name": <<tool_name>>}}"""
-                    f"Received: {tool_choice}"
-                )
+        # if tool_choice:
+        #     if isinstance(tool_choice, dict):
+        #         if not any(
+        #             tool_choice["function"]["name"] == name for name in tool_names
+        #         ):
+        #             raise ValueError(
+        #                 f"Tool choice {tool_choice=} was specified, but the only "
+        #                 f"provided tools were {tool_names}."
+        #             )
+        #     elif isinstance(tool_choice, str):
+        #         chosen = [
+        #             f for f in formatted_tools if f["function"]["name"] == tool_choice
+        #         ]
+        #         if not chosen:
+        #             raise ValueError(
+        #                 f"Tool choice {tool_choice=} was specified, but the only "
+        #                 f"provided tools were {tool_names}."
+        #             )
+        #     elif isinstance(tool_choice, bool):
+        #         if len(formatted_tools) > 1:
+        #             raise ValueError(
+        #                 "tool_choice=True can only be specified when a single tool is "
+        #                 f"passed in. Received {len(tools)} tools."
+        #             )
+        #         tool_choice = formatted_tools[0]
+        #     else:
+        #         raise ValueError(
+        #             """Unrecognized tool_choice type. Expected dict having format like 
+        #             this {"type": "function", "function": {"name": <<tool_name>>}}"""
+        #             f"Received: {tool_choice}"
+        #         )
 
         kwargs["tool_choice"] = tool_choice
         formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
