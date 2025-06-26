@@ -195,3 +195,5 @@ voice_models/
 
 # Local configuration files
 config.json*
+
+instructions

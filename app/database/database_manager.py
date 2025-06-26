@@ -224,3 +224,37 @@ class DatabaseManager:
         except Exception as e:
             log_error(f"Error retrieving session messages: {e}")
             return []
+    
+    async def update_message(self, message: Message) -> bool:
+        """Update an existing message in the database"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("""
+                    UPDATE messages 
+                    SET content = ?, 
+                        message_type = ?, 
+                        timestamp = ?,
+                        session_id = ?,
+                        metadata = ?,
+                        source_type = ?
+                    WHERE id = ?
+                """, (
+                    message.content,
+                    message.message_type.value,
+                    message.timestamp.isoformat(),
+                    message.session_id,
+                    json.dumps(message.metadata) if message.metadata else None,
+                    message.source_type,
+                    message.id
+                ))
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error updating message {message.id}: {e}")
+            return False
+    
+    async def close(self):
+        """Close any open connections and resources"""
+        # This is a no-op since we use connection per operation
+        # but included for API consistency and future use
+        pass

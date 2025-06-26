@@ -1,0 +1,71 @@
+name: Full Test Suite
+
+on:
+  # Full test suite runs only on manual trigger or release tags
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  full_test_suite:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+        pip install -r requirements-test.txt
+        
+    - name: Lint with flake8
+      run: |
+        flake8 app tests
+        
+    - name: Type check with mypy
+      run: |
+        mypy app tests
+        
+    - name: Run unit tests with coverage
+      run: |
+        pytest tests/unit -v --cov=app --cov-report=xml:unit-coverage.xml
+        
+    - name: Run integration tests with coverage
+      run: |
+        pytest tests/integration -v --cov=app --cov-report=xml:integration-coverage.xml --cov-append
+        
+    - name: Run end-to-end tests with coverage
+      run: |
+        pytest tests/e2e -v --cov=app --cov-report=xml:e2e-coverage.xml --cov-append
+        
+    - name: Run performance tests with coverage
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: |
+        pytest tests/performance -v --cov=app --cov-report=xml:performance-coverage.xml --cov-append
+        
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./unit-coverage.xml,./integration-coverage.xml,./e2e-coverage.xml,./performance-coverage.xml
+        flags: alltests
+        fail_ci_if_error: false
+        
+    - name: Generate HTML coverage report
+      run: |
+        pytest tests/unit tests/integration tests/e2e tests/performance -v --cov=app --cov-report=html:coverage-report
+        
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage-report/
