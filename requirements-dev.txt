@@ -8,11 +8,10 @@
 # Include runtime dependencies
 -r requirements-runtime.txt
 
+# Include test dependencies
+-r requirements-test.txt
+
 # Development tools
-pytest==8.3.5
-pytest-asyncio
-pytest-cov
-pytest-mock
 black
 flake8
 mypy
@@ -30,4 +29,8 @@ gunicorn>=21.0.0
 supervisor>=4.2.0
 
 # Testing tools
-httpx[testing]
+httpx[testing]>=0.25.0
+factory-boy>=3.3.0
+freezegun>=1.2.0
+responses>=0.23.0
+aiosqlite>=0.17.0

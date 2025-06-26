@@ -1,0 +1,32 @@
+# Core test dependencies
+pytest==8.3.5
+pytest-asyncio
+pytest-cov
+pytest-mock
+httpx[testing]
+pytest-timeout
+pytest-benchmark
+
+# Unit test dependencies
+faker
+freezegun
+
+# Integration test dependencies
+pytest-docker
+pytest-postgresql
+pytest-sqlite
+
+# E2E test dependencies
+pytest-playwright
+selenium
+
+# Performance test dependencies
+locust
+psutil
+
+# Development test utilities
+pytest-xdist
+pytest-sugar
+pytest-clarity
+pytest-html
+coverage[toml]

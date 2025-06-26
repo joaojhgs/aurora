@@ -1,5 +1,10 @@
 # Aurora: Intelligent Voice Assistant for Local Automation and Productivity
 
+[![Unit and Integration Tests](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml)
+[![Code Coverage](https://codecov.io/gh/aurora-ai/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python Versions](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11-blue)](https://github.com/aurora-ai/aurora)
+
 Aurora is an intelligent voice assistant designed to enhance productivity through local, privacy-focused automation. It leverages real-time speech-to-text, a large language model (LLM), and open-source tools to provide a seamless and intuitive user experience.
 
 **It's objective is to be the privacy-first swiss knife of assistants, allowing unprecedentedly easy extension and addition of tools for productivity, every day life and work life.**
@@ -395,8 +400,142 @@ Also by allowing client side tools aside from the ones we can use on the Desktop
 - [ ] Integrations with Home Assistant
    - [ ] Allow for tool calling with smart home appliances
 
+## Testing & Development
+
+### Test Categories
+
+Aurora has a comprehensive testing suite divided into several categories:
+
+1. **Unit Tests** - Test individual components in isolation
+   - Location: `tests/unit/`
+
+2. **Integration Tests** - Test interactions between components
+   - Location: `tests/integration/`
+
+3. **End-to-End Tests** - Test complete user workflows
+   - Location: `tests/e2e/`
+
+4. **Performance Tests** - Test system performance
+   - Location: `tests/performance/`
+
+### Running Tests
+
+Install test dependencies:
+```bash
+pip install -r requirements-test.txt
+```
+
+Run all tests (except performance tests):
+```bash
+pytest
+```
+
+Generate a test coverage report:
+```bash
+pytest --cov=app --cov-report=html
+```
+
+For more details, see [Testing Guide](tests/README.md).
+
+### CI/CD Pipeline
+
+Aurora has several GitHub Actions workflows:
+
+1. **Unit and Integration Tests** - Run on every push
+2. **End-to-End Tests** - Run on pull requests
+3. **Performance Tests** - Run on schedule and manually
+4. **Full Test Suite** - Run on releases and manually
+5. **Lint and Static Analysis** - Run on every push
+
+[![Code Coverage](https://codecov.io/gh/aurora-ai/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
+
 ## Why Aurora?
 Aurora redefines how users interact with their computers by combining voice-based interfaces with powerful local automation tools. It enhances productivity without compromising privacy, offering a seamless blend of natural language processing, semantic search, and browser automation. By leveraging open-source tools, Aurora ensures transparency and customization, making it a versatile assistant for both personal and professional use.
 
 ## Contributing
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+
+Contributions to Aurora are welcome! Here's how you can contribute:
+
+### Getting Started
+
+1. **Fork the repository** on GitHub
+2. **Clone your fork** locally:
+   ```bash
+   git clone https://github.com/YOUR-USERNAME/aurora.git
+   cd aurora
+   ```
+3. **Set up the development environment**:
+   ```bash
+   # Create a virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Install development and test dependencies
+   pip install -e ".[dev-local-cpu]"
+   pip install -r requirements-test.txt
+   ```
+
+### Development Workflow
+
+1. **Create a branch** for your feature or bugfix:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** and ensure they follow the project's code style:
+   ```bash
+   # Format your code with black
+   black app/ tests/
+   
+   # Run linting
+   flake8 app/ tests/
+   
+   # Run type checking
+   mypy app/ tests/
+   ```
+
+3. **Write tests** for your changes:
+   - Unit tests for new functionality
+   - Integration tests for component interactions
+   - Update existing tests as needed
+
+4. **Run tests** to verify your changes:
+   ```bash
+   # Run all tests (excluding performance tests)
+   pytest
+   
+   # Run only the tests you modified
+   pytest path/to/your/test_file.py
+   
+   # Check test coverage
+   pytest --cov=app --cov-report=term
+   ```
+
+5. **Commit your changes** with a clear message:
+   ```bash
+   git commit -m "Add feature: your feature description"
+   ```
+
+6. **Push your branch** to GitHub:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+7. **Submit a pull request** from your fork to the main repository
+
+### Pull Request Guidelines
+
+- Ensure your code passes all tests and CI checks
+- Include tests for any new functionality
+- Update documentation as needed
+- Follow the existing code style and conventions
+- Keep changes focused on a single issue/feature
+
+The CI pipeline will automatically run tests on your pull request, including unit tests, integration tests, and linting.
+
+### Need Help?
+
+If you have questions or need help, feel free to:
+- Open an issue with your question
+- Join our community discussions
+- Check the existing documentation in the `/docs` directory

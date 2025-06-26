@@ -293,14 +293,57 @@ dev = [
     "pre-commit",
     "ipython",
     "jupyter",
+    "pytest-xdist",       # For parallel test execution
+    "pytest-sugar",       # For better test progress visualization
+    "pytest-clarity",     # For better test failure output
+    "pytest-html",        # For HTML test reports
+    "coverage[toml]",     # For comprehensive test coverage reporting
 ]
 
+# Core test dependencies needed for all test types
 test = [
     "pytest==8.3.5",
     "pytest-asyncio",
     "pytest-cov",
     "pytest-mock",
     "httpx[testing]",
+    "pytest-timeout",
+    "pytest-benchmark",
+]
+
+# Dependencies for unit tests
+test-unit = [
+    "aurora[test]",
+    "faker",
+    "freezegun",
+]
+
+# Dependencies for integration tests (including database)
+test-integration = [
+    "aurora[test,test-unit]",
+    "pytest-docker",
+    "pytest-postgresql",
+    "pytest-sqlite",
+]
+
+# Dependencies for end-to-end tests
+test-e2e = [
+    "aurora[test,test-unit]",
+    "pytest-playwright",
+    "selenium",
+]
+
+# Dependencies for performance tests
+test-performance = [
+    "aurora[test]",
+    "pytest-benchmark",
+    "locust",
+    "psutil",
+]
+
+# All test dependencies combined
+test-all = [
+    "aurora[test,test-unit,test-integration,test-e2e,test-performance]",
 ]
 
 # ============================================================================
@@ -404,18 +447,18 @@ all = [
 # ============================================================================
 # Development with third-party providers (fastest setup for development)
 dev-third-party = [
-    "aurora[runtime,torch-cpu,openai,dev,test,build,container]",
+    "aurora[runtime,torch-cpu,openai,dev,test-all,build,container]",
 ]
 
 # Development with local models (CPU - good for testing)
 dev-local-cpu = [
-    "aurora[runtime,torch-cpu,embeddings-local,dev,test,build,container]",
+    "aurora[runtime,torch-cpu,embeddings-local,dev,test-all,build,container]",
 ]
 
 # Development with local models + GPU (for ML/AI development)
 # Note: PyTorch GPU packages installed separately by setup script
 dev-local-gpu = [
-    "aurora[runtime,embeddings-local,dev,test,build,container]",  # No torch - PyTorch installed separately
+    "aurora[runtime,embeddings-local,dev,test-all,build,container]",  # No torch - PyTorch installed separately
 ]
 
 [project.urls]
@@ -496,9 +539,25 @@ addopts = [
     "--strict-markers",
     "--strict-config", 
     "--verbose",
+    "-m", "not performance"  # Don't run performance tests by default
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "e2e: marks tests as end-to-end tests",
+    "performance: marks tests as performance tests",
+    "db: marks tests that require database access",
+    "network: marks tests that require network access",
+    "external_api: marks tests that call external APIs",
+    "simple: marks simplified versions of tests that use mocks instead of real dependencies",
+    "smoke: marks critical smoke tests that must pass for basic functionality",
+    "flaky: marks tests that might be unreliable",
+    "mocked: marks tests that use mock objects instead of real dependencies",
+    "langgraph: tests related to the langgraph module",
+    "scheduler: tests related to the scheduler module",
+    "stt: tests related to the speech-to-text module",
+    "tts: tests related to the text-to-speech module", 
 ]
+# Default timeout for tests in seconds (prevents hanging tests)
+timeout = 300
