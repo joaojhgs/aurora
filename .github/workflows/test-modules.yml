@@ -20,10 +20,10 @@ jobs:
         python-version: ['3.9', '3.10', '3.11']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         
@@ -31,11 +31,30 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
+        pip install -r requirements-test.txt
         pip install -r modules/ui/requirements.txt
         
     - name: Test UI module
       run: |
-        pytest tests/unit/modules/ui -v --marker="ui"
+        pytest tests/unit/modules/ui -v --marker="ui" --cov=modules/ui --cov-report=xml:ui-coverage.xml
+        
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./ui-coverage.xml
+        flags: ui-module
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+        
+    - name: Generate HTML coverage report
+      run: |
+        pytest tests/unit/modules/ui -v --marker="ui" --cov=modules/ui --cov-report=html:ui-coverage-report
+        
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: ui-coverage-report
+        path: ui-coverage-report/
         
   test-openrecall:
     runs-on: ${{ matrix.os }}
@@ -45,10 +64,10 @@ jobs:
         python-version: ['3.9', '3.10']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         
@@ -56,8 +75,27 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
+        pip install -r requirements-test.txt
         cd modules/openrecall && pip install -e .
         
     - name: Test OpenRecall module
       run: |
-        pytest tests/unit/modules/openrecall -v
+        pytest tests/unit/modules/openrecall -v --cov=modules/openrecall --cov-report=xml:openrecall-coverage.xml
+        
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./openrecall-coverage.xml
+        flags: openrecall-module
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+        
+    - name: Generate HTML coverage report
+      run: |
+        pytest tests/unit/modules/openrecall -v --cov=modules/openrecall --cov-report=html:openrecall-coverage-report
+        
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: openrecall-coverage-report
+        path: openrecall-coverage-report/
