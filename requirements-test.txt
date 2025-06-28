@@ -13,8 +13,10 @@ freezegun
 
 # Integration test dependencies
 pytest-docker
-pytest-postgresql
-pytest-sqlite
+pytest-postgresql>=7.0.0
+# SQLite support for async tests
+aiosqlite>=0.19.0
+pytest-asyncio
 
 # E2E test dependencies
 pytest-playwright
