@@ -1,0 +1,46 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    -   id: check-yaml
+    -   id: check-added-large-files
+        args: ['--maxkb=1000']
+    -   id: check-toml
+    -   id: check-ast  # Verify Python code is valid syntax
+    -   id: check-json
+    -   id: check-merge-conflict
+    -   id: debug-statements  # Check for debugger imports and py37+ breakpoint calls
+
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        language_version: python3
+        args: ["--line-length=100"]
+
+-   repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+    -   id: flake8
+        additional_dependencies: [flake8-docstrings]
+        args: ["--max-line-length=100", "--extend-ignore=E203,W503"]
+
+-   repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+    -   id: isort
+        args: ["--profile", "black", "--line-length=100"]
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.1
+    hooks:
+    -   id: mypy
+        additional_dependencies: [types-requests, types-setuptools]
+        exclude: ^tests/
+        args: ["--ignore-missing-imports", "--disable-error-code=attr-defined"]
+        
+-   repo: https://github.com/asottile/pyupgrade
+    rev: v3.20.0
+    hooks:
+    -   id: pyupgrade
+        args: ["--py39-plus"]  # Keep Python syntax compatible with 3.9+

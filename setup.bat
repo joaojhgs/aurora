@@ -530,6 +530,21 @@ if "%FEATURE_LEVEL%"=="dev" (
     echo    flake8         # Lint code
     echo    mypy           # Type checking
     echo.
+    
+    REM Set up pre-commit hooks for development
+    echo 🪝 Setting up pre-commit hooks for code quality...
+    pip install pre-commit
+    
+    REM Install the pre-commit hooks
+    pre-commit install
+    
+    REM Update hooks to the latest version
+    pre-commit autoupdate
+    
+    echo ✅ Pre-commit hooks installed successfully!
+    echo    Your code will be automatically linted when you commit changes.
+    echo    You can run pre-commit manually with: pre-commit run --all-files
+    echo.
 )
 
 echo Happy voice assisting! 🎤✨

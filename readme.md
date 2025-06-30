@@ -466,13 +466,17 @@ Contributions to Aurora are welcome! Here's how you can contribute:
    ```
 3. **Set up the development environment**:
    ```bash
-   # Create a virtual environment
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # Run the setup script and choose option 3 (Development)
+   # Linux/macOS:
+   ./setup.sh
+   # Windows:
+   setup.bat
    
-   # Install development and test dependencies
-   pip install -e ".[dev-local-cpu]"
-   pip install -r requirements-test.txt
+   # Activate the virtual environment (if not using the run.sh/run.bat scripts)
+   # Linux/macOS:
+   source venv/bin/activate
+   # Windows:
+   venv\Scripts\activate
    ```
 
 ### Development Workflow
@@ -482,19 +486,29 @@ Contributions to Aurora are welcome! Here's how you can contribute:
    git checkout -b feature/your-feature-name
    ```
 
-2. **Make your changes** and ensure they follow the project's code style:
+2. **Set up development environment** with pre-commit hooks:
    ```bash
-   # Format your code with black
-   black app/ tests/
-   
-   # Run linting
-   flake8 app/ tests/
-   
-   # Run type checking
-   mypy app/ tests/
+   # Run the setup script and choose the "Development" feature level (option 3)
+   # This will install all development dependencies and pre-commit hooks
+   ./setup.sh
+   # or on Windows
+   setup.bat
    ```
 
-3. **Write tests** for your changes:
+3. **Make your changes** and ensure they follow the project's code style:
+   ```bash
+   # Run auto-formatting (black + isort)
+   make format
+   
+   # Run all code quality checks (lint + typing)
+   make check
+   
+   # Or run individual checks:
+   make lint      # Run flake8 linting
+   make typing    # Run mypy type checking
+   ```
+
+4. **Write tests** for your changes:
    - Unit tests for new functionality
    - Integration tests for component interactions
    - Update existing tests as needed
@@ -502,13 +516,14 @@ Contributions to Aurora are welcome! Here's how you can contribute:
 4. **Run tests** to verify your changes:
    ```bash
    # Run all tests (excluding performance tests)
-   pytest
+   make test
    
-   # Run only the tests you modified
-   pytest path/to/your/test_file.py
+   # Run specific test types
+   make unit        # Run unit tests only
+   make integration # Run integration tests only
    
-   # Check test coverage
-   pytest --cov=app --cov-report=term
+   # Generate test coverage report
+   make coverage
    ```
 
 5. **Commit your changes** with a clear message:
