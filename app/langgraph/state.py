@@ -1,6 +1,8 @@
 from typing import Annotated
-from typing_extensions import TypedDict
+
 from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
+
 
 # New messages from both the user and the assistant are persisted in the state
 class State(TypedDict):

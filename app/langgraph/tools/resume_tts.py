@@ -2,6 +2,7 @@ from langchain_core.tools import tool
 
 from app.text_to_speech.tts import resume
 
+
 @tool
 def resume_tts_tool():
     """

@@ -175,7 +175,7 @@ class ChatLlamaCpp(BaseChatModel):
         """Validate that llama-cpp-python library is installed."""
         Llama = None
         LlamaGrammar = None
-        
+
         # First try the standard llama_cpp import
         try:
             from llama_cpp import Llama, LlamaGrammar
@@ -221,8 +221,7 @@ class ChatLlamaCpp(BaseChatModel):
             self.client = Llama(model_path, **model_params)
         except Exception as e:
             raise ValueError(
-                f"Could not load Llama model from path: {model_path}. "
-                f"Received error {e}"
+                f"Could not load Llama model from path: {model_path}. " f"Received error {e}"
             )
 
         if self.grammar and self.grammar_path:
@@ -258,9 +257,7 @@ class ChatLlamaCpp(BaseChatModel):
 
         return params
 
-    def _create_message_dicts(
-        self, messages: List[BaseMessage]
-    ) -> List[Dict[str, Any]]:
+    def _create_message_dicts(self, messages: List[BaseMessage]) -> List[Dict[str, Any]]:
         message_dicts = [_convert_message_to_dict(m) for m in messages]
 
         return message_dicts
@@ -310,9 +307,7 @@ class ChatLlamaCpp(BaseChatModel):
         params = {**self._get_parameters(stop), **kwargs}
         message_dicts = self._create_message_dicts(messages)
 
-        result = self.client.create_chat_completion(
-            messages=message_dicts, stream=True, **params
-        )
+        result = self.client.create_chat_completion(messages=message_dicts, stream=True, **params)
 
         default_chunk_class = AIMessageChunk
         count = 0
@@ -325,16 +320,12 @@ class ChatLlamaCpp(BaseChatModel):
             choice = chunk["choices"][0]
             if choice["delta"] is None:
                 continue
-            chunk = _convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
-            )
+            chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
             generation_info = {}
             if finish_reason := choice.get("finish_reason"):
                 generation_info["finish_reason"] = finish_reason
             default_chunk_class = chunk.__class__
-            chunk = ChatGenerationChunk(
-                message=chunk, generation_info=generation_info or None
-            )
+            chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info or None)
             if run_manager:
                 run_manager.on_llm_new_token(chunk.text, chunk=chunk)
             yield chunk
@@ -381,7 +372,7 @@ class ChatLlamaCpp(BaseChatModel):
         #         tool_choice = formatted_tools[0]
         #     else:
         #         raise ValueError(
-        #             """Unrecognized tool_choice type. Expected dict having format like 
+        #             """Unrecognized tool_choice type. Expected dict having format like
         #             this {"type": "function", "function": {"name": <<tool_name>>}}"""
         #             f"Received: {tool_choice}"
         #         )
@@ -535,8 +526,7 @@ class ChatLlamaCpp(BaseChatModel):
         is_pydantic_schema = isinstance(schema, type) and is_basemodel_subclass(schema)
         if schema is None:
             raise ValueError(
-                "schema must be specified when method is 'function_calling'. "
-                "Received None."
+                "schema must be specified when method is 'function_calling'. " "Received None."
             )
         tool_name = convert_to_openai_tool(schema)["function"]["name"]
         tool_choice = {"type": "function", "function": {"name": tool_name}}
@@ -546,9 +536,7 @@ class ChatLlamaCpp(BaseChatModel):
                 tools=[cast(Type, schema)], first_tool_only=True
             )
         else:
-            output_parser = JsonOutputKeyToolsParser(
-                key_name=tool_name, first_tool_only=True
-            )
+            output_parser = JsonOutputKeyToolsParser(key_name=tool_name, first_tool_only=True)
 
         if include_raw:
             parser_assign = RunnablePassthrough.assign(
@@ -685,9 +673,7 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
             id=id_,
         )
     else:
-        return ChatMessage(
-            content=_dict.get("content", ""), role=cast(str, role), id=id_
-        )
+        return ChatMessage(content=_dict.get("content", ""), role=cast(str, role), id=id_)
 
 
 def _format_message_content(content: Any) -> Any:
@@ -696,11 +682,7 @@ def _format_message_content(content: Any) -> Any:
         # Remove unexpected block types
         formatted_content = []
         for block in content:
-            if (
-                isinstance(block, dict)
-                and "type" in block
-                and block["type"] == "tool_use"
-            ):
+            if isinstance(block, dict) and "type" in block and block["type"] == "tool_use":
                 continue
             else:
                 formatted_content.append(block)
@@ -737,10 +719,7 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
         if message.tool_calls or message.invalid_tool_calls:
             message_dict["tool_calls"] = [
                 _lc_tool_call_to_openai_tool_call(tc) for tc in message.tool_calls
-            ] + [
-                _lc_invalid_tool_call_to_openai_tool_call(tc)
-                for tc in message.invalid_tool_calls
-            ]
+            ] + [_lc_invalid_tool_call_to_openai_tool_call(tc) for tc in message.invalid_tool_calls]
         elif "tool_calls" in message.additional_kwargs:
             message_dict["tool_calls"] = message.additional_kwargs["tool_calls"]
             tool_call_supported_props = {"id", "type", "function"}
@@ -809,9 +788,7 @@ def _convert_delta_to_message_chunk(
     elif role == "function" or default_class == FunctionMessageChunk:
         return FunctionMessageChunk(content=content, name=_dict["name"], id=id_)
     elif role == "tool" or default_class == ToolMessageChunk:
-        return ToolMessageChunk(
-            content=content, tool_call_id=_dict["tool_call_id"], id=id_
-        )
+        return ToolMessageChunk(content=content, tool_call_id=_dict["tool_call_id"], id=id_)
     elif role or default_class == ChatMessageChunk:
         return ChatMessageChunk(content=content, role=role, id=id_)
     else:

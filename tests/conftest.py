@@ -1,17 +1,20 @@
 """
 Global test fixtures and configuration for Aurora test suite.
 """
-import os
-import sys
-import pytest
-import tempfile
-import sqlite3
+
 import asyncio
-from unittest.mock import MagicMock, patch
+import os
+import sqlite3
+import sys
+import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add the parent directory to the path so we can import app modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 # Register custom markers
 def pytest_configure(config):
@@ -23,6 +26,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: Tests requiring GPU")
     config.addinivalue_line("markers", "ui: Tests requiring UI components")
     config.addinivalue_line("markers", "external: Tests requiring external services")
+
 
 # Import app modules
 from app.config.config_manager import ConfigManager
@@ -42,7 +46,7 @@ def event_loop():
 @pytest.fixture
 def mock_config_manager():
     """Mock the ConfigManager singleton."""
-    with patch('app.config.config_manager.ConfigManager') as mock:
+    with patch("app.config.config_manager.ConfigManager") as mock:
         instance = MagicMock()
         mock.get_instance.return_value = instance
         yield instance
@@ -52,31 +56,20 @@ def mock_config_manager():
 def test_config():
     """Create a test configuration."""
     return {
-        "app": {
-            "name": "Aurora Test",
-            "version": "0.1.0",
-            "log_level": "DEBUG"
-        },
-        "database": {
-            "path": ":memory:"
-        },
+        "app": {"name": "Aurora Test", "version": "0.1.0", "log_level": "DEBUG"},
+        "database": {"path": ":memory:"},
         "speech_to_text": {
             "enabled": False,
             "wake_word_path": "test_wake_word.onnx",
-            "timeout_seconds": 5
+            "timeout_seconds": 5,
         },
         "text_to_speech": {
             "enabled": False,
             "voice_model_path": "test_voice_model.onnx",
-            "speaker_id": 0
+            "speaker_id": 0,
         },
-        "scheduler": {
-            "enabled": False
-        },
-        "langgraph": {
-            "model_path": "test_model.gguf",
-            "max_tokens": 100
-        }
+        "scheduler": {"enabled": False},
+        "langgraph": {"model_path": "test_model.gguf", "max_tokens": 100},
     }
 
 
@@ -109,7 +102,7 @@ async def test_database_manager(temp_db_path):
 @pytest.fixture
 def mock_audio_device():
     """Mock audio recording device."""
-    with patch('app.speech_to_text.audio_recorder.AudioRecorder') as mock:
+    with patch("app.speech_to_text.audio_recorder.AudioRecorder") as mock:
         instance = MagicMock()
         mock.return_value = instance
         yield instance
@@ -118,7 +111,7 @@ def mock_audio_device():
 @pytest.fixture
 def mock_tts_engine():
     """Mock text-to-speech engine."""
-    with patch('app.text_to_speech.tts.TTS') as mock:
+    with patch("app.text_to_speech.tts.TTS") as mock:
         instance = MagicMock()
         mock.return_value = instance
         yield instance
@@ -127,7 +120,7 @@ def mock_tts_engine():
 @pytest.fixture
 def mock_llm_engine():
     """Mock LLM engine."""
-    with patch('app.langgraph.ChatLlamaCpp.LlamaCppChat') as mock:
+    with patch("app.langgraph.ChatLlamaCpp.LlamaCppChat") as mock:
         instance = MagicMock()
         mock.return_value = instance
         yield instance
@@ -142,19 +135,19 @@ def sample_message():
         role="user",
         created_at="2023-01-01T00:00:00",
         message_type="TEXT",
-        metadata={"test": True}
+        metadata={"test": True},
     )
 
 
 @pytest.fixture
 def mock_gpu_available():
     """Mock GPU availability detection."""
-    with patch('app.helpers.getUseHardwareAcceleration.is_cuda_available', return_value=True):
+    with patch("app.helpers.getUseHardwareAcceleration.is_cuda_available", return_value=True):
         yield
 
 
 @pytest.fixture
 def mock_gpu_unavailable():
     """Mock GPU unavailability."""
-    with patch('app.helpers.getUseHardwareAcceleration.is_cuda_available', return_value=False):
+    with patch("app.helpers.getUseHardwareAcceleration.is_cuda_available", return_value=False):
         yield

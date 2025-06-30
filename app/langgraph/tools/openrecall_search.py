@@ -1,5 +1,7 @@
 from langchain_core.tools import tool
+
 from modules.openrecall.openrecall.database import search_entries
+
 
 @tool
 def openrecall_search_tool(
@@ -12,5 +14,7 @@ def openrecall_search_tool(
     """
 
     results = search_entries(input, 3)
-    filtered_results = [(app, title, text, timestamp) for app, title, text, timestamp, id, embedding in results]
-    return filtered_results   
+    filtered_results = [
+        (app, title, text, timestamp) for app, title, text, timestamp, id, embedding in results
+    ]
+    return filtered_results
