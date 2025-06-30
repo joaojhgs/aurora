@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import sys
 import json
+import sys
 import traceback
-
 from typing import (
     Dict,
     Iterator,
@@ -16,11 +15,17 @@ from typing import (
 
 import jinja2
 from jinja2.sandbox import ImmutableSandboxedEnvironment
-
 from llama_cpp_cuda import llama
-from llama_cpp_cuda import llama_types as llama_types
 from llama_cpp_cuda import llama_grammar as llama_grammar
-from llama_cpp_cuda.llama_chat_format import _convert_completion_to_chat_function, _grammar_for_response_format, _convert_completion_to_chat, _convert_text_completion_logprobs_to_chat, register_chat_completion_handler
+from llama_cpp_cuda import llama_types as llama_types
+from llama_cpp_cuda.llama_chat_format import (
+    _convert_completion_to_chat,
+    _convert_completion_to_chat_function,
+    _convert_text_completion_logprobs_to_chat,
+    _grammar_for_response_format,
+    register_chat_completion_handler,
+)
+
 
 @register_chat_completion_handler("function-calling")
 def function_calling_handler(
@@ -116,7 +121,7 @@ def function_calling_handler(
         autoescape=jinja2.select_autoescape(["html", "xml"]),
         undefined=jinja2.StrictUndefined,
     ).from_string(function_calling_template)
-    
+
     # Convert legacy functions to tools
     if functions is not None:
         tools = [
@@ -129,9 +134,7 @@ def function_calling_handler(
 
     # Convert legacy function_call to tool_choice
     if function_call is not None:
-        if isinstance(function_call, str) and (
-            function_call == "none" or function_call == "auto"
-        ):
+        if isinstance(function_call, str) and (function_call == "none" or function_call == "auto"):
             tool_choice = function_call
         if isinstance(function_call, dict) and "name" in function_call:
             tool_choice = {
@@ -146,7 +149,7 @@ def function_calling_handler(
         if isinstance(stop, str)
         else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
     )
-    
+
     # Case 1: No tool choice by user
     if (
         tool_choice is None
@@ -193,9 +196,7 @@ def function_calling_handler(
     # Case 2: Tool choice by user
     if isinstance(tool_choice, dict):
         tool_name = tool_choice["function"]["name"]
-        tool = next(
-            (tool for tool in tools if tool["function"]["name"] == tool_name), None
-        )
+        tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
         if tool is None:
             raise ValueError(f"Tool with name '{tool_name}' not found in tools")
         prompt = template_renderer.render(
@@ -239,18 +240,13 @@ def function_calling_handler(
             logits_processor=logits_processor,
             grammar=grammar,
         )
-        return _convert_completion_to_chat_function(
-            tool_name, completion_or_chunks, stream
-        )
+        return _convert_completion_to_chat_function(tool_name, completion_or_chunks, stream)
 
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
-    function_names = " | ".join(
-        [f'''"functions.{tool['function']['name']}:"''' for tool in tools]
-    )
+    function_names = " | ".join([f'''"functions.{tool['function']['name']}:"''' for tool in tools])
     initial_gbnf_tool_grammar = (
-        """root   ::= functions | "message:"\n"""
-        f"""functions ::= {function_names}\n"""
+        """root   ::= functions | "message:"\n""" f"""functions ::= {function_names}\n"""
     )
     follow_up_gbnf_tool_grammar = (
         """root   ::= functions | message\n"""
@@ -263,18 +259,18 @@ def function_calling_handler(
         tool_calls=True,
         add_generation_prompt=True,
     )
-    
+
     print("[DEBUG] ===== RECEIVED MESSAGES =====")
     for i, message in enumerate(messages):
         print(f"[DEBUG] Message {i}, role: {message.get('role')}")
-        if 'content' in message and message['content']:
+        if "content" in message and message["content"]:
             print(f"[DEBUG] Content: {message['content'][:100]}...")
-        if 'tool_calls' in message:
+        if "tool_calls" in message:
             print(f"[DEBUG] Tool calls: {message['tool_calls']}")
     print("[DEBUG] ===== END MESSAGES =====")
-    
+
     print("[DEBUG] Tool choice auto prompt:", prompt)
-    
+
     completion_or_chunks = llama.create_completion(
         prompt=prompt,
         temperature=0,
@@ -327,10 +323,10 @@ def function_calling_handler(
             #     follow_up_gbnf_tool_grammar, verbose=llama.verbose
             # ),
         )
-        
+
         if not stream:
             print(f"[DEBUG] Message completion: {completion_result['choices'][0]['text']}")
-            
+
         return _convert_completion_to_chat(
             completion_result,
             stream=stream,
@@ -340,7 +336,7 @@ def function_calling_handler(
     tool_name = text[len("functions.") :]
     tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
     print(f"[DEBUG] Selected tool_name: '{tool_name}', Found tool: {tool is not None}")
-    
+
     if not stream:
         completions: List[llama_types.CreateCompletionResponse] = []
         completions_tool_name: List[str] = []
@@ -381,14 +377,12 @@ def function_calling_handler(
                 logits_processor=logits_processor,
                 grammar=grammar,
             )
-            completion_or_chunks = cast(
-                llama_types.CreateCompletionResponse, completion_or_chunks
-            )
+            completion_or_chunks = cast(llama_types.CreateCompletionResponse, completion_or_chunks)
             completions.append(completion_or_chunks)
             completions_tool_name.append(tool_name)
-            
+
             print(f"[DEBUG] Tool completion: {completion_or_chunks['choices'][0]['text'][:100]}...")
-            
+
             prompt += completion_or_chunks["choices"][0]["text"]
             prompt += "\n"
 
@@ -417,7 +411,7 @@ def function_calling_handler(
                 ),
             )
             response = cast(llama_types.CreateCompletionResponse, response)
-            
+
             print(f"[DEBUG] Follow-up response: {response['choices'][0]['text']}")
 
             try:
@@ -461,10 +455,10 @@ def function_calling_handler(
             if len(completions) == 1
             else {}
         )
-        
+
         print(f"[DEBUG] Completed tool calls. Number of completions: {len(completions)}")
         print(f"[DEBUG] Tool names used: {completions_tool_name}")
-        
+
         response_dict = {
             "id": "chat" + completion["id"],
             "object": "chat.completion",
@@ -474,17 +468,15 @@ def function_calling_handler(
                 {
                     "finish_reason": "tool_calls",
                     "index": 0,
-                    "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(
+                        completion["choices"][0]["logprobs"]
+                    ),
                     "message": {
                         "role": "assistant",
                         "content": None,
                         "tool_calls": [
                             {
-                                "id": "call_"
-                                + f"_{i}_"
-                                + tool_name
-                                + "_"
-                                + completion["id"],
+                                "id": "call_" + f"_{i}_" + tool_name + "_" + completion["id"],
                                 "type": "function",
                                 "function": {
                                     "name": tool_name,
@@ -501,11 +493,7 @@ def function_calling_handler(
             ],
             "usage": {
                 "completion_tokens": sum(
-                    (
-                        completion["usage"]["completion_tokens"]
-                        if "usage" in completion
-                        else 0
-                    )
+                    (completion["usage"]["completion_tokens"] if "usage" in completion else 0)
                     for completion in completions
                 ),
                 "prompt_tokens": sum(
@@ -518,8 +506,10 @@ def function_calling_handler(
                 ),
             },
         }
-        
-        print(f"[DEBUG] Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls")
+
+        print(
+            f"[DEBUG] Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls"
+        )
         return response_dict
 
     raise ValueError("Automatic streaming tool choice is not supported")

@@ -1,17 +1,18 @@
-from typing import Any, Literal, Union
-from langgraph.graph import StateGraph, END
-from app.langgraph.state import State
-from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver
-from app.langgraph.agents.chatbot import chatbot
-from app.langgraph.tools.tools import tools
-from pydantic import BaseModel
-from langchain_core.messages import AnyMessage
-
-from app.langgraph.memory_store import store
-from app.text_to_speech.tts import play
 from enum import Enum
-from app.helpers.aurora_logger import log_info, log_debug
+from typing import Any, Literal, Union
+
+from langchain_core.messages import AnyMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from pydantic import BaseModel
+
+from app.helpers.aurora_logger import log_debug, log_info
+from app.langgraph.agents.chatbot import chatbot
+from app.langgraph.memory_store import store
+from app.langgraph.state import State
+from app.langgraph.tools.tools import tools
+from app.text_to_speech.tts import play
 
 graph_builder = StateGraph(State)
 
@@ -45,13 +46,9 @@ def tools_end_condition(
         return "END"
     return "chatbot"
 
+
 graph_builder.add_conditional_edges(
-    "tools",
-    tools_end_condition,
-    {
-        "END": END,
-        "chatbot": "chatbot"
-    }
+    "tools", tools_end_condition, {"END": END, "chatbot": "chatbot"}
 )
 
 # Add an edge from the tools node to the chatbot node
@@ -76,13 +73,13 @@ except Exception:
     # This requires some extra dependencies and is optional
     pass
 
+
 # The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
 async def stream_graph_updates(user_input: str, ttsResult: bool = True):
     # Handle custom UIMessage objects
     input_content = user_input
-    
 
-    if hasattr(user_input, 'text'):
+    if hasattr(user_input, "text"):
         input_content = user_input.text
         log_debug(f"Graph: Processing input from custom object: {input_content[:30]}...")
     else:
@@ -95,25 +92,27 @@ async def stream_graph_updates(user_input: str, ttsResult: bool = True):
         config={"configurable": {"thread_id": "1"}},
         stream_mode="values",
     )
-    
+
     # Get the LLM response text
-    text = response['messages'][-1].content
-    
+    text = response["messages"][-1].content
+
     if text != "END":
         log_info(f"Jarvis: {text}...")
         # Play the text through TTS - this is used for STT messages that need speech output
-        if(ttsResult): play(text) 
+        if ttsResult:
+            play(text)
     else:
         log_debug("Graph: Response was END, not sending to TTS")
-    
+
     return text
+
 
 # New function for text input that doesn't use TTS
 async def process_text_input(user_input: str):
     """Process text input from UI without using TTS"""
     # Handle custom UIMessage objects
     input_content = user_input
-    if hasattr(user_input, 'text'):
+    if hasattr(user_input, "text"):
         input_content = user_input.text
         log_debug(f"Graph: Processing UI text input from object: {input_content[:30]}...")
     else:
@@ -126,15 +125,14 @@ async def process_text_input(user_input: str):
         config={"configurable": {"thread_id": "1"}},
         stream_mode="values",
     )
-    
+
     # Get the LLM response text
-    text = response['messages'][-1].content
-    
+    text = response["messages"][-1].content
+
     if text != "END":
         log_info(f"Jarvis (UI text response): {text[:100]}...")
         # No TTS for UI text input
     else:
         log_debug("Graph: Response was END, not processing further")
-    
+
     return text
-    

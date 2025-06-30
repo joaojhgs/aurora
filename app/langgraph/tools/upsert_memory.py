@@ -2,10 +2,11 @@ import uuid
 from typing import Optional
 
 from langchain.chat_models import init_chat_model
+from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 from typing_extensions import Annotated
-from langchain_core.tools import tool
+
 
 @tool
 def upsert_memory_tool(

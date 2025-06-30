@@ -1,16 +1,19 @@
 """
 Integration tests for LangGraph and Tools components.
 """
-import pytest
-import pytest_asyncio
+
 import asyncio
 import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+import pytest_asyncio
+
 
 @pytest.mark.integration
 class TestLangGraphToolsIntegrationMinimal:
     """Minimal integration tests for LangGraph and Tools components."""
-    
+
     @pytest.fixture
     def mock_memory_store(self):
         """Create a mock memory store."""
@@ -19,7 +22,7 @@ class TestLangGraphToolsIntegrationMinimal:
         store.aget = AsyncMock(return_value={"key": "value"})
         store.search = MagicMock(return_value=[])
         return store
-    
+
     @pytest.fixture
     def mock_graph(self):
         """Create a mock graph."""
@@ -28,9 +31,12 @@ class TestLangGraphToolsIntegrationMinimal:
         graph.ainvoke.return_value = {
             "messages": [
                 {"role": "user", "content": "What's the weather in New York?"},
-                {"role": "assistant", "content": "The weather in New York is sunny with a temperature of 25°C."}
+                {
+                    "role": "assistant",
+                    "content": "The weather in New York is sunny with a temperature of 25°C.",
+                },
             ],
-            "current_node": "end"
+            "current_node": "end",
         }
         return graph
 
@@ -42,27 +48,29 @@ class TestLangGraphToolsIntegrationMinimal:
         session_id = "test_session_123"
         namespace = ("conversation", session_id)
         key = "memory"
-        
+
         # Store memory
         await mock_memory_store.aput(namespace, key, test_memory)
-        
+
         # Retrieve memory
         retrieved = await mock_memory_store.aget(namespace, key)
-        
+
         # Verify memory was stored and retrieved
         mock_memory_store.aput.assert_called_once_with(namespace, key, test_memory)
         mock_memory_store.aget.assert_called_once_with(namespace, key)
         assert retrieved == {"key": "value"}  # From our mock return value
-    
+
     @pytest.mark.asyncio
     async def test_graph_execution(self, mock_graph):
         """Test graph execution."""
         # Create an initial state
-        initial_input = {"messages": [{"role": "user", "content": "What's the weather in New York?"}]}
-        
+        initial_input = {
+            "messages": [{"role": "user", "content": "What's the weather in New York?"}]
+        }
+
         # Execute the graph
         result = await mock_graph.ainvoke(input=initial_input)
-        
+
         # Verify the result
         assert "messages" in result
         last_message = result["messages"][-1]
