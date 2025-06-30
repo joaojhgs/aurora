@@ -1,15 +1,13 @@
 import json
+from collections.abc import Iterator, Mapping, Sequence
 from operator import itemgetter
 from pathlib import Path
 from typing import (
     Any,
     Callable,
     Dict,
-    Iterator,
     List,
-    Mapping,
     Optional,
-    Sequence,
     Type,
     Union,
     cast,
@@ -126,7 +124,7 @@ class ChatLlamaCpp(BaseChatModel):
     echo: bool = False
     """Whether to echo the prompt."""
 
-    stop: Optional[List[str]] = None
+    stop: Optional[list[str]] = None
     """A list of strings to stop generation when encountered."""
 
     repeat_penalty: float = 1.1
@@ -147,7 +145,7 @@ class ChatLlamaCpp(BaseChatModel):
     rope_freq_base: float = 10000.0
     """Base frequency for rope sampling."""
 
-    model_kwargs: Dict[str, Any] = Field(default_factory=dict)
+    model_kwargs: dict[str, Any] = Field(default_factory=dict)
     """Any additional parameters to pass to llama_cpp.Llama."""
 
     streaming: bool = True
@@ -162,8 +160,8 @@ class ChatLlamaCpp(BaseChatModel):
     """
     grammar: Any = None
     """
-    grammar: formal grammar for constraining model outputs. For instance, the grammar 
-    can be used to force the model to generate valid JSON or to speak exclusively in 
+    grammar: formal grammar for constraining model outputs. For instance, the grammar
+    can be used to force the model to generate valid JSON or to speak exclusively in
     emojis. At most one of grammar_path and grammar should be passed in.
     """
 
@@ -239,7 +237,7 @@ class ChatLlamaCpp(BaseChatModel):
             pass
         return self
 
-    def _get_parameters(self, stop: Optional[List[str]]) -> Dict[str, Any]:
+    def _get_parameters(self, stop: Optional[list[str]]) -> dict[str, Any]:
         """
         Performs sanity check, preparing parameters in format needed by llama_cpp.
 
@@ -257,7 +255,7 @@ class ChatLlamaCpp(BaseChatModel):
 
         return params
 
-    def _create_message_dicts(self, messages: List[BaseMessage]) -> List[Dict[str, Any]]:
+    def _create_message_dicts(self, messages: list[BaseMessage]) -> list[dict[str, Any]]:
         message_dicts = [_convert_message_to_dict(m) for m in messages]
 
         return message_dicts
@@ -278,8 +276,8 @@ class ChatLlamaCpp(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: Optional[list[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
@@ -299,8 +297,8 @@ class ChatLlamaCpp(BaseChatModel):
 
     def _stream(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: Optional[list[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
@@ -332,7 +330,7 @@ class ChatLlamaCpp(BaseChatModel):
 
     def bind_tools(
         self,
-        tools: Sequence[Union[Dict[str, Any], Type[BaseModel], Callable, BaseTool]],
+        tools: Sequence[Union[dict[str, Any], type[BaseModel], Callable, BaseTool]],
         *,
         tool_choice: Optional[Union[dict, bool, str]] = None,
         **kwargs: Any,
@@ -344,7 +342,7 @@ class ChatLlamaCpp(BaseChatModel):
             {"type": "function", "function": {"name": <<tool_name>>}}.
         """
         formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
-        tool_names = [ft["function"]["name"] for ft in formatted_tools]
+        # tool_names = [ft["function"]["name"] for ft in formatted_tools]
         # if tool_choice:
         #     if isinstance(tool_choice, dict):
         #         if not any(
@@ -383,11 +381,11 @@ class ChatLlamaCpp(BaseChatModel):
 
     def with_structured_output(
         self,
-        schema: Optional[Union[Dict, Type[BaseModel]]] = None,
+        schema: Optional[Union[dict, type[BaseModel]]] = None,
         *,
         include_raw: bool = False,
         **kwargs: Any,
-    ) -> Runnable[LanguageModelInput, Union[Dict, BaseModel]]:
+    ) -> Runnable[LanguageModelInput, Union[dict, BaseModel]]:
         """Model wrapper that returns outputs formatted to match the given schema.
 
         Args:
@@ -533,7 +531,7 @@ class ChatLlamaCpp(BaseChatModel):
         llm = self.bind_tools([schema], tool_choice=tool_choice)
         if is_pydantic_schema:
             output_parser: OutputParserLike = PydanticToolsParser(
-                tools=[cast(Type, schema)], first_tool_only=True
+                tools=[cast(type, schema)], first_tool_only=True
             )
         else:
             output_parser = JsonOutputKeyToolsParser(key_name=tool_name, first_tool_only=True)
@@ -551,7 +549,7 @@ class ChatLlamaCpp(BaseChatModel):
             return llm | output_parser
 
     @property
-    def _identifying_params(self) -> Dict[str, Any]:
+    def _identifying_params(self) -> dict[str, Any]:
         """Return a dictionary of identifying parameters.
 
         This information is used by the LangChain callback system, which
@@ -572,9 +570,9 @@ class ChatLlamaCpp(BaseChatModel):
         return "llama-cpp-python"
 
     @property
-    def _default_params(self) -> Dict[str, Any]:
+    def _default_params(self) -> dict[str, Any]:
         """Get the default parameters for calling create_chat_completion."""
-        params: Dict = {
+        params: dict = {
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "top_p": self.top_p,
@@ -629,7 +627,7 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
         # Fix for azure
         # Also OpenAI returns None for tool invocations
         content = _dict.get("content", "") or ""
-        additional_kwargs: Dict = {}
+        additional_kwargs: dict = {}
         if function_call := _dict.get("function_call"):
             additional_kwargs["function_call"] = dict(function_call)
         tool_calls = []
@@ -701,7 +699,7 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
     Returns:
         The dictionary.
     """
-    message_dict: Dict[str, Any] = {
+    message_dict: dict[str, Any] = {
         "content": _format_message_content(message.content),
     }
     if (name := message.name or message.additional_kwargs.get("name")) is not None:
@@ -748,12 +746,12 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
 
 
 def _convert_delta_to_message_chunk(
-    _dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]
+    _dict: Mapping[str, Any], default_class: type[BaseMessageChunk]
 ) -> BaseMessageChunk:
     id_ = _dict.get("id")
     role = cast(str, _dict.get("role"))
     content = cast(str, _dict.get("content") or "")
-    additional_kwargs: Dict = {}
+    additional_kwargs: dict = {}
     if _dict.get("function_call"):
         function_call = dict(_dict["function_call"])
         if "name" in function_call and function_call["name"] is None:

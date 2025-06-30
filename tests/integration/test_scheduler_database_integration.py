@@ -29,7 +29,8 @@ class TestSchedulerDatabaseIntegration:
 
     # Add helper method to patch the migration_manager during tests
     async def patch_migration_manager(self, service):
-        # Create a patched migration manager that doesn't try to run migrations that might fail in tests
+        # Create a patched migration manager that doesn't try to run migrations
+        # that might fail in tests
         patched_manager = MagicMock()
         patched_manager.run_migrations = AsyncMock(return_value=True)
         service.migration_manager = patched_manager

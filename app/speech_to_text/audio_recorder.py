@@ -42,8 +42,9 @@ import struct
 import threading
 import time
 import traceback
+from collections.abc import Iterable
 from ctypes import c_bool
-from typing import Iterable, List, Optional, Union
+from typing import List, Optional, Union
 
 import faster_whisper
 import halo
@@ -243,7 +244,7 @@ class AudioToTextRecorder:
         language: str = "",
         compute_type: str = "default",
         input_device_index: int = None,
-        gpu_device_index: Union[int, List[int]] = 0,
+        gpu_device_index: Union[int, list[int]] = 0,
         device: str = "cuda",
         on_recording_start=None,
         on_recording_stop=None,
@@ -296,7 +297,7 @@ class AudioToTextRecorder:
         sample_rate: int = SAMPLE_RATE,
         initial_prompt: Optional[Union[str, Iterable[int]]] = None,
         initial_prompt_realtime: Optional[Union[str, Iterable[int]]] = None,
-        suppress_tokens: Optional[List[int]] = [-1],
+        suppress_tokens: Optional[list[int]] = [-1],
         print_transcription_time: bool = False,
         early_transcription_on_silence: int = 0,
         allowed_latency_limit: int = ALLOWED_LATENCY_LIMIT,
@@ -2449,7 +2450,7 @@ class AudioToTextRecorder:
         try:
             while True:
                 self.audio_queue.get_nowait()
-        except:
+        except BaseException:
             # PyTorch's mp.Queue doesn't have a specific Empty exception
             # so we catch any exception that might occur when the queue is empty
             pass

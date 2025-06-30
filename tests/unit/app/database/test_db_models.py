@@ -105,7 +105,7 @@ class TestModels:
     def test_is_user_message(self):
         """Test is_user_message helper method."""
         user_text = Message.create_user_text_message("Hello")
-        assert user_text.is_user_message() == True
+        assert user_text.is_user_message()
 
         assistant = Message.create_assistant_message("Hello back")
         assert assistant.is_user_message() == False
@@ -136,7 +136,7 @@ class TestModels:
         assert job.callback_module == "test.module"
         assert job.callback_function == "test_function"
         assert job.callback_args == {"param": "value"}
-        assert job.is_active == True
+        assert job.is_active
         assert job.status == JobStatus.PENDING
         assert job.metadata == {"test": True}
 

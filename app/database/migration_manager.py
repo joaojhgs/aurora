@@ -10,7 +10,7 @@ from typing import List, Tuple
 
 import aiosqlite
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_info
 
 
 class MigrationManager:
@@ -36,7 +36,7 @@ class MigrationManager:
             )
             await db.commit()
 
-    def get_migration_files(self) -> List[Tuple[str, str]]:
+    def get_migration_files(self) -> list[tuple[str, str]]:
         """Get all migration files sorted by version"""
         migration_files = []
 
@@ -54,7 +54,7 @@ class MigrationManager:
         migration_files.sort(key=lambda x: int(x[0]))
         return migration_files
 
-    async def get_applied_migrations(self) -> List[str]:
+    async def get_applied_migrations(self) -> list[str]:
         """Get list of applied migration versions"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("SELECT version FROM migrations ORDER BY version")
@@ -65,7 +65,7 @@ class MigrationManager:
         """Apply a single migration"""
         log_info(f"Applying migration {version}: {os.path.basename(filename)}")
 
-        with open(filename, "r") as f:
+        with open(filename) as f:
             migration_sql = f.read()
 
         async with aiosqlite.connect(self.db_path) as db:

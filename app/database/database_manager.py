@@ -6,14 +6,14 @@ Handles all database operations using aiosqlite.
 import json
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import aiosqlite
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info
 
 from .migration_manager import MigrationManager
-from .models import Message, MessageType
+from .models import Message
 
 
 class DatabaseManager:
@@ -52,7 +52,7 @@ class DatabaseManager:
                 await db.execute(
                     """
                     INSERT INTO messages (
-                        id, content, message_type, timestamp, 
+                        id, content, message_type, timestamp,
                         session_id, metadata, source_type
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -72,7 +72,7 @@ class DatabaseManager:
             log_error(f"Error storing message: {e}")
             return False
 
-    async def get_messages_for_date(self, target_date: date = None) -> List[Message]:
+    async def get_messages_for_date(self, target_date: date = None) -> list[Message]:
         """Get all messages for a specific date (defaults to today)"""
         if target_date is None:
             target_date = date.today()
@@ -86,7 +86,7 @@ class DatabaseManager:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM messages 
+                    SELECT * FROM messages
                     WHERE timestamp BETWEEN ? AND ?
                     ORDER BY timestamp ASC
                 """,
@@ -109,15 +109,15 @@ class DatabaseManager:
             log_error(f"Error retrieving messages for date {target_date}: {e}")
             return []
 
-    async def get_recent_messages(self, limit: int = 50) -> List[Message]:
+    async def get_recent_messages(self, limit: int = 50) -> list[Message]:
         """Get the most recent messages"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM messages 
-                    ORDER BY timestamp DESC 
+                    SELECT * FROM messages
+                    ORDER BY timestamp DESC
                     LIMIT ?
                 """,
                     (limit,),
@@ -182,7 +182,7 @@ class DatabaseManager:
             async with aiosqlite.connect(self.db_path) as db:
                 cursor = await db.execute(
                     """
-                    SELECT COUNT(*) FROM messages 
+                    SELECT COUNT(*) FROM messages
                     WHERE timestamp BETWEEN ? AND ?
                 """,
                     (start_datetime.isoformat(), end_datetime.isoformat()),
@@ -210,14 +210,14 @@ class DatabaseManager:
             log_error(f"Error cleaning up old messages: {e}")
             return 0
 
-    async def get_session_messages(self, session_id: str) -> List[Message]:
+    async def get_session_messages(self, session_id: str) -> list[Message]:
         """Get all messages for a specific session"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM messages 
+                    SELECT * FROM messages
                     WHERE session_id = ?
                     ORDER BY timestamp ASC
                 """,
@@ -244,9 +244,9 @@ class DatabaseManager:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
-                    UPDATE messages 
-                    SET content = ?, 
-                        message_type = ?, 
+                    UPDATE messages
+                    SET content = ?,
+                        message_type = ?,
                         timestamp = ?,
                         session_id = ?,
                         metadata = ?,

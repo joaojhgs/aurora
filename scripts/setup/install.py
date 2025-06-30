@@ -8,15 +8,17 @@ and provides guidance for getting started with Aurora.
 """
 
 import os
-import sys
-import subprocess
 import platform
+import subprocess
+import sys
 from pathlib import Path
+
 
 def print_header():
     print("🌟 Aurora Voice Assistant - Installation Helper")
     print("=" * 50)
     print()
+
 
 def print_installation_options():
     print("📦 Installation Methods Available:")
@@ -50,64 +52,65 @@ def print_installation_options():
     print("   📄 Command: pip install -e .[dev-local-gpu]")
     print()
 
+
 def check_requirements():
     """Check if basic requirements are met"""
     issues = []
-    
+
     # Check Python version
     if sys.version_info < (3, 11):
-        issues.append(f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor})")
-    
+        issues.append(
+            f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor})"
+        )
+
     # Check if we're in the right directory
     if not Path("pyproject.toml").exists():
         issues.append("Please run this script from the Aurora root directory")
-    
+
     # Check for basic tools
     try:
         subprocess.run(["python3", "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         issues.append("python3 command not found")
-    
+
     return issues
+
 
 def get_system_info():
     """Get basic system information"""
     system = platform.system()
     machine = platform.machine()
-    
+
     gpu_info = []
-    
+
     # Check for NVIDIA GPU
     try:
         result = subprocess.run(["nvidia-smi"], capture_output=True, check=True)
         gpu_info.append("NVIDIA GPU detected")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
-    
+
     # Check for AMD GPU (ROCm)
     try:
         result = subprocess.run(["rocm-smi"], capture_output=True, check=True)
         gpu_info.append("AMD GPU (ROCm) detected")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
-    
+
     # Check for Apple Silicon
     if system == "Darwin" and machine == "arm64":
         gpu_info.append("Apple Silicon detected")
-    
-    return {
-        "system": system,
-        "machine": machine,
-        "gpu_info": gpu_info
-    }
+
+    return {"system": system, "machine": machine, "gpu_info": gpu_info}
+
 
 def recommend_installation(system_info):
     """Provide installation recommendations based on system"""
     print("🔍 System Analysis & Recommendations:")
     print("=" * 40)
     print(f"System: {system_info['system']} ({system_info['machine']})")
-    
-    if system_info['gpu_info']:
+
+    if system_info["gpu_info"]:
         print(f"GPU: {', '.join(system_info['gpu_info'])}")
         print()
         print("💡 RECOMMENDED: Local models with GPU acceleration")
@@ -123,12 +126,13 @@ def recommend_installation(system_info):
         print("   - High-quality models (GPT-4, Claude)")
         print("   - Faster initial setup")
         print("   📄 Command: ./setup.sh (choose 'third-party')")
-    
+
     print()
+
 
 def main():
     print_header()
-    
+
     # Check requirements
     issues = check_requirements()
     if issues:
@@ -138,30 +142,30 @@ def main():
         print()
         print("Please fix these issues before proceeding.")
         return 1
-    
+
     print("✅ Requirements check passed!")
     print()
-    
+
     # Get system info and recommendations
     system_info = get_system_info()
     recommend_installation(system_info)
-    
+
     # Show installation options
     print_installation_options()
-    
+
     # Get user choice
     print("Choose your installation method:")
     print()
-    
+
     while True:
         choice = input("Enter your choice [1-4]: ").strip()
-        
+
         if choice == "1":
             print()
             print("🚀 Starting guided setup...")
             print("This will run: ./setup.sh")
             print()
-            
+
             # Make setup.sh executable and run it
             os.chmod("setup.sh", 0o755)
             try:
@@ -170,7 +174,7 @@ def main():
                 print(f"❌ Setup failed with code {e.returncode}")
                 return e.returncode
             break
-            
+
         elif choice == "2":
             print()
             print("📚 Package Installation Guide:")
@@ -194,7 +198,7 @@ def main():
             print()
             print("Note: You'll need to configure config.json manually.")
             break
-            
+
         elif choice == "3":
             print()
             print("🐳 Container Deployment:")
@@ -205,7 +209,7 @@ def main():
             print()
             print("For more details, see docker-compose.yml")
             break
-            
+
         elif choice == "4":
             print()
             print("🛠️  Development Setup:")
@@ -221,13 +225,14 @@ def main():
             print("• pre-commit hooks")
             print("• Jupyter notebooks")
             break
-            
+
         else:
             print("Please enter 1, 2, 3, or 4")
-    
+
     print()
     print("✨ Installation helper completed!")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
