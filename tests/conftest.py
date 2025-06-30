@@ -1,18 +1,14 @@
-"""
-Global test fixtures and configuration for Aurora test suite.
-"""
+"""Global test fixtures and configuration for Aurora test suite."""
 
 import asyncio
 import os
 import sqlite3
 import sys
 import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.config.config_manager import ConfigManager
 from app.database.database_manager import DatabaseManager
 from app.database.models import Message
 
