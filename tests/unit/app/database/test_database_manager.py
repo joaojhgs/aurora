@@ -141,7 +141,8 @@ class TestDatabaseManager:
         recent_messages = await db_manager.get_recent_messages(limit=3)
 
         assert len(recent_messages) == 3
-        # Messages should be in reverse chronological order (oldest first, based on the implementation)
+        # Messages should be in reverse chronological order (oldest first, based
+        # on the implementation)
         assert "Test message" in recent_messages[0].content
         assert "Test message" in recent_messages[1].content
         assert "Test message" in recent_messages[2].content
@@ -175,7 +176,7 @@ class TestDatabaseManager:
         # Retrieve the updated message
         retrieved_message = await db_manager.get_message_by_id(message_id)
         assert retrieved_message.content == "Updated content"
-        assert retrieved_message.metadata.get("updated") == True
+        assert retrieved_message.metadata.get("updated")
 
     async def test_delete_message(self, db_manager):
         """Test deleting a message."""

@@ -8,7 +8,7 @@ class ConfigAPI:
     """API for runtime configuration changes"""
 
     @staticmethod
-    def get_config(section: str = None) -> Dict[str, Any]:
+    def get_config(section: str = None) -> dict[str, Any]:
         """Get entire config or specific section"""
         if section:
             return config_manager.get(section, {})
@@ -35,7 +35,7 @@ class ConfigAPI:
         return config_manager.get(f"plugins.{plugin_name}.activate", False)
 
     @staticmethod
-    def validate_config() -> List[str]:
+    def validate_config() -> list[str]:
         """Validate current configuration"""
         return config_manager.validate_config()
 

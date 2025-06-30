@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Any, Literal, Union
 
 from langchain_core.messages import AnyMessage
@@ -74,7 +73,8 @@ except Exception:
     pass
 
 
-# The `stream_graph_updates` function takes user input and streams it through the graph, printing the assistant's responses
+# The `stream_graph_updates` function takes user input and streams it
+# through the graph, printing the assistant's responses
 async def stream_graph_updates(user_input: str, ttsResult: bool = True):
     # Handle custom UIMessage objects
     input_content = user_input

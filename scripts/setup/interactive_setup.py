@@ -4,21 +4,23 @@ Aurora Voice Assistant - Interactive Setup System
 =================================================
 
 This script provides a comprehensive installation experience that guides users
-through choosing the best setup method for their needs. It combines the 
+through choosing the best setup method for their needs. It combines the
 functionality of both installation guidance and automated setup.
 """
 
+import json
 import os
-import sys
-import subprocess
 import platform
+import subprocess
+import sys
 import venv
 from pathlib import Path
+
 import click
-import json
 
 # Get project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 
 def print_header():
     """Print the Aurora header"""
@@ -26,11 +28,12 @@ def print_header():
     click.echo("=" * 50)
     click.echo()
 
+
 def detect_system():
     """Detect the operating system and return setup info"""
     system = platform.system().lower()
     arch = platform.machine().lower()
-    
+
     if system == "windows":
         return {
             "name": "Windows",
@@ -38,26 +41,27 @@ def detect_system():
             "pip": "pip",
             "venv_activate": "venv\\Scripts\\activate.bat",
             "shell_ext": ".bat",
-            "audio_deps": []  # PyAudio wheel should work
+            "audio_deps": [],  # PyAudio wheel should work
         }
     elif system == "darwin":  # macOS
         return {
-            "name": "macOS", 
+            "name": "macOS",
             "python": "python3",
             "pip": "pip3",
             "venv_activate": "venv/bin/activate",
             "shell_ext": ".sh",
-            "audio_deps": ["portaudio"]  # via homebrew
+            "audio_deps": ["portaudio"],  # via homebrew
         }
     else:  # Linux
         return {
             "name": "Linux",
-            "python": "python3", 
+            "python": "python3",
             "pip": "pip3",
             "venv_activate": "venv/bin/activate",
             "shell_ext": ".sh",
-            "audio_deps": ["portaudio19-dev", "python3-dev", "gcc"]
+            "audio_deps": ["portaudio19-dev", "python3-dev", "gcc"],
         }
+
 
 def check_python_version():
     """Check if Python version is supported"""
@@ -66,53 +70,58 @@ def check_python_version():
         return False, f"Python {version.major}.{version.minor}"
     return True, f"Python {version.major}.{version.minor}.{version.micro}"
 
+
 def detect_gpu():
     """Detect available GPU hardware"""
     gpu_info = []
-    
+
     try:
         # Try nvidia-smi for NVIDIA GPUs
-        result = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], 
-                              capture_output=True, text=True)
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+        )
         if result.returncode == 0:
-            gpus = [gpu.strip() for gpu in result.stdout.strip().split('\n') if gpu.strip()]
+            gpus = [gpu.strip() for gpu in result.stdout.strip().split("\n") if gpu.strip()]
             gpu_info.extend([f"NVIDIA {gpu}" for gpu in gpus])
     except FileNotFoundError:
         pass
-    
+
     try:
         # Try rocm-smi for AMD GPUs
-        result = subprocess.run(["rocm-smi", "--showproductname"], 
-                              capture_output=True, text=True)
+        result = subprocess.run(["rocm-smi", "--showproductname"], capture_output=True, text=True)
         if result.returncode == 0:
             gpu_info.append("AMD GPU (ROCm compatible)")
     except FileNotFoundError:
         pass
-    
+
     # Check for Apple Silicon
     if platform.system() == "Darwin" and platform.machine() == "arm64":
         gpu_info.append("Apple Silicon (Metal compatible)")
-    
+
     return gpu_info
+
 
 def check_requirements():
     """Check system requirements"""
     issues = []
-    
+
     # Check Python version
     python_ok, python_version = check_python_version()
     if not python_ok:
         issues.append(f"Python 3.11+ required, found {python_version}")
-    
+
     # Check if we're in the right directory
     if not (PROJECT_ROOT / "main.py").exists():
         issues.append("Not in Aurora project directory")
-    
+
     # Check if pyproject.toml exists
     if not (PROJECT_ROOT / "pyproject.toml").exists():
         issues.append("pyproject.toml not found")
-    
+
     return issues
+
 
 def get_system_info():
     """Get comprehensive system information"""
@@ -121,32 +130,33 @@ def get_system_info():
         "system": platform.system(),
         "machine": platform.machine(),
         "python_version": platform.python_version(),
-        "gpu_info": gpu_info
+        "gpu_info": gpu_info,
     }
+
 
 def install_system_dependencies(sys_info):
     """Install system-level dependencies"""
     if not sys_info["audio_deps"]:
         return True
-    
+
     click.echo("🔧 Installing system dependencies...")
-    
+
     try:
         if sys_info["name"] == "macOS":
             # Check if homebrew is available
             subprocess.run(["brew", "--version"], capture_output=True, check=True)
             for dep in sys_info["audio_deps"]:
                 subprocess.run(["brew", "install", dep], check=True)
-                
+
         elif sys_info["name"] == "Linux":
             # Try apt-get (Debian/Ubuntu)
             subprocess.run(["sudo", "apt", "update"], check=True)
             for dep in sys_info["audio_deps"]:
                 subprocess.run(["sudo", "apt", "install", "-y", dep], check=True)
-        
+
         click.echo("✅ System dependencies installed")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Failed to install system dependencies: {e}")
         click.echo("📋 Please install manually:")
@@ -159,16 +169,17 @@ def install_system_dependencies(sys_info):
             click.echo("📋 Please install Homebrew: https://brew.sh/")
         return False
 
+
 def create_virtual_environment(sys_info):
     """Create Python virtual environment"""
     venv_path = PROJECT_ROOT / "venv"
-    
+
     if venv_path.exists():
         click.echo("📁 Virtual environment already exists")
         return True
-    
+
     click.echo("🐍 Creating virtual environment...")
-    
+
     try:
         venv.create(venv_path, with_pip=True)
         click.echo("✅ Virtual environment created")
@@ -177,13 +188,14 @@ def create_virtual_environment(sys_info):
         click.echo(f"❌ Failed to create virtual environment: {e}")
         return False
 
+
 def recommend_installation(system_info):
     """Provide installation recommendations based on system"""
     click.echo("🔍 System Analysis & Recommendations:")
     click.echo("=" * 40)
     click.echo(f"System: {system_info['system']} ({system_info['machine']})")
-    
-    if system_info['gpu_info']:
+
+    if system_info["gpu_info"]:
         click.echo(f"GPU: {', '.join(system_info['gpu_info'])}")
         click.echo()
         click.echo("💡 RECOMMENDED: Local models with GPU acceleration")
@@ -199,8 +211,9 @@ def recommend_installation(system_info):
         click.echo("   - High-quality models (GPT-4, Claude)")
         click.echo("   - Faster initial setup")
         click.echo("   📄 Only requires API keys")
-    
+
     click.echo()
+
 
 def show_installation_options():
     """Show available installation methods"""
@@ -228,21 +241,22 @@ def show_installation_options():
     click.echo("   📄 Command: docker-compose up")
     click.echo()
 
+
 def run_guided_setup(sys_info):
     """Run the guided setup script"""
     click.echo()
     click.echo("🚀 Starting guided setup...")
-    
+
     if sys_info["name"] == "Windows":
         script_name = "setup.bat"
     else:
         script_name = "setup.sh"
         # Make executable
         os.chmod(PROJECT_ROOT / script_name, 0o755)
-    
+
     click.echo(f"This will run: {script_name}")
     click.echo()
-    
+
     try:
         if sys_info["name"] == "Windows":
             subprocess.run([str(PROJECT_ROOT / script_name)], check=True, shell=True)
@@ -252,6 +266,7 @@ def run_guided_setup(sys_info):
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Setup failed with code {e.returncode}")
         return False
+
 
 def show_package_guide():
     """Show package installation guide"""
@@ -290,6 +305,7 @@ def show_package_guide():
     click.echo()
     click.echo("⚠️ Note: You'll need to configure config.json manually after installation.")
 
+
 def show_container_guide():
     """Show container deployment guide"""
     click.echo()
@@ -301,6 +317,7 @@ def show_container_guide():
     click.echo("2. Run: docker-compose up")
     click.echo()
     click.echo("For more details, see docker-compose.yml")
+
 
 def show_development_guide():
     """Show development setup guide"""
@@ -318,13 +335,14 @@ def show_development_guide():
     click.echo("• pre-commit hooks")
     click.echo("• Jupyter notebooks")
 
+
 @click.command()
-@click.option('--skip-checks', '-s', is_flag=True, help='Skip system requirement checks')
-@click.option('--auto-guided', '-a', is_flag=True, help='Automatically run guided setup')
+@click.option("--skip-checks", "-s", is_flag=True, help="Skip system requirement checks")
+@click.option("--auto-guided", "-a", is_flag=True, help="Automatically run guided setup")
 def main(skip_checks, auto_guided):
     """Interactive setup system for Aurora Voice Assistant"""
     print_header()
-    
+
     # Check requirements
     if not skip_checks:
         issues = check_requirements()
@@ -335,47 +353,48 @@ def main(skip_checks, auto_guided):
             click.echo()
             click.echo("Please fix these issues before proceeding.")
             return 1
-        
+
         click.echo("✅ Requirements check passed!")
         click.echo()
-    
+
     # Get system info and recommendations
     system_info = get_system_info()
     sys_info = detect_system()
     recommend_installation(system_info)
-    
+
     # Auto-run guided setup if requested
     if auto_guided:
         return 0 if run_guided_setup(sys_info) else 1
-    
+
     # Show installation options
     show_installation_options()
-    
+
     # Get user choice
     click.echo("Choose your installation method:")
     click.echo()
-    
+
     while True:
         choice = click.prompt("Enter your choice [1-3]", type=str).strip()
-        
+
         if choice == "1":
             success = run_guided_setup(sys_info)
             return 0 if success else 1
-            
+
         elif choice == "2":
             show_package_guide()
             break
-            
+
         elif choice == "3":
             show_container_guide()
             break
-            
+
         else:
             click.echo("Please enter 1, 2, or 3")
-    
+
     click.echo()
     click.echo("✨ Installation helper completed!")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

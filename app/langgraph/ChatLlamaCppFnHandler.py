@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import traceback
+from collections.abc import Iterator
 from typing import (
-    Dict,
-    Iterator,
-    List,
     Literal,
-    Optional,
-    Union,
     cast,
 )
 
@@ -30,20 +25,20 @@ from llama_cpp_cuda.llama_chat_format import (
 @register_chat_completion_handler("function-calling")
 def function_calling_handler(
     llama: llama.Llama,
-    messages: List[llama_types.ChatCompletionRequestMessage],
-    functions: Optional[List[llama_types.ChatCompletionFunction]] = None,
-    function_call: Optional[llama_types.ChatCompletionRequestFunctionCall] = None,
-    tools: Optional[List[llama_types.ChatCompletionTool]] = None,
-    tool_choice: Optional[llama_types.ChatCompletionToolChoiceOption] = None,
+    messages: list[llama_types.ChatCompletionRequestMessage],
+    functions: list[llama_types.ChatCompletionFunction] | None = None,
+    function_call: llama_types.ChatCompletionRequestFunctionCall | None = None,
+    tools: list[llama_types.ChatCompletionTool] | None = None,
+    tool_choice: llama_types.ChatCompletionToolChoiceOption | None = None,
     temperature: float = 0.2,
     top_p: float = 0.95,
     top_k: int = 40,
     min_p: float = 0.05,
     typical_p: float = 1.0,
     stream: bool = False,
-    stop: Optional[Union[str, List[str]]] = [],
-    response_format: Optional[llama_types.ChatCompletionRequestResponseFormat] = None,
-    max_tokens: Optional[int] = None,
+    stop: str | list[str] | None = [],
+    response_format: llama_types.ChatCompletionRequestResponseFormat | None = None,
+    max_tokens: int | None = None,
     presence_penalty: float = 0.0,
     frequency_penalty: float = 0.0,
     repeat_penalty: float = 1.1,
@@ -51,16 +46,16 @@ def function_calling_handler(
     mirostat_mode: int = 0,
     mirostat_tau: float = 5.0,
     mirostat_eta: float = 0.1,
-    model: Optional[str] = None,
-    logits_processor: Optional[llama.LogitsProcessorList] = None,
-    grammar: Optional[llama.LlamaGrammar] = None,
-    logprobs: Optional[bool] = None,
-    top_logprobs: Optional[int] = None,
+    model: str | None = None,
+    logits_processor: llama.LogitsProcessorList | None = None,
+    grammar: llama.LlamaGrammar | None = None,
+    logprobs: bool | None = None,
+    top_logprobs: int | None = None,
     **kwargs,  # type: ignore
-) -> Union[
-    llama_types.CreateChatCompletionResponse,
-    Iterator[llama_types.CreateChatCompletionStreamResponse],
-]:
+) -> (
+    llama_types.CreateChatCompletionResponse
+    | Iterator[llama_types.CreateChatCompletionStreamResponse]
+):
     function_calling_template = (
         "{% for message in messages %}"
         "<|im_start|>{{ message.role }}\n"
@@ -92,7 +87,7 @@ def function_calling_handler(
         "{% endif %}"
         # Assistant message
         "{% if message.role == 'assistant' %}"
-        ## Regular message
+        # Regular message
         "{% if message.content and message.content | length > 0 %}"
         "{% if tool_calls %}"
         "message:\n"
@@ -100,7 +95,7 @@ def function_calling_handler(
         "{{ message.content }}"
         "<|im_end|>\n"
         "{% endif %}"
-        ## Function calls
+        # Function calls
         "{% if 'tool_calls' in message %}"
         "{% for tool_call in message.tool_calls %}"
         "functions.{{ tool_call.function.name }}:\n"
@@ -338,8 +333,8 @@ def function_calling_handler(
     print(f"[DEBUG] Selected tool_name: '{tool_name}', Found tool: {tool is not None}")
 
     if not stream:
-        completions: List[llama_types.CreateCompletionResponse] = []
-        completions_tool_name: List[str] = []
+        completions: list[llama_types.CreateCompletionResponse] = []
+        completions_tool_name: list[str] = []
         while tool is not None:
             print(f"[DEBUG] Processing tool: {tool_name}")
             prompt += f"functions.{tool_name}:\n"
@@ -439,13 +434,13 @@ def function_calling_handler(
                 tool = None
 
         # Merge completions
-        function_call_dict: Union[
-            Dict[str, str],
-            Dict[
+        function_call_dict: (
+            dict[str, str]
+            | dict[
                 Literal["function_call"],
                 llama_types.ChatCompletionRequestAssistantMessageFunctionCall,
-            ],
-        ] = (
+            ]
+        ) = (
             {
                 "function_call": {
                     "name": tool_name,

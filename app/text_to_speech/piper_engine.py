@@ -13,7 +13,8 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 
-# This is a custom PiperEngine class definition to override the default from the lib, allowing the use of voices with higher sample rates.
+# This is a custom PiperEngine class definition to override the default
+# from the lib, allowing the use of voices with higher sample rates.
 class PiperVoice:
     """
     Represents a Piper voice configuration.
@@ -123,9 +124,8 @@ class PiperEngine(BaseEngine):
             # Pass the text via STDIN directly to Piper.
             result = subprocess.run(
                 cmd_list,
-                input=text.encode("utf-8"),  # Piper reads from STDIN
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                input=text.encode("utf-8"),
+                capture_output=True,
                 check=True,  # Raises CalledProcessError on non-zero exit
                 shell=False,  # No shell means no special quoting issues
             )

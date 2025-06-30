@@ -6,13 +6,13 @@ Handles message persistence and retrieval for the UI.
 import asyncio
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date
 from typing import Callable, List, Optional
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 from .database_manager import DatabaseManager
-from .models import Message, MessageType
+from .models import Message
 
 
 class MessageHistoryService:
@@ -87,7 +87,7 @@ class MessageHistoryService:
 
         return self._run_async(_store())
 
-    def get_today_messages(self) -> List[Message]:
+    def get_today_messages(self) -> list[Message]:
         """Get all messages for today synchronously for UI use"""
 
         async def _get():
@@ -98,7 +98,7 @@ class MessageHistoryService:
         result = self._run_async(_get())
         return result if result is not None else []
 
-    def get_messages_for_date(self, target_date: date) -> List[Message]:
+    def get_messages_for_date(self, target_date: date) -> list[Message]:
         """Get all messages for a specific date synchronously for UI use"""
 
         async def _get():
@@ -109,7 +109,7 @@ class MessageHistoryService:
         result = self._run_async(_get())
         return result if result is not None else []
 
-    def get_recent_messages(self, limit: int = 50) -> List[Message]:
+    def get_recent_messages(self, limit: int = 50) -> list[Message]:
         """Get recent messages synchronously for UI use"""
 
         async def _get():

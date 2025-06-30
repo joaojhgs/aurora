@@ -11,7 +11,6 @@ A centralized logging system for Aurora that provides:
 import inspect
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +74,7 @@ class AuroraLogger:
                 # Fallback to just the filename without extension
                 return path.stem
             return "unknown"
-        except:
+        except BaseException:
             return "unknown"
         finally:
             del frame

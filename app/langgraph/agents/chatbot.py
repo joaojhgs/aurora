@@ -37,7 +37,8 @@ elif provider == "huggingface_endpoint":
         try:
             from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
-            # Prepare options for HuggingFaceEndpoint (rename access_token to huggingfacehub_api_token)
+            # Prepare options for HuggingFaceEndpoint (rename access_token to
+            # huggingfacehub_api_token)
             endpoint_options = hf_endpoint_options.copy()
             if "access_token" in endpoint_options:
                 endpoint_options["huggingfacehub_api_token"] = endpoint_options.pop("access_token")
@@ -150,7 +151,8 @@ def chatbot(state: State, store: BaseStore):
     # RAG Search tools to bind for each chatbot call
     # Reduce the top_k parameter to reduce token usage
     # Be carefull to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
-    # It might need adjusting depending on how much plugins you are using as well, +plugins = +tools to load
+    # It might need adjusting depending on how much plugins you are using as
+    # well, +plugins = +tools to load
     llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 8), tool_choice="auto")
     print(state["messages"])
     return {

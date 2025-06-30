@@ -5,14 +5,14 @@ Handles all database operations related to cron jobs.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import aiosqlite
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info
 
 from .migration_manager import MigrationManager
-from .models import CronJob, JobStatus, ScheduleType
+from .models import CronJob
 
 
 class SchedulerDatabaseService:
@@ -80,7 +80,7 @@ class SchedulerDatabaseService:
 
                 await db.execute(
                     f"""
-                    UPDATE cron_jobs 
+                    UPDATE cron_jobs
                     SET {set_clause}
                     WHERE id = ?
                 """,
@@ -110,7 +110,7 @@ class SchedulerDatabaseService:
             log_error(f"Error getting job: {e}")
             return None
 
-    async def get_all_jobs(self) -> List[CronJob]:
+    async def get_all_jobs(self) -> list[CronJob]:
         """Get all jobs"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
@@ -124,14 +124,14 @@ class SchedulerDatabaseService:
             log_error(f"Error getting all jobs: {e}")
             return []
 
-    async def get_active_jobs(self) -> List[CronJob]:
+    async def get_active_jobs(self) -> list[CronJob]:
         """Get all active jobs"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM cron_jobs 
+                    SELECT * FROM cron_jobs
                     WHERE is_active = 1
                     ORDER BY next_run_time ASC
                 """
@@ -144,7 +144,7 @@ class SchedulerDatabaseService:
             log_error(f"Error getting active jobs: {e}")
             return []
 
-    async def get_ready_jobs(self) -> List[CronJob]:
+    async def get_ready_jobs(self) -> list[CronJob]:
         """Get jobs that are ready to execute"""
         try:
             now = datetime.now().isoformat()
@@ -152,8 +152,8 @@ class SchedulerDatabaseService:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM cron_jobs 
-                    WHERE is_active = 1 
+                    SELECT * FROM cron_jobs
+                    WHERE is_active = 1
                     AND next_run_time <= ?
                     AND status IN ('pending', 'failed')
                     ORDER BY next_run_time ASC
@@ -190,7 +190,7 @@ class SchedulerDatabaseService:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
-                    UPDATE cron_jobs 
+                    UPDATE cron_jobs
                     SET is_active = 0, updated_at = ?
                     WHERE id = ?
                 """,
@@ -205,14 +205,14 @@ class SchedulerDatabaseService:
             log_error(f"Error deactivating job: {e}")
             return False
 
-    async def get_job_history(self, limit: int = 50) -> List[CronJob]:
+    async def get_job_history(self, limit: int = 50) -> list[CronJob]:
         """Get job execution history"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
-                    SELECT * FROM cron_jobs 
+                    SELECT * FROM cron_jobs
                     WHERE last_run_time IS NOT NULL
                     ORDER BY last_run_time DESC
                     LIMIT ?
@@ -236,8 +236,8 @@ class SchedulerDatabaseService:
             async with aiosqlite.connect(self.db_path) as db:
                 cursor = await db.execute(
                     """
-                    DELETE FROM cron_jobs 
-                    WHERE is_active = 0 
+                    DELETE FROM cron_jobs
+                    WHERE is_active = 0
                     AND status IN ('completed', 'failed', 'cancelled')
                     AND updated_at < ?
                 """,

@@ -1,13 +1,11 @@
 import json
 import os
-from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
-import jsonschema
 from jsonschema import ValidationError, validate
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_error, log_info, log_warning
 
 
 class ConfigManager:
@@ -23,7 +21,7 @@ class ConfigManager:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = super(ConfigManager, cls).__new__(cls)
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
@@ -40,7 +38,7 @@ class ConfigManager:
         """Load configuration from JSON file, create default if not exists"""
         try:
             if os.path.exists(self.config_file):
-                with open(self.config_file, "r") as f:
+                with open(self.config_file) as f:
                     config_data = json.load(f)
 
                 # Validate the loaded configuration against schema
@@ -75,6 +73,7 @@ class ConfigManager:
     def get(self, key_path: str, default: Any = None) -> Any:
         """
         Get configuration value using dot notation (e.g., 'ui.activate')
+
         Can also retrieve entire sections (e.g., 'llm.third_party.openai')
         """
         keys = key_path.split(".")
@@ -130,7 +129,7 @@ class ConfigManager:
             # Notify observers of the change
             self._notify_observers(key_path, old_value, value)
 
-    def update_section(self, section: str, values: Dict[str, Any], save: bool = True):
+    def update_section(self, section: str, values: dict[str, Any], save: bool = True):
         """Update an entire configuration section using dot notation"""
         keys = section.split(".")
         config_ref = self._config
@@ -172,7 +171,7 @@ class ConfigManager:
             except Exception as e:
                 log_error(f"Error notifying observer: {e}")
 
-    def _get_default_config(self) -> Dict:
+    def _get_default_config(self) -> dict:
         """Return default configuration structure"""
         return {
             "ui": {"activate": False, "dark_mode": False, "debug": False},
@@ -344,12 +343,12 @@ class ConfigManager:
             self.save_config()
             log_info("Migrated environment variables to config.json")
 
-    def get_config_dict(self) -> Dict[str, Any]:
+    def get_config_dict(self) -> dict[str, Any]:
         """Get a copy of the entire configuration dictionary"""
         with self.config_lock:
             return json.loads(json.dumps(self._config))  # Deep copy
 
-    def _get_config_schema(self) -> Dict[str, Any]:
+    def _get_config_schema(self) -> dict[str, Any]:
         """Return the JSON schema for configuration validation"""
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -658,7 +657,7 @@ class ConfigManager:
             "additionalProperties": False,
         }
 
-    def _validate_config(self, config_data: Dict[str, Any]) -> None:
+    def _validate_config(self, config_data: dict[str, Any]) -> None:
         """Validate configuration data against the schema"""
         try:
             validate(instance=config_data, schema=self._schema)
@@ -668,7 +667,7 @@ class ConfigManager:
                 f"Configuration validation failed at '{e.json_path}': {e.message}"
             )
 
-    def validate_current_config(self) -> List[str]:
+    def validate_current_config(self) -> list[str]:
         """Validate current configuration and return list of validation errors"""
         errors = []
 
@@ -683,7 +682,7 @@ class ConfigManager:
 
         return errors
 
-    def validate_config(self) -> List[str]:
+    def validate_config(self) -> list[str]:
         """Validate configuration and return list of validation errors"""
         errors = []
 

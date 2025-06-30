@@ -23,7 +23,8 @@ from app.langgraph.tools.upsert_memory import upsert_memory_tool
 
 log_info("Initializing all tools and plugins...\n")
 
-# Make memory upsert is always active so that the chatbot can always store something new it deems worthwhile
+# Make memory upsert is always active so that the chatbot can always store
+# something new it deems worthwhile
 always_active_tools = [upsert_memory_tool]
 
 # Export all tools to bind to LLM - scheduler and pomodoro tools are always available
@@ -85,7 +86,7 @@ if config_manager.get("plugins.slack.activate", False):
 
     tools.extend(slack_tools)
 
-tool_lookup: Dict[str, Callable] = {}
+tool_lookup: dict[str, Callable] = {}
 
 
 def sync_tools_with_database():
@@ -160,7 +161,7 @@ for tool in tools:
 sync_tools_with_database()
 
 
-def get_tools(query: str, top_k: int = 5) -> List[Callable]:
+def get_tools(query: str, top_k: int = 5) -> list[Callable]:
     """
     Search for relevant tools based on input text.
 
@@ -180,7 +181,7 @@ def get_tools(query: str, top_k: int = 5) -> List[Callable]:
     )
 
     # Get unique tool names from results
-    tool_names = set(result.key for result in results)
+    tool_names = {result.key for result in results}
     # Return corresponding tool functions
 
     # Always include always_active_tools

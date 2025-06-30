@@ -12,6 +12,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.config.config_manager import ConfigManager
+from app.database.database_manager import DatabaseManager
+from app.database.models import Message
+
 # Add the parent directory to the path so we can import app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -29,9 +33,6 @@ def pytest_configure(config):
 
 
 # Import app modules
-from app.config.config_manager import ConfigManager
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message
 
 
 @pytest.fixture(scope="session")
