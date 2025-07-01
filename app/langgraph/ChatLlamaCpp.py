@@ -5,10 +5,7 @@ from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Dict,
-    List,
     Optional,
-    Type,
     Union,
     cast,
 )
@@ -218,17 +215,12 @@ class ChatLlamaCpp(BaseChatModel):
         try:
             self.client = Llama(model_path, **model_params)
         except Exception as e:
-            raise ValueError(
-                f"Could not load Llama model from path: {model_path}. " f"Received error {e}"
-            )
+            raise ValueError(f"Could not load Llama model from path: {model_path}. " f"Received error {e}")
 
         if self.grammar and self.grammar_path:
             grammar = self.grammar
             grammar_path = self.grammar_path
-            raise ValueError(
-                "Can only pass in one of grammar and grammar_path. Received "
-                f"{grammar=} and {grammar_path=}."
-            )
+            raise ValueError("Can only pass in one of grammar and grammar_path. Received " f"{grammar=} and {grammar_path=}.")
         elif isinstance(self.grammar, str):
             self.grammar = LlamaGrammar.from_string(self.grammar)
         elif self.grammar_path:
@@ -523,27 +515,19 @@ class ChatLlamaCpp(BaseChatModel):
             raise ValueError(f"Received unsupported arguments {kwargs}")
         is_pydantic_schema = isinstance(schema, type) and is_basemodel_subclass(schema)
         if schema is None:
-            raise ValueError(
-                "schema must be specified when method is 'function_calling'. " "Received None."
-            )
+            raise ValueError("schema must be specified when method is 'function_calling'. " "Received None.")
         tool_name = convert_to_openai_tool(schema)["function"]["name"]
         tool_choice = {"type": "function", "function": {"name": tool_name}}
         llm = self.bind_tools([schema], tool_choice=tool_choice)
         if is_pydantic_schema:
-            output_parser: OutputParserLike = PydanticToolsParser(
-                tools=[cast(type, schema)], first_tool_only=True
-            )
+            output_parser: OutputParserLike = PydanticToolsParser(tools=[cast(type, schema)], first_tool_only=True)
         else:
             output_parser = JsonOutputKeyToolsParser(key_name=tool_name, first_tool_only=True)
 
         if include_raw:
-            parser_assign = RunnablePassthrough.assign(
-                parsed=itemgetter("raw") | output_parser, parsing_error=lambda _: None
-            )
+            parser_assign = RunnablePassthrough.assign(parsed=itemgetter("raw") | output_parser, parsing_error=lambda _: None)
             parser_none = RunnablePassthrough.assign(parsed=lambda _: None)
-            parser_with_fallback = parser_assign.with_fallbacks(
-                [parser_none], exception_key="parsing_error"
-            )
+            parser_with_fallback = parser_assign.with_fallbacks([parser_none], exception_key="parsing_error")
             return RunnableMap(raw=llm) | parser_with_fallback
         else:
             return llm | output_parser
@@ -656,9 +640,7 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
     elif role == "system":
         return SystemMessage(content=_dict.get("content", ""), name=name, id=id_)
     elif role == "function":
-        return FunctionMessage(
-            content=_dict.get("content", ""), name=cast(str, _dict.get("name")), id=id_
-        )
+        return FunctionMessage(content=_dict.get("content", ""), name=cast(str, _dict.get("name")), id=id_)
     elif role == "tool":
         additional_kwargs = {}
         if "name" in _dict:
@@ -715,15 +697,14 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
         if "function_call" in message.additional_kwargs:
             message_dict["function_call"] = message.additional_kwargs["function_call"]
         if message.tool_calls or message.invalid_tool_calls:
-            message_dict["tool_calls"] = [
-                _lc_tool_call_to_openai_tool_call(tc) for tc in message.tool_calls
-            ] + [_lc_invalid_tool_call_to_openai_tool_call(tc) for tc in message.invalid_tool_calls]
+            message_dict["tool_calls"] = [_lc_tool_call_to_openai_tool_call(tc) for tc in message.tool_calls] + [
+                _lc_invalid_tool_call_to_openai_tool_call(tc) for tc in message.invalid_tool_calls
+            ]
         elif "tool_calls" in message.additional_kwargs:
             message_dict["tool_calls"] = message.additional_kwargs["tool_calls"]
             tool_call_supported_props = {"id", "type", "function"}
             message_dict["tool_calls"] = [
-                {k: v for k, v in tool_call.items() if k in tool_call_supported_props}
-                for tool_call in message_dict["tool_calls"]
+                {k: v for k, v in tool_call.items() if k in tool_call_supported_props} for tool_call in message_dict["tool_calls"]
             ]
         else:
             pass
@@ -745,9 +726,7 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
     return message_dict
 
 
-def _convert_delta_to_message_chunk(
-    _dict: Mapping[str, Any], default_class: type[BaseMessageChunk]
-) -> BaseMessageChunk:
+def _convert_delta_to_message_chunk(_dict: Mapping[str, Any], default_class: type[BaseMessageChunk]) -> BaseMessageChunk:
     id_ = _dict.get("id")
     role = cast(str, _dict.get("role"))
     content = cast(str, _dict.get("content") or "")

@@ -6,7 +6,7 @@ Handles all database operations using aiosqlite.
 import json
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import aiosqlite
 
@@ -201,9 +201,7 @@ class DatabaseManager:
 
         try:
             async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),)
-                )
+                cursor = await db.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),))
                 await db.commit()
                 return cursor.rowcount
         except Exception as e:

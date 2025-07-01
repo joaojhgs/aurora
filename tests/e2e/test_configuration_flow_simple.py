@@ -5,8 +5,7 @@ End-to-end tests for the configuration management flow with mocks.
 import json
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -20,9 +19,7 @@ class MockSTT:
 
     def __init__(self, config=None):
         self.config = config or {}
-        self.wake_word_model_path = config.get("speech_to_text", {}).get(
-            "wake_word_path", "default/path"
-        )
+        self.wake_word_model_path = config.get("speech_to_text", {}).get("wake_word_path", "default/path")
         self.timeout_seconds = config.get("speech_to_text", {}).get("timeout_seconds", 5)
 
     async def start_listening(self, callback):

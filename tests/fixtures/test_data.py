@@ -9,7 +9,6 @@ import json
 import os
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from app.database.models import Message, MessageType
 from app.scheduler.models import CronJob, JobStatus, ScheduleType
@@ -99,9 +98,7 @@ def get_sample_messages(count=5):
         message = Message(
             id=str(uuid.uuid4()),
             content=entry["content"],
-            message_type=(
-                MessageType.USER_TEXT if entry["role"] == "user" else MessageType.ASSISTANT
-            ),
+            message_type=(MessageType.USER_TEXT if entry["role"] == "user" else MessageType.ASSISTANT),
             timestamp=now - timedelta(minutes=count - i),
             session_id=session_id,
         )
@@ -129,9 +126,7 @@ def get_sample_jobs(count=3):
             id=str(uuid.uuid4()),
             name=f"Test Cron Job {i}",
             schedule_type=ScheduleType.CRON if i % 2 == 1 else ScheduleType.ABSOLUTE,
-            schedule_value=(
-                f"{i} * * * *" if i % 2 == 1 else (now + timedelta(hours=i + 1)).isoformat()
-            ),
+            schedule_value=(f"{i} * * * *" if i % 2 == 1 else (now + timedelta(hours=i + 1)).isoformat()),
             next_run_time=now + timedelta(minutes=i + 10),
             callback_module="test_module",
             callback_function="test_function",
@@ -154,12 +149,15 @@ def get_sample_graph_state():
             {"role": "user", "content": "What can you do?"},
             {
                 "role": "assistant",
-                "content": "I'm an AI assistant that can help you with various tasks such as answering questions, having conversations, and performing actions through tools.",
+                "content": (
+                    "I'm an AI assistant that can help you with various tasks such as answering questions, "
+                    "having conversations, and performing actions through tools."
+                ),
             },
             {"role": "user", "content": "Can you help me set a reminder?"},
             {
                 "role": "assistant",
-                "content": "I'd be happy to help you set a reminder. What would you like to be reminded about and when?",
+                "content": ("I'd be happy to help you set a reminder. " "What would you like to be reminded about and when?"),
             },
         ]
     }

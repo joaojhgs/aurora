@@ -2,7 +2,6 @@
 End-to-end test for a basic conversation workflow.
 """
 
-import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 

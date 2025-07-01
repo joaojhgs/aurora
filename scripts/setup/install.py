@@ -59,9 +59,7 @@ def check_requirements():
 
     # Check Python version
     if sys.version_info < (3, 11):
-        issues.append(
-            f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor})"
-        )
+        issues.append(f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor})")
 
     # Check if we're in the right directory
     if not Path("pyproject.toml").exists():
@@ -85,14 +83,14 @@ def get_system_info():
 
     # Check for NVIDIA GPU
     try:
-        result = subprocess.run(["nvidia-smi"], capture_output=True, check=True)
+        subprocess.run(["nvidia-smi"], capture_output=True, check=True)
         gpu_info.append("NVIDIA GPU detected")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
     # Check for AMD GPU (ROCm)
     try:
-        result = subprocess.run(["rocm-smi"], capture_output=True, check=True)
+        subprocess.run(["rocm-smi"], capture_output=True, check=True)
         gpu_info.append("AMD GPU (ROCm) detected")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass

@@ -3,9 +3,6 @@ End-to-end tests for the Aurora voice interaction flow using mocks.
 """
 
 import asyncio
-import os
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,9 +13,7 @@ class MockSTT:
 
     def __init__(self, config=None):
         self.config = config or {}
-        self.wake_word_model_path = config.get("speech_to_text", {}).get(
-            "wake_word_path", "default/path"
-        )
+        self.wake_word_model_path = config.get("speech_to_text", {}).get("wake_word_path", "default/path")
         self.timeout_seconds = config.get("speech_to_text", {}).get("timeout_seconds", 5)
 
     async def start_listening(self, callback):
@@ -38,9 +33,7 @@ class MockTTS:
 
     def __init__(self, config=None):
         self.config = config or {}
-        self.voice_model_path = config.get("text_to_speech", {}).get(
-            "voice_model_path", "default/voice.onnx"
-        )
+        self.voice_model_path = config.get("text_to_speech", {}).get("voice_model_path", "default/voice.onnx")
 
     async def speak_text(self, text):
         """Speak text."""

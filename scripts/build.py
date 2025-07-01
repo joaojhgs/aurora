@@ -61,7 +61,7 @@ def ensure_dependencies():
     click.echo("📦 Installing build dependencies...")
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", f".[build,runtime,torch-cpu]"],
+            [sys.executable, "-m", "pip", "install", "-e", ".[build,runtime,torch-cpu]"],
             check=True,
             cwd=PROJECT_ROOT,
         )
@@ -204,9 +204,7 @@ def handle_enum34_compatibility():
     backup_paths = []
     try:
         # Check if enum34 is installed using pip
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", "enum34"], capture_output=True, text=True
-        )
+        result = subprocess.run([sys.executable, "-m", "pip", "show", "enum34"], capture_output=True, text=True)
 
         if result.returncode == 0:
             # enum34 is installed, find its location
@@ -225,9 +223,7 @@ def handle_enum34_compatibility():
                 enum_path = location_path / "enum"
                 if enum_path.exists():
                     enum_backup_path = location_path / f"enum_backup_{timestamp}"
-                    click.echo(
-                        "⚠️  Found enum34 package - temporarily hiding for PyInstaller compatibility..."
-                    )
+                    click.echo("⚠️  Found enum34 package - temporarily hiding for PyInstaller compatibility...")
                     click.echo(f"    Moving enum: {enum_path} -> {enum_backup_path}")
                     shutil.move(str(enum_path), str(enum_backup_path))
                     backup_paths.append(("enum", str(enum_backup_path)))
@@ -239,12 +235,8 @@ def handle_enum34_compatibility():
                 for dist_info_path in glob.glob(str(dist_info_pattern)):
                     dist_info_path = Path(dist_info_path)
                     if dist_info_path.exists():
-                        dist_info_backup_path = (
-                            location_path / f"{dist_info_path.name}_backup_{timestamp}"
-                        )
-                        click.echo(
-                            f"    Moving dist-info: {dist_info_path} -> {dist_info_backup_path}"
-                        )
+                        dist_info_backup_path = location_path / f"{dist_info_path.name}_backup_{timestamp}"
+                        click.echo(f"    Moving dist-info: {dist_info_path} -> {dist_info_backup_path}")
                         shutil.move(str(dist_info_path), str(dist_info_backup_path))
                         backup_paths.append(("dist-info", str(dist_info_backup_path)))
 
@@ -312,9 +304,7 @@ def handle_webrtcvad_hook():
         import site
 
         site_packages = site.getsitepackages()[0]
-        hook_path = (
-            Path(site_packages) / "_pyinstaller_hooks_contrib" / "stdhooks" / "hook-webrtcvad.py"
-        )
+        hook_path = Path(site_packages) / "_pyinstaller_hooks_contrib" / "stdhooks" / "hook-webrtcvad.py"
 
         if hook_path.exists():
             backup_path = hook_path.with_suffix(".py.backup")
@@ -376,8 +366,8 @@ def build_executable():
         executable_path = DIST_DIR / executable_name
 
         if executable_path.exists():
-            click.echo(f"✅ Build successful!")
-            click.echo(f"📦 Executable: {executable_path}")
+            click.echo("✅ Build successful!")
+            click.echo("📦 Executable: {executable_path}")
             click.echo(f"📊 Size: {executable_path.stat().st_size / (1024*1024):.1f} MB")
             success = True
         else:

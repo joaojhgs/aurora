@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional
 
 
 class ScheduleType(Enum):
@@ -39,7 +39,7 @@ class CronJob:
     next_run_time: Optional[datetime]
     callback_module: str  # Module path for the callback function
     callback_function: str  # Function name to call
-    callback_args: Optional[Dict[str, Any]] = None  # Arguments to pass to callback
+    callback_args: Optional[dict[str, Any]] = None  # Arguments to pass to callback
     is_active: bool = True
     status: JobStatus = JobStatus.PENDING
     last_run_time: Optional[datetime] = None
@@ -48,7 +48,7 @@ class CronJob:
     max_retries: int = 3
     created_at: datetime = None
     updated_at: datetime = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     def __post_init__(self):
         """Initialize timestamps if not provided"""
@@ -64,7 +64,7 @@ class CronJob:
         relative_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> "CronJob":
         """Create a relative time job (e.g., 'in 5 minutes', 'every 1 hour')"""
@@ -87,7 +87,7 @@ class CronJob:
         absolute_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> "CronJob":
         """Create an absolute time job (e.g., '2025-05-28 15:00')"""
@@ -110,7 +110,7 @@ class CronJob:
         cron_expression: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> "CronJob":
         """Create a cron expression job (e.g., '0 9 * * 1-5')"""
@@ -126,7 +126,7 @@ class CronJob:
             **kwargs,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for database storage"""
         return {
             "id": self.id,
@@ -149,24 +149,20 @@ class CronJob:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CronJob":
+    def from_dict(cls, data: dict[str, Any]) -> "CronJob":
         """Create job from dictionary (database row)"""
         return cls(
             id=data["id"],
             name=data["name"],
             schedule_type=ScheduleType(data["schedule_type"]),
             schedule_value=data["schedule_value"],
-            next_run_time=(
-                datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None
-            ),
+            next_run_time=(datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None),
             callback_module=data["callback_module"],
             callback_function=data["callback_function"],
             callback_args=json.loads(data["callback_args"]) if data["callback_args"] else None,
             is_active=data["is_active"],
             status=JobStatus(data["status"]),
-            last_run_time=(
-                datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None
-            ),
+            last_run_time=(datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None),
             last_run_result=data["last_run_result"],
             retry_count=data["retry_count"],
             max_retries=data["max_retries"],

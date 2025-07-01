@@ -2,12 +2,8 @@
 Unit tests for the database models.
 """
 
-import json
 import uuid
-from dataclasses import asdict
 from datetime import datetime
-
-import pytest
 
 from app.database.models import Message, MessageType
 from app.scheduler.models import CronJob, JobStatus, ScheduleType
@@ -108,7 +104,7 @@ class TestModels:
         assert user_text.is_user_message()
 
         assistant = Message.create_assistant_message("Hello back")
-        assert assistant.is_user_message() == False
+        assert assistant.is_user_message() is False
 
     def test_cron_job_creation(self):
         """Test creating a CronJob object."""

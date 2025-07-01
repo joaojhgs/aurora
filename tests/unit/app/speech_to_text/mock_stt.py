@@ -2,10 +2,6 @@
 Basic STT wrapper for testing
 """
 
-import asyncio
-from typing import Any, Callable, Dict, Optional
-from unittest.mock import MagicMock
-
 
 class AudioRecorder:
     """Mock AudioRecorder for testing."""

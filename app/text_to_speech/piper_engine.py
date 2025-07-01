@@ -9,7 +9,7 @@ import pyaudio
 from RealtimeTTS import BaseEngine
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 
@@ -122,7 +122,7 @@ class PiperEngine(BaseEngine):
 
         try:
             # Pass the text via STDIN directly to Piper.
-            result = subprocess.run(
+            subprocess.run(
                 cmd_list,
                 input=text.encode("utf-8"),
                 capture_output=True,
@@ -135,15 +135,11 @@ class PiperEngine(BaseEngine):
                 # If you require specific WAV properties, check them:
                 if (
                     wf.getnchannels() != 1
-                    or wf.getframerate()
-                    != int(config_manager.get("text_to_speech.model_sample_rate", 24000))
+                    or wf.getframerate() != int(config_manager.get("text_to_speech.model_sample_rate", 24000))
                     or wf.getsampwidth() != 2
                 ):
                     log_warning(
-                        f"Unexpected WAV properties: "
-                        f"Channels={wf.getnchannels()}, "
-                        f"Rate={wf.getframerate()}, "
-                        f"Width={wf.getsampwidth()}"
+                        f"Unexpected WAV properties: " f"Channels={wf.getnchannels()}, " f"Rate={wf.getframerate()}, " f"Width={wf.getsampwidth()}"
                     )
                     return False
 

@@ -2,12 +2,9 @@
 Integration tests for LangGraph and Tools components.
 """
 
-import asyncio
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.mark.integration
@@ -64,9 +61,7 @@ class TestLangGraphToolsIntegrationMinimal:
     async def test_graph_execution(self, mock_graph):
         """Test graph execution."""
         # Create an initial state
-        initial_input = {
-            "messages": [{"role": "user", "content": "What's the weather in New York?"}]
-        }
+        initial_input = {"messages": [{"role": "user", "content": "What's the weather in New York?"}]}
 
         # Execute the graph
         result = await mock_graph.ainvoke(input=initial_input)

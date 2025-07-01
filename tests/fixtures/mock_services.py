@@ -6,10 +6,6 @@ to avoid external dependencies like LLMs, audio devices, and databases.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-import pytest_asyncio
 
 
 # Mock LLM Service

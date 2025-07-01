@@ -2,16 +2,11 @@
 End-to-end tests for the Aurora system.
 """
 
-import asyncio
-import os
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.config.config_manager import ConfigManager
 from app.database.database_manager import DatabaseManager
-from app.langgraph.graph import build_graph
 from app.langgraph.memory_store import MemoryStore
 from app.langgraph.state import State
 from app.speech_to_text.stt import STT
@@ -102,15 +97,11 @@ class TestVoiceInteractionFlow:
         return graph
 
     @pytest.mark.asyncio
-    async def test_complete_voice_interaction_flow(
-        self, mock_config_manager, mock_stt, mock_tts, mock_llm_graph, mock_memory_store, db_manager
-    ):
+    async def test_complete_voice_interaction_flow(self, mock_config_manager, mock_stt, mock_tts, mock_llm_graph, mock_memory_store, db_manager):
         """Test the complete voice interaction flow from wake word to response."""
 
         # Set up mocks for the complete pipeline
-        with patch(
-            "app.config.config_manager.ConfigManager.get_instance", return_value=mock_config_manager
-        ):
+        with patch("app.config.config_manager.ConfigManager.get_instance", return_value=mock_config_manager):
             with patch("app.speech_to_text.stt.STT", return_value=mock_stt):
                 with patch("app.text_to_speech.tts.TTS", return_value=mock_tts):
                     with patch("app.langgraph.graph.build_graph", return_value=mock_llm_graph):
@@ -138,9 +129,7 @@ class TestVoiceInteractionFlow:
 
                         # 5. Store in database
                         await db_manager.store_message({"content": transcription, "role": "user"})
-                        await db_manager.store_message(
-                            {"content": assistant_message, "role": "assistant"}
-                        )
+                        await db_manager.store_message({"content": assistant_message, "role": "assistant"})
 
                         # Verify the complete flow worked as expected
                         mock_stt.start_listening.assert_called_once()
@@ -148,15 +137,11 @@ class TestVoiceInteractionFlow:
                         mock_tts.speak_text.assert_called_once_with("It's currently 3:00 PM.")
 
     @pytest.mark.asyncio
-    async def test_error_recovery_flow(
-        self, mock_config_manager, mock_stt, mock_tts, mock_llm_graph, mock_memory_store, db_manager
-    ):
+    async def test_error_recovery_flow(self, mock_config_manager, mock_stt, mock_tts, mock_llm_graph, mock_memory_store, db_manager):
         """Test the error recovery flow when a component fails."""
 
         # Set up mocks for the pipeline
-        with patch(
-            "app.config.config_manager.ConfigManager.get_instance", return_value=mock_config_manager
-        ):
+        with patch("app.config.config_manager.ConfigManager.get_instance", return_value=mock_config_manager):
             with patch("app.speech_to_text.stt.STT", return_value=mock_stt):
                 with patch("app.text_to_speech.tts.TTS", return_value=mock_tts):
                     with patch("app.langgraph.graph.build_graph", return_value=mock_llm_graph):
@@ -181,9 +166,7 @@ class TestVoiceInteractionFlow:
                             await mock_llm_graph.arun(initial_state)
                         except Exception:
                             # 5. Error recovery: Notify the user
-                            await mock_tts.speak_text(
-                                "I'm sorry, I encountered an error processing your request."
-                            )
+                            await mock_tts.speak_text("I'm sorry, I encountered an error processing your request.")
 
                             # 6. Log the error in the database
                             await db_manager.store_message(
@@ -195,6 +178,4 @@ class TestVoiceInteractionFlow:
                             )
 
                         # Verify the error recovery flow worked
-                        mock_tts.speak_text.assert_called_once_with(
-                            "I'm sorry, I encountered an error processing your request."
-                        )
+                        mock_tts.speak_text.assert_called_once_with("I'm sorry, I encountered an error processing your request.")

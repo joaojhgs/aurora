@@ -3,11 +3,8 @@ Performance tests for the Aurora system using mocks.
 """
 
 import asyncio
-import multiprocessing
-import os
 import time
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,12 +78,6 @@ class TestConcurrentOperations:
     @pytest.mark.asyncio
     async def test_concurrent_database_operations(self, db_manager):
         """Test concurrent database operations."""
-        # Setup
-        message = Message(
-            content="Performance test message",
-            message_type=MessageType.USER_TEXT,
-            timestamp=time.time(),
-        )
 
         # Create multiple messages concurrently
         start_time = time.time()

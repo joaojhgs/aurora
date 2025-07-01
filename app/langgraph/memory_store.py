@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
@@ -38,9 +38,7 @@ def get_embedding_model_signature(model_info: dict[str, str]) -> str:
     return f"{model_info['type']}:{model_info['model_name']}:{model_info['version']}"
 
 
-def check_and_update_embedding_model(
-    store: "SQLiteVecStore", current_model_info: dict[str, str]
-) -> bool:
+def check_and_update_embedding_model(store: "SQLiteVecStore", current_model_info: dict[str, str]) -> bool:
     """
     Check if the embedding model has changed and re-embed all data if necessary.
 
@@ -69,22 +67,18 @@ def check_and_update_embedding_model(
     temp_connection.commit()
 
     # Check stored model signature
-    cursor = temp_connection.execute(
-        "SELECT value FROM embedding_metadata WHERE key = 'model_signature'"
-    )
+    cursor = temp_connection.execute("SELECT value FROM embedding_metadata WHERE key = 'model_signature'")
     result = cursor.fetchone()
     stored_signature = result[0] if result else None
 
     if stored_signature != current_signature:
-        log_info(f"Embedding model change detected!")
+        log_info("Embedding model change detected!")
         log_info(f"  Previous: {stored_signature or 'None'}")
         log_info(f"  Current:  {current_signature}")
         log_info(f"  Re-embedding all data in {store.table} table...")
 
         # Check if the table exists
-        cursor = temp_connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (store.table,)
-        )
+        cursor = temp_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (store.table,))
         table_exists = cursor.fetchone() is not None
 
         if not table_exists:
@@ -144,9 +138,9 @@ def check_and_update_embedding_model(
                 log_info(f"  Recreating database {db_path} for new embedding dimensions...")
                 os.remove(db_path)
 
-            # Create a new vector store with the current embeddings using real data
+            # Re-embed all texts with the new model
             log_info(f"  Re-embedding {len(texts)} items with new model...")
-            new_vector_store = SQLiteVec.from_texts(
+            SQLiteVec.from_texts(
                 texts=texts,
                 metadatas=metadatas,
                 embedding=embeddings,
@@ -217,7 +211,7 @@ class SQLiteVecStore(BaseStore):
         # Don't store the connection - create on-demand to handle threading
         # Just initialize the database schema by creating a temporary connection
         temp_connection = SQLiteVec.create_connection(db_file=db_file)
-        temp_store = SQLiteVec(table=table, embedding=embeddings, connection=temp_connection)
+        SQLiteVec(table=table, embedding=embeddings, connection=temp_connection)
         # Close the temporary connection
         temp_connection.close()
 
@@ -320,9 +314,7 @@ class SQLiteVecStore(BaseStore):
 
         # Store in vector database
         vector_store = self._get_vector_store()
-        vector_store.add_texts(
-            texts=[text_content], metadatas=[metadata], ids=[f"{metadata['namespace']}_{key}"]
-        )
+        vector_store.add_texts(texts=[text_content], metadatas=[metadata], ids=[f"{metadata['namespace']}_{key}"])
 
     def get(
         self,
@@ -340,22 +332,16 @@ class SQLiteVecStore(BaseStore):
             Item if found, None otherwise
         """
         namespace_str = "|".join(namespace)
-        doc_id = f"{namespace_str}_{key}"
 
         # SQLiteVec doesn't have a direct get by ID method,
         # so we'll search with a high similarity threshold
         try:
             # Use the key as search query and filter by exact metadata match
             vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(
-                query=key, k=50  # Get more results to find exact match
-            )
+            results = vector_store.similarity_search_with_score(query=key, k=50)  # Get more results to find exact match
 
-            for doc, score in results:
-                if (
-                    doc.metadata.get("namespace") == namespace_str
-                    and doc.metadata.get("key") == key
-                ):
+            for doc in results:
+                if doc.metadata.get("namespace") == namespace_str and doc.metadata.get("key") == key:
                     # Parse the stored value
                     value = json.loads(doc.metadata["value"])
                     return Item(
@@ -455,7 +441,7 @@ class SQLiteVecStore(BaseStore):
             # Filter by namespace and apply offset/limit
             items = []
             count = 0
-            for doc, score in results:
+            for doc in results:
                 if doc.metadata.get("namespace") == namespace_str:
                     if count >= offset:
                         if len(items) < limit:
@@ -502,9 +488,7 @@ class SQLiteVecStore(BaseStore):
         try:
             # Perform vector similarity search
             vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(
-                query=query, k=limit + offset + 20  # Get extra to handle filtering
-            )
+            results = vector_store.similarity_search_with_score(query=query, k=limit + offset + 20)  # Get extra to handle filtering
 
             # Filter by namespace and apply offset/limit
             items = []
@@ -538,9 +522,7 @@ class SQLiteVecStore(BaseStore):
 embeddings, model_info = get_embeddings()
 
 # Create separate SQLite vector stores for memories and tools in the data folder
-memories_store = SQLiteVecStore(
-    db_file="./data/memories.db", table="memories", embeddings=embeddings
-)
+memories_store = SQLiteVecStore(db_file="./data/memories.db", table="memories", embeddings=embeddings)
 
 tools_store = SQLiteVecStore(db_file="./data/tools.db", table="tools", embeddings=embeddings)
 
@@ -596,12 +578,10 @@ class CombinedSQLiteVecStore(BaseStore):
     def delete(self, namespace: tuple[str, ...], key: str) -> None:
         return self._get_store(namespace).delete(namespace, key)
 
-    def list(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
+    def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
         return self._get_store(namespace).list(namespace, limit=limit, offset=offset)
 
-    def search(
-        self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0
-    ) -> list[Item]:
+    def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
         return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)
 
     # Implement the missing abstract methods by delegating to the appropriate store
@@ -620,17 +600,11 @@ class CombinedSQLiteVecStore(BaseStore):
     async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
         return await self._get_store(namespace).adelete(namespace, key)
 
-    async def alist(
-        self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0
-    ) -> list[Item]:
+    async def alist(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
         return await self._get_store(namespace).alist(namespace, limit=limit, offset=offset)
 
-    async def asearch(
-        self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0
-    ) -> list[Item]:
-        return await self._get_store(namespace).asearch(
-            namespace, query=query, limit=limit, offset=offset
-        )
+    async def asearch(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
+        return await self._get_store(namespace).asearch(namespace, query=query, limit=limit, offset=offset)
 
     def batch(self, ops) -> list[Any]:
         raise NotImplementedError("Batch operations not implemented")
