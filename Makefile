@@ -32,6 +32,7 @@ format:
 	@echo "Running auto-formatting..."
 	black app tests
 	isort app tests
+	autopep8 --in-place --aggressive --aggressive --max-line-length=100 --recursive .
 
 # Run type checking
 typing:
