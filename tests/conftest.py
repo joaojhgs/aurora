@@ -5,6 +5,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,6 +27,38 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: Tests requiring GPU")
     config.addinivalue_line("markers", "ui: Tests requiring UI components")
     config.addinivalue_line("markers", "external: Tests requiring external services")
+
+
+# Clean up test databases after all tests
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up test databases after all tests."""
+    test_files = [
+        Path(__file__).parent / "test_scheduler.db",
+        Path(__file__).parent / "test_db.sqlite",
+        # Add any other test database files here
+    ]
+
+    for file in test_files:
+        if file.exists():
+            try:
+                # Instead of deleting, just clear tables by opening and closing with truncate mode
+                conn = sqlite3.connect(str(file))
+                # Get all tables
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                tables = cursor.fetchall()
+
+                # Drop all tables to clean the database
+                for table in tables:
+                    table_name = table[0]
+                    if table_name != "sqlite_sequence":  # Skip internal SQLite tables
+                        cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+
+                conn.commit()
+                conn.close()
+                print(f"Cleaned test database: {file}")
+            except Exception as e:
+                print(f"Failed to clean {file}: {e}")
 
 
 # Import app modules

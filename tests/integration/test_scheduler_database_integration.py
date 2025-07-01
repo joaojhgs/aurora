@@ -1,23 +1,68 @@
-"""
-Integration tests for Scheduler and Database components.
-"""
+"""Integration tests for Scheduler and Database components."""
 
-import asyncio
-import json
-import os
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import aiosqlite
 import pytest
 import pytest_asyncio
 
 from app.database import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
-from app.database.migration_manager import MigrationManager
 from app.scheduler.scheduler_manager import SchedulerManager
+
+# Fixed path to a test database file in the tests directory
+TEST_DB_PATH = str(Path(__file__).parent.parent / "test_scheduler.db")
+
+
+def reset_test_database():
+    """Reset the test database to a clean state."""
+    # Connect to the existing database or create it if it doesn't exist
+    conn = sqlite3.connect(TEST_DB_PATH)
+
+    # Drop existing tables if they exist to clear data
+    conn.execute("DROP TABLE IF EXISTS cron_jobs")
+    conn.execute("DROP TABLE IF EXISTS migrations")
+
+    # Create the migrations table with the correct schema that includes filename column
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS migrations (
+            version TEXT PRIMARY KEY,
+            filename TEXT,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
+    # Create the cron_jobs table
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cron_jobs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            schedule_type TEXT NOT NULL,
+            schedule_value TEXT NOT NULL,
+            next_run_time TIMESTAMP,
+            last_run_time TIMESTAMP,
+            callback_module TEXT NOT NULL,
+            callback_function TEXT NOT NULL,
+            callback_args TEXT,
+            is_active INTEGER DEFAULT 1,
+            status TEXT NOT NULL,
+            last_run_result TEXT,
+            retry_count INTEGER DEFAULT 0,
+            max_retries INTEGER DEFAULT 3,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            metadata TEXT
+        )
+    """
+    )
+    conn.commit()
+    conn.close()
+
 
 # For compatibility with the test
 Job = CronJob
@@ -29,6 +74,7 @@ class TestSchedulerDatabaseIntegration:
 
     # Add helper method to patch the migration_manager during tests
     async def patch_migration_manager(self, service):
+        """Patch the migration manager to avoid running migrations in tests."""
         # Create a patched migration manager that doesn't try to run migrations
         # that might fail in tests
         patched_manager = MagicMock()
@@ -38,60 +84,39 @@ class TestSchedulerDatabaseIntegration:
 
     @pytest_asyncio.fixture
     async def db_service(self):
-        """Create a scheduler database service with in-memory database."""
-        # Use a shared in-memory database through URI connection string
-        db_path = "file:memdb1?mode=memory&cache=shared"
-        service = SchedulerDatabaseService(db_path=db_path)
+        """Create a scheduler database service with a file-based test database."""
+        # Reset the database to a clean state before each test
+        reset_test_database()
+
+        # Create the database service using the test file path
+        service = SchedulerDatabaseService(db_path=TEST_DB_PATH)
 
         # Patch the migration_manager to avoid issues with migrations
         await self.patch_migration_manager(service)
 
-        # Create a test database for scheduler jobs
-        async with aiosqlite.connect(db_path, uri=True) as db:
-            # Create cron_jobs table that matches the expected schema in the application
-            await db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cron_jobs (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    schedule_type TEXT NOT NULL,
-                    schedule_value TEXT NOT NULL,
-                    next_run_time TIMESTAMP,
-                    last_run_time TIMESTAMP,
-                    callback_module TEXT NOT NULL,
-                    callback_function TEXT NOT NULL,
-                    callback_args TEXT,
-                    is_active INTEGER DEFAULT 1,
-                    status TEXT NOT NULL,
-                    last_run_result TEXT,
-                    retry_count INTEGER DEFAULT 0,
-                    max_retries INTEGER DEFAULT 3,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT
-                )
-            """
-            )
-            await db.commit()
-
-        # We don't need to call initialize since we've already created the table
-        # and patched the migration_manager
+        # We don't need to explicitly create tables or initialize
+        # since reset_test_database does this for us
         yield service
-        # Close connection if needed
 
     @pytest_asyncio.fixture
     async def scheduler_manager(self, db_service):
         """Create a scheduler manager with the test database service."""
         # Create a SchedulerManager that uses our test db_service
-        with patch(
-            "app.database.scheduler_service.SchedulerDatabaseService", return_value=db_service
-        ):
-            # Initialize with the same db path as the service
-            manager = SchedulerManager(db_path="file:memdb1?mode=memory&cache=shared")
-            await manager.initialize()
-            yield manager
-            # Stop the scheduler
-            manager.stop()
+        manager = SchedulerManager(db_path=TEST_DB_PATH)
+
+        # Replace the db_service with our patched one
+        manager.db_service = db_service
+
+        async def patched_initialize():
+            # Skip db_service.initialize() and just load jobs
+            await manager._load_jobs()
+
+        manager.initialize = patched_initialize
+        await manager.initialize()
+
+        yield manager
+        # Stop the scheduler
+        manager.stop()
 
     @pytest.mark.asyncio
     async def test_job_persistence(self, db_service, scheduler_manager):
