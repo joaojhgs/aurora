@@ -46,9 +46,7 @@ def tools_end_condition(
     return "chatbot"
 
 
-graph_builder.add_conditional_edges(
-    "tools", tools_end_condition, {"END": END, "chatbot": "chatbot"}
-)
+graph_builder.add_conditional_edges("tools", tools_end_condition, {"END": END, "chatbot": "chatbot"})
 
 # Add an edge from the tools node to the chatbot node
 # graph_builder.add_edge("tools", "chatbot")

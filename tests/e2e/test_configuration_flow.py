@@ -5,13 +5,11 @@ End-to-end tests for the configuration management flow.
 import json
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 
 from app.config.config_manager import ConfigManager
-from app.database.database_manager import DatabaseManager
 from app.speech_to_text.stt import STT
 from app.text_to_speech.tts import TTS
 
@@ -57,12 +55,8 @@ class TestConfigurationFlow:
             config_manager = ConfigManager.get_instance()
 
             # 2. Initialize components with the initial config
-            with patch(
-                "app.speech_to_text.stt.ConfigManager.get_instance", return_value=config_manager
-            ):
-                with patch(
-                    "app.text_to_speech.tts.ConfigManager.get_instance", return_value=config_manager
-                ):
+            with patch("app.speech_to_text.stt.ConfigManager.get_instance", return_value=config_manager):
+                with patch("app.text_to_speech.tts.ConfigManager.get_instance", return_value=config_manager):
                     # Create the STT and TTS components
                     with patch("app.speech_to_text.stt.AudioRecorder"):
                         stt = STT()
@@ -86,7 +80,7 @@ class TestConfigurationFlow:
                     assert tts.speaker_id == 2
 
                     # 6. Verify the changes were saved to the config file
-                    with open(temp_config_path, "r") as f:
+                    with open(temp_config_path) as f:
                         saved_config = json.load(f)
                         assert saved_config["speech_to_text"]["timeout_seconds"] == 10
                         assert saved_config["text_to_speech"]["speaker_id"] == 2
@@ -128,13 +122,9 @@ class TestConfigurationFlow:
 
         with patch("app.config.config_manager.DEFAULT_CONFIG_PATH", temp_config_path):
             # 2. Initialize with validation that should fail
-            with patch(
-                "app.config.config_manager.ConfigManager._validate_config", return_value=False
-            ):
-                with patch(
-                    "app.config.config_manager.ConfigManager._load_default_config"
-                ) as mock_default:
-                    config_manager = ConfigManager.get_instance()
+            with patch("app.config.config_manager.ConfigManager._validate_config", return_value=False):
+                with patch("app.config.config_manager.ConfigManager._load_default_config") as mock_default:
+                    ConfigManager.get_instance()
 
                     # 3. Verify default config was loaded
                     mock_default.assert_called_once()

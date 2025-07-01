@@ -1,18 +1,16 @@
 import asyncio
 import random
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import tool
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info
 from app.scheduler import get_cron_service
 
 
 @tool()
-async def schedule_task_tool(
-    task_name: str, schedule_time: str, action: str, message: Optional[str] = None, **kwargs
-) -> str:
+async def schedule_task_tool(task_name: str, schedule_time: str, action: str, message: Optional[str] = None, **kwargs) -> str:
     """
     Schedule a task to be executed at a specified time.
 
@@ -125,11 +123,7 @@ async def list_scheduled_tasks_tool() -> str:
                 "cancelled": "🚫",
             }.get(job.status.value, "❓")
 
-            next_run = (
-                job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
-                if job.next_run_time
-                else "Not scheduled"
-            )
+            next_run = job.next_run_time.strftime("%Y-%m-%d %H:%M:%S") if job.next_run_time else "Not scheduled"
 
             result += f"{status_emoji} **{job.name}**\n"
             result += f"   ID: {job.id[:8]}...\n"
@@ -162,11 +156,7 @@ async def cancel_scheduled_task_tool(task_identifier: str) -> str:
         # Find job by name or ID
         target_job = None
         for job in jobs:
-            if (
-                job.name.lower() == task_identifier.lower()
-                or job.id.startswith(task_identifier)
-                or job.id == task_identifier
-            ):
+            if job.name.lower() == task_identifier.lower() or job.id.startswith(task_identifier) or job.id == task_identifier:
                 target_job = job
                 break
 
@@ -186,7 +176,7 @@ async def cancel_scheduled_task_tool(task_identifier: str) -> str:
 
 
 # Assistant-specific callbacks for scheduled tasks
-def speak_reminder(**kwargs) -> Dict[str, Any]:
+def speak_reminder(**kwargs) -> dict[str, Any]:
     """
     Make the assistant speak a message.
     This is the primary callback for speech reminders.
@@ -194,7 +184,6 @@ def speak_reminder(**kwargs) -> Dict[str, Any]:
     try:
         from app.text_to_speech.tts import play
 
-        job_id = kwargs.get("job_id", "unknown")
         job_name = kwargs.get("job_name", "unknown")
         text = kwargs.get("text", "")
         message = kwargs.get("message", text)  # Support both 'text' and 'message' parameters
@@ -212,7 +201,7 @@ def speak_reminder(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to speak reminder: {e}"}
 
 
-def daily_greeting(**kwargs) -> Dict[str, Any]:
+def daily_greeting(**kwargs) -> dict[str, Any]:
     """
     A daily greeting that can be scheduled.
     """
@@ -243,7 +232,7 @@ def daily_greeting(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver daily greeting: {e}"}
 
 
-def hourly_time_announcement(**kwargs) -> Dict[str, Any]:
+def hourly_time_announcement(**kwargs) -> dict[str, Any]:
     """
     Announce the current time (useful for hourly reminders).
     """
@@ -265,7 +254,7 @@ def hourly_time_announcement(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to announce time: {e}"}
 
 
-def break_reminder(**kwargs) -> Dict[str, Any]:
+def break_reminder(**kwargs) -> dict[str, Any]:
     """
     Remind the user to take a break.
     """
@@ -296,7 +285,7 @@ def break_reminder(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver break reminder: {e}"}
 
 
-def water_reminder(**kwargs) -> Dict[str, Any]:
+def water_reminder(**kwargs) -> dict[str, Any]:
     """
     Remind the user to drink water.
     """
@@ -327,7 +316,7 @@ def water_reminder(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver water reminder: {e}"}
 
 
-def motivational_message(**kwargs) -> Dict[str, Any]:
+def motivational_message(**kwargs) -> dict[str, Any]:
     """
     Deliver a motivational message.
     """
@@ -360,9 +349,7 @@ def motivational_message(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver motivational message: {e}"}
 
 
-def _get_callback_for_action(
-    action: str, message: str = None, **kwargs
-) -> tuple[str, Dict[str, Any]]:
+def _get_callback_for_action(action: str, message: str = None, **kwargs) -> tuple[str, dict[str, Any]]:
     """
     Get the appropriate callback function and arguments for the given action.
 
@@ -373,9 +360,7 @@ def _get_callback_for_action(
 
     if action in ["speak", "say"]:
         # Use the local speak_reminder callback
-        return "app.langgraph.tools.scheduler_tool.speak_reminder", {
-            "message": message or "Scheduled reminder"
-        }
+        return "app.langgraph.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
 
     elif action == "reminder":
         # Use the local speak_reminder callback with reminder prefix
@@ -425,9 +410,7 @@ def schedule_speech_reminder(task_name: str, schedule_time: str, message: str) -
     """
     try:
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(
-            schedule_task_tool(task_name, schedule_time, "speak", message)
-        )
+        return loop.run_until_complete(schedule_task_tool(task_name, schedule_time, "speak", message))
     except RuntimeError:
         # No event loop running, create a new one
         return asyncio.run(schedule_task_tool(task_name, schedule_time, "speak", message))

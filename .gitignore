@@ -192,6 +192,7 @@ voice_models/
 .vscode/*
 
 *.db
+!/tests/*.db
 
 # Local configuration files
 config.json*

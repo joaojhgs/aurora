@@ -2,7 +2,6 @@
 Unit tests for the Scheduler module.
 """
 
-import asyncio
 import uuid
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -76,7 +75,7 @@ class TestSchedulerManager:
         callback_function = "test_function"
         callback_args = {"command": "echo 'test'"}
 
-        job_id = await scheduler_manager.create_cron_job(
+        await scheduler_manager.create_cron_job(
             name=name,
             cron_expression=cron_expression,
             callback_module=callback_module,
@@ -111,7 +110,7 @@ class TestSchedulerManager:
         callback_function = "test_function"
         callback_args = {"command": "echo 'absolute time'"}
 
-        job_id = await scheduler_manager.create_absolute_job(
+        await scheduler_manager.create_absolute_job(
             name=name,
             absolute_time=execution_time.isoformat(),
             callback_module=callback_module,
@@ -174,9 +173,7 @@ class TestSchedulerManager:
         mock_db_manager.update_job = AsyncMock(return_value=True)
 
         # Create the scheduler manager
-        with patch(
-            "app.scheduler.scheduler_manager.asyncio.create_subprocess_shell"
-        ) as mock_subprocess:
+        with patch("app.scheduler.scheduler_manager.asyncio.create_subprocess_shell") as mock_subprocess:
             # Mock the subprocess creation
             mock_process = MagicMock()
             mock_process.communicate = AsyncMock(return_value=(b"output", b""))
@@ -190,9 +187,7 @@ class TestSchedulerManager:
             await manager.initialize()
 
             # Mock _call_job_callback to call subprocess
-            with patch.object(
-                manager, "_call_job_callback", side_effect=lambda job: {"success": True}
-            ):
+            with patch.object(manager, "_call_job_callback", side_effect=lambda job: {"success": True}):
                 # Simulate the scheduler loop iteration by executing ready jobs
                 for job in ready_jobs:
                     await manager._execute_job(job)
@@ -258,9 +253,7 @@ class TestSchedulerManager:
         await manager.initialize()
 
         # Mock the _call_job_callback method to raise an exception
-        with patch.object(
-            manager, "_call_job_callback", side_effect=Exception("Command execution failed")
-        ):
+        with patch.object(manager, "_call_job_callback", side_effect=Exception("Command execution failed")):
             # Execute the failing job
             await manager._execute_job(failing_job)
 
@@ -270,9 +263,7 @@ class TestSchedulerManager:
 
             # For jobs with retries available, the status is set back to PENDING for retry
             # When retry_count < max_retries
-            assert (
-                failing_job.status == JobStatus.PENDING
-            ), "Job status was not set to PENDING for retry"
+            assert failing_job.status == JobStatus.PENDING, "Job status was not set to PENDING for retry"
 
             # Verify the job was passed to update_job method at least once
             assert mock_db_manager.update_job.called, "update_job was not called"

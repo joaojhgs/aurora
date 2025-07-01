@@ -29,11 +29,7 @@ if provider == "openai":
 elif provider == "huggingface_endpoint":
     hf_endpoint_options = config_manager.get_section("llm.third_party.huggingface_endpoint.options")
 
-    if (
-        hf_endpoint_options
-        and hf_endpoint_options.get("endpoint_url")
-        and hf_endpoint_options.get("access_token")
-    ):
+    if hf_endpoint_options and hf_endpoint_options.get("endpoint_url") and hf_endpoint_options.get("access_token"):
         try:
             from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
@@ -48,13 +44,9 @@ elif provider == "huggingface_endpoint":
             # Create HuggingFace endpoint and chat interface
             hf_endpoint = HuggingFaceEndpoint(**endpoint_options)
             llm = ChatHuggingFace(llm=hf_endpoint)
-            log_info(
-                f"Initialized HuggingFace Endpoint LLM with URL: {hf_endpoint_options['endpoint_url']}"
-            )
+            log_info(f"Initialized HuggingFace Endpoint LLM with URL: {hf_endpoint_options['endpoint_url']}")
         except ImportError:
-            log_warning(
-                "langchain-huggingface not available. Install with: pip install langchain-huggingface"
-            )
+            log_warning("langchain-huggingface not available. Install with: pip install langchain-huggingface")
         except Exception as e:
             log_error(f"Failed to initialize HuggingFace Endpoint: {e}")
 
@@ -94,14 +86,10 @@ elif provider == "huggingface_pipeline":
                 model_kwargs=model_kwargs,
             )
 
-            log_info(
-                "HuggingFace Pipeline initialized successfully, initializing ChatHuggingFace..."
-            )
+            log_info("HuggingFace Pipeline initialized successfully, initializing ChatHuggingFace...")
             llm = ChatHuggingFace(llm=pipeline, verbose=True, model_id=model_id)
             device_name = "GPU" if use_hardware_acceleration else "CPU"
-            log_info(
-                f"Initialized HuggingFace Pipeline LLM with model: {model_id} on device: {device_name}"
-            )
+            log_info(f"Initialized HuggingFace Pipeline LLM with model: {model_id} on device: {device_name}")
 
         except ImportError as e:
             log_error(f"Missing dependencies for HuggingFace Pipeline: {e}")
@@ -113,7 +101,7 @@ elif provider == "llama_cpp":
     from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
 
     # Import handler to register it on the directory of chat formats
-    from app.langgraph.ChatLlamaCppFnHandler import *
+    from app.langgraph.ChatLlamaCppFnHandler import *  # noqa: F401,F403
 
     llama_options = config_manager.get_section("llm.local.llama_cpp.options")
     model_path = llama_options.get("model_path") if llama_options else None
@@ -143,9 +131,7 @@ def chatbot(state: State, store: BaseStore):
     # Vector search for the history of memories
 
     items = store.search(("main", "memories"), query=state["messages"][-1].content, limit=3)
-    memories = "\n".join(
-        f"{item.value['text']} (score: {item.value['_search_score']})" for item in items
-    )
+    memories = "\n".join(f"{item.value['text']} (score: {item.value['_search_score']})" for item in items)
     memories = f"## Similar memories\n{memories}" if memories else ""
 
     # RAG Search tools to bind for each chatbot call

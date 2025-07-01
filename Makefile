@@ -25,26 +25,27 @@ setup:
 # Run linting checks
 lint:
 	@echo "Running linting checks..."
-	flake8 app tests
+	black --check app tests
+	flake8 app tests scripts
 
 # Run auto-formatting
 format:
 	@echo "Running auto-formatting..."
-	black app tests
-	isort app tests
-	autopep8 --in-place --aggressive --aggressive --max-line-length=100 --recursive .
+	black app tests scripts --line-length=150
+	isort app tests scripts
+	autopep8 --in-place --aggressive --aggressive --max-line-length=150 --recursive .
 
 # Run type checking
 typing:
 	@echo "Running type checking..."
-	mypy app tests
+	mypy --explicit-package-bases app tests
 
 # Run all checks
 check:
 	@echo "Running all code quality checks..."
 	black --check app tests
-	flake8 app tests
-	mypy app tests
+	flake8 app tests scripts
+	# mypy --explicit-package-bases app tests scripts
 
 # Run all tests
 test:

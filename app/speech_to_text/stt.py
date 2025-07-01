@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info
 
 detected = False
 
@@ -31,9 +31,7 @@ def on_wakeword_detection_start():
 
 def check_bluetooth_headphones():
     try:
-        result = subprocess.run(
-            ["bluetoothctl", "info"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        result = subprocess.run(["bluetoothctl", "info"], capture_output=True, text=True)
         return "Connected: yes" in result.stdout
     except Exception as e:
         log_error(f"Error checking Bluetooth headphones: {e}")
@@ -133,7 +131,6 @@ def reduce_volume_except_current():
 
 
 def restore_volume_except_current():
-    global original_volumes
     try:
         # Restore the volume levels for all other processes
         for input_index, volume in original_volumes.items():

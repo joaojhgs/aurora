@@ -7,7 +7,7 @@ import asyncio
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 
@@ -29,9 +29,7 @@ class MessageHistoryService:
         if not self._initialized:
             await self.db_manager.initialize()
             self._initialized = True
-            log_info(
-                f"Message history service initialized with session: {self._current_session_id}"
-            )
+            log_info(f"Message history service initialized with session: {self._current_session_id}")
 
     def _run_async(self, coro):
         """Run async function in executor for UI thread compatibility"""
@@ -141,9 +139,7 @@ class MessageHistoryService:
         """Get the current session ID"""
         return self._current_session_id
 
-    def load_and_display_today_messages(
-        self, add_message_callback: Callable[[str, bool, Optional[str]], None]
-    ):
+    def load_and_display_today_messages(self, add_message_callback: Callable[[str, bool, Optional[str]], None]):
         """Load today's messages and display them in the UI"""
         messages = self.get_today_messages()
 

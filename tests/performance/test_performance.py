@@ -7,15 +7,12 @@ import multiprocessing
 import os
 import time
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.database.database_manager import DatabaseManager
 from app.database.models import Message, MessageType
-from app.langgraph.graph import build_graph
 from app.langgraph.memory_store import MemoryStore
-from app.langgraph.state import State
 
 
 class TestConcurrentOperations:
@@ -184,11 +181,7 @@ class TestConcurrentOperations:
                     print(f"Inference completed in {duration:.2f} seconds")
 
                     # Check for a reasonable response
-                    assert any(
-                        "Paris" in msg.get("content", "")
-                        for msg in result["messages"]
-                        if isinstance(msg, dict)
-                    )
+                    assert any("Paris" in msg.get("content", "") for msg in result["messages"] if isinstance(msg, dict))
 
                     return duration
                 finally:
@@ -254,9 +247,7 @@ class TestResourceUsage:
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_diff = final_memory - initial_memory
 
-        print(
-            f"Memory usage: initial={initial_memory:.2f}MB, final={final_memory:.2f}MB, diff={memory_diff:.2f}MB"
-        )
+        print(f"Memory usage: initial={initial_memory:.2f}MB, final={final_memory:.2f}MB, diff={memory_diff:.2f}MB")
 
         # Assert memory growth is reasonable (less than 50MB)
         # This threshold may need adjustment based on the specific system

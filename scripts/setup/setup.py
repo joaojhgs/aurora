@@ -23,7 +23,6 @@ PROJECT_ROOT = Path(__file__).parent.parent
 def detect_system():
     """Detect the operating system and return setup info"""
     system = platform.system().lower()
-    arch = platform.machine().lower()
 
     if system == "windows":
         return {

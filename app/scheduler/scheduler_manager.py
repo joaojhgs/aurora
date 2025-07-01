@@ -7,15 +7,13 @@ import asyncio
 import importlib
 import re
 import threading
-import time
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 from croniter import croniter
 
 from ..database import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
-from ..helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from ..helpers.aurora_logger import log_debug, log_error, log_info
 
 
 class SchedulerManager:
@@ -26,7 +24,7 @@ class SchedulerManager:
         self._running = False
         self._thread = None
         self._loop = None
-        self._jobs_cache: Dict[str, CronJob] = {}
+        self._jobs_cache: dict[str, CronJob] = {}
         self._lock = threading.Lock()
 
     async def initialize(self):
@@ -162,7 +160,7 @@ class SchedulerManager:
             else:
                 self._jobs_cache.pop(job.id, None)
 
-    async def _call_job_callback(self, job: CronJob) -> Optional[Dict[str, Any]]:
+    async def _call_job_callback(self, job: CronJob) -> Optional[dict[str, Any]]:
         """Call the job's callback function"""
         try:
             # Import the module
@@ -265,7 +263,7 @@ class SchedulerManager:
             # If no format worked, try parsing ISO format
             return datetime.fromisoformat(absolute_time)
 
-        except Exception as e:
+        except Exception:
             raise ValueError(f"Invalid absolute time format: {absolute_time}")
 
     # Public API methods
@@ -275,7 +273,7 @@ class SchedulerManager:
         relative_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """Create a relative time job and return its ID"""
         job = CronJob.create_relative_job(
@@ -303,7 +301,7 @@ class SchedulerManager:
         absolute_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """Create an absolute time job and return its ID"""
         job = CronJob.create_absolute_job(
@@ -331,7 +329,7 @@ class SchedulerManager:
         cron_expression: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """Create a cron expression job and return its ID"""
         job = CronJob.create_cron_job(
@@ -357,7 +355,7 @@ class SchedulerManager:
         """Get a job by ID"""
         return await self.db_service.get_job(job_id)
 
-    async def get_all_jobs(self) -> List[CronJob]:
+    async def get_all_jobs(self) -> list[CronJob]:
         """Get all jobs"""
         return await self.db_service.get_all_jobs()
 

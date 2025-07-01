@@ -2,14 +2,12 @@
 Integration tests for Database and Config components.
 """
 
-import json
 import os
 import shutil
 import tempfile
 import uuid
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -40,7 +38,6 @@ class TestDBConfigIntegration:
         temp_dir = tempfile.mkdtemp()
         try:
             # Create test paths
-            config_path = os.path.join(temp_dir, "config.json")
             test_db_path = os.path.join(temp_dir, "test.db")
 
             # Update db path in config
@@ -55,9 +52,7 @@ class TestDBConfigIntegration:
             config_manager = MagicMock()
             config_manager._config = test_config
             config_manager.get_config.return_value = test_config
-            config_manager.get.side_effect = lambda key: (
-                test_config["database"]["path"] if key == "database.path" else None
-            )
+            config_manager.get.side_effect = lambda key: (test_config["database"]["path"] if key == "database.path" else None)
 
             # Create database manager with the test path
             db_manager = DatabaseManager(db_path=test_db_path)

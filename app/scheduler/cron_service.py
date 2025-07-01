@@ -3,11 +3,10 @@ High-level cron service interface for Aurora.
 Provides easy-to-use functions for scheduling tasks.
 """
 
-import asyncio
 import re
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from ..database import CronJob, ScheduleType
 from ..helpers.aurora_logger import log_error, log_info, log_warning
@@ -35,7 +34,7 @@ class CronService:
         name: str,
         relative_time: str,
         callback: Union[Callable, str],
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> Optional[str]:
         """
@@ -73,7 +72,7 @@ class CronService:
         name: str,
         absolute_time: str,
         callback: Union[Callable, str],
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> Optional[str]:
         """
@@ -107,7 +106,7 @@ class CronService:
         name: str,
         cron_expression: str,
         callback: Union[Callable, str],
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> Optional[str]:
         """
@@ -150,9 +149,7 @@ class CronService:
             callback_module, callback_function = self._parse_callback(callback)
 
             # Call the scheduler manager method directly
-            job_id = await scheduler_method(
-                callback_module=callback_module, callback_function=callback_function, **kwargs
-            )
+            job_id = await scheduler_method(callback_module=callback_module, callback_function=callback_function, **kwargs)
 
             return job_id
 
@@ -205,7 +202,7 @@ class CronService:
 
         return self._run_async(self.scheduler_manager.deactivate_job(job_id))
 
-    def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_job_status(self, job_id: str) -> Optional[dict[str, Any]]:
         """Get detailed job status"""
         job = self.get_job(job_id)
         if not job:
@@ -237,7 +234,7 @@ class CronService:
         name: str,
         schedule_text: str,
         callback: Union[Callable, str],
-        callback_args: Optional[Dict[str, Any]] = None,
+        callback_args: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> Optional[str]:
         """
@@ -516,9 +513,7 @@ class CronService:
         parts = text.split()
         # Basic cron has 5 parts: minute hour day month weekday
         return len(parts) == 5 and all(
-            part.replace("*", "").replace("/", "").replace("-", "").replace(",", "").isdigit()
-            or part == "*"
-            for part in parts
+            part.replace("*", "").replace("/", "").replace("-", "").replace(",", "").isdigit() or part == "*" for part in parts
         )
 
 
@@ -544,7 +539,7 @@ def schedule_task(
     name: str,
     when: str,
     callback: Union[Callable, str],
-    callback_args: Optional[Dict[str, Any]] = None,
+    callback_args: Optional[dict[str, Any]] = None,
     **kwargs,
 ) -> Optional[str]:
     """

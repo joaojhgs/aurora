@@ -8,7 +8,6 @@ through choosing the best setup method for their needs. It combines the
 functionality of both installation guidance and automated setup.
 """
 
-import json
 import os
 import platform
 import subprocess
@@ -32,7 +31,6 @@ def print_header():
 def detect_system():
     """Detect the operating system and return setup info"""
     system = platform.system().lower()
-    arch = platform.machine().lower()
 
     if system == "windows":
         return {

@@ -1,7 +1,7 @@
 import json
 import os
 from threading import Lock
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 from jsonschema import ValidationError, validate
 
@@ -178,9 +178,7 @@ class ConfigManager:
             "llm": {
                 "provider": "openai",
                 "third_party": {
-                    "openai": {
-                        "options": {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 512}
-                    },
+                    "openai": {"options": {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 512}},
                     "huggingface_endpoint": {
                         "options": {
                             "endpoint_url": "",
@@ -663,9 +661,7 @@ class ConfigManager:
             validate(instance=config_data, schema=self._schema)
         except ValidationError as e:
             # Re-raise with more context
-            raise ValidationError(
-                f"Configuration validation failed at '{e.json_path}': {e.message}"
-            )
+            raise ValidationError(f"Configuration validation failed at '{e.json_path}': {e.message}")
 
     def validate_current_config(self) -> list[str]:
         """Validate current configuration and return list of validation errors"""
@@ -719,9 +715,7 @@ class ConfigManager:
         for key in hw_accel_keys:
             value = self.get(f"hardware_acceleration.{key}")
             if not isinstance(value, bool):
-                errors.append(
-                    f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}"
-                )
+                errors.append(f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}")
 
         return errors
 

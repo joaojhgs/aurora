@@ -11,7 +11,7 @@ import os
 import platform
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 class WheelInstaller:
@@ -82,7 +82,7 @@ class WheelInstaller:
                         "--extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/",
                     ],
                     "advanced": [
-                        "https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.3.8+cu124-cp311-cp311-linux_x86_64.whl"
+                        "https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.3.8+cu124-cp311-cp311-linux_x86_64.whl"  # noqa: E501
                     ],
                     "legacy": [
                         "llama-cpp-python",
@@ -114,9 +114,7 @@ class WheelInstaller:
                     "fallback": ["llama-cpp-python"],
                 },
                 "sycl": {
-                    "fallback_env": {
-                        "CMAKE_ARGS": "-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
-                    },
+                    "fallback_env": {"CMAKE_ARGS": "-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"},
                     "fallback": ["llama-cpp-python"],
                     "pre_install_check": "intel_oneapi",
                 },
@@ -127,9 +125,7 @@ class WheelInstaller:
             },
         }
 
-    def install_package(
-        self, package_name: str, variant: str = "cpu", advanced: bool = False
-    ) -> bool:
+    def install_package(self, package_name: str, variant: str = "cpu", advanced: bool = False) -> bool:
         """
         Install a package with smart wheel selection
 
@@ -159,7 +155,7 @@ class WheelInstaller:
             if self._pip_install(config["advanced"]):
                 print(f"✅ Successfully installed {package_name} with advanced wheels")
                 return True
-            print(f"⚠️  Advanced wheels failed, trying primary...")
+            print("⚠️  Advanced wheels failed, trying primary...")
 
         # Try primary pre-built wheels if available
         if "primary" in config:
@@ -181,7 +177,7 @@ class WheelInstaller:
                 return True
 
         # Fallback to source compilation
-        print(f"🛠️  Pre-built wheels failed, falling back to source compilation...")
+        print("🛠️  Pre-built wheels failed, falling back to source compilation...")
 
         # Set environment variables for source build if specified
         env = os.environ.copy()
@@ -206,8 +202,8 @@ class WheelInstaller:
                     print(f"✅ Intel OneAPI found at {oneapi_vars}")
                     return True
                 else:
-                    print(f"❌ Intel OneAPI not found. Please install Intel OneAPI toolkit.")
-                    print(f"   Required for SYCL backend support.")
+                    print("❌ Intel OneAPI not found. Please install Intel OneAPI toolkit.")
+                    print("   Required for SYCL backend support.")
                     return False
             except Exception as e:
                 print(f"❌ Error checking Intel OneAPI: {e}")
@@ -218,9 +214,7 @@ class WheelInstaller:
         """Execute pip install with given arguments"""
         try:
             cmd = [sys.executable, "-m", "pip", "install"] + args
-            result = subprocess.run(
-                cmd, check=True, capture_output=True, text=True, env=env or os.environ
-            )
+            subprocess.run(cmd, check=True, capture_output=True, text=True, env=env or os.environ)
             return True
         except subprocess.CalledProcessError as e:
             print(f"📋 Installation failed: {e.stderr.strip()}")
@@ -251,7 +245,7 @@ class WheelInstaller:
 
         # Platform-specific validations
         if hardware == "metal" and self.system != "darwin":
-            print(f"⚠️  Metal backend is only available on macOS")
+            print("⚠️  Metal backend is only available on macOS")
             print(f"   Current platform: {self.system}")
             return False
 
@@ -280,7 +274,7 @@ class WheelInstaller:
         # For CUDA, allow legacy version selection
         if hardware == "cuda" and legacy:
             config = self.wheel_configs["pytorch"]["cuda"]["legacy"]
-            print(f"🔄 Using legacy CUDA 11.8 packages...")
+            print("🔄 Using legacy CUDA 11.8 packages...")
         else:
             config = self.wheel_configs["pytorch"][hardware]["primary"]
 
@@ -292,9 +286,7 @@ class WheelInstaller:
             print(f"❌ Failed to install PyTorch for {hardware.upper()}")
             return False
 
-    def install_both(
-        self, hardware: str = "cpu", advanced: bool = False, legacy_torch: bool = False
-    ) -> bool:
+    def install_both(self, hardware: str = "cpu", advanced: bool = False, legacy_torch: bool = False) -> bool:
         """
         Install both PyTorch and llama-cpp-python with matching hardware support
 
@@ -312,7 +304,7 @@ class WheelInstaller:
         # Install PyTorch first
         pytorch_success = self.install_pytorch(hardware, legacy_torch)
         if not pytorch_success:
-            print(f"❌ PyTorch installation failed, skipping llama-cpp-python")
+            print("❌ PyTorch installation failed, skipping llama-cpp-python")
             return False
 
         print()  # Add spacing
@@ -322,13 +314,11 @@ class WheelInstaller:
 
         if pytorch_success and llama_success:
             print()
-            print(
-                f"🎉 Successfully installed both PyTorch and llama-cpp-python for {hardware.upper()}"
-            )
+            print(f"🎉 Successfully installed both PyTorch and llama-cpp-python for {hardware.upper()}")
             return True
         else:
             print()
-            print(f"⚠️  Partial installation - check logs above for details")
+            print("⚠️  Partial installation - check logs above for details")
             return False
 
 

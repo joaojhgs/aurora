@@ -2,10 +2,6 @@
 Unit tests for the Text-to-Speech module with minimal mocks.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
 
 class MockTTS:
     """Mock TTS class for testing."""

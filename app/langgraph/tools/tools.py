@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List
+from typing import Callable
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -109,7 +109,7 @@ def sync_tools_with_database():
 
     # Get existing tools from database
     try:
-        existing_items = store.list(("tools",), limit=1000)  # Get all tools
+        existing_items = store.retrieve_items(("tools",), limit=1000)  # Get all tools
         existing_tools = {item.key: item.value for item in existing_items}
         log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
         for name in existing_tools.keys():
@@ -145,9 +145,7 @@ def sync_tools_with_database():
         log_info(f"Removing inactive tool from database: {name}")
         store.delete(("tools",), name)
 
-    log_info(
-        f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}"
-    )
+    log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
 
 # Build tool lookup table and sync with database
@@ -176,9 +174,7 @@ def get_tools(query: str, top_k: int = 5) -> list[Callable]:
     # Search vector store
     results = store.search(("tools",), query=query, limit=top_k)
 
-    log_debug(
-        f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}"
-    )
+    log_debug(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
 
     # Get unique tool names from results
     tool_names = {result.key for result in results}

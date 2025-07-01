@@ -1,10 +1,10 @@
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_error
 from app.scheduler import get_cron_service
 
 # Simple in-memory storage for current Pomodoro session
@@ -38,9 +38,7 @@ async def start_pomodoro_tool(
     """
     try:
         if _current_session["active"]:
-            return (
-                "❌ A Pomodoro session is already active. Use stop_pomodoro_tool to end it first."
-            )
+            return "❌ A Pomodoro session is already active. Use stop_pomodoro_tool to end it first."
 
         # Reset session state
         _current_session.update(
@@ -101,9 +99,7 @@ async def stop_pomodoro_tool() -> str:
         # Reset session
         cycle = _current_session.get("cycle", 0)
         session_type = _current_session.get("type", "work")
-        _current_session.update(
-            {"active": False, "type": None, "cycle": 0, "total_cycles": 0, "start_time": None}
-        )
+        _current_session.update({"active": False, "type": None, "cycle": 0, "total_cycles": 0, "start_time": None})
 
         return f"🛑 Pomodoro stopped. Last session: {session_type} (Cycle {cycle}), Duration: {duration_str}"
 
@@ -166,7 +162,7 @@ Remaining: {remaining_str}"""
 
 
 # Callback functions for scheduler
-def work_session_end(**kwargs) -> Dict[str, Any]:
+def work_session_end(**kwargs) -> dict[str, Any]:
     """Called when a work session ends"""
     try:
         if not _current_session["active"]:
@@ -175,16 +171,13 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
         from app.text_to_speech.tts import play
 
         cycle = _current_session["cycle"]
-        total_cycles = _current_session["total_cycles"]
         cycles_before_long_break = _current_session.get("cycles_before_long_break", 4)
 
         # Determine break type
         if cycle >= cycles_before_long_break:
             # Long break
             break_minutes = _current_session.get("long_break_minutes", 15)
-            play(
-                f"Trabalho concluído! Hora de uma pausa longa de {break_minutes} minutos. Você completou {cycle} ciclos!"
-            )
+            play(f"Trabalho concluído! Hora de uma pausa longa de {break_minutes} minutos. Você completou {cycle} ciclos!")
             _current_session.update(
                 {
                     "type": "long_break",
@@ -195,9 +188,7 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
         else:
             # Short break
             break_minutes = _current_session.get("short_break_minutes", 5)
-            play(
-                f"Trabalho concluído! Hora de uma pausa de {break_minutes} minutos. Ciclo {cycle} de {cycles_before_long_break}."
-            )
+            play(f"Trabalho concluído! Hora de uma pausa de {break_minutes} minutos. Ciclo {cycle} de {cycles_before_long_break}.")
             _current_session.update({"type": "short_break", "start_time": datetime.now()})
 
         # Schedule break end
@@ -230,7 +221,7 @@ def work_session_end(**kwargs) -> Dict[str, Any]:
         return {"success": False, "message": str(e)}
 
 
-def break_session_end(**kwargs) -> Dict[str, Any]:
+def break_session_end(**kwargs) -> dict[str, Any]:
     """Called when a break session ends"""
     try:
         if not _current_session["active"]:
@@ -242,15 +233,11 @@ def break_session_end(**kwargs) -> Dict[str, Any]:
         work_minutes = _current_session.get("work_minutes", 25)
 
         if session_type == "long_break":
-            play(
-                f"Pausa longa terminada! Vamos começar um novo ciclo. Trabalhe por {work_minutes} minutos!"
-            )
+            play(f"Pausa longa terminada! Vamos começar um novo ciclo. Trabalhe por {work_minutes} minutos!")
             _current_session.update({"type": "work", "cycle": 1, "start_time": datetime.now()})
         else:  # short_break
             cycle = _current_session["cycle"] + 1
-            play(
-                f"Pausa terminada! Hora de trabalhar novamente por {work_minutes} minutos. Ciclo {cycle}!"
-            )
+            play(f"Pausa terminada! Hora de trabalhar novamente por {work_minutes} minutos. Ciclo {cycle}!")
             _current_session.update({"type": "work", "cycle": cycle, "start_time": datetime.now()})
 
         # Schedule next work session end
@@ -276,7 +263,7 @@ def break_session_end(**kwargs) -> Dict[str, Any]:
         thread.daemon = True
         thread.start()
 
-        return {"success": True, "message": f"Break ended, work session started"}
+        return {"success": True, "message": "Break ended, work session started"}
 
     except Exception as e:
         log_error(f"Error in break_session_end: {e}")

@@ -8,7 +8,6 @@ import shutil
 import tempfile
 import uuid
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
@@ -217,7 +216,7 @@ class TestConfigIntegration:
             config_manager = ConfigManager()
 
             # Force our test config into the ConfigManager
-            with open(temp_config_file, "r") as f:
+            with open(temp_config_file) as f:
                 test_config = json.load(f)
                 config_manager._config = test_config
 
@@ -239,7 +238,7 @@ class TestConfigIntegration:
             config_manager = ConfigManager()
 
             # Force our test config into the ConfigManager
-            with open(temp_config_file, "r") as f:
+            with open(temp_config_file) as f:
                 test_config = json.load(f)
                 config_manager._config = test_config
 

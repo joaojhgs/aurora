@@ -52,10 +52,7 @@ def function_calling_handler(
     logprobs: bool | None = None,
     top_logprobs: int | None = None,
     **kwargs,  # type: ignore
-) -> (
-    llama_types.CreateChatCompletionResponse
-    | Iterator[llama_types.CreateChatCompletionStreamResponse]
-):
+) -> llama_types.CreateChatCompletionResponse | Iterator[llama_types.CreateChatCompletionStreamResponse]:
     function_calling_template = (
         "{% for message in messages %}"
         "<|im_start|>{{ message.role }}\n"
@@ -139,19 +136,10 @@ def function_calling_handler(
                 },
             }
 
-    stop = (
-        [stop, "<|im_end|>"]
-        if isinstance(stop, str)
-        else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
-    )
+    stop = [stop, "<|im_end|>"] if isinstance(stop, str) else stop + ["<|im_end|>"] if stop else ["<|im_end|>"]
 
     # Case 1: No tool choice by user
-    if (
-        tool_choice is None
-        or (isinstance(tool_choice, str) and tool_choice == "none")
-        or tools is None
-        or len(tools) == 0
-    ):
+    if tool_choice is None or (isinstance(tool_choice, str) and tool_choice == "none") or tools is None or len(tools) == 0:
         prompt = template_renderer.render(
             messages=messages,
             tools=[],
@@ -202,17 +190,11 @@ def function_calling_handler(
         )
         prompt += f"functions.{tool_name}:\n"
         try:
-            grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
-            )
+            grammar = llama_grammar.LlamaGrammar.from_json_schema(json.dumps(tool["function"]["parameters"]), verbose=llama.verbose)
         except Exception as e:
-            grammar = llama_grammar.LlamaGrammar.from_string(
-                llama_grammar.JSON_GBNF, verbose=llama.verbose
-            )
+            grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
             if llama.verbose:
-                print(
-                    "Failed to parse function body as JSON schema, falling back to default grammar"
-                )
+                print("Failed to parse function body as JSON schema, falling back to default grammar")
                 print(e)
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
@@ -240,14 +222,8 @@ def function_calling_handler(
     # Case 3: Automatic tool choice
     assert isinstance(tool_choice, str) and tool_choice == "auto"
     function_names = " | ".join([f'''"functions.{tool['function']['name']}:"''' for tool in tools])
-    initial_gbnf_tool_grammar = (
-        """root   ::= functions | "message:"\n""" f"""functions ::= {function_names}\n"""
-    )
-    follow_up_gbnf_tool_grammar = (
-        """root   ::= functions | message\n"""
-        """message ::= "message:"\n"""
-        f"""functions ::= {function_names}\n"""
-    )
+    initial_gbnf_tool_grammar = """root   ::= functions | "message:"\n""" f"""functions ::= {function_names}\n"""
+    follow_up_gbnf_tool_grammar = """root   ::= functions | message\n""" """message ::= "message:"\n""" f"""functions ::= {function_names}\n"""
     prompt = template_renderer.render(
         messages=messages,
         tools=tools,
@@ -285,9 +261,7 @@ def function_calling_handler(
         mirostat_eta=mirostat_eta,
         model=model,
         logits_processor=logits_processor,
-        grammar=llama_grammar.LlamaGrammar.from_string(
-            initial_gbnf_tool_grammar, verbose=llama.verbose
-        ),
+        grammar=llama_grammar.LlamaGrammar.from_string(initial_gbnf_tool_grammar, verbose=llama.verbose),
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
@@ -339,17 +313,11 @@ def function_calling_handler(
             print(f"[DEBUG] Processing tool: {tool_name}")
             prompt += f"functions.{tool_name}:\n"
             try:
-                grammar = llama_grammar.LlamaGrammar.from_json_schema(
-                    json.dumps(tool["function"]["parameters"]), verbose=llama.verbose
-                )
+                grammar = llama_grammar.LlamaGrammar.from_json_schema(json.dumps(tool["function"]["parameters"]), verbose=llama.verbose)
             except Exception as e:
-                grammar = llama_grammar.LlamaGrammar.from_string(
-                    llama_grammar.JSON_GBNF, verbose=llama.verbose
-                )
+                grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
                 if llama.verbose:
-                    print(
-                        "Failed to parse function body as JSON schema, falling back to default grammar"
-                    )
+                    print("Failed to parse function body as JSON schema, falling back to default grammar")
                     print(e)
             completion_or_chunks = llama.create_completion(
                 prompt=prompt,
@@ -401,9 +369,7 @@ def function_calling_handler(
                 mirostat_eta=mirostat_eta,
                 model=model,
                 logits_processor=logits_processor,
-                grammar=llama_grammar.LlamaGrammar.from_string(
-                    follow_up_gbnf_tool_grammar, verbose=llama.verbose
-                ),
+                grammar=llama_grammar.LlamaGrammar.from_string(follow_up_gbnf_tool_grammar, verbose=llama.verbose),
             )
             response = cast(llama_types.CreateCompletionResponse, response)
 
@@ -415,9 +381,7 @@ def function_calling_handler(
                 if text_response.startswith("functions."):
                     tool_name = text_response[len("functions.") :]
                     print(f"[DEBUG] Next tool_name extracted: '{tool_name}'")
-                    tool = next(
-                        (tool for tool in tools if tool["function"]["name"] == tool_name), None
-                    )
+                    tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
                     print(f"[DEBUG] Found next tool: {tool is not None}")
                 elif text_response.startswith("message:"):
                     print("[DEBUG] Model switched to message response, ending tool calls")
@@ -463,9 +427,7 @@ def function_calling_handler(
                 {
                     "finish_reason": "tool_calls",
                     "index": 0,
-                    "logprobs": _convert_text_completion_logprobs_to_chat(
-                        completion["choices"][0]["logprobs"]
-                    ),
+                    "logprobs": _convert_text_completion_logprobs_to_chat(completion["choices"][0]["logprobs"]),
                     "message": {
                         "role": "assistant",
                         "content": None,
@@ -478,33 +440,20 @@ def function_calling_handler(
                                     "arguments": completion["choices"][0]["text"],
                                 },
                             }
-                            for i, (tool_name, completion) in enumerate(
-                                zip(completions_tool_name, completions)
-                            )
+                            for i, (tool_name, completion) in enumerate(zip(completions_tool_name, completions))
                         ],
                         **function_call_dict,
                     },
                 }
             ],
             "usage": {
-                "completion_tokens": sum(
-                    (completion["usage"]["completion_tokens"] if "usage" in completion else 0)
-                    for completion in completions
-                ),
-                "prompt_tokens": sum(
-                    completion["usage"]["prompt_tokens"] if "usage" in completion else 0
-                    for completion in completions
-                ),
-                "total_tokens": sum(
-                    completion["usage"]["total_tokens"] if "usage" in completion else 0
-                    for completion in completions
-                ),
+                "completion_tokens": sum((completion["usage"]["completion_tokens"] if "usage" in completion else 0) for completion in completions),
+                "prompt_tokens": sum(completion["usage"]["prompt_tokens"] if "usage" in completion else 0 for completion in completions),
+                "total_tokens": sum(completion["usage"]["total_tokens"] if "usage" in completion else 0 for completion in completions),
             },
         }
 
-        print(
-            f"[DEBUG] Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls"
-        )
+        print(f"[DEBUG] Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls")
         return response_dict
 
     raise ValueError("Automatic streaming tool choice is not supported")

@@ -4,11 +4,9 @@ Unit tests for the DatabaseManager.
 
 import asyncio
 import os
-import sqlite3
 import tempfile
 import uuid
 from datetime import datetime
-from unittest.mock import MagicMock, patch
 
 import aiosqlite
 import pytest
@@ -65,9 +63,7 @@ class TestDatabaseManager:
         # Create a test connection to verify the database is accessible
         async with aiosqlite.connect(db_manager.db_path) as conn:
             # Check that the messages table exists
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
-            )
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
             result = await cursor.fetchone()
             assert result is not None
             assert result[0] == "messages"
@@ -91,9 +87,7 @@ class TestDatabaseManager:
         # Connect to database and check
         async with aiosqlite.connect(db_manager.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(
-                "SELECT content, message_type FROM messages WHERE id = ?", (message_id,)
-            )
+            cursor = await conn.execute("SELECT content, message_type FROM messages WHERE id = ?", (message_id,))
             result = await cursor.fetchone()
 
         assert result is not None

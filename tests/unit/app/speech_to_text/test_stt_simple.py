@@ -2,11 +2,9 @@
 Unit tests for the Speech-to-Text module with minimal mocks.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-
-from app.speech_to_text import stt  # Import the module, not the class
 
 
 # Create a basic AudioRecorder mock

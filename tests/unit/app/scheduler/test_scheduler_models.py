@@ -69,7 +69,6 @@ class TestSchedulerModels:
 
     def test_cron_job_with_args(self):
         """Test creating a CronJob with arguments."""
-        job_id = str(uuid.uuid4())
         now = datetime.now()
 
         # Test with callback args

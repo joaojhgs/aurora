@@ -4,11 +4,8 @@ Performance tests for Aurora components using mocks.
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.database.models import Message, MessageType
 
 
 class MockSTT:
@@ -161,16 +158,12 @@ class TestPerformanceMetricsSimple:
         # Simulate the whole flow
         transcription = await mock_stt.transcribe_audio(b"mock_audio_data")
         response = await mock_llm.generate(transcription)
-        spoke = await mock_tts.speak_text(response)
+        await mock_tts.speak_text(response)
 
         # Store both messages
-        await mock_db_manager.store_message(
-            {"content": transcription, "role": "user", "timestamp": time.time()}
-        )
+        await mock_db_manager.store_message({"content": transcription, "role": "user", "timestamp": time.time()})
 
-        await mock_db_manager.store_message(
-            {"content": response, "role": "assistant", "timestamp": time.time()}
-        )
+        await mock_db_manager.store_message({"content": response, "role": "assistant", "timestamp": time.time()})
 
         elapsed_time = time.time() - start_time
 

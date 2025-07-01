@@ -2,10 +2,9 @@
 Integration tests for the speech components.
 """
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.mark.integration

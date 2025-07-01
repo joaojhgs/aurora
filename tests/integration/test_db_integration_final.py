@@ -8,13 +8,10 @@ import shutil
 import tempfile
 import uuid
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 import pytest_asyncio
 
-from app.config.config_manager import ConfigManager
 from app.database.database_manager import DatabaseManager
 from app.database.models import Message, MessageType
 
