@@ -258,7 +258,7 @@ class SQLiteVecStore(BaseStore):
         offset: int = 0,
     ) -> list[Item]:
         """Async version of list - just calls the sync version."""
-        return self.list(namespace, limit=limit, offset=offset)
+        return self.list_items_in_namespace(namespace, limit=limit, offset=offset)
 
     async def asearch(
         self,
@@ -409,7 +409,7 @@ class SQLiteVecStore(BaseStore):
                 log_error(f"Alternative delete method also failed for {namespace}/{key}: {e2}")
                 pass
 
-    def list(
+    def list_items_in_namespace(
         self,
         namespace: tuple[str, ...],
         *,
@@ -579,7 +579,7 @@ class CombinedSQLiteVecStore(BaseStore):
         return self._get_store(namespace).delete(namespace, key)
 
     def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).list(namespace, limit=limit, offset=offset)
+        return self._get_store(namespace).list_items_in_namespace(namespace, limit=limit, offset=offset)
 
     def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
         return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)

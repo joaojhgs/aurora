@@ -253,6 +253,26 @@ class ConfigManager:
                 "gmail": {"activate": False},
                 "gcalendar": {"activate": False},
             },
+            # MCP (Model Context Protocol) servers configuration
+            "mcp": {
+                "enabled": True,
+                "servers": {
+                    # Example local stdio server
+                    # "math": {
+                    #     "command": "python",
+                    #     "args": ["/path/to/math_server.py"],
+                    #     "transport": "stdio"
+                    # },
+                    # Example remote HTTP server
+                    # "weather": {
+                    #     "url": "http://localhost:8000/mcp/",
+                    #     "transport": "streamable_http",
+                    #     "headers": {
+                    #         "Authorization": "Bearer YOUR_TOKEN"
+                    #     }
+                    # }
+                },
+            },
             "google": {"credentials_file": "google_credentials.json"},
         }
 
@@ -347,7 +367,7 @@ class ConfigManager:
             return json.loads(json.dumps(self._config))  # Deep copy
 
     def _get_config_schema(self) -> dict[str, Any]:
-        """Return the JSON schema for configuration validation"""
+        """Return the JSON schema for configuration validation with UI metadata"""
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
@@ -359,6 +379,7 @@ class ConfigManager:
                 "text_to_speech",
                 "hardware_acceleration",
                 "plugins",
+                "mcp",
                 "google",
             ],
             "properties": {
@@ -366,9 +387,9 @@ class ConfigManager:
                     "type": "object",
                     "required": ["activate", "dark_mode", "debug"],
                     "properties": {
-                        "activate": {"type": "boolean"},
-                        "dark_mode": {"type": "boolean"},
-                        "debug": {"type": "boolean"},
+                        "activate": {"type": "boolean", "description": "Enable graphical user interface"},
+                        "dark_mode": {"type": "boolean", "description": "Enable dark mode theme"},
+                        "debug": {"type": "boolean", "description": "Enable debug mode for verbose logging"},
                     },
                     "additionalProperties": False,
                 },
@@ -384,6 +405,8 @@ class ConfigManager:
                                 "huggingface_pipeline",
                                 "llama_cpp",
                             ],
+                            "description": "LLM provider to use",
+                            "ui_choices": ["llama_cpp", "openai", "huggingface_endpoint", "huggingface_pipeline"],
                         },
                         "third_party": {
                             "type": "object",
@@ -397,13 +420,24 @@ class ConfigManager:
                                             "type": "object",
                                             "required": ["model", "temperature", "max_tokens"],
                                             "properties": {
-                                                "model": {"type": "string"},
+                                                "model": {
+                                                    "type": "string",
+                                                    "enum": ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"],
+                                                    "description": "OpenAI model to use",
+                                                    "ui_choices": ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"],
+                                                },
                                                 "temperature": {
                                                     "type": "number",
                                                     "minimum": 0,
                                                     "maximum": 2,
+                                                    "description": "Sampling temperature for OpenAI models",
                                                 },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
+                                                "max_tokens": {
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "maximum": 4096,
+                                                    "description": "Maximum tokens for OpenAI responses",
+                                                },
                                             },
                                             "additionalProperties": False,
                                         }
@@ -424,15 +458,16 @@ class ConfigManager:
                                                 "max_tokens",
                                             ],
                                             "properties": {
-                                                "endpoint_url": {"type": "string"},
-                                                "model": {"type": "string"},
-                                                "access_token": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
+                                                "endpoint_url": {"type": "string", "description": "HuggingFace endpoint URL"},
+                                                "model": {"type": "string", "description": "HuggingFace model name"},
+                                                "access_token": {"type": "string", "description": "HuggingFace access token"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "Sampling temperature"},
+                                                "max_tokens": {
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "maximum": 4096,
+                                                    "description": "Maximum tokens for responses",
                                                 },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
                                             },
                                             "additionalProperties": False,
                                         }
@@ -454,14 +489,21 @@ class ConfigManager:
                                             "type": "object",
                                             "required": ["model"],
                                             "properties": {
-                                                "model": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
+                                                "model": {"type": "string", "description": "HuggingFace model name for local pipeline"},
+                                                "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "Sampling temperature"},
+                                                "max_tokens": {"type": "integer", "minimum": 1, "description": "Maximum tokens for responses"},
+                                                "torch_dtype": {
+                                                    "type": "string",
+                                                    "enum": ["auto", "float32", "float16", "bfloat16"],
+                                                    "description": "PyTorch data type",
+                                                    "ui_choices": ["auto", "float32", "float16", "bfloat16"],
                                                 },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                                "torch_dtype": {"type": "string"},
+                                                "device": {
+                                                    "type": "string",
+                                                    "enum": ["cpu", "cuda", "auto"],
+                                                    "description": "Device to run the model on",
+                                                    "ui_choices": ["cpu", "cuda", "auto"],
+                                                },
                                                 "pipeline_kwargs": {"type": "object"},
                                                 "model_kwargs": {"type": "object"},
                                             },
@@ -489,29 +531,52 @@ class ConfigManager:
                                                 "min_p",
                                             ],
                                             "properties": {
-                                                "model_path": {"type": "string"},
+                                                "model_path": {"type": "string", "description": "Path to the GGUF model file"},
                                                 "temperature": {
                                                     "type": "number",
                                                     "minimum": 0,
                                                     "maximum": 2,
+                                                    "description": "Sampling temperature for Llama.cpp",
                                                 },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                                "n_ctx": {"type": "integer", "minimum": 1},
-                                                "n_gpu_layers": {"type": "integer", "minimum": 0},
-                                                "n_batch": {"type": "integer", "minimum": 1},
-                                                "top_p": {
-                                                    "type": "number",
+                                                "max_tokens": {
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "maximum": 4096,
+                                                    "description": "Maximum tokens for responses",
+                                                },
+                                                "n_ctx": {"type": "integer", "minimum": 512, "maximum": 32768, "description": "Context window size"},
+                                                "n_gpu_layers": {
+                                                    "type": "integer",
                                                     "minimum": 0,
-                                                    "maximum": 1,
+                                                    "maximum": 100,
+                                                    "description": "Number of layers to offload to GPU",
                                                 },
-                                                "top_k": {"type": "integer", "minimum": 1},
-                                                "repeat_penalty": {"type": "number", "minimum": 0},
+                                                "n_batch": {
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "maximum": 2048,
+                                                    "description": "Batch size for processing",
+                                                },
+                                                "top_p": {"type": "number", "minimum": 0, "maximum": 1, "description": "Top-p sampling parameter"},
+                                                "top_k": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Top-k sampling parameter"},
+                                                "repeat_penalty": {
+                                                    "type": "number",
+                                                    "minimum": 0.1,
+                                                    "maximum": 2.0,
+                                                    "description": "Repetition penalty",
+                                                },
                                                 "min_p": {
                                                     "type": "number",
                                                     "minimum": 0,
                                                     "maximum": 1,
+                                                    "description": "Minimum probability threshold",
                                                 },
-                                                "chat_format": {"type": "string"},
+                                                "chat_format": {
+                                                    "type": "string",
+                                                    "enum": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                                                    "description": "Chat format template to use",
+                                                    "ui_choices": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                                                },
                                             },
                                             "additionalProperties": True,
                                         }
@@ -527,7 +592,7 @@ class ConfigManager:
                 "embeddings": {
                     "type": "object",
                     "required": ["use_local"],
-                    "properties": {"use_local": {"type": "boolean"}},
+                    "properties": {"use_local": {"type": "boolean", "description": "Use local embeddings model instead of API"}},
                     "additionalProperties": False,
                 },
                 "speech_to_text": {
@@ -538,9 +603,26 @@ class ConfigManager:
                         "wakeword_speedx_noise_reduction",
                     ],
                     "properties": {
-                        "language": {"type": "string"},
-                        "silero_deactivity_detection": {"type": "boolean"},
-                        "wakeword_speedx_noise_reduction": {"type": "boolean"},
+                        "language": {
+                            "type": "string",
+                            "enum": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+                            "description": "Language for speech recognition (empty for auto-detect)",
+                            "ui_choices": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+                        },
+                        "model": {
+                            "type": "string",
+                            "enum": ["tiny", "base", "small", "medium", "large"],
+                            "description": "Whisper model size for speech recognition",
+                            "ui_choices": ["tiny", "base", "small", "medium", "large"],
+                        },
+                        "silero_deactivity_detection": {"type": "boolean", "description": "Enable Silero-based voice activity detection"},
+                        "wakeword_speedx_noise_reduction": {"type": "boolean", "description": "Enable noise reduction for wake word detection"},
+                        "wake_words_sensitivity": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "description": "Sensitivity for wake word detection (0.0 - 1.0)",
+                        },
                     },
                     "additionalProperties": False,
                 },
@@ -553,10 +635,10 @@ class ConfigManager:
                         "piper_path",
                     ],
                     "properties": {
-                        "model_file_path": {"type": "string"},
-                        "model_config_file_path": {"type": "string"},
-                        "model_sample_rate": {"type": "integer", "minimum": 8000, "maximum": 48000},
-                        "piper_path": {"type": "string"},
+                        "model_file_path": {"type": "string", "description": "Path to the TTS model file"},
+                        "model_config_file_path": {"type": "string", "description": "Path to the TTS model configuration file"},
+                        "model_sample_rate": {"type": "integer", "minimum": 8000, "maximum": 48000, "description": "Sample rate for TTS output"},
+                        "piper_path": {"type": "string", "description": "Path to Piper TTS executable"},
                     },
                     "additionalProperties": False,
                 },
@@ -564,11 +646,11 @@ class ConfigManager:
                     "type": "object",
                     "required": ["tts", "stt", "ocr_bg", "ocr_curr", "llm"],
                     "properties": {
-                        "tts": {"type": "boolean"},
-                        "stt": {"type": "boolean"},
-                        "ocr_bg": {"type": "boolean"},
-                        "ocr_curr": {"type": "boolean"},
-                        "llm": {"type": "boolean"},
+                        "tts": {"type": "boolean", "description": "Enable hardware acceleration for TTS"},
+                        "stt": {"type": "boolean", "description": "Enable hardware acceleration for STT"},
+                        "ocr_bg": {"type": "boolean", "description": "Enable hardware acceleration for background OCR"},
+                        "ocr_curr": {"type": "boolean", "description": "Enable hardware acceleration for current OCR"},
+                        "llm": {"type": "boolean", "description": "Enable hardware acceleration for LLM"},
                     },
                     "additionalProperties": False,
                 },
@@ -588,25 +670,25 @@ class ConfigManager:
                             "type": "object",
                             "required": ["activate", "api_token", "username", "instance_url"],
                             "properties": {
-                                "activate": {"type": "boolean"},
-                                "api_token": {"type": "string"},
-                                "username": {"type": "string"},
-                                "instance_url": {"type": "string", "format": "uri"},
+                                "activate": {"type": "boolean", "description": "Enable Jira integration"},
+                                "api_token": {"type": "string", "description": "Jira API token"},
+                                "username": {"type": "string", "description": "Jira username"},
+                                "instance_url": {"type": "string", "format": "uri", "description": "Jira instance URL"},
                             },
                             "additionalProperties": False,
                         },
                         "openrecall": {
                             "type": "object",
                             "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
+                            "properties": {"activate": {"type": "boolean", "description": "Enable OpenRecall integration"}},
                             "additionalProperties": False,
                         },
                         "brave_search": {
                             "type": "object",
                             "required": ["activate", "api_key"],
                             "properties": {
-                                "activate": {"type": "boolean"},
-                                "api_key": {"type": "string"},
+                                "activate": {"type": "boolean", "description": "Enable Brave Search integration"},
+                                "api_key": {"type": "string", "description": "Brave Search API key"},
                             },
                             "additionalProperties": False,
                         },
@@ -614,10 +696,10 @@ class ConfigManager:
                             "type": "object",
                             "required": ["activate", "app_id", "app_private_key", "repository"],
                             "properties": {
-                                "activate": {"type": "boolean"},
-                                "app_id": {"type": "string"},
-                                "app_private_key": {"type": "string"},
-                                "repository": {"type": "string"},
+                                "activate": {"type": "boolean", "description": "Enable GitHub integration"},
+                                "app_id": {"type": "string", "description": "GitHub App ID"},
+                                "app_private_key": {"type": "string", "description": "GitHub App private key"},
+                                "repository": {"type": "string", "description": "GitHub repository"},
                             },
                             "additionalProperties": False,
                         },
@@ -625,21 +707,21 @@ class ConfigManager:
                             "type": "object",
                             "required": ["activate", "user_token"],
                             "properties": {
-                                "activate": {"type": "boolean"},
-                                "user_token": {"type": "string"},
+                                "activate": {"type": "boolean", "description": "Enable Slack integration"},
+                                "user_token": {"type": "string", "description": "Slack user token"},
                             },
                             "additionalProperties": False,
                         },
                         "gmail": {
                             "type": "object",
                             "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
+                            "properties": {"activate": {"type": "boolean", "description": "Enable Gmail integration"}},
                             "additionalProperties": False,
                         },
                         "gcalendar": {
                             "type": "object",
                             "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
+                            "properties": {"activate": {"type": "boolean", "description": "Enable Google Calendar integration"}},
                             "additionalProperties": False,
                         },
                     },
@@ -648,12 +730,116 @@ class ConfigManager:
                 "google": {
                     "type": "object",
                     "required": ["credentials_file"],
-                    "properties": {"credentials_file": {"type": "string"}},
+                    "properties": {"credentials_file": {"type": "string", "description": "Path to Google credentials JSON file"}},
+                    "additionalProperties": False,
+                },
+                "mcp": {
+                    "type": "object",
+                    "required": ["enabled", "servers"],
+                    "properties": {
+                        "enabled": {"type": "boolean", "description": "Enable Model Context Protocol integration"},
+                        "servers": {
+                            "type": "object",
+                            "patternProperties": {
+                                "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+                                    "type": "object",
+                                    "properties": {
+                                        "transport": {"type": "string", "enum": ["stdio", "streamable_http", "sse"]},
+                                        "command": {"type": "string"},
+                                        "args": {"type": "array", "items": {"type": "string"}},
+                                        "url": {"type": "string", "format": "uri"},
+                                        "headers": {"type": "object", "patternProperties": {"^.+$": {"type": "string"}}},
+                                        "enabled": {"type": "boolean"},
+                                    },
+                                    "required": ["transport"],
+                                    "allOf": [
+                                        {
+                                            "if": {"properties": {"transport": {"const": "stdio"}}},
+                                            "then": {"required": ["command"], "not": {"required": ["url"]}},
+                                        },
+                                        {
+                                            "if": {"properties": {"transport": {"enum": ["streamable_http", "sse"]}}},
+                                            "then": {"required": ["url"], "not": {"required": ["command", "args"]}},
+                                        },
+                                    ],
+                                    "additionalProperties": False,
+                                }
+                            },
+                            "additionalProperties": False,
+                        },
+                    },
                     "additionalProperties": False,
                 },
             },
             "additionalProperties": False,
         }
+
+    def get_field_metadata(self) -> dict[str, dict[str, Any]]:
+        """Extract field metadata from the configuration schema for UI generation"""
+        metadata = {}
+
+        def extract_metadata(schema: dict, path: str = ""):
+            """Recursively extract metadata from schema"""
+            if "properties" in schema:
+                for key, prop in schema["properties"].items():
+                    current_path = f"{path}.{key}" if path else key
+
+                    # Extract field metadata
+                    field_meta = {}
+
+                    # Map JSON schema types to UI types
+                    json_type = prop.get("type", "string")
+                    if json_type == "boolean":
+                        field_meta["type"] = "bool"
+                    elif json_type == "integer":
+                        field_meta["type"] = "int"
+                    elif json_type == "number":
+                        field_meta["type"] = "float"
+                    elif json_type == "string":
+                        if "enum" in prop or "ui_choices" in prop:
+                            field_meta["type"] = "choice"
+                            # Use ui_choices if available, otherwise use enum
+                            field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+                        else:
+                            field_meta["type"] = "string"
+                    elif json_type == "object":
+                        field_meta["type"] = "dict"
+                    elif json_type == "array":
+                        field_meta["type"] = "list"
+
+                    # Extract constraints
+                    if "minimum" in prop:
+                        field_meta["min"] = prop["minimum"]
+                    if "maximum" in prop:
+                        field_meta["max"] = prop["maximum"]
+
+                    # Extract description
+                    if "description" in prop:
+                        field_meta["description"] = prop["description"]
+
+                    # Special handling flags
+                    if "ui_expand_dict" in prop:
+                        field_meta["expand_dict"] = prop["ui_expand_dict"]
+
+                    # Store metadata for this field
+                    metadata[current_path] = field_meta
+
+                    # Recursively process nested objects
+                    if json_type == "object" and "properties" in prop:
+                        extract_metadata(prop, current_path)
+
+        # Extract metadata from the schema
+        extract_metadata(self._schema)
+
+        # Add some special cases that aren't directly in the schema
+        metadata.update(
+            {
+                # Dictionaries that should NOT be expanded (treat as single JSON fields)
+                "plugins.jira.env": {"expand_dict": False, "type": "dict", "description": "Environment variables for Jira plugin"}
+            }
+        )
+
+        return metadata
 
     def _validate_config(self, config_data: dict[str, Any]) -> None:
         """Validate configuration data against the schema"""
