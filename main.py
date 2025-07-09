@@ -103,7 +103,7 @@ if __name__ == "__main__":
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
-            language=config_manager.get("speech_to_text.language", ""),
+            language=config_manager.get("general.speech_to_text.language", ""),
             wake_words_sensitivity=0.35,
             openwakeword_model_paths="voice_models/jarvis.onnx",
             on_wakeword_detected=on_wakeword_detected,
@@ -113,8 +113,8 @@ if __name__ == "__main__":
             on_recording_stop=on_recording_stop,
             wake_word_buffer_duration=1,
             device=getUseHardwareAcceleration("stt"),
-            silero_deactivity_detection=config_manager.get("speech_to_text.silero_deactivity_detection", False),
-            openwakeword_speedx_noise_reduction=config_manager.get("speech_to_text.wakeword_speedx_noise_reduction", False),
+            silero_deactivity_detection=config_manager.get("general.speech_to_text.silero_deactivity_detection", False),
+            openwakeword_speedx_noise_reduction=config_manager.get("general.speech_to_text.wakeword_speedx_noise_reduction", False),
             # No need for CLI STT indication if UI is activated
             spinner=not config_manager.get("ui.activate", False),
         ) as recorder:

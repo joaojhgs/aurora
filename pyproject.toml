@@ -88,6 +88,9 @@ runtime = [
     "langgraph-sdk==0.1.51",
     "langsmith==0.3.8",
     
+    # MCP (Model Context Protocol) Integration
+    "langchain-mcp-adapters>=0.1.8",
+    
     # Database & Storage
     "aiosqlite>=0.19.0",
     "sqlite-vec",

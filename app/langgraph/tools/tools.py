@@ -1,7 +1,7 @@
 from typing import Callable
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.langgraph.memory_store import store
 
 # Pomodoro tools
@@ -86,7 +86,126 @@ if config_manager.get("plugins.slack.activate", False):
 
     tools.extend(slack_tools)
 
+# Load MCP tools if enabled
+_mcp_tools_loaded = False
+
 tool_lookup: dict[str, Callable] = {}
+
+
+async def load_mcp_tools_async():
+    """Load MCP tools asynchronously and add them to the tool system."""
+    global _mcp_tools_loaded
+
+    if not config_manager.get("mcp.enabled", True) or _mcp_tools_loaded:
+        return
+
+    try:
+        from app.langgraph.mcp_client import get_mcp_tools, initialize_mcp
+
+        # Initialize MCP client first
+        log_info("Initializing MCP client...")
+        await initialize_mcp()
+
+        # Then get the tools
+        mcp_tools = await get_mcp_tools()
+        if mcp_tools:
+            # Add MCP tools to the global tools list and lookup
+            for tool in mcp_tools:
+                if tool.name not in tool_lookup:
+                    tools.append(tool)
+                    tool_lookup[tool.name] = tool
+
+            log_info(f"Added {len(mcp_tools)} MCP tools to tool system")
+
+            # Resync database with new tools
+            sync_tools_with_database()
+            _mcp_tools_loaded = True
+        else:
+            log_debug("No MCP tools to load")
+
+    except Exception as e:
+        log_error(f"Failed to load MCP tools asynchronously: {e}")
+
+
+async def reload_mcp_servers():
+    """Reload MCP servers from configuration and restart connections."""
+    global _mcp_tools_loaded
+
+    try:
+        from app.langgraph.mcp_client import mcp_client_manager
+
+        log_info("Reloading MCP servers...")
+
+        # Remove existing MCP tools from the tools list and lookup
+        mcp_tool_names = []
+        if mcp_client_manager.is_initialized:
+            current_mcp_tools = mcp_client_manager.get_tools()
+            mcp_tool_names = [tool.name for tool in current_mcp_tools]
+
+        # Remove MCP tools from global tools list
+        global tools
+        tools = [tool for tool in tools if tool.name not in mcp_tool_names]
+
+        # Remove MCP tools from lookup
+        for tool_name in mcp_tool_names:
+            tool_lookup.pop(tool_name, None)
+
+        # Reset the loaded flag
+        _mcp_tools_loaded = False
+
+        # Close existing client connections
+        await mcp_client_manager.close()
+
+        # Reload tools from configuration
+        await load_mcp_tools_async()
+
+        log_info("MCP servers reloaded successfully")
+
+    except Exception as e:
+        log_error(f"Failed to reload MCP servers: {e}")
+
+
+def reload_mcp_servers_sync():
+    """Synchronous wrapper for reloading MCP servers."""
+    try:
+        import asyncio
+
+        # Check if we're in an event loop
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context, create a task
+            asyncio.create_task(reload_mcp_servers())
+            log_info("MCP server reload scheduled asynchronously")
+        except RuntimeError:
+            # No event loop running, create one
+            asyncio.run(reload_mcp_servers())
+
+    except Exception as e:
+        log_error(f"Failed to reload MCP servers synchronously: {e}")
+
+
+if config_manager.get("mcp.enabled", True):
+    try:
+        import asyncio
+
+        log_info("Loading MCP tools...")
+
+        # Check if we're in an event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context, schedule the coroutine
+            mcp_tools_future = asyncio.create_task(load_mcp_tools_async())
+            # For initialization, we'll load tools later in an async context
+            # For now, we'll create a placeholder that will be filled later
+            log_debug("MCP tools will be loaded asynchronously")
+        except RuntimeError:
+            # We're not in an event loop, run one
+            asyncio.run(load_mcp_tools_async())
+
+    except ImportError as e:
+        log_warning(f"MCP integration not available: {e}")
+    except Exception as e:
+        log_error(f"Failed to load MCP tools: {e}")
 
 
 def sync_tools_with_database():
@@ -159,17 +278,64 @@ for tool in tools:
 sync_tools_with_database()
 
 
+async def get_tools_async(query: str, top_k: int = 5) -> list[Callable]:
+    """
+    Async version of get_tools that ensures MCP tools are loaded.
+
+    Args:
+        query: Text to search for relevant tools
+        top_k: Number of tools to return (default 5)
+
+    Returns:
+        List of matching tool functions including MCP tools
+    """
+    # Ensure MCP tools are loaded
+    await load_mcp_tools_async()
+
+    # Use the regular get_tools function
+    return get_tools(query, top_k)
+
+
+def ensure_mcp_tools_loaded():
+    """
+    Attempt to load MCP tools if they haven't been loaded yet.
+    This is a fallback for synchronous contexts.
+    """
+
+    if not config_manager.get("mcp.enabled", True) or _mcp_tools_loaded:
+        return
+
+    try:
+        import asyncio
+
+        # Try to run in the current event loop if it exists
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context but this is a sync call
+            # We can't await here, so we'll skip for now
+            log_debug("MCP tools loading skipped - in async context, use get_tools_async() instead")
+            return
+        except RuntimeError:
+            # No event loop running, we can create one
+            asyncio.run(load_mcp_tools_async())
+
+    except Exception as e:
+        log_debug(f"Could not load MCP tools in sync context: {e}")
+
+
 def get_tools(query: str, top_k: int = 5) -> list[Callable]:
     """
     Search for relevant tools based on input text.
 
     Args:
         query: Text to search for relevant tools
-        top_k: Number of tools to return (default 3)
+        top_k: Number of tools to return (default 5)
 
     Returns:
         List of matching tool functions
     """
+    # Try to ensure MCP tools are loaded if not already
+    ensure_mcp_tools_loaded()
 
     # Search vector store
     results = store.search(("tools",), query=query, limit=top_k)
@@ -187,3 +353,38 @@ def get_tools(query: str, top_k: int = 5) -> list[Callable]:
         if tool not in result_tools:
             result_tools.append(tool)
     return result_tools
+
+
+# Tool management functions - exposed for external use
+def get_mcp_status():
+    """Get the current status of MCP integration."""
+    try:
+        from app.langgraph.mcp_client import mcp_client_manager
+
+        # Count MCP tools
+        mcp_tool_count = 0
+        mcp_tool_names = []
+        if mcp_client_manager.is_initialized:
+            current_mcp_tools = mcp_client_manager.get_tools()
+            mcp_tool_count = len(current_mcp_tools)
+            mcp_tool_names = [tool.name for tool in current_mcp_tools]
+
+        return {
+            "enabled": config_manager.get("mcp.enabled", True),
+            "initialized": mcp_client_manager.is_initialized,
+            "tools_loaded": _mcp_tools_loaded,
+            "tool_count": mcp_tool_count,
+            "tool_names": mcp_tool_names,
+            "servers_configured": list(config_manager.get("mcp.servers", {}).keys()),
+        }
+    except Exception as e:
+        log_error(f"Failed to get MCP status: {e}")
+        return {
+            "enabled": config_manager.get("mcp.enabled", True),
+            "initialized": False,
+            "tools_loaded": False,
+            "tool_count": 0,
+            "tool_names": [],
+            "servers_configured": [],
+            "error": str(e),
+        }
