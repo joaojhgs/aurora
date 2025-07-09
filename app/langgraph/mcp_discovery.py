@@ -257,11 +257,7 @@ class MCPServerDiscovery:
 
     def _is_mcp_package(self, package_name: str) -> bool:
         """Check if a package name indicates an MCP server"""
-        mcp_indicators = [
-            "@modelcontextprotocol/server-",
-            "mcp-server-",
-            "mcp_server_",
-        ]
+        mcp_indicators = ["@modelcontextprotocol/server-", "mcp-server-", "mcp_server_", "mcp-", "-mcp"]
         return any(indicator in package_name.lower() for indicator in mcp_indicators)
 
     def _is_mcp_process(self, cmdline: list[str]) -> bool:
@@ -273,12 +269,18 @@ class MCPServerDiscovery:
         mcp_indicators = [
             "mcp-server",
             "mcp_server",
+            "mcp-remote",
             "@modelcontextprotocol",
             "server-filesystem",
             "server-memory",
             "server-fetch",
+            "mcp-",
+            "-mcp",
         ]
-        return any(indicator in cmdline_str for indicator in mcp_indicators)
+        isMcpProcess = any(indicator in cmdline_str for indicator in mcp_indicators)
+        if isMcpProcess:
+            print(f"{isMcpProcess}: {cmdline_str}")
+        return isMcpProcess
 
     def _extract_server_name_from_cmdline(self, cmdline: list[str]) -> Optional[str]:
         """Extract server name from command line"""
@@ -286,11 +288,15 @@ class MCPServerDiscovery:
         # Look for package names
         for arg in cmdline:
             if "@modelcontextprotocol/server-" in arg:
-                return arg.split("server-")[-1]
+                return arg.split("server-")[-1].split(" ")[0]
             elif "mcp-server-" in arg:
-                return arg.split("mcp-server-")[-1]
+                return arg.split("mcp-server-")[-1].split(" ")[0]
             elif "mcp_server_" in arg:
-                return arg.split("mcp_server_")[-1]
+                return arg.split("mcp_server_")[-1].split(" ")[0]
+            elif "mcp-" in arg:
+                return arg.split("mcp-")[-1].split(" ")[0]
+            elif "-mcp" in arg:
+                return arg.split("-mcp")[-1].split(" ")[0]
 
         return None
 

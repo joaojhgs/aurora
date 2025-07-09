@@ -17,5 +17,5 @@ if config_manager.get("plugins.gcalendar.activate"):
 google_credentials = get_google_credentials(
     token_file=None,
     scopes=scopes,
-    client_secrets_file=config_manager.get("google.credentials_file"),
+    client_secrets_file=config_manager.get("plugins.google.credentials_file"),
 )
