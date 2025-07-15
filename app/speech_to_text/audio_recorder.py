@@ -79,6 +79,10 @@ INIT_WAKE_WORD_TIMEOUT = 5.0
 INIT_WAKE_WORD_BUFFER_DURATION = 0.1
 ALLOWED_LATENCY_LIMIT = 100
 
+# Ambient transcription defaults
+INIT_AMBIENT_TRANSCRIPTION_INTERVAL = 300  # 5 minutes
+INIT_AMBIENT_BUFFER_DURATION = 30  # 30 seconds of audio to transcribe
+
 TIME_SLEEP = 0.02
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 512
@@ -300,6 +304,11 @@ class AudioToTextRecorder:
         no_log_file: bool = False,
         use_extended_logging: bool = False,
         openwakeword_speedx_noise_reduction: bool = False,
+        # Ambient transcription parameters
+        enable_ambient_transcription: bool = False,
+        ambient_transcription_interval: float = INIT_AMBIENT_TRANSCRIPTION_INTERVAL,
+        ambient_buffer_duration: float = INIT_AMBIENT_BUFFER_DURATION,
+        on_ambient_transcription: Optional[callable] = None,
     ):
         """
         Initializes an audio recorder and  transcription
@@ -515,6 +524,19 @@ class AudioToTextRecorder:
             log messages for the recording worker, that processes the audio
             chunks.
 
+        Ambient transcription parameters:
+        - enable_ambient_transcription (bool, default=False): Enable continuous
+            background transcription of ambient audio for day summaries.
+            Uses the same microphone stream and main transcription model.
+        - ambient_transcription_interval (float, default=300): Interval in
+            seconds between ambient transcriptions. Default is 5 minutes.
+        - ambient_buffer_duration (float, default=30): Duration in seconds
+            of rolling audio buffer to transcribe during each ambient
+            transcription. Default is 30 seconds.
+        - on_ambient_transcription (callable, default=None): Callback function
+            to handle ambient transcription results. Called with transcription
+            text and timestamp. Example: lambda text, timestamp: save_to_file(text)
+
         Raises:
             Exception: Errors related to initializing transcription
             model, wake word detection, or audio recording.
@@ -619,6 +641,15 @@ class AudioToTextRecorder:
         self.early_transcription_on_silence = early_transcription_on_silence
         self.use_extended_logging = use_extended_logging
         self.openwakeword_speedx_noise_reduction = openwakeword_speedx_noise_reduction
+
+        # Ambient transcription attributes
+        self.enable_ambient_transcription = enable_ambient_transcription
+        self.ambient_transcription_interval = ambient_transcription_interval
+        self.ambient_buffer_duration = ambient_buffer_duration
+        self.on_ambient_transcription = on_ambient_transcription
+        self.ambient_thread = None
+        self.ambient_audio_buffer = None
+        self.last_ambient_transcription_time = 0
 
         # Initialize the logging configuration with the specified level
         log_format = "RealTimeSTT: %(name)s - %(levelname)s - %(message)s"
@@ -825,6 +856,13 @@ class AudioToTextRecorder:
 
         self.audio_buffer = collections.deque(maxlen=int((self.sample_rate // self.buffer_size) * self.pre_recording_buffer_duration))
         self.last_words_buffer = collections.deque(maxlen=int((self.sample_rate // self.buffer_size) * 0.3))
+        
+        # Initialize ambient audio buffer if ambient transcription is enabled
+        if self.enable_ambient_transcription:
+            self.ambient_audio_buffer = collections.deque(
+                maxlen=int((self.sample_rate // self.buffer_size) * self.ambient_buffer_duration)
+            )
+        
         self.frames = []
         self.last_frames = []
 
@@ -843,6 +881,12 @@ class AudioToTextRecorder:
         self.realtime_thread = threading.Thread(target=self._realtime_worker)
         self.realtime_thread.daemon = True
         self.realtime_thread.start()
+
+        # Start the ambient transcription worker thread if enabled
+        if self.enable_ambient_transcription:
+            self.ambient_thread = threading.Thread(target=self._ambient_worker)
+            self.ambient_thread.daemon = True
+            self.ambient_thread.start()
 
         # Wait for transcription models to start
         logging.debug("Waiting for main transcription model to start")
@@ -1624,6 +1668,10 @@ class AudioToTextRecorder:
 
             # Feed the extracted data to the audio_queue
             self.audio_queue.put(to_process)
+            
+            # Also feed to ambient buffer if enabled
+            if self.enable_ambient_transcription and self.ambient_audio_buffer is not None:
+                self.ambient_audio_buffer.append(to_process)
 
     def set_microphone(self, microphone_on=True):
         """
@@ -1679,6 +1727,10 @@ class AudioToTextRecorder:
             logging.debug("Finishing realtime thread")
             if self.realtime_thread:
                 self.realtime_thread.join()
+
+            logging.debug("Finishing ambient thread")
+            if self.ambient_thread:
+                self.ambient_thread.join()
 
             if self.enable_realtime_transcription:
                 if self.realtime_model_type:
@@ -2059,6 +2111,10 @@ class AudioToTextRecorder:
                     if self.use_extended_logging:
                         logging.debug("Debug: Appending data to audio buffer")
                     self.audio_buffer.append(data)
+                
+                # Always feed audio to ambient buffer if enabled (for continuous background transcription)
+                if self.enable_ambient_transcription and self.ambient_audio_buffer is not None:
+                    self.ambient_audio_buffer.append(data)
 
         except Exception as e:
             logging.debug("Debug: Caught exception in main try block")
@@ -2209,6 +2265,91 @@ class AudioToTextRecorder:
 
         except Exception as e:
             logging.error(f"Unhandled exeption in _realtime_worker: {e}", exc_info=True)
+            raise
+
+    def _ambient_worker(self):
+        """
+        Performs periodic ambient transcription of background audio.
+        
+        This method runs in a separate thread and continuously transcribes
+        ambient audio at regular intervals for day summaries. It uses the same
+        main transcription model and audio input stream as the assistant.
+        
+        The method:
+        - Waits for the specified interval between transcriptions
+        - Collects audio from the ambient buffer
+        - Transcribes the audio using the main model
+        - Calls the ambient transcription callback with results
+        """
+        try:
+            logging.debug("Starting ambient transcription worker")
+            
+            # Wait for the main transcription model to be ready
+            self.main_transcription_ready_event.wait()
+            
+            self.last_ambient_transcription_time = time.time()
+            
+            while self.is_running:
+                current_time = time.time()
+                
+                # Check if it's time for the next ambient transcription
+                if current_time - self.last_ambient_transcription_time >= self.ambient_transcription_interval:
+                    
+                    # Only transcribe if we have audio data and callback is set
+                    if self.ambient_audio_buffer and self.on_ambient_transcription:
+                        try:
+                            # Copy the ambient audio buffer to avoid interference
+                            ambient_frames = list(self.ambient_audio_buffer)
+                            
+                            if ambient_frames:
+                                logging.debug(f"Performing ambient transcription with {len(ambient_frames)} frames")
+                                
+                                # Convert frames to audio array
+                                audio_array = np.frombuffer(b"".join(ambient_frames), dtype=np.int16)
+                                audio = audio_array.astype(np.float32) / INT16_MAX_ABS_VALUE
+                                
+                                # Use the main transcription model (thread-safe)
+                                with self.transcription_lock:
+                                    try:
+                                        # Send transcription request to main worker
+                                        self.parent_transcription_pipe.send((audio, self.language))
+                                        
+                                        # Wait for response with timeout
+                                        if self.parent_transcription_pipe.poll(timeout=30):
+                                            status, result = self.parent_transcription_pipe.recv()
+                                            
+                                            if status == "success":
+                                                segments, info = result
+                                                transcription = " ".join(seg.text for seg in segments).strip()
+                                                
+                                                # Preprocess the transcription
+                                                transcription = self._preprocess_output(transcription)
+                                                
+                                                if transcription:
+                                                    logging.debug(f"Ambient transcription completed: {transcription[:50]}...")
+                                                    
+                                                    # Call the callback with transcription and timestamp
+                                                    self.on_ambient_transcription(transcription, current_time)
+                                                else:
+                                                    logging.debug("Ambient transcription was empty")
+                                            else:
+                                                logging.error(f"Ambient transcription error: {result}")
+                                        else:
+                                            logging.warning("Ambient transcription timed out")
+                                    except Exception as e:
+                                        logging.error(f"Error in ambient transcription: {e}", exc_info=True)
+                                
+                        except Exception as e:
+                            logging.error(f"Error processing ambient audio: {e}", exc_info=True)
+                    
+                    # Update the last transcription time
+                    self.last_ambient_transcription_time = current_time
+                
+                # Sleep for a short time to avoid excessive CPU usage
+                time.sleep(1.0)
+                
+        except Exception as e:
+            logging.error(f"Unhandled exception in _ambient_worker: {e}", exc_info=True)
             raise
 
     def _is_silero_speech(self, chunk):
