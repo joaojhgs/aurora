@@ -97,10 +97,10 @@ runtime = [
     "croniter==6.0.0",
     
     # Web & Network
-    "requests==2.32.3",
-    "aiohttp==3.11.12",
+    "requests==2.32.4",
+    "aiohttp==3.12.14",
     "httpx==0.28.1",
-    "urllib3==2.3.0",
+    "urllib3==2.5.0",
     "duckduckgo-search==7.5.2",
     
     # Utilities
@@ -126,7 +126,7 @@ runtime = [
 # ============================================================================
 # Default CPU torch (compatible with most systems)
 torch-cpu = [
-    "torch==2.6.0",
+    "torch==2.7.1",
     "torchaudio==2.6.0",
     "torchvision==0.21.0",
 ]
@@ -176,7 +176,7 @@ rocm = [
 # Metal (Apple Silicon) acceleration support
 metal = [
     # Note: Uses CPU torch packages as Metal acceleration happens at llama-cpp-python level
-    "torch==2.6.0",
+    "torch==2.7.1",
     "torchaudio==2.6.0",
     "torchvision==0.21.0",
     "onnxruntime",
@@ -185,7 +185,7 @@ metal = [
 # Vulkan (cross-platform) acceleration support  
 vulkan = [
     # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
-    "torch==2.6.0",
+    "torch==2.7.1",
     "torchaudio==2.6.0", 
     "torchvision==0.21.0",
     "onnxruntime",
@@ -194,7 +194,7 @@ vulkan = [
 # SYCL (Intel GPU) acceleration support
 sycl = [
     # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
-    "torch==2.6.0",
+    "torch==2.7.1",
     "torchaudio==2.6.0",
     "torchvision==0.21.0", 
     "onnxruntime",
@@ -203,7 +203,7 @@ sycl = [
 # RPC (remote/distributed) acceleration support
 rpc = [
     # Note: Same as CPU setup, acceleration happens at llama-cpp-python level
-    "torch==2.6.0",
+    "torch==2.7.1",
     "torchaudio==2.6.0",
     "torchvision==0.21.0",
     "onnxruntime",
