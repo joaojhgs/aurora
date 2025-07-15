@@ -1,10 +1,12 @@
 import sys
+import os
+import datetime
 from threading import Thread
 
 from dotenv import load_dotenv
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_info
+from app.helpers.aurora_logger import log_debug, log_info, log_error
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.helpers.runAsyncInThread import run_async_in_thread
 
@@ -97,9 +99,43 @@ if __name__ == "__main__":
             # Fallback if UI isn't initialized
             run_async_in_thread(stream_graph_updates(text))
 
+    def on_ambient_transcription(text, timestamp, chunk_id):
+        """Handle ambient transcription results"""
+        try:
+            # Get configuration
+            ambient_config = config_manager.get("speech_to_text.ambient_transcription", {})
+            storage_path = ambient_config.get("storage_path", "ambient_logs/")
+            filter_short = ambient_config.get("filter_short_transcriptions", True)
+            min_length = ambient_config.get("min_transcription_length", 10)
+            
+            # Apply filtering
+            if filter_short and len(text.strip()) < min_length:
+                return
+            
+            # Create storage directory if it doesn't exist
+            os.makedirs(storage_path, exist_ok=True)
+            
+            # Save to daily log file
+            date_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
+            time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
+            
+            log_file = os.path.join(storage_path, f"ambient_{date_str}.txt")
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"[{time_str}] ({chunk_id}) {text}\n")
+                
+            log_debug(f"Ambient transcription saved: {text[:50]}...")
+            
+        except Exception as e:
+            log_error(f"Error handling ambient transcription: {e}")
+
     # Create and start the audio recorder in a separate thread
     def start_recorder():
         log_info("Starting audio recorder...")
+        
+        # Get ambient transcription configuration
+        ambient_config = config_manager.get("speech_to_text.ambient_transcription", {})
+        
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
@@ -117,6 +153,14 @@ if __name__ == "__main__":
             openwakeword_speedx_noise_reduction=config_manager.get("speech_to_text.wakeword_speedx_noise_reduction", False),
             # No need for CLI STT indication if UI is activated
             spinner=not config_manager.get("ui.activate", False),
+            
+            # Ambient transcription configuration
+            enable_ambient_transcription=ambient_config.get("enable", False),
+            ambient_chunk_duration=ambient_config.get("chunk_duration", 3.0),
+            ambient_storage_path=ambient_config.get("storage_path", "ambient_logs/"),
+            ambient_filter_short=ambient_config.get("filter_short_transcriptions", True),
+            ambient_min_length=ambient_config.get("min_transcription_length", 10),
+            on_ambient_transcription=on_ambient_transcription,
         ) as recorder:
 
             while True:

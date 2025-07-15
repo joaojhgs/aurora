@@ -1,9 +1,9 @@
 """
-Example usage of the AudioToTextRecorder with ambient transcription.
+Example usage of the AudioToTextRecorder with real-time ambient transcription.
 
-This example shows how to use the ambient transcription feature to continuously
-transcribe background audio for day summaries while maintaining the normal
-wake word detection and assistant functionality.
+This example shows how to use the new real-time ambient transcription feature
+to continuously transcribe background audio using a priority queue system while
+maintaining the normal wake word detection and assistant functionality.
 """
 import time
 import datetime
@@ -11,13 +11,14 @@ import os
 from pathlib import Path
 
 # Example storage callback for ambient transcriptions
-def save_ambient_transcription(text, timestamp):
+def save_ambient_transcription(text, timestamp, chunk_id):
     """
-    Example callback for storing ambient transcriptions.
+    Example callback for storing real-time ambient transcriptions.
     
     Args:
         text (str): The transcribed text
         timestamp (float): Unix timestamp when transcription was completed
+        chunk_id (str): Unique identifier for the audio chunk
     """
     # Create filename with date
     date_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
@@ -28,7 +29,7 @@ def save_ambient_transcription(text, timestamp):
     
     # Format the log entry
     time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
-    log_entry = f"[{time_str}] {text}\n"
+    log_entry = f"[{time_str}] ({chunk_id}) {text}\n"
     
     # Append to file
     with open(f"ambient_logs/{filename}", "a", encoding="utf-8") as f:
@@ -48,7 +49,7 @@ def main():
         """Handle regular speech-to-text results"""
         print(f"Assistant heard: {text}")
     
-    print("Starting AudioToTextRecorder with ambient transcription...")
+    print("Starting AudioToTextRecorder with real-time ambient transcription...")
     
     # Create recorder with ambient transcription enabled
     with AudioToTextRecorder(
@@ -58,10 +59,12 @@ def main():
         wakeword_backend="oww",
         wake_words_sensitivity=0.6,
         
-        # Ambient transcription configuration
+        # Real-time ambient transcription configuration
         enable_ambient_transcription=True,
-        ambient_transcription_interval=60,  # Transcribe every 60 seconds
-        ambient_buffer_duration=30,  # Use 30 seconds of audio
+        ambient_chunk_duration=3.0,  # Process audio every 3 seconds
+        ambient_storage_path="ambient_logs/",  # Directory for storage
+        ambient_filter_short=True,  # Filter out short transcriptions
+        ambient_min_length=10,  # Minimum 10 characters for transcription
         on_ambient_transcription=save_ambient_transcription,
         
         # Other settings
@@ -70,7 +73,8 @@ def main():
     ) as recorder:
         
         print("Recorder started. Say 'hey jarvis' to activate the assistant.")
-        print("Ambient transcription will save background audio every 60 seconds.")
+        print("Ambient transcription will continuously process audio in 3-second chunks.")
+        print("Ambient processing pauses when wake word is detected for better assistant responsiveness.")
         print("Press Ctrl+C to stop.")
         
         try:
@@ -87,38 +91,44 @@ def main():
 def example_configurations():
     """Show different ambient transcription configurations"""
     
-    # Basic ambient transcription (every 5 minutes)
+    # Basic real-time ambient transcription (3 seconds)
     basic_config = {
         "enable_ambient_transcription": True,
-        "ambient_transcription_interval": 300,  # 5 minutes
-        "ambient_buffer_duration": 30,  # 30 seconds
+        "ambient_chunk_duration": 3.0,  # 3 seconds
+        "ambient_storage_path": "ambient_logs/",
+        "ambient_filter_short": True,
+        "ambient_min_length": 10,
         "on_ambient_transcription": save_ambient_transcription,
     }
     
-    # Frequent ambient transcription (every 30 seconds)
+    # Frequent real-time ambient transcription (1 second)
     frequent_config = {
         "enable_ambient_transcription": True,
-        "ambient_transcription_interval": 30,  # 30 seconds
-        "ambient_buffer_duration": 15,  # 15 seconds
+        "ambient_chunk_duration": 1.0,  # 1 second
+        "ambient_storage_path": "ambient_logs/",
+        "ambient_filter_short": True,
+        "ambient_min_length": 5,
         "on_ambient_transcription": save_ambient_transcription,
     }
     
-    # Long-form ambient transcription (every 10 minutes)
-    longform_config = {
+    # Slower real-time ambient transcription (10 seconds)
+    slower_config = {
         "enable_ambient_transcription": True,
-        "ambient_transcription_interval": 600,  # 10 minutes
-        "ambient_buffer_duration": 60,  # 1 minute
+        "ambient_chunk_duration": 10.0,  # 10 seconds
+        "ambient_storage_path": "ambient_logs/",
+        "ambient_filter_short": True,
+        "ambient_min_length": 15,
         "on_ambient_transcription": save_ambient_transcription,
     }
     
     return {
         "basic": basic_config,
         "frequent": frequent_config,
-        "longform": longform_config,
+        "slower": slower_config,
     }
 
 # Advanced storage callback with filtering
-def filtered_ambient_callback(text, timestamp):
+def filtered_ambient_callback(text, timestamp, chunk_id):
     """
     Advanced ambient transcription callback with filtering.
     
@@ -136,20 +146,25 @@ def filtered_ambient_callback(text, timestamp):
         "silence",
         "background",
         "static",
+        "hmm",
+        "uh",
+        "um",
     ]
     
     text_lower = text.lower()
     if any(pattern in text_lower for pattern in noise_patterns):
         return
     
-    # Skip if the text is repetitive (same as last few entries)
-    # This would require maintaining state between calls
+    # Skip very repetitive text (single words repeated)
+    words = text.split()
+    if len(words) > 1 and len(set(words)) == 1:
+        return
     
     # Save meaningful transcriptions
-    save_ambient_transcription(text, timestamp)
+    save_ambient_transcription(text, timestamp, chunk_id)
 
 # Database storage example
-def database_storage_callback(text, timestamp):
+def database_storage_callback(text, timestamp, chunk_id):
     """
     Example callback that stores ambient transcriptions in a database.
     """
@@ -170,18 +185,20 @@ def database_storage_callback(text, timestamp):
             text TEXT NOT NULL,
             timestamp REAL NOT NULL,
             datetime TEXT NOT NULL,
+            chunk_id TEXT NOT NULL,
             length INTEGER NOT NULL
         )
     """)
     
     # Insert transcription
     cursor.execute("""
-        INSERT INTO ambient_transcriptions (text, timestamp, datetime, length)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO ambient_transcriptions (text, timestamp, datetime, chunk_id, length)
+        VALUES (?, ?, ?, ?, ?)
     """, (
         text,
         timestamp,
         datetime.fromtimestamp(timestamp).isoformat(),
+        chunk_id,
         len(text)
     ))
     
