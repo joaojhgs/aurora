@@ -2116,7 +2116,8 @@ class AudioToTextRecorder:
                         if not self.speech_end_silence_start:
                             str_speech_end_silence_start = "0"
                         else:
-                            str_speech_end_silence_start = datetime.datetime.fromtimestamp(self.speech_end_silence_start).strftime("%H:%M:%S.%f")[:-3]
+                            timestamp = datetime.datetime.fromtimestamp(self.speech_end_silence_start)
+                            str_speech_end_silence_start = timestamp.strftime("%H:%M:%S.%f")[:-3]
                         if self.use_extended_logging:
                             logging.debug(f"is_speech: {is_speech}, str_speech_end_silence_start: {str_speech_end_silence_start}")
 
