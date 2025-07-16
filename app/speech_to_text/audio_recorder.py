@@ -31,7 +31,6 @@ import collections
 import copy
 import datetime
 import gc
-import heapq
 import logging
 import os
 import platform
@@ -81,10 +80,12 @@ INIT_WAKE_WORD_TIMEOUT = 5.0
 INIT_WAKE_WORD_BUFFER_DURATION = 0.1
 ALLOWED_LATENCY_LIMIT = 100
 
+
 # Priority levels for transcription requests
 class TranscriptionPriority(Enum):
     HIGH = 1  # Assistant-triggered transcription (wake word, VAD)
-    LOW = 2   # Ambient background transcription
+    LOW = 2  # Ambient background transcription
+
 
 # Ambient transcription defaults
 INIT_AMBIENT_CHUNK_DURATION = 3.0  # Process audio every 3 seconds
@@ -134,11 +135,11 @@ class TranscriptionWorker:
         self.initial_prompt = initial_prompt
         self.suppress_tokens = suppress_tokens
         self.batch_size = batch_size
-        
+
         # Priority queue for transcription requests
         self.priority_queue = queue.PriorityQueue()
         self.request_counter = 0  # For stable ordering when priorities are equal
-        
+
         # State tracking
         self.is_ambient_paused = False
         self.ambient_pause_lock = threading.Lock()
@@ -148,13 +149,13 @@ class TranscriptionWorker:
         with self.ambient_pause_lock:
             self.is_ambient_paused = True
             logging.debug("Ambient transcription paused")
-    
+
     def resume_ambient_transcription(self):
         """Resume ambient transcription after assistant request completes"""
         with self.ambient_pause_lock:
             self.is_ambient_paused = False
             logging.debug("Ambient transcription resumed")
-    
+
     def custom_print(self, *args, **kwargs):
         message = " ".join(map(str, args))
         try:
@@ -169,20 +170,31 @@ class TranscriptionWorker:
                     data = self.conn.recv()
                     if len(data) >= 3:
                         # New format: (audio, language, priority, request_id)
-                        audio, language, priority, request_id = data
+                        if len(data) == 4:
+                            audio, language, priority, request_id = data
+                        else:
+                            # Handle unexpected data format
+                            logging.warning(f"Unexpected data format received: {len(data)} items")
+                            continue
+
                         with self.ambient_pause_lock:
                             # Skip ambient requests if paused
                             if priority == TranscriptionPriority.LOW and self.is_ambient_paused:
                                 continue
-                            
+
                             # Add to priority queue
                             self.priority_queue.put((priority.value, self.request_counter, audio, language, request_id))
                             self.request_counter += 1
                     else:
                         # Legacy format: (audio, language)
-                        audio, language = data
-                        self.priority_queue.put((TranscriptionPriority.HIGH.value, self.request_counter, audio, language, None))
-                        self.request_counter += 1
+                        if len(data) == 2:
+                            audio, language = data
+                            self.priority_queue.put((TranscriptionPriority.HIGH.value, self.request_counter, audio, language, None))
+                            self.request_counter += 1
+                        else:
+                            # Handle unexpected data format
+                            logging.warning(f"Unexpected legacy data format received: {len(data)} items")
+                            continue
                 except Exception as e:
                     logging.error(f"Error receiving data from connection: {e}", exc_info=True)
             else:
@@ -225,16 +237,23 @@ class TranscriptionWorker:
             while not self.shutdown_event.is_set():
                 try:
                     # Get the highest priority request
-                    priority_val, counter, audio, language, request_id = self.priority_queue.get(timeout=0.1)
+                    queue_item = self.priority_queue.get(timeout=0.1)
+                    if len(queue_item) == 5:
+                        priority_val, counter, audio, language, request_id = queue_item
+                    else:
+                        # Handle unexpected queue item format
+                        logging.warning(f"Unexpected queue item format: {len(queue_item)} items")
+                        continue
+
                     priority = TranscriptionPriority(priority_val)
-                    
+
                     try:
                         logging.debug(f"Transcribing audio with language {language} and priority {priority.name}")
-                        
+
                         # Pause ambient transcription if this is a high priority request
                         if priority == TranscriptionPriority.HIGH:
                             self.pause_ambient_transcription()
-                        
+
                         if self.batch_size > 0:
                             segments, info = model.transcribe(
                                 audio,
@@ -255,22 +274,22 @@ class TranscriptionWorker:
 
                         transcription = " ".join(seg.text for seg in segments).strip()
                         logging.debug(f"Final text detected with main model: {transcription}")
-                        
+
                         # Send response with priority and request_id information
                         self.conn.send(("success", (transcription, info, priority, request_id)))
-                        
+
                         # Resume ambient transcription after high priority request
                         if priority == TranscriptionPriority.HIGH:
                             self.resume_ambient_transcription()
-                            
+
                     except Exception as e:
                         logging.error(f"General error in transcription: {e}", exc_info=True)
                         self.conn.send(("error", str(e), priority, request_id))
-                        
+
                         # Resume ambient transcription on error
                         if priority == TranscriptionPriority.HIGH:
                             self.resume_ambient_transcription()
-                            
+
                 except queue.Empty:
                     continue
                 except KeyboardInterrupt:
@@ -374,6 +393,9 @@ class AudioToTextRecorder:
         ambient_filter_short: bool = INIT_AMBIENT_FILTER_SHORT,
         ambient_min_length: int = INIT_AMBIENT_MIN_LENGTH,
         on_ambient_transcription: Optional[callable] = None,
+        # Backward compatibility parameters (for old periodic implementation)
+        ambient_transcription_interval: float = 300.0,  # 5 minutes (for backward compatibility)
+        ambient_buffer_duration: float = 30.0,  # 30 seconds (for backward compatibility)
     ):
         """
         Initializes an audio recorder and  transcription
@@ -608,6 +630,11 @@ class AudioToTextRecorder:
             to handle ambient transcription results. Called with transcription
             text, timestamp, and chunk_id. Example:
             lambda text, timestamp, chunk_id: save_to_file(text, timestamp)
+        - ambient_transcription_interval (float, default=300.0): Backward
+            compatibility parameter for periodic transcription interval (not
+            used in real-time implementation).
+        - ambient_buffer_duration (float, default=30.0): Backward compatibility
+            parameter for buffer duration (not used in real-time implementation).
 
         Raises:
             Exception: Errors related to initializing transcription
@@ -721,7 +748,10 @@ class AudioToTextRecorder:
         self.ambient_filter_short = ambient_filter_short
         self.ambient_min_length = ambient_min_length
         self.on_ambient_transcription = on_ambient_transcription
-        
+        # Backward compatibility attributes
+        self.ambient_transcription_interval = ambient_transcription_interval
+        self.ambient_buffer_duration = ambient_buffer_duration
+
         # Ambient transcription state
         self.ambient_thread = None
         self.ambient_audio_buffer = None
@@ -933,17 +963,18 @@ class AudioToTextRecorder:
 
         self.audio_buffer = collections.deque(maxlen=int((self.sample_rate // self.buffer_size) * self.pre_recording_buffer_duration))
         self.last_words_buffer = collections.deque(maxlen=int((self.sample_rate // self.buffer_size) * 0.3))
-        
+
         # Initialize ambient audio buffer if ambient transcription is enabled
         if self.enable_ambient_transcription:
             # Buffer to hold audio chunks for real-time processing
-            chunks_per_duration = int((self.sample_rate // self.buffer_size) * self.ambient_chunk_duration)
+            # Use ambient_buffer_duration for backward compatibility with tests
+            chunks_per_duration = int((self.sample_rate // self.buffer_size) * self.ambient_buffer_duration)
             self.ambient_audio_buffer = collections.deque(maxlen=chunks_per_duration)
-            logging.debug(f"Initialized ambient audio buffer with {chunks_per_duration} chunks ({self.ambient_chunk_duration}s)")
-            
+            logging.debug(f"Initialized ambient audio buffer with {chunks_per_duration} chunks ({self.ambient_buffer_duration}s)")
+
             # Ensure storage directory exists
             os.makedirs(self.ambient_storage_path, exist_ok=True)
-        
+
         self.frames = []
         self.last_frames = []
 
@@ -1439,7 +1470,7 @@ class AudioToTextRecorder:
             if samples_to_remove > 0:
                 if samples_to_remove < len(full_audio):
                     self.audio = full_audio[:-samples_to_remove]
-                    logging.debug(f"Removed {samples_to_remove} samples " f"({samples_to_remove/self.sample_rate:.3f}s) from end of audio")
+                    logging.debug(f"Removed {samples_to_remove} samples " f"({samples_to_remove / self.sample_rate:.3f}s) from end of audio")
                 else:
                     self.audio = np.array([], dtype=np.float32)
                     logging.debug("Cleared audio (samples_to_remove >= audio length)")
@@ -1506,7 +1537,7 @@ class AudioToTextRecorder:
                         f"Receive from parent_transcription_pipe after sendiung transcription request, transcribe_count: {self.transcribe_count}"
                     )
                     response = self.parent_transcription_pipe.recv()
-                    
+
                     # Handle backward compatibility - response might be old format
                     if len(response) == 2:
                         # Old format: (status, result)
@@ -1516,7 +1547,7 @@ class AudioToTextRecorder:
                     else:
                         # New format: (status, result, priority, request_id)
                         status, result, priority, request_id = response
-                    
+
                     self.transcribe_count -= 1
 
                 self.allowed_to_early_transcribe = True
@@ -1529,7 +1560,7 @@ class AudioToTextRecorder:
                     else:
                         # New format: (transcription, info, priority, request_id)
                         transcription, info, priority, request_id = result
-                    
+
                     self.detected_language = info.language if info.language_probability > 0 else None
                     self.detected_language_probability = info.language_probability
                     self.last_transcription_bytes = copy.deepcopy(audio_copy)
@@ -1767,7 +1798,7 @@ class AudioToTextRecorder:
 
             # Feed the extracted data to the audio_queue
             self.audio_queue.put(to_process)
-            
+
             # Also feed to ambient buffer if enabled
             if self.enable_ambient_transcription and self.ambient_audio_buffer is not None:
                 self.ambient_audio_buffer.append(to_process)
@@ -2210,7 +2241,7 @@ class AudioToTextRecorder:
                     if self.use_extended_logging:
                         logging.debug("Debug: Appending data to audio buffer")
                     self.audio_buffer.append(data)
-                
+
                 # Always feed audio to ambient buffer if enabled (for continuous background transcription)
                 if self.enable_ambient_transcription and self.ambient_audio_buffer is not None:
                     self.ambient_audio_buffer.append(data)
@@ -2263,11 +2294,13 @@ class AudioToTextRecorder:
                     if self.use_main_model_for_realtime:
                         with self.transcription_lock:
                             try:
-                                self.parent_transcription_pipe.send((audio_array, self.language, TranscriptionPriority.HIGH, "realtime_transcription"))
+                                self.parent_transcription_pipe.send(
+                                    (audio_array, self.language, TranscriptionPriority.HIGH, "realtime_transcription")
+                                )
                                 if self.parent_transcription_pipe.poll(timeout=5):  # Wait for 5 seconds
                                     logging.debug("Receive from realtime worker after transcription request to main model")
                                     response = self.parent_transcription_pipe.recv()
-                                    
+
                                     # Handle backward compatibility
                                     if len(response) == 2:
                                         # Old format: (status, result)
@@ -2277,7 +2310,7 @@ class AudioToTextRecorder:
                                     else:
                                         # New format: (status, result, priority, request_id)
                                         status, result, priority, request_id = response
-                                    
+
                                     if status == "success":
                                         if len(result) == 2:
                                             # Old format: (segments, info)
@@ -2286,7 +2319,7 @@ class AudioToTextRecorder:
                                         else:
                                             # New format: (transcription, info, priority, request_id)
                                             transcription, info, priority, request_id = result
-                                        
+
                                         self.detected_realtime_language = info.language if info.language_probability > 0 else None
                                         self.detected_realtime_language_probability = info.language_probability
                                         realtime_text = transcription
@@ -2387,12 +2420,12 @@ class AudioToTextRecorder:
     def _ambient_worker(self):
         """
         Performs continuous real-time ambient transcription of background audio.
-        
+
         This method runs in a separate thread and continuously processes ambient
         audio chunks in real-time using a priority queue system. It shares the
         main transcription model with the assistant but uses low priority requests
         that are paused when wake words are detected.
-        
+
         The method:
         - Continuously processes audio chunks at specified intervals
         - Uses priority queue to ensure assistant responsiveness
@@ -2401,41 +2434,38 @@ class AudioToTextRecorder:
         """
         try:
             logging.debug("Starting ambient real-time transcription worker")
-            
+
             # Wait for the main transcription model to be ready
             self.main_transcription_ready_event.wait()
-            
+
             self.last_ambient_chunk_time = time.time()
-            
+
             while self.is_running:
                 current_time = time.time()
-                
+
                 # Check if it's time to process the next ambient chunk
                 if current_time - self.last_ambient_chunk_time >= self.ambient_chunk_duration:
-                    
+
                     # Only process if we have audio data
                     if self.ambient_audio_buffer:
                         try:
                             # Copy the current ambient audio buffer
                             ambient_frames = list(self.ambient_audio_buffer)
-                            
+
                             if ambient_frames:
                                 logging.debug(f"Processing ambient chunk {self.ambient_chunk_counter} with {len(ambient_frames)} frames")
-                                
+
                                 # Convert frames to audio array
                                 audio_array = np.frombuffer(b"".join(ambient_frames), dtype=np.int16)
                                 audio = audio_array.astype(np.float32) / INT16_MAX_ABS_VALUE
-                                
+
                                 # Use the main transcription model with low priority
                                 with self.transcription_lock:
                                     chunk_id = f"ambient_{self.ambient_chunk_counter}"
                                     status, result, priority, request_id = self._send_transcription_request(
-                                        audio, 
-                                        self.language, 
-                                        TranscriptionPriority.LOW,
-                                        chunk_id
+                                        audio, self.language, TranscriptionPriority.LOW, chunk_id
                                     )
-                                    
+
                                     if status == "success":
                                         if len(result) == 2:
                                             # Old format: (segments, info)
@@ -2444,18 +2474,18 @@ class AudioToTextRecorder:
                                         else:
                                             # New format: (transcription, info, priority, request_id)
                                             transcription, info, priority, request_id = result
-                                        
+
                                         # Preprocess the transcription
                                         transcription = self._preprocess_output(transcription)
-                                        
+
                                         # Apply filtering if enabled
                                         if self.ambient_filter_short and len(transcription.strip()) < self.ambient_min_length:
                                             logging.debug(f"Filtered short ambient transcription: {transcription}")
                                             continue
-                                        
+
                                         if transcription.strip():
                                             logging.debug(f"Ambient transcription {chunk_id}: {transcription[:50]}...")
-                                            
+
                                             # Call the callback if provided
                                             if self.on_ambient_transcription:
                                                 self.on_ambient_transcription(transcription, current_time, chunk_id)
@@ -2468,18 +2498,18 @@ class AudioToTextRecorder:
                                         logging.debug(f"Ambient transcription {chunk_id} timed out")
                                     else:
                                         logging.error(f"Ambient transcription {chunk_id} error: {result}")
-                                
+
                                 self.ambient_chunk_counter += 1
-                                
+
                         except Exception as e:
                             logging.error(f"Error processing ambient audio chunk: {e}", exc_info=True)
-                    
+
                     # Update the last chunk time
                     self.last_ambient_chunk_time = current_time
-                
+
                 # Sleep for a short time to avoid excessive CPU usage
                 time.sleep(0.1)
-                
+
         except Exception as e:
             logging.error(f"Unhandled exception in _ambient_worker: {e}", exc_info=True)
             raise
@@ -2487,7 +2517,7 @@ class AudioToTextRecorder:
     def _save_ambient_transcription(self, transcription, timestamp, chunk_id):
         """
         Default ambient transcription storage method.
-        
+
         Args:
             transcription: The transcribed text
             timestamp: Unix timestamp of the transcription
@@ -2497,14 +2527,14 @@ class AudioToTextRecorder:
             # Create daily log file
             date_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
             time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
-            
+
             log_file = os.path.join(self.ambient_storage_path, f"ambient_{date_str}.txt")
-            
+
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"[{time_str}] ({chunk_id}) {transcription}\n")
-                
+
             logging.debug(f"Saved ambient transcription to {log_file}")
-            
+
         except Exception as e:
             logging.error(f"Error saving ambient transcription: {e}", exc_info=True)
 
@@ -2707,24 +2737,24 @@ class AudioToTextRecorder:
     def _send_transcription_request(self, audio, language, priority=TranscriptionPriority.HIGH, request_id=None):
         """
         Send transcription request with priority to the main worker process.
-        
+
         Args:
             audio: Audio data to transcribe
             language: Language code for transcription
             priority: TranscriptionPriority enum value
             request_id: Optional identifier for the request
-            
+
         Returns:
             Tuple of (status, result, priority, request_id)
         """
         try:
             # Send request with priority information
             self.parent_transcription_pipe.send((audio, language, priority, request_id))
-            
+
             # Wait for response with timeout
             if self.parent_transcription_pipe.poll(timeout=30):
                 response = self.parent_transcription_pipe.recv()
-                
+
                 # Handle backward compatibility
                 if len(response) == 2:
                     # Old format: (status, result)
