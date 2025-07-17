@@ -204,12 +204,7 @@ class MCPClientManager:
             error_str = str(e)
             if "401 Unauthorized" in error_str:
                 log_error("MCP server authentication failed (401 Unauthorized)")
-                if "atlassian.com" in error_str:
-                    log_error("This Atlassian MCP server requires authentication.")
-                    log_error("Recommended solution: Use 'stdio' transport with 'mcp-remote' instead of direct SSE.")
-                    log_error("Example config: transport='stdio', command='npm', args=['exec', 'mcp-remote', 'https://mcp.atlassian.com/v1/sse']")
-                else:
-                    log_error("The MCP server requires authentication headers. Add them to the 'headers' section in config.")
+                log_error("The MCP server requires authentication headers. Add them to the 'headers' section in config.")
             elif "Connection refused" in error_str or "Failed to connect" in error_str:
                 log_error("Failed to connect to MCP server. Check if the server is running and accessible.")
             elif "TimeoutError" in error_str or "timeout" in error_str.lower():
