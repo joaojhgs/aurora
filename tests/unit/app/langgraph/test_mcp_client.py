@@ -270,7 +270,10 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_load_tools_failure(self, mcp_manager, config_manager):
         """Test handling of tool loading failures."""
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": {"test": {"enabled": True}}}.get(key, default)
+        config_manager.get.side_effect = lambda key, default=None: {
+            "mcp.enabled": True,
+            "mcp.servers": {"test": {"enabled": True, "transport": "stdio", "command": "test-command"}},
+        }.get(key, default)
 
         mock_client = AsyncMock()
         mock_client.get_tools.side_effect = Exception("Tool loading failed")

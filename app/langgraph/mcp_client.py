@@ -73,6 +73,9 @@ class MCPClientManager:
                     self._client = MultiServerMCPClient(client_config)
                     log_debug("MultiServerMCPClient created successfully")
 
+                    # Mark as initialized after successful client creation
+                    self._initialized = True
+
                     # Load tools from all servers
                     log_debug("Loading tools from MCP servers...")
                     await self._load_tools()
@@ -90,6 +93,7 @@ class MCPClientManager:
                         log_debug(f"Error during client cleanup: {close_e}")
                     finally:
                         self._client = None
+                        self._initialized = False
                 return
             except Exception as e:
                 log_error(f"Failed to create MCP client or load tools: {e}")
@@ -107,9 +111,9 @@ class MCPClientManager:
                         log_debug(f"Error during client cleanup: {close_e}")
                     finally:
                         self._client = None
+                        self._initialized = False
                 return
 
-            self._initialized = True
             log_info(f"MCP client initialized successfully with {len(self._tools)} tools")
 
         except ImportError as e:

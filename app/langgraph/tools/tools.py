@@ -92,6 +92,65 @@ _mcp_tools_loaded = False
 tool_lookup: dict[str, Callable] = {}
 
 
+def sync_tools_with_database():
+    """
+    Synchronize the tools database with the currently active tools.
+    - Add new tools that are active but not in database
+    - Remove tools that are in database but no longer active
+    - Update existing tools if their descriptions changed
+    """
+    log_info("Synchronizing tools with database...")
+
+    # Get currently active tools
+    active_tools = {}
+    for tool in tools:
+        active_tools[tool.name] = {"name": tool.name, "description": tool.description}
+
+    log_debug(f"DEBUG: Found {len(active_tools)} active tools:")
+    for name in active_tools.keys():
+        log_debug(f"  - '{name}'")
+
+    # Get existing tools from database
+    try:
+        existing_items = store.retrieve_items(("tools",), limit=1000)  # Get all tools
+        existing_tools = {item.key: item.value for item in existing_items}
+        log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
+        for name in existing_tools.keys():
+            log_debug(f"  - '{name}'")
+    except Exception as e:
+        log_error(f"Error getting existing tools from database: {e}")
+        existing_tools = {}
+
+    # Find tools to add (active but not in database)
+    tools_to_add = []
+    for name, tool_data in active_tools.items():
+        if name not in existing_tools:
+            tools_to_add.append((name, tool_data))
+        elif existing_tools[name].get("description") != tool_data["description"]:
+            # Tool exists but description changed - update it
+            log_info(f"Updating tool '{name}' with new description")
+            store.put(("tools",), name, tool_data, ["name", "description"])
+
+    # Find tools to remove (in database but not active)
+    tools_to_remove = []
+    for name in existing_tools.keys():
+        if name not in active_tools:
+            tools_to_remove.append(name)
+            log_debug(f"DEBUG: Will remove '{name}' (not in active tools)")
+
+    # Add new tools
+    for name, tool_data in tools_to_add:
+        log_info(f"Adding new tool to database: {name}")
+        store.put(("tools",), name, tool_data, ["name", "description"])
+
+    # Remove inactive tools
+    for name in tools_to_remove:
+        log_info(f"Removing inactive tool from database: {name}")
+        store.delete(("tools",), name)
+
+    log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
+
+
 async def load_mcp_tools_async():
     """Load MCP tools asynchronously and add them to the tool system."""
     global _mcp_tools_loaded
@@ -137,9 +196,8 @@ async def load_mcp_tools_async():
                     tool_lookup[tool.name] = tool
 
             log_info(f"Added {len(mcp_tools)} MCP tools to tool system")
-
-            # Resync database with new tools - call it later after the function is defined
-            # sync_tools_with_database()  # Will be called at the end of module loading
+            # Resync database with new tools
+            sync_tools_with_database()
             _mcp_tools_loaded = True
         else:
             log_info("No MCP tools were loaded - this may be normal if servers require authentication")
@@ -234,65 +292,6 @@ if config_manager.get("mcp.enabled", True):
     except Exception as e:
         log_error(f"Failed to setup MCP tools: {e}")
         log_info("MCP tools will be loaded on-demand when first requested")
-
-
-def sync_tools_with_database():
-    """
-    Synchronize the tools database with the currently active tools.
-    - Add new tools that are active but not in database
-    - Remove tools that are in database but no longer active
-    - Update existing tools if their descriptions changed
-    """
-    log_info("Synchronizing tools with database...")
-
-    # Get currently active tools
-    active_tools = {}
-    for tool in tools:
-        active_tools[tool.name] = {"name": tool.name, "description": tool.description}
-
-    log_debug(f"DEBUG: Found {len(active_tools)} active tools:")
-    for name in active_tools.keys():
-        log_debug(f"  - '{name}'")
-
-    # Get existing tools from database
-    try:
-        existing_items = store.retrieve_items(("tools",), limit=1000)  # Get all tools
-        existing_tools = {item.key: item.value for item in existing_items}
-        log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
-        for name in existing_tools.keys():
-            log_debug(f"  - '{name}'")
-    except Exception as e:
-        log_error(f"Error getting existing tools from database: {e}")
-        existing_tools = {}
-
-    # Find tools to add (active but not in database)
-    tools_to_add = []
-    for name, tool_data in active_tools.items():
-        if name not in existing_tools:
-            tools_to_add.append((name, tool_data))
-        elif existing_tools[name].get("description") != tool_data["description"]:
-            # Tool exists but description changed - update it
-            log_info(f"Updating tool '{name}' with new description")
-            store.put(("tools",), name, tool_data, ["name", "description"])
-
-    # Find tools to remove (in database but not active)
-    tools_to_remove = []
-    for name in existing_tools.keys():
-        if name not in active_tools:
-            tools_to_remove.append(name)
-            log_debug(f"DEBUG: Will remove '{name}' (not in active tools)")
-
-    # Add new tools
-    for name, tool_data in tools_to_add:
-        log_info(f"Adding new tool to database: {name}")
-        store.put(("tools",), name, tool_data, ["name", "description"])
-
-    # Remove inactive tools
-    for name in tools_to_remove:
-        log_info(f"Removing inactive tool from database: {name}")
-        store.delete(("tools",), name)
-
-    log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
 
 # Build tool lookup table
