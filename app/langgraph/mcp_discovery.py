@@ -279,7 +279,7 @@ class MCPServerDiscovery:
         ]
         isMcpProcess = any(indicator in cmdline_str for indicator in mcp_indicators)
         if isMcpProcess:
-            print(f"{isMcpProcess}: {cmdline_str}")
+            log_debug(f"MCP process detected: {isMcpProcess}, Command line: {cmdline_str}")
         return isMcpProcess
 
     def _extract_server_name_from_cmdline(self, cmdline: list[str]) -> Optional[str]:
