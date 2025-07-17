@@ -16,6 +16,7 @@ class ConfigManager:
 
     _instance = None
     _lock = Lock()
+    _schema = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -37,6 +38,7 @@ class ConfigManager:
     def load_config(self):
         """Load configuration from JSON file, create default if not exists"""
         try:
+            self._schema = self._get_config_schema()  # Ensure schema is loaded
             if os.path.exists(self.config_file):
                 with open(self.config_file) as f:
                     config_data = json.load(f)
@@ -48,17 +50,14 @@ class ConfigManager:
                     log_info("Configuration loaded and validated from config.json")
                 except ValidationError as e:
                     log_error(f"Configuration validation failed: {e.message}")
-                    log_warning("Using default configuration due to validation errors")
-                    self._config = self._get_default_config()
-                    self.save_config()  # Save the valid default config
-
+                    raise RuntimeError(f"Configuration validation failed: {e.message}")
             else:
                 self._config = self._get_default_config()
                 self.save_config()
                 log_info("Created default configuration file")
         except Exception as e:
             log_error(f"Error loading config: {e}")
-            self._config = self._get_default_config()
+            raise RuntimeError(f"Error loading config: {e}")
 
     def save_config(self):
         """Save current configuration to JSON file"""
@@ -237,6 +236,7 @@ class ConfigManager:
             "ui": {"activate": False, "dark_mode": False, "debug": False},
             # Plugins configuration
             "plugins": {
+                "google": {"credentials_file": "google_credentials.json"},
                 "jira": {
                     "activate": False,
                     "api_token": "",
@@ -275,8 +275,35 @@ class ConfigManager:
                     # }
                 },
             },
-            "google": {"credentials_file": "google_credentials.json"},
         }
+
+    def clean_empty_strings(self, save: bool = True) -> int:
+        """Remove empty string values from configuration and return count of cleaned fields"""
+
+        def clean_dict(d: dict) -> int:
+            cleaned = 0
+            keys_to_remove = []
+
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    cleaned += clean_dict(value)
+                elif isinstance(value, str) and value.strip() == "":
+                    keys_to_remove.append(key)
+                    cleaned += 1
+
+            for key in keys_to_remove:
+                del d[key]
+
+            return cleaned
+
+        with self.config_lock:
+            cleaned_count = clean_dict(self._config)
+
+            if cleaned_count > 0 and save:
+                self.save_config()
+                log_info(f"Cleaned {cleaned_count} empty string fields from configuration")
+
+            return cleaned_count
 
     def migrate_from_env(self):
         """Migrate existing environment variables to config.json"""
@@ -375,6 +402,7 @@ class ConfigManager:
         try:
             with open(schema_path) as f:
                 return json.load(f)
+
         except Exception as e:
             log_error(f"Failed to load config schema from {schema_path}: {e}")
             return {}
@@ -382,54 +410,64 @@ class ConfigManager:
     def get_field_metadata(self) -> dict[str, dict[str, Any]]:
         """Extract field metadata from the configuration schema for UI generation"""
         metadata = {}
+        self._schema = self._get_config_schema()  # Ensure schema is loaded
 
         def extract_metadata(schema: dict, path: str = ""):
             """Recursively extract metadata from schema"""
+            # If 'properties' is present, iterate through them
             if "properties" in schema:
                 for key, prop in schema["properties"].items():
                     current_path = f"{path}.{key}" if path else key
 
-                    # Extract field metadata
-                    field_meta = {}
+                    # Start with a copy of all properties (excluding nested dicts)
+                    field_meta = {k: v for k, v in prop.items() if not isinstance(v, dict)}
 
-                    # Map JSON schema types to UI types
-                    json_type = prop.get("type", "string")
-                    if json_type == "boolean":
-                        field_meta["type"] = "bool"
-                    elif json_type == "integer":
-                        field_meta["type"] = "int"
-                    elif json_type == "number":
-                        field_meta["type"] = "float"
-                    elif json_type == "string":
-                        if "enum" in prop or "ui_choices" in prop:
-                            field_meta["type"] = "choice"
-                            # Use ui_choices if available, otherwise use enum
-                            field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+                    # Determine UI type - prioritize ui_type over JSON schema type mapping
+                    if "ui_type" in prop:
+                        # Use explicit ui_type when specified
+                        field_meta["type"] = prop["ui_type"]
+                    else:
+                        # Map JSON schema types to UI types
+                        json_type = prop.get("type", "string")
+                        if json_type == "boolean":
+                            field_meta["type"] = "bool"
+                        elif json_type == "integer":
+                            field_meta["type"] = "int"
+                        elif json_type == "number":
+                            field_meta["type"] = "float"
+                        elif json_type == "string":
+                            if "enum" in prop or "ui_choices" in prop:
+                                field_meta["type"] = "choice"
+                                # Use ui_choices if available, otherwise use enum
+                                field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+                            else:
+                                field_meta["type"] = "string"
+                        elif json_type == "object":
+                            field_meta["type"] = "dict"
+                        elif json_type == "array":
+                            field_meta["type"] = "list"
                         else:
                             field_meta["type"] = "string"
-                    elif json_type == "object":
-                        field_meta["type"] = "dict"
-                    elif json_type == "array":
-                        field_meta["type"] = "list"
 
-                    # Extract constraints
+                    # Handle choices for choice type fields (in case ui_type="choice" is used)
+                    if field_meta["type"] == "choice" and "choices" not in field_meta:
+                        field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+
+                    # Extract constraints with consistent naming
                     if "minimum" in prop:
                         field_meta["min"] = prop["minimum"]
                     if "maximum" in prop:
                         field_meta["max"] = prop["maximum"]
 
-                    # Extract description
-                    if "description" in prop:
-                        field_meta["description"] = prop["description"]
-
-                    # Special handling flags
-                    if "ui_expand_dict" in prop:
-                        field_meta["expand_dict"] = prop["ui_expand_dict"]
+                    # Handle file filter for file type fields
+                    if field_meta["type"] == "file" and "ui_file_filter" in prop:
+                        field_meta["file_filter"] = prop["ui_file_filter"]
 
                     # Store metadata for this field
                     metadata[current_path] = field_meta
 
                     # Recursively process nested objects
+                    json_type = prop.get("type", "string")
                     if json_type == "object" and "properties" in prop:
                         extract_metadata(prop, current_path)
 

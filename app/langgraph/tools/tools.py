@@ -102,12 +102,33 @@ async def load_mcp_tools_async():
     try:
         from app.langgraph.mcp_client import get_mcp_tools, initialize_mcp
 
-        # Initialize MCP client first
+        # Initialize MCP client first with timeout
         log_info("Initializing MCP client...")
-        await initialize_mcp()
+
+        # Use asyncio.timeout for better error handling
+        import asyncio
+
+        try:
+            log_debug("Starting MCP initialization with 60 second timeout...")
+            async with asyncio.timeout(60):  # 60 second timeout for MCP initialization
+                await initialize_mcp()
+            log_debug("MCP initialization completed successfully")
+        except asyncio.TimeoutError:
+            log_error("MCP initialization timed out - some servers may require authentication")
+            log_warning("Check MCP server configurations and ensure servers are accessible")
+            return
+        except Exception as e:
+            log_error(f"MCP initialization failed: {e}")
+            import traceback
+
+            log_debug(f"MCP initialization full traceback:\n{traceback.format_exc()}")
+            return
 
         # Then get the tools
+        log_debug("Getting MCP tools from client...")
         mcp_tools = await get_mcp_tools()
+        log_debug(f"Retrieved {len(mcp_tools) if mcp_tools else 0} MCP tools")
+
         if mcp_tools:
             # Add MCP tools to the global tools list and lookup
             for tool in mcp_tools:
@@ -117,14 +138,17 @@ async def load_mcp_tools_async():
 
             log_info(f"Added {len(mcp_tools)} MCP tools to tool system")
 
-            # Resync database with new tools
-            sync_tools_with_database()
+            # Resync database with new tools - call it later after the function is defined
+            # sync_tools_with_database()  # Will be called at the end of module loading
             _mcp_tools_loaded = True
         else:
-            log_debug("No MCP tools to load")
+            log_info("No MCP tools were loaded - this may be normal if servers require authentication")
 
     except Exception as e:
         log_error(f"Failed to load MCP tools asynchronously: {e}")
+        import traceback
+
+        log_debug(f"MCP tools loading traceback: {traceback.format_exc()}")
 
 
 async def reload_mcp_servers():
@@ -194,18 +218,22 @@ if config_manager.get("mcp.enabled", True):
         try:
             loop = asyncio.get_running_loop()
             # We're in an async context, schedule the coroutine
-            mcp_tools_future = asyncio.create_task(load_mcp_tools_async())
-            # For initialization, we'll load tools later in an async context
-            # For now, we'll create a placeholder that will be filled later
-            log_debug("MCP tools will be loaded asynchronously")
+            # Don't create a task here as it can cause TaskGroup issues
+            # Instead, we'll load tools on-demand when needed
+            log_debug("MCP tools will be loaded on-demand in async context")
         except RuntimeError:
-            # We're not in an event loop, run one
-            asyncio.run(load_mcp_tools_async())
+            # We're not in an event loop, start one with proper error handling
+            try:
+                asyncio.run(load_mcp_tools_async())
+            except Exception as e:
+                log_error(f"Failed to initialize MCP tools at startup: {e}")
+                log_info("MCP tools will be loaded on-demand when first requested")
 
     except ImportError as e:
         log_warning(f"MCP integration not available: {e}")
     except Exception as e:
-        log_error(f"Failed to load MCP tools: {e}")
+        log_error(f"Failed to setup MCP tools: {e}")
+        log_info("MCP tools will be loaded on-demand when first requested")
 
 
 def sync_tools_with_database():
@@ -267,15 +295,14 @@ def sync_tools_with_database():
     log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
 
-# Build tool lookup table and sync with database
+# Build tool lookup table
 for tool in tools:
     name = tool.name
     description = tool.description
     # Add tool to hash table
     tool_lookup[name] = tool
 
-# Synchronize tools with database
-sync_tools_with_database()
+# Note: sync_tools_with_database() will be called at the end of module loading
 
 
 async def get_tools_async(query: str, top_k: int = 5) -> list[Callable]:
@@ -388,3 +415,15 @@ def get_mcp_status():
             "servers_configured": [],
             "error": str(e),
         }
+
+
+# Initialize tool synchronization after all functions are defined
+if _mcp_tools_loaded:
+    try:
+        sync_tools_with_database()
+        log_info("MCP tools synchronized with database successfully")
+    except Exception as e:
+        log_error(f"Failed to sync MCP tools with database: {e}")
+else:
+    # Always sync the initial tools regardless of MCP
+    sync_tools_with_database()

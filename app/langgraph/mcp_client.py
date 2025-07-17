@@ -49,13 +49,65 @@ class MCPClientManager:
             # Prepare server configurations for MultiServerMCPClient
             client_config = {}
             for name, server_config in enabled_servers.items():
-                client_config[name] = self._prepare_server_config(server_config)
+                try:
+                    log_debug(f"Preparing config for server '{name}' with transport '{server_config.get('transport')}'")
+                    client_config[name] = self._prepare_server_config(server_config)
+                    log_debug(f"Prepared config for server '{name}': {client_config[name]}")
+                except Exception as e:
+                    log_error(f"Invalid configuration for server '{name}': {e}")
+                    import traceback
 
-            # Create MCP client
-            self._client = MultiServerMCPClient(client_config)
+                    log_debug(f"Server config preparation traceback:\n{traceback.format_exc()}")
+                    continue
 
-            # Load tools from all servers
-            await self._load_tools()
+            if not client_config:
+                log_warning("No valid MCP server configurations found")
+                return
+
+            # Create MCP client with timeout handling
+            import asyncio
+
+            try:
+                log_debug("Creating MultiServerMCPClient...")
+                async with asyncio.timeout(30):  # 30 second timeout for initialization
+                    self._client = MultiServerMCPClient(client_config)
+                    log_debug("MultiServerMCPClient created successfully")
+
+                    # Load tools from all servers
+                    log_debug("Loading tools from MCP servers...")
+                    await self._load_tools()
+                    log_debug("Tool loading completed")
+            except asyncio.TimeoutError:
+                log_error("MCP client initialization timed out after 30 seconds")
+                if self._client:
+                    try:
+                        # Check if client has close method before calling
+                        if hasattr(self._client, "close"):
+                            await self._client.close()
+                        elif hasattr(self._client, "shutdown"):
+                            await self._client.shutdown()
+                    except Exception as close_e:
+                        log_debug(f"Error during client cleanup: {close_e}")
+                    finally:
+                        self._client = None
+                return
+            except Exception as e:
+                log_error(f"Failed to create MCP client or load tools: {e}")
+                # Log full traceback for debugging
+                import traceback
+
+                log_debug(f"MCP client creation full traceback:\n{traceback.format_exc()}")
+                if self._client:
+                    try:
+                        if hasattr(self._client, "close"):
+                            await self._client.close()
+                        elif hasattr(self._client, "shutdown"):
+                            await self._client.shutdown()
+                    except Exception as close_e:
+                        log_debug(f"Error during client cleanup: {close_e}")
+                    finally:
+                        self._client = None
+                return
 
             self._initialized = True
             log_info(f"MCP client initialized successfully with {len(self._tools)} tools")
@@ -65,21 +117,64 @@ class MCPClientManager:
             log_warning("Install with: pip install langchain-mcp-adapters")
         except Exception as e:
             log_error(f"Failed to initialize MCP client: {e}")
+            import traceback
+
+            log_debug(f"MCP initialization traceback: {traceback.format_exc()}")
 
     def _prepare_server_config(self, server_config: dict[str, Any]) -> dict[str, Any]:
         """Prepare server configuration for MultiServerMCPClient."""
         transport = server_config.get("transport")
+        if not transport:
+            raise ValueError("Transport type is required")
+
         config = {"transport": transport}
 
         if transport == "stdio":
-            config["command"] = server_config.get("command")
-            if "args" in server_config:
-                config["args"] = server_config["args"]
+            command = server_config.get("command")
+            if not command:
+                raise ValueError("Command is required for stdio transport")
+            config["command"] = command
 
-        elif transport in ["streamable_http", "sse"]:
-            config["url"] = server_config.get("url")
-            if "headers" in server_config:
+            # Validate and add args if present
+            if "args" in server_config:
+                args = server_config["args"]
+                if isinstance(args, str):
+                    # If args is a string, try to parse as JSON, otherwise treat as single arg
+                    try:
+                        import json
+
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = [args]
+                elif not isinstance(args, list):
+                    raise ValueError("Args must be a list or valid JSON string")
+                config["args"] = args
+
+            # Add optional stdio fields
+            for field in ["cwd", "env", "timeout"]:
+                if field in server_config:
+                    config[field] = server_config[field]
+
+        elif transport in ["streamable_http", "sse", "websocket"]:
+            url = server_config.get("url")
+            if not url:
+                raise ValueError(f"URL is required for {transport} transport")
+            config["url"] = url
+
+            # Add optional HTTP fields
+            if "headers" in server_config and server_config["headers"]:
                 config["headers"] = server_config["headers"]
+
+            if "timeout" in server_config:
+                config["timeout"] = server_config["timeout"]
+
+            # Check if this is an Atlassian MCP server that needs authentication
+            if "atlassian.com" in url and transport == "sse":
+                log_warning(f"Server '{url}' appears to be an Atlassian MCP server using SSE transport.")
+                log_warning("SSE transport requires authentication. Consider using 'stdio' transport with 'mcp-remote' for automatic OAuth handling.")
+                log_warning("Example: transport='stdio', command='npm', args=['exec', 'mcp-remote', '{url}']")
+        else:
+            raise ValueError(f"Unsupported transport type: {transport}")
 
         return config
 
@@ -89,6 +184,7 @@ class MCPClientManager:
             return
 
         try:
+            log_debug("Attempting to get tools from MCP client...")
             # Get tools from all servers
             tools = await self._client.get_tools()
             self._tools = tools or []
@@ -99,6 +195,26 @@ class MCPClientManager:
 
         except Exception as e:
             log_error(f"Failed to load MCP tools: {e}")
+
+            # Provide user-friendly error messages for common issues
+            error_str = str(e)
+            if "401 Unauthorized" in error_str:
+                log_error("MCP server authentication failed (401 Unauthorized)")
+                if "atlassian.com" in error_str:
+                    log_error("This Atlassian MCP server requires authentication.")
+                    log_error("Recommended solution: Use 'stdio' transport with 'mcp-remote' instead of direct SSE.")
+                    log_error("Example config: transport='stdio', command='npm', args=['exec', 'mcp-remote', 'https://mcp.atlassian.com/v1/sse']")
+                else:
+                    log_error("The MCP server requires authentication headers. Add them to the 'headers' section in config.")
+            elif "Connection refused" in error_str or "Failed to connect" in error_str:
+                log_error("Failed to connect to MCP server. Check if the server is running and accessible.")
+            elif "TimeoutError" in error_str or "timeout" in error_str.lower():
+                log_error("Connection to MCP server timed out. The server may be slow or unreachable.")
+
+            # Log the full traceback for better debugging
+            import traceback
+
+            log_debug(f"MCP tools loading full traceback:\n{traceback.format_exc()}")
             self._tools = []
 
     def get_tools(self) -> list[BaseTool]:
@@ -109,9 +225,13 @@ class MCPClientManager:
         """Close MCP client connections."""
         if self._client:
             try:
-                # Close client connections if it has a close method
+                # Check what close methods are available
                 if hasattr(self._client, "close"):
                     await self._client.close()
+                elif hasattr(self._client, "shutdown"):
+                    await self._client.shutdown()
+                else:
+                    log_debug("MCP client has no close/shutdown method")
                 log_debug("MCP client connections closed")
             except Exception as e:
                 log_error(f"Error closing MCP client: {e}")

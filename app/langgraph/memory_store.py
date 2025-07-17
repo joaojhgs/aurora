@@ -441,20 +441,35 @@ class SQLiteVecStore(BaseStore):
             # Filter by namespace and apply offset/limit
             items = []
             count = 0
-            for doc in results:
+            for result in results:
+                # Handle both tuple (doc, score) and doc formats
+                if isinstance(result, tuple):
+                    doc, score = result
+                else:
+                    doc = result
+
+                # Check if doc has metadata attribute
+                if not hasattr(doc, "metadata"):
+                    log_debug(f"Skipping result without metadata: {result}")
+                    continue
+
                 if doc.metadata.get("namespace") == namespace_str:
                     if count >= offset:
                         if len(items) < limit:
-                            value = json.loads(doc.metadata["value"])
-                            items.append(
-                                Item(
-                                    value=value,
-                                    key=doc.metadata["key"],
-                                    namespace=namespace,
-                                    created_at=datetime.now(),
-                                    updated_at=datetime.now(),
+                            try:
+                                value = json.loads(doc.metadata["value"])
+                                items.append(
+                                    Item(
+                                        value=value,
+                                        key=doc.metadata["key"],
+                                        namespace=namespace,
+                                        created_at=datetime.now(),
+                                        updated_at=datetime.now(),
+                                    )
                                 )
-                            )
+                            except (json.JSONDecodeError, KeyError) as e:
+                                log_debug(f"Skipping malformed item: {e}")
+                                continue
                     count += 1
 
             return items

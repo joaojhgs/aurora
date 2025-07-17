@@ -41,7 +41,7 @@ class TestConfigFieldMetadata:
         """Test that LLM provider has correct choice metadata."""
         metadata = config_manager.get_field_metadata()
 
-        llm_provider = metadata.get("llm.provider")
+        llm_provider = metadata.get("general.llm.provider")
         assert llm_provider is not None
         assert llm_provider["type"] == "choice"
         assert "choices" in llm_provider
@@ -55,7 +55,7 @@ class TestConfigFieldMetadata:
         metadata = config_manager.get_field_metadata()
 
         # Test temperature field
-        temp_field = metadata.get("llm.local.llama_cpp.options.temperature")
+        temp_field = metadata.get("general.llm.local.llama_cpp.options.temperature")
         assert temp_field is not None
         assert temp_field["type"] == "float"
         assert temp_field["min"] == 0
@@ -63,7 +63,7 @@ class TestConfigFieldMetadata:
         assert "temperature" in temp_field["description"].lower()
 
         # Test n_ctx field
-        n_ctx_field = metadata.get("llm.local.llama_cpp.options.n_ctx")
+        n_ctx_field = metadata.get("general.llm.local.llama_cpp.options.n_ctx")
         assert n_ctx_field is not None
         assert n_ctx_field["type"] == "int"
         assert n_ctx_field["min"] == 512
@@ -73,7 +73,7 @@ class TestConfigFieldMetadata:
         """Test that OpenAI model field has correct choices."""
         metadata = config_manager.get_field_metadata()
 
-        openai_model = metadata.get("llm.third_party.openai.options.model")
+        openai_model = metadata.get("general.llm.third_party.openai.options.model")
         assert openai_model is not None
         assert openai_model["type"] == "choice"
 
@@ -108,7 +108,7 @@ class TestConfigFieldMetadata:
         hw_accel_fields = ["tts", "stt", "ocr_bg", "ocr_curr", "llm"]
 
         for field in hw_accel_fields:
-            hw_field = metadata.get(f"hardware_acceleration.{field}")
+            hw_field = metadata.get(f"general.hardware_acceleration.{field}")
             assert hw_field is not None
             assert hw_field["type"] == "bool"
             assert "hardware acceleration" in hw_field["description"].lower()
@@ -118,7 +118,7 @@ class TestConfigFieldMetadata:
         metadata = config_manager.get_field_metadata()
 
         # Test a deeply nested field
-        nested_field = metadata.get("llm.local.llama_cpp.options.repeat_penalty")
+        nested_field = metadata.get("general.llm.local.llama_cpp.options.repeat_penalty")
         assert nested_field is not None
         assert nested_field["type"] == "float"
         assert nested_field["min"] == 0.1
@@ -128,7 +128,7 @@ class TestConfigFieldMetadata:
         """Test that speech to text language field has correct choices."""
         metadata = config_manager.get_field_metadata()
 
-        lang_field = metadata.get("speech_to_text.language")
+        lang_field = metadata.get("general.speech_to_text.language")
         assert lang_field is not None
         assert lang_field["type"] == "choice"
 

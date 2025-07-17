@@ -665,41 +665,80 @@
                 },
                 "servers": {
                     "type": "object",
+                    "description": "MCP server configurations indexed by server name",
                     "patternProperties": {
                         "^[a-zA-Z][a-zA-Z0-9_-]*$": {
                             "type": "object",
+                            "description": "MCP server configuration",
                             "properties": {
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable or disable this MCP server",
+                                    "default": true
+                                },
                                 "transport": {
                                     "type": "string",
                                     "enum": [
                                         "stdio",
                                         "streamable_http",
-                                        "sse"
+                                        "sse",
+                                        "websocket"
+                                    ],
+                                    "description": "Transport protocol for MCP communication. 'stdio' runs a local process",
+                                    "ui_choices": [
+                                        "stdio",
+                                        "streamable_http", 
+                                        "sse",
+                                        "websocket"
                                     ]
                                 },
                                 "command": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "Command to start the MCP server (required for stdio transport)"
                                 },
                                 "args": {
                                     "type": "array",
+                                    "description": "Arguments to pass to the command (used with stdio transport)",
                                     "items": {
                                         "type": "string"
-                                    }
+                                    },
+                                    "default": []
                                 },
                                 "url": {
                                     "type": "string",
-                                    "format": "uri"
+                                    "format": "uri",
+                                    "description": "URL endpoint for HTTP-based transports (required for streamable_http, sse, websocket)"
                                 },
                                 "headers": {
                                     "type": "object",
+                                    "description": "Custom HTTP headers for authentication and configuration (supported by streamable_http, sse, websocket). For Atlassian servers, consider using stdio transport with mcp-remote instead of manual authentication.",
                                     "patternProperties": {
                                         "^.+$": {
                                             "type": "string"
                                         }
-                                    }
+                                    },
+                                    "default": {}
                                 },
-                                "enabled": {
-                                    "type": "boolean"
+                                "env": {
+                                    "type": "object",
+                                    "description": "Environment variables for the MCP server process (used with stdio transport)",
+                                    "patternProperties": {
+                                        "^.+$": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "default": {}
+                                },
+                                "cwd": {
+                                    "type": "string",
+                                    "description": "Working directory for the MCP server process (used with stdio transport)"
+                                },
+                                "timeout": {
+                                    "type": "number",
+                                    "description": "Connection timeout in seconds",
+                                    "minimum": 1,
+                                    "maximum": 300,
+                                    "default": 30
                                 }
                             },
                             "required": [
@@ -716,7 +755,8 @@
                                     },
                                     "then": {
                                         "required": [
-                                            "command"
+                                            "command",
+                                            "args"
                                         ],
                                         "not": {
                                             "required": [
@@ -731,7 +771,8 @@
                                             "transport": {
                                                 "enum": [
                                                     "streamable_http",
-                                                    "sse"
+                                                    "sse", 
+                                                    "websocket"
                                                 ]
                                             }
                                         }
