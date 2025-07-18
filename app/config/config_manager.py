@@ -171,118 +171,26 @@ class ConfigManager:
                 log_error(f"Error notifying observer: {e}")
 
     def _get_default_config(self) -> dict:
-        """Return default configuration structure"""
-        return {
-            "general": {
-                "llm": {
-                    "provider": "openai",
-                    "third_party": {
-                        "openai": {"options": {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 512}},
-                        "huggingface_endpoint": {
-                            "options": {
-                                "endpoint_url": "",
-                                "model": "",
-                                "access_token": "",
-                                "temperature": 0.7,
-                                "max_tokens": 512,
-                            }
-                        },
-                    },
-                    "local": {
-                        "huggingface_pipeline": {
-                            "options": {
-                                "model": "microsoft/DialoGPT-medium",
-                                "temperature": 0.7,
-                                "torch_dtype": "auto",
-                            }
-                        },
-                        "llama_cpp": {
-                            "options": {
-                                "model_path": "",
-                                "temperature": 1.0,
-                                "max_tokens": 512,
-                                "n_ctx": 2048,
-                                "n_gpu_layers": 0,
-                                "n_batch": 1000,
-                                "top_p": 0.95,
-                                "top_k": 64,
-                                "repeat_penalty": 1.0,
-                                "min_p": 0.0,
-                                "chat_format": "chatml-function-calling",
-                            }
-                        },
-                    },
+        """Return default configuration structure loaded from config_defaults.json"""
+        defaults_path = os.path.join(os.path.dirname(__file__), "config_defaults.json")
+        try:
+            with open(defaults_path) as f:
+                return json.load(f)
+        except Exception as e:
+            log_error(f"Failed to load default config from {defaults_path}: {e}")
+            # Fallback to minimal config if defaults file is missing
+            return {
+                "general": {
+                    "llm": {"provider": "openai"},
+                    "embeddings": {"use_local": True},
+                    "speech_to_text": {"language": "", "ambient_transcription": {"enable": False}},
+                    "text_to_speech": {},
+                    "hardware_acceleration": {},
                 },
-                "embeddings": {"use_local": True},
-                "speech_to_text": {
-                    "language": "",
-                    "silero_deactivity_detection": False,
-                    "wakeword_speedx_noise_reduction": False,
-                    "ambient_transcription": {
-                        "enable": False,
-                        "chunk_duration": 3.0,
-                        "storage_path": "ambient_logs/",
-                        "filter_short_transcriptions": True,
-                        "min_transcription_length": 10,
-                    },
-                },
-                "text_to_speech": {
-                    "model_file_path": "/voice_models/en_US-lessac-medium.onnx",
-                    "model_config_file_path": "/voice_models/en_US-lessac-medium.onnx.txt",
-                    "model_sample_rate": 22050,
-                    "piper_path": "",
-                },
-                "hardware_acceleration": {
-                    "tts": False,
-                    "stt": False,
-                    "ocr_bg": False,
-                    "ocr_curr": False,
-                    "llm": False,
-                },
-            },
-            "ui": {"activate": False, "dark_mode": False, "debug": False},
-            # Plugins configuration
-            "plugins": {
-                "google": {"credentials_file": "google_credentials.json"},
-                "jira": {
-                    "activate": False,
-                    "api_token": "",
-                    "username": "",
-                    "instance_url": "https://jira.atlassian.net/",
-                },
-                "openrecall": {"activate": False},
-                "brave_search": {"activate": False, "api_key": ""},
-                "github": {
-                    "activate": False,
-                    "app_id": "",
-                    "app_private_key": "",
-                    "repository": "",
-                },
-                "slack": {"activate": False, "user_token": ""},
-                "gmail": {"activate": False},
-                "gcalendar": {"activate": False},
-            },
-            # MCP (Model Context Protocol) servers configuration
-            "mcp": {
-                "enabled": True,
-                "servers": {
-                    # Example local stdio server
-                    # "math": {
-                    #     "command": "python",
-                    #     "args": ["/path/to/math_server.py"],
-                    #     "transport": "stdio"
-                    # },
-                    # Example remote HTTP server
-                    # "weather": {
-                    #     "url": "http://localhost:8000/mcp/",
-                    #     "transport": "streamable_http",
-                    #     "headers": {
-                    #         "Authorization": "Bearer YOUR_TOKEN"
-                    #     }
-                    # }
-                },
-            },
-        }
+                "ui": {"activate": False, "dark_mode": False, "debug": False},
+                "plugins": {},
+                "mcp": {"enabled": True, "servers": {}},
+            }
 
     def clean_empty_strings(self, save: bool = True) -> int:
         """Remove empty string values from configuration and return count of cleaned fields"""
