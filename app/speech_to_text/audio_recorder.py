@@ -396,6 +396,9 @@ class AudioToTextRecorder:
         # Backward compatibility parameters (for old periodic implementation)
         ambient_transcription_interval: float = 300.0,  # 5 minutes (for backward compatibility)
         ambient_buffer_duration: float = 30.0,  # 30 seconds (for backward compatibility)
+        # Database integration parameters
+        ambient_db_manager=None,
+        ambient_config_manager=None,
     ):
         """
         Initializes an audio recorder and  transcription
@@ -635,6 +638,12 @@ class AudioToTextRecorder:
             used in real-time implementation).
         - ambient_buffer_duration (float, default=30.0): Backward compatibility
             parameter for buffer duration (not used in real-time implementation).
+        - ambient_db_manager (DatabaseManager, default=None): Database manager
+            instance for storing ambient transcriptions in database with vector
+            similarity search support.
+        - ambient_config_manager (ConfigManager, default=None): Configuration
+            manager instance for accessing ambient transcription settings including
+            database vs file storage preferences and vector search options.
 
         Raises:
             Exception: Errors related to initializing transcription
@@ -757,6 +766,22 @@ class AudioToTextRecorder:
         self.ambient_audio_buffer = None
         self.ambient_chunk_counter = 0
         self.last_ambient_chunk_time = 0
+
+        # Database integration for ambient transcriptions
+        self.ambient_db_manager = ambient_db_manager
+        self.ambient_config_manager = ambient_config_manager
+        self.ambient_service = None
+
+        # Initialize ambient transcription service if database integration is provided
+        if self.enable_ambient_transcription and self.ambient_db_manager:
+            try:
+                from app.database.ambient_transcription_service import AmbientTranscriptionService
+
+                self.ambient_service = AmbientTranscriptionService(self.ambient_db_manager, self.ambient_config_manager)
+                # We'll initialize the service async later
+            except ImportError as e:
+                logging.warning(f"Could not import ambient transcription service: {e}")
+                self.ambient_service = None
 
         # Initialize the logging configuration with the specified level
         log_format = "RealTimeSTT: %(name)s - %(levelname)s - %(message)s"
@@ -2450,15 +2475,30 @@ class AudioToTextRecorder:
                     # Only process if we have audio data
                     if self.ambient_audio_buffer:
                         try:
-                            # Copy the current ambient audio buffer
-                            ambient_frames = list(self.ambient_audio_buffer)
+                            # Calculate how many frames we need for this chunk duration
+                            frames_needed = int((self.sample_rate // self.buffer_size) * self.ambient_chunk_duration)
+
+                            # Extract frames for this chunk (don't copy entire buffer)
+                            ambient_frames = []
+                            frames_extracted = 0
+
+                            # Extract only the frames we need for this specific chunk
+                            while frames_extracted < frames_needed and self.ambient_audio_buffer:
+                                frame = self.ambient_audio_buffer.popleft()  # Remove from left (oldest)
+                                ambient_frames.append(frame)
+                                frames_extracted += 1
 
                             if ambient_frames:
-                                logging.debug(f"Processing ambient chunk {self.ambient_chunk_counter} with {len(ambient_frames)} frames")
+                                logging.debug(
+                                    f"Processing ambient chunk {self.ambient_chunk_counter} with {len(ambient_frames)} frames ({frames_extracted}/{frames_needed})"
+                                )
 
                                 # Convert frames to audio array
                                 audio_array = np.frombuffer(b"".join(ambient_frames), dtype=np.int16)
                                 audio = audio_array.astype(np.float32) / INT16_MAX_ABS_VALUE
+
+                                # Calculate actual duration of this chunk
+                                actual_duration = len(audio) / self.sample_rate
 
                                 # Use the main transcription model with low priority
                                 with self.transcription_lock:
@@ -2487,12 +2527,8 @@ class AudioToTextRecorder:
                                         if transcription.strip():
                                             logging.debug(f"Ambient transcription {chunk_id}: {transcription[:50]}...")
 
-                                            # Call the callback if provided
-                                            if self.on_ambient_transcription:
-                                                self.on_ambient_transcription(transcription, current_time, chunk_id)
-                                            else:
-                                                # Default: save to file
-                                                self._save_ambient_transcription(transcription, current_time, chunk_id)
+                                            # Store transcription based on configuration and available services
+                                            self._handle_ambient_transcription_sync(transcription, current_time, chunk_id, actual_duration, info)
                                         else:
                                             logging.debug(f"Empty ambient transcription for chunk {chunk_id}")
                                     elif status == "timeout":
@@ -2501,6 +2537,8 @@ class AudioToTextRecorder:
                                         logging.error(f"Ambient transcription {chunk_id} error: {result}")
 
                                 self.ambient_chunk_counter += 1
+                            else:
+                                logging.debug("No ambient frames available for processing")
 
                         except Exception as e:
                             logging.error(f"Error processing ambient audio chunk: {e}", exc_info=True)
@@ -2538,6 +2576,114 @@ class AudioToTextRecorder:
 
         except Exception as e:
             logging.error(f"Error saving ambient transcription: {e}", exc_info=True)
+
+    async def _handle_ambient_transcription(self, transcription, timestamp, chunk_id, duration, transcription_info=None):
+        """
+        Handle ambient transcription storage based on configuration (async version).
+
+        Args:
+            transcription: The transcribed text
+            timestamp: Unix timestamp of the transcription
+            chunk_id: Unique identifier for the audio chunk
+            duration: Duration of the audio chunk in seconds
+            transcription_info: Additional transcription information (confidence, etc.)
+        """
+        try:
+            # Extract confidence score if available
+            confidence = None
+            if transcription_info and hasattr(transcription_info, "avg_logprob"):
+                # Convert log probability to confidence score (approximate)
+                confidence = min(1.0, max(0.0, (transcription_info.avg_logprob + 1.0)))
+
+            # Check configuration for storage preferences
+            use_database = True  # Default to database storage
+            use_file_storage = False  # Default to no file storage
+
+            if self.ambient_config_manager:
+                use_database = self.ambient_config_manager.get("general.speech_to_text.ambient_transcription.use_database_storage", True)
+                use_file_storage = self.ambient_config_manager.get("general.speech_to_text.ambient_transcription.use_file_storage", False)
+
+            # Store in database if enabled and service is available
+            if use_database and self.ambient_service:
+                try:
+                    success = await self.ambient_service.store_transcription(
+                        text=transcription,
+                        timestamp=timestamp,
+                        chunk_id=chunk_id,
+                        duration=duration,
+                        confidence=confidence,
+                        session_id=None,  # Could be configured later for session grouping
+                        metadata={
+                            "source": "ambient_transcription",
+                            "language": self.language,
+                            "model_info": transcription_info.__dict__ if transcription_info else None,
+                        },
+                        generate_embedding=True,
+                    )
+                    if success:
+                        logging.debug(f"Stored ambient transcription {chunk_id} in database")
+                    else:
+                        logging.error(f"Failed to store ambient transcription {chunk_id} in database")
+                except Exception as e:
+                    logging.error(f"Error storing ambient transcription in database: {e}")
+                    # Fall back to file storage if database fails
+                    use_file_storage = True
+
+            # Store in file if enabled or as fallback
+            if use_file_storage:
+                self._save_ambient_transcription(transcription, timestamp, chunk_id)
+
+            # Call custom callback if provided (for backward compatibility)
+            if self.on_ambient_transcription:
+                try:
+                    # Enhanced callback with duration parameter
+                    if hasattr(self.on_ambient_transcription, "__code__") and self.on_ambient_transcription.__code__.co_argcount >= 4:
+                        self.on_ambient_transcription(transcription, timestamp, chunk_id, duration)
+                    else:
+                        # Backward compatibility for 3-parameter callbacks
+                        self.on_ambient_transcription(transcription, timestamp, chunk_id)
+                except Exception as e:
+                    logging.error(f"Error in custom ambient transcription callback: {e}")
+
+        except Exception as e:
+            logging.error(f"Error handling ambient transcription: {e}", exc_info=True)
+
+    def _handle_ambient_transcription_sync(self, transcription, timestamp, chunk_id, duration, transcription_info=None):
+        """
+        Handle ambient transcription storage based on configuration (sync version).
+        """
+        try:
+            import asyncio
+
+            # Create a new event loop if we're not in an async context
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is running, create a task
+                    asyncio.create_task(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
+                else:
+                    # If loop is not running, run until complete
+                    loop.run_until_complete(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
+            except RuntimeError:
+                # No event loop, create a new one
+                asyncio.run(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
+
+        except Exception as e:
+            logging.error(f"Error in sync ambient transcription handler: {e}")
+            # Fallback to simple file storage
+            self._save_ambient_transcription(transcription, timestamp, chunk_id)
+
+            # Call custom callback if provided (for backward compatibility)
+            if self.on_ambient_transcription:
+                try:
+                    # Enhanced callback with duration parameter
+                    if hasattr(self.on_ambient_transcription, "__code__") and self.on_ambient_transcription.__code__.co_argcount >= 4:
+                        self.on_ambient_transcription(transcription, timestamp, chunk_id, duration)
+                    else:
+                        # Backward compatibility for 3-parameter callbacks
+                        self.on_ambient_transcription(transcription, timestamp, chunk_id)
+                except Exception as e:
+                    logging.error(f"Error in custom ambient transcription callback: {e}")
 
     def _is_silero_speech(self, chunk):
         """

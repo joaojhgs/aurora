@@ -422,14 +422,59 @@
                                 "chunk_duration",
                                 "storage_path",
                                 "filter_short_transcriptions",
-                                "min_transcription_length"
+                                "min_transcription_length",
+                                "use_database_storage",
+                                "use_file_storage",
+                                "enable_vector_search"
                             ],
                             "properties": {
-                                "enable": {"type": "boolean"},
-                                "chunk_duration": {"type": "number", "minimum": 0.5, "maximum": 60.0},
-                                "storage_path": {"type": "string"},
-                                "filter_short_transcriptions": {"type": "boolean"},
-                                "min_transcription_length": {"type": "integer", "minimum": 0}
+                                "enable": {
+                                    "type": "boolean",
+                                    "description": "Enable ambient transcription"
+                                },
+                                "chunk_duration": {
+                                    "type": "number", 
+                                    "minimum": 0.5, 
+                                    "maximum": 60.0,
+                                    "description": "Duration in seconds of audio chunks to process"
+                                },
+                                "storage_path": {
+                                    "type": "string",
+                                    "description": "Directory path for file storage (when enabled)"
+                                },
+                                "filter_short_transcriptions": {
+                                    "type": "boolean",
+                                    "description": "Filter out short transcriptions to reduce noise"
+                                },
+                                "min_transcription_length": {
+                                    "type": "integer", 
+                                    "minimum": 0,
+                                    "description": "Minimum character length for transcriptions when filtering"
+                                },
+                                "use_database_storage": {
+                                    "type": "boolean",
+                                    "description": "Store ambient transcriptions in database (recommended)"
+                                },
+                                "use_file_storage": {
+                                    "type": "boolean",
+                                    "description": "Store ambient transcriptions in files"
+                                },
+                                "enable_vector_search": {
+                                    "type": "boolean",
+                                    "description": "Enable vector similarity search for ambient transcriptions"
+                                },
+                                "similarity_threshold": {
+                                    "type": "number",
+                                    "minimum": 0.0,
+                                    "maximum": 1.0,
+                                    "description": "Minimum similarity score for vector search results"
+                                },
+                                "max_search_results": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 100,
+                                    "description": "Maximum number of search results to return"
+                                }
                             },
                             "additionalProperties": false
                         }
