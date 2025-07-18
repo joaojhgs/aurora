@@ -50,14 +50,114 @@ class ConfigAPI:
         config_manager.remove_observer(callback)
 
     @staticmethod
-    def reload_from_file():
-        """Reload configuration from file"""
-        config_manager.load_config()
+    def get_mcp_status() -> dict[str, Any]:
+        """Get MCP system status"""
+        try:
+            from app.langgraph.tools.tools import get_mcp_status
+
+            return get_mcp_status()
+        except Exception as e:
+            log_error(f"Error getting MCP status: {e}")
+            return {"error": str(e)}
 
     @staticmethod
-    def save_to_file():
-        """Force save configuration to file"""
-        config_manager.save_config()
+    def reload_mcp_servers() -> dict[str, Any]:
+        """Reload MCP servers from configuration"""
+        try:
+            from app.langgraph.tools.tools import reload_mcp_servers_sync
+
+            reload_mcp_servers_sync()
+            return {"success": True, "message": "MCP servers reload initiated"}
+        except Exception as e:
+            log_error(f"Error reloading MCP servers: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def update_mcp_config(servers_config: dict[str, Any]) -> dict[str, Any]:
+        """Update MCP servers configuration and reload"""
+        try:
+            # Update configuration
+            config_manager.set("mcp.servers", servers_config)
+
+            # Reload servers
+            from app.langgraph.tools.tools import reload_mcp_servers_sync
+
+            reload_mcp_servers_sync()
+
+            return {"success": True, "message": "MCP configuration updated and servers reloaded"}
+        except Exception as e:
+            log_error(f"Error updating MCP config: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def discover_mcp_servers() -> dict[str, Any]:
+        """Discover MCP servers using various methods"""
+        try:
+            import asyncio
+
+            from app.langgraph.mcp_discovery import discover_mcp_servers
+
+            # Run discovery
+            discovered = asyncio.run(discover_mcp_servers())
+
+            # Convert to serializable format
+            servers_info = {}
+            for key, server in discovered.items():
+                servers_info[key] = {
+                    "name": server.name,
+                    "transport": server.transport,
+                    "command": server.command,
+                    "args": server.args,
+                    "url": server.url,
+                    "env": server.env,
+                    "source": server.source,
+                    "description": server.description,
+                    "installed": server.installed,
+                }
+
+            return {"success": True, "servers": servers_info, "count": len(servers_info), "message": f"Discovered {len(servers_info)} MCP servers"}
+
+        except Exception as e:
+            log_error(f"Error discovering MCP servers: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def add_discovered_servers_to_config(server_names: list[str] = None) -> dict[str, Any]:
+        """Add discovered servers to Aurora's MCP configuration"""
+        try:
+            from app.langgraph.mcp_discovery import mcp_discovery
+
+            discovered = mcp_discovery.get_server_configs_for_aurora()
+
+            # Filter by requested server names if provided
+            if server_names:
+                discovered = {name: config for name, config in discovered.items() if name in server_names}
+
+            # Get current MCP config
+            current_servers = config_manager.get("mcp.servers", {})
+
+            # Merge with discovered servers
+            updated_servers = current_servers.copy()
+            updated_servers.update(discovered)
+
+            # Update configuration
+            config_manager.set("mcp.servers", updated_servers)
+
+            # Reload servers
+            from app.langgraph.tools.tools import reload_mcp_servers_sync
+
+            reload_mcp_servers_sync()
+
+            return {
+                "success": True,
+                "added_servers": list(discovered.keys()),
+                "total_servers": len(updated_servers),
+                "message": f"Added {len(discovered)} discovered servers to configuration",
+            }
+
+        except Exception as e:
+            log_error(f"Error adding discovered servers: {e}")
+            return {"success": False, "error": str(e)}
 
 
 # Global API instance

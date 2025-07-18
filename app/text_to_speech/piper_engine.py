@@ -60,7 +60,7 @@ class PiperEngine(BaseEngine):
         """
         # If piper_path is None, check config manager or default to 'piper.exe'.
         if piper_path is None:
-            config_path = config_manager.get("text_to_speech.piper_path", "")
+            config_path = config_manager.get("general.text_to_speech.piper_path", "")
             self.piper_path = config_path if config_path else "piper.exe"
         else:
             self.piper_path = piper_path
@@ -83,7 +83,7 @@ class PiperEngine(BaseEngine):
         return (
             pyaudio.paInt16,
             1,
-            int(config_manager.get("text_to_speech.model_sample_rate", 24000)),
+            int(config_manager.get("general.text_to_speech.model_sample_rate", 24000)),
         )
 
     def synthesize(self, text: str) -> bool:
@@ -135,7 +135,7 @@ class PiperEngine(BaseEngine):
                 # If you require specific WAV properties, check them:
                 if (
                     wf.getnchannels() != 1
-                    or wf.getframerate() != int(config_manager.get("text_to_speech.model_sample_rate", 24000))
+                    or wf.getframerate() != int(config_manager.get("general.text_to_speech.model_sample_rate", 24000))
                     or wf.getsampwidth() != 2
                 ):
                     log_warning(

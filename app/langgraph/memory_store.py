@@ -13,7 +13,7 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 def get_embeddings():
     """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
-    use_local = config_manager.get("embeddings.use_local", False)
+    use_local = config_manager.get("general.embeddings.use_local", False)
 
     if use_local:
         from langchain_huggingface import HuggingFaceEmbeddings
@@ -258,7 +258,7 @@ class SQLiteVecStore(BaseStore):
         offset: int = 0,
     ) -> list[Item]:
         """Async version of list - just calls the sync version."""
-        return self.list(namespace, limit=limit, offset=offset)
+        return self.list_items_in_namespace(namespace, limit=limit, offset=offset)
 
     async def asearch(
         self,
@@ -409,7 +409,7 @@ class SQLiteVecStore(BaseStore):
                 log_error(f"Alternative delete method also failed for {namespace}/{key}: {e2}")
                 pass
 
-    def list(
+    def list_items_in_namespace(
         self,
         namespace: tuple[str, ...],
         *,
@@ -441,20 +441,35 @@ class SQLiteVecStore(BaseStore):
             # Filter by namespace and apply offset/limit
             items = []
             count = 0
-            for doc in results:
+            for result in results:
+                # Handle both tuple (doc, score) and doc formats
+                if isinstance(result, tuple):
+                    doc, score = result
+                else:
+                    doc = result
+
+                # Check if doc has metadata attribute
+                if not hasattr(doc, "metadata"):
+                    log_debug(f"Skipping result without metadata: {result}")
+                    continue
+
                 if doc.metadata.get("namespace") == namespace_str:
                     if count >= offset:
                         if len(items) < limit:
-                            value = json.loads(doc.metadata["value"])
-                            items.append(
-                                Item(
-                                    value=value,
-                                    key=doc.metadata["key"],
-                                    namespace=namespace,
-                                    created_at=datetime.now(),
-                                    updated_at=datetime.now(),
+                            try:
+                                value = json.loads(doc.metadata["value"])
+                                items.append(
+                                    Item(
+                                        value=value,
+                                        key=doc.metadata["key"],
+                                        namespace=namespace,
+                                        created_at=datetime.now(),
+                                        updated_at=datetime.now(),
+                                    )
                                 )
-                            )
+                            except (json.JSONDecodeError, KeyError) as e:
+                                log_debug(f"Skipping malformed item: {e}")
+                                continue
                     count += 1
 
             return items
@@ -579,7 +594,7 @@ class CombinedSQLiteVecStore(BaseStore):
         return self._get_store(namespace).delete(namespace, key)
 
     def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).list(namespace, limit=limit, offset=offset)
+        return self._get_store(namespace).list_items_in_namespace(namespace, limit=limit, offset=offset)
 
     def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
         return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)

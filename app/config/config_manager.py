@@ -16,6 +16,7 @@ class ConfigManager:
 
     _instance = None
     _lock = Lock()
+    _schema = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -37,6 +38,7 @@ class ConfigManager:
     def load_config(self):
         """Load configuration from JSON file, create default if not exists"""
         try:
+            self._schema = self._get_config_schema()  # Ensure schema is loaded
             if os.path.exists(self.config_file):
                 with open(self.config_file) as f:
                     config_data = json.load(f)
@@ -48,17 +50,14 @@ class ConfigManager:
                     log_info("Configuration loaded and validated from config.json")
                 except ValidationError as e:
                     log_error(f"Configuration validation failed: {e.message}")
-                    log_warning("Using default configuration due to validation errors")
-                    self._config = self._get_default_config()
-                    self.save_config()  # Save the valid default config
-
+                    raise RuntimeError(f"Configuration validation failed: {e.message}")
             else:
                 self._config = self._get_default_config()
                 self.save_config()
                 log_info("Created default configuration file")
         except Exception as e:
             log_error(f"Error loading config: {e}")
-            self._config = self._get_default_config()
+            raise RuntimeError(f"Error loading config: {e}")
 
     def save_config(self):
         """Save current configuration to JSON file"""
@@ -174,67 +173,70 @@ class ConfigManager:
     def _get_default_config(self) -> dict:
         """Return default configuration structure"""
         return {
+            "general": {
+                "llm": {
+                    "provider": "openai",
+                    "third_party": {
+                        "openai": {"options": {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 512}},
+                        "huggingface_endpoint": {
+                            "options": {
+                                "endpoint_url": "",
+                                "model": "",
+                                "access_token": "",
+                                "temperature": 0.7,
+                                "max_tokens": 512,
+                            }
+                        },
+                    },
+                    "local": {
+                        "huggingface_pipeline": {
+                            "options": {
+                                "model": "microsoft/DialoGPT-medium",
+                                "temperature": 0.7,
+                                "torch_dtype": "auto",
+                            }
+                        },
+                        "llama_cpp": {
+                            "options": {
+                                "model_path": "",
+                                "temperature": 1.0,
+                                "max_tokens": 512,
+                                "n_ctx": 2048,
+                                "n_gpu_layers": 0,
+                                "n_batch": 1000,
+                                "top_p": 0.95,
+                                "top_k": 64,
+                                "repeat_penalty": 1.0,
+                                "min_p": 0.0,
+                                "chat_format": "chatml-function-calling",
+                            }
+                        },
+                    },
+                },
+                "embeddings": {"use_local": True},
+                "speech_to_text": {
+                    "language": "",
+                    "silero_deactivity_detection": False,
+                    "wakeword_speedx_noise_reduction": False,
+                },
+                "text_to_speech": {
+                    "model_file_path": "/voice_models/en_US-lessac-medium.onnx",
+                    "model_config_file_path": "/voice_models/en_US-lessac-medium.onnx.txt",
+                    "model_sample_rate": 22050,
+                    "piper_path": "",
+                },
+                "hardware_acceleration": {
+                    "tts": False,
+                    "stt": False,
+                    "ocr_bg": False,
+                    "ocr_curr": False,
+                    "llm": False,
+                },
+            },
             "ui": {"activate": False, "dark_mode": False, "debug": False},
-            "llm": {
-                "provider": "openai",
-                "third_party": {
-                    "openai": {"options": {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 512}},
-                    "huggingface_endpoint": {
-                        "options": {
-                            "endpoint_url": "",
-                            "model": "",
-                            "access_token": "",
-                            "temperature": 0.7,
-                            "max_tokens": 512,
-                        }
-                    },
-                },
-                "local": {
-                    "huggingface_pipeline": {
-                        "options": {
-                            "model": "microsoft/DialoGPT-medium",
-                            "temperature": 0.7,
-                            "torch_dtype": "auto",
-                        }
-                    },
-                    "llama_cpp": {
-                        "options": {
-                            "model_path": "",
-                            "temperature": 1.0,
-                            "max_tokens": 512,
-                            "n_ctx": 2048,
-                            "n_gpu_layers": 0,
-                            "n_batch": 1000,
-                            "top_p": 0.95,
-                            "top_k": 64,
-                            "repeat_penalty": 1.0,
-                            "min_p": 0.0,
-                            "chat_format": "chatml-function-calling",
-                        }
-                    },
-                },
-            },
-            "embeddings": {"use_local": True},
-            "speech_to_text": {
-                "language": "",
-                "silero_deactivity_detection": False,
-                "wakeword_speedx_noise_reduction": False,
-            },
-            "text_to_speech": {
-                "model_file_path": "/voice_models/en_US-lessac-medium.onnx",
-                "model_config_file_path": "/voice_models/en_US-lessac-medium.onnx.txt",
-                "model_sample_rate": 22050,
-                "piper_path": "",
-            },
-            "hardware_acceleration": {
-                "tts": False,
-                "stt": False,
-                "ocr_bg": False,
-                "ocr_curr": False,
-                "llm": False,
-            },
             # Plugins configuration
             "plugins": {
+                "google": {"credentials_file": "google_credentials.json"},
                 "jira": {
                     "activate": False,
                     "api_token": "",
@@ -253,8 +255,55 @@ class ConfigManager:
                 "gmail": {"activate": False},
                 "gcalendar": {"activate": False},
             },
-            "google": {"credentials_file": "google_credentials.json"},
+            # MCP (Model Context Protocol) servers configuration
+            "mcp": {
+                "enabled": True,
+                "servers": {
+                    # Example local stdio server
+                    # "math": {
+                    #     "command": "python",
+                    #     "args": ["/path/to/math_server.py"],
+                    #     "transport": "stdio"
+                    # },
+                    # Example remote HTTP server
+                    # "weather": {
+                    #     "url": "http://localhost:8000/mcp/",
+                    #     "transport": "streamable_http",
+                    #     "headers": {
+                    #         "Authorization": "Bearer YOUR_TOKEN"
+                    #     }
+                    # }
+                },
+            },
         }
+
+    def clean_empty_strings(self, save: bool = True) -> int:
+        """Remove empty string values from configuration and return count of cleaned fields"""
+
+        def clean_dict(d: dict) -> int:
+            cleaned = 0
+            keys_to_remove = []
+
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    cleaned += clean_dict(value)
+                elif isinstance(value, str) and value.strip() == "":
+                    keys_to_remove.append(key)
+                    cleaned += 1
+
+            for key in keys_to_remove:
+                del d[key]
+
+            return cleaned
+
+        with self.config_lock:
+            cleaned_count = clean_dict(self._config)
+
+            if cleaned_count > 0 and save:
+                self.save_config()
+                log_info(f"Cleaned {cleaned_count} empty string fields from configuration")
+
+            return cleaned_count
 
     def migrate_from_env(self):
         """Migrate existing environment variables to config.json"""
@@ -347,313 +396,93 @@ class ConfigManager:
             return json.loads(json.dumps(self._config))  # Deep copy
 
     def _get_config_schema(self) -> dict[str, Any]:
-        """Return the JSON schema for configuration validation"""
-        return {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "type": "object",
-            "required": [
-                "ui",
-                "llm",
-                "embeddings",
-                "speech_to_text",
-                "text_to_speech",
-                "hardware_acceleration",
-                "plugins",
-                "google",
-            ],
-            "properties": {
-                "ui": {
-                    "type": "object",
-                    "required": ["activate", "dark_mode", "debug"],
-                    "properties": {
-                        "activate": {"type": "boolean"},
-                        "dark_mode": {"type": "boolean"},
-                        "debug": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-                "llm": {
-                    "type": "object",
-                    "required": ["provider", "third_party", "local"],
-                    "properties": {
-                        "provider": {
-                            "type": "string",
-                            "enum": [
-                                "openai",
-                                "huggingface_endpoint",
-                                "huggingface_pipeline",
-                                "llama_cpp",
-                            ],
-                        },
-                        "third_party": {
-                            "type": "object",
-                            "required": ["openai", "huggingface_endpoint"],
-                            "properties": {
-                                "openai": {
-                                    "type": "object",
-                                    "required": ["options"],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": ["model", "temperature", "max_tokens"],
-                                            "properties": {
-                                                "model": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                            },
-                                            "additionalProperties": False,
-                                        }
-                                    },
-                                    "additionalProperties": False,
-                                },
-                                "huggingface_endpoint": {
-                                    "type": "object",
-                                    "required": ["options"],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "endpoint_url",
-                                                "model",
-                                                "access_token",
-                                                "temperature",
-                                                "max_tokens",
-                                            ],
-                                            "properties": {
-                                                "endpoint_url": {"type": "string"},
-                                                "model": {"type": "string"},
-                                                "access_token": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                            },
-                                            "additionalProperties": False,
-                                        }
-                                    },
-                                    "additionalProperties": False,
-                                },
-                            },
-                            "additionalProperties": False,
-                        },
-                        "local": {
-                            "type": "object",
-                            "required": ["huggingface_pipeline", "llama_cpp"],
-                            "properties": {
-                                "huggingface_pipeline": {
-                                    "type": "object",
-                                    "required": ["options"],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": ["model"],
-                                            "properties": {
-                                                "model": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                                "torch_dtype": {"type": "string"},
-                                                "pipeline_kwargs": {"type": "object"},
-                                                "model_kwargs": {"type": "object"},
-                                            },
-                                            "additionalProperties": True,
-                                        }
-                                    },
-                                    "additionalProperties": False,
-                                },
-                                "llama_cpp": {
-                                    "type": "object",
-                                    "required": ["options"],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "model_path",
-                                                "temperature",
-                                                "max_tokens",
-                                                "n_ctx",
-                                                "n_gpu_layers",
-                                                "n_batch",
-                                                "top_p",
-                                                "top_k",
-                                                "repeat_penalty",
-                                                "min_p",
-                                            ],
-                                            "properties": {
-                                                "model_path": {"type": "string"},
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                },
-                                                "max_tokens": {"type": "integer", "minimum": 1},
-                                                "n_ctx": {"type": "integer", "minimum": 1},
-                                                "n_gpu_layers": {"type": "integer", "minimum": 0},
-                                                "n_batch": {"type": "integer", "minimum": 1},
-                                                "top_p": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 1,
-                                                },
-                                                "top_k": {"type": "integer", "minimum": 1},
-                                                "repeat_penalty": {"type": "number", "minimum": 0},
-                                                "min_p": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 1,
-                                                },
-                                                "chat_format": {"type": "string"},
-                                            },
-                                            "additionalProperties": True,
-                                        }
-                                    },
-                                    "additionalProperties": False,
-                                },
-                            },
-                            "additionalProperties": False,
-                        },
-                    },
-                    "additionalProperties": False,
-                },
-                "embeddings": {
-                    "type": "object",
-                    "required": ["use_local"],
-                    "properties": {"use_local": {"type": "boolean"}},
-                    "additionalProperties": False,
-                },
-                "speech_to_text": {
-                    "type": "object",
-                    "required": [
-                        "language",
-                        "silero_deactivity_detection",
-                        "wakeword_speedx_noise_reduction",
-                    ],
-                    "properties": {
-                        "language": {"type": "string"},
-                        "silero_deactivity_detection": {"type": "boolean"},
-                        "wakeword_speedx_noise_reduction": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-                "text_to_speech": {
-                    "type": "object",
-                    "required": [
-                        "model_file_path",
-                        "model_config_file_path",
-                        "model_sample_rate",
-                        "piper_path",
-                    ],
-                    "properties": {
-                        "model_file_path": {"type": "string"},
-                        "model_config_file_path": {"type": "string"},
-                        "model_sample_rate": {"type": "integer", "minimum": 8000, "maximum": 48000},
-                        "piper_path": {"type": "string"},
-                    },
-                    "additionalProperties": False,
-                },
-                "hardware_acceleration": {
-                    "type": "object",
-                    "required": ["tts", "stt", "ocr_bg", "ocr_curr", "llm"],
-                    "properties": {
-                        "tts": {"type": "boolean"},
-                        "stt": {"type": "boolean"},
-                        "ocr_bg": {"type": "boolean"},
-                        "ocr_curr": {"type": "boolean"},
-                        "llm": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-                "plugins": {
-                    "type": "object",
-                    "required": [
-                        "jira",
-                        "openrecall",
-                        "brave_search",
-                        "github",
-                        "slack",
-                        "gmail",
-                        "gcalendar",
-                    ],
-                    "properties": {
-                        "jira": {
-                            "type": "object",
-                            "required": ["activate", "api_token", "username", "instance_url"],
-                            "properties": {
-                                "activate": {"type": "boolean"},
-                                "api_token": {"type": "string"},
-                                "username": {"type": "string"},
-                                "instance_url": {"type": "string", "format": "uri"},
-                            },
-                            "additionalProperties": False,
-                        },
-                        "openrecall": {
-                            "type": "object",
-                            "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
-                            "additionalProperties": False,
-                        },
-                        "brave_search": {
-                            "type": "object",
-                            "required": ["activate", "api_key"],
-                            "properties": {
-                                "activate": {"type": "boolean"},
-                                "api_key": {"type": "string"},
-                            },
-                            "additionalProperties": False,
-                        },
-                        "github": {
-                            "type": "object",
-                            "required": ["activate", "app_id", "app_private_key", "repository"],
-                            "properties": {
-                                "activate": {"type": "boolean"},
-                                "app_id": {"type": "string"},
-                                "app_private_key": {"type": "string"},
-                                "repository": {"type": "string"},
-                            },
-                            "additionalProperties": False,
-                        },
-                        "slack": {
-                            "type": "object",
-                            "required": ["activate", "user_token"],
-                            "properties": {
-                                "activate": {"type": "boolean"},
-                                "user_token": {"type": "string"},
-                            },
-                            "additionalProperties": False,
-                        },
-                        "gmail": {
-                            "type": "object",
-                            "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
-                            "additionalProperties": False,
-                        },
-                        "gcalendar": {
-                            "type": "object",
-                            "required": ["activate"],
-                            "properties": {"activate": {"type": "boolean"}},
-                            "additionalProperties": False,
-                        },
-                    },
-                    "additionalProperties": False,
-                },
-                "google": {
-                    "type": "object",
-                    "required": ["credentials_file"],
-                    "properties": {"credentials_file": {"type": "string"}},
-                    "additionalProperties": False,
-                },
-            },
-            "additionalProperties": False,
-        }
+        """Return the JSON schema for configuration validation with UI metadata"""
+        # Load schema from external file "config_schema.json" in the same directory
+        schema_path = os.path.join(os.path.dirname(__file__), "config_schema.json")
+        try:
+            with open(schema_path) as f:
+                return json.load(f)
+
+        except Exception as e:
+            log_error(f"Failed to load config schema from {schema_path}: {e}")
+            return {}
+
+    def get_field_metadata(self) -> dict[str, dict[str, Any]]:
+        """Extract field metadata from the configuration schema for UI generation"""
+        metadata = {}
+        self._schema = self._get_config_schema()  # Ensure schema is loaded
+
+        def extract_metadata(schema: dict, path: str = ""):
+            """Recursively extract metadata from schema"""
+            # If 'properties' is present, iterate through them
+            if "properties" in schema:
+                for key, prop in schema["properties"].items():
+                    current_path = f"{path}.{key}" if path else key
+
+                    # Start with a copy of all properties (excluding nested dicts)
+                    field_meta = {k: v for k, v in prop.items() if not isinstance(v, dict)}
+
+                    # Determine UI type - prioritize ui_type over JSON schema type mapping
+                    if "ui_type" in prop:
+                        # Use explicit ui_type when specified
+                        field_meta["type"] = prop["ui_type"]
+                    else:
+                        # Map JSON schema types to UI types
+                        json_type = prop.get("type", "string")
+                        if json_type == "boolean":
+                            field_meta["type"] = "bool"
+                        elif json_type == "integer":
+                            field_meta["type"] = "int"
+                        elif json_type == "number":
+                            field_meta["type"] = "float"
+                        elif json_type == "string":
+                            if "enum" in prop or "ui_choices" in prop:
+                                field_meta["type"] = "choice"
+                                # Use ui_choices if available, otherwise use enum
+                                field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+                            else:
+                                field_meta["type"] = "string"
+                        elif json_type == "object":
+                            field_meta["type"] = "dict"
+                        elif json_type == "array":
+                            field_meta["type"] = "list"
+                        else:
+                            field_meta["type"] = "string"
+
+                    # Handle choices for choice type fields (in case ui_type="choice" is used)
+                    if field_meta["type"] == "choice" and "choices" not in field_meta:
+                        field_meta["choices"] = prop.get("ui_choices", prop.get("enum", []))
+
+                    # Extract constraints with consistent naming
+                    if "minimum" in prop:
+                        field_meta["min"] = prop["minimum"]
+                    if "maximum" in prop:
+                        field_meta["max"] = prop["maximum"]
+
+                    # Handle file filter for file type fields
+                    if field_meta["type"] == "file" and "ui_file_filter" in prop:
+                        field_meta["file_filter"] = prop["ui_file_filter"]
+
+                    # Store metadata for this field
+                    metadata[current_path] = field_meta
+
+                    # Recursively process nested objects
+                    json_type = prop.get("type", "string")
+                    if json_type == "object" and "properties" in prop:
+                        extract_metadata(prop, current_path)
+
+        # Extract metadata from the schema
+        extract_metadata(self._schema)
+
+        # Add some special cases that aren't directly in the schema
+        metadata.update(
+            {
+                # Dictionaries that should NOT be expanded (treat as single JSON fields)
+                "plugins.jira.env": {"expand_dict": False, "type": "dict", "description": "Environment variables for Jira plugin"}
+            }
+        )
+
+        return metadata
 
     def _validate_config(self, config_data: dict[str, Any]) -> None:
         """Validate configuration data against the schema"""
