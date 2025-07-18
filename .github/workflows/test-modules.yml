@@ -1,10 +1,10 @@
 name: Optional Modules Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'modules/**'
+  # push:
+  #   branches: [ main, develop ]
+  #   paths:
+  #     - 'modules/**'
   # pull_request:
   #   branches: [ main, develop ]
   #   paths:
