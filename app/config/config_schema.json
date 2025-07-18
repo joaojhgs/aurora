@@ -351,7 +351,8 @@
                     "required": [
                         "language",
                         "silero_deactivity_detection",
-                        "wakeword_speedx_noise_reduction"
+                        "wakeword_speedx_noise_reduction",
+                        "ambient_transcription"
                     ],
                     "properties": {
                         "language": {
@@ -413,6 +414,24 @@
                             "minimum": 0.0,
                             "maximum": 1.0,
                             "description": "Sensitivity for wake word detection (0.0 - 1.0)"
+                        },
+                        "ambient_transcription": {
+                            "type": "object",
+                            "required": [
+                                "enable",
+                                "chunk_duration",
+                                "storage_path",
+                                "filter_short_transcriptions",
+                                "min_transcription_length"
+                            ],
+                            "properties": {
+                                "enable": {"type": "boolean"},
+                                "chunk_duration": {"type": "number", "minimum": 0.5, "maximum": 60.0},
+                                "storage_path": {"type": "string"},
+                                "filter_short_transcriptions": {"type": "boolean"},
+                                "min_transcription_length": {"type": "integer", "minimum": 0}
+                            },
+                            "additionalProperties": false
                         }
                     },
                     "additionalProperties": false

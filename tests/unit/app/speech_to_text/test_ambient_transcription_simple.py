@@ -22,7 +22,7 @@ class TestAmbientTranscriptionConfiguration(unittest.TestCase):
         expected_ambient_storage_path = "ambient_logs/"
         expected_ambient_filter_short = True
         expected_ambient_min_length = 10
-        
+
         # Test that values are reasonable
         self.assertEqual(expected_ambient_chunk_duration, 3.0)
         self.assertEqual(expected_ambient_storage_path, "ambient_logs/")
@@ -58,7 +58,7 @@ class TestAmbientTranscriptionConfiguration(unittest.TestCase):
         # without requiring module import
         expected_ambient_chunk_duration = 3.0  # 3 seconds
         expected_ambient_min_length = 10
-        
+
         # Check that the constants are reasonable
         self.assertGreaterEqual(expected_ambient_chunk_duration, 0.5)  # At least 0.5 seconds
         self.assertLessEqual(expected_ambient_chunk_duration, 60.0)  # At most 1 minute
@@ -153,7 +153,7 @@ class TestAmbientTranscriptionPrioritySystem(unittest.TestCase):
         # Test the expected priority values without requiring module import
         HIGH_PRIORITY = 1
         LOW_PRIORITY = 2
-        
+
         # Test that priorities are defined
         self.assertEqual(HIGH_PRIORITY, 1)
         self.assertEqual(LOW_PRIORITY, 2)

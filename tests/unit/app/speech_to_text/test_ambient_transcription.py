@@ -1,37 +1,36 @@
+from app.speech_to_text.audio_recorder import AudioToTextRecorder
+import sys
 import unittest
 from unittest.mock import Mock, patch
-import sys
 
 # Mock numpy before importing anything that depends on it
-sys.modules['numpy'] = Mock()
+sys.modules["numpy"] = Mock()
 
 # Mock all the heavy dependencies that are causing import issues
-sys.modules['faster_whisper'] = Mock()
-sys.modules['torch'] = Mock()
-sys.modules['torch.multiprocessing'] = Mock()
-sys.modules['torch.cuda'] = Mock()
-sys.modules['openwakeword'] = Mock()
-sys.modules['openwakeword.model'] = Mock()
-sys.modules['pvporcupine'] = Mock()
-sys.modules['webrtcvad'] = Mock()
-sys.modules['pyaudio'] = Mock()
-sys.modules['scipy'] = Mock()
-sys.modules['scipy.signal'] = Mock()
-sys.modules['halo'] = Mock()
+sys.modules["faster_whisper"] = Mock()
+sys.modules["torch"] = Mock()
+sys.modules["torch.multiprocessing"] = Mock()
+sys.modules["torch.cuda"] = Mock()
+sys.modules["openwakeword"] = Mock()
+sys.modules["openwakeword.model"] = Mock()
+sys.modules["pvporcupine"] = Mock()
+sys.modules["webrtcvad"] = Mock()
+sys.modules["pyaudio"] = Mock()
+sys.modules["scipy"] = Mock()
+sys.modules["scipy.signal"] = Mock()
+sys.modules["halo"] = Mock()
 
 # Mock the specific classes that cause issues
 np = Mock()
 np.ndarray = type  # Mock ndarray as a type so isinstance works
 np.zeros = Mock(return_value=Mock())
 np.int16 = Mock()
-sys.modules['numpy'] = np
+sys.modules["numpy"] = np
 
 # Mock multiprocessing.Pipe to return a tuple
 mp = Mock()
 mp.Pipe = Mock(return_value=(Mock(), Mock()))
-sys.modules['torch.multiprocessing'] = mp
-
-from app.speech_to_text.audio_recorder import AudioToTextRecorder
+sys.modules["torch.multiprocessing"] = mp
 
 
 class TestAmbientTranscription(unittest.TestCase):
@@ -118,11 +117,15 @@ class TestAmbientTranscription(unittest.TestCase):
                             with patch("app.speech_to_text.audio_recorder.mp.Pipe", return_value=(Mock(), Mock())):
                                 with patch("app.speech_to_text.audio_recorder.mp.Event", return_value=Mock()):
                                     recorder = AudioToTextRecorder(
-                                        use_microphone=False, spinner=False, no_log_file=True, enable_ambient_transcription=True, ambient_buffer_duration=5
+                                        use_microphone=False,
+                                        spinner=False,
+                                        no_log_file=True,
+                                        enable_ambient_transcription=True,
+                                        ambient_buffer_duration=5,
                                     )
 
                                     # Mock audio data as bytes
-                                    test_audio = b'\x00\x00\x01\x00'
+                                    test_audio = b"\x00\x00\x01\x00"
 
                                     # Feed audio
                                     recorder.feed_audio(test_audio)
@@ -131,7 +134,7 @@ class TestAmbientTranscription(unittest.TestCase):
                                     self.assertIsNotNone(recorder.ambient_audio_buffer)
                                     # Since the ambient buffer exists, let's check if it has data
                                     # The buffer might have been reset, so just check if it exists
-                                    self.assertTrue(hasattr(recorder, 'ambient_audio_buffer'))
+                                    self.assertTrue(hasattr(recorder, "ambient_audio_buffer"))
 
     def test_ambient_transcription_callback_format(self):
         """Test that ambient transcription callback is called with correct parameters"""
@@ -165,7 +168,9 @@ class TestAmbientTranscription(unittest.TestCase):
                         with patch("faster_whisper.WhisperModel"):
                             with patch("app.speech_to_text.audio_recorder.mp.Pipe", return_value=(Mock(), Mock())):
                                 with patch("app.speech_to_text.audio_recorder.mp.Event", return_value=Mock()):
-                                    recorder = AudioToTextRecorder(use_microphone=False, spinner=False, no_log_file=True, enable_ambient_transcription=True)
+                                    recorder = AudioToTextRecorder(
+                                        use_microphone=False, spinner=False, no_log_file=True, enable_ambient_transcription=True
+                                    )
 
                                     # Check default values
                                     self.assertEqual(recorder.ambient_transcription_interval, 300)  # 5 minutes
