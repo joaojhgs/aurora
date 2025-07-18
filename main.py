@@ -102,104 +102,31 @@ if __name__ == "__main__":
 
     # Initialize database and ambient transcription service for database storage
     db_manager = None
-    ambient_service = None
 
     # Check if ambient transcription database storage is enabled
     ambient_config = config_manager.get("general.speech_to_text.ambient_transcription", {})
-    use_database_storage = ambient_config.get("use_database_storage", True)
     ambient_enabled = ambient_config.get("enable", False)
+    use_database_storage = ambient_config.get("use_database_storage", True)
 
     if ambient_enabled and use_database_storage:
         try:
             log_info("Setting up ambient transcription database integration...")
             from app.database.database_manager import DatabaseManager
-            from app.database.ambient_transcription_service import AmbientTranscriptionService
 
-            # Initialize database
+            # Initialize database manager (service initialization is handled internally)
             db_manager = DatabaseManager()
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(db_manager.initialize())
 
-                # Initialize ambient service
-                ambient_service = AmbientTranscriptionService(db_manager, config_manager)
-                loop.run_until_complete(ambient_service.initialize())
+            # Initialize database synchronously for main thread
+            import asyncio
 
-                log_info("Ambient transcription database integration initialized")
-            finally:
-                loop.close()
+            asyncio.run(db_manager.initialize())
+
+            log_info("Ambient transcription database integration initialized")
 
         except Exception as e:
             log_error(f"Error setting up ambient transcription database integration: {e}")
             log_info("Falling back to file-based ambient transcription storage")
-            use_database_storage = False
-
-    def on_ambient_transcription(text, timestamp, chunk_id, duration=0.0):
-        """Handle ambient transcription results with database and file storage support"""
-        try:
-            # If database storage is enabled and service is available, store in database
-            if use_database_storage and ambient_service:
-                try:
-                    # Create async task for database storage
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(
-                            ambient_service.store_transcription(
-                                text=text,
-                                timestamp=timestamp,
-                                chunk_id=chunk_id,
-                                duration=duration,
-                                session_id=None,  # Could be configured for session grouping
-                                metadata={
-                                    "source": "main_application",
-                                    "language": config_manager.get("general.speech_to_text.language", ""),
-                                }
-                            )
-                        )
-                        log_debug(f"Stored ambient transcription {chunk_id} in database")
-                    finally:
-                        loop.close()
-                except Exception as e:
-                    log_error(f"Error storing ambient transcription in database: {e}")
-                    # Fall back to file storage
-                    _save_ambient_to_file(text, timestamp, chunk_id)
-
-            # If file storage is enabled or as fallback, save to file
-            elif ambient_config.get("use_file_storage", not use_database_storage):
-                _save_ambient_to_file(text, timestamp, chunk_id)
-
-        except Exception as e:
-            log_error(f"Error handling ambient transcription: {e}")
-
-    def _save_ambient_to_file(text, timestamp, chunk_id):
-        """Save ambient transcription to file (fallback or configured option)"""
-        try:
-            # Get configuration
-            storage_path = ambient_config.get("storage_path", "ambient_logs/")
-            filter_short = ambient_config.get("filter_short_transcriptions", True)
-            min_length = ambient_config.get("min_transcription_length", 10)
-
-            # Apply filtering
-            if filter_short and len(text.strip()) < min_length:
-                return
-
-            # Create storage directory if it doesn't exist
-            os.makedirs(storage_path, exist_ok=True)
-
-            # Save to daily log file
-            date_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
-            time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
-
-            log_file = os.path.join(storage_path, f"ambient_{date_str}.txt")
-
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"[{time_str}] ({chunk_id}) {text}\n")
-
-            log_debug(f"Ambient transcription saved: {text[:50]}...")
-        except Exception as e:
-            log_error(f"Error saving ambient transcription to file: {e}")
+            db_manager = None
 
     # Create and start the audio recorder in a separate thread
     def start_recorder():
@@ -231,8 +158,7 @@ if __name__ == "__main__":
             ambient_storage_path=ambient_config.get("storage_path", "ambient_logs/"),
             ambient_filter_short=ambient_config.get("filter_short_transcriptions", True),
             ambient_min_length=ambient_config.get("min_transcription_length", 10),
-            on_ambient_transcription=on_ambient_transcription,
-            # Database integration for ambient transcription
+            # Database integration for ambient transcription (callback handled internally)
             ambient_db_manager=db_manager,
             ambient_config_manager=config_manager,
         ) as recorder:

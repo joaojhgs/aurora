@@ -2472,73 +2472,82 @@ class AudioToTextRecorder:
                 # Check if it's time to process the next ambient chunk
                 if current_time - self.last_ambient_chunk_time >= self.ambient_chunk_duration:
 
-                    # Only process if we have audio data
+                    # Only process if we have enough audio data
                     if self.ambient_audio_buffer:
                         try:
                             # Calculate how many frames we need for this chunk duration
                             frames_needed = int((self.sample_rate // self.buffer_size) * self.ambient_chunk_duration)
 
-                            # Extract frames for this chunk (don't copy entire buffer)
-                            ambient_frames = []
-                            frames_extracted = 0
+                            # Ensure we only extract available frames
+                            frames_available = len(self.ambient_audio_buffer)
+                            frames_to_extract = min(frames_needed, frames_available)
 
-                            # Extract only the frames we need for this specific chunk
-                            while frames_extracted < frames_needed and self.ambient_audio_buffer:
-                                frame = self.ambient_audio_buffer.popleft()  # Remove from left (oldest)
-                                ambient_frames.append(frame)
-                                frames_extracted += 1
+                            # Only proceed if we have at least some frames to work with
+                            if frames_to_extract > 0:
+                                # Extract frames for this chunk (removing them from buffer to prevent reuse)
+                                ambient_frames = []
 
-                            if ambient_frames:
-                                logging.debug(
-                                    f"Processing ambient chunk {self.ambient_chunk_counter} with {len(ambient_frames)} frames ({frames_extracted}/{frames_needed})"
-                                )
+                                # Extract exactly the number of frames we determined
+                                for _ in range(frames_to_extract):
+                                    if self.ambient_audio_buffer:  # Double-check buffer isn't empty
+                                        frame = self.ambient_audio_buffer.popleft()  # Remove from left (oldest)
+                                        ambient_frames.append(frame)
+                                    else:
+                                        break
 
-                                # Convert frames to audio array
-                                audio_array = np.frombuffer(b"".join(ambient_frames), dtype=np.int16)
-                                audio = audio_array.astype(np.float32) / INT16_MAX_ABS_VALUE
-
-                                # Calculate actual duration of this chunk
-                                actual_duration = len(audio) / self.sample_rate
-
-                                # Use the main transcription model with low priority
-                                with self.transcription_lock:
-                                    chunk_id = f"ambient_{self.ambient_chunk_counter}"
-                                    status, result, priority, request_id = self._send_transcription_request(
-                                        audio, self.language, TranscriptionPriority.LOW, chunk_id
+                                if ambient_frames:
+                                    logging.debug(
+                                        f"Processing ambient chunk {self.ambient_chunk_counter} with {len(ambient_frames)} frames ({len(ambient_frames)}/{frames_needed} available)"
                                     )
 
-                                    if status == "success":
-                                        if len(result) == 2:
-                                            # Old format: (segments, info)
-                                            segments, info = result
-                                            transcription = " ".join(seg.text for seg in segments).strip()
+                                    # Convert frames to audio array
+                                    audio_array = np.frombuffer(b"".join(ambient_frames), dtype=np.int16)
+                                    audio = audio_array.astype(np.float32) / INT16_MAX_ABS_VALUE
+
+                                    # Calculate actual duration of this chunk
+                                    actual_duration = len(audio) / self.sample_rate
+
+                                    # Use the main transcription model with low priority
+                                    with self.transcription_lock:
+                                        chunk_id = f"ambient_{self.ambient_chunk_counter}"
+                                        status, result, priority, request_id = self._send_transcription_request(
+                                            audio, self.language, TranscriptionPriority.LOW, chunk_id
+                                        )
+
+                                        if status == "success":
+                                            if len(result) == 2:
+                                                # Old format: (segments, info)
+                                                segments, info = result
+                                                transcription = " ".join(seg.text for seg in segments).strip()
+                                            else:
+                                                # New format: (transcription, info, priority, request_id)
+                                                transcription, info, priority, request_id = result
+
+                                            # Preprocess the transcription
+                                            transcription = self._preprocess_output(transcription)
+
+                                            # Apply filtering if enabled
+                                            if self.ambient_filter_short and len(transcription.strip()) < self.ambient_min_length:
+                                                logging.debug(f"Filtered short ambient transcription: {transcription}")
+                                                continue
+
+                                            if transcription.strip():
+                                                logging.debug(f"Ambient transcription {chunk_id}: {transcription[:50]}...")
+
+                                                # Store transcription based on configuration and available services
+                                                self._handle_ambient_transcription_sync(transcription, current_time, chunk_id, actual_duration, info)
+                                            else:
+                                                logging.debug(f"Empty ambient transcription for chunk {chunk_id}")
+                                        elif status == "timeout":
+                                            logging.debug(f"Ambient transcription {chunk_id} timed out")
                                         else:
-                                            # New format: (transcription, info, priority, request_id)
-                                            transcription, info, priority, request_id = result
+                                            logging.error(f"Ambient transcription {chunk_id} error: {result}")
 
-                                        # Preprocess the transcription
-                                        transcription = self._preprocess_output(transcription)
-
-                                        # Apply filtering if enabled
-                                        if self.ambient_filter_short and len(transcription.strip()) < self.ambient_min_length:
-                                            logging.debug(f"Filtered short ambient transcription: {transcription}")
-                                            continue
-
-                                        if transcription.strip():
-                                            logging.debug(f"Ambient transcription {chunk_id}: {transcription[:50]}...")
-
-                                            # Store transcription based on configuration and available services
-                                            self._handle_ambient_transcription_sync(transcription, current_time, chunk_id, actual_duration, info)
-                                        else:
-                                            logging.debug(f"Empty ambient transcription for chunk {chunk_id}")
-                                    elif status == "timeout":
-                                        logging.debug(f"Ambient transcription {chunk_id} timed out")
-                                    else:
-                                        logging.error(f"Ambient transcription {chunk_id} error: {result}")
-
-                                self.ambient_chunk_counter += 1
+                                    self.ambient_chunk_counter += 1
+                                else:
+                                    logging.debug("No ambient frames available for processing")
                             else:
-                                logging.debug("No ambient frames available for processing")
+                                logging.debug("Not enough frames available for ambient processing")
 
                         except Exception as e:
                             logging.error(f"Error processing ambient audio chunk: {e}", exc_info=True)
@@ -2654,19 +2663,18 @@ class AudioToTextRecorder:
         """
         try:
             import asyncio
+            import threading
 
-            # Create a new event loop if we're not in an async context
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is running, create a task
-                    asyncio.create_task(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
-                else:
-                    # If loop is not running, run until complete
-                    loop.run_until_complete(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
-            except RuntimeError:
-                # No event loop, create a new one
-                asyncio.run(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
+            def run_async_storage():
+                """Run async storage in a separate thread to avoid event loop conflicts"""
+                try:
+                    asyncio.run(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
+                except Exception as e:
+                    logging.error(f"Error in async storage thread: {e}")
+
+            # Always run async operations in a separate thread to avoid event loop conflicts
+            storage_thread = threading.Thread(target=run_async_storage, daemon=True)
+            storage_thread.start()
 
         except Exception as e:
             logging.error(f"Error in sync ambient transcription handler: {e}")
@@ -3036,6 +3044,27 @@ class AudioToTextRecorder:
         Returns:
             self: The current instance of the class.
         """
+        # Initialize ambient transcription service if needed
+        if self.enable_ambient_transcription and self.ambient_service and self.ambient_db_manager:
+            try:
+                import asyncio
+                import threading
+
+                def init_ambient_service():
+                    """Initialize ambient service in a separate thread"""
+                    try:
+                        asyncio.run(self.ambient_service.initialize())
+                        logging.debug("Ambient transcription service initialized")
+                    except Exception as e:
+                        logging.error(f"Error initializing ambient service: {e}")
+
+                # Initialize in a separate thread to avoid blocking
+                init_thread = threading.Thread(target=init_ambient_service, daemon=True)
+                init_thread.start()
+
+            except Exception as e:
+                logging.warning(f"Error setting up ambient service initialization: {e}")
+
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):

@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 
 from app.config.config_manager import ConfigManager
 from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.langgraph.memory_store import get_combined_store
 
 from .database_manager import DatabaseManager
 from .models import AmbientTranscription
@@ -19,15 +20,14 @@ class AmbientTranscriptionService:
     def __init__(self, db_manager: DatabaseManager, config_manager: ConfigManager = None):
         self.db_manager = db_manager
         self.config_manager = config_manager or ConfigManager()
-        self.embeddings_model = None
-        self._embeddings_lock = asyncio.Lock()
+        self.vector_store = None
 
     async def initialize(self):
-        """Initialize the service and embeddings model if needed"""
+        """Initialize the service and vector store if needed"""
         try:
             # Check if vector similarity is enabled
             if self._is_vector_search_enabled():
-                await self._initialize_embeddings_model()
+                await self._initialize_vector_store()
             log_info("Ambient transcription service initialized")
         except Exception as e:
             log_error(f"Error initializing ambient transcription service: {e}")
@@ -39,47 +39,15 @@ class AmbientTranscriptionService:
         except Exception:
             return False
 
-    async def _initialize_embeddings_model(self):
-        """Initialize the embeddings model for vector similarity search"""
+    async def _initialize_vector_store(self):
+        """Initialize the vector store using existing SQLiteVec infrastructure"""
         try:
-            async with self._embeddings_lock:
-                if self.embeddings_model is None:
-                    # Import embeddings model based on configuration
-                    embeddings_provider = self.config_manager.get("general.embeddings.provider", "sentence-transformers")
-
-                    if embeddings_provider == "sentence-transformers":
-                        from sentence_transformers import SentenceTransformer
-
-                        model_name = self.config_manager.get("general.embeddings.sentence_transformers.model", "all-MiniLM-L6-v2")
-                        self.embeddings_model = SentenceTransformer(model_name)
-                        log_info(f"Initialized embeddings model: {model_name}")
-
-                    elif embeddings_provider == "openai":
-                        # For OpenAI embeddings, we'll need to implement API calls
-                        log_info("OpenAI embeddings provider configured")
-                        # TODO: Implement OpenAI embeddings integration
-
-                    else:
-                        log_error(f"Unsupported embeddings provider: {embeddings_provider}")
-
+            # Use the existing memory store infrastructure for vector search
+            self.vector_store = get_combined_store()
+            log_info("Vector store initialized for ambient transcriptions")
         except Exception as e:
-            log_error(f"Error initializing embeddings model: {e}")
-
-    async def generate_embedding(self, text: str) -> Optional[list[float]]:
-        """Generate embedding vector for the given text"""
-        try:
-            if not self._is_vector_search_enabled() or not self.embeddings_model:
-                return None
-
-            # Use sentence transformers
-            if hasattr(self.embeddings_model, "encode"):
-                embedding = self.embeddings_model.encode([text])[0]
-                return embedding.tolist()
-
-            return None
-        except Exception as e:
-            log_error(f"Error generating embedding: {e}")
-            return None
+            log_error(f"Error initializing vector store: {e}")
+            self.vector_store = None
 
     async def store_transcription(
         self,
@@ -92,20 +60,15 @@ class AmbientTranscriptionService:
         metadata: Optional[dict[str, Any]] = None,
         generate_embedding: bool = True,
     ) -> bool:
-        """Store an ambient transcription with optional embedding generation"""
+        """Store an ambient transcription with optional vector storage"""
         try:
-            # Generate embedding if enabled and requested
-            embedding = None
-            if generate_embedding and self._is_vector_search_enabled():
-                embedding = await self.generate_embedding(text)
-
             # Create transcription object
             transcription = AmbientTranscription.create(
                 text=text,
                 chunk_id=chunk_id,
                 duration=duration,
                 confidence=confidence,
-                embedding=embedding,
+                embedding=None,  # Vector store handles embedding generation
                 metadata=metadata,
                 session_id=session_id,
                 source_info={
@@ -117,6 +80,31 @@ class AmbientTranscriptionService:
 
             # Store in database
             success = await self.db_manager.store_ambient_transcription(transcription)
+
+            # If vector search is enabled and database storage succeeded, also store in vector store
+            if success and generate_embedding and self._is_vector_search_enabled() and self.vector_store:
+                try:
+                    # Store in vector store using ambient transcription namespace
+                    namespace = ("ambient", "transcriptions")
+
+                    # Prepare value for vector storage
+                    value = {
+                        "text": text,
+                        "chunk_id": chunk_id,
+                        "timestamp": timestamp,
+                        "duration": duration,
+                        "confidence": confidence,
+                        "session_id": session_id,
+                        "metadata": metadata or {},
+                    }
+
+                    # Store in vector store for similarity search
+                    self.vector_store.put(namespace, chunk_id, value)
+                    log_debug(f"Stored ambient transcription in vector store: {chunk_id}")
+
+                except Exception as e:
+                    log_error(f"Error storing in vector store: {e}")
+                    # Don't fail the entire operation if vector store fails
 
             if success:
                 log_debug(f"Stored ambient transcription: {chunk_id}")
@@ -138,24 +126,56 @@ class AmbientTranscriptionService:
             return []
 
     async def search_by_similarity(self, query: str, limit: int = 20, similarity_threshold: float = 0.7) -> list[AmbientTranscription]:
-        """Search ambient transcriptions by semantic similarity"""
+        """Search ambient transcriptions by semantic similarity using SQLiteVec"""
         try:
-            if not self._is_vector_search_enabled():
+            if not self._is_vector_search_enabled() or not self.vector_store:
                 log_debug("Vector search not enabled, falling back to text search")
                 return await self.search_by_text(query, limit)
 
-            # Generate embedding for query
-            query_embedding = await self.generate_embedding(query)
-            if not query_embedding:
-                log_error("Failed to generate embedding for query")
-                return await self.search_by_text(query, limit)
+            # Use the existing vector store for similarity search
+            namespace = ("ambient", "transcriptions")
+            results = self.vector_store.search(namespace, query=query, limit=limit)
 
-            # Search by similarity
-            return await self.db_manager.search_ambient_transcriptions_by_similarity(query_embedding, limit, similarity_threshold)
+            # Convert vector store results to AmbientTranscription objects
+            transcriptions = []
+            for item in results:
+                try:
+                    # Filter by similarity score if available
+                    if hasattr(item, "value") and isinstance(item.value, dict):
+                        score = item.value.get("_search_score", 1.0)
+                        if score < similarity_threshold:
+                            continue
+
+                    # Try to get the full transcription from database by chunk_id
+                    chunk_id = item.value.get("chunk_id") if hasattr(item, "value") else item.key
+                    db_results = await self.db_manager.get_ambient_transcription_by_chunk_id(chunk_id)
+
+                    if db_results:
+                        transcriptions.extend(db_results)
+                    else:
+                        # Fallback: create from vector store data
+                        if hasattr(item, "value") and isinstance(item.value, dict):
+                            transcription = AmbientTranscription.create(
+                                text=item.value.get("text", ""),
+                                chunk_id=chunk_id,
+                                duration=item.value.get("duration", 0.0),
+                                confidence=item.value.get("confidence"),
+                                metadata=item.value.get("metadata"),
+                                session_id=item.value.get("session_id"),
+                                source_info={"from_vector_store": True},
+                            )
+                            transcriptions.append(transcription)
+
+                except Exception as e:
+                    log_debug(f"Error processing search result: {e}")
+                    continue
+
+            return transcriptions[:limit]
 
         except Exception as e:
             log_error(f"Error searching ambient transcriptions by similarity: {e}")
-            return []
+            # Fallback to text search
+            return await self.search_by_text(query, limit)
 
     async def get_transcriptions_for_date(self, target_date=None) -> list[AmbientTranscription]:
         """Get all ambient transcriptions for a specific date"""

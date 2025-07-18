@@ -8,14 +8,12 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
+import pytest_asyncio
 
 from app.config.config_manager import ConfigManager
 from app.database.ambient_transcription_service import AmbientTranscriptionService
 from app.database.database_manager import DatabaseManager
 from app.database.models import AmbientTranscription
-
-
-import pytest_asyncio
 
 
 @pytest_asyncio.fixture
