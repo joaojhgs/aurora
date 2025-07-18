@@ -3,10 +3,7 @@ Integration test for ambient transcription with the main application.
 Tests the real-time processing system with priority queue.
 """
 
-import os
-import tempfile
 import time
-from unittest.mock import MagicMock, Mock, patch
 
 
 # Test that demonstrates how to integrate ambient transcription with main.py
@@ -177,7 +174,6 @@ def test_priority_system():
 
 def test_real_time_processing_pattern():
     """Test the real-time processing pattern"""
-    import threading
     import time
 
     # Mock real-time processing
@@ -210,14 +206,12 @@ def test_real_time_processing_pattern():
 def test_callback_storage_patterns():
     """Test different storage patterns for callbacks"""
     import datetime
-    import json
 
     # Test file storage pattern
     file_results = []
 
     def file_storage_callback(text, timestamp, chunk_id):
         """Mock file storage callback"""
-        date_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
         time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
         entry = f"[{time_str}] ({chunk_id}) {text}"
         file_results.append(entry)
