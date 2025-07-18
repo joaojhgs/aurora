@@ -12,7 +12,6 @@ import pytest
 
 from app.database.database_manager import DatabaseManager
 from app.database.models import Message, MessageType
-from app.langgraph.memory_store import MemoryStore
 
 
 class TestConcurrentOperations:
@@ -76,9 +75,10 @@ class TestConcurrentOperations:
     @pytest.mark.asyncio
     async def test_memory_store_under_load(self):
         """Test memory store performance under load."""
-        # Create a memory store
-        store = MemoryStore(":memory:")
-        await store.initialize()
+        # Get the memory store singleton
+        from app.langgraph.memory_store import get_combined_store
+
+        store = get_combined_store()
 
         try:
             # Number of memories to store
@@ -146,15 +146,14 @@ class TestConcurrentOperations:
 
         # Import actual implementation (not mocked)
         from app.langgraph.graph import build_graph
-        from app.langgraph.memory_store import MemoryStore
+        from app.langgraph.memory_store import get_combined_store
         from app.langgraph.state import State
 
         # Run in a separate process to measure memory usage
         def run_model():
             async def async_run():
-                # Create memory store
-                store = MemoryStore(":memory:")
-                await store.initialize()
+                # Get memory store singleton
+                store = get_combined_store()
 
                 try:
                     # Build the actual graph

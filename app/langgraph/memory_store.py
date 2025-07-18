@@ -533,27 +533,100 @@ class SQLiteVecStore(BaseStore):
             return []
 
 
-# Create embeddings instance
-embeddings, model_info = get_embeddings()
+class MemoryStoreManager:
+    """Singleton manager for memory and tools stores with lazy initialization."""
 
-# Create separate SQLite vector stores for memories and tools in the data folder
-memories_store = SQLiteVecStore(db_file="./data/memories.db", table="memories", embeddings=embeddings)
+    _instance = None
+    _lock = None
 
-tools_store = SQLiteVecStore(db_file="./data/tools.db", table="tools", embeddings=embeddings)
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+            # Import threading only when needed
+            import threading
 
-# Check if embedding model changed and re-embed if necessary
-log_info("Checking for embedding model changes...")
-memories_reembedded = check_and_update_embedding_model(memories_store, model_info)
-tools_reembedded = check_and_update_embedding_model(tools_store, model_info)
+            cls._lock = threading.Lock()
+        return cls._instance
 
-if memories_reembedded or tools_reembedded:
-    log_info("Embedding model update completed!")
-    if memories_reembedded:
-        log_info("  ✅ Memories re-embedded successfully")
-    if tools_reembedded:
-        log_info("  ✅ Tools re-embedded successfully")
-else:
-    log_info("Embedding model unchanged - no re-embedding needed")
+    def __init__(self):
+        if self._initialized:
+            return
+
+        self._memories_store = None
+        self._tools_store = None
+        self._combined_store = None
+        self._initialized = True
+
+    def _initialize_stores(self):
+        """Initialize the memory and tools stores with embeddings."""
+        if self._memories_store is not None and self._tools_store is not None:
+            return  # Already initialized
+
+        with self._lock:
+            # Double-check after acquiring lock
+            if self._memories_store is not None and self._tools_store is not None:
+                return
+
+            log_info("Initializing memory and tools stores...")
+
+            # Create embeddings instance
+            embeddings, model_info = get_embeddings()
+
+            # Create separate SQLite vector stores for memories and tools in the data folder
+            self._memories_store = SQLiteVecStore(db_file="./data/memories.db", table="memories", embeddings=embeddings)
+            self._tools_store = SQLiteVecStore(db_file="./data/tools.db", table="tools", embeddings=embeddings)
+
+            # Check if embedding model changed and re-embed if necessary
+            log_info("Checking for embedding model changes...")
+            memories_reembedded = check_and_update_embedding_model(self._memories_store, model_info)
+            tools_reembedded = check_and_update_embedding_model(self._tools_store, model_info)
+
+            if memories_reembedded or tools_reembedded:
+                log_info("Embedding model update completed!")
+                if memories_reembedded:
+                    log_info("  ✅ Memories re-embedded successfully")
+                if tools_reembedded:
+                    log_info("  ✅ Tools re-embedded successfully")
+            else:
+                log_info("Embedding model unchanged - no re-embedding needed")
+
+            # Create combined store
+            self._combined_store = CombinedSQLiteVecStore(self._memories_store, self._tools_store)
+
+            log_info("SQLiteVec-based memory and tools storage initialized successfully")
+
+    @property
+    def memories_store(self):
+        """Get the memories store, initializing if necessary."""
+        if self._memories_store is None:
+            self._initialize_stores()
+        return self._memories_store
+
+    @property
+    def tools_store(self):
+        """Get the tools store, initializing if necessary."""
+        if self._tools_store is None:
+            self._initialize_stores()
+        return self._tools_store
+
+    @property
+    def store(self):
+        """Get the combined store, initializing if necessary."""
+        if self._combined_store is None:
+            self._initialize_stores()
+        return self._combined_store
+
+    def reset(self):
+        """Reset the stores (useful for testing)."""
+        with self._lock:
+            self._memories_store = None
+            self._tools_store = None
+            self._combined_store = None
+
+
+# Create the singleton instance
+_store_manager = MemoryStoreManager()
 
 
 # Combined store that routes operations to the appropriate store based on namespace
@@ -628,7 +701,32 @@ class CombinedSQLiteVecStore(BaseStore):
         raise NotImplementedError("Async batch operations not implemented")
 
 
-# Create the combined store for backward compatibility
-store = CombinedSQLiteVecStore(memories_store, tools_store)
+# Public API functions for accessing the stores
+def get_memory_store():
+    """Get the memories store instance."""
+    return _store_manager.memories_store
 
-log_info("SQLiteVec-based memory and tools storage initialized successfully")
+
+def get_tools_store():
+    """Get the tools store instance."""
+    return _store_manager.tools_store
+
+
+def get_combined_store():
+    """Get the combined store instance."""
+    return _store_manager.store
+
+
+# Backward compatibility - expose the store as module-level variable
+# This will be lazily initialized when first accessed
+class _LazyStore:
+    """Lazy proxy for the store to maintain backward compatibility."""
+
+    def __getattr__(self, name):
+        return getattr(_store_manager.store, name)
+
+    def __call__(self, *args, **kwargs):
+        return _store_manager.store(*args, **kwargs)
+
+
+store = _LazyStore()

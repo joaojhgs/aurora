@@ -351,40 +351,81 @@ class TestMCPIntegration:
 
         mock_tools = [mock_add, mock_subtract]
 
+        # Mock the memory store manager
+        mock_store_manager = Mock()
+        mock_store_manager.tools_store = Mock()
+
         with (
             patch("app.langgraph.mcp_client.get_mcp_tools", return_value=mock_tools),
-            patch("app.langgraph.tools.tools.tool_lookup", {}) as mock_lookup,
-            patch("app.langgraph.tools.tools.tools", []) as mock_tools_list,
-            patch("app.langgraph.tools.tools.sync_tools_with_database"),
+            patch("app.langgraph.memory_store._store_manager", mock_store_manager),
         ):
 
-            from app.langgraph.tools.tools import load_mcp_tools_async
+            # Mock problematic imports before importing the module
+            with patch.dict(
+                "sys.modules",
+                {
+                    "pyaudio._portaudio": Mock(),
+                    "RealtimeTTS": Mock(),
+                    "RealtimeTTS.text_to_stream": Mock(),
+                    "RealtimeTTS.stream_player": Mock(),
+                    "duckduckgo_search": Mock(),
+                    "primp": Mock(),
+                },
+            ):
+                # Import the module after setting up patches
+                import app.langgraph.tools.tools as tools_module
 
-            await load_mcp_tools_async()
+                # Mock the module-level variables directly
+                with (
+                    patch.object(tools_module, "tool_lookup", {}) as mock_lookup,
+                    patch.object(tools_module, "tools", []) as mock_tools_list,
+                    patch.object(tools_module, "sync_tools_with_database"),
+                ):
 
-            # Verify tools were added to the system
-            assert len(mock_tools_list) == 2
-            assert "add" in mock_lookup
-            assert "subtract" in mock_lookup
+                    await tools_module.load_mcp_tools_async()
+
+                    # Verify tools were added to the system
+                    assert len(mock_tools_list) == 2
+                    assert "add" in mock_lookup
+                    assert "subtract" in mock_lookup
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_mcp_error_handling_in_tool_system(self):
         """Test error handling when MCP tools fail to load."""
+        # Mock the memory store manager
+        mock_store_manager = Mock()
+        mock_store_manager.tools_store = Mock()
+
         with (
             patch("app.langgraph.mcp_client.get_mcp_tools", side_effect=Exception("Connection failed")),
-            patch("app.langgraph.tools.tools.tool_lookup", {}) as mock_lookup,
-            patch("app.langgraph.tools.tools.tools", []) as mock_tools_list,
+            patch("app.langgraph.memory_store._store_manager", mock_store_manager),
         ):
 
-            from app.langgraph.tools.tools import load_mcp_tools_async
+            # Mock problematic imports before importing the module
+            with patch.dict(
+                "sys.modules",
+                {
+                    "pyaudio._portaudio": Mock(),
+                    "RealtimeTTS": Mock(),
+                    "RealtimeTTS.text_to_stream": Mock(),
+                    "RealtimeTTS.stream_player": Mock(),
+                    "duckduckgo_search": Mock(),
+                    "primp": Mock(),
+                },
+            ):
+                # Import the module after setting up patches
+                import app.langgraph.tools.tools as tools_module
 
-            # Should not raise exception, just log error
-            await load_mcp_tools_async()
+                # Mock the module-level variables directly
+                with patch.object(tools_module, "tool_lookup", {}) as mock_lookup, patch.object(tools_module, "tools", []) as mock_tools_list:
 
-            # No tools should be added
-            assert len(mock_tools_list) == 0
-            assert len(mock_lookup) == 0
+                    # Should not raise exception, just log error
+                    await tools_module.load_mcp_tools_async()
+
+                    # No tools should be added
+                    assert len(mock_tools_list) == 0
+                    assert len(mock_lookup) == 0
 
 
 class TestMCPConfigurationValidation:
