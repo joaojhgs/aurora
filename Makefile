@@ -43,7 +43,7 @@ typing:
 # Run all checks
 check:
 	@echo "Running all code quality checks..."
-	black --check app tests
+	black --check app tests --line-length=150
 	flake8 app tests scripts
 	# mypy --explicit-package-bases app tests scripts
 

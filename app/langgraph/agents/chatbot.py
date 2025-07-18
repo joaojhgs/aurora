@@ -16,18 +16,18 @@ The chatbot agent is the main agent coordinator in the graph.
 llm = None
 
 # Get the configured LLM provider
-provider = config_manager.get("llm.provider", "openai")
+provider = config_manager.get("general.llm.provider", "openai")
 
 if provider == "openai":
     from langchain_openai import ChatOpenAI
 
-    openai_options = config_manager.get_section("llm.third_party.openai.options")
+    openai_options = config_manager.get_section("general.llm.third_party.openai.options")
     if openai_options and openai_options.get("model"):
         llm = ChatOpenAI(**openai_options)
         log_info(f"Initialized OpenAI LLM with model: {openai_options['model']}")
 
 elif provider == "huggingface_endpoint":
-    hf_endpoint_options = config_manager.get_section("llm.third_party.huggingface_endpoint.options")
+    hf_endpoint_options = config_manager.get_section("general.llm.third_party.huggingface_endpoint.options")
 
     if hf_endpoint_options and hf_endpoint_options.get("endpoint_url") and hf_endpoint_options.get("access_token"):
         try:
