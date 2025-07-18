@@ -289,3 +289,87 @@ class CronJob:
             and datetime.now() >= self.next_run_time
             and (self.status != JobStatus.FAILED or self.can_retry())
         )
+
+
+@dataclass
+class AmbientTranscription:
+    """Model for ambient transcription storage"""
+
+    id: str
+    text: str
+    timestamp: datetime
+    chunk_id: str
+    duration: float  # Duration of the audio chunk in seconds
+    confidence: Optional[float] = None  # Transcription confidence score
+    embedding: Optional[str] = None  # Vector embedding for similarity search (JSON-encoded)
+    metadata: Optional[dict[str, Any]] = None  # Additional metadata
+    session_id: Optional[str] = None  # Optional session grouping
+    source_info: Optional[dict[str, Any]] = None  # Source audio information
+
+    @classmethod
+    def create(
+        cls,
+        text: str,
+        chunk_id: str,
+        duration: float,
+        confidence: Optional[float] = None,
+        embedding: Optional[list[float]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        session_id: Optional[str] = None,
+        source_info: Optional[dict[str, Any]] = None,
+    ) -> "AmbientTranscription":
+        """Create a new ambient transcription"""
+        return cls(
+            id=str(uuid.uuid4()),
+            text=text,
+            timestamp=datetime.now(),
+            chunk_id=chunk_id,
+            duration=duration,
+            confidence=confidence,
+            embedding=json.dumps(embedding) if embedding else None,
+            metadata=metadata,
+            session_id=session_id,
+            source_info=source_info,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert ambient transcription to dictionary for database storage"""
+        return {
+            "id": self.id,
+            "text": self.text,
+            "timestamp": self.timestamp.isoformat(),
+            "chunk_id": self.chunk_id,
+            "duration": self.duration,
+            "confidence": self.confidence,
+            "embedding": self.embedding,
+            "metadata": json.dumps(self.metadata) if self.metadata else None,
+            "session_id": self.session_id,
+            "source_info": json.dumps(self.source_info) if self.source_info else None,
+            "created_at": self.timestamp.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AmbientTranscription":
+        """Create ambient transcription from dictionary (database row)"""
+        return cls(
+            id=data["id"],
+            text=data["text"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            chunk_id=data["chunk_id"],
+            duration=data["duration"],
+            confidence=data["confidence"],
+            embedding=data["embedding"],
+            metadata=json.loads(data["metadata"]) if data["metadata"] else None,
+            session_id=data["session_id"],
+            source_info=json.loads(data["source_info"]) if data["source_info"] else None,
+        )
+
+    def get_embedding_vector(self) -> Optional[list[float]]:
+        """Get the embedding as a list of floats"""
+        if self.embedding:
+            return json.loads(self.embedding)
+        return None
+
+    def set_embedding_vector(self, embedding: list[float]):
+        """Set the embedding from a list of floats"""
+        self.embedding = json.dumps(embedding)

@@ -368,7 +368,7 @@ def build_executable():
         if executable_path.exists():
             click.echo("✅ Build successful!")
             click.echo("📦 Executable: {executable_path}")
-            click.echo(f"📊 Size: {executable_path.stat().st_size / (1024*1024):.1f} MB")
+            click.echo(f"📊 Size: {executable_path.stat().st_size / (1024 * 1024):.1f} MB")
             success = True
         else:
             click.echo("❌ Build failed - executable not found")

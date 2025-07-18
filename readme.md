@@ -35,6 +35,7 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 2. **Real-Time Speech-to-Text (STT)**:
    - Convert user speech into text using **Whisper** (OpenAI's lightweight model for local processing).
+   - **Ambient Transcription**: Continuous background audio transcription for day summaries with priority queue system.
 
 3. **Large Language Model (LLM) Integration**:
    - **Multi-Provider Support**: Choose from OpenAI, HuggingFace Pipeline (local), HuggingFace Endpoint (remote), or Llama.cpp

@@ -1,10 +1,13 @@
+import asyncio
+import datetime
+import os
 import sys
 from threading import Thread
 
 from dotenv import load_dotenv
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.helpers.runAsyncInThread import run_async_in_thread
 
@@ -97,9 +100,41 @@ if __name__ == "__main__":
             # Fallback if UI isn't initialized
             run_async_in_thread(stream_graph_updates(text))
 
+    # Initialize database and ambient transcription service for database storage
+    db_manager = None
+
+    # Check if ambient transcription database storage is enabled
+    ambient_config = config_manager.get("general.speech_to_text.ambient_transcription", {})
+    ambient_enabled = ambient_config.get("enable", False)
+    use_database_storage = ambient_config.get("use_database_storage", True)
+
+    if ambient_enabled and use_database_storage:
+        try:
+            log_info("Setting up ambient transcription database integration...")
+            from app.database.database_manager import DatabaseManager
+
+            # Initialize database manager (service initialization is handled internally)
+            db_manager = DatabaseManager()
+
+            # Initialize database synchronously for main thread
+            import asyncio
+
+            asyncio.run(db_manager.initialize())
+
+            log_info("Ambient transcription database integration initialized")
+
+        except Exception as e:
+            log_error(f"Error setting up ambient transcription database integration: {e}")
+            log_info("Falling back to file-based ambient transcription storage")
+            db_manager = None
+
     # Create and start the audio recorder in a separate thread
     def start_recorder():
         log_info("Starting audio recorder...")
+
+        # Get ambient transcription configuration
+        ambient_config = config_manager.get("general.speech_to_text.ambient_transcription", {})
+
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
@@ -117,6 +152,15 @@ if __name__ == "__main__":
             openwakeword_speedx_noise_reduction=config_manager.get("general.speech_to_text.wakeword_speedx_noise_reduction", False),
             # No need for CLI STT indication if UI is activated
             spinner=not config_manager.get("ui.activate", False),
+            # Ambient transcription configuration
+            enable_ambient_transcription=ambient_config.get("enable", False),
+            ambient_chunk_duration=ambient_config.get("chunk_duration", 3.0),
+            ambient_storage_path=ambient_config.get("storage_path", "ambient_logs/"),
+            ambient_filter_short=ambient_config.get("filter_short_transcriptions", True),
+            ambient_min_length=ambient_config.get("min_transcription_length", 10),
+            # Database integration for ambient transcription (callback handled internally)
+            ambient_db_manager=db_manager,
+            ambient_config_manager=config_manager,
         ) as recorder:
 
             while True:
