@@ -72,6 +72,12 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Only install dependencies for the plugins you'll want to use, keeping the sizes low
    - Easy setup, just need to activate it and fill the correct env credentials if necessary
 
+9. **MCP (Model Context Protocol) Support**:
+   - Connect to external MCP servers to extend Aurora's capabilities
+   - Support for both local (stdio) and remote (HTTP) MCP servers
+   - Dynamic tool loading from MCP servers with authentication support
+   - Full integration with Aurora's semantic tool selection system
+
 ---
 
 ## Installation and Usage
@@ -386,6 +392,13 @@ This architecture ensures Aurora remains privacy-focused (all processing local),
    - [x] Use tool descriptions to RAG match what are the possible best tools for the user request
       (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
 - [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
+- [x] **MCP (Model Context Protocol) Integration**
+   - [x] Add support for connecting to external MCP servers
+   - [x] Support both local (stdio) and remote (HTTP) MCP servers
+   - [x] Dynamic tool loading from MCP servers into Aurora's tool system
+   - [x] Authentication support for remote MCP servers
+   - [x] Example MCP servers (math, weather) with documentation
+   - [x] Full integration with Aurora's RAG-based tool selection
 
 # Long term vision:
 
