@@ -1,12 +1,12 @@
-import sys
-import os
 import datetime
+import os
+import sys
 from threading import Thread
 
 from dotenv import load_dotenv
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_info, log_error
+from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.helpers.runAsyncInThread import run_async_in_thread
 
@@ -153,7 +153,6 @@ if __name__ == "__main__":
             openwakeword_speedx_noise_reduction=config_manager.get("general.speech_to_text.wakeword_speedx_noise_reduction", False),
             # No need for CLI STT indication if UI is activated
             spinner=not config_manager.get("ui.activate", False),
-
             # Ambient transcription configuration
             enable_ambient_transcription=ambient_config.get("enable", False),
             ambient_chunk_duration=ambient_config.get("chunk_duration", 3.0),
