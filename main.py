@@ -134,7 +134,7 @@ if __name__ == "__main__":
         log_info("Starting audio recorder...")
 
         # Get ambient transcription configuration
-        ambient_config = config_manager.get("speech_to_text.ambient_transcription", {})
+        ambient_config = config_manager.get("general.speech_to_text.ambient_transcription", {})
 
         with AudioToTextRecorder(
             wakeword_backend="oww",
