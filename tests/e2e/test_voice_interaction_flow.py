@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.database.database_manager import DatabaseManager
-from app.langgraph.memory_store import MemoryStore
 from app.langgraph.state import State
 from app.speech_to_text.stt import STT
 from app.text_to_speech.tts import TTS
@@ -41,7 +40,9 @@ class TestVoiceInteractionFlow:
     @pytest.fixture
     async def mock_memory_store(self):
         """Create a mock memory store."""
-        store = MagicMock(spec=MemoryStore)
+        from app.langgraph.memory_store import CombinedSQLiteVecStore
+
+        store = MagicMock(spec=CombinedSQLiteVecStore)
         store.initialize = AsyncMock()
         store.store_memory = AsyncMock()
         store.get_memories = AsyncMock(return_value=[])

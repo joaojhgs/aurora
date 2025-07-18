@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_info
 from app.langgraph.agents.chatbot import chatbot
-from app.langgraph.memory_store import store
+from app.langgraph.memory_store import get_combined_store
 from app.langgraph.state import State
 from app.langgraph.tools.tools import tools
 from app.text_to_speech.tts import play
@@ -58,6 +58,8 @@ graph_builder.add_conditional_edges("tools", tools_end_condition, {"END": END, "
 graph_builder.set_entry_point("chatbot")
 
 memory = MemorySaver()
+
+store = get_combined_store()
 
 # Compile the graph
 graph = graph_builder.compile(checkpointer=memory, store=store)
