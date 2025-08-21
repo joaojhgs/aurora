@@ -57,12 +57,7 @@
                 "chunk_duration": 3.0,
                 "storage_path": "ambient_logs/",
                 "filter_short_transcriptions": true,
-                "min_transcription_length": 10,
-                "use_database_storage": true,
-                "use_file_storage": false,
-                "enable_vector_search": true,
-                "similarity_threshold": 0.7,
-                "max_search_results": 20
+                "min_transcription_length": 10
             }
         },
         "text_to_speech": {

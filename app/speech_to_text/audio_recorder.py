@@ -396,9 +396,6 @@ class AudioToTextRecorder:
         # Backward compatibility parameters (for old periodic implementation)
         ambient_transcription_interval: float = 300.0,  # 5 minutes (for backward compatibility)
         ambient_buffer_duration: float = 30.0,  # 30 seconds (for backward compatibility)
-        # Database integration parameters
-        ambient_db_manager=None,
-        ambient_config_manager=None,
     ):
         """
         Initializes an audio recorder and  transcription
@@ -638,12 +635,6 @@ class AudioToTextRecorder:
             used in real-time implementation).
         - ambient_buffer_duration (float, default=30.0): Backward compatibility
             parameter for buffer duration (not used in real-time implementation).
-        - ambient_db_manager (DatabaseManager, default=None): Database manager
-            instance for storing ambient transcriptions in database with vector
-            similarity search support.
-        - ambient_config_manager (ConfigManager, default=None): Configuration
-            manager instance for accessing ambient transcription settings including
-            database vs file storage preferences and vector search options.
 
         Raises:
             Exception: Errors related to initializing transcription
@@ -766,22 +757,6 @@ class AudioToTextRecorder:
         self.ambient_audio_buffer = None
         self.ambient_chunk_counter = 0
         self.last_ambient_chunk_time = 0
-
-        # Database integration for ambient transcriptions
-        self.ambient_db_manager = ambient_db_manager
-        self.ambient_config_manager = ambient_config_manager
-        self.ambient_service = None
-
-        # Initialize ambient transcription service if database integration is provided
-        if self.enable_ambient_transcription and self.ambient_db_manager:
-            try:
-                from app.database.ambient_transcription_service import AmbientTranscriptionService
-
-                self.ambient_service = AmbientTranscriptionService(self.ambient_db_manager, self.ambient_config_manager)
-                # We'll initialize the service async later
-            except ImportError as e:
-                logging.warning(f"Could not import ambient transcription service: {e}")
-                self.ambient_service = None
 
         # Initialize the logging configuration with the specified level
         log_format = "RealTimeSTT: %(name)s - %(levelname)s - %(message)s"
@@ -2645,43 +2620,8 @@ class AudioToTextRecorder:
                 # Convert log probability to confidence score (approximate)
                 confidence = min(1.0, max(0.0, (transcription_info.avg_logprob + 1.0)))
 
-            # Check configuration for storage preferences
-            use_database = True  # Default to database storage
-            use_file_storage = False  # Default to no file storage
-
-            if self.ambient_config_manager:
-                use_database = self.ambient_config_manager.get("general.speech_to_text.ambient_transcription.use_database_storage", True)
-                use_file_storage = self.ambient_config_manager.get("general.speech_to_text.ambient_transcription.use_file_storage", False)
-
-            # Store in database if enabled and service is available
-            if use_database and self.ambient_service:
-                try:
-                    success = await self.ambient_service.store_transcription(
-                        text=transcription,
-                        timestamp=timestamp,
-                        chunk_id=chunk_id,
-                        duration=duration,
-                        confidence=confidence,
-                        session_id=None,  # Could be configured later for session grouping
-                        metadata={
-                            "source": "ambient_transcription",
-                            "language": self.language,
-                            "model_info": self._extract_serializable_transcription_info(transcription_info),
-                        },
-                        generate_embedding=True,
-                    )
-                    if success:
-                        logging.debug(f"Stored ambient transcription {chunk_id} in database")
-                    else:
-                        logging.error(f"Failed to store ambient transcription {chunk_id} in database")
-                except Exception as e:
-                    logging.error(f"Error storing ambient transcription in database: {e}")
-                    # Fall back to file storage if database fails
-                    use_file_storage = True
-
-            # Store in file if enabled or as fallback
-            if use_file_storage:
-                self._save_ambient_transcription(transcription, timestamp, chunk_id)
+            # Store in file (always enabled now)
+            self._save_ambient_transcription(transcription, timestamp, chunk_id)
 
             # Call custom callback if provided (for backward compatibility)
             if self.on_ambient_transcription:
@@ -2700,26 +2640,10 @@ class AudioToTextRecorder:
 
     def _handle_ambient_transcription_sync(self, transcription, timestamp, chunk_id, duration, transcription_info=None):
         """
-        Handle ambient transcription storage based on configuration (sync version).
+        Handle ambient transcription storage (sync version - file storage only).
         """
         try:
-            import asyncio
-            import threading
-
-            def run_async_storage():
-                """Run async storage in a separate thread to avoid event loop conflicts"""
-                try:
-                    asyncio.run(self._handle_ambient_transcription(transcription, timestamp, chunk_id, duration, transcription_info))
-                except Exception as e:
-                    logging.error(f"Error in async storage thread: {e}")
-
-            # Always run async operations in a separate thread to avoid event loop conflicts
-            storage_thread = threading.Thread(target=run_async_storage, daemon=True)
-            storage_thread.start()
-
-        except Exception as e:
-            logging.error(f"Error in sync ambient transcription handler: {e}")
-            # Fallback to simple file storage
+            # Store in file
             self._save_ambient_transcription(transcription, timestamp, chunk_id)
 
             # Call custom callback if provided (for backward compatibility)
@@ -2733,6 +2657,11 @@ class AudioToTextRecorder:
                         self.on_ambient_transcription(transcription, timestamp, chunk_id)
                 except Exception as e:
                     logging.error(f"Error in custom ambient transcription callback: {e}")
+
+        except Exception as e:
+            logging.error(f"Error in ambient transcription handler: {e}")
+            # Fallback to simple file storage
+            self._save_ambient_transcription(transcription, timestamp, chunk_id)
 
     def _is_silero_speech(self, chunk):
         """
@@ -3085,27 +3014,6 @@ class AudioToTextRecorder:
         Returns:
             self: The current instance of the class.
         """
-        # Initialize ambient transcription service if needed
-        if self.enable_ambient_transcription and self.ambient_service and self.ambient_db_manager:
-            try:
-                import asyncio
-                import threading
-
-                def init_ambient_service():
-                    """Initialize ambient service in a separate thread"""
-                    try:
-                        asyncio.run(self.ambient_service.initialize())
-                        logging.debug("Ambient transcription service initialized")
-                    except Exception as e:
-                        logging.error(f"Error initializing ambient service: {e}")
-
-                # Initialize in a separate thread to avoid blocking
-                init_thread = threading.Thread(target=init_ambient_service, daemon=True)
-                init_thread.start()
-
-            except Exception as e:
-                logging.warning(f"Error setting up ambient service initialization: {e}")
-
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
