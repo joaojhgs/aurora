@@ -2586,6 +2586,47 @@ class AudioToTextRecorder:
         except Exception as e:
             logging.error(f"Error saving ambient transcription: {e}", exc_info=True)
 
+    def _extract_serializable_transcription_info(self, transcription_info):
+        """
+        Extract only JSON-serializable fields from transcription_info.
+
+        Args:
+            transcription_info: Transcription info object from faster_whisper
+
+        Returns:
+            dict: Dictionary containing only JSON-serializable fields
+        """
+        if not transcription_info:
+            return None
+
+        serializable_info = {}
+
+        # Extract common serializable fields from faster_whisper transcription info
+        serializable_fields = [
+            "language",
+            "language_probability",
+            "duration",
+            "duration_after_vad",
+            "all_language_probs",
+            "avg_logprob",
+            "no_speech_prob",
+            "compression_ratio",
+        ]
+
+        for field in serializable_fields:
+            if hasattr(transcription_info, field):
+                value = getattr(transcription_info, field)
+                # Only include if the value is natively JSON serializable
+                if value is None or isinstance(value, (str, int, float, bool, list, dict)):
+                    serializable_info[field] = value
+                # Convert numpy types to native Python types
+                elif hasattr(value, "item"):  # numpy scalar
+                    serializable_info[field] = value.item()
+                elif hasattr(value, "tolist"):  # numpy array
+                    serializable_info[field] = value.tolist()
+
+        return serializable_info if serializable_info else None
+
     async def _handle_ambient_transcription(self, transcription, timestamp, chunk_id, duration, transcription_info=None):
         """
         Handle ambient transcription storage based on configuration (async version).
@@ -2625,7 +2666,7 @@ class AudioToTextRecorder:
                         metadata={
                             "source": "ambient_transcription",
                             "language": self.language,
-                            "model_info": transcription_info.__dict__ if transcription_info else None,
+                            "model_info": self._extract_serializable_transcription_info(transcription_info),
                         },
                         generate_embedding=True,
                     )
