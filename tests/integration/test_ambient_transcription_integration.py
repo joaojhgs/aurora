@@ -216,21 +216,6 @@ def test_callback_storage_patterns():
         entry = f"[{time_str}] ({chunk_id}) {text}"
         file_results.append(entry)
 
-    # Test database storage pattern
-    db_results = []
-
-    def db_storage_callback(text, timestamp, chunk_id):
-        """Mock database storage callback"""
-        db_results.append(
-            {
-                "text": text,
-                "timestamp": timestamp,
-                "datetime": datetime.datetime.fromtimestamp(timestamp).isoformat(),
-                "chunk_id": chunk_id,
-                "length": len(text),
-            }
-        )
-
     # Test filtered storage pattern
     filtered_results = []
 
@@ -257,12 +242,10 @@ def test_callback_storage_patterns():
 
     for text, timestamp, chunk_id in test_data:
         file_storage_callback(text, timestamp, chunk_id)
-        db_storage_callback(text, timestamp, chunk_id)
         filtered_storage_callback(text, timestamp, chunk_id)
 
     # Verify results
     assert len(file_results) == 4  # File storage gets everything
-    assert len(db_results) == 4  # Database storage gets everything
     assert len(filtered_results) == 2  # Filtered storage only gets meaningful entries
 
     # Check filtered results

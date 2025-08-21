@@ -303,7 +303,7 @@ class TestAmbientTranscriptionConfiguration(unittest.TestCase):
         self.assertIsInstance(ambient_config["min_transcription_length"], int)
 
     def test_callback_patterns(self):
-        """Test different callback patterns"""
+        """Test file storage callback pattern"""
         # Test file storage callback
         file_results = []
 
@@ -312,29 +312,17 @@ class TestAmbientTranscriptionConfiguration(unittest.TestCase):
             entry = f"[{time_str}] ({chunk_id}) {text}"
             file_results.append(entry)
 
-        # Test database callback
-        db_results = []
-
-        def db_callback(text, timestamp, chunk_id):
-            db_results.append(
-                {"text": text, "timestamp": timestamp, "chunk_id": chunk_id, "datetime": datetime.datetime.fromtimestamp(timestamp).isoformat()}
-            )
-
-        # Test both callbacks
+        # Test callback
         test_text = "Test transcription"
         test_timestamp = time.time()
         test_chunk_id = "chunk_001"
 
         file_callback(test_text, test_timestamp, test_chunk_id)
-        db_callback(test_text, test_timestamp, test_chunk_id)
 
         # Verify results
         self.assertEqual(len(file_results), 1)
-        self.assertEqual(len(db_results), 1)
         self.assertIn(test_text, file_results[0])
         self.assertIn(test_chunk_id, file_results[0])
-        self.assertEqual(db_results[0]["text"], test_text)
-        self.assertEqual(db_results[0]["chunk_id"], test_chunk_id)
 
 
 if __name__ == "__main__":

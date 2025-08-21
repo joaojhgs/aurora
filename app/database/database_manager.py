@@ -13,7 +13,7 @@ import aiosqlite
 from app.helpers.aurora_logger import log_error, log_info
 
 from .migration_manager import MigrationManager
-from .models import AmbientTranscription, Message
+from .models import Message
 
 
 class DatabaseManager:

@@ -103,43 +103,6 @@ def save_to_file(text, timestamp, chunk_id):
         f.write(log_entry)
 ```
 
-### Database Storage
-
-```python
-import sqlite3
-from datetime import datetime
-
-def save_to_database(text, timestamp, chunk_id):
-    """Save ambient transcription to database"""
-    conn = sqlite3.connect("ambient_transcriptions.db")
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ambient_transcriptions (
-            id INTEGER PRIMARY KEY,
-            text TEXT NOT NULL,
-            timestamp REAL NOT NULL,
-            datetime TEXT NOT NULL,
-            chunk_id TEXT NOT NULL,
-            length INTEGER NOT NULL
-        )
-    """)
-    
-    cursor.execute("""
-        INSERT INTO ambient_transcriptions (text, timestamp, datetime, chunk_id, length)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        text,
-        timestamp,
-        datetime.fromtimestamp(timestamp).isoformat(),
-        chunk_id,
-        len(text)
-    ))
-    
-    conn.commit()
-    conn.close()
-```
-
 ### Filtered Storage
 
 ```python
