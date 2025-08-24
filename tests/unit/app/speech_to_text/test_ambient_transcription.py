@@ -2,7 +2,12 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
-from app.speech_to_text.audio_recorder import AudioToTextRecorder
+from app.speech_to_text.audio_recorder import (
+    INIT_AMBIENT_CHUNK_DURATION,
+    INIT_AMBIENT_FILTER_SHORT,
+    INIT_AMBIENT_MIN_LENGTH,
+    AudioToTextRecorder,
+)
 
 # Mock numpy before importing anything that depends on it
 sys.modules["numpy"] = Mock()

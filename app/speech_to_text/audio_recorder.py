@@ -168,14 +168,8 @@ class TranscriptionWorker:
             if self.conn.poll(0.01):
                 try:
                     data = self.conn.recv()
-                    if len(data) >= 3:
-                        # New format: (audio, language, priority, request_id)
-                        if len(data) == 4:
-                            audio, language, priority, request_id = data
-                        else:
-                            # Handle unexpected data format
-                            logging.warning(f"Unexpected data format received: {len(data)} items")
-                            continue
+                    if len(data) == 4:
+                        audio, language, priority, request_id = data
 
                         with self.ambient_pause_lock:
                             # Skip ambient requests if paused
@@ -186,23 +180,9 @@ class TranscriptionWorker:
                             self.priority_queue.put((priority.value, self.request_counter, audio, language, request_id))
                             self.request_counter += 1
                     else:
-                        # Legacy format: (audio, language)
-                        if len(data) == 2:
-                            audio, language = data
-                            self.priority_queue.put(
-                                (
-                                    TranscriptionPriority.HIGH.value,
-                                    self.request_counter,
-                                    audio,
-                                    language,
-                                    None,
-                                )
-                            )
-                            self.request_counter += 1
-                        else:
-                            # Handle unexpected data format
-                            logging.warning(f"Unexpected legacy data format received: {len(data)} items")
-                            continue
+                        # Handle unexpected data format
+                        logging.warning(f"Unexpected data format received: {len(data)} items")
+                        continue
                 except Exception as e:
                     logging.error(f"Error receiving data from connection: {e}", exc_info=True)
             else:
@@ -1542,28 +1522,15 @@ class AudioToTextRecorder:
                     )
                     response = self.parent_transcription_pipe.recv()
 
-                    # Handle backward compatibility - response might be old format
-                    if len(response) == 2:
-                        # Old format: (status, result)
-                        status, result = response
-                        priority = TranscriptionPriority.HIGH
-                        request_id = "legacy"
-                    else:
-                        # New format: (status, result, priority, request_id)
-                        status, result, priority, request_id = response
+                    # New format: (status, result, priority, request_id)
+                    status, result, priority, request_id = response
 
                     self.transcribe_count -= 1
 
                 self.allowed_to_early_transcribe = True
                 self._set_state("inactive")
                 if status == "success":
-                    if len(result) == 2:
-                        # Old format: (segments, info)
-                        segments, info = result
-                        transcription = " ".join(seg.text for seg in segments).strip()
-                    else:
-                        # New format: (transcription, info, priority, request_id)
-                        transcription, info, priority, request_id = result
+                    transcription, info, priority, request_id = result
 
                     self.detected_language = info.language if info.language_probability > 0 else None
                     self.detected_language_probability = info.language_probability
@@ -2318,24 +2285,10 @@ class AudioToTextRecorder:
                                     logging.debug("Receive from realtime worker after transcription request to main model")
                                     response = self.parent_transcription_pipe.recv()
 
-                                    # Handle backward compatibility
-                                    if len(response) == 2:
-                                        # Old format: (status, result)
-                                        status, result = response
-                                        priority = TranscriptionPriority.HIGH
-                                        request_id = "realtime_legacy"
-                                    else:
-                                        # New format: (status, result, priority, request_id)
-                                        status, result, priority, request_id = response
+                                    status, result, priority, request_id = response
 
                                     if status == "success":
-                                        if len(result) == 2:
-                                            # Old format: (segments, info)
-                                            segments, info = result
-                                            transcription = " ".join(seg.text for seg in segments).strip()
-                                        else:
-                                            # New format: (transcription, info, priority, request_id)
-                                            transcription, info, priority, request_id = result
+                                        transcription, info, priority, request_id = result
 
                                         self.detected_realtime_language = info.language if info.language_probability > 0 else None
                                         self.detected_realtime_language_probability = info.language_probability
@@ -2510,13 +2463,7 @@ class AudioToTextRecorder:
                                         )
 
                                         if status == "success":
-                                            if len(result) == 2:
-                                                # Old format: (segments, info)
-                                                segments, info = result
-                                                transcription = " ".join(seg.text for seg in segments).strip()
-                                            else:
-                                                # New format: (transcription, info, priority, request_id)
-                                                transcription, info, priority, request_id = result
+                                            transcription, info, priority, request_id = result
 
                                             # Preprocess the transcription
                                             transcription = self._preprocess_output(transcription)
@@ -2890,14 +2837,7 @@ class AudioToTextRecorder:
             if self.parent_transcription_pipe.poll(timeout=30):
                 response = self.parent_transcription_pipe.recv()
 
-                # Handle backward compatibility
-                if len(response) == 2:
-                    # Old format: (status, result)
-                    status, result = response
-                    return (status, result, priority, request_id)
-                else:
-                    # New format: (status, result, priority, request_id)
-                    return response
+                return response
             else:
                 logging.warning(f"Transcription request timed out (priority: {priority.name})")
                 return ("timeout", None, priority, request_id)
