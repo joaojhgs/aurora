@@ -250,17 +250,13 @@ class CronJob:
             name=data["name"],
             schedule_type=ScheduleType(data["schedule_type"]),
             schedule_value=data["schedule_value"],
-            next_run_time=(
-                datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None
-            ),
+            next_run_time=(datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None),
             callback_module=data["callback_module"],
             callback_function=data["callback_function"],
             callback_args=json.loads(data["callback_args"]) if data["callback_args"] else None,
             is_active=data["is_active"],
             status=JobStatus(data["status"]),
-            last_run_time=(
-                datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None
-            ),
+            last_run_time=(datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None),
             last_run_result=data["last_run_result"],
             retry_count=data["retry_count"],
             max_retries=data["max_retries"],

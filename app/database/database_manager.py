@@ -201,9 +201,7 @@ class DatabaseManager:
 
         try:
             async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),)
-                )
+                cursor = await db.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),))
                 await db.commit()
                 return cursor.rowcount
         except Exception as e:
