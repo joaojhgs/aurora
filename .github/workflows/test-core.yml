@@ -38,14 +38,6 @@ jobs:
       run: |
         pytest tests/integration -v --cov=app --cov-report=xml:integration-coverage.xml --cov-append
         
-    - name: Upload coverage report
-      uses: codecov/codecov-action@v4
-      with:
-        files: ./unit-coverage.xml,./integration-coverage.xml
-        flags: unittests,integrationtests
-        fail_ci_if_error: false
-        token: ${{ secrets.CODECOV_TOKEN }}
-        
     - name: Generate HTML coverage report
       run: |
         pytest tests/unit tests/integration -v --cov=app --cov-report=html:coverage-report

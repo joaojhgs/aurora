@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from threading import Thread
 
@@ -50,7 +51,6 @@ if __name__ == "__main__":
 
     # Initialize the scheduler system
     log_info("Initializing scheduler system...")
-    import asyncio
 
     from app.scheduler import get_cron_service
 
@@ -100,6 +100,10 @@ if __name__ == "__main__":
     # Create and start the audio recorder in a separate thread
     def start_recorder():
         log_info("Starting audio recorder...")
+
+        # Get ambient transcription configuration
+        ambient_config = config_manager.get("general.speech_to_text.ambient_transcription", {})
+
         with AudioToTextRecorder(
             wakeword_backend="oww",
             model="medium",
@@ -117,6 +121,12 @@ if __name__ == "__main__":
             openwakeword_speedx_noise_reduction=config_manager.get("general.speech_to_text.wakeword_speedx_noise_reduction", False),
             # No need for CLI STT indication if UI is activated
             spinner=not config_manager.get("ui.activate", False),
+            # Ambient transcription configuration
+            enable_ambient_transcription=ambient_config.get("enable", False),
+            ambient_chunk_duration=ambient_config.get("chunk_duration", 3.0),
+            ambient_storage_path=ambient_config.get("storage_path", "ambient_logs/"),
+            ambient_filter_short=ambient_config.get("filter_short_transcriptions", True),
+            ambient_min_length=ambient_config.get("min_transcription_length", 10),
         ) as recorder:
 
             while True:
