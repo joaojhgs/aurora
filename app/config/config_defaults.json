@@ -1,0 +1,120 @@
+{
+    "general": {
+        "llm": {
+            "provider": "openai",
+            "third_party": {
+                "openai": {
+                    "options": {
+                        "model": "gpt-4o",
+                        "temperature": 0.7,
+                        "max_tokens": 512
+                    }
+                },
+                "huggingface_endpoint": {
+                    "options": {
+                        "endpoint_url": "",
+                        "model": "",
+                        "access_token": "",
+                        "temperature": 0.7,
+                        "max_tokens": 512
+                    }
+                }
+            },
+            "local": {
+                "huggingface_pipeline": {
+                    "options": {
+                        "model": "microsoft/DialoGPT-medium",
+                        "temperature": 0.7,
+                        "torch_dtype": "auto"
+                    }
+                },
+                "llama_cpp": {
+                    "options": {
+                        "model_path": "",
+                        "temperature": 1.0,
+                        "max_tokens": 512,
+                        "n_ctx": 2048,
+                        "n_gpu_layers": 0,
+                        "n_batch": 1000,
+                        "top_p": 0.95,
+                        "top_k": 64,
+                        "repeat_penalty": 1.0,
+                        "min_p": 0.0,
+                        "chat_format": "chatml-function-calling"
+                    }
+                }
+            }
+        },
+        "embeddings": {
+            "use_local": true
+        },
+        "speech_to_text": {
+            "language": "",
+            "silero_deactivity_detection": false,
+            "wakeword_speedx_noise_reduction": false,
+            "ambient_transcription": {
+                "enable": false,
+                "chunk_duration": 3.0,
+                "storage_path": "ambient_logs/",
+                "filter_short_transcriptions": true,
+                "min_transcription_length": 10
+            }
+        },
+        "text_to_speech": {
+            "model_file_path": "/voice_models/en_US-lessac-medium.onnx",
+            "model_config_file_path": "/voice_models/en_US-lessac-medium.onnx.txt",
+            "model_sample_rate": 22050,
+            "piper_path": ""
+        },
+        "hardware_acceleration": {
+            "tts": false,
+            "stt": false,
+            "ocr_bg": false,
+            "ocr_curr": false,
+            "llm": false
+        }
+    },
+    "ui": {
+        "activate": false,
+        "dark_mode": false,
+        "debug": false
+    },
+    "plugins": {
+        "google": {
+            "credentials_file": "google_credentials.json"
+        },
+        "jira": {
+            "activate": false,
+            "api_token": "",
+            "username": "",
+            "instance_url": "https://jira.atlassian.net/"
+        },
+        "openrecall": {
+            "activate": false
+        },
+        "brave_search": {
+            "activate": false,
+            "api_key": ""
+        },
+        "github": {
+            "activate": false,
+            "app_id": "",
+            "app_private_key": "",
+            "repository": ""
+        },
+        "slack": {
+            "activate": false,
+            "user_token": ""
+        },
+        "gmail": {
+            "activate": false
+        },
+        "gcalendar": {
+            "activate": false
+        }
+    },
+    "mcp": {
+        "enabled": true,
+        "servers": {}
+    }
+}
