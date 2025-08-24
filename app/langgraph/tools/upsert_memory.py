@@ -21,7 +21,7 @@ def upsert_memory_tool(
     # The LLM can use this tool to store a new memory
     mem_id = memory_id or uuid.uuid4()
     store.put(
-        ("main", "memories"),
+        ("memories",),  # Simplified to single workspace name
         key=str(mem_id),
         value={"text": content},
     )

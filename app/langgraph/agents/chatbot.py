@@ -130,7 +130,7 @@ def chatbot(state: State, store: BaseStore):
 
     # Vector search for the history of memories
 
-    items = store.search(("main", "memories"), query=state["messages"][-1].content, limit=3)
+    items = store.search(("memories",), query=state["messages"][-1].content, limit=3)  # Simplified to single workspace name
     memories = "\n".join(f"{item.value['text']} (score: {item.value['_search_score']})" for item in items)
     memories = f"## Similar memories\n{memories}" if memories else ""
 

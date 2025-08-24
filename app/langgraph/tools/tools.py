@@ -112,7 +112,7 @@ def sync_tools_with_database():
 
     # Get existing tools from database
     try:
-        existing_items = store.retrieve_items(("tools",), limit=1000)  # Get all tools
+        existing_items = store.retrieve_items(("tools",), limit=1000)  # Simplified to single workspace name
         existing_tools = {item.key: item.value for item in existing_items}
         log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
         for name in existing_tools.keys():
@@ -364,7 +364,7 @@ def get_tools(query: str, top_k: int = 5) -> list[Callable]:
     ensure_mcp_tools_loaded()
 
     # Search vector store
-    results = store.search(("tools",), query=query, limit=top_k)
+    results = store.search(("tools",), query=query, limit=top_k)  # Simplified to single workspace name
 
     log_debug(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
 

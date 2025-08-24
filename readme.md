@@ -181,6 +181,8 @@ Aurora leverages a comprehensive stack of open-source technologies, organized by
 
 - **Database**: [SQLite](https://www.sqlite.org/) with [aiosqlite](https://aiosqlite.omnilib.dev/) - Async local database
 - **Vector Storage**: [sqlite-vec](https://github.com/asg017/sqlite-vec) - Vector similarity search in SQLite
+- **Chroma Integration**: [Chroma](https://www.trychroma.com/) - Advanced vector database with local and server options
+- **Flexible Backends**: Switch between SQLiteVec and Chroma via configuration
 
 ### 🖥️ User Interface
 
