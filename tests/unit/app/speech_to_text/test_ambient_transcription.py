@@ -71,14 +71,12 @@ class TestAmbientTranscription(unittest.TestCase):
                                         spinner=False,
                                         no_log_file=True,
                                         enable_ambient_transcription=True,
-                                        ambient_transcription_interval=10,
-                                        ambient_buffer_duration=5,
+                                        ambient_chunk_duration=3.0,
                                         on_ambient_transcription=self.ambient_callback,
                                     )
 
                                     self.assertTrue(recorder.enable_ambient_transcription)
-                                    self.assertEqual(recorder.ambient_transcription_interval, 10)
-                                    self.assertEqual(recorder.ambient_buffer_duration, 5)
+                                    self.assertEqual(recorder.ambient_chunk_duration, 3.0)
                                     self.assertEqual(recorder.on_ambient_transcription, self.ambient_callback)
                                     self.assertIsNotNone(recorder.ambient_audio_buffer)
 
@@ -91,7 +89,7 @@ class TestAmbientTranscription(unittest.TestCase):
                         with patch("faster_whisper.WhisperModel"):
                             with patch("app.speech_to_text.audio_recorder.mp.Pipe", return_value=(Mock(), Mock())):
                                 with patch("app.speech_to_text.audio_recorder.mp.Event", return_value=Mock()):
-                                    buffer_duration = 20
+                                    chunk_duration = 20
                                     sample_rate = 16000
                                     buffer_size = 512
 
@@ -100,12 +98,12 @@ class TestAmbientTranscription(unittest.TestCase):
                                         spinner=False,
                                         no_log_file=True,
                                         enable_ambient_transcription=True,
-                                        ambient_buffer_duration=buffer_duration,
+                                        ambient_chunk_duration=chunk_duration,
                                         sample_rate=sample_rate,
                                         buffer_size=buffer_size,
                                     )
 
-                                    expected_maxlen = int((sample_rate // buffer_size) * buffer_duration)
+                                    expected_maxlen = int((sample_rate // buffer_size) * chunk_duration)
                                     self.assertEqual(recorder.ambient_audio_buffer.maxlen, expected_maxlen)
 
     def test_feed_audio_with_ambient_transcription(self):
@@ -122,7 +120,7 @@ class TestAmbientTranscription(unittest.TestCase):
                                         spinner=False,
                                         no_log_file=True,
                                         enable_ambient_transcription=True,
-                                        ambient_buffer_duration=5,
+                                        ambient_chunk_duration=5,
                                     )
 
                                     # Mock audio data as bytes
@@ -173,9 +171,10 @@ class TestAmbientTranscription(unittest.TestCase):
                                         use_microphone=False, spinner=False, no_log_file=True, enable_ambient_transcription=True
                                     )
 
-                                    # Check default values
-                                    self.assertEqual(recorder.ambient_transcription_interval, 300)  # 5 minutes
-                                    self.assertEqual(recorder.ambient_buffer_duration, 30)  # 30 seconds
+                                    # Check default values for chunk-based processing
+                                    self.assertEqual(recorder.ambient_chunk_duration, 3.0)  # 3 seconds
+                                    self.assertEqual(recorder.ambient_filter_short, True)
+                                    self.assertEqual(recorder.ambient_min_length, 10)
 
 
 if __name__ == "__main__":

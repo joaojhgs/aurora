@@ -198,3 +198,5 @@ voice_models/
 config.json*
 
 instructions
+
+/ambient_logs/
