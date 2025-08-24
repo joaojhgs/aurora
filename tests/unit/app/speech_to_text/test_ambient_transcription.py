@@ -172,9 +172,9 @@ class TestAmbientTranscription(unittest.TestCase):
                                     )
 
                                     # Check default values for chunk-based processing
-                                    self.assertEqual(recorder.ambient_chunk_duration, 3.0)  # 3 seconds
-                                    self.assertEqual(recorder.ambient_filter_short, True)
-                                    self.assertEqual(recorder.ambient_min_length, 10)
+                                    self.assertEqual(recorder.ambient_chunk_duration, INIT_AMBIENT_CHUNK_DURATION)  # 3 seconds
+                                    self.assertEqual(recorder.ambient_filter_short, INIT_AMBIENT_FILTER_SHORT)
+                                    self.assertEqual(recorder.ambient_min_length, INIT_AMBIENT_MIN_LENGTH)
 
 
 if __name__ == "__main__":
