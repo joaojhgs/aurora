@@ -49,7 +49,6 @@
             "use_local": true
         },
         "memory_store": {
-            "backend": "sqlite",
             "chroma": {
                 "type": "local",
                 "local": {

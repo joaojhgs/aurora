@@ -1,24 +1,22 @@
 """
-Tests for the new Chroma memory store integration.
-This file adds new tests specifically for Chroma while ensuring backward compatibility.
+Unit tests for the simplified Chroma-only memory store.
 """
 
 import pytest
 import tempfile
 import shutil
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from app.langgraph.memory_store import (
-    ChromaMemoryStore, 
-    CombinedChromaStore,
-    MemoryStoreManager, 
-    CHROMA_AVAILABLE
+    ChromaVectorStore,
+    ChromaMemoryStoreAdapter,
+    get_combined_store
 )
 
 
-class TestChromaMemoryStore:
-    """Tests for the ChromaMemoryStore class."""
+class TestChromaVectorStore:
+    """Tests for the ChromaVectorStore singleton class."""
 
     @pytest.fixture
     def mock_embeddings(self):
@@ -28,283 +26,212 @@ class TestChromaMemoryStore:
         embeddings.embed_query = MagicMock(return_value=[0.1, 0.2, 0.3])
         return embeddings
 
-    @pytest.fixture
-    def temp_chroma_config(self):
-        """Create temporary Chroma configuration."""
-        temp_dir = tempfile.mkdtemp()
-        config = {
+    def test_singleton_behavior(self):
+        """Test that ChromaVectorStore is a singleton."""
+        store1 = ChromaVectorStore()
+        store2 = ChromaVectorStore()
+        assert store1 is store2
+
+    @patch('app.langgraph.memory_store.get_embeddings')
+    @patch('app.langgraph.memory_store.config_manager')
+    def test_initialization(self, mock_config, mock_get_embeddings):
+        """Test ChromaVectorStore initialization."""
+        mock_embeddings = MagicMock()
+        mock_get_embeddings.return_value = mock_embeddings
+        mock_config.get.return_value = {
             "type": "local",
-            "local": {
-                "persist_directory": temp_dir
-            }
+            "local": {"persist_directory": "./data/chroma"},
+            "server": {"host": "localhost", "port": 8000}
         }
-        yield config
-        # Cleanup
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    def test_chroma_store_initialization(self, mock_embeddings, temp_chroma_config):
-        """Test ChromaMemoryStore initialization."""
-        store = ChromaMemoryStore(
-            collection_name="test_memories",
-            embeddings=mock_embeddings,
-            chroma_config=temp_chroma_config
-        )
-        assert store.collection_name == "test_memories"
-        assert store.embeddings == mock_embeddings
-        assert store.chroma_config == temp_chroma_config
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    @pytest.mark.asyncio
-    async def test_chroma_store_put_and_get(self, mock_embeddings, temp_chroma_config):
-        """Test storing and retrieving data with Chroma."""
-        store = ChromaMemoryStore(
-            collection_name="test_memories",
-            embeddings=mock_embeddings,
-            chroma_config=temp_chroma_config
-        )
         
-        namespace = ("test", "memories")
+        store = ChromaVectorStore()
+        store.reset()  # Reset for clean test
+        store._ensure_initialized()
+        
+        assert store._embeddings == mock_embeddings
+        assert store._chroma_config is not None
+
+
+class TestChromaMemoryStoreAdapter:
+    """Tests for the ChromaMemoryStoreAdapter class."""
+
+    @pytest.fixture
+    def mock_chroma_store(self):
+        """Create a mock ChromaVectorStore."""
+        with patch('app.langgraph.memory_store.ChromaVectorStore') as mock_class:
+            mock_instance = MagicMock()
+            mock_collection = MagicMock()
+            mock_instance.get_collection.return_value = mock_collection
+            mock_class.return_value = mock_instance
+            yield mock_instance, mock_collection
+
+    def test_collection_routing(self):
+        """Test that namespaces are routed to correct collections."""
+        adapter = ChromaMemoryStoreAdapter()
+        
+        # Test memories namespace
+        assert adapter._get_collection_name(("main", "memories")) == "memories"
+        
+        # Test tools namespace
+        assert adapter._get_collection_name(("tools",)) == "tools"
+        
+        # Test default routing
+        assert adapter._get_collection_name(("other",)) == "memories"
+
+    def test_text_content_formatting(self):
+        """Test text content formatting for different value types."""
+        adapter = ChromaMemoryStoreAdapter()
+        
+        # Test with text field
+        value1 = {"text": "This is a memory"}
+        assert adapter._format_text_content(value1) == "This is a memory"
+        
+        # Test with name and description
+        value2 = {"name": "test_tool", "description": "A test tool"}
+        assert adapter._format_text_content(value2) == "test_tool: A test tool"
+        
+        # Test fallback to JSON
+        value3 = {"other": "data"}
+        result = adapter._format_text_content(value3)
+        assert "other" in result and "data" in result
+
+    @pytest.mark.asyncio
+    async def test_put_operation(self, mock_chroma_store):
+        """Test storing data through the adapter."""
+        mock_instance, mock_collection = mock_chroma_store
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_instance
+        
+        # Mock get to return None (no existing item)
+        adapter.get = MagicMock(return_value=None)
+        
+        namespace = ("main", "memories")
         key = "test_key"
-        value = {"text": "Test memory content", "metadata": {"test": True}}
+        value = {"text": "Test memory content"}
+        
+        await adapter.aput(namespace, key, value)
+        
+        # Verify collection was called
+        mock_instance.get_collection.assert_called_with("memories")
+        mock_collection.add_texts.assert_called_once()
 
-        # Store the value
-        await store.aput(namespace, key, value)
-
-        # Retrieve the value
-        item = await store.aget(namespace, key)
+    @pytest.mark.asyncio
+    async def test_get_operation(self, mock_chroma_store):
+        """Test retrieving data through the adapter."""
+        mock_instance, mock_collection = mock_chroma_store
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_instance
+        
+        # Mock collection get response
+        mock_collection.get.return_value = {
+            'documents': ['test content'],
+            'metadatas': [{
+                'namespace': 'main|memories',
+                'key': 'test_key',
+                'value': '{"text": "Test memory content"}'
+            }]
+        }
+        
+        namespace = ("main", "memories")
+        key = "test_key"
+        
+        item = await adapter.aget(namespace, key)
+        
         assert item is not None
         assert item.key == key
         assert item.namespace == namespace
-        assert item.value["text"] == "Test memory content"
 
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
     @pytest.mark.asyncio
-    async def test_chroma_store_search(self, mock_embeddings, temp_chroma_config):
-        """Test searching with Chroma."""
-        store = ChromaMemoryStore(
-            collection_name="test_memories",
-            embeddings=mock_embeddings,
-            chroma_config=temp_chroma_config
-        )
+    async def test_search_operation(self, mock_chroma_store):
+        """Test searching data through the adapter."""
+        mock_instance, mock_collection = mock_chroma_store
         
-        namespace = ("test", "memories")
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_instance
         
-        # Store some test data
-        await store.aput(namespace, "key1", {"text": "Test memory one"})
-        await store.aput(namespace, "key2", {"text": "Test memory two"})
-
-        # Search for data
-        results = await store.asearch(namespace, query="test memory", limit=5)
-        
-        # Should find the stored items
-        assert len(results) >= 0  # Results may vary depending on embedding mocks
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    @pytest.mark.asyncio
-    async def test_chroma_store_delete(self, mock_embeddings, temp_chroma_config):
-        """Test deleting data with Chroma."""
-        store = ChromaMemoryStore(
-            collection_name="test_memories",
-            embeddings=mock_embeddings,
-            chroma_config=temp_chroma_config
-        )
-        
-        namespace = ("test", "memories")
-        key = "test_key"
-        value = {"text": "Test memory content"}
-
-        # Store and verify
-        await store.aput(namespace, key, value)
-        item = await store.aget(namespace, key)
-        assert item is not None
-
-        # Delete and verify
-        await store.adelete(namespace, key)
-        item = await store.aget(namespace, key)
-        assert item is None
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    @pytest.mark.asyncio
-    async def test_chroma_store_list(self, mock_embeddings, temp_chroma_config):
-        """Test listing items in namespace with Chroma."""
-        store = ChromaMemoryStore(
-            collection_name="test_memories",
-            embeddings=mock_embeddings,
-            chroma_config=temp_chroma_config
-        )
-        
-        namespace = ("test", "memories")
-        
-        # Store multiple items
-        await store.aput(namespace, "key1", {"text": "Memory one"})
-        await store.aput(namespace, "key2", {"text": "Memory two"})
-
-        # List items
-        items = await store.alist(namespace, limit=10)
-        
-        # Should find at least the stored items
-        assert len(items) >= 0  # May vary due to mock embeddings
-
-
-class TestCombinedChromaStore:
-    """Tests for the CombinedChromaStore class."""
-
-    @pytest.fixture
-    def mock_embeddings(self):
-        """Create mock embeddings for testing."""
-        embeddings = MagicMock()
-        embeddings.embed_documents = MagicMock(return_value=[[0.1, 0.2, 0.3]])
-        embeddings.embed_query = MagicMock(return_value=[0.1, 0.2, 0.3])
-        return embeddings
-
-    @pytest.fixture
-    def temp_chroma_config(self):
-        """Create temporary Chroma configuration."""
-        temp_dir = tempfile.mkdtemp()
-        config = {
-            "type": "local",
-            "local": {
-                "persist_directory": temp_dir
-            }
+        # Mock search results
+        mock_doc = MagicMock()
+        mock_doc.metadata = {
+            'namespace': 'main|memories',
+            'key': 'test_key',
+            'value': '{"text": "Test memory content"}'
         }
-        yield config
-        # Cleanup
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    def test_combined_chroma_store_routing(self, mock_embeddings, temp_chroma_config):
-        """Test namespace routing in CombinedChromaStore."""
-        memories_store = ChromaMemoryStore("memories", mock_embeddings, temp_chroma_config)
-        tools_store = ChromaMemoryStore("tools", mock_embeddings, temp_chroma_config)
         
-        combined_store = CombinedChromaStore(memories_store, tools_store)
+        mock_collection.similarity_search_with_score.return_value = [
+            (mock_doc, 0.9)
+        ]
         
-        # Test routing
-        assert combined_store._get_store(("main", "memories")) == memories_store
-        assert combined_store._get_store(("tools",)) == tools_store
-        assert combined_store._get_store(("other",)) == memories_store  # Default
-
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
-    @pytest.mark.asyncio
-    async def test_combined_chroma_store_operations(self, mock_embeddings, temp_chroma_config):
-        """Test basic operations with CombinedChromaStore."""
-        memories_store = ChromaMemoryStore("memories", mock_embeddings, temp_chroma_config)
-        tools_store = ChromaMemoryStore("tools", mock_embeddings, temp_chroma_config)
+        namespace = ("main", "memories")
+        query = "test query"
         
-        combined_store = CombinedChromaStore(memories_store, tools_store)
+        results = await adapter.asearch(namespace, query=query, limit=5)
         
-        # Test memory storage
-        memory_namespace = ("main", "memories")
-        await combined_store.aput(memory_namespace, "mem1", {"text": "A memory"})
+        # Verify search was called
+        mock_collection.similarity_search_with_score.assert_called_once()
         
-        # Test tool storage
-        tool_namespace = ("tools",)
-        await combined_store.aput(tool_namespace, "tool1", {"name": "test_tool", "description": "A tool"})
-        
-        # Verify retrieval
-        memory_item = await combined_store.aget(memory_namespace, "mem1")
-        tool_item = await combined_store.aget(tool_namespace, "tool1")
-        
-        assert memory_item is not None
-        assert tool_item is not None
 
+class TestMemoryStoreAPI:
+    """Tests for the public API functions."""
 
-class TestMemoryStoreManagerWithChroma:
-    """Tests for MemoryStoreManager with Chroma support."""
+    def test_get_combined_store_singleton(self):
+        """Test that get_combined_store returns the same instance."""
+        store1 = get_combined_store()
+        store2 = get_combined_store()
+        assert store1 is store2
 
-    def test_backend_type_detection(self):
-        """Test that backend type is correctly detected."""
-        manager = MemoryStoreManager()
-        
-        # Should handle configuration properly
-        backend_type = manager.get_backend_type()
-        assert backend_type in ["sqlite", "chroma"]
-
-    def test_manager_reset(self):
-        """Test that manager can be reset."""
-        manager = MemoryStoreManager()
-        manager.reset()
-        
-        # After reset, properties should be None until re-initialized
-        assert manager._memories_store is None
-        assert manager._tools_store is None
-        assert manager._combined_store is None
-
-
-class TestBackwardCompatibility:
-    """Tests to ensure backward compatibility is maintained."""
-
-    def test_existing_api_preserved(self):
-        """Test that existing API functions still work."""
-        from app.langgraph.memory_store import get_memory_store, get_tools_store, get_combined_store
+    def test_api_functions_exist(self):
+        """Test that all expected API functions exist."""
+        from app.langgraph.memory_store import get_memory_store, get_tools_store, get_combined_store, store
         
         # These should not raise errors
         memory_store = get_memory_store()
         tools_store = get_tools_store()
         combined_store = get_combined_store()
         
-        # All should be BaseStore instances
-        from langgraph.store.base import BaseStore
-        assert isinstance(memory_store, BaseStore)
-        assert isinstance(tools_store, BaseStore)
-        assert isinstance(combined_store, BaseStore)
-
-    def test_store_lazy_proxy(self):
-        """Test that the lazy store proxy still works."""
-        from app.langgraph.memory_store import store
+        # All should return the same ChromaMemoryStoreAdapter instance
+        assert memory_store is tools_store
+        assert tools_store is combined_store
         
-        # Should be able to access attributes
+        # Test lazy store proxy
         assert hasattr(store, 'put')
         assert hasattr(store, 'get')
         assert hasattr(store, 'delete')
         assert hasattr(store, 'search')
 
 
-# Additional integration tests
-class TestChromaIntegration:
-    """Integration tests for full Chroma functionality."""
+class TestBackwardCompatibility:
+    """Tests to ensure backward compatibility is maintained."""
 
-    @pytest.mark.skipif(not CHROMA_AVAILABLE, reason="Chroma not available")
     @pytest.mark.asyncio
-    async def test_full_workflow(self):
-        """Test a complete workflow with Chroma backend."""
-        # This test simulates the actual usage pattern in the application
+    async def test_existing_usage_patterns(self):
+        """Test that existing code patterns still work."""
+        from app.langgraph.memory_store import get_combined_store
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Mock configuration
-            from app.config.config_manager import config_manager
-            
-            # Temporarily override config
-            original_config = config_manager._config.copy() if config_manager._config else {}
-            
-            try:
-                config_manager._config = {
-                    "general": {
-                        "memory_store": {
-                            "backend": "chroma",
-                            "chroma": {
-                                "type": "local",
-                                "local": {
-                                    "persist_directory": temp_dir
-                                }
-                            }
-                        },
-                        "embeddings": {
-                            "use_local": True
-                        }
-                    }
-                }
-                
-                # Reset manager to pick up new config
-                manager = MemoryStoreManager()
-                manager.reset()
-                
-                # This would normally initialize Chroma stores, but may fail due to missing sentence-transformers
-                # The test verifies the configuration and setup logic works
-                backend_type = manager.get_backend_type()
-                assert backend_type == "chroma"
-                
-            finally:
-                # Restore original config
-                config_manager._config = original_config
+        store = get_combined_store()
+        
+        # Test that the expected methods exist and can be called
+        assert hasattr(store, 'put')
+        assert hasattr(store, 'get')
+        assert hasattr(store, 'delete')
+        assert hasattr(store, 'retrieve_items')
+        assert hasattr(store, 'search')
+        
+        # Test async methods
+        assert hasattr(store, 'aput')
+        assert hasattr(store, 'aget')
+        assert hasattr(store, 'adelete')
+        assert hasattr(store, 'alist')
+        assert hasattr(store, 'asearch')
+
+    def test_namespace_compatibility(self):
+        """Test that existing namespace patterns are handled correctly."""
+        adapter = ChromaMemoryStoreAdapter()
+        
+        # Test existing namespace patterns used in the codebase
+        memories_ns = ("main", "memories")
+        tools_ns = ("tools",)
+        
+        assert adapter._get_collection_name(memories_ns) == "memories"
+        assert adapter._get_collection_name(tools_ns) == "tools"

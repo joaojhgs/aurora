@@ -1,90 +1,159 @@
 """
-Unit tests for the LangGraph memory store with mock objects.
+Unit tests for the simplified Chroma memory store with mock objects.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 
-# Mock SQLiteVecStore class
-class MockSQLiteVecStore:
-    """Mock implementation of the SQLiteVecStore class."""
-
-    def __init__(self, db_path=":memory:", table="test_memories", embeddings=None):
-        self.db_file = db_path
-        self.table = table
-        self.embeddings = embeddings or MagicMock()
-        self.vector_store = None
-
-    def _get_vector_store(self):
-        """Get the vector store."""
-        if self.vector_store is None:
-            self.vector_store = MagicMock()
-        return self.vector_store
-
-    async def aput(self, namespace, key, value):
-        """Store a value in the vector store."""
-        vector_store = self._get_vector_store()
-        vector_store.add_texts.return_value = ["doc_id"]
-        vector_store.add_texts(["content"], metadatas=[{"key": key}])
-        return True
-
-    async def asearch(self, namespace, query, limit=5):
-        """Search the vector store."""
-        vector_store = self._get_vector_store()
-        mock_results = [(f"Result {i}", 0.9 - (i * 0.1)) for i in range(min(limit, 5))]
-        vector_store.similarity_search_with_score.return_value = mock_results
-        vector_store.similarity_search_with_score(query, k=limit)
-        return mock_results
-
-
-class TestMemoryStore:
-    """Tests for the MemoryStore with mock SQLiteVecStore."""
+class TestMemoryStoreSimplified:
+    """Tests for the simplified Chroma memory store with mocks."""
 
     @pytest.fixture
-    def mock_store(self):
-        """Create a mock SQLiteVecStore."""
-        return MockSQLiteVecStore()
+    def mock_chroma_collection(self):
+        """Create a mock Chroma collection."""
+        collection = MagicMock()
+        collection.add_texts.return_value = ["doc_id"]
+        collection.get.return_value = {
+            'documents': ['test content'],
+            'metadatas': [{'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}]
+        }
+        collection.similarity_search_with_score.return_value = [
+            (MagicMock(metadata={'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}), 0.9)
+        ]
+        collection.similarity_search.return_value = [
+            MagicMock(metadata={'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'})
+        ]
+        return collection
+
+    @pytest.fixture
+    def mock_chroma_store(self, mock_chroma_collection):
+        """Create a mock ChromaVectorStore."""
+        with patch('app.langgraph.memory_store.ChromaVectorStore') as mock_class:
+            mock_instance = MagicMock()
+            mock_instance.get_collection.return_value = mock_chroma_collection
+            mock_class.return_value = mock_instance
+            return mock_instance
 
     @pytest.mark.asyncio
-    async def test_store_initialization(self, mock_store):
+    async def test_store_initialization(self, mock_chroma_store):
         """Test store initialization."""
-        assert mock_store.db_file == ":memory:"
-        assert mock_store.table == "test_memories"
-        assert mock_store.embeddings is not None
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        # Test that collections can be accessed
+        collection = adapter.chroma_store.get_collection("memories")
+        assert collection is not None
 
     @pytest.mark.asyncio
-    async def test_store_put(self, mock_store):
+    async def test_store_put(self, mock_chroma_store, mock_chroma_collection):
         """Test storing data."""
-        namespace = ("test",)
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        # Mock get to return None (no existing item)
+        adapter.get = MagicMock(return_value=None)
+        
+        namespace = ("test", "memories")
         key = "test:key"
-        value = {"content": "Test memory content", "metadata": {"test": True}}
+        value = {"text": "Test memory content", "metadata": {"test": True}}
 
         # Store the value
-        result = await mock_store.aput(namespace, key, value)
+        await adapter.aput(namespace, key, value)
 
-        # Verify the result
-        assert result is True
-
-        # Verify add_texts was called
-        vector_store = mock_store._get_vector_store()
-        vector_store.add_texts.assert_called_once()
+        # Verify the collection was accessed and add_texts was called
+        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_collection.add_texts.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_store_search(self, mock_store):
+    async def test_store_search(self, mock_chroma_store, mock_chroma_collection):
         """Test searching for data."""
-        namespace = ("test",)
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        namespace = ("test", "memories")
         query = "test query"
 
         # Search for data
-        results = await mock_store.asearch(namespace, query, limit=3)
+        results = await adapter.asearch(namespace, query=query, limit=3)
 
-        # Verify the results
-        assert len(results) == 3
-        assert results[0][0] == "Result 0"
-        assert results[0][1] == 0.9  # Highest similarity score
+        # Verify the search was performed
+        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_collection.similarity_search_with_score.assert_called_once()
 
-        # Verify similarity_search_with_score was called
-        vector_store = mock_store._get_vector_store()
-        vector_store.similarity_search_with_score.assert_called_once()
+    @pytest.mark.asyncio
+    async def test_store_get(self, mock_chroma_store, mock_chroma_collection):
+        """Test getting data by key."""
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        namespace = ("test", "memories")
+        key = "test_key"
+
+        # Get data
+        item = await adapter.aget(namespace, key)
+
+        # Verify the get was performed
+        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_collection.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_store_delete(self, mock_chroma_store, mock_chroma_collection):
+        """Test deleting data."""
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        namespace = ("test", "memories")
+        key = "test_key"
+
+        # Delete data
+        await adapter.adelete(namespace, key)
+
+        # Verify the delete was performed
+        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_collection.delete.assert_called_once()
+
+    def test_collection_routing(self):
+        """Test namespace to collection routing."""
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        
+        # Test memories routing
+        assert adapter._get_collection_name(("main", "memories")) == "memories"
+        
+        # Test tools routing
+        assert adapter._get_collection_name(("tools",)) == "tools"
+        
+        # Test default routing
+        assert adapter._get_collection_name(("other",)) == "memories"
+
+    def test_text_formatting(self):
+        """Test text content formatting."""
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        
+        # Test text field
+        value1 = {"text": "Test content"}
+        assert adapter._format_text_content(value1) == "Test content"
+        
+        # Test name and description
+        value2 = {"name": "tool", "description": "A tool"}
+        assert adapter._format_text_content(value2) == "tool: A tool"
+        
+        # Test JSON fallback
+        value3 = {"other": "data"}
+        result = adapter._format_text_content(value3)
+        assert "other" in result

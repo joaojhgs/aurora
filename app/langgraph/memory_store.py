@@ -1,16 +1,9 @@
 import json
-import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from langchain_community.vectorstores import SQLiteVec
-from langgraph.store.base import BaseStore, Item
-
-from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_error, log_info
-
-# Chroma imports (optional)
 try:
     from langchain_chroma import Chroma
     CHROMA_AVAILABLE = True
@@ -18,9 +11,14 @@ except ImportError:
     CHROMA_AVAILABLE = False
     Chroma = None
 
+from langgraph.store.base import BaseStore, Item
+
+from app.config.config_manager import config_manager
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+
 
 def get_embeddings():
-    """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
+    """Get embeddings based on configuration"""
     use_local = config_manager.get("general.embeddings.use_local", False)
 
     if use_local:
@@ -28,553 +26,78 @@ def get_embeddings():
 
         # Use local HuggingFace embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        model_info = {"type": "huggingface", "model_name": "all-MiniLM-L6-v2", "version": "local"}
         log_info("Using local HuggingFace embeddings (all-MiniLM-L6-v2)")
     else:
         from langchain.embeddings import init_embeddings
 
         # Use OpenAI embeddings
         embeddings = init_embeddings("openai:text-embedding-3-small")
-        model_info = {"type": "openai", "model_name": "text-embedding-3-small", "version": "openai"}
         log_info("Using OpenAI embeddings (text-embedding-3-small)")
 
-    return embeddings, model_info
+    return embeddings
 
 
-def get_embedding_model_signature(model_info: dict[str, str]) -> str:
-    """Generate a unique signature for the embedding model configuration"""
-    return f"{model_info['type']}:{model_info['model_name']}:{model_info['version']}"
-
-
-def check_and_update_embedding_model(store: "SQLiteVecStore", current_model_info: dict[str, str]) -> bool:
+class ChromaVectorStore:
     """
-    Check if the embedding model has changed and re-embed all data if necessary.
-
-    Args:
-        store: The SQLiteVec store instance
-        current_model_info: Current model information
-
-    Returns:
-        bool: True if re-embedding was performed, False otherwise
+    Singleton Chroma vector store manager that provides access to different collections.
+    Uses Chroma's native langchain interface for simplified memory management.
     """
-    current_signature = get_embedding_model_signature(current_model_info)
-
-    # Create a temporary connection to check model signature
-    temp_connection = SQLiteVec.create_connection(db_file=store.db_file)
-
-    # Create metadata table if it doesn't exist
-    temp_connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS embedding_metadata (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """
-    )
-    temp_connection.commit()
-
-    # Check stored model signature
-    cursor = temp_connection.execute("SELECT value FROM embedding_metadata WHERE key = 'model_signature'")
-    result = cursor.fetchone()
-    stored_signature = result[0] if result else None
-
-    if stored_signature != current_signature:
-        log_info("Embedding model change detected!")
-        log_info(f"  Previous: {stored_signature or 'None'}")
-        log_info(f"  Current:  {current_signature}")
-        log_info(f"  Re-embedding all data in {store.table} table...")
-
-        # Check if the table exists
-        cursor = temp_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (store.table,))
-        table_exists = cursor.fetchone() is not None
-
-        if not table_exists:
-            log_debug(f"  Table {store.table} doesn't exist yet, skipping re-embedding")
-            temp_connection.close()
-
-            # Update model signature for empty database
-            update_connection = SQLiteVec.create_connection(db_file=store.db_file)
-            update_connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS embedding_metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-            update_connection.execute(
-                "INSERT OR REPLACE INTO embedding_metadata (key, value) VALUES (?, ?)",
-                ("model_signature", current_signature),
-            )
-            update_connection.commit()
-            update_connection.close()
-            return True
-
-        # Read existing data
-        cursor = temp_connection.execute(
-            f"""
-            SELECT rowid, text, metadata
-            FROM {store.table}
-            ORDER BY rowid
-        """
-        )
-        existing_data = cursor.fetchall()
-
-        # Close the temporary connection
-        temp_connection.close()
-
-        if existing_data:
-            log_info(f"  Found {len(existing_data)} items to re-embed")
-
-            # Extract texts and metadatas for re-embedding
-            texts = []
-            metadatas = []
-            for row in existing_data:
-                texts.append(row[1])  # text
-                metadatas.append(json.loads(row[2]) if row[2] else {})  # metadata
-
-            # Get current embeddings to determine new dimensions
-            embeddings, _ = get_embeddings()
-
-            # Delete the old database file and recreate it
-            db_path = store.db_file
-            table_name = store.table
-
-            if os.path.exists(db_path):
-                log_info(f"  Recreating database {db_path} for new embedding dimensions...")
-                os.remove(db_path)
-
-            # Re-embed all texts with the new model
-            log_info(f"  Re-embedding {len(texts)} items with new model...")
-            SQLiteVec.from_texts(
-                texts=texts,
-                metadatas=metadatas,
-                embedding=embeddings,
-                table=table_name,
-                db_file=db_path,
-            )
-
-            log_info(f"  Successfully re-embedded {len(existing_data)} items with new dimensions")
-
-        else:
-            log_debug(f"  No existing data found in {store.table}")
-
-            # Still need to recreate database for dimension consistency
-            db_path = store.db_file
-            if os.path.exists(db_path):
-                os.remove(db_path)
-
-        # Update the stored model signature in the new database
-        # Create a fresh connection for metadata operations
-        metadata_connection = SQLiteVec.create_connection(db_file=store.db_file)
-
-        # Recreate metadata table in new database
-        metadata_connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS embedding_metadata (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-        )
-
-        metadata_connection.execute(
-            "INSERT OR REPLACE INTO embedding_metadata (key, value) VALUES (?, ?)",
-            ("model_signature", current_signature),
-        )
-        metadata_connection.commit()
-        metadata_connection.close()
-
-        return True
-    else:
-        temp_connection.close()
-        return False
-
-
-class SQLiteVecStore(BaseStore):
-    """
-    A BaseStore implementation that uses SQLiteVec as the underlying storage.
-    This adapter bridges SQLiteVec (vector store) with LangGraph's BaseStore interface.
-    """
-
-    def __init__(self, db_file: str, table: str, embeddings):
-        """
-        Initialize the SQLiteVec store.
-
-        Args:
-            db_file: Path to the SQLite database file
-            table: Table name for the vector store
-            embeddings: Embeddings instance to use
-        """
-        self.db_file = db_file
-        self.table = table
-        self.embeddings = embeddings
-
-        # Ensure the data directory exists
-        Path(db_file).parent.mkdir(parents=True, exist_ok=True)
-
-        # Don't store the connection - create on-demand to handle threading
-        # Just initialize the database schema by creating a temporary connection
-        temp_connection = SQLiteVec.create_connection(db_file=db_file)
-        SQLiteVec(table=table, embedding=embeddings, connection=temp_connection)
-        # Close the temporary connection
-        temp_connection.close()
-
-        log_info(f"Initialized SQLiteVec store: {db_file} (table: {table})")
-
-    def _get_vector_store(self):
-        """Create a new SQLiteVec instance for the current thread."""
-        # Always create a fresh connection to avoid threading issues
-        connection = SQLiteVec.create_connection(db_file=self.db_file)
-        return SQLiteVec(table=self.table, embedding=self.embeddings, connection=connection)
-
-    # Implement the missing abstract methods
-    async def aput(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        """Async version of put - just calls the sync version."""
-        return self.put(namespace, key, value, index)
-
-    async def aget(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-    ) -> Optional[Item]:
-        """Async version of get - just calls the sync version."""
-        return self.get(namespace, key)
-
-    async def adelete(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-    ) -> None:
-        """Async version of delete - just calls the sync version."""
-        return self.delete(namespace, key)
-
-    async def alist(
-        self,
-        namespace: tuple[str, ...],
-        *,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> list[Item]:
-        """Async version of list - just calls the sync version."""
-        return self.list_items_in_namespace(namespace, limit=limit, offset=offset)
-
-    async def asearch(
-        self,
-        namespace: tuple[str, ...],
-        *,
-        query: str,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> list[Item]:
-        """Async version of search - just calls the sync version."""
-        return self.search(namespace, query=query, limit=limit, offset=offset)
-
-    def batch(self, ops) -> list[Any]:
-        """Batch operations - not implemented for simplicity."""
-        raise NotImplementedError("Batch operations not implemented")
-
-    async def abatch(self, ops) -> list[Any]:
-        """Async batch operations - not implemented for simplicity."""
-        raise NotImplementedError("Async batch operations not implemented")
-
-    def put(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        """
-        Store a key-value pair in the vector store.
-
-        Args:
-            namespace: Namespace tuple (e.g., ("main", "memories") or ("tools",))
-            key: Unique key for the item
-            value: Dictionary value to store
-            index: Optional list of fields to index (not used in vector store)
-        """
-        # Create a text representation for vector search
-        # For memories, use the 'text' field; for tools, use name and description
-        if "text" in value:
-            text_content = value["text"]
-        elif "name" in value and "description" in value:
-            text_content = f"{value['name']}: {value['description']}"
-        else:
-            # Fallback: use JSON representation
-            text_content = json.dumps(value, ensure_ascii=False)
-
-        # Create metadata that includes the namespace, key, and original value
-        metadata = {
-            "namespace": "|".join(namespace),
-            "key": key,
-            "value": json.dumps(value, ensure_ascii=False),
-        }
-
-        # Store in vector database
-        vector_store = self._get_vector_store()
-        vector_store.add_texts(texts=[text_content], metadatas=[metadata], ids=[f"{metadata['namespace']}_{key}"])
-
-    def get(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-    ) -> Optional[Item]:
-        """
-        Get an item by namespace and key.
-
-        Args:
-            namespace: Namespace tuple
-            key: Key to retrieve
-
-        Returns:
-            Item if found, None otherwise
-        """
-        namespace_str = "|".join(namespace)
-
-        # SQLiteVec doesn't have a direct get by ID method,
-        # so we'll search with a high similarity threshold
-        try:
-            # Use the key as search query and filter by exact metadata match
-            vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(query=key, k=50)  # Get more results to find exact match
-
-            for doc in results:
-                if doc.metadata.get("namespace") == namespace_str and doc.metadata.get("key") == key:
-                    # Parse the stored value
-                    value = json.loads(doc.metadata["value"])
-                    return Item(
-                        value=value,
-                        key=key,
-                        namespace=namespace,
-                        created_at=datetime.now(),  # Use current time as fallback
-                        updated_at=datetime.now(),  # Use current time as fallback
-                    )
-
-            return None
-
-        except Exception as e:
-            log_error(f"Error getting item {namespace}/{key}: {e}")
-            return None
-
-    def delete(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-    ) -> None:
-        """
-        Delete an item by namespace and key.
-
-        Args:
-            namespace: Namespace tuple
-            key: Key to delete
-        """
-        namespace_str = "|".join(namespace)
-        doc_id = f"{namespace_str}_{key}"
-
-        try:
-            # Use direct SQLite connection to delete from the vector table
-            vector_store = self._get_vector_store()
-            connection = vector_store._connection
-
-            # SQLiteVec stores documents in a table with the name specified during initialization
-            # We need to delete from both the embedding table and any metadata tables
-            cursor = connection.cursor()
-
-            # Delete from the main vector table using the document ID
-            # The exact table structure may vary, but typically it's stored with a
-            # rowid or id column
-            cursor.execute(f"DELETE FROM {self.table} WHERE id = ?", (doc_id,))
-            connection.commit()
-
-            log_info(f"Deleted tool {namespace}/{key} from database")
-
-        except Exception as e:
-            log_error(f"Error deleting item {namespace}/{key}: {e}")
-            # Try alternative approach - delete by metadata matching
-            try:
-                # If direct delete fails, we can try to find and delete by metadata
-                cursor.execute(
-                    f"""
-                    DELETE FROM {self.table}
-                    WHERE json_extract(metadata, '$.namespace') = ?
-                    AND json_extract(metadata, '$.key') = ?
-                """,
-                    (namespace_str, key),
-                )
-                connection.commit()
-                log_info(f"Deleted tool {namespace}/{key} using metadata matching")
-            except Exception as e2:
-                log_error(f"Alternative delete method also failed for {namespace}/{key}: {e2}")
-                pass
-
-    def list_items_in_namespace(
-        self,
-        namespace: tuple[str, ...],
-        *,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> list[Item]:
-        """
-        List items in a namespace.
-
-        Args:
-            namespace: Namespace tuple
-            limit: Maximum number of items to return
-            offset: Number of items to skip
-
-        Returns:
-            List of items
-        """
-        namespace_str = "|".join(namespace)
-
-        try:
-            # Search for all items in this namespace
-            # Use a broad search query to get items
-            vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(
-                query="",  # Empty query to get all
-                k=limit + offset + 50,  # Get extra to handle filtering
-            )
-
-            # Filter by namespace and apply offset/limit
-            items = []
-            count = 0
-            for result in results:
-                # Handle both tuple (doc, score) and doc formats
-                if isinstance(result, tuple):
-                    doc, score = result
-                else:
-                    doc = result
-
-                # Check if doc has metadata attribute
-                if not hasattr(doc, "metadata"):
-                    log_debug(f"Skipping result without metadata: {result}")
-                    continue
-
-                if doc.metadata.get("namespace") == namespace_str:
-                    if count >= offset:
-                        if len(items) < limit:
-                            try:
-                                value = json.loads(doc.metadata["value"])
-                                items.append(
-                                    Item(
-                                        value=value,
-                                        key=doc.metadata["key"],
-                                        namespace=namespace,
-                                        created_at=datetime.now(),
-                                        updated_at=datetime.now(),
-                                    )
-                                )
-                            except (json.JSONDecodeError, KeyError) as e:
-                                log_debug(f"Skipping malformed item: {e}")
-                                continue
-                    count += 1
-
-            return items
-
-        except Exception as e:
-            log_error(f"Error listing items in {namespace}: {e}")
-            return []
-
-    def search(
-        self,
-        namespace: tuple[str, ...],
-        *,
-        query: str,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> list[Item]:
-        """
-        Search for items in a namespace using vector similarity.
-
-        Args:
-            namespace: Namespace tuple
-            query: Search query
-            limit: Maximum number of items to return
-            offset: Number of items to skip
-
-        Returns:
-            List of items with similarity scores
-        """
-        namespace_str = "|".join(namespace)
-
-        try:
-            # Perform vector similarity search
-            vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(query=query, k=limit + offset + 20)  # Get extra to handle filtering
-
-            # Filter by namespace and apply offset/limit
-            items = []
-            count = 0
-            for doc, score in results:
-                if doc.metadata.get("namespace") == namespace_str:
-                    if count >= offset:
-                        if len(items) < limit:
-                            value = json.loads(doc.metadata["value"])
-                            item = Item(
-                                value=value,
-                                key=doc.metadata["key"],
-                                namespace=namespace,
-                                created_at=datetime.now(),
-                                updated_at=datetime.now(),
-                            )
-                            # Store score in the value if needed
-                            if isinstance(item.value, dict):
-                                item.value["_search_score"] = float(score)
-                            items.append(item)
-                    count += 1
-
-            return items
-
-        except Exception as e:
-            log_error(f"Error searching in {namespace} with query '{query}': {e}")
-            return []
-
-
-class ChromaMemoryStore(BaseStore):
-    """
-    A BaseStore implementation that uses Chroma as the underlying storage.
-    This adapter bridges Chroma (vector store) with LangGraph's BaseStore interface.
-    Mirrors the SQLiteVecStore API exactly.
-    """
-
-    def __init__(self, collection_name: str, embeddings, chroma_config: dict):
-        """
-        Initialize the Chroma store.
-
-        Args:
-            collection_name: Name for the Chroma collection
-            embeddings: Embeddings instance to use
-            chroma_config: Configuration for Chroma (local/server)
-        """
-        if not CHROMA_AVAILABLE:
-            raise ImportError("Chroma is not available. Please install langchain-chroma and chromadb.")
-        
-        self.collection_name = collection_name
-        self.embeddings = embeddings
-        self.chroma_config = chroma_config
-        
-        self._initialize_chroma()
-        log_info(f"Initialized Chroma store: {collection_name}")
-
-    def _initialize_chroma(self):
-        """Initialize the Chroma vector store based on configuration."""
-        if self.chroma_config.get("type") == "server":
-            # Server-based Chroma
-            host = self.chroma_config.get("server", {}).get("host", "localhost")
-            port = self.chroma_config.get("server", {}).get("port", 8000)
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
             
-            # Create HTTP client settings for server
+        if not CHROMA_AVAILABLE:
+            raise ImportError(
+                "Chroma is not available. Please install the required packages:\n"
+                "pip install langchain-chroma chromadb"
+            )
+            
+        self._embeddings = None
+        self._chroma_config = None
+        self._collections = {}
+        self._initialized = True
+    
+    def _ensure_initialized(self):
+        """Ensure the store is initialized with embeddings and config."""
+        if self._embeddings is None:
+            self._embeddings = get_embeddings()
+            self._chroma_config = config_manager.get("general.memory_store.chroma", {
+                "type": "local",
+                "local": {"persist_directory": "./data/chroma"},
+                "server": {"host": "localhost", "port": 8000}
+            })
+            log_info("ChromaVectorStore initialized")
+    
+    def get_collection(self, collection_name: str) -> Chroma:
+        """Get or create a Chroma collection."""
+        self._ensure_initialized()
+        
+        if collection_name not in self._collections:
+            with self._lock:
+                if collection_name not in self._collections:
+                    self._collections[collection_name] = self._create_chroma_collection(collection_name)
+        
+        return self._collections[collection_name]
+    
+    def _create_chroma_collection(self, collection_name: str) -> Chroma:
+        """Create a new Chroma collection."""
+        if self._chroma_config.get("type") == "server":
+            # Server-based Chroma
+            host = self._chroma_config.get("server", {}).get("host", "localhost")
+            port = self._chroma_config.get("server", {}).get("port", 8000)
+            
             import chromadb
             from chromadb.config import Settings
             
@@ -584,25 +107,54 @@ class ChromaMemoryStore(BaseStore):
                 settings=Settings(allow_reset=True)
             )
             
-            self.vector_store = Chroma(
+            collection = Chroma(
                 client=chroma_client,
-                collection_name=self.collection_name,
-                embedding_function=self.embeddings
+                collection_name=collection_name,
+                embedding_function=self._embeddings
             )
-            log_info(f"Connected to Chroma server at {host}:{port}")
+            log_info(f"Created Chroma collection '{collection_name}' on server {host}:{port}")
         else:
             # Local file-based Chroma (default)
-            persist_dir = self.chroma_config.get("local", {}).get("persist_directory", "./data/chroma")
+            persist_dir = self._chroma_config.get("local", {}).get("persist_directory", "./data/chroma")
             
             # Ensure the data directory exists
             Path(persist_dir).mkdir(parents=True, exist_ok=True)
             
-            self.vector_store = Chroma(
-                collection_name=self.collection_name,
-                embedding_function=self.embeddings,
+            collection = Chroma(
+                collection_name=collection_name,
+                embedding_function=self._embeddings,
                 persist_directory=persist_dir
             )
-            log_info(f"Using local Chroma at {persist_dir}")
+            log_info(f"Created Chroma collection '{collection_name}' at {persist_dir}")
+        
+        return collection
+    
+    def reset(self):
+        """Reset the store (useful for testing)."""
+        with self._lock:
+            self._collections.clear()
+            self._embeddings = None
+            self._chroma_config = None
+
+
+class ChromaMemoryStoreAdapter(BaseStore):
+    """
+    A BaseStore adapter that uses different Chroma collections for different namespaces.
+    This provides a unified interface while using separate collections as workspaces.
+    """
+
+    def __init__(self):
+        self.chroma_store = ChromaVectorStore()
+
+    def _get_collection_name(self, namespace: tuple[str, ...]) -> str:
+        """Determine which Chroma collection to use based on namespace."""
+        if len(namespace) >= 2 and namespace[1] == "memories":
+            return "memories"
+        elif len(namespace) >= 1 and namespace[0] == "tools":
+            return "tools"
+        else:
+            # Default to memories collection for backward compatibility
+            return "memories"
 
     def _format_text_content(self, value: dict[str, Any]) -> str:
         """Create a text representation for vector search."""
@@ -620,7 +172,6 @@ class ChromaMemoryStore(BaseStore):
             "namespace": "|".join(namespace),
             "key": key,
             "value": json.dumps(value, ensure_ascii=False),
-            "namespace_key": f"{'.'.join(namespace)}_{key}",  # For easy filtering
         }
 
     # Implement the missing abstract methods
@@ -658,7 +209,7 @@ class ChromaMemoryStore(BaseStore):
         offset: int = 0,
     ) -> list[Item]:
         """Async version of list - just calls the sync version."""
-        return self.list_items_in_namespace(namespace, limit=limit, offset=offset)
+        return self.retrieve_items(namespace, limit=limit, offset=offset)
 
     async def asearch(
         self,
@@ -687,7 +238,7 @@ class ChromaMemoryStore(BaseStore):
         index: Optional[list[str]] = None,
     ) -> None:
         """
-        Store a key-value pair in the vector store.
+        Store a key-value pair in the appropriate Chroma collection.
 
         Args:
             namespace: Namespace tuple (e.g., ("main", "memories") or ("tools",))
@@ -696,6 +247,9 @@ class ChromaMemoryStore(BaseStore):
             index: Optional list of fields to index (not used in vector store)
         """
         try:
+            collection_name = self._get_collection_name(namespace)
+            collection = self.chroma_store.get_collection(collection_name)
+
             # First, check if item already exists and delete it to update
             existing = self.get(namespace, key)
             if existing:
@@ -709,7 +263,7 @@ class ChromaMemoryStore(BaseStore):
             doc_id = f"{metadata['namespace']}_{key}"
             
             # Store in vector database
-            self.vector_store.add_texts(
+            collection.add_texts(
                 texts=[text_content], 
                 metadatas=[metadata], 
                 ids=[doc_id]
@@ -735,12 +289,15 @@ class ChromaMemoryStore(BaseStore):
             Item if found, None otherwise
         """
         try:
+            collection_name = self._get_collection_name(namespace)
+            collection = self.chroma_store.get_collection(collection_name)
+            
             namespace_str = "|".join(namespace)
             doc_id = f"{namespace_str}_{key}"
             
             # Try to get by ID first (most efficient)
             try:
-                docs = self.vector_store.get(ids=[doc_id])
+                docs = collection.get(ids=[doc_id])
                 if docs and docs.get('documents') and len(docs['documents']) > 0:
                     metadata = docs['metadatas'][0]
                     if metadata.get("namespace") == namespace_str and metadata.get("key") == key:
@@ -757,7 +314,7 @@ class ChromaMemoryStore(BaseStore):
                 pass
             
             # Fallback: search with metadata filter
-            results = self.vector_store.similarity_search(
+            results = collection.similarity_search(
                 query=key, 
                 k=50,
                 filter={"$and": [{"namespace": {"$eq": namespace_str}}, {"key": {"$eq": key}}]}
@@ -795,17 +352,20 @@ class ChromaMemoryStore(BaseStore):
             key: Key to delete
         """
         try:
+            collection_name = self._get_collection_name(namespace)
+            collection = self.chroma_store.get_collection(collection_name)
+            
             namespace_str = "|".join(namespace)
             doc_id = f"{namespace_str}_{key}"
             
             # Delete by ID
-            self.vector_store.delete(ids=[doc_id])
-            log_debug(f"Deleted item {namespace}/{key} from Chroma")
+            collection.delete(ids=[doc_id])
+            log_debug(f"Deleted item {namespace}/{key} from Chroma collection {collection_name}")
             
         except Exception as e:
             log_error(f"Error deleting item {namespace}/{key}: {e}")
 
-    def list_items_in_namespace(
+    def retrieve_items(
         self,
         namespace: tuple[str, ...],
         *,
@@ -824,11 +384,14 @@ class ChromaMemoryStore(BaseStore):
             List of items
         """
         try:
+            collection_name = self._get_collection_name(namespace)
+            collection = self.chroma_store.get_collection(collection_name)
+            
             namespace_str = "|".join(namespace)
             
             # Use similarity search with metadata filter to get items in namespace
             # We search with empty query to get all items, filtered by namespace
-            results = self.vector_store.similarity_search(
+            results = collection.similarity_search(
                 query="",  # Empty query to get all
                 k=limit + offset + 50,  # Get extra to handle filtering
                 filter={"namespace": {"$eq": namespace_str}}
@@ -884,10 +447,13 @@ class ChromaMemoryStore(BaseStore):
             List of items with similarity scores
         """
         try:
+            collection_name = self._get_collection_name(namespace)
+            collection = self.chroma_store.get_collection(collection_name)
+            
             namespace_str = "|".join(namespace)
             
             # Perform vector similarity search with namespace filter
-            results = self.vector_store.similarity_search_with_score(
+            results = collection.similarity_search_with_score(
                 query=query, 
                 k=limit + offset + 20,  # Get extra to handle filtering
                 filter={"namespace": {"$eq": namespace_str}}
@@ -925,303 +491,29 @@ class ChromaMemoryStore(BaseStore):
             return []
 
 
-class CombinedChromaStore(BaseStore):
-    """
-    A combined store that routes operations to separate Chroma stores based on namespace.
-    This mirrors CombinedSQLiteVecStore but uses Chroma backend.
-    """
-
-    def __init__(self, memories_store: ChromaMemoryStore, tools_store: ChromaMemoryStore):
-        self.memories_store = memories_store
-        self.tools_store = tools_store
-
-    def _get_store(self, namespace: tuple[str, ...]) -> ChromaMemoryStore:
-        """Route to the appropriate store based on namespace."""
-        if len(namespace) >= 2 and namespace[1] == "memories":
-            return self.memories_store
-        elif len(namespace) >= 1 and namespace[0] == "tools":
-            return self.tools_store
-        else:
-            # Default to memories store for backward compatibility
-            return self.memories_store
-
-    def put(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        return self._get_store(namespace).put(namespace, key, value, index)
-
-    def get(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
-        return self._get_store(namespace).get(namespace, key)
-
-    def delete(self, namespace: tuple[str, ...], key: str) -> None:
-        return self._get_store(namespace).delete(namespace, key)
-
-    def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).list_items_in_namespace(namespace, limit=limit, offset=offset)
-
-    def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)
-
-    # Implement the missing abstract methods by delegating to the appropriate store
-    async def aput(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        return await self._get_store(namespace).aput(namespace, key, value, index)
-
-    async def aget(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
-        return await self._get_store(namespace).aget(namespace, key)
-
-    async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
-        return await self._get_store(namespace).adelete(namespace, key)
-
-    async def alist(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return await self._get_store(namespace).alist(namespace, limit=limit, offset=offset)
-
-    async def asearch(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
-        return await self._get_store(namespace).asearch(namespace, query=query, limit=limit, offset=offset)
-
-    def batch(self, ops) -> list[Any]:
-        raise NotImplementedError("Batch operations not implemented")
-
-    async def abatch(self, ops) -> list[Any]:
-        raise NotImplementedError("Async batch operations not implemented")
+# Singleton instance for the adapter
+_memory_store_adapter = None
+_adapter_lock = threading.Lock()
 
 
-class MemoryStoreManager:
-    """Singleton manager for memory and tools stores with lazy initialization."""
-
-    _instance = None
-    _lock = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-            # Import threading only when needed
-            import threading
-
-            cls._lock = threading.Lock()
-        return cls._instance
-
-    def __init__(self):
-        if self._initialized:
-            return
-
-        self._memories_store = None
-        self._tools_store = None
-        self._combined_store = None
-        self._initialized = True
-
-    def _initialize_stores(self):
-        """Initialize the memory and tools stores with embeddings."""
-        if self._memories_store is not None and self._tools_store is not None:
-            return  # Already initialized
-
-        with self._lock:
-            # Double-check after acquiring lock
-            if self._memories_store is not None and self._tools_store is not None:
-                return
-
-            log_info("Initializing memory and tools stores...")
-
-            # Create embeddings instance
-            embeddings, model_info = get_embeddings()
-
-            # Get backend configuration
-            backend = config_manager.get("general.memory_store.backend", "sqlite")
-            
-            if backend == "chroma" and CHROMA_AVAILABLE:
-                self._initialize_chroma_stores(embeddings, model_info)
-            else:
-                if backend == "chroma" and not CHROMA_AVAILABLE:
-                    log_warning("Chroma backend requested but not available. Falling back to SQLite.")
-                self._initialize_sqlite_stores(embeddings, model_info)
-
-            log_info("Memory and tools storage initialized successfully")
-
-    def _initialize_sqlite_stores(self, embeddings, model_info):
-        """Initialize SQLite-based stores (original implementation)."""
-        # Create separate SQLite vector stores for memories and tools in the data folder
-        self._memories_store = SQLiteVecStore(db_file="./data/memories.db", table="memories", embeddings=embeddings)
-        self._tools_store = SQLiteVecStore(db_file="./data/tools.db", table="tools", embeddings=embeddings)
-
-        # Check if embedding model changed and re-embed if necessary
-        log_info("Checking for embedding model changes...")
-        memories_reembedded = check_and_update_embedding_model(self._memories_store, model_info)
-        tools_reembedded = check_and_update_embedding_model(self._tools_store, model_info)
-
-        if memories_reembedded or tools_reembedded:
-            log_info("Embedding model update completed!")
-            if memories_reembedded:
-                log_info("  ✅ Memories re-embedded successfully")
-            if tools_reembedded:
-                log_info("  ✅ Tools re-embedded successfully")
-        else:
-            log_info("Embedding model unchanged - no re-embedding needed")
-
-        # Create combined store
-        self._combined_store = CombinedSQLiteVecStore(self._memories_store, self._tools_store)
-
-    def _initialize_chroma_stores(self, embeddings, model_info):
-        """Initialize Chroma-based stores."""
-        if not CHROMA_AVAILABLE:
-            raise ImportError("Chroma is not available. Please install langchain-chroma and chromadb.")
-        
-        # Get Chroma configuration
-        chroma_config = config_manager.get("general.memory_store.chroma", {})
-        
-        # Create separate Chroma collections for memories and tools
-        self._memories_store = ChromaMemoryStore(
-            collection_name="memories", 
-            embeddings=embeddings, 
-            chroma_config=chroma_config
-        )
-        self._tools_store = ChromaMemoryStore(
-            collection_name="tools", 
-            embeddings=embeddings, 
-            chroma_config=chroma_config
-        )
-
-        # Note: Chroma handles embedding model changes automatically through its own versioning
-        log_info("Using Chroma backend - embedding model changes handled automatically")
-
-        # Create combined store
-        self._combined_store = CombinedChromaStore(self._memories_store, self._tools_store)
-
-    @property
-    def memories_store(self):
-        """Get the memories store, initializing if necessary."""
-        if self._memories_store is None:
-            self._initialize_stores()
-        return self._memories_store
-
-    @property
-    def tools_store(self):
-        """Get the tools store, initializing if necessary."""
-        if self._tools_store is None:
-            self._initialize_stores()
-        return self._tools_store
-
-    @property
-    def store(self):
-        """Get the combined store, initializing if necessary."""
-        if self._combined_store is None:
-            self._initialize_stores()
-        return self._combined_store
-
-    def reset(self):
-        """Reset the stores (useful for testing)."""
-        with self._lock:
-            self._memories_store = None
-            self._tools_store = None
-            self._combined_store = None
-
-    def get_backend_type(self) -> str:
-        """Get the current backend type (sqlite or chroma)."""
-        backend = config_manager.get("general.memory_store.backend", "sqlite")
-        if backend == "chroma" and not CHROMA_AVAILABLE:
-            return "sqlite"  # Fallback
-        return backend
+def get_combined_store() -> ChromaMemoryStoreAdapter:
+    """Get the singleton memory store adapter."""
+    global _memory_store_adapter
+    if _memory_store_adapter is None:
+        with _adapter_lock:
+            if _memory_store_adapter is None:
+                _memory_store_adapter = ChromaMemoryStoreAdapter()
+    return _memory_store_adapter
 
 
-# Create the singleton instance
-_store_manager = MemoryStoreManager()
-
-
-# Combined store that routes operations to the appropriate store based on namespace
-class CombinedSQLiteVecStore(BaseStore):
-    """
-    A combined store that routes operations to separate stores based on namespace.
-    This allows using separate databases for memories and tools while maintaining
-    a single store interface for backward compatibility.
-    """
-
-    def __init__(self, memories_store: SQLiteVecStore, tools_store: SQLiteVecStore):
-        self.memories_store = memories_store
-        self.tools_store = tools_store
-
-    def _get_store(self, namespace: tuple[str, ...]) -> SQLiteVecStore:
-        """Route to the appropriate store based on namespace."""
-        if len(namespace) >= 2 and namespace[1] == "memories":
-            return self.memories_store
-        elif len(namespace) >= 1 and namespace[0] == "tools":
-            return self.tools_store
-        else:
-            # Default to memories store for backward compatibility
-            return self.memories_store
-
-    def put(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        return self._get_store(namespace).put(namespace, key, value, index)
-
-    def get(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
-        return self._get_store(namespace).get(namespace, key)
-
-    def delete(self, namespace: tuple[str, ...], key: str) -> None:
-        return self._get_store(namespace).delete(namespace, key)
-
-    def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).list_items_in_namespace(namespace, limit=limit, offset=offset)
-
-    def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)
-
-    # Implement the missing abstract methods by delegating to the appropriate store
-    async def aput(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-        index: Optional[list[str]] = None,
-    ) -> None:
-        return await self._get_store(namespace).aput(namespace, key, value, index)
-
-    async def aget(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
-        return await self._get_store(namespace).aget(namespace, key)
-
-    async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
-        return await self._get_store(namespace).adelete(namespace, key)
-
-    async def alist(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return await self._get_store(namespace).alist(namespace, limit=limit, offset=offset)
-
-    async def asearch(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
-        return await self._get_store(namespace).asearch(namespace, query=query, limit=limit, offset=offset)
-
-    def batch(self, ops) -> list[Any]:
-        raise NotImplementedError("Batch operations not implemented")
-
-    async def abatch(self, ops) -> list[Any]:
-        raise NotImplementedError("Async batch operations not implemented")
-
-
-# Public API functions for accessing the stores
 def get_memory_store():
-    """Get the memories store instance."""
-    return _store_manager.memories_store
+    """Get the memories store instance (returns the combined store for backward compatibility)."""
+    return get_combined_store()
 
 
 def get_tools_store():
-    """Get the tools store instance."""
-    return _store_manager.tools_store
-
-
-def get_combined_store():
-    """Get the combined store instance."""
-    return _store_manager.store
+    """Get the tools store instance (returns the combined store for backward compatibility).""" 
+    return get_combined_store()
 
 
 # Backward compatibility - expose the store as module-level variable
@@ -1230,10 +522,10 @@ class _LazyStore:
     """Lazy proxy for the store to maintain backward compatibility."""
 
     def __getattr__(self, name):
-        return getattr(_store_manager.store, name)
+        return getattr(get_combined_store(), name)
 
     def __call__(self, *args, **kwargs):
-        return _store_manager.store(*args, **kwargs)
+        return get_combined_store()(*args, **kwargs)
 
 
 store = _LazyStore()

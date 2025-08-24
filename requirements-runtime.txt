@@ -87,3 +87,7 @@ sentence-transformers==3.0.0
 transformers
 huggingface-hub==0.30.2
 Pillow>=10.3.0
+
+# Vector Database
+chromadb>=0.4.0
+langchain-chroma>=0.1.0

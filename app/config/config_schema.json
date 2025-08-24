@@ -350,18 +350,9 @@
                 "memory_store": {
                     "type": "object",
                     "required": [
-                        "backend",
                         "chroma"
                     ],
                     "properties": {
-                        "backend": {
-                            "type": "string",
-                            "enum": [
-                                "sqlite",
-                                "chroma"
-                            ],
-                            "description": "Memory store backend to use"
-                        },
                         "chroma": {
                             "type": "object",
                             "required": [
