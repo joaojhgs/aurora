@@ -48,6 +48,19 @@
         "embeddings": {
             "use_local": true
         },
+        "memory_store": {
+            "backend": "sqlite",
+            "chroma": {
+                "type": "local",
+                "local": {
+                    "persist_directory": "./data/chroma"
+                },
+                "server": {
+                    "host": "localhost",
+                    "port": 8000
+                }
+            }
+        },
         "speech_to_text": {
             "language": "",
             "silero_deactivity_detection": false,

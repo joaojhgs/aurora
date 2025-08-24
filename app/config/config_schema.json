@@ -13,6 +13,7 @@
             "required": [
                 "llm",
                 "embeddings",
+                "memory_store",
                 "speech_to_text",
                 "text_to_speech",
                 "hardware_acceleration"
@@ -342,6 +343,74 @@
                         "use_local": {
                             "type": "boolean",
                             "description": "Use local embeddings model instead of API"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "memory_store": {
+                    "type": "object",
+                    "required": [
+                        "backend",
+                        "chroma"
+                    ],
+                    "properties": {
+                        "backend": {
+                            "type": "string",
+                            "enum": [
+                                "sqlite",
+                                "chroma"
+                            ],
+                            "description": "Memory store backend to use"
+                        },
+                        "chroma": {
+                            "type": "object",
+                            "required": [
+                                "type",
+                                "local",
+                                "server"
+                            ],
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "local",
+                                        "server"
+                                    ],
+                                    "description": "Chroma connection type"
+                                },
+                                "local": {
+                                    "type": "object",
+                                    "required": [
+                                        "persist_directory"
+                                    ],
+                                    "properties": {
+                                        "persist_directory": {
+                                            "type": "string",
+                                            "description": "Local directory for Chroma persistence"
+                                        }
+                                    },
+                                    "additionalProperties": false
+                                },
+                                "server": {
+                                    "type": "object",
+                                    "required": [
+                                        "host",
+                                        "port"
+                                    ],
+                                    "properties": {
+                                        "host": {
+                                            "type": "string",
+                                            "description": "Chroma server host"
+                                        },
+                                        "port": {
+                                            "type": "integer",
+                                            "description": "Chroma server port"
+                                        }
+                                    },
+                                    "additionalProperties": false
+                                }
+                            },
+                            "additionalProperties": false
                         }
                     },
                     "additionalProperties": false
