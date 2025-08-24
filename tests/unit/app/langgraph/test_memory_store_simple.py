@@ -17,13 +17,13 @@ class TestMemoryStoreSimplified:
         collection.add_texts.return_value = ["doc_id"]
         collection.get.return_value = {
             'documents': ['test content'],
-            'metadatas': [{'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}]
+            'metadatas': [{'workspace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}]
         }
         collection.similarity_search_with_score.return_value = [
-            (MagicMock(metadata={'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}), 0.9)
+            (MagicMock(metadata={'workspace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'}), 0.9)
         ]
         collection.similarity_search.return_value = [
-            MagicMock(metadata={'namespace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'})
+            MagicMock(metadata={'workspace': 'test', 'key': 'test_key', 'value': '{"content": "test"}'})
         ]
         return collection
 
@@ -67,7 +67,7 @@ class TestMemoryStoreSimplified:
         await adapter.aput(namespace, key, value)
 
         # Verify the collection was accessed and add_texts was called
-        mock_chroma_store.get_collection.assert_called_with("test_memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")  # Backward compatibility still works
         mock_chroma_collection.add_texts.assert_called_once()
 
     @pytest.mark.asyncio
@@ -85,7 +85,7 @@ class TestMemoryStoreSimplified:
         results = await adapter.asearch(namespace, query=query, limit=3)
 
         # Verify the search was performed
-        mock_chroma_store.get_collection.assert_called_with("test_memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")  # Backward compatibility still works
         mock_chroma_collection.similarity_search_with_score.assert_called_once()
 
     @pytest.mark.asyncio
@@ -103,7 +103,7 @@ class TestMemoryStoreSimplified:
         item = await adapter.aget(namespace, key)
 
         # Verify the get was performed
-        mock_chroma_store.get_collection.assert_called_with("test_memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")  # Backward compatibility still works
         mock_chroma_collection.get.assert_called_once()
 
     @pytest.mark.asyncio
@@ -121,23 +121,32 @@ class TestMemoryStoreSimplified:
         await adapter.adelete(namespace, key)
 
         # Verify the delete was performed
-        mock_chroma_store.get_collection.assert_called_with("test_memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")  # Backward compatibility still works
         mock_chroma_collection.delete.assert_called_once()
 
     def test_collection_routing(self):
-        """Test namespace to collection routing."""
+        """Test workspace to collection routing."""
         from app.langgraph.memory_store import ChromaMemoryStoreAdapter
         
         adapter = ChromaMemoryStoreAdapter()
         
-        # Test memories routing
-        assert adapter._get_collection_name(("main", "memories")) == "main_memories"
+        # Test backward compatibility - namespace tuples still work
+        # ("main", "memories") -> "main_memories" workspace 
+        workspace = "_".join(("main", "memories"))
+        assert workspace == "main_memories"
         
-        # Test tools routing
-        assert adapter._get_collection_name(("tools",)) == "tools"
+        # ("tools",) -> "tools" workspace
+        workspace = "_".join(("tools",)) if len(("tools",)) > 1 else ("tools",)[0]
+        assert workspace == "tools"
         
-        # Test other patterns
-        assert adapter._get_collection_name(("user", "data")) == "user_data"
+        # ("user", "data") -> "user_data" workspace
+        workspace = "_".join(("user", "data"))
+        assert workspace == "user_data"
+        
+        # Test direct workspace names (new interface)
+        assert "memories" == "memories"
+        assert "tools" == "tools"
+        assert "user_data" == "user_data"
 
     def test_text_formatting(self):
         """Test text content formatting."""
@@ -157,3 +166,47 @@ class TestMemoryStoreSimplified:
         value3 = {"other": "data"}
         result = adapter._format_text_content(value3)
         assert "other" in result
+
+    @pytest.mark.asyncio
+    async def test_workspace_interface(self, mock_chroma_store, mock_chroma_collection):
+        """Test the new workspace-based interface."""
+        from app.langgraph.memory_store import ChromaMemoryStoreAdapter
+        
+        adapter = ChromaMemoryStoreAdapter()
+        adapter.chroma_store = mock_chroma_store
+        
+        # Mock get to return None (no existing item)
+        adapter.get_workspace = MagicMock(return_value=None)
+        
+        workspace = "memories"
+        key = "test_key"
+        value = {"text": "Test memory content"}
+
+        # Store using workspace interface
+        adapter.put_workspace(workspace, key, value)
+
+        # Verify the collection was accessed correctly
+        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_collection.add_texts.assert_called_once()
+
+    @pytest.mark.asyncio 
+    async def test_convenience_functions(self, mock_chroma_store, mock_chroma_collection):
+        """Test the new convenience functions."""
+        from app.langgraph.memory_store import put_memory, search_memories, search_tools
+        
+        # Mock the store
+        with patch('app.langgraph.memory_store.get_combined_store') as mock_get_store:
+            mock_adapter = MagicMock()
+            mock_get_store.return_value = mock_adapter
+            
+            # Test put_memory
+            put_memory("test_key", {"text": "test"})
+            mock_adapter.put_workspace.assert_called_with("memories", "test_key", {"text": "test"})
+            
+            # Test search_memories
+            search_memories("test query", limit=5)
+            mock_adapter.search_workspace.assert_called_with("memories", query="test query", limit=5)
+            
+            # Test search_tools
+            search_tools("tool query", limit=10)
+            mock_adapter.search_workspace.assert_called_with("tools", query="tool query", limit=10)

@@ -139,16 +139,12 @@ class ChromaVectorStore:
 
 class ChromaMemoryStoreAdapter(BaseStore):
     """
-    A BaseStore adapter that uses Chroma collections based directly on namespace.
-    Each namespace tuple is converted to a collection name by joining with underscores.
+    A BaseStore adapter that uses Chroma collections based directly on workspace names.
+    Each workspace string is used directly as the collection name.
     """
 
     def __init__(self):
         self.chroma_store = ChromaVectorStore()
-
-    def _get_collection_name(self, namespace: tuple[str, ...]) -> str:
-        """Convert namespace tuple directly to collection name."""
-        return "_".join(namespace)
 
     def _format_text_content(self, value: dict[str, Any]) -> str:
         """Create a text representation for vector search."""
@@ -160,10 +156,10 @@ class ChromaMemoryStoreAdapter(BaseStore):
             # Fallback: use JSON representation
             return json.dumps(value, ensure_ascii=False)
 
-    def _create_metadata(self, namespace: tuple[str, ...], key: str, value: dict[str, Any]) -> dict:
-        """Create metadata that includes the namespace, key, and original value."""
+    def _create_metadata(self, workspace: str, key: str, value: dict[str, Any]) -> dict:
+        """Create metadata that includes the workspace, key, and original value."""
         return {
-            "namespace": "|".join(namespace),
+            "workspace": workspace,
             "key": key,
             "value": json.dumps(value, ensure_ascii=False),
         }
@@ -177,7 +173,9 @@ class ChromaMemoryStoreAdapter(BaseStore):
         index: Optional[list[str]] = None,
     ) -> None:
         """Async version of put - just calls the sync version."""
-        return self.put(namespace, key, value, index)
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.put_workspace(workspace, key, value, index)
 
     async def aget(
         self,
@@ -185,7 +183,9 @@ class ChromaMemoryStoreAdapter(BaseStore):
         key: str,
     ) -> Optional[Item]:
         """Async version of get - just calls the sync version."""
-        return self.get(namespace, key)
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.get_workspace(workspace, key)
 
     async def adelete(
         self,
@@ -193,7 +193,9 @@ class ChromaMemoryStoreAdapter(BaseStore):
         key: str,
     ) -> None:
         """Async version of delete - just calls the sync version."""
-        return self.delete(namespace, key)
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.delete_workspace(workspace, key)
 
     async def alist(
         self,
@@ -203,7 +205,9 @@ class ChromaMemoryStoreAdapter(BaseStore):
         offset: int = 0,
     ) -> list[Item]:
         """Async version of list - just calls the sync version."""
-        return self.retrieve_items(namespace, limit=limit, offset=offset)
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.retrieve_items_workspace(workspace, limit=limit, offset=offset)
 
     async def asearch(
         self,
@@ -214,7 +218,9 @@ class ChromaMemoryStoreAdapter(BaseStore):
         offset: int = 0,
     ) -> list[Item]:
         """Async version of search - just calls the sync version."""
-        return self.search(namespace, query=query, limit=limit, offset=offset)
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.search_workspace(workspace, query=query, limit=limit, offset=offset)
 
     def batch(self, ops) -> list[Any]:
         """Batch operations - not implemented for simplicity."""
@@ -233,28 +239,48 @@ class ChromaMemoryStoreAdapter(BaseStore):
     ) -> None:
         """
         Store a key-value pair in the appropriate Chroma collection.
+        Backward compatibility method that converts namespace to workspace.
 
         Args:
-            namespace: Namespace tuple - converted directly to collection name
+            namespace: Namespace tuple - converted to workspace string
+            key: Unique key for the item
+            value: Dictionary value to store
+            index: Optional list of fields to index (not used in vector store)
+        """
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.put_workspace(workspace, key, value, index)
+
+    def put_workspace(
+        self,
+        workspace: str,
+        key: str,
+        value: dict[str, Any],
+        index: Optional[list[str]] = None,
+    ) -> None:
+        """
+        Store a key-value pair in the appropriate Chroma collection.
+
+        Args:
+            workspace: Workspace name - used directly as collection name
             key: Unique key for the item
             value: Dictionary value to store
             index: Optional list of fields to index (not used in vector store)
         """
         try:
-            collection_name = self._get_collection_name(namespace)
-            collection = self.chroma_store.get_collection(collection_name)
+            collection = self.chroma_store.get_collection(workspace)
 
             # First, check if item already exists and delete it to update
-            existing = self.get(namespace, key)
+            existing = self.get_workspace(workspace, key)
             if existing:
-                self.delete(namespace, key)
+                self.delete_workspace(workspace, key)
 
             # Create text content and metadata
             text_content = self._format_text_content(value)
-            metadata = self._create_metadata(namespace, key, value)
+            metadata = self._create_metadata(workspace, key, value)
             
             # Create unique ID for the document
-            doc_id = f"{metadata['namespace']}_{key}"
+            doc_id = f"{workspace}_{key}"
             
             # Store in vector database
             collection.add_texts(
@@ -264,7 +290,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
             )
             
         except Exception as e:
-            log_error(f"Error storing item {namespace}/{key}: {e}")
+            log_error(f"Error storing item {workspace}/{key}: {e}")
             raise
 
     def get(
@@ -274,6 +300,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
     ) -> Optional[Item]:
         """
         Get an item by namespace and key.
+        Backward compatibility method that converts namespace to workspace.
 
         Args:
             namespace: Namespace tuple
@@ -282,24 +309,41 @@ class ChromaMemoryStoreAdapter(BaseStore):
         Returns:
             Item if found, None otherwise
         """
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.get_workspace(workspace, key)
+
+    def get_workspace(
+        self,
+        workspace: str,
+        key: str,
+    ) -> Optional[Item]:
+        """
+        Get an item by workspace and key.
+
+        Args:
+            workspace: Workspace name
+            key: Key to retrieve
+
+        Returns:
+            Item if found, None otherwise
+        """
         try:
-            collection_name = self._get_collection_name(namespace)
-            collection = self.chroma_store.get_collection(collection_name)
+            collection = self.chroma_store.get_collection(workspace)
             
-            namespace_str = "|".join(namespace)
-            doc_id = f"{namespace_str}_{key}"
+            doc_id = f"{workspace}_{key}"
             
             # Try to get by ID first (most efficient)
             try:
                 docs = collection.get(ids=[doc_id])
                 if docs and docs.get('documents') and len(docs['documents']) > 0:
                     metadata = docs['metadatas'][0]
-                    if metadata.get("namespace") == namespace_str and metadata.get("key") == key:
+                    if metadata.get("workspace") == workspace and metadata.get("key") == key:
                         value = json.loads(metadata["value"])
                         return Item(
                             value=value,
                             key=key,
-                            namespace=namespace,
+                            namespace=(workspace,),  # Convert back to tuple for compatibility
                             created_at=datetime.now(),
                             updated_at=datetime.now(),
                         )
@@ -311,18 +355,18 @@ class ChromaMemoryStoreAdapter(BaseStore):
             results = collection.similarity_search(
                 query=key, 
                 k=50,
-                filter={"$and": [{"namespace": {"$eq": namespace_str}}, {"key": {"$eq": key}}]}
+                filter={"$and": [{"workspace": {"$eq": workspace}}, {"key": {"$eq": key}}]}
             )
             
             for doc in results:
                 if (hasattr(doc, 'metadata') and 
-                    doc.metadata.get("namespace") == namespace_str and 
+                    doc.metadata.get("workspace") == workspace and 
                     doc.metadata.get("key") == key):
                     value = json.loads(doc.metadata["value"])
                     return Item(
                         value=value,
                         key=key,
-                        namespace=namespace,
+                        namespace=(workspace,),  # Convert back to tuple for compatibility
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
@@ -330,7 +374,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
             return None
 
         except Exception as e:
-            log_error(f"Error getting item {namespace}/{key}: {e}")
+            log_error(f"Error getting item {workspace}/{key}: {e}")
             return None
 
     def delete(
@@ -340,24 +384,39 @@ class ChromaMemoryStoreAdapter(BaseStore):
     ) -> None:
         """
         Delete an item by namespace and key.
+        Backward compatibility method that converts namespace to workspace.
 
         Args:
             namespace: Namespace tuple
             key: Key to delete
         """
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.delete_workspace(workspace, key)
+
+    def delete_workspace(
+        self,
+        workspace: str,
+        key: str,
+    ) -> None:
+        """
+        Delete an item by workspace and key.
+
+        Args:
+            workspace: Workspace name
+            key: Key to delete
+        """
         try:
-            collection_name = self._get_collection_name(namespace)
-            collection = self.chroma_store.get_collection(collection_name)
+            collection = self.chroma_store.get_collection(workspace)
             
-            namespace_str = "|".join(namespace)
-            doc_id = f"{namespace_str}_{key}"
+            doc_id = f"{workspace}_{key}"
             
             # Delete by ID
             collection.delete(ids=[doc_id])
-            log_debug(f"Deleted item {namespace}/{key} from Chroma collection {collection_name}")
+            log_debug(f"Deleted item {workspace}/{key} from Chroma collection {workspace}")
             
         except Exception as e:
-            log_error(f"Error deleting item {namespace}/{key}: {e}")
+            log_error(f"Error deleting item {workspace}/{key}: {e}")
 
     def retrieve_items(
         self,
@@ -368,6 +427,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
     ) -> list[Item]:
         """
         List items in a namespace.
+        Backward compatibility method that converts namespace to workspace.
 
         Args:
             namespace: Namespace tuple
@@ -377,18 +437,37 @@ class ChromaMemoryStoreAdapter(BaseStore):
         Returns:
             List of items
         """
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.retrieve_items_workspace(workspace, limit=limit, offset=offset)
+
+    def retrieve_items_workspace(
+        self,
+        workspace: str,
+        *,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Item]:
+        """
+        List items in a workspace.
+
+        Args:
+            workspace: Workspace name
+            limit: Maximum number of items to return
+            offset: Number of items to skip
+
+        Returns:
+            List of items
+        """
         try:
-            collection_name = self._get_collection_name(namespace)
-            collection = self.chroma_store.get_collection(collection_name)
+            collection = self.chroma_store.get_collection(workspace)
             
-            namespace_str = "|".join(namespace)
-            
-            # Use similarity search with metadata filter to get items in namespace
-            # We search with empty query to get all items, filtered by namespace
+            # Use similarity search with metadata filter to get items in workspace
+            # We search with empty query to get all items, filtered by workspace
             results = collection.similarity_search(
                 query="",  # Empty query to get all
                 k=limit + offset + 50,  # Get extra to handle filtering
-                filter={"namespace": {"$eq": namespace_str}}
+                filter={"workspace": {"$eq": workspace}}
             )
             
             # Extract items and apply offset/limit
@@ -396,7 +475,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
             count = 0
             for doc in results:
                 if (hasattr(doc, 'metadata') and 
-                    doc.metadata.get("namespace") == namespace_str):
+                    doc.metadata.get("workspace") == workspace):
                     if count >= offset and len(items) < limit:
                         try:
                             value = json.loads(doc.metadata["value"])
@@ -404,7 +483,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
                                 Item(
                                     value=value,
                                     key=doc.metadata["key"],
-                                    namespace=namespace,
+                                    namespace=(workspace,),  # Convert back to tuple for compatibility
                                     created_at=datetime.now(),
                                     updated_at=datetime.now(),
                                 )
@@ -417,7 +496,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
             return items
 
         except Exception as e:
-            log_error(f"Error listing items in {namespace}: {e}")
+            log_error(f"Error listing items in {workspace}: {e}")
             return []
 
     def search(
@@ -430,6 +509,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
     ) -> list[Item]:
         """
         Search for items in a namespace using vector similarity.
+        Backward compatibility method that converts namespace to workspace.
 
         Args:
             namespace: Namespace tuple
@@ -440,32 +520,53 @@ class ChromaMemoryStoreAdapter(BaseStore):
         Returns:
             List of items with similarity scores
         """
+        # Convert namespace tuple to workspace string for backward compatibility
+        workspace = "_".join(namespace) if len(namespace) > 1 else namespace[0]
+        return self.search_workspace(workspace, query=query, limit=limit, offset=offset)
+
+    def search_workspace(
+        self,
+        workspace: str,
+        *,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Item]:
+        """
+        Search for items in a workspace using vector similarity.
+
+        Args:
+            workspace: Workspace name
+            query: Search query
+            limit: Maximum number of items to return
+            offset: Number of items to skip
+
+        Returns:
+            List of items with similarity scores
+        """
         try:
-            collection_name = self._get_collection_name(namespace)
-            collection = self.chroma_store.get_collection(collection_name)
+            collection = self.chroma_store.get_collection(workspace)
             
-            namespace_str = "|".join(namespace)
-            
-            # Perform vector similarity search with namespace filter
+            # Perform vector similarity search with workspace filter
             results = collection.similarity_search_with_score(
                 query=query, 
                 k=limit + offset + 20,  # Get extra to handle filtering
-                filter={"namespace": {"$eq": namespace_str}}
+                filter={"workspace": {"$eq": workspace}}
             )
             
-            # Filter by namespace and apply offset/limit
+            # Filter by workspace and apply offset/limit
             items = []
             count = 0
             for doc, score in results:
                 if (hasattr(doc, 'metadata') and 
-                    doc.metadata.get("namespace") == namespace_str):
+                    doc.metadata.get("workspace") == workspace):
                     if count >= offset and len(items) < limit:
                         try:
                             value = json.loads(doc.metadata["value"])
                             item = Item(
                                 value=value,
                                 key=doc.metadata["key"],
-                                namespace=namespace,
+                                namespace=(workspace,),  # Convert back to tuple for compatibility
                                 created_at=datetime.now(),
                                 updated_at=datetime.now(),
                             )
@@ -481,7 +582,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
             return items
 
         except Exception as e:
-            log_error(f"Error searching in {namespace} with query '{query}': {e}")
+            log_error(f"Error searching in {workspace} with query '{query}': {e}")
             return []
 
 
@@ -508,6 +609,37 @@ def get_memory_store():
 def get_tools_store():
     """Get the tools store instance (returns the combined store for backward compatibility).""" 
     return get_combined_store()
+
+
+# New workspace-based convenience functions
+def put_memory(key: str, value: dict[str, Any]) -> None:
+    """Store a memory in the 'memories' workspace."""
+    store = get_combined_store()
+    store.put_workspace("memories", key, value)
+
+
+def get_memory(key: str) -> Optional[Item]:
+    """Get a memory from the 'memories' workspace."""
+    store = get_combined_store()
+    return store.get_workspace("memories", key)
+
+
+def search_memories(query: str, limit: int = 10) -> list[Item]:
+    """Search memories in the 'memories' workspace."""
+    store = get_combined_store()
+    return store.search_workspace("memories", query=query, limit=limit)
+
+
+def put_tool(key: str, value: dict[str, Any]) -> None:
+    """Store a tool in the 'tools' workspace."""
+    store = get_combined_store()
+    store.put_workspace("tools", key, value)
+
+
+def search_tools(query: str, limit: int = 10) -> list[Item]:
+    """Search tools in the 'tools' workspace."""
+    store = get_combined_store()
+    return store.search_workspace("tools", query=query, limit=limit)
 
 
 # Backward compatibility - expose the store as module-level variable
