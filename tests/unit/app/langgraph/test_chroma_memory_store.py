@@ -66,17 +66,18 @@ class TestChromaMemoryStoreAdapter:
             yield mock_instance, mock_collection
 
     def test_collection_routing(self):
-        """Test that namespaces are routed to correct collections."""
+        """Test that namespaces are converted directly to collection names."""
         adapter = ChromaMemoryStoreAdapter()
         
         # Test memories namespace
-        assert adapter._get_collection_name(("main", "memories")) == "memories"
+        assert adapter._get_collection_name(("main", "memories")) == "main_memories"
         
         # Test tools namespace
         assert adapter._get_collection_name(("tools",)) == "tools"
         
-        # Test default routing
-        assert adapter._get_collection_name(("other",)) == "memories"
+        # Test other namespace patterns
+        assert adapter._get_collection_name(("user", "data")) == "user_data"
+        assert adapter._get_collection_name(("system",)) == "system"
 
     def test_text_content_formatting(self):
         """Test text content formatting for different value types."""
@@ -113,7 +114,7 @@ class TestChromaMemoryStoreAdapter:
         await adapter.aput(namespace, key, value)
         
         # Verify collection was called
-        mock_instance.get_collection.assert_called_with("memories")
+        mock_instance.get_collection.assert_called_with("main_memories")
         mock_collection.add_texts.assert_called_once()
 
     @pytest.mark.asyncio
@@ -233,5 +234,5 @@ class TestBackwardCompatibility:
         memories_ns = ("main", "memories")
         tools_ns = ("tools",)
         
-        assert adapter._get_collection_name(memories_ns) == "memories"
+        assert adapter._get_collection_name(memories_ns) == "main_memories"
         assert adapter._get_collection_name(tools_ns) == "tools"

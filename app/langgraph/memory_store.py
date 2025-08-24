@@ -139,22 +139,16 @@ class ChromaVectorStore:
 
 class ChromaMemoryStoreAdapter(BaseStore):
     """
-    A BaseStore adapter that uses different Chroma collections for different namespaces.
-    This provides a unified interface while using separate collections as workspaces.
+    A BaseStore adapter that uses Chroma collections based directly on namespace.
+    Each namespace tuple is converted to a collection name by joining with underscores.
     """
 
     def __init__(self):
         self.chroma_store = ChromaVectorStore()
 
     def _get_collection_name(self, namespace: tuple[str, ...]) -> str:
-        """Determine which Chroma collection to use based on namespace."""
-        if len(namespace) >= 2 and namespace[1] == "memories":
-            return "memories"
-        elif len(namespace) >= 1 and namespace[0] == "tools":
-            return "tools"
-        else:
-            # Default to memories collection for backward compatibility
-            return "memories"
+        """Convert namespace tuple directly to collection name."""
+        return "_".join(namespace)
 
     def _format_text_content(self, value: dict[str, Any]) -> str:
         """Create a text representation for vector search."""
@@ -241,7 +235,7 @@ class ChromaMemoryStoreAdapter(BaseStore):
         Store a key-value pair in the appropriate Chroma collection.
 
         Args:
-            namespace: Namespace tuple (e.g., ("main", "memories") or ("tools",))
+            namespace: Namespace tuple - converted directly to collection name
             key: Unique key for the item
             value: Dictionary value to store
             index: Optional list of fields to index (not used in vector store)

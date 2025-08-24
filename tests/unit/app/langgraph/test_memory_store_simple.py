@@ -67,7 +67,7 @@ class TestMemoryStoreSimplified:
         await adapter.aput(namespace, key, value)
 
         # Verify the collection was accessed and add_texts was called
-        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")
         mock_chroma_collection.add_texts.assert_called_once()
 
     @pytest.mark.asyncio
@@ -85,7 +85,7 @@ class TestMemoryStoreSimplified:
         results = await adapter.asearch(namespace, query=query, limit=3)
 
         # Verify the search was performed
-        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")
         mock_chroma_collection.similarity_search_with_score.assert_called_once()
 
     @pytest.mark.asyncio
@@ -103,7 +103,7 @@ class TestMemoryStoreSimplified:
         item = await adapter.aget(namespace, key)
 
         # Verify the get was performed
-        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")
         mock_chroma_collection.get.assert_called_once()
 
     @pytest.mark.asyncio
@@ -121,7 +121,7 @@ class TestMemoryStoreSimplified:
         await adapter.adelete(namespace, key)
 
         # Verify the delete was performed
-        mock_chroma_store.get_collection.assert_called_with("memories")
+        mock_chroma_store.get_collection.assert_called_with("test_memories")
         mock_chroma_collection.delete.assert_called_once()
 
     def test_collection_routing(self):
@@ -131,13 +131,13 @@ class TestMemoryStoreSimplified:
         adapter = ChromaMemoryStoreAdapter()
         
         # Test memories routing
-        assert adapter._get_collection_name(("main", "memories")) == "memories"
+        assert adapter._get_collection_name(("main", "memories")) == "main_memories"
         
         # Test tools routing
         assert adapter._get_collection_name(("tools",)) == "tools"
         
-        # Test default routing
-        assert adapter._get_collection_name(("other",)) == "memories"
+        # Test other patterns
+        assert adapter._get_collection_name(("user", "data")) == "user_data"
 
     def test_text_formatting(self):
         """Test text content formatting."""
