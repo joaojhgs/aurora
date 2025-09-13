@@ -1,9 +1,11 @@
 # Aurora: Intelligent Voice Assistant for Local Automation and Productivity
 
-[![Unit and Integration Tests](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml)
-[![Code Coverage](https://codecov.io/gh/aurora-ai/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
+![Aurora System Architecture](aurora.jpg)
+
+[![Unit and Integration Tests](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml)
+[![Code Coverage](https://codecov.io/gh/joaojhgs/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Versions](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11-blue)](https://github.com/aurora-ai/aurora)
+[![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11-blue)](https://github.com/aurora-ai/aurora)
 
 Aurora is an intelligent voice assistant designed to enhance productivity through local, privacy-focused automation. It leverages real-time speech-to-text, a large language model (LLM), and open-source tools to provide a seamless and intuitive user experience.
 
@@ -23,7 +25,6 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 - [TODO LIST](#todo-list)
 - [Long Term Vision](#long-term-vision)
 - [Why Aurora?](#why-aurora)
-- [Contributing](#contributing)
 
 ---
 
@@ -49,14 +50,10 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - Enable queries like, "What did I research about interfaces at 2 PM?"
    - Enrich the assistant context by adding past activities when necessary
 
-5.~~Browser Automation:~~
-   - ~~Control web browsers (e.g., open tabs, fill forms, click elements) using the **browser-use** framework.~~
-   - ~~The assistant will interpret your request, deem wether it should call the browser-use or not, and finally re-structure your request so that it's carried out correctly.~~
-
-6. **Text-to-Speech (TTS)**:
+5. **Text-to-Speech (TTS)**:
    - Generate natural-sounding audio responses using **Piper** (offline TTS).
 
-7. **Modern User Interface**:
+6. **Modern User Interface**:
    - Graphical user interface with both text and voice input options
    - Dark mode and light mode support
    - Real-time status indicators for listening, processing, and speaking states
@@ -122,7 +119,7 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
   - Troubleshooting and configuration details
   - Platform-specific instructions
   
-- **Python Version Requirements**: Aurora requires Python 3.9-3.11 (Python 3.12+ causes dependency conflicts)
+- **Python Version Requirements**: Aurora requires Python 3.10-3.11 (Python 3.12+ causes dependency conflicts)
 
 - **Model Management**: Aurora includes models for offline operation - see [Model Management](#-model-management) below
 
@@ -133,20 +130,12 @@ Aurora stores model files in dedicated directories at the project root:
 **Chat Models** (`chat_models/`):
 - Large language models in GGUF format (2-4GB each)
 - Configure in `config.json`: `"llama_cpp_model_path": "chat_models/model-name.gguf"`
-- Included: Gemma 2B/3B, Llama 2 7B models
 - Download more from [Hugging Face GGUF models](https://huggingface.co/models?library=gguf)
 
 **Voice Models** (`voice_models/`):
 - Text-to-speech (Piper) and wake word models
 - Configure in `config.json`: `"model_file_path": "/voice_models/voice-name.onnx"`
-- Included: English, Portuguese voices + Jarvis wake word
 - Download more from [Piper Voices](https://github.com/rhasspy/piper/blob/master/VOICES.md)
-
-**Model Directory Features**:
-- ✅ **Excluded from builds**: Large files don't bloat packages
-- ✅ **Git ignored**: Models managed separately from code
-- ✅ **User controlled**: Choose models based on your hardware
-- ✅ **Privacy focused**: All models run locally
 
 *See `chat_models/README.md` and `voice_models/README.md` for detailed model information.*
 
@@ -218,19 +207,10 @@ Aurora leverages a comprehensive stack of open-source technologies, organized by
 
 ### ⚙️ System & Configuration
 
-- **Environment Management**: [python-dotenv](https://github.com/theskumar/python-dotenv) - Environment variable handling
 - **Configuration**: Hybrid JSON + environment variable system with validation
 - **Plugin Architecture**: Conditional dependency loading based on configuration
 - **Cross-Platform**: Windows, macOS, and Linux support with platform-specific optimizations
 - **CUDA Support**: Optional GPU acceleration for TTS, STT, and OCR components
-
-### 📦 Development & Build Tools
-
-- **Package Management**: Standard pip with `requirements.txt`
-- **Code Quality**: Type hints with [typing-extensions](https://github.com/python/typing_extensions)
-- **Progress Tracking**: [tqdm](https://github.com/tqdm/tqdm) - Progress bars for long operations
-- **Logging**: [coloredlogs](https://coloredlogs.readthedocs.io/) - Enhanced logging with colors
-- **Terminal UI**: [halo](https://github.com/manrajgrover/halo) - Elegant terminal spinners
 
 ### 🔒 Privacy & Security
 
@@ -382,23 +362,6 @@ This architecture ensures Aurora remains privacy-focused (all processing local),
       - [ ] Upgrade openrecall tool to be able to filter by date as well "Jarvis, what have I done today?"
    - [ ] Update openrecall code to be able to detect active window titles on linux as well
    - [ ] Create custom tool using OmniParser and Magma for UI interaction (Self-Operating-Computer has been removed since it's not reliable)
-- [x] Add productivity tools
-   - [x] Jira
-   - [x] Slack (Setup requires creating an app, interaction requires specifying channel ids, potentially too cumbersome)
-   - [x] Github (Setup is a bit too cumbersome, needs creating a new app and specifying only one repo that you want to interact with)
-   - [x] Calendar
-   - [x] Gmail
-- [x] Upgrade logic that defines which tools are available to the coordinator agent
-   - [x] Use tool descriptions to RAG match what are the possible best tools for the user request
-      (This will allow for an ever increasing number of tools without compromising the context length, specially for local LLMs)
-- [ ] Turn all available langchain tools into an [MCP Server](https://github.com/langchain-ai/langchain-mcp-adapters) to allow usage in other interfaces (such as cursor)
-- [x] **MCP (Model Context Protocol) Integration**
-   - [x] Add support for connecting to external MCP servers
-   - [x] Support both local (stdio) and remote (HTTP) MCP servers
-   - [x] Dynamic tool loading from MCP servers into Aurora's tool system
-   - [x] Authentication support for remote MCP servers
-   - [x] Example MCP servers (math, weather) with documentation
-   - [x] Full integration with Aurora's RAG-based tool selection
 
 # Long term vision:
 
@@ -414,153 +377,9 @@ Also by allowing client side tools aside from the ones we can use on the Desktop
 - [ ] Integrations with Home Assistant
    - [ ] Allow for tool calling with smart home appliances
 
-## Testing & Development
-
-### Test Categories
-
-Aurora has a comprehensive testing suite divided into several categories:
-
-1. **Unit Tests** - Test individual components in isolation
-   - Location: `tests/unit/`
-
-2. **Integration Tests** - Test interactions between components
-   - Location: `tests/integration/`
-
-3. **End-to-End Tests** - Test complete user workflows
-   - Location: `tests/e2e/`
-
-4. **Performance Tests** - Test system performance
-   - Location: `tests/performance/`
-
-### Running Tests
-
-Install test dependencies:
-```bash
-pip install -r requirements-test.txt
-```
-
-Run all tests (except performance tests):
-```bash
-pytest
-```
-
-Generate a test coverage report:
-```bash
-pytest --cov=app --cov-report=html
-```
-
-For more details, see [Testing Guide](tests/README.md).
-
-### CI/CD Pipeline
-
-Aurora has several GitHub Actions workflows:
-
-1. **Unit and Integration Tests** - Run on every push
-2. **End-to-End Tests** - Run on pull requests
-3. **Performance Tests** - Run on schedule and manually
-4. **Full Test Suite** - Run on releases and manually
-5. **Lint and Static Analysis** - Run on every push
-
-[![Code Coverage](https://codecov.io/gh/aurora-ai/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
 
 ## Why Aurora?
 Aurora redefines how users interact with their computers by combining voice-based interfaces with powerful local automation tools. It enhances productivity without compromising privacy, offering a seamless blend of natural language processing, semantic search, and browser automation. By leveraging open-source tools, Aurora ensures transparency and customization, making it a versatile assistant for both personal and professional use.
-
-## Contributing
-
-Contributions to Aurora are welcome! Here's how you can contribute:
-
-### Getting Started
-
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/aurora.git
-   cd aurora
-   ```
-3. **Set up the development environment**:
-   ```bash
-   # Run the setup script and choose option 3 (Development)
-   # Linux/macOS:
-   ./setup.sh
-   # Windows:
-   setup.bat
-   
-   # Activate the virtual environment (if not using the run.sh/run.bat scripts)
-   # Linux/macOS:
-   source venv/bin/activate
-   # Windows:
-   venv\Scripts\activate
-   ```
-
-### Development Workflow
-
-1. **Create a branch** for your feature or bugfix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Set up development environment** with pre-commit hooks:
-   ```bash
-   # Run the setup script and choose the "Development" feature level (option 3)
-   # This will install all development dependencies and pre-commit hooks
-   ./setup.sh
-   # or on Windows
-   setup.bat
-   ```
-
-3. **Make your changes** and ensure they follow the project's code style:
-   ```bash
-   # Run auto-formatting (black + isort)
-   make format
-   
-   # Run all code quality checks (lint + typing)
-   make check
-   
-   # Or run individual checks:
-   make lint      # Run flake8 linting
-   make typing    # Run mypy type checking
-   ```
-
-4. **Write tests** for your changes:
-   - Unit tests for new functionality
-   - Integration tests for component interactions
-   - Update existing tests as needed
-
-4. **Run tests** to verify your changes:
-   ```bash
-   # Run all tests (excluding performance tests)
-   make test
-   
-   # Run specific test types
-   make unit        # Run unit tests only
-   make integration # Run integration tests only
-   
-   # Generate test coverage report
-   make coverage
-   ```
-
-5. **Commit your changes** with a clear message:
-   ```bash
-   git commit -m "Add feature: your feature description"
-   ```
-
-6. **Push your branch** to GitHub:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-7. **Submit a pull request** from your fork to the main repository
-
-### Pull Request Guidelines
-
-- Ensure your code passes all tests and CI checks
-- Include tests for any new functionality
-- Update documentation as needed
-- Follow the existing code style and conventions
-- Keep changes focused on a single issue/feature
-
-The CI pipeline will automatically run tests on your pull request, including unit tests, integration tests, and linting.
 
 ### Need Help?
 

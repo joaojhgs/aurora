@@ -62,23 +62,6 @@ Add MCP servers to your `config.json` file:
 - **Configuration**: Similar to streamable_http but for streaming
 - **Example**: Live data feeds, real-time notifications
 
-## Example Servers
-
-Aurora includes example MCP servers in `examples/mcp_servers/`:
-
-### Math Server
-Provides basic mathematical operations:
-- Addition, subtraction, multiplication, division
-- Power and square root calculations
-- Local execution via stdio transport
-
-### Weather Server
-Provides weather information:
-- Current weather for cities
-- Weather forecasts
-- Weather alerts
-- HTTP-based service
-
 ## Creating Custom MCP Servers
 
 1. **Install FastMCP**:
