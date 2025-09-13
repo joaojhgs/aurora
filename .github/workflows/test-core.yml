@@ -32,18 +32,24 @@ jobs:
         
     - name: Run unit tests with coverage
       run: |
-        pytest tests/unit -v --cov=app --cov-report=xml:unit-coverage.xml
+        pytest tests/unit -v --cov=app --cov-report=xml:unit-coverage.xml --cov-report=html:unit-coverage.html
         
     - name: Run integration tests with coverage
       run: |
-        pytest tests/integration -v --cov=app --cov-report=xml:integration-coverage.xml --cov-append
+        pytest tests/integration -v --cov=app --cov-report=xml:integration-coverage.xml --cov-report=html:integration-coverage.html --cov-append
+
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./unit-coverage.xml,./integration-coverage.xml
+        flags: alltests
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
         
-    - name: Generate HTML coverage report
-      run: |
-        pytest tests/unit tests/integration -v --cov=app --cov-report=html:coverage-report
-        
-    - name: Upload HTML coverage report
+    - name: Upload HTML coverage reports
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-report
-        path: coverage-report/
+        name: html-coverage-reports
+        path: |
+          unit-coverage.html/
+          integration-coverage.html/
