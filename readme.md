@@ -2,8 +2,8 @@
 
 ![Aurora System Architecture](aurora.jpg)
 
-[![Unit and Integration Tests](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/aurora-ai/aurora/actions/workflows/test-core.yml)
-[![Code Coverage](https://codecov.io/gh/joaojhgs/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
+[![Unit and Integration Tests](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml)
+[![Code Coverage](https://codecov.io/gh/joaojhgs/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/joaojhgs/aurora)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11-blue)](https://github.com/aurora-ai/aurora)
 
