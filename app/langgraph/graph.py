@@ -66,7 +66,7 @@ graph = graph_builder.compile(checkpointer=memory, store=store)
 
 # Save the graph
 try:
-    with open("./graph.png", "wb") as f:
+    with open("./assets/graph.png", "wb") as f:
         f.write(graph.get_graph().draw_mermaid_png())
 except Exception:
     # This requires some extra dependencies and is optional
