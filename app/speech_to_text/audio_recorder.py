@@ -1522,8 +1522,7 @@ class AudioToTextRecorder:
                     )
                     response = self.parent_transcription_pipe.recv()
 
-                    # New format: (status, result, priority, request_id)
-                    status, result, priority, request_id = response
+                    status, result = response
 
                     self.transcribe_count -= 1
 
@@ -2285,7 +2284,7 @@ class AudioToTextRecorder:
                                     logging.debug("Receive from realtime worker after transcription request to main model")
                                     response = self.parent_transcription_pipe.recv()
 
-                                    status, result, priority, request_id = response
+                                    status, result = response
 
                                     if status == "success":
                                         transcription, info, priority, request_id = result
@@ -2455,7 +2454,7 @@ class AudioToTextRecorder:
                                     # Use the main transcription model with low priority
                                     with self.transcription_lock:
                                         chunk_id = f"ambient_{self.ambient_chunk_counter}"
-                                        status, result, priority, request_id = self._send_transcription_request(
+                                        status, result = self._send_transcription_request(
                                             audio,
                                             self.language,
                                             TranscriptionPriority.LOW,
