@@ -60,6 +60,11 @@ jobs:
       - name: 🔍 Check if release is needed
         id: check
         run: |
+          echo "🔍 Checking release requirements..."
+          echo "Input - Release Type: ${{ github.event.inputs.release_type }}"
+          echo "Input - Prerelease: ${{ github.event.inputs.prerelease }}"
+          echo "Input - Dry Run: ${{ github.event.inputs.dry_run }}"
+          
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             echo "should_release=true" >> $GITHUB_OUTPUT
             echo "🧪 Dry run mode - proceeding with validation"
@@ -69,12 +74,18 @@ jobs:
               # Force release when specific type is selected
               echo "should_release=true" >> $GITHUB_OUTPUT
               echo "✅ Forced release type: ${{ github.event.inputs.release_type }}"
-            elif semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release >/dev/null 2>&1; then
-              echo "should_release=true" >> $GITHUB_OUTPUT
-              echo "✅ New release is needed based on commit history"
             else
-              echo "should_release=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ No new release needed based on commit history"
+              # Check semantic-release to see if a release is warranted
+              echo "🔍 Checking conventional commits for release..."
+              
+              if semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release >/dev/null 2>&1; then
+                echo "should_release=true" >> $GITHUB_OUTPUT
+                echo "✅ New release is needed based on commit history"
+              else
+                echo "should_release=false" >> $GITHUB_OUTPUT
+                echo "ℹ️ No new release needed based on commit history"
+                echo "💡 To force a release, select a specific release type (patch/minor/major)"
+              fi
             fi
           fi
 
@@ -82,18 +93,44 @@ jobs:
         id: version
         if: steps.check.outputs.should_release == 'true'
         run: |
-          current=$(python -c "import toml; print(toml.load('pyproject.toml')['project']['version'])")
+          echo "📊 Getting version information..."
+          
+          # Get current version from pyproject.toml
+          current=$(python3 -c "
+          import toml
+          try:
+              data = toml.load('pyproject.toml')
+              print(data['project']['version'])
+          except Exception as e:
+              print('Error reading version:', e, file=sys.stderr)
+              exit(1)
+          ")
           echo "current_version=$current" >> $GITHUB_OUTPUT
-          
-          if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
-            next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release --${{ github.event.inputs.release_type }})
-          else
-            next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release)
-          fi
-          echo "next_version=$next" >> $GITHUB_OUTPUT
-          
           echo "📊 Current version: $current"
-          echo "📊 Next version: $next"
+          
+          # Get next version based on release type
+          echo "🔢 Calculating next version..."
+          if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
+            echo "Using specified release type: ${{ github.event.inputs.release_type }}"
+            if next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release --${{ github.event.inputs.release_type }} 2>/dev/null); then
+              echo "next_version=$next" >> $GITHUB_OUTPUT
+              echo "📊 Next version: $next"
+            else
+              echo "⚠️ Failed to calculate next version, using current"
+              echo "next_version=$current" >> $GITHUB_OUTPUT
+              echo "📊 Next version: $current (fallback)"
+            fi
+          else
+            echo "Using automatic versioning based on commits"
+            if next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release 2>/dev/null); then
+              echo "next_version=$next" >> $GITHUB_OUTPUT
+              echo "📊 Next version: $next"
+            else
+              echo "⚠️ No version bump needed, using current"
+              echo "next_version=$current" >> $GITHUB_OUTPUT  
+              echo "📊 Next version: $current (no change)"
+            fi
+          fi
 
   # Job 2: Build executables for multiple platforms (optional - doesn't fail release)
   build:
@@ -126,16 +163,18 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y portaudio19-dev python3-dev gcc
+          sudo apt-get install -y portaudio19-dev python3-dev gcc build-essential
 
       - name: 📦 Install build dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[build,runtime,torch-cpu]
+          # Install runtime dependencies needed for Piper TTS and other components
+          pip install -e .[runtime,build,torch-cpu]
 
       - name: 🏗️ Build executable
         run: |
-          python scripts/build.py --target exe --platform ${{ matrix.platform }} --clean
+          # Use correct build.py syntax - no --platform option exists
+          python scripts/build.py --target exe --clean
         timeout-minutes: 30
         continue-on-error: true  # Allow individual builds to fail
 
@@ -143,22 +182,46 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
+          
+          # Check what was actually built
+          echo "📂 Checking dist directory:"
+          ls -la dist/ || echo "No dist directory found"
+          
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp dist/Aurora.exe artifacts/aurora-windows.exe
-            # Create portable package
-            mkdir -p artifacts/aurora-windows
-            cp dist/Aurora.exe artifacts/aurora-windows/
-            cp README.md LICENSE artifacts/aurora-windows/
-            cd artifacts && zip -r aurora-windows-portable.zip aurora-windows/
+            if [ -f "dist/Aurora.exe" ]; then
+              echo "✅ Found Windows executable"
+              cp dist/Aurora.exe artifacts/aurora-windows.exe
+              # Create portable package
+              mkdir -p artifacts/aurora-windows
+              cp dist/Aurora.exe artifacts/aurora-windows/
+              [ -f "readme.md" ] && cp readme.md artifacts/aurora-windows/
+              [ -f "README.md" ] && cp README.md artifacts/aurora-windows/
+              [ -f "LICENSE" ] && cp LICENSE artifacts/aurora-windows/
+              cd artifacts && zip -r aurora-windows-portable.zip aurora-windows/
+            else
+              echo "❌ Windows executable not found"
+              exit 1
+            fi
           else
-            cp dist/Aurora artifacts/aurora-linux
-            chmod +x artifacts/aurora-linux
-            # Create portable package
-            mkdir -p artifacts/aurora-linux
-            cp dist/Aurora artifacts/aurora-linux/aurora
-            cp README.md LICENSE artifacts/aurora-linux/
-            cd artifacts && tar -czf aurora-linux-portable.tar.gz aurora-linux/
+            if [ -f "dist/Aurora" ]; then
+              echo "✅ Found Linux executable"
+              cp dist/Aurora artifacts/aurora-linux
+              chmod +x artifacts/aurora-linux
+              # Create portable package
+              mkdir -p artifacts/aurora-linux
+              cp dist/Aurora artifacts/aurora-linux/aurora
+              [ -f "readme.md" ] && cp readme.md artifacts/aurora-linux/
+              [ -f "README.md" ] && cp README.md artifacts/aurora-linux/
+              [ -f "LICENSE" ] && cp LICENSE artifacts/aurora-linux/
+              cd artifacts && tar -czf aurora-linux-portable.tar.gz aurora-linux/
+            else
+              echo "❌ Linux executable not found"
+              exit 1
+            fi
           fi
+          
+          echo "📦 Prepared artifacts:"
+          ls -la artifacts/
 
       - name: 📤 Upload artifacts
         uses: actions/upload-artifact@v4
@@ -206,51 +269,115 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get recent commits for context
-          commits=$(git log --oneline --since="$(git describe --tags --abbrev=0 2>/dev/null || echo '1 month ago')" --pretty=format:"- %s (%an)")
+          echo "🤖 Starting AI release summary generation..."
           
-          # Create prompt for AI model
-          cat << EOF > prompt.json
-          {
-            "messages": [
-              {
-                "role": "system",
-                "content": "You are a technical writer specializing in release notes for open-source software. Generate a concise, professional release summary that highlights key features, improvements, and fixes. Focus on user-facing changes and technical improvements. Use markdown formatting."
-              },
-              {
-                "role": "user", 
-                "content": "Generate a release summary for Aurora Voice Assistant version ${{ needs.validate.outputs.next_version }}. Here are the recent commits:\n\n$commits\n\nProject context: Aurora is a Python-based intelligent voice assistant for local automation and productivity. It uses real-time speech-to-text, LLMs, and various productivity tools in a modular, privacy-focused architecture.\n\nGenerate a 2-3 paragraph summary highlighting the most important changes for users."
-              }
-            ],
-            "model": "openai/gpt-4o",
-            "max_tokens": 500
+          # Get recent commits for context
+          commits=$(git log --oneline --since="$(git describe --tags --abbrev=0 2>/dev/null || echo '1 month ago')" --pretty=format:"- %s (%an)" | head -20)
+          
+          # Debug: show what commits we found
+          echo "📋 Found commits:"
+          echo "$commits"
+          
+          # Create a proper JSON file with escaped content
+          python3 << 'EOF'
+          import json
+          import os
+          import sys
+          
+          commits_text = """$commits"""
+          
+          # Create the request payload
+          payload = {
+              "messages": [
+                  {
+                      "role": "system",
+                      "content": "You are a technical writer specializing in release notes for open-source software. Generate a concise, professional release summary that highlights key features, improvements, and fixes. Focus on user-facing changes and technical improvements. Use markdown formatting."
+                  },
+                  {
+                      "role": "user", 
+                      "content": f"Generate a release summary for Aurora Voice Assistant version ${{ needs.validate.outputs.next_version }}. Here are the recent commits:\n\n{commits_text}\n\nProject context: Aurora is a Python-based intelligent voice assistant for local automation and productivity. It uses real-time speech-to-text, LLMs, and various productivity tools in a modular, privacy-focused architecture.\n\nGenerate a 2-3 paragraph summary highlighting the most important changes for users."
+                  }
+              ],
+              "model": "gpt-4o-mini",
+              "max_tokens": 500,
+              "temperature": 0.7
           }
+          
+          # Write to file
+          with open('prompt.json', 'w') as f:
+              json.dump(payload, f, indent=2)
+              
+          print("✅ Created prompt.json file")
           EOF
           
-          # Call GitHub Models API (with fallback)
-          if response=$(curl -s --fail "https://models.github.ai/inference/chat/completions" \
+          # Debug: show the created file
+          echo "📄 Created prompt file:"
+          cat prompt.json
+          
+          # Initialize fallback summary
+          fallback_summary="🚀 **Aurora Voice Assistant ${{ needs.validate.outputs.next_version }}**
+
+          This release includes various improvements and updates to Aurora's voice assistant capabilities.
+
+          **Recent Changes:**
+          $commits
+
+          See the detailed changelog below for specific technical changes and improvements."
+          
+          # Try GitHub Models API with correct endpoint
+          echo "🌐 Calling GitHub Models API..."
+          if response=$(curl -s -w "%{http_code}" -o response.json "https://models.inference.ai.azure.com/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -d @prompt.json 2>/dev/null); then
             
-            # Extract summary from response
-            summary=$(echo "$response" | python3 -c "
-            import json, sys
-            try:
-                data = json.load(sys.stdin)
-                content = data['choices'][0]['message']['content']
-                # Escape for GitHub output
-                content_escaped = content.replace('\n', '\\n').replace('\"', '\\\"')
-                print(content_escaped)
-            except Exception as e:
-                print('🤖 AI summary generation failed - using fallback summary')
-            " 2>/dev/null)
+            http_code="${response: -3}"
+            echo "📊 HTTP Response Code: $http_code"
+            
+            if [ "$http_code" = "200" ]; then
+              echo "✅ API call successful, parsing response..."
+              
+              # Extract summary from response
+              if summary=$(python3 -c "
+              import json, sys
+              try:
+                  with open('response.json', 'r') as f:
+                      data = json.load(f)
+                  content = data['choices'][0]['message']['content']
+                  print(content)
+              except Exception as e:
+                  print('Fallback due to parsing error: ' + str(e), file=sys.stderr)
+                  sys.exit(1)
+              " 2>/dev/null); then
+                echo "✅ Successfully extracted AI summary"
+                # Use proper GitHub Actions multiline output
+                echo "summary<<EOF" >> $GITHUB_OUTPUT
+                echo "$summary" >> $GITHUB_OUTPUT
+                echo "EOF" >> $GITHUB_OUTPUT
+              else
+                echo "⚠️ Failed to parse API response, using fallback"
+                echo "📄 Response content:"
+                cat response.json
+                echo "summary<<EOF" >> $GITHUB_OUTPUT
+                echo "$fallback_summary" >> $GITHUB_OUTPUT
+                echo "EOF" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "❌ API call failed with HTTP $http_code"
+              echo "📄 Error response:"
+              cat response.json
+              echo "summary<<EOF" >> $GITHUB_OUTPUT
+              echo "$fallback_summary" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "⚠️ GitHub Models API unavailable - using fallback"
-            summary="🚀 **Aurora Voice Assistant ${{ needs.validate.outputs.next_version }}** - This release includes various improvements and updates. See the detailed changelog below for specific changes."
+            echo "❌ GitHub Models API unavailable or network error"
+            echo "summary<<EOF" >> $GITHUB_OUTPUT
+            echo "$fallback_summary" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
           
-          echo "summary=$summary" >> $GITHUB_OUTPUT
+          echo "🎉 AI summary generation completed"
 
   # Job 4: Create release (independent of build success)
   release:
@@ -318,51 +445,96 @@ jobs:
           # Get current release
           tag="${{ steps.semantic-release.outputs.tag }}"
           
-          # Create enhanced release notes
-          cat << EOF > enhanced_notes.md
-          ## 🤖 Release Summary
+          echo "🎯 Updating release $tag with enhanced notes..."
+          
+          # Create enhanced release notes with proper escaping
+          cat << 'EOF' > enhanced_notes.md
+          ## 🤖 AI-Generated Release Summary
           
           ${{ needs.generate-summary.outputs.release_summary }}
           
-          ## 📝 Detailed Changes
+          ## 📝 Detailed Changelog
           
           ${{ needs.generate-summary.outputs.changelog_preview }}
           
-          ## 📦 Installation
+          ## 📦 Installation Options
           
-          ### Download Executables
-          {% if needs.build.result == 'success' %}
-          - **Linux**: Download \`aurora-linux-portable.tar.gz\` 
-          - **Windows**: Download \`aurora-windows-portable.zip\`
-          {% else %}
-          ⚠️ **Note**: Pre-built executables may not be available for this release due to build issues. Please install from source.
-          {% endif %}
+          ### Option 1: Download Pre-built Executables
+          EOF
           
-          ### Install from Source
-          \`\`\`bash
-          pip install aurora==${{ needs.validate.outputs.next_version }}
-          \`\`\`
+          # Add build status info
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            cat << 'EOF' >> enhanced_notes.md
+          ✅ **Executables available below:**
+          - **Linux**: Download `aurora-linux-portable.tar.gz` 
+          - **Windows**: Download `aurora-windows-portable.zip`
           
-          ### From Repository
-          \`\`\`bash
-          git clone https://github.com/${{ github.repository }}.git
+          Simply download, extract, and run the executable for your platform.
+          EOF
+          else
+            cat << 'EOF' >> enhanced_notes.md
+          ⚠️ **Pre-built executables not available** for this release due to build issues.
+          Please use one of the installation methods below.
+          EOF
+          fi
+          
+          # Add installation methods
+          cat << 'EOF' >> enhanced_notes.md
+          
+          ### Option 2: Install via pip (recommended)
+          ```bash
+          pip install aurora-voice-assistant
+          ```
+          
+          ### Option 3: Install from Source
+          ```bash
+          git clone https://github.com/$GITHUB_REPOSITORY.git
           cd aurora
           git checkout $tag
           pip install -e .[full-third-party]
-          \`\`\`
+          ```
           
-          ## 🔧 System Requirements
-          - Python 3.9-3.11 (Python 3.12+ not supported due to dependency conflicts)
-          - Audio input/output devices
-          - Internet connection for AI features (unless using local models)
+          ### Option 4: Quick Setup Script
+          ```bash
+          git clone https://github.com/$GITHUB_REPOSITORY.git
+          cd aurora
+          ./setup.sh  # Interactive setup with hardware detection
+          ```
+          
+          ## ⚙️ System Requirements
+          
+          - **Python**: 3.9-3.11 (⚠️ Python 3.12+ not supported due to dependency conflicts)
+          - **OS**: Linux, Windows, macOS
+          - **Audio**: Input/output devices (microphone and speakers)
+          - **Memory**: 4GB+ RAM (8GB+ recommended for local models)
+          - **Storage**: 2GB+ free space
+          - **Network**: Required for API-based models (optional for local models)
+          
+          ## 🚀 Quick Start
+          
+          1. **Install Aurora** using any method above
+          2. **Run setup**: `./setup.sh` (interactive) or configure `config.json` manually
+          3. **Start Aurora**: `python main.py`
+          4. **Say "Hey Jarvis"** to activate voice commands
+          
+          For detailed installation instructions, see [INSTALL.md](https://github.com/$GITHUB_REPOSITORY/blob/main/docs/INSTALL.md).
           
           ---
           
-          *This release was automatically generated using [python-semantic-release](https://python-semantic-release.readthedocs.io/) with AI-powered summaries.*
+          🤖 *This release was automatically generated using [python-semantic-release](https://python-semantic-release.readthedocs.io/) with AI-powered summaries via GitHub Models.*
           EOF
           
-          # Update release
-          gh release edit "$tag" --notes-file enhanced_notes.md
+          echo "📄 Generated enhanced release notes:"
+          cat enhanced_notes.md
+          
+          # Update release with enhanced notes
+          echo "📝 Updating GitHub release..."
+          if gh release edit "$tag" --notes-file enhanced_notes.md; then
+            echo "✅ Successfully updated release notes"
+          else
+            echo "❌ Failed to update release notes"
+            exit 1
+          fi
 
   # Job 5: Upload release artifacts (only if builds succeeded)
   upload-artifacts:
