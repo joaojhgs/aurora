@@ -5,7 +5,7 @@ Aurora Voice Assistant
 Intelligent Voice Assistant for Local Automation and Productivity.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __author__ = "Aurora Team"
 __email__ = "aurora@example.com"
 __license__ = "MIT"
