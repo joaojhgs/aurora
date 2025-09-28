@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aurora"
-version = "0.1.0"
+version = "1.0.0"
 description = "Intelligent Voice Assistant for Local Automation and Productivity"
 readme = "readme.md"
 license = {file = "LICENSE"}
