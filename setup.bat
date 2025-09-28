@@ -533,17 +533,29 @@ if "%FEATURE_LEVEL%"=="dev" (
     
     REM Set up pre-commit hooks for development
     echo 🪝 Setting up pre-commit hooks for code quality...
-    pip install pre-commit
     
-    REM Install the pre-commit hooks
-    pre-commit install
+    REM Install pre-commit and commitizen ^(needed for commit validation^)
+    echo 📦 Installing pre-commit and commitizen...
+    pip install pre-commit commitizen
+    
+    REM Install all necessary pre-commit hook types
+    echo 🔧 Installing pre-commit hook types...
+    pre-commit install --hook-type pre-commit
+    pre-commit install --hook-type commit-msg
+    pre-commit install --hook-type pre-push
     
     REM Update hooks to the latest version
+    echo 🔄 Updating pre-commit hooks to latest versions...
     pre-commit autoupdate
     
     echo ✅ Pre-commit hooks installed successfully!
-    echo    Your code will be automatically linted when you commit changes.
-    echo    You can run pre-commit manually with: pre-commit run --all-files
+    echo    🔍 Code quality hooks: Run on every commit ^(formatting, linting^)
+    echo    📝 Commit message validation: Enforces conventional commit format
+    echo    🚀 Branch validation: Runs on push to validate branch state
+    echo.
+    echo    Manual usage:
+    echo    • pre-commit run --all-files    # Run on all files
+    echo    • cz check --message "feat: example"  # Test commit message format
     echo.
 )
 
