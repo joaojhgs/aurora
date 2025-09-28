@@ -157,14 +157,37 @@ def get_platform_args():
         ]
 
 
+def get_version():
+    """Get current version from pyproject.toml"""
+    try:
+        # Try importing tomllib (Python 3.11+) or toml
+        try:
+            import tomllib
+
+            with open(PROJECT_ROOT / "pyproject.toml", "rb") as f:
+                data = tomllib.load(f)
+        except ImportError:
+            import toml
+
+            with open(PROJECT_ROOT / "pyproject.toml") as f:
+                data = toml.load(f)
+        return data["project"]["version"]
+    except Exception:
+        return "0.1.0"
+
+
 def create_version_file():
     """Create version file for Windows builds"""
+    version = get_version()
+    version_parts = version.split(".")
+    major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
+
     if platform.system() == "Windows":
-        version_content = """# UTF-8
+        version_content = f"""# UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(0, 1, 0, 0),
-    prodvers=(0, 1, 0, 0),
+    filevers=({major}, {minor}, {patch}, 0),
+    prodvers=({major}, {minor}, {patch}, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -177,13 +200,13 @@ VSVersionInfo(
       StringTable(
         u'040904B0',
         [StringStruct(u'CompanyName', u'Aurora Team'),
-        StringStruct(u'FileDescription', u'Aurora Voice Assistant'),
-        StringStruct(u'FileVersion', u'0.1.0'),
+        StringStruct(u'FileDescription', u'Aurora Voice Assistant v{version}'),
+        StringStruct(u'FileVersion', u'{version}'),
         StringStruct(u'InternalName', u'Aurora'),
         StringStruct(u'LegalCopyright', u'© Aurora Team'),
         StringStruct(u'OriginalFilename', u'Aurora.exe'),
-        StringStruct(u'ProductName', u'Aurora Voice Assistant'),
-        StringStruct(u'ProductVersion', u'0.1.0')])
+        StringStruct(u'ProductName', u'Aurora Voice Assistant v{version}'),
+        StringStruct(u'ProductVersion', u'{version}')])
     ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]

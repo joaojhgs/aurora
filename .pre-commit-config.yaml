@@ -49,3 +49,11 @@ repos:
     hooks:
     -   id: pyupgrade
         args: ["--py39-plus"]  # Keep Python syntax compatible with 3.9+
+
+-   repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.9.1
+    hooks:
+    -   id: commitizen
+        stages: [commit-msg]
+    -   id: commitizen-branch
+        stages: [pre-push]
