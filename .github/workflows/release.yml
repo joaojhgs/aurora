@@ -29,6 +29,7 @@ permissions:
   pull-requests: write
   id-token: write
   models: read
+  actions: write
 
 jobs:
   # Job 1: Validate and prepare release
@@ -388,6 +389,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.semantic-release.outputs.tag }}
       release_url: ${{ steps.semantic-release.outputs.url }}
+      released: ${{ steps.semantic-release.outputs.released }}
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
@@ -400,45 +402,18 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install semantic-release
-        run: |
-          pip install --upgrade pip
-          pip install python-semantic-release[changelog]
-
-      - name: 🎯 Run semantic release
+      - name: 🎯 Python Semantic Release
         id: semantic-release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Run semantic-release
-          if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
-            if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
-              semantic-release version --${{ github.event.inputs.release_type }} --prerelease
-            else
-              semantic-release version --${{ github.event.inputs.release_type }}
-            fi
-          else
-            if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
-              semantic-release version --prerelease
-            else
-              semantic-release version
-            fi
-          fi
-          
-          # Capture outputs
-          tag=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
-          if [ -n "$tag" ]; then
-            echo "tag=$tag" >> $GITHUB_OUTPUT
-            echo "url=https://github.com/${{ github.repository }}/releases/tag/$tag" >> $GITHUB_OUTPUT
-          fi
+        uses: python-semantic-release/python-semantic-release@v9.14.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          root_options: -vv
+          force: ${{ github.event.inputs.release_type != 'auto' && github.event.inputs.release_type || '' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          prerelease_token: 'rc'
 
       - name: 📝 Update release with AI summary
-        if: steps.semantic-release.outputs.tag
+        if: steps.semantic-release.outputs.released == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
