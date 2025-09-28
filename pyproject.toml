@@ -562,13 +562,13 @@ version_pattern = [
     "scripts/build.py:Aurora Voice Assistant v{version}",
 ]
 
-# Build command - create Python packages and executables
-build_command = """
-python -m pip install --upgrade pip
-pip install -e .[build,runtime,torch-cpu]
-python -m build --sdist --wheel .
-python scripts/build.py --target exe --clean
-"""
+# # Build command - create Python packages and executables
+# build_command = """
+# python -m pip install --upgrade pip
+# pip install -e .[build,runtime,torch-cpu]
+# python -m build --sdist --wheel .
+# python scripts/build.py --target exe --clean
+# """
 
 # Upload to PyPI
 upload_to_vcs_release = true
