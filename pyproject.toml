@@ -578,7 +578,9 @@ upload_to_pypi = false  # Disabled until package is ready for PyPI
 commit_parser = "conventional"
 
 # Branch configuration for releases
-branches = {main = {match = "main", prerelease = false}}
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
 
 # Changelog configuration
 [tool.semantic_release.changelog]
