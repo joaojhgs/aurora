@@ -618,6 +618,7 @@ name = "origin"
 type = "github"
 ignore_token_for_push = false
 token = { env = "GITHUB_TOKEN" }
+url = "https://github.com/joaojhgs/aurora"
 
 # Release notes customization  
 [tool.semantic_release.changelog.environment]
