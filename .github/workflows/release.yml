@@ -435,7 +435,7 @@ jobs:
           echo "🎯 Updating release $tag with enhanced notes..."
           
           # Create enhanced release notes with proper escaping
-          cat << 'EOF' > enhanced_notes.md
+          cat << EOF > enhanced_notes.md
           ## 🤖 AI-Generated Release Summary
           
           ${{ needs.generate-summary.outputs.release_summary }}
@@ -446,48 +446,57 @@ jobs:
           
           ## 📦 Installation Options
           
-          ### Option 1: Download Pre-built Executables
           EOF
           
-          # Add build status info
+          # Add build status info for pre-built executables
           if [ "${{ needs.build.result }}" = "success" ]; then
             cat << 'EOF' >> enhanced_notes.md
+          ### Option 1: Download Pre-built Executables (Recommended)
+          
           ✅ **Executables available below:**
           - **Linux**: Download `aurora-linux-portable.tar.gz` 
           - **Windows**: Download `aurora-windows-portable.zip`
           
-          Simply download, extract, and run the executable for your platform.
-          EOF
-          else
-            cat << 'EOF' >> enhanced_notes.md
-          ⚠️ **Pre-built executables not available** for this release due to build issues.
-          Please use one of the installation methods below.
+          Simply download, extract, and run the executable for your platform. No installation required!
+          
           EOF
           fi
           
-          # Add installation methods
-          cat << 'EOF' >> enhanced_notes.md
+          # Add version archive installation method
+          cat << EOF >> enhanced_notes.md
+          ### Option 2: Download Release Archive
           
-          ### Option 2: Install via pip (recommended)
-          ```bash
-          pip install aurora-voice-assistant
-          ```
+          Download the complete source code for this specific version:
           
-          ### Option 3: Install from Source
-          ```bash
-          git clone https://github.com/$GITHUB_REPOSITORY.git
-          cd aurora
-          git checkout $tag
-          pip install -e .[full-third-party]
-          ```
+          #### Using Command Line:
+          \`\`\`bash
+          # Download and extract Aurora ${tag}
+          curl -L -o aurora-${tag}.zip "https://github.com/joaojhgs/aurora/archive/refs/tags/${tag}.zip"
+          unzip aurora-${tag}.zip
+          cd aurora-${tag#v}
           
-          ### Option 4: Quick Setup Script
-          ```bash
-          git clone https://github.com/$GITHUB_REPOSITORY.git
-          cd aurora
-          ./setup.sh  # Interactive setup with hardware detection
-          ```
+          # Run automatic setup
+          ./setup.sh
+          \`\`\`
           
+          #### Using wget (alternative):
+          \`\`\`bash
+          # Download and extract Aurora ${tag}
+          wget "https://github.com/joaojhgs/aurora/archive/refs/tags/${tag}.zip" -O aurora-${tag}.zip
+          unzip aurora-${tag}.zip
+          cd aurora-${tag#v}
+          
+          # Run automatic setup
+          ./setup.sh
+          \`\`\`
+          
+          #### Manual Download:
+          1. **Download**: [aurora-${tag}.zip](https://github.com/joaojhgs/aurora/archive/refs/tags/${tag}.zip)
+          2. **Extract** the ZIP file
+          3. **Navigate** to the extracted \`aurora-${tag#v}\` folder
+          4. **Run setup**: \`./setup.sh\` (Linux/macOS) or \`setup.bat\` (Windows)
+          
+          EOF
           ## ⚙️ System Requirements
           
           - **Python**: 3.9-3.11 (⚠️ Python 3.12+ not supported due to dependency conflicts)
@@ -499,12 +508,20 @@ jobs:
           
           ## 🚀 Quick Start
           
-          1. **Install Aurora** using any method above
-          2. **Run setup**: `./setup.sh` (interactive) or configure `config.json` manually
-          3. **Start Aurora**: `python main.py`
+          After downloading using any method above:
+          
+          1. **Navigate** to the Aurora directory
+          2. **Run interactive setup**: \`./setup.sh\` (will detect your hardware and configure automatically)
+          3. **Start Aurora**: \`python main.py\`
           4. **Say "Hey Jarvis"** to activate voice commands
           
-          For detailed installation instructions, see [INSTALL.md](https://github.com/$GITHUB_REPOSITORY/blob/main/docs/INSTALL.md).
+          ### Setup Script Features:
+          - 🔍 **Hardware Detection**: Automatically detects CPU/GPU and installs appropriate packages
+          - ⚙️ **Configuration**: Creates optimized \`config.json\` for your system
+          - 📦 **Dependencies**: Installs all required Python packages
+          - 🎯 **Model Setup**: Downloads and configures voice models
+          
+          For detailed installation instructions and troubleshooting, see [INSTALL.md](https://github.com/joaojhgs/aurora/blob/main/docs/INSTALL.md).
           
           ---
           

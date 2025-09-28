@@ -584,7 +584,6 @@ prerelease = false
 
 # Changelog configuration
 [tool.semantic_release.changelog]
-template_dir = "scripts/release/templates"
 
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
