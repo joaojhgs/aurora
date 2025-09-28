@@ -244,11 +244,32 @@ def setup_development_tools():
     click.echo("🛠️  Setting up development tools...")
 
     try:
-        subprocess.run(["pre-commit", "install"], cwd=PROJECT_ROOT, check=True)
-        click.echo("✅ Pre-commit hooks installed")
+        # Install pre-commit and commitizen (needed for commit validation)
+        click.echo("📦 Installing pre-commit and commitizen...")
+        subprocess.run(["pip", "install", "pre-commit", "commitizen"], cwd=PROJECT_ROOT, check=True)
+
+        # Install all necessary pre-commit hook types
+        click.echo("🔧 Installing pre-commit hook types...")
+        subprocess.run(["pre-commit", "install", "--hook-type", "pre-commit"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(["pre-commit", "install", "--hook-type", "commit-msg"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(["pre-commit", "install", "--hook-type", "pre-push"], cwd=PROJECT_ROOT, check=True)
+
+        # Update hooks to latest version
+        click.echo("🔄 Updating pre-commit hooks to latest versions...")
+        subprocess.run(["pre-commit", "autoupdate"], cwd=PROJECT_ROOT, check=True)
+
+        click.echo("✅ Pre-commit hooks installed successfully!")
+        click.echo("   🔍 Code quality hooks: Run on every commit (formatting, linting)")
+        click.echo("   📝 Commit message validation: Enforces conventional commit format")
+        click.echo("   🚀 Branch validation: Runs on push to validate branch state")
+        click.echo("")
+        click.echo("   Manual usage:")
+        click.echo("   • pre-commit run --all-files    # Run on all files")
+        click.echo("   • cz check --message 'feat: example'  # Test commit message format")
         return True
-    except subprocess.CalledProcessError:
-        click.echo("⚠️  Pre-commit setup failed (optional)")
+
+    except subprocess.CalledProcessError as e:
+        click.echo(f"⚠️  Pre-commit setup failed (optional): {e}")
         return True
     except FileNotFoundError:
         click.echo("⚠️  Pre-commit not found (optional)")
