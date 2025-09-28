@@ -1,0 +1,473 @@
+name: 🚀 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+        - auto
+        - patch
+        - minor
+        - major
+      prerelease:
+        description: 'Create prerelease'
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  models: read
+
+jobs:
+  # Job 1: Validate and prepare release
+  validate:
+    name: 🔍 Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      current_version: ${{ steps.version.outputs.current_version }}
+      next_version: ${{ steps.version.outputs.next_version }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install release dependencies
+        run: |
+          pip install --upgrade pip
+          pip install python-semantic-release[changelog] commitizen
+
+      - name: 🔍 Check if release is needed
+        id: check
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "🧪 Dry run mode - proceeding with validation"
+          else
+            # Check if there are commits since last release that warrant a release
+            if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
+              # Force release when specific type is selected
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "✅ Forced release type: ${{ github.event.inputs.release_type }}"
+            elif semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release >/dev/null 2>&1; then
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "✅ New release is needed based on commit history"
+            else
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ No new release needed based on commit history"
+            fi
+          fi
+
+      - name: 📋 Get version information
+        id: version
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          current=$(python -c "import toml; print(toml.load('pyproject.toml')['project']['version'])")
+          echo "current_version=$current" >> $GITHUB_OUTPUT
+          
+          if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
+            next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release --${{ github.event.inputs.release_type }})
+          else
+            next=$(semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release)
+          fi
+          echo "next_version=$next" >> $GITHUB_OUTPUT
+          
+          echo "📊 Current version: $current"
+          echo "📊 Next version: $next"
+
+  # Job 2: Build executables for multiple platforms (optional - doesn't fail release)
+  build:
+    name: 🏗️ Build Executables
+    needs: validate
+    if: needs.validate.outputs.should_release == 'true'
+    continue-on-error: true  # Don't fail the workflow if builds fail
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact: aurora-linux
+          - os: windows-latest
+            platform: windows
+            artifact: aurora-windows.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 🔧 Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev gcc
+
+      - name: 📦 Install build dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[build,runtime,torch-cpu]
+
+      - name: 🏗️ Build executable
+        run: |
+          python scripts/build.py --target exe --platform ${{ matrix.platform }} --clean
+        timeout-minutes: 30
+        continue-on-error: true  # Allow individual builds to fail
+
+      - name: 📁 Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp dist/Aurora.exe artifacts/aurora-windows.exe
+            # Create portable package
+            mkdir -p artifacts/aurora-windows
+            cp dist/Aurora.exe artifacts/aurora-windows/
+            cp README.md LICENSE artifacts/aurora-windows/
+            cd artifacts && zip -r aurora-windows-portable.zip aurora-windows/
+          else
+            cp dist/Aurora artifacts/aurora-linux
+            chmod +x artifacts/aurora-linux
+            # Create portable package
+            mkdir -p artifacts/aurora-linux
+            cp dist/Aurora artifacts/aurora-linux/aurora
+            cp README.md LICENSE artifacts/aurora-linux/
+            cd artifacts && tar -czf aurora-linux-portable.tar.gz aurora-linux/
+          fi
+
+      - name: 📤 Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: success()  # Only upload if build succeeded
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/
+          retention-days: 30
+
+  # Job 3: Generate AI-powered release summary
+  generate-summary:
+    name: 🤖 Generate Release Summary
+    needs: validate
+    if: needs.validate.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_summary: ${{ steps.ai-summary.outputs.summary }}
+      changelog_preview: ${{ steps.changelog.outputs.preview }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install python-semantic-release[changelog] requests
+
+      - name: 📋 Generate changelog preview
+        id: changelog
+        run: |
+          preview=$(semantic-release changelog --print --no-commit --no-tag --no-push --no-vcs-release 2>/dev/null || echo "No changelog available")
+          # Escape newlines for GitHub output
+          preview_escaped=$(echo "$preview" | sed ':a;N;$!ba;s/\n/\\n/g')
+          echo "preview=$preview_escaped" >> $GITHUB_OUTPUT
+
+      - name: 🤖 Generate AI release summary
+        id: ai-summary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get recent commits for context
+          commits=$(git log --oneline --since="$(git describe --tags --abbrev=0 2>/dev/null || echo '1 month ago')" --pretty=format:"- %s (%an)")
+          
+          # Create prompt for AI model
+          cat << EOF > prompt.json
+          {
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are a technical writer specializing in release notes for open-source software. Generate a concise, professional release summary that highlights key features, improvements, and fixes. Focus on user-facing changes and technical improvements. Use markdown formatting."
+              },
+              {
+                "role": "user", 
+                "content": "Generate a release summary for Aurora Voice Assistant version ${{ needs.validate.outputs.next_version }}. Here are the recent commits:\n\n$commits\n\nProject context: Aurora is a Python-based intelligent voice assistant for local automation and productivity. It uses real-time speech-to-text, LLMs, and various productivity tools in a modular, privacy-focused architecture.\n\nGenerate a 2-3 paragraph summary highlighting the most important changes for users."
+              }
+            ],
+            "model": "openai/gpt-4o",
+            "max_tokens": 500
+          }
+          EOF
+          
+          # Call GitHub Models API (with fallback)
+          if response=$(curl -s --fail "https://models.github.ai/inference/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -d @prompt.json 2>/dev/null); then
+            
+            # Extract summary from response
+            summary=$(echo "$response" | python3 -c "
+            import json, sys
+            try:
+                data = json.load(sys.stdin)
+                content = data['choices'][0]['message']['content']
+                # Escape for GitHub output
+                content_escaped = content.replace('\n', '\\n').replace('\"', '\\\"')
+                print(content_escaped)
+            except Exception as e:
+                print('🤖 AI summary generation failed - using fallback summary')
+            " 2>/dev/null)
+          else
+            echo "⚠️ GitHub Models API unavailable - using fallback"
+            summary="🚀 **Aurora Voice Assistant ${{ needs.validate.outputs.next_version }}** - This release includes various improvements and updates. See the detailed changelog below for specific changes."
+          fi
+          
+          echo "summary=$summary" >> $GITHUB_OUTPUT
+
+  # Job 4: Create release (independent of build success)
+  release:
+    name: 🎉 Create Release
+    needs: [validate, generate-summary]
+    if: needs.validate.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.semantic-release.outputs.tag }}
+      release_url: ${{ steps.semantic-release.outputs.url }}
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install semantic-release
+        run: |
+          pip install --upgrade pip
+          pip install python-semantic-release[changelog]
+
+      - name: 🎯 Run semantic release
+        id: semantic-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Run semantic-release
+          if [ "${{ github.event.inputs.release_type }}" != "auto" ]; then
+            if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+              semantic-release version --${{ github.event.inputs.release_type }} --prerelease
+            else
+              semantic-release version --${{ github.event.inputs.release_type }}
+            fi
+          else
+            if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+              semantic-release version --prerelease
+            else
+              semantic-release version
+            fi
+          fi
+          
+          # Capture outputs
+          tag=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+          if [ -n "$tag" ]; then
+            echo "tag=$tag" >> $GITHUB_OUTPUT
+            echo "url=https://github.com/${{ github.repository }}/releases/tag/$tag" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📝 Update release with AI summary
+        if: steps.semantic-release.outputs.tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get current release
+          tag="${{ steps.semantic-release.outputs.tag }}"
+          
+          # Create enhanced release notes
+          cat << EOF > enhanced_notes.md
+          ## 🤖 Release Summary
+          
+          ${{ needs.generate-summary.outputs.release_summary }}
+          
+          ## 📝 Detailed Changes
+          
+          ${{ needs.generate-summary.outputs.changelog_preview }}
+          
+          ## 📦 Installation
+          
+          ### Download Executables
+          {% if needs.build.result == 'success' %}
+          - **Linux**: Download \`aurora-linux-portable.tar.gz\` 
+          - **Windows**: Download \`aurora-windows-portable.zip\`
+          {% else %}
+          ⚠️ **Note**: Pre-built executables may not be available for this release due to build issues. Please install from source.
+          {% endif %}
+          
+          ### Install from Source
+          \`\`\`bash
+          pip install aurora==${{ needs.validate.outputs.next_version }}
+          \`\`\`
+          
+          ### From Repository
+          \`\`\`bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd aurora
+          git checkout $tag
+          pip install -e .[full-third-party]
+          \`\`\`
+          
+          ## 🔧 System Requirements
+          - Python 3.9-3.11 (Python 3.12+ not supported due to dependency conflicts)
+          - Audio input/output devices
+          - Internet connection for AI features (unless using local models)
+          
+          ---
+          
+          *This release was automatically generated using [python-semantic-release](https://python-semantic-release.readthedocs.io/) with AI-powered summaries.*
+          EOF
+          
+          # Update release
+          gh release edit "$tag" --notes-file enhanced_notes.md
+
+  # Job 5: Upload release artifacts (only if builds succeeded)
+  upload-artifacts:
+    name: 📦 Upload Release Artifacts  
+    needs: [validate, build, release]
+    if: needs.validate.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true' && needs.release.outputs.release_tag && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Download Linux artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true  # Don't fail if artifacts don't exist
+        with:
+          name: aurora-linux
+          path: ./linux-artifacts
+
+      - name: 📥 Download Windows artifacts  
+        uses: actions/download-artifact@v4
+        continue-on-error: true  # Don't fail if artifacts don't exist
+        with:
+          name: aurora-windows.exe
+          path: ./windows-artifacts
+
+      - name: 📤 Upload artifacts to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ needs.release.outputs.release_tag }}"
+          
+          # Upload Linux artifacts (if they exist)
+          if [ -f "./linux-artifacts/aurora-linux-portable.tar.gz" ]; then
+            echo "📦 Uploading Linux portable package..."
+            gh release upload "$tag" "./linux-artifacts/aurora-linux-portable.tar.gz" --clobber || echo "⚠️ Failed to upload Linux portable package"
+          else
+            echo "ℹ️ Linux portable package not found - skipping"
+          fi
+          
+          if [ -f "./linux-artifacts/aurora-linux" ]; then
+            echo "📦 Uploading Linux executable..."
+            gh release upload "$tag" "./linux-artifacts/aurora-linux" --clobber || echo "⚠️ Failed to upload Linux executable"
+          else
+            echo "ℹ️ Linux executable not found - skipping"
+          fi
+          
+          # Upload Windows artifacts (if they exist)
+          if [ -f "./windows-artifacts/aurora-windows-portable.zip" ]; then
+            echo "📦 Uploading Windows portable package..."
+            gh release upload "$tag" "./windows-artifacts/aurora-windows-portable.zip" --clobber || echo "⚠️ Failed to upload Windows portable package"
+          else
+            echo "ℹ️ Windows portable package not found - skipping"
+          fi
+          
+          if [ -f "./windows-artifacts/aurora-windows.exe" ]; then
+            echo "📦 Uploading Windows executable..."
+            gh release upload "$tag" "./windows-artifacts/aurora-windows.exe" --clobber || echo "⚠️ Failed to upload Windows executable"
+          else
+            echo "ℹ️ Windows executable not found - skipping"
+          fi
+
+  # Job 6: Notify completion
+  notify:
+    name: 📢 Notify Completion
+    needs: [validate, build, generate-summary, release, upload-artifacts]
+    if: always() && needs.validate.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📊 Release Summary
+        run: |
+          echo "## 🎉 Release Workflow Complete!"
+          echo ""
+          echo "### 📋 Details:"
+          echo "- **Previous Version**: ${{ needs.validate.outputs.current_version }}"
+          echo "- **New Version**: ${{ needs.validate.outputs.next_version }}"
+          echo "- **Release Type**: ${{ github.event.inputs.release_type }}"
+          echo "- **Prerelease**: ${{ github.event.inputs.prerelease }}"
+          echo "- **Dry Run**: ${{ github.event.inputs.dry_run }}"
+          echo ""
+          if [ "${{ needs.release.result }}" = "success" ]; then
+            echo "- **Release URL**: ${{ needs.release.outputs.release_url }}"
+            echo "- **Release Tag**: ${{ needs.release.outputs.release_tag }}"
+          fi
+          echo ""
+          echo "### 🏗️ Build Status:"
+          echo "- **Build Job**: ${{ needs.build.result }}"
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "  ✅ Executable builds completed successfully"
+          elif [ "${{ needs.build.result }}" = "failure" ]; then
+            echo "  ⚠️ Executable builds failed (release still created)"
+          else
+            echo "  ℹ️ Build status: ${{ needs.build.result }}"
+          fi
+          echo ""
+          echo "### 🤖 AI Summary Generated:"
+          echo "${{ needs.generate-summary.outputs.release_summary }}"
+
+      - name: ⚠️ Workflow Failed
+        if: failure()
+        run: |
+          echo "## ❌ Release Workflow Failed"
+          echo ""
+          echo "One or more jobs in the release workflow failed."
+          echo "Please check the workflow logs for details."
+          echo ""
+          echo "### Job Status:"
+          echo "- **Validate**: ${{ needs.validate.result }}"
+          echo "- **Build**: ${{ needs.build.result }}" 
+          echo "- **Generate Summary**: ${{ needs.generate-summary.result }}"
+          echo "- **Release**: ${{ needs.release.result }}"
+          echo "- **Upload Artifacts**: ${{ needs.upload-artifacts.result }}"

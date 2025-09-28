@@ -144,6 +144,7 @@ build = [
     "pyinstaller>=6.0.0",
     "auto-py-to-exe>=2.4.0",  # GUI for PyInstaller
     "pyinstaller-hooks-contrib>=2024.0",
+    "toml>=0.10.2",  # For version parsing in build script
 ]
 
 # Executable runtime (lighter than full runtime)
@@ -301,6 +302,12 @@ dev = [
     "pytest-clarity",     # For better test failure output
     "pytest-html",        # For HTML test reports
     "coverage[toml]",     # For comprehensive test coverage reporting
+    
+    # Release management
+    "python-semantic-release>=9.0.0",  # Automated versioning and changelog
+    "commitizen>=3.0.0",               # Enforce conventional commits
+    "toml>=0.10.2",                    # For version file parsing
+    "requests>=2.32.0",                # For GitHub API calls
 ]
 
 # Core test dependencies needed for all test types
@@ -527,11 +534,174 @@ module = [
     "openwakeword.*",
     "pvporcupine.*",
     "pyaudio.*",
+    "langchain.*",
+    "langchain_core.*",
+    "langchain_community.*",
+    "langsmith.*",
+    "langgraph.*",
+    "sentence_transformers.*",
+    "ctranslate2.*",
+    "sklearn.*",
+    "tensorrt.*",
     "mss.*",
     "PyQt6.*",
 ]
 ignore_missing_imports = true
 
+# ============================================================================
+# PYTHON SEMANTIC RELEASE CONFIGURATION
+# ============================================================================
+[tool.semantic_release]
+# Version management
+version_toml = ["pyproject.toml:project.version"]
+version_variables = [
+    "app/__init__.py:__version__",
+]
+version_pattern = [
+    "readme.md:Aurora Voice Assistant v{version}",
+    "scripts/build.py:Aurora Voice Assistant v{version}",
+]
+
+# Build command - create Python packages and executables
+build_command = """
+python -m pip install --upgrade pip
+pip install -e .[build,runtime,torch-cpu]
+python -m build --sdist --wheel .
+python scripts/build.py --target exe --clean
+"""
+
+# Upload to PyPI
+upload_to_vcs_release = true
+upload_to_pypi = false  # Disabled until package is ready for PyPI
+
+# Commit parser for conventional commits
+commit_parser = "conventional"
+
+# Branch configuration for releases
+branches = {main = {match = "main", prerelease = false}}
+
+# Changelog configuration
+[tool.semantic_release.changelog]
+template_dir = "scripts/release/templates"
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+output_format = "md"
+
+# Exclude commits that don't need changelog entries
+exclude_commit_patterns = [
+    '''chore(?:\([^)]*?\))?: .+''',
+    '''ci(?:\([^)]*?\))?: .+''', 
+    '''refactor(?:\([^)]*?\))?: .+''',
+    '''style(?:\([^)]*?\))?: .+''',
+    '''test(?:\([^)]*?\))?: .+''',
+    '''build\((?!deps\): .+)''',
+    '''Merge .*''',
+    '''Initial [Cc]ommit.*''',
+    '''Bump to version.*''',
+    '''Version bump.*''',
+]
+
+# Custom sections for changelog
+[tool.semantic_release.changelog.sections]
+feature = { title = "🚀 Features", description = "New features and enhancements" }
+fix = { title = "🐛 Bug Fixes", description = "Bug fixes and corrections" }
+breaking = { title = "💥 Breaking Changes", description = "Breaking changes that require attention" }
+documentation = { title = "📚 Documentation", description = "Documentation improvements" }
+performance = { title = "⚡ Performance", description = "Performance improvements" }
+refactor = { title = "🔧 Code Refactoring", description = "Code improvements without feature changes" }
+build = { title = "🏗️ Build System", description = "Build and dependency updates" }
+
+# GitHub releases
+[tool.semantic_release.remote]
+name = "origin"
+type = "github"
+ignore_token_for_push = false
+token = { env = "GITHUB_TOKEN" }
+
+# Release notes customization  
+[tool.semantic_release.changelog.environment]
+block_start_string = "{%"
+block_end_string = "%}"
+variable_start_string = "{{"
+variable_end_string = "}}"
+comment_start_string = "{#"
+comment_end_string = "#}"
+trim_blocks = false
+lstrip_blocks = false
+
+# ============================================================================
+# COMMITIZEN CONFIGURATION  
+# ============================================================================
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+version_scheme = "semver"
+version_provider = "pep621"
+update_changelog_on_bump = true
+major_version_zero = false
+
+# Custom commit types for Aurora project
+[tool.commitizen.customize]
+message_template = """{{change_type}}{{scope}}: {{message}}
+
+{{body}}
+
+{{footer}}"""
+
+example = "feat(speech): add wake word detection"
+
+schema = """
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+"""
+
+schema_pattern = '''(?s)(build|ci|docs|feat|fix|perf|refactor|style|test|chore|revert)(\(.+?\))?: (.+?)(\n\n.*)?'''
+
+bump_pattern = "^(break|new|fix|hotfix)"
+
+[tool.commitizen.customize.bump_map]
+"break" = "MAJOR"
+"new" = "MINOR"
+"fix" = "PATCH" 
+"hotfix" = "PATCH"
+
+info_path = "cz_info.txt"
+info = """
+Aurora Voice Assistant follows conventional commits for automated releases:
+
+Types:
+- feat: New features
+- fix: Bug fixes  
+- docs: Documentation changes
+- style: Code formatting changes
+- refactor: Code restructuring without feature changes
+- perf: Performance improvements
+- test: Test changes
+- build: Build system or dependency changes
+- ci: CI configuration changes
+- chore: Other changes that don't modify src or test files
+- revert: Reverts a previous commit
+
+Scopes (optional):
+- speech: Speech recognition and processing
+- tts: Text-to-speech functionality  
+- llm: Language model integration
+- ui: User interface
+- config: Configuration management
+- database: Database operations
+- scheduler: Task scheduling
+- tools: Tool integrations (Jira, Slack, etc.)
+
+Examples:
+- feat(speech): add new wake word detection
+- fix(llm): resolve memory leak in chat processing
+- docs: update installation guide
+- style(ui): format Qt interface code
+"""
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]

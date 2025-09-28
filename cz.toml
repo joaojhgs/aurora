@@ -1,0 +1,106 @@
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+version_scheme = "semver"
+version_provider = "pep621"
+update_changelog_on_bump = true
+major_version_zero = false
+
+# Commit message template and customization
+[tool.commitizen.customize]
+message_template = """{{change_type}}{{scope}}: {{message}}
+
+{{body}}
+
+{{footer}}"""
+
+example = "feat(speech): add wake word detection"
+
+schema = """<type>(<scope>): <subject>
+
+<body>
+
+<footer>"""
+
+schema_pattern = '''(?s)(build|ci|docs|feat|fix|perf|refactor|style|test|chore|revert)(\(.+?\))?: (.+?)(\n\n.*)?'''
+
+bump_pattern = "^(break|new|fix|hotfix)"
+
+[tool.commitizen.customize.bump_map]
+"break" = "MAJOR"
+"new" = "MINOR" 
+"fix" = "PATCH"
+"hotfix" = "PATCH"
+
+info_path = "cz_info.txt"
+info = """
+Aurora Voice Assistant follows conventional commits for automated releases:
+
+Types:
+- feat: New features
+- fix: Bug fixes
+- docs: Documentation changes
+- style: Code formatting changes  
+- refactor: Code restructuring without feature changes
+- perf: Performance improvements
+- test: Test changes
+- build: Build system or dependency changes
+- ci: CI configuration changes
+- chore: Other changes that don't modify src or test files
+- revert: Reverts a previous commit
+
+Scopes (optional):
+- speech: Speech recognition and processing
+- tts: Text-to-speech functionality
+- llm: Language model integration
+- ui: User interface
+- config: Configuration management
+- database: Database operations
+- scheduler: Task scheduling
+- tools: Tool integrations (Jira, Slack, etc.)
+
+Examples:
+- feat(speech): add new wake word detection
+- fix(llm): resolve memory leak in chat processing
+- docs: update installation guide
+- style(ui): format Qt interface code
+"""
+
+# Questions for interactive commit creation
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "change_type"
+choices = [
+    {value = "feat", name = "feat: A new feature"},
+    {value = "fix", name = "fix: A bug fix"},
+    {value = "docs", name = "docs: Documentation only changes"},
+    {value = "style", name = "style: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)"},
+    {value = "refactor", name = "refactor: A code change that neither fixes a bug nor adds a feature"},
+    {value = "perf", name = "perf: A code change that improves performance"},
+    {value = "test", name = "test: Adding missing tests or correcting existing tests"},
+    {value = "build", name = "build: Changes that affect the build system or external dependencies"},
+    {value = "ci", name = "ci: Changes to our CI configuration files and scripts"},
+    {value = "chore", name = "chore: Other changes that don't modify src or test files"},
+    {value = "revert", name = "revert: Reverts a previous commit"}
+]
+message = "Select the type of change that you're committing"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "scope"
+message = "What is the scope of this change (optional, press enter to skip)?"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "message"
+message = "Write a short, imperative tense description of the change (max 50 chars):"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "body"
+message = "Provide a longer description of the change (optional, press enter to skip):"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "footer"
+message = "Any breaking changes or reference to closed issues (optional, press enter to skip):"
