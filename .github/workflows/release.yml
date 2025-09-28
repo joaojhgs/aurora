@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_RELEASE }}
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
@@ -270,7 +270,7 @@ jobs:
       - name: 🤖 Generate AI release summary
         id: ai-summary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_RELEASE }}
         run: |
           echo "🤖 Starting AI release summary generation..."
           
@@ -397,7 +397,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_RELEASE }}
           persist-credentials: true
 
       - name: 🐍 Set up Python
@@ -427,7 +427,7 @@ jobs:
       - name: 📝 Update release with AI summary
         if: steps.semantic-release.outputs.released == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_RELEASE }}
         run: |
           # Get current release
           tag="${{ steps.semantic-release.outputs.tag }}"
@@ -546,7 +546,7 @@ jobs:
 
       - name: 📤 Upload artifacts to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_RELEASE }}
         run: |
           tag="${{ needs.release.outputs.release_tag }}"
           
