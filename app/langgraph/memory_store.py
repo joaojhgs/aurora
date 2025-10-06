@@ -385,7 +385,7 @@ class SQLiteVecStore(BaseStore):
             # Delete from the main vector table using the document ID
             # The exact table structure may vary, but typically it's stored with a
             # rowid or id column
-            cursor.execute(f"DELETE FROM {self.table} WHERE id = ?", (doc_id,))
+            cursor.execute(f"DELETE FROM {self.table} WHERE id = ?", (doc_id))
             connection.commit()
 
             log_info(f"Deleted tool {namespace}/{key} from database")
