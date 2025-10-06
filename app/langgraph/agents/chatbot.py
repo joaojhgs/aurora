@@ -139,7 +139,7 @@ def chatbot(state: State, store: BaseStore):
     # Be carefull to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
     # It might need adjusting depending on how much plugins you are using as
     # well, +plugins = +tools to load
-    llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 8), tool_choice="auto")
+    llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 10), tool_choice="auto")
     print(state["messages"])
     return {
         "messages": [
@@ -161,7 +161,7 @@ def chatbot(state: State, store: BaseStore):
                             f"\nCurrent time: {os.popen('date').read().strip()}"
                         ),
                     },
-                    *state["messages"][-3:],
+                    *state["messages"][-4:],
                 ]
             )
         ]

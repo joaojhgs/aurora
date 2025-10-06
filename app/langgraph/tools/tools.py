@@ -112,7 +112,7 @@ def sync_tools_with_database():
 
     # Get existing tools from database
     try:
-        existing_items = store.retrieve_items(("tools",), limit=1000)  # Get all tools
+        existing_items = store.retrieve_items(("tools",), limit=4000)  # Get all tools
         existing_tools = {item.key: item.value for item in existing_items}
         log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
         for name in existing_tools.keys():
@@ -304,7 +304,7 @@ for tool in tools:
 # Note: sync_tools_with_database() will be called at the end of module loading
 
 
-async def get_tools_async(query: str, top_k: int = 5) -> list[Callable]:
+async def get_tools_async(query: str, top_k: int = 10) -> list[Callable]:
     """
     Async version of get_tools that ensures MCP tools are loaded.
 
@@ -349,7 +349,7 @@ def ensure_mcp_tools_loaded():
         log_debug(f"Could not load MCP tools in sync context: {e}")
 
 
-def get_tools(query: str, top_k: int = 5) -> list[Callable]:
+def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     """
     Search for relevant tools based on input text.
 
@@ -366,7 +366,7 @@ def get_tools(query: str, top_k: int = 5) -> list[Callable]:
     # Search vector store
     results = store.search(("tools",), query=query, limit=top_k)
 
-    log_debug(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
+    log_info(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
 
     # Get unique tool names from results
     tool_names = {result.key for result in results}
