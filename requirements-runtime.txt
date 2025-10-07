@@ -37,7 +37,7 @@ piper-phonemize==1.1.0
 realtimetts==0.4.47
 
 # Machine Learning & AI Core (CPU)
-torch==2.6.0
+torch==2.8.0
 torchaudio==2.6.0
 torchvision==0.21.0
 numpy==1.26.4
@@ -47,7 +47,7 @@ onnxruntime==1.20.1
 # LangChain & LLM Framework
 langchain==0.3.25
 langchain-core==0.3.62
-langchain-community==0.3.24
+langchain-community==0.3.27
 langchain-text-splitters==0.3.8
 langgraph==0.4.6
 langgraph-checkpoint==2.0.26
@@ -65,10 +65,10 @@ SQLAlchemy==2.0.38
 croniter==6.0.0
 
 # Web & Network
-requests==2.32.3
-aiohttp==3.11.12
+requests==2.32.4
+aiohttp==3.12.14
 httpx==0.28.1
-urllib3==2.3.0
+urllib3==2.5.0
 duckduckgo-search==7.5.2
 
 # Utilities
