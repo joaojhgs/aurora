@@ -33,6 +33,7 @@ class AuroraLogger:
         # Create console handler with unbuffered stream
         # Force flush after every log message
         import sys
+
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.DEBUG if self.debug_enabled else logging.INFO)
 
@@ -42,7 +43,7 @@ class AuroraLogger:
 
         # Add handler to logger
         self.logger.addHandler(console_handler)
-        
+
         # Force flush after every log
         console_handler.flush = lambda: sys.stdout.flush()
 

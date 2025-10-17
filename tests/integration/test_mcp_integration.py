@@ -17,12 +17,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-# Set dummy OpenAI API key before any imports that might initialize OpenAI
-os.environ.setdefault('OPENAI_API_KEY', 'test-key-dummy-integration')
-
 from app.config.config_manager import config_manager
 from app.tooling.mcp.mcp_client import MCPClientManager
 from app.tooling.tools.tools import load_mcp_tools_async, tool_lookup, tools
+
+# Set dummy OpenAI API key before any imports that might initialize OpenAI
+os.environ.setdefault("OPENAI_API_KEY", "test-key-dummy-integration")
 
 
 @pytest.mark.integration

@@ -1,7 +1,7 @@
 from typing import Callable
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.orchestrator.memory_store import store  # Memory store is now in orchestrator module
 
 # Pomodoro tools
@@ -155,7 +155,7 @@ def sync_tools_with_database():
 
 async def load_mcp_tools_async():
     """DEPRECATED: MCP tools are now loaded by ToolingService.
-    
+
     This function is kept for backwards compatibility but does nothing.
     All MCP tool loading is handled by app.tooling.tools_manager.ToolsManager
     via app.services.tooling_service.ToolingService.
@@ -255,7 +255,7 @@ async def get_tools_async(query: str, top_k: int = 10) -> list[Callable]:
 
 def ensure_mcp_tools_loaded():
     """DEPRECATED: MCP tools are now loaded by ToolingService.
-    
+
     This function is kept for backwards compatibility but does nothing.
     All MCP tool loading is handled by app.tooling.tools_manager.ToolsManager
     via app.services.tooling_service.ToolingService.

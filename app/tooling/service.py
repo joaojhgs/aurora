@@ -9,15 +9,11 @@ This service:
 
 from __future__ import annotations
 
-import asyncio
 import logging
+
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from typing import List, Optional
-
-from pydantic import BaseModel
-
 from app.messaging import Command, Envelope, Event, MessageBus, Query, ToolingTopics
-from app.tooling.tools_manager import ToolsManager, get_tools_manager, set_tools_manager
+from app.tooling.tools_manager import ToolsManager, set_tools_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +35,7 @@ class ToolsReloaded(Event):
 class GetToolsQuery(Query):
     """Query to get available tools."""
 
-    query: Optional[str] = None
+    query: str | None = None
     top_k: int = 10
 
 
@@ -64,7 +60,7 @@ class GetToolStatsQuery(Query):
 # Service implementation
 class ToolingService:
     """Tooling service.
-    
+
     Responsibilities:
     - Initialize ToolsManager
     - Load all tools in correct order
@@ -74,7 +70,7 @@ class ToolingService:
 
     def __init__(self, bus: MessageBus):
         """Initialize tooling service.
-        
+
         Args:
             bus: MessageBus instance
         """
@@ -107,13 +103,10 @@ class ToolingService:
         stats = self.tools_manager.get_stats()
         await self.bus.publish(
             ToolingTopics.TOOLS_INITIALIZED,
-            ToolsInitialized(
-                total_tools=stats["total_tools"],
-                mcp_tools_loaded=stats["mcp_tools_loaded"]
-            ),
+            ToolsInitialized(total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]),
             event=True,
             priority=50,
-            origin="internal"
+            origin="internal",
         )
 
         self._started = True
@@ -127,7 +120,7 @@ class ToolingService:
 
     async def _on_get_tools(self, env: Envelope) -> None:
         """Handle get tools query.
-        
+
         Args:
             env: Message envelope containing GetToolsQuery
         """
@@ -140,24 +133,17 @@ class ToolingService:
 
             # Send response
             if env.reply_to:
-                response = {
-                    "tools": tool_names,
-                    "count": len(tool_names)
-                }
+                response = {"tools": tool_names, "count": len(tool_names)}
                 await self.bus.publish(env.reply_to, response, origin="internal")
 
         except Exception as e:
             log_error(f"Error handling get tools query: {e}", exc_info=True)
             if env.reply_to:
-                await self.bus.publish(
-                    env.reply_to,
-                    {"error": str(e)},
-                    origin="internal"
-                )
+                await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
 
     async def _on_get_tool_by_name(self, env: Envelope) -> None:
         """Handle get tool by name query.
-        
+
         Args:
             env: Message envelope containing GetToolByNameQuery
         """
@@ -170,30 +156,19 @@ class ToolingService:
             # Send response
             if env.reply_to:
                 if tool:
-                    response = {
-                        "found": True,
-                        "name": tool.name,
-                        "description": getattr(tool, 'description', '')
-                    }
+                    response = {"found": True, "name": tool.name, "description": getattr(tool, "description", "")}
                 else:
-                    response = {
-                        "found": False,
-                        "name": query.name
-                    }
+                    response = {"found": False, "name": query.name}
                 await self.bus.publish(env.reply_to, response, origin="internal")
 
         except Exception as e:
             log_error(f"Error handling get tool by name query: {e}", exc_info=True)
             if env.reply_to:
-                await self.bus.publish(
-                    env.reply_to,
-                    {"error": str(e)},
-                    origin="internal"
-                )
+                await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
 
     async def _on_get_stats(self, env: Envelope) -> None:
         """Handle get stats query.
-        
+
         Args:
             env: Message envelope containing GetToolStatsQuery
         """
@@ -208,15 +183,11 @@ class ToolingService:
         except Exception as e:
             log_error(f"Error handling get stats query: {e}", exc_info=True)
             if env.reply_to:
-                await self.bus.publish(
-                    env.reply_to,
-                    {"error": str(e)},
-                    origin="internal"
-                )
+                await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
 
     async def _on_reload_mcp(self, env: Envelope) -> None:
         """Handle reload MCP tools command.
-        
+
         Args:
             env: Message envelope containing ReloadMCPToolsCommand
         """
@@ -226,13 +197,7 @@ class ToolingService:
 
             # Emit reloaded event
             stats = self.tools_manager.get_stats()
-            await self.bus.publish(
-                "Tooling.Reloaded",
-                ToolsReloaded(total_tools=stats["total_tools"]),
-                event=True,
-                priority=50,
-                origin="internal"
-            )
+            await self.bus.publish("Tooling.Reloaded", ToolsReloaded(total_tools=stats["total_tools"]), event=True, priority=50, origin="internal")
 
             log_info("MCP tools reloaded successfully")
 

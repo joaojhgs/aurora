@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Callable, Dict, List, Optional
+from typing import Callable
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class ToolsManager:
     """Manages all tools for Aurora.
-    
+
     Responsibilities:
     - Load core Aurora tools
     - Load plugin tools based on configuration
@@ -29,15 +29,15 @@ class ToolsManager:
 
     def __init__(self):
         """Initialize the ToolsManager."""
-        self.tools: List[Callable] = []
-        self.tool_lookup: Dict[str, Callable] = {}
-        self.always_active_tools: List[Callable] = []
+        self.tools: list[Callable] = []
+        self.tool_lookup: dict[str, Callable] = {}
+        self.always_active_tools: list[Callable] = []
         self._mcp_tools_loaded = False
         self._initialized = False
 
     async def initialize(self) -> None:
         """Initialize all tools in the correct order.
-        
+
         Order:
         1. Load core Aurora tools
         2. Load plugin tools
@@ -71,18 +71,18 @@ class ToolsManager:
 
         try:
             # Import core tools
-            from app.tooling.tools.resume_tts import resume_tts_tool
-            from app.tooling.tools.stop_tts import stop_tts_tool
-            from app.tooling.tools.scheduler_tool import (
-                schedule_task_tool,
-                list_scheduled_tasks_tool,
-                cancel_scheduled_task_tool,
-            )
             from app.tooling.tools.pomodoro_tool import (
+                pomodoro_status_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
-                pomodoro_status_tool,
             )
+            from app.tooling.tools.resume_tts import resume_tts_tool
+            from app.tooling.tools.scheduler_tool import (
+                cancel_scheduled_task_tool,
+                list_scheduled_tasks_tool,
+                schedule_task_tool,
+            )
+            from app.tooling.tools.stop_tts import stop_tts_tool
             from app.tooling.tools.upsert_memory import upsert_memory_tool
 
             # Always active tools
@@ -115,6 +115,7 @@ class ToolsManager:
         if config_manager.get("plugins.openrecall.activate", False):
             try:
                 from app.tooling.tools.current_screen import current_screen_tool
+
                 self.tools.append(current_screen_tool)
                 log_info("Loaded OpenRecall plugin tools")
             except Exception as e:
@@ -124,6 +125,7 @@ class ToolsManager:
         if config_manager.get("plugins.jira.activate", False):
             try:
                 from app.tooling.tools.jira_toolkit import jira_tools
+
                 self.tools.extend(jira_tools)
                 log_info(f"Loaded {len(jira_tools)} Jira plugin tools")
             except Exception as e:
@@ -133,6 +135,7 @@ class ToolsManager:
         if config_manager.get("plugins.slack.activate", False):
             try:
                 from app.tooling.tools.slack_toolkit import slack_tools
+
                 self.tools.extend(slack_tools)
                 log_info(f"Loaded {len(slack_tools)} Slack plugin tools")
             except Exception as e:
@@ -142,6 +145,7 @@ class ToolsManager:
         if config_manager.get("plugins.github.activate", False):
             try:
                 from app.tooling.tools.github_toolkit import github_tools
+
                 self.tools.extend(github_tools)
                 log_info(f"Loaded {len(github_tools)} GitHub plugin tools")
             except Exception as e:
@@ -191,7 +195,7 @@ class ToolsManager:
 
     async def _sync_tools_with_database(self) -> None:
         """Sync tools with database.
-        
+
         This is called AFTER all tools are loaded to ensure no tools are
         incorrectly removed from the database.
         """
@@ -205,6 +209,7 @@ class ToolsManager:
 
             # Import and call the sync function
             from app.tooling.tools.tools import sync_tools_with_database
+
             sync_tools_with_database()
 
             log_info("Tools synchronized with database")
@@ -212,13 +217,13 @@ class ToolsManager:
         except Exception as e:
             log_error(f"Failed to sync tools with database: {e}", exc_info=True)
 
-    def get_tools(self, query: Optional[str] = None, top_k: int = 10) -> List[Callable]:
+    def get_tools(self, query: str | None = None, top_k: int = 10) -> list[Callable]:
         """Get tools, optionally filtered by query.
-        
+
         Args:
             query: Optional search query
             top_k: Number of tools to return
-            
+
         Returns:
             List of tool callables
         """
@@ -232,25 +237,26 @@ class ToolsManager:
         # Use the original get_tools function for semantic search
         try:
             from app.tooling.tools.tools import get_tools
+
             return get_tools(query, top_k)
         except Exception as e:
             log_error(f"Error in get_tools: {e}")
             return self.tools[:top_k]
 
-    def get_tool_by_name(self, name: str) -> Optional[Callable]:
+    def get_tool_by_name(self, name: str) -> Callable | None:
         """Get a specific tool by name.
-        
+
         Args:
             name: Tool name
-            
+
         Returns:
             Tool callable or None
         """
         return self.tool_lookup.get(name)
 
-    def get_all_tool_names(self) -> List[str]:
+    def get_all_tool_names(self) -> list[str]:
         """Get names of all loaded tools.
-        
+
         Returns:
             List of tool names
         """
@@ -258,7 +264,7 @@ class ToolsManager:
 
     def get_stats(self) -> dict:
         """Get tooling statistics.
-        
+
         Returns:
             Dictionary with tool statistics
         """
@@ -266,7 +272,7 @@ class ToolsManager:
             "total_tools": len(self.tools),
             "mcp_tools_loaded": self._mcp_tools_loaded,
             "initialized": self._initialized,
-            "core_tools": len([t for t in self.tools if not hasattr(t, '_is_mcp_tool')]),
+            "core_tools": len([t for t in self.tools if not hasattr(t, "_is_mcp_tool")]),
         }
 
     async def reload_mcp_tools(self) -> None:
@@ -302,15 +308,15 @@ class ToolsManager:
 
 
 # Global instance
-_tools_manager: Optional[ToolsManager] = None
+_tools_manager: ToolsManager | None = None
 
 
 def get_tools_manager() -> ToolsManager:
     """Get the global ToolsManager instance.
-    
+
     Returns:
         ToolsManager instance
-        
+
     Raises:
         RuntimeError: If ToolsManager not initialized
     """
@@ -321,7 +327,7 @@ def get_tools_manager() -> ToolsManager:
 
 def set_tools_manager(manager: ToolsManager) -> None:
     """Set the global ToolsManager instance.
-    
+
     Args:
         manager: ToolsManager instance
     """

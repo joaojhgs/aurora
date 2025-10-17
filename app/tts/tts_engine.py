@@ -5,14 +5,17 @@ from RealtimeTTS import PiperVoice, TextToAudioStream
 from app.config.config_manager import config_manager
 from app.tts.piper_engine import PiperEngine
 
+
 # TODO: Implement volume control functions
 def reduce_volume_except_current():
     """Placeholder for reducing system volume during TTS."""
     pass
 
+
 def restore_volume_except_current():
     """Placeholder for restoring system volume after TTS."""
     pass
+
 
 file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -6,7 +6,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import BaseModel
 
-from app.helpers.aurora_logger import log_debug, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_info
 from app.orchestrator.agents.chatbot import chatbot
 from app.orchestrator.memory_store import get_combined_store
 from app.orchestrator.state import State
@@ -21,36 +21,37 @@ _store = None
 
 def _build_graph_if_needed():
     """Build the graph lazily on first use.
-    
+
     This ensures tools are only loaded when actually needed,
     preventing double initialization issues.
     """
     global _graph, _graph_builder, _memory, _store
-    
+
     if _graph is not None:
         return _graph
-    
+
     log_debug("Building LangGraph (lazy initialization)...")
-    
+
     # Import tools lazily to avoid premature initialization
     from app.tooling.tools.tools import tools
+
     log_debug("Loaded tools from app.tooling.tools")
-    
+
     _graph_builder = StateGraph(State)
-    
+
     # Init tools node
     tool_node = ToolNode(tools=tools)
     _graph_builder.add_node("tools", tool_node)
-    
+
     # Add the chatbot agent node
     _graph_builder.add_node("chatbot", chatbot)
-    
+
     # Connect the chatbot agent and the tool nodes
     _graph_builder.add_conditional_edges(
         "chatbot",
         tools_condition,
     )
-    
+
     def tools_end_condition(
         state: Union[list[AnyMessage], dict[str, Any], BaseModel],
         messages_key: str = "messages",
@@ -66,18 +67,18 @@ def _build_graph_if_needed():
         if hasattr(ai_message, "content") and ai_message.content == "END":
             return "END"
         return "chatbot"
-    
+
     _graph_builder.add_conditional_edges("tools", tools_end_condition, {"END": END, "chatbot": "chatbot"})
-    
+
     # Set the entry point to the chatbot
     _graph_builder.set_entry_point("chatbot")
-    
+
     _memory = MemorySaver()
     _store = get_combined_store()
-    
+
     # Compile the graph
     _graph = _graph_builder.compile(checkpointer=_memory, store=_store)
-    
+
     # Save the graph visualization
     try:
         with open("./assets/graph.png", "wb") as f:
@@ -85,7 +86,7 @@ def _build_graph_if_needed():
     except Exception:
         # This requires some extra dependencies and is optional
         pass
-    
+
     log_info("LangGraph built successfully")
     return _graph
 
