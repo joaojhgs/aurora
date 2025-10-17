@@ -7,23 +7,14 @@ This module handles text-to-speech synthesis including:
 """
 
 from app.tts.service import (
+    TTSError,
+    TTSPause,
+    TTSRequest,
+    TTSResume,
     TTSService,
     TTSStarted,
-    TTSRequest,
     TTSStop,
     TTSStopped,
-    TTSPause,
-    TTSResume,
-    TTSError
 )
 
-__all__ = [
-    "TTSService",
-    "TTSStarted",
-    "TTSRequest",
-    "TTSStop",
-    "TTSStopped",
-    "TTSPause",
-    "TTSResume",
-    "TTSError"
-]
+__all__ = ["TTSService", "TTSStarted", "TTSRequest", "TTSStop", "TTSStopped", "TTSPause", "TTSResume", "TTSError"]

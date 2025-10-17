@@ -8,10 +8,10 @@ This module handles all database operations including:
 - Scheduler job persistence
 """
 
-from app.db.service import DBService
 from app.db.manager import DatabaseManager
-from app.db.models import Message, CronJob, JobStatus, ScheduleType
+from app.db.models import CronJob, JobStatus, Message, ScheduleType
 from app.db.scheduler_db_service import SchedulerDatabaseService
+from app.db.service import DBService
 
 __all__ = [
     "DBService",

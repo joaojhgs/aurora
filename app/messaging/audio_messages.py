@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-# typing imports removed
 
 from pydantic import BaseModel, Field
 
 from .bus import Command, Event
+
+# typing imports removed
 
 
 class AudioEncoding(str, Enum):

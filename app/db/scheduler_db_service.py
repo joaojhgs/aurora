@@ -9,10 +9,9 @@ from typing import Optional
 
 import aiosqlite
 
-from app.helpers.aurora_logger import log_error, log_info
-
 from app.db.migration_manager import MigrationManager
 from app.db.models import CronJob
+from app.helpers.aurora_logger import log_error, log_info
 
 
 class SchedulerDatabaseService:
