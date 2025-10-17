@@ -1,5 +1,8 @@
 {
     "general": {
+        "architecture": {
+            "mode": "threads"
+        },
         "llm": {
             "provider": "openai",
             "third_party": {
@@ -49,15 +52,54 @@
             "use_local": true
         },
         "speech_to_text": {
-            "language": "",
-            "silero_deactivity_detection": false,
-            "wakeword_speedx_noise_reduction": false,
+            "architecture": {
+                "use_streaming": true,
+                "legacy_mode": false
+            },
+            "language": "en",
             "ambient_transcription": {
                 "enable": false,
                 "chunk_duration": 3.0,
                 "storage_path": "ambient_logs/",
                 "filter_short_transcriptions": true,
                 "min_transcription_length": 10
+            },
+            "audio_input": {
+                "device_index": null,
+                "sample_rate": 16000,
+                "channels": 1,
+                "chunk_size": 1024,
+                "format": "int16"
+            },
+            "wake_word": {
+                "enabled": true,
+                "backend": "oww",
+                "model_path": null,
+                "threshold": 0.5,
+                "inference_framework": "onnx"
+            },
+            "transcription": {
+                "vad_enabled": true,
+                "vad_threshold": 0.5,
+                "silence_duration_ms": 900,
+                "max_speech_duration_s": 30,
+                "realtime_model": {
+                    "enabled": true,
+                    "model_size": "tiny",
+                    "device": "cpu",
+                    "compute_type": "int8"
+                },
+                "accurate_model": {
+                    "enabled": true,
+                    "model_size": "base",
+                    "device": "cpu",
+                    "compute_type": "int8"
+                }
+            },
+            "coordinator": {
+                "session_timeout_s": 10.0,
+                "multi_turn_enabled": false,
+                "pause_tts_on_listen": true
             }
         },
         "text_to_speech": {
@@ -116,5 +158,15 @@
     "mcp": {
         "enabled": true,
         "servers": {}
+    },
+    "messaging": {
+        "redis": {
+            "url": "redis://localhost:6379"
+        },
+        "priorities": {
+            "interactive": 10,
+            "system": 50,
+            "external": 80
+        }
     }
 }

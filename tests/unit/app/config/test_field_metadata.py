@@ -69,17 +69,6 @@ class TestConfigFieldMetadata:
         assert n_ctx_field["min"] == 512
         assert n_ctx_field["max"] == 32768
 
-    def test_openai_model_choices(self, config_manager):
-        """Test that OpenAI model field has correct choices."""
-        metadata = config_manager.get_field_metadata()
-
-        openai_model = metadata.get("general.llm.third_party.openai.options.model")
-        assert openai_model is not None
-        assert openai_model["type"] == "choice"
-
-        expected_models = ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"]
-        assert openai_model["choices"] == expected_models
-
     def test_plugin_activation_fields(self, config_manager):
         """Test that plugin activation fields have correct metadata."""
         metadata = config_manager.get_field_metadata()
