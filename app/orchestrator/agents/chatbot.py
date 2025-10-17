@@ -5,8 +5,9 @@ from langgraph.store.base import BaseStore
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
-from app.langgraph.state import State
-from app.langgraph.tools.tools import get_tools
+from app.orchestrator.state import State
+# Import get_tools lazily to avoid premature initialization
+# from app.orchestrator.tools.tools import get_tools
 
 """
 The chatbot agent is the main agent coordinator in the graph.
@@ -98,10 +99,10 @@ elif provider == "huggingface_pipeline":
             llm = None
 
 elif provider == "llama_cpp":
-    from app.langgraph.ChatLlamaCpp import ChatLlamaCpp
+    from app.orchestrator.chat_llama_cpp import ChatLlamaCpp
 
     # Import handler to register it on the directory of chat formats
-    from app.langgraph.ChatLlamaCppFnHandler import *  # noqa: F401,F403
+    from app.orchestrator.chat_llama_cpp_fn_handler import *  # noqa: F401,F403
 
     llama_options = config_manager.get_section("llm.local.llama_cpp.options")
     model_path = llama_options.get("model_path") if llama_options else None
@@ -139,6 +140,10 @@ def chatbot(state: State, store: BaseStore):
     # Be carefull to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
     # It might need adjusting depending on how much plugins you are using as
     # well, +plugins = +tools to load
+    
+    # Lazy import to avoid premature initialization
+    from app.tooling.tools.tools import get_tools
+    
     llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 10), tool_choice="auto")
     print(state["messages"])
     return {
