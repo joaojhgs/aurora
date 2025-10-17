@@ -5,7 +5,7 @@ Unit tests for the database models.
 import uuid
 from datetime import datetime
 
-from app.database.models import Message, MessageType
+from app.db.models import Message, MessageType
 from app.scheduler.models import CronJob, JobStatus, ScheduleType
 
 
