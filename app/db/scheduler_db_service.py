@@ -11,8 +11,8 @@ import aiosqlite
 
 from app.helpers.aurora_logger import log_error, log_info
 
-from .migration_manager import MigrationManager
-from .models import CronJob
+from app.db.migration_manager import MigrationManager
+from app.db.models import CronJob
 
 
 class SchedulerDatabaseService:
