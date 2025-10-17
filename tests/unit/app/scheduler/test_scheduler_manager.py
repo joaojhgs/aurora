@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from app.database.models import CronJob as Job
-from app.database.models import JobStatus, ScheduleType
+from app.db.models import CronJob as Job
+from app.db.models import JobStatus, ScheduleType
 from app.scheduler.scheduler_manager import SchedulerManager
 
 

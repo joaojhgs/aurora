@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from croniter import croniter
 
-from ..database import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
+from ..db import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
 from ..helpers.aurora_logger import log_debug, log_error, log_info
 
 
