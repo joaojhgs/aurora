@@ -10,15 +10,19 @@ These tests verify the integration between MCP client and Aurora's systems:
 
 import asyncio
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+# Set dummy OpenAI API key before any imports that might initialize OpenAI
+os.environ.setdefault('OPENAI_API_KEY', 'test-key-dummy-integration')
+
 from app.config.config_manager import config_manager
-from app.langgraph.mcp_client import MCPClientManager
-from app.langgraph.tools.tools import load_mcp_tools_async, tool_lookup, tools
+from app.tooling.mcp.mcp_client import MCPClientManager
+from app.tooling.tools.tools import load_mcp_tools_async, tool_lookup, tools
 
 
 @pytest.mark.integration
@@ -64,7 +68,7 @@ class TestMCPToolIntegration:
         """Test that MCP tools are properly loaded into Aurora's tool system."""
         initial_tool_count = len(tools)
 
-        with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.orchestrator.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = False
             mock_manager.initialize = AsyncMock()
             mock_manager.get_tools.return_value = mock_mcp_tools
@@ -85,7 +89,7 @@ class TestMCPToolIntegration:
     @pytest.mark.asyncio
     async def test_mcp_tool_execution_through_aurora_lookup(self, mock_mcp_tools):
         """Test executing MCP tools through Aurora's tool lookup system."""
-        with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.orchestrator.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = True
             mock_manager.get_tools.return_value = mock_mcp_tools
 
@@ -104,7 +108,7 @@ class TestMCPToolIntegration:
         manager = MCPClientManager()
 
         # Patch the config_manager inside the initialize method
-        with patch("app.langgraph.mcp_client.config_manager") as mock_config:
+        with patch("app.orchestrator.mcp_client.config_manager") as mock_config:
             mock_config.get.side_effect = lambda key, default=None: {
                 "mcp.enabled": True,
                 "mcp.servers": {"math": {"command": "python", "args": ["/tmp/math_server.py"], "transport": "stdio", "enabled": True}},
@@ -124,18 +128,18 @@ class TestMCPToolIntegration:
     async def test_error_handling_integration(self):
         """Test error handling across MCP and Aurora integration."""
         # Reset the global variable to allow testing
-        import app.langgraph.tools.tools as tools_module
+        import app.tooling.tools.tools as tools_module
 
         original_loaded = tools_module._mcp_tools_loaded
         tools_module._mcp_tools_loaded = False
 
         try:
             # Test that the function handles MCP initialization errors gracefully
-            with patch("app.langgraph.tools.tools.config_manager") as mock_config:
+            with patch("app.tooling.tools.tools.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {"mcp.enabled": True}.get(key, default)
 
                 # Mock the MCP client to fail during initialization
-                with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+                with patch("app.orchestrator.mcp_client.mcp_client_manager") as mock_manager:
                     mock_manager.is_initialized = False
                     mock_manager.initialize = AsyncMock(side_effect=Exception("Connection failed"))
                     mock_manager.get_tools.return_value = []
@@ -154,7 +158,7 @@ class TestMCPToolIntegration:
         manager = MCPClientManager()
 
         # Test initialization
-        with patch("app.langgraph.mcp_client.config_manager") as mock_config:
+        with patch("app.orchestrator.mcp_client.config_manager") as mock_config:
             mock_config.get.side_effect = lambda key, default=None: {
                 "mcp.enabled": True,
                 "mcp.servers": {"test": {"enabled": True, "transport": "stdio", "command": "python"}},
@@ -219,7 +223,7 @@ class TestMCPConfigurationIntegration:
             },
         }
 
-        with patch("app.langgraph.mcp_client.config_manager") as mock_config:
+        with patch("app.orchestrator.mcp_client.config_manager") as mock_config:
             mock_config.get.side_effect = lambda key, default=None: {
                 "mcp.enabled": test_config["enabled"],
                 "mcp.servers": test_config["servers"],
@@ -256,17 +260,17 @@ class TestMCPMemoryIntegration:
         mock_mcp_tools = [mock_tool]
 
         # Reset the global variable to allow testing
-        import app.langgraph.tools.tools as tools_module
+        import app.tooling.tools.tools as tools_module
 
         original_loaded = tools_module._mcp_tools_loaded
         tools_module._mcp_tools_loaded = False
 
         try:
-            with patch("app.langgraph.tools.tools.config_manager") as mock_config:
+            with patch("app.tooling.tools.tools.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {"mcp.enabled": True}.get(key, default)
 
                 # Mock the MCP tools directly in the module where they're used
-                with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+                with patch("app.orchestrator.mcp_client.mcp_client_manager") as mock_manager:
                     mock_manager.is_initialized = False
                     mock_manager.initialize = AsyncMock()  # Initialize successfully
                     mock_manager.get_tools.return_value = mock_mcp_tools
@@ -278,7 +282,7 @@ class TestMCPMemoryIntegration:
                     mock_manager.initialize.side_effect = mock_init
 
                     # Mock the tool synchronization
-                    with patch("app.langgraph.tools.tools.sync_tools_with_database") as mock_sync:
+                    with patch("app.tooling.tools.tools.sync_tools_with_database") as mock_sync:
                         await load_mcp_tools_async()
 
                         # Verify database sync was called

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message, MessageType
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 # Create a mock MemoryStore for testing

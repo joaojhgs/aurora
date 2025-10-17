@@ -10,8 +10,8 @@ from datetime import datetime
 
 import pytest
 
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message, MessageType
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 class TestConcurrentOperations:
@@ -76,7 +76,7 @@ class TestConcurrentOperations:
     async def test_memory_store_under_load(self):
         """Test memory store performance under load."""
         # Get the memory store singleton
-        from app.langgraph.memory_store import get_combined_store
+        from app.orchestrator.memory_store import get_combined_store
 
         store = get_combined_store()
 
@@ -145,9 +145,9 @@ class TestConcurrentOperations:
             pytest.skip("No test model available")
 
         # Import actual implementation (not mocked)
-        from app.langgraph.graph import build_graph
-        from app.langgraph.memory_store import get_combined_store
-        from app.langgraph.state import State
+        from app.orchestrator.graph import build_graph
+        from app.orchestrator.memory_store import get_combined_store
+        from app.orchestrator.state import State
 
         # Run in a separate process to measure memory usage
         def run_model():
