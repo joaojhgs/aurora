@@ -8,7 +8,6 @@ This module tests the MCP client functionality including:
 - Error handling and edge cases
 """
 
-import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest

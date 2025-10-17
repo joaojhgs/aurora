@@ -4,8 +4,6 @@ This module defines all valid message bus topics as typed constants,
 preventing typos and making it easy to discover available topics.
 """
 
-from typing import List
-
 from app.messaging.event_registry import TopicDefinition
 
 # =============================================================================

@@ -4,7 +4,6 @@ Tests the interaction between services via the message bus.
 """
 
 import asyncio
-from typing import List
 
 import pytest
 import pytest_asyncio
