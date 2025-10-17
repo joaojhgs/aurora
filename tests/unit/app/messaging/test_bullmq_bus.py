@@ -10,7 +10,6 @@ import pytest
 from pydantic import BaseModel
 
 from app.messaging.bullmq_bus import BullMQBus
-from app.messaging.bus import Envelope
 
 
 class SampleMessage(BaseModel):

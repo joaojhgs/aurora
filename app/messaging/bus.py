@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Protocol
 
 from pydantic import BaseModel, Field
 

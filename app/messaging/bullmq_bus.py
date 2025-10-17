@@ -15,7 +15,6 @@ import asyncio
 import logging
 import uuid as uuid_lib
 from collections import defaultdict
-from typing import Dict, List
 
 from pydantic import BaseModel
 

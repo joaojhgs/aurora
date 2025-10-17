@@ -6,8 +6,6 @@ services to obtain the bus instance without tight coupling.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .bus import MessageBus
 
 _bus: MessageBus | None = None
