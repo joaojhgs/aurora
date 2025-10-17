@@ -53,7 +53,7 @@ class ConfigAPI:
     def get_mcp_status() -> dict[str, Any]:
         """Get MCP system status"""
         try:
-            from app.langgraph.tools.tools import get_mcp_status
+            from app.tooling.tools.tools import get_mcp_status
 
             return get_mcp_status()
         except Exception as e:
@@ -64,7 +64,7 @@ class ConfigAPI:
     def reload_mcp_servers() -> dict[str, Any]:
         """Reload MCP servers from configuration"""
         try:
-            from app.langgraph.tools.tools import reload_mcp_servers_sync
+            from app.tooling.tools.tools import reload_mcp_servers_sync
 
             reload_mcp_servers_sync()
             return {"success": True, "message": "MCP servers reload initiated"}
@@ -80,7 +80,7 @@ class ConfigAPI:
             config_manager.set("mcp.servers", servers_config)
 
             # Reload servers
-            from app.langgraph.tools.tools import reload_mcp_servers_sync
+            from app.tooling.tools.tools import reload_mcp_servers_sync
 
             reload_mcp_servers_sync()
 
@@ -95,7 +95,7 @@ class ConfigAPI:
         try:
             import asyncio
 
-            from app.langgraph.mcp_discovery import discover_mcp_servers
+            from app.tooling.mcp.mcp_discovery import discover_mcp_servers
 
             # Run discovery
             discovered = asyncio.run(discover_mcp_servers())
@@ -125,7 +125,7 @@ class ConfigAPI:
     def add_discovered_servers_to_config(server_names: list[str] = None) -> dict[str, Any]:
         """Add discovered servers to Aurora's MCP configuration"""
         try:
-            from app.langgraph.mcp_discovery import mcp_discovery
+            from app.tooling.mcp.mcp_discovery import mcp_discovery
 
             discovered = mcp_discovery.get_server_configs_for_aurora()
 
@@ -144,7 +144,7 @@ class ConfigAPI:
             config_manager.set("mcp.servers", updated_servers)
 
             # Reload servers
-            from app.langgraph.tools.tools import reload_mcp_servers_sync
+            from app.tooling.tools.tools import reload_mcp_servers_sync
 
             reload_mcp_servers_sync()
 
