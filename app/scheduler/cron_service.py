@@ -8,7 +8,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, Union
 
-from ..database import CronJob, ScheduleType
+from ..db import CronJob, ScheduleType
 from ..helpers.aurora_logger import log_error, log_info, log_warning
 from .scheduler_manager import SchedulerManager
 
@@ -226,7 +226,7 @@ class CronService:
         """Shutdown the cron service"""
         if self.scheduler_manager:
             self.scheduler_manager.stop()
-        self._executor.shutdown(wait=True)
+        # Executor is managed by scheduler_manager
         log_info("Cron service shutdown")
 
     async def schedule_from_text(
