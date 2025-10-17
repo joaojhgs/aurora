@@ -30,8 +30,10 @@ class AuroraLogger:
         # Remove existing handlers to avoid duplicates
         self.logger.handlers.clear()
 
-        # Create console handler
-        console_handler = logging.StreamHandler()
+        # Create console handler with unbuffered stream
+        # Force flush after every log message
+        import sys
+        console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.DEBUG if self.debug_enabled else logging.INFO)
 
         # Create formatter with clean timestamp format
@@ -40,6 +42,9 @@ class AuroraLogger:
 
         # Add handler to logger
         self.logger.addHandler(console_handler)
+        
+        # Force flush after every log
+        console_handler.flush = lambda: sys.stdout.flush()
 
         # Prevent propagation to root logger
         self.logger.propagate = False
@@ -94,9 +99,9 @@ class AuroraLogger:
         """Log warning message"""
         self.logger.warning(str(message), *args)
 
-    def error(self, message: Any, *args):
+    def error(self, message: Any, *args, **kwargs):
         """Log error message"""
-        self.logger.error(str(message), *args)
+        self.logger.error(str(message), *args, **kwargs)
 
     def success(self, message: Any, *args):
         """Log success message (using info level with ✓ prefix)"""
@@ -123,9 +128,9 @@ def log_warning(message: Any, *args):
     logger.warning(message, *args)
 
 
-def log_error(message: Any, *args):
+def log_error(message: Any, *args, **kwargs):
     """Log error message"""
-    logger.error(message, *args)
+    logger.error(message, *args, **kwargs)
 
 
 def log_success(message: Any, *args):
