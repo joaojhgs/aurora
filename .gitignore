@@ -1,5 +1,19 @@
 .env*
 !.env.file
+
+# Log files
+*.log
+*.log.*
+
+# Backup and temporary files
+*.backup
+*.old
+*_new.py
+*_old.py
+
+# Test files in root (should be in tests/ folder)
+/test_*.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
