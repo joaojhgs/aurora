@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-from app.database import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
+from app.db.models import CronJob, JobStatus, ScheduleType
+from app.db.scheduler_db_service import SchedulerDatabaseService
 from app.scheduler.scheduler_manager import SchedulerManager
 
 # Fixed path to a test database file in the tests directory

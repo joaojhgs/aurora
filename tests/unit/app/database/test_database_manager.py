@@ -12,8 +12,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message, MessageType
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 @pytest.mark.asyncio

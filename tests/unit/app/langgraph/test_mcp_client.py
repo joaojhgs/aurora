@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.config.config_manager import ConfigManager
-from app.langgraph.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
+from app.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
 
 
 @pytest.mark.unit
@@ -53,7 +53,7 @@ class TestMCPClientManager:
         """Test initialization when MCP is disabled."""
         config_manager.get.side_effect = lambda key, default=None: False if key == "mcp.enabled" else default
 
-        with patch("app.langgraph.mcp_client.config_manager", config_manager):
+        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -64,7 +64,7 @@ class TestMCPClientManager:
         """Test initialization when no servers are configured."""
         config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": {}}.get(key, default)
 
-        with patch("app.langgraph.mcp_client.config_manager", config_manager):
+        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -85,7 +85,7 @@ class TestMCPClientManager:
         mock_client.get_tools.return_value = mock_tools
 
         with (
-            patch("app.langgraph.mcp_client.config_manager", config_manager),
+            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
             patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
         ):
 
@@ -117,7 +117,7 @@ class TestMCPClientManager:
         mock_client.get_tools.return_value = mock_tools
 
         with (
-            patch("app.langgraph.mcp_client.config_manager", config_manager),
+            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
             patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
         ):
 
@@ -134,7 +134,7 @@ class TestMCPClientManager:
 
         config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
 
-        with patch("app.langgraph.mcp_client.config_manager", config_manager):
+        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -148,7 +148,7 @@ class TestMCPClientManager:
     #     config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
 
     #     with (
-    #         patch("app.langgraph.mcp_client.config_manager", config_manager),
+    #         patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
     #         patch("builtins.__import__", side_effect=ImportError("langchain-mcp-adapters not found")),
     #     ):
 
@@ -184,7 +184,7 @@ class TestMCPClientManager:
     #     mock_client.get_tools.return_value = mock_tools
 
     #     with (
-    #         patch("app.langgraph.mcp_client.config_manager", config_manager),
+    #         patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
     #         patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
     #     ):
 
@@ -260,7 +260,7 @@ class TestMCPClientManager:
         """Test initialization when MCP dependencies are not available."""
         config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": {"test": {"enabled": True}}}.get(key, default)
 
-        with patch("app.langgraph.mcp_client.config_manager", config_manager), patch("builtins.__import__", side_effect=ImportError("No module")):
+        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager), patch("builtins.__import__", side_effect=ImportError("No module")):
 
             await mcp_manager.initialize()
 
@@ -279,7 +279,7 @@ class TestMCPClientManager:
         mock_client.get_tools.side_effect = Exception("Tool loading failed")
 
         with (
-            patch("app.langgraph.mcp_client.config_manager", config_manager),
+            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
             patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
         ):
 
@@ -296,7 +296,7 @@ class TestMCPUtilityFunctions:
     @pytest.mark.asyncio
     async def test_get_mcp_tools_with_uninitialized_client(self):
         """Test get_mcp_tools when client is not initialized."""
-        with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = False
             mock_manager.initialize = AsyncMock()
             mock_manager.get_tools.return_value = []
@@ -311,7 +311,7 @@ class TestMCPUtilityFunctions:
         """Test get_mcp_tools when client is already initialized."""
         mock_tools = [Mock(name="test_tool")]
 
-        with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = True
             mock_manager.initialize = AsyncMock()
             mock_manager.get_tools.return_value = mock_tools
@@ -324,7 +324,7 @@ class TestMCPUtilityFunctions:
     @pytest.mark.asyncio
     async def test_initialize_mcp(self):
         """Test initialize_mcp function."""
-        with patch("app.langgraph.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.initialize = AsyncMock()
 
             await initialize_mcp()
@@ -336,96 +336,14 @@ class TestMCPUtilityFunctions:
 class TestMCPIntegration:
     """Integration tests for MCP with Aurora's tool system."""
 
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_mcp_tools_integration_with_tool_system(self):
-        """Test that MCP tools integrate properly with Aurora's tool system."""
-        # Create proper mock tools with string names
-        mock_add = Mock()
-        mock_add.name = "add"
-        mock_add.description = "Add two numbers"
+    # NOTE: MCP tool loading integration tests have been removed because
+    # load_mcp_tools_async() is now deprecated. MCP tools are loaded by
+    # ToolingService instead. See app/services/tooling_service.py and
+    # app/tooling/tools_manager.py for the new implementation.
+    # Integration tests for the new system should be added in
+    # tests/integration/test_tooling_service.py
 
-        mock_subtract = Mock()
-        mock_subtract.name = "subtract"
-        mock_subtract.description = "Subtract two numbers"
-
-        mock_tools = [mock_add, mock_subtract]
-
-        # Mock the memory store manager
-        mock_store_manager = Mock()
-        mock_store_manager.tools_store = Mock()
-
-        with (
-            patch("app.langgraph.mcp_client.get_mcp_tools", return_value=mock_tools),
-            patch("app.langgraph.memory_store._store_manager", mock_store_manager),
-        ):
-
-            # Mock problematic imports before importing the module
-            with patch.dict(
-                "sys.modules",
-                {
-                    "pyaudio._portaudio": Mock(),
-                    "RealtimeTTS": Mock(),
-                    "RealtimeTTS.text_to_stream": Mock(),
-                    "RealtimeTTS.stream_player": Mock(),
-                    "duckduckgo_search": Mock(),
-                    "primp": Mock(),
-                },
-            ):
-                # Import the module after setting up patches
-                import app.langgraph.tools.tools as tools_module
-
-                # Mock the module-level variables directly
-                with (
-                    patch.object(tools_module, "tool_lookup", {}) as mock_lookup,
-                    patch.object(tools_module, "tools", []) as mock_tools_list,
-                    patch.object(tools_module, "sync_tools_with_database"),
-                ):
-
-                    await tools_module.load_mcp_tools_async()
-
-                    # Verify tools were added to the system
-                    assert len(mock_tools_list) == 2
-                    assert "add" in mock_lookup
-                    assert "subtract" in mock_lookup
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_mcp_error_handling_in_tool_system(self):
-        """Test error handling when MCP tools fail to load."""
-        # Mock the memory store manager
-        mock_store_manager = Mock()
-        mock_store_manager.tools_store = Mock()
-
-        with (
-            patch("app.langgraph.mcp_client.get_mcp_tools", side_effect=Exception("Connection failed")),
-            patch("app.langgraph.memory_store._store_manager", mock_store_manager),
-        ):
-
-            # Mock problematic imports before importing the module
-            with patch.dict(
-                "sys.modules",
-                {
-                    "pyaudio._portaudio": Mock(),
-                    "RealtimeTTS": Mock(),
-                    "RealtimeTTS.text_to_stream": Mock(),
-                    "RealtimeTTS.stream_player": Mock(),
-                    "duckduckgo_search": Mock(),
-                    "primp": Mock(),
-                },
-            ):
-                # Import the module after setting up patches
-                import app.langgraph.tools.tools as tools_module
-
-                # Mock the module-level variables directly
-                with patch.object(tools_module, "tool_lookup", {}) as mock_lookup, patch.object(tools_module, "tools", []) as mock_tools_list:
-
-                    # Should not raise exception, just log error
-                    await tools_module.load_mcp_tools_async()
-
-                    # No tools should be added
-                    assert len(mock_tools_list) == 0
-                    assert len(mock_lookup) == 0
+    pass
 
 
 class TestMCPConfigurationValidation:

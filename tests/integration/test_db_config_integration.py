@@ -14,8 +14,8 @@ import pytest
 import pytest_asyncio
 
 from app.config.config_manager import ConfigManager
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message, MessageType
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 @pytest.mark.integration
@@ -127,7 +127,7 @@ class TestDatabaseIntegration:
 
         try:
             # Create database manager
-            with patch("app.database.database_manager.MigrationManager") as mock_migration:
+            with patch("app.db.database_manager.MigrationManager") as mock_migration:
                 # Set up mock for migration manager
                 instance = MagicMock()
                 mock_migration.return_value = instance

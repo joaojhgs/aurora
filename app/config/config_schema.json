@@ -18,6 +18,18 @@
                 "hardware_acceleration"
             ],
             "properties": {
+                "architecture": {
+                    "type": "object",
+                    "required": ["mode"],
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": ["threads", "processes"],
+                            "description": "Architecture mode: 'threads' for LocalBus, 'processes' for BullMQBus"
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "llm": {
                     "type": "object",
                     "required": [
@@ -347,11 +359,24 @@
                     "type": "object",
                     "required": [
                         "language",
-                        "silero_deactivity_detection",
-                        "wakeword_speedx_noise_reduction",
                         "ambient_transcription"
                     ],
                     "properties": {
+                        "architecture": {
+                            "type": "object",
+                            "required": ["use_streaming", "legacy_mode"],
+                            "properties": {
+                                "use_streaming": {
+                                    "type": "boolean",
+                                    "description": "Use new streaming STT architecture"
+                                },
+                                "legacy_mode": {
+                                    "type": "boolean",
+                                    "description": "Enable legacy monolithic STT mode"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
                         "language": {
                             "type": "string",
                             "enum": [
@@ -379,38 +404,6 @@
                                 "ko",
                                 "zh"
                             ]
-                        },
-                        "model": {
-                            "type": "string",
-                            "enum": [
-                                "tiny",
-                                "base",
-                                "small",
-                                "medium",
-                                "large"
-                            ],
-                            "description": "Whisper model size for speech recognition",
-                            "ui_choices": [
-                                "tiny",
-                                "base",
-                                "small",
-                                "medium",
-                                "large"
-                            ]
-                        },
-                        "silero_deactivity_detection": {
-                            "type": "boolean",
-                            "description": "Enable Silero-based voice activity detection"
-                        },
-                        "wakeword_speedx_noise_reduction": {
-                            "type": "boolean",
-                            "description": "Enable noise reduction for wake word detection"
-                        },
-                        "wake_words_sensitivity": {
-                            "type": "number",
-                            "minimum": 0.0,
-                            "maximum": 1.0,
-                            "description": "Sensitivity for wake word detection (0.0 - 1.0)"
                         },
                         "ambient_transcription": {
                             "type": "object",
@@ -444,6 +437,166 @@
                                     "type": "integer", 
                                     "minimum": 0,
                                     "description": "Minimum character length for transcriptions when filtering"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "audio_input": {
+                            "type": "object",
+                            "properties": {
+                                "device_index": {
+                                    "type": ["integer", "null"],
+                                    "description": "Audio input device index (null for default)"
+                                },
+                                "sample_rate": {
+                                    "type": "integer",
+                                    "enum": [8000, 16000, 22050, 44100, 48000],
+                                    "description": "Audio sample rate in Hz"
+                                },
+                                "channels": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 2,
+                                    "description": "Number of audio channels"
+                                },
+                                "chunk_size": {
+                                    "type": "integer",
+                                    "minimum": 128,
+                                    "maximum": 8192,
+                                    "description": "Audio chunk size in frames"
+                                },
+                                "format": {
+                                    "type": "string",
+                                    "enum": ["int16", "int32", "float32"],
+                                    "description": "Audio sample format"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "wake_word": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable wake word detection"
+                                },
+                                "backend": {
+                                    "type": "string",
+                                    "enum": ["oww", "pvp"],
+                                    "description": "Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)"
+                                },
+                                "model_path": {
+                                    "type": ["string", "null"],
+                                    "description": "Path to wake word model file"
+                                },
+                                "threshold": {
+                                    "type": "number",
+                                    "minimum": 0.0,
+                                    "maximum": 1.0,
+                                    "description": "Wake word detection threshold"
+                                },
+                                "inference_framework": {
+                                    "type": "string",
+                                    "enum": ["onnx", "tflite"],
+                                    "description": "Inference framework for wake word detection"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "transcription": {
+                            "type": "object",
+                            "properties": {
+                                "vad_enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable voice activity detection"
+                                },
+                                "vad_threshold": {
+                                    "type": "number",
+                                    "minimum": 0.0,
+                                    "maximum": 1.0,
+                                    "description": "VAD threshold"
+                                },
+                                "silence_duration_ms": {
+                                    "type": "integer",
+                                    "minimum": 100,
+                                    "maximum": 5000,
+                                    "description": "Silence duration in milliseconds before stopping"
+                                },
+                                "max_speech_duration_s": {
+                                    "type": "integer",
+                                    "minimum": 5,
+                                    "maximum": 300,
+                                    "description": "Maximum speech duration in seconds"
+                                },
+                                "realtime_model": {
+                                    "type": "object",
+                                    "properties": {
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "description": "Enable realtime transcription model"
+                                        },
+                                        "model_size": {
+                                            "type": "string",
+                                            "enum": ["tiny", "base", "small", "medium", "large"],
+                                            "description": "Whisper model size for realtime transcription"
+                                        },
+                                        "device": {
+                                            "type": "string",
+                                            "enum": ["cpu", "cuda", "auto"],
+                                            "description": "Device for realtime model"
+                                        },
+                                        "compute_type": {
+                                            "type": "string",
+                                            "enum": ["int8", "int16", "float16", "float32"],
+                                            "description": "Compute type for realtime model"
+                                        }
+                                    },
+                                    "additionalProperties": false
+                                },
+                                "accurate_model": {
+                                    "type": "object",
+                                    "properties": {
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "description": "Enable accurate transcription model"
+                                        },
+                                        "model_size": {
+                                            "type": "string",
+                                            "enum": ["tiny", "base", "small", "medium", "large"],
+                                            "description": "Whisper model size for accurate transcription"
+                                        },
+                                        "device": {
+                                            "type": "string",
+                                            "enum": ["cpu", "cuda", "auto"],
+                                            "description": "Device for accurate model"
+                                        },
+                                        "compute_type": {
+                                            "type": "string",
+                                            "enum": ["int8", "int16", "float16", "float32"],
+                                            "description": "Compute type for accurate model"
+                                        }
+                                    },
+                                    "additionalProperties": false
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "coordinator": {
+                            "type": "object",
+                            "properties": {
+                                "session_timeout_s": {
+                                    "type": "number",
+                                    "minimum": 1.0,
+                                    "maximum": 300.0,
+                                    "description": "Session timeout in seconds"
+                                },
+                                "multi_turn_enabled": {
+                                    "type": "boolean",
+                                    "description": "Enable multi-turn conversation"
+                                },
+                                "pause_tts_on_listen": {
+                                    "type": "boolean",
+                                    "description": "Pause TTS when listening for speech"
                                 }
                             },
                             "additionalProperties": false
@@ -851,6 +1004,47 @@
                 "debug": {
                     "type": "boolean",
                     "description": "Enable debug mode for verbose logging"
+                }
+            },
+            "additionalProperties": false
+        },
+        "messaging": {
+            "type": "object",
+            "properties": {
+                "redis": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "Redis connection URL for BullMQ message bus"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "priorities": {
+                    "type": "object",
+                    "properties": {
+                        "interactive": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "description": "Priority level for interactive messages"
+                        },
+                        "system": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "description": "Priority level for system messages"
+                        },
+                        "external": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "description": "Priority level for external messages"
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false

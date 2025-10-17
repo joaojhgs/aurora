@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from app.database.models import Message, MessageType
+from app.db.models import Message, MessageType
 
 
 @pytest.mark.performance
@@ -116,7 +116,7 @@ class TestPerformanceMeasurements:
 
         # Patch the graph
         with patch("app.langgraph.graph.graph", mock_graph):
-            from app.langgraph.graph import process_text_input
+            from app.orchestrator.graph import process_text_input
 
             # Measure processing time for multiple requests
             total_time = 0
@@ -173,7 +173,7 @@ class TestPerformanceMeasurements:
         """Test performance under concurrent load."""
         # Mock the graph
         with patch("app.langgraph.graph.graph", mock_environment["graph"]):
-            from app.langgraph.graph import process_text_input
+            from app.orchestrator.graph import process_text_input
 
             # Execute multiple requests concurrently
             start_time = time.time()

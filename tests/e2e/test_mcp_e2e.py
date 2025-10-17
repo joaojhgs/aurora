@@ -10,6 +10,7 @@ These tests verify the complete MCP workflow from configuration to execution:
 
 import asyncio
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -17,8 +18,11 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.langgraph.mcp_client import MCPClientManager, cleanup_mcp, initialize_mcp
-from app.langgraph.tools.tools import load_mcp_tools_async, tool_lookup, tools
+from app.tooling.mcp.mcp_client import MCPClientManager, cleanup_mcp, initialize_mcp
+from app.tooling.tools.tools import load_mcp_tools_async, tool_lookup, tools
+
+# Set dummy OpenAI API key before any imports that might initialize OpenAI
+os.environ.setdefault("OPENAI_API_KEY", "test-key-dummy-e2e")
 
 
 @pytest.mark.e2e
@@ -171,7 +175,7 @@ class TestMCPEndToEndFlow:
             # Mock configuration at multiple levels for E2E testing
             with (
                 patch("app.langgraph.mcp_client.config_manager") as mock_mcp_config,
-                patch("app.langgraph.tools.tools.config_manager") as mock_tools_config,
+                patch("app.tooling.tools.tools.config_manager") as mock_tools_config,
             ):
 
                 config_data = {
@@ -183,7 +187,7 @@ class TestMCPEndToEndFlow:
                 mock_tools_config.get.side_effect = lambda key, default=None: config_data.get(key, default)
 
                 # Reset MCP tools loaded flag for this test
-                import app.langgraph.tools.tools as tools_module
+                import app.tooling.tools.tools as tools_module
 
                 original_loaded = tools_module._mcp_tools_loaded
                 tools_module._mcp_tools_loaded = False
