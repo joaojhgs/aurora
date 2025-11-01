@@ -127,7 +127,7 @@ class TestDatabaseIntegration:
 
         try:
             # Create database manager
-            with patch("app.db.database_manager.MigrationManager") as mock_migration:
+            with patch("app.db.manager.MigrationManager") as mock_migration:
                 # Set up mock for migration manager
                 instance = MagicMock()
                 mock_migration.return_value = instance
