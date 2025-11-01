@@ -68,7 +68,7 @@ class LocalBus:
 
         # Topic validation
         self._validate_topics = validate_topics
-        
+
         # Counter for tiebreaking in priority queue (ensures FIFO for same priority)
         self._counter = 0
 
@@ -354,9 +354,9 @@ class LocalBus:
             if not fut.done():
                 # Handle both BaseModel instances and dict payloads
                 result_data = None
-                
+
                 # Check if it's a BaseModel instance (not the class itself)
-                if hasattr(env.payload, '__class__') and hasattr(env.payload.__class__, 'model_dump'):
+                if hasattr(env.payload, "__class__") and hasattr(env.payload.__class__, "model_dump"):
                     try:
                         result_data = env.payload.model_dump()
                         logger.debug(f"Reply handler: model_dump result = {result_data}")

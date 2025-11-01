@@ -29,43 +29,36 @@ class GraphOrchestrator:
     def __init__(self):
         """Initialize the graph orchestrator."""
         log_debug("Initializing GraphOrchestrator...")
-        
+
         self.bus = get_bus()
         self.graph_builder = StateGraph(State)
-        
+
         # Add nodes
         self.graph_builder.add_node("chatbot", chatbot)
         self.graph_builder.add_node("tools", self._execute_tools_via_bus)
-        
+
         # Connect chatbot to tools or end
         self.graph_builder.add_conditional_edges(
             "chatbot",
             tools_condition,
         )
-        
+
         # Connect tools back to chatbot or end
-        self.graph_builder.add_conditional_edges(
-            "tools",
-            self._tools_end_condition,
-            {"END": END, "chatbot": "chatbot"}
-        )
-        
+        self.graph_builder.add_conditional_edges("tools", self._tools_end_condition, {"END": END, "chatbot": "chatbot"})
+
         # Set entry point
         self.graph_builder.set_entry_point("chatbot")
-        
+
         # Initialize memory and store
         self.memory = MemorySaver()
         self.store = get_combined_store()
-        
+
         # Compile graph
-        self.graph = self.graph_builder.compile(
-            checkpointer=self.memory,
-            store=self.store
-        )
-        
+        self.graph = self.graph_builder.compile(checkpointer=self.memory, store=self.store)
+
         # Save visualization
         self._save_graph_visualization()
-        
+
         log_info("GraphOrchestrator initialized successfully")
 
     def _save_graph_visualization(self):
@@ -79,34 +72,34 @@ class GraphOrchestrator:
 
     async def _execute_tools_via_bus(self, state: State) -> dict[str, list[ToolMessage]]:
         """Execute tools via message bus.
-        
+
         This node intercepts tool calls from the chatbot and executes them
         via the message bus instead of calling them directly.
-        
+
         Args:
             state: Current graph state containing messages
-            
+
         Returns:
             Updated state with tool execution results
         """
         messages = state["messages"]
         last_message = messages[-1]
-        
+
         # Check if last message has tool calls
         if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
             log_debug("No tool calls found in last message")
             return {"messages": []}
-        
+
         tool_messages = []
-        
+
         # Execute each tool call via bus
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
-            
+
             log_debug(f"Executing tool via bus: {tool_name} with args: {tool_args}")
-            
+
             try:
                 # Send tool execution command via bus and wait for response
                 result = await self.bus.request(
@@ -115,7 +108,7 @@ class GraphOrchestrator:
                     timeout=30.0,  # 30 second timeout for tool execution
                     priority=10,
                 )
-                
+
                 if result.ok:
                     log_debug(f"Tool {tool_name} executed successfully")
                     tool_messages.append(
@@ -135,7 +128,7 @@ class GraphOrchestrator:
                             name=tool_name,
                         )
                     )
-                    
+
             except Exception as e:
                 error_msg = f"Failed to execute tool via bus: {str(e)}"
                 log_error(error_msg, exc_info=True)
@@ -146,7 +139,7 @@ class GraphOrchestrator:
                         name=tool_name,
                     )
                 )
-        
+
         return {"messages": tool_messages}
 
     def _tools_end_condition(
@@ -155,11 +148,11 @@ class GraphOrchestrator:
         messages_key: str = "messages",
     ) -> Literal["tools", "chatbot", "END"]:
         """Determine next step after tool execution.
-        
+
         Args:
             state: Current graph state
             messages_key: Key to access messages in state
-            
+
         Returns:
             Next node to execute ("chatbot" or "END")
         """
@@ -171,15 +164,15 @@ class GraphOrchestrator:
             ai_message = messages[-1]
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
-        
+
         if hasattr(ai_message, "content") and ai_message.content == "END":
             return "END"
-        
+
         return "chatbot"
 
     async def _send_tts_via_bus(self, text: str, interrupt: bool = False):
         """Send TTS request via message bus.
-        
+
         Args:
             text: Text to convert to speech
             interrupt: Whether to interrupt current playback
@@ -196,14 +189,13 @@ class GraphOrchestrator:
         except Exception as e:
             log_error(f"Failed to send TTS request via bus: {e}", exc_info=True)
 
-
     async def stream_graph_updates(self, user_input: str, tts_result: bool = True) -> str:
         """Process user input through the graph with optional TTS output.
-        
+
         Args:
             user_input: User's text input or custom message object
             tts_result: Whether to play result through TTS
-            
+
         Returns:
             Assistant's response text
         """
@@ -237,10 +229,10 @@ class GraphOrchestrator:
 
     async def process_text_input(self, user_input: str) -> str:
         """Process text input from UI without using TTS.
-        
+
         Args:
             user_input: User's text input or custom message object
-            
+
         Returns:
             Assistant's response text
         """
@@ -276,31 +268,31 @@ _orchestrator: GraphOrchestrator | None = None
 
 def get_orchestrator() -> GraphOrchestrator:
     """Get or create the global graph orchestrator instance.
-    
+
     Returns:
         GraphOrchestrator instance
-        
+
     Raises:
         RuntimeError: If called before message bus is initialized
     """
     global _orchestrator
-    
+
     if _orchestrator is None:
         _orchestrator = GraphOrchestrator()
-    
+
     return _orchestrator
 
 
 # Backward-compatible API
 async def stream_graph_updates(user_input: str, ttsResult: bool = True) -> str:
     """Process user input through the graph with optional TTS output.
-    
+
     This is a backward-compatible wrapper around GraphOrchestrator.
-    
+
     Args:
         user_input: User's text input
         ttsResult: Whether to play result through TTS
-        
+
     Returns:
         Assistant's response text
     """
@@ -310,12 +302,12 @@ async def stream_graph_updates(user_input: str, ttsResult: bool = True) -> str:
 
 async def process_text_input(user_input: str) -> str:
     """Process text input from UI without using TTS.
-    
+
     This is a backward-compatible wrapper around GraphOrchestrator.
-    
+
     Args:
         user_input: User's text input
-        
+
     Returns:
         Assistant's response text
     """
