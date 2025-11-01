@@ -1,14 +1,16 @@
 import os
 
+from langchain_core.tools import StructuredTool
 from langgraph.store.base import BaseStore
+from pydantic import create_model
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
+from app.messaging import ToolingTopics
+from app.messaging.bus_runtime import get_bus
 from app.orchestrator.state import State
-
-# Import get_tools lazily to avoid premature initialization
-# from app.orchestrator.tools.tools import get_tools
+from app.tooling.service import GetToolsQuery
 
 """
 The chatbot agent is the main agent coordinator in the graph.
@@ -25,8 +27,12 @@ if provider == "openai":
 
     openai_options = config_manager.get_section("general.llm.third_party.openai.options")
     if openai_options and openai_options.get("model"):
-        llm = ChatOpenAI(**openai_options)
-        log_info(f"Initialized OpenAI LLM with model: {openai_options['model']}")
+        try:
+            llm = ChatOpenAI(**openai_options)
+            log_info(f"Initialized OpenAI LLM with model: {openai_options['model']}")
+        except Exception as e:
+            log_warning(f"Failed to initialize OpenAI LLM: {e}. LLM will be None.")
+            llm = None
 
 elif provider == "huggingface_endpoint":
     hf_endpoint_options = config_manager.get_section("general.llm.third_party.huggingface_endpoint.options")
@@ -124,8 +130,105 @@ else:
     log_error(f"Failed to initialize LLM with provider: {provider}")
 
 
+def _deserialize_tools(tool_schemas: list[dict]) -> list[StructuredTool]:
+    """Deserialize tool schemas received from ToolingService via bus into LangChain StructuredTool objects.
+
+    This function reconstructs LangChain tools from serialized data (name, description, argument descriptions)
+    that was sent through the bus. The bus remains agnostic - it just transported the data.
+
+    Args:
+        tool_schemas: List of serialized tool schemas from ToolingService (name, description, args_schema)
+
+    Returns:
+        List of LangChain StructuredTool objects that can be bound to LLM
+    """
+    from pydantic import Field
+
+    tools = []
+
+    for schema in tool_schemas:
+        try:
+            tool_name = schema.get("name", "unknown_tool")
+            tool_description = schema.get("description", "")
+            args_schema_dict = schema.get("args_schema", {})
+
+            # Create a Pydantic model from the JSON schema
+            # If the schema has properties, create a model with those fields
+            if args_schema_dict and isinstance(args_schema_dict, dict) and "properties" in args_schema_dict:
+                properties = args_schema_dict["properties"]
+                required_fields = args_schema_dict.get("required", [])
+
+                # Build field definitions for create_model
+                field_defs = {}
+                if properties:  # Only iterate if properties is not empty
+                    for field_name, field_info in properties.items():
+                        field_type = _json_schema_type_to_python(field_info.get("type", "string"))
+                        field_description = field_info.get("description", "")
+
+                        # Check if field is required
+                        if field_name in required_fields:
+                            # Required field - use Ellipsis (...) with Field description if available
+                            if field_description:
+                                field_defs[field_name] = (field_type, Field(..., description=field_description))
+                            else:
+                                field_defs[field_name] = (field_type, ...)
+                        else:
+                            # Optional field - use Field with default None and description if available
+                            if field_description:
+                                field_defs[field_name] = (field_type, Field(default=None, description=field_description))
+                            else:
+                                field_defs[field_name] = (field_type, None)
+
+                # Create the Pydantic model dynamically (empty field_defs creates empty model)
+                ArgsModel = create_model(f"{tool_name}Args", **field_defs)
+            else:
+                # No arguments
+                ArgsModel = create_model(f"{tool_name}Args")
+
+            # Create a dummy function for the tool (execution happens via bus)
+            def dummy_func(**kwargs):
+                """This function is never called - tool execution happens via bus."""
+                raise NotImplementedError(f"Tool {tool_name} should be executed via message bus, not directly")
+
+            # Create the StructuredTool
+            tool = StructuredTool(
+                name=tool_name,
+                description=tool_description,
+                func=dummy_func,
+                args_schema=ArgsModel,
+            )
+
+            tools.append(tool)
+
+        except Exception as e:
+            log_warning(f"Failed to deserialize tool schema: {e}")
+            continue
+
+    return tools
+
+
+def _json_schema_type_to_python(json_type: str) -> type:
+    """Convert JSON schema type to Python type.
+
+    Args:
+        json_type: JSON schema type string
+
+    Returns:
+        Corresponding Python type
+    """
+    type_mapping = {
+        "string": str,
+        "number": float,
+        "integer": int,
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
+    return type_mapping.get(json_type, str)
+
+
 # Def the chatbot node
-def chatbot(state: State, store: BaseStore):
+async def chatbot(state: State, store: BaseStore):
     # Check if llm is initialized
     if llm is None:
         raise ValueError("The language model (llm) is not initialized.")
@@ -138,14 +241,42 @@ def chatbot(state: State, store: BaseStore):
 
     # RAG Search tools to bind for each chatbot call
     # Reduce the top_k parameter to reduce token usage
-    # Be carefull to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
+    # Be careful to not reduce too much, the RAG is quite simplistic, it might miss relevant tools if top_k is too small
     # It might need adjusting depending on how much plugins you are using as
     # well, +plugins = +tools to load
 
-    # Lazy import to avoid premature initialization
-    from app.tooling.tools.tools import get_tools
+    # Get tools via message bus (from ToolingService)
+    bus = get_bus()
 
-    llm_with_tools = llm.bind_tools(get_tools(state["messages"][-1].content, 10), tool_choice="auto")
+    # Request tools from ToolingService via bus
+    result = await bus.request(
+        ToolingTopics.GET_TOOLS,
+        GetToolsQuery(query=state["messages"][-1].content, top_k=10),
+        timeout=5.0,
+        priority=10,
+    )
+
+    if not result.ok:
+        log_error(f"Failed to get tools from ToolingService: {result.error}")
+        tools = []
+    else:
+        # Deserialize tools from the response
+        # result.data contains the GetToolsResponse fields
+        if result.data is None:
+            log_error("GetToolsResponse returned None data")
+            tools = []
+        elif isinstance(result.data, dict):
+            # Extract tools from the response
+            tool_schemas = result.data.get("tools", [])
+            if not tool_schemas:
+                log_warning("No tools returned from ToolingService")
+            tools = _deserialize_tools(tool_schemas)
+            log_debug(f"Loaded {len(tools)} tools for LLM binding")
+        else:
+            log_error(f"Unexpected result.data type: {type(result.data)}")
+            tools = []
+
+    llm_with_tools = llm.bind_tools(tools, tool_choice="auto") if tools else llm
     print(state["messages"])
     return {
         "messages": [
