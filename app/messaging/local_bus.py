@@ -68,6 +68,9 @@ class LocalBus:
 
         # Topic validation
         self._validate_topics = validate_topics
+        
+        # Counter for tiebreaking in priority queue (ensures FIFO for same priority)
+        self._counter = 0
 
         # Metrics
         self._stats = {
@@ -205,8 +208,8 @@ class LocalBus:
 
         while not self._shutdown.is_set():
             try:
-                # Get prioritized command
-                prio, env = await asyncio.wait_for(queue.get(), timeout=0.1)
+                # Get prioritized command (priority, counter, envelope)
+                prio, _counter, env = await asyncio.wait_for(queue.get(), timeout=0.1)
 
                 try:
                     await self._deliver(topic, env, raise_errors=True)
@@ -220,9 +223,10 @@ class LocalBus:
                         # Calculate backoff delay
                         delay = min(0.25 * (2**env.attempts), 10.0)
                         await asyncio.sleep(delay)
-                        # Re-queue with same priority
+                        # Re-queue with same priority and new counter
                         queue.task_done()  # Mark current task done before re-queueing
-                        await queue.put((prio, env))
+                        self._counter += 1
+                        await queue.put((prio, self._counter, env))
                         logger.info(f"Re-queued command {env.id} to {topic} " f"(attempt {env.attempts}/{env.max_attempts})")
                     else:
                         # Dead-letter
@@ -268,8 +272,8 @@ class LocalBus:
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
         """
-        # Validate topic if enabled
-        if self._validate_topics:
+        # Validate topic if enabled (skip validation for reply topics)
+        if self._validate_topics and not topic.startswith("reply."):
             try:
                 registry = get_event_registry()
                 registry.validate_publish(topic)
@@ -306,7 +310,9 @@ class LocalBus:
                 asyncio.create_task(self._command_worker(topic))
 
             try:
-                await self._cmd_queues[topic].put((priority, env))
+                # Use counter as tiebreaker to ensure FIFO for same priority
+                self._counter += 1
+                await self._cmd_queues[topic].put((priority, self._counter, env))
                 logger.debug(f"Published command to {topic} with priority {priority}")
             except asyncio.QueueFull:
                 logger.error(f"Command queue full for {topic}, cannot publish")
@@ -343,20 +349,42 @@ class LocalBus:
         fut: asyncio.Future = asyncio.get_event_loop().create_future()
         reply_topic = f"reply.{message.__class__.__name__}.{uuid_lib.uuid4()}"
 
-        # Subscribe to reply topic
+        # Subscribe to reply topic (skip validation for dynamic reply topics)
         async def _on_reply(env: Envelope) -> None:
             if not fut.done():
-                if hasattr(env.payload, "model_dump"):
-                    result_data = env.payload.model_dump()
-                else:
+                # Handle both BaseModel instances and dict payloads
+                result_data = None
+                
+                # Check if it's a BaseModel instance (not the class itself)
+                if hasattr(env.payload, '__class__') and hasattr(env.payload.__class__, 'model_dump'):
+                    try:
+                        result_data = env.payload.model_dump()
+                        logger.debug(f"Reply handler: model_dump result = {result_data}")
+                    except Exception as e:
+                        logger.error(f"Failed to dump model: {e}")
+                        result_data = {"data": str(env.payload)}
+                elif isinstance(env.payload, dict):
                     result_data = env.payload
+                    logger.debug(f"Reply handler: dict payload = {result_data}")
+                else:
+                    # Unexpected payload type, wrap it
+                    logger.warning(f"Reply handler: unexpected payload type {type(env.payload)}")
+                    result_data = {"data": str(env.payload)}
 
+                # If result_data has 'ok' field, it's already a QueryResult-like structure
                 if isinstance(result_data, dict) and "ok" in result_data:
+                    logger.debug(f"Reply handler: Creating QueryResult from dict with ok field")
                     fut.set_result(QueryResult(**result_data))
                 else:
+                    # Wrap the data in a successful QueryResult
+                    logger.debug(f"Reply handler: Wrapping data in QueryResult")
                     fut.set_result(QueryResult(ok=True, data=result_data))
 
+        # Temporarily disable validation for reply topic subscription
+        original_validate = self._validate_topics
+        self._validate_topics = False
         self.subscribe(reply_topic, _on_reply)
+        self._validate_topics = original_validate
 
         # Publish request with reply_to field
         await self.publish(
