@@ -4,94 +4,96 @@ This module defines all valid message bus topics as typed constants,
 preventing typos and making it easy to discover available topics.
 """
 
+from app.messaging.audio_messages import AudioTopics
 from app.messaging.event_registry import TopicDefinition
 
 # =============================================================================
-# AUDIO INPUT SERVICE
+# AUDIO PROTOCOL - GENERIC TOPICS
 # =============================================================================
 
-
-class AudioInputTopics:
-    """Topics for AudioInputService."""
-
-    # Events
-    STREAM_STARTED = "Audio.Stream.Started"
-    STREAM_STOPPED = "Audio.Stream.Stopped"
-    STREAM_CHUNK = "Audio.Stream.Microphone"  # AudioChunk events
-
-    # Commands
-    CONTROL = "Audio.Input.Control"
-
-
-AUDIO_INPUT_TOPIC_DEFS: list[TopicDefinition] = [
-    # Legacy AudioTopics from audio_messages.py
+# Generic audio streaming protocol topics (used by any service that produces/consumes audio)
+AUDIO_PROTOCOL_TOPIC_DEFS: list[TopicDefinition] = [
+    # Generic audio stream lifecycle events
     TopicDefinition(
-        topic="Audio.Started",
-        service="AudioInputService",
+        topic=AudioTopics.STARTED,
+        service="AudioProtocol",
         message_type="Event",
         payload_class="AudioStreamStarted",
-        description="Audio started (legacy)",
+        description="Audio stream started (generic protocol event)",
     ),
     TopicDefinition(
-        topic="Audio.Stopped",
-        service="AudioInputService",
+        topic=AudioTopics.STOPPED,
+        service="AudioProtocol",
         message_type="Event",
         payload_class="AudioStreamStopped",
-        description="Audio stopped (legacy)",
+        description="Audio stream stopped (generic protocol event)",
     ),
-    # AudioTopics stream types (from audio_messages.py)
+    # Generic audio stream data (all source types)
     TopicDefinition(
-        topic="Audio.Stream.Microphone",
-        service="AudioInputService",
+        topic=AudioTopics.STREAM_MICROPHONE,
+        service="AudioProtocol",
         message_type="Event",
         payload_class="AudioChunk",
         description="Audio chunk from microphone",
     ),
     TopicDefinition(
-        topic="Audio.Stream.WebSocket",
-        service="AudioInputService",
+        topic=AudioTopics.STREAM_WEBSOCKET,
+        service="AudioProtocol",
         message_type="Event",
         payload_class="AudioChunk",
         description="Audio chunk from WebSocket",
     ),
     TopicDefinition(
-        topic="Audio.Stream.File", service="AudioInputService", message_type="Event", payload_class="AudioChunk", description="Audio chunk from file"
+        topic=AudioTopics.STREAM_FILE,
+        service="AudioProtocol",
+        message_type="Event",
+        payload_class="AudioChunk",
+        description="Audio chunk from file",
     ),
     TopicDefinition(
-        topic="Audio.Stream.Generic",
-        service="AudioInputService",
+        topic=AudioTopics.STREAM_GENERIC,
+        service="AudioProtocol",
         message_type="Event",
         payload_class="AudioChunk",
         description="Audio chunk from generic source",
     ),
-    # New AudioInputTopics
+    # Generic audio control
     TopicDefinition(
-        topic=AudioInputTopics.STREAM_STARTED,
-        service="AudioInputService",
-        message_type="Event",
-        payload_class="AudioStreamStarted",
-        description="Audio stream started",
+        topic=AudioTopics.CONTROL,
+        service="AudioProtocol",
+        message_type="Command",
+        payload_class="AudioStreamControl",
+        description="Generic audio stream control (start/stop/pause/resume)",
     ),
-    TopicDefinition(
-        topic=AudioInputTopics.STREAM_STOPPED,
-        service="AudioInputService",
-        message_type="Event",
-        payload_class="AudioStreamStopped",
-        description="Audio stream stopped",
-    ),
-    TopicDefinition(
-        topic=AudioInputTopics.STREAM_CHUNK,
-        service="AudioInputService",
-        message_type="Event",
-        payload_class="AudioChunk",
-        description="Audio chunk from microphone (new)",
-    ),
+]
+
+
+# =============================================================================
+# AUDIO INPUT SERVICE - SERVICE-SPECIFIC TOPICS
+# =============================================================================
+
+
+class AudioInputTopics:
+    """Topics specific to AudioInputService.
+    
+    For generic audio streaming topics (stream types, chunks, lifecycle),
+    use AudioTopics from audio_messages.py.
+    
+    This class contains only service-specific control and coordination topics.
+    """
+
+    # Service-specific control (different from generic Audio.Control)
+    CONTROL = "Audio.Input.Control"  # AudioInputService-specific commands
+
+
+# Service-specific topic definitions for AudioInputService
+AUDIO_INPUT_TOPIC_DEFS: list[TopicDefinition] = [
     TopicDefinition(
         topic=AudioInputTopics.CONTROL,
         service="AudioInputService",
         message_type="Command",
         payload_class="AudioInputControl",
-        description="Control audio input (start/stop/pause/resume)",
+        description="AudioInputService-specific control commands",
     ),
 ]
 
@@ -515,6 +517,7 @@ class ToolingTopics:
 
     # Commands
     RELOAD_MCP_TOOLS = "Tooling.ReloadMCP"
+    EXECUTE_TOOL = "Tooling.ExecuteTool"
 
     # Queries
     GET_TOOLS = "Tooling.GetTools"
@@ -580,6 +583,13 @@ TOOLING_TOPIC_DEFS: list[TopicDefinition] = [
         payload_class="ReloadMCPToolsCommand",
         description="Reload MCP tools",
     ),
+    TopicDefinition(
+        topic=ToolingTopics.EXECUTE_TOOL,
+        service="ToolingService",
+        message_type="Command",
+        payload_class="ExecuteToolCommand",
+        description="Execute a tool by name with arguments",
+    ),
 ]
 
 
@@ -594,7 +604,10 @@ def register_all_service_topics() -> None:
 
     registry = get_event_registry()
 
-    # Register all services
+    # Register audio protocol topics (generic, used by multiple services)
+    registry.register_service_topics("AudioProtocol", AUDIO_PROTOCOL_TOPIC_DEFS)
+    
+    # Register service-specific topics
     registry.register_service_topics("AudioInputService", AUDIO_INPUT_TOPIC_DEFS)
     registry.register_service_topics("WakeWordService", WAKEWORD_TOPIC_DEFS)
     registry.register_service_topics("TranscriptionService", TRANSCRIPTION_TOPIC_DEFS)
@@ -622,4 +635,5 @@ __all__ = [
     "SchedulerTopics",
     "ToolingTopics",
     "register_all_service_topics",
+    "AUDIO_PROTOCOL_TOPIC_DEFS",  # Export for documentation/testing
 ]

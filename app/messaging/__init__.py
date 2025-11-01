@@ -14,6 +14,7 @@ from .bus import Command, Envelope, Event, Handler, MessageBus, Query, QueryResu
 from .bus_runtime import get_bus, set_bus
 from .event_registry import EventRegistry, TopicDefinition, get_event_registry, set_event_registry
 from .service_topics import (
+    AUDIO_PROTOCOL_TOPIC_DEFS,
     AudioInputTopics,
     DBTopics,
     OrchestratorTopics,
@@ -47,7 +48,17 @@ __all__ = [
     "TopicDefinition",
     "get_event_registry",
     "set_event_registry",
-    # Service Topics
+    # Audio Protocol (Generic) - Used by any service handling audio
+    "AudioTopics",
+    "AudioChunk",
+    "AudioFormat",
+    "AudioEncoding",
+    "AudioStreamControl",
+    "AudioStreamState",
+    "AudioStreamStarted",
+    "AudioStreamStopped",
+    "AUDIO_PROTOCOL_TOPIC_DEFS",
+    # Service Topics (Implementation-Specific)
     "AudioInputTopics",
     "WakeWordTopics",
     "TranscriptionTopics",
@@ -58,15 +69,6 @@ __all__ = [
     "SchedulerTopics",
     "ToolingTopics",
     "register_all_service_topics",
-    # Audio streaming
-    "AudioChunk",
-    "AudioFormat",
-    "AudioEncoding",
-    "AudioStreamControl",
-    "AudioStreamState",
-    "AudioStreamStarted",
-    "AudioStreamStopped",
-    "AudioTopics",
     # Transcription
     "TranscriptionType",
     "TranscriptionResult",

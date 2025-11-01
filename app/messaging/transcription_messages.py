@@ -82,28 +82,10 @@ class TranscriptionError(Event):
     timestamp: datetime = Field(default_factory=datetime.now, description="When error occurred")
 
 
-class TranscriptionTopics:
-    """Standard topic names for transcription events."""
-
-    # Results
-    RESULT = "Transcription.Result"
-    RESULT_PARTIAL = "Transcription.Result.Partial"
-    RESULT_FINAL = "Transcription.Result.Final"
-    RESULT_REALTIME = "Transcription.Result.Realtime"
-    RESULT_ACCURATE = "Transcription.Result.Accurate"
-
-    # Control
-    CONTROL = "Transcription.Control"
-
-    # Errors
-    ERROR = "Transcription.Error"
-
-
 # Export all message types
 __all__ = [
     "TranscriptionType",
     "TranscriptionResult",
     "TranscriptionControl",
     "TranscriptionError",
-    "TranscriptionTopics",
 ]
