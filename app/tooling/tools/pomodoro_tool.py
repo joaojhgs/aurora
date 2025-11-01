@@ -19,6 +19,7 @@ _current_session = {
 
 @tool
 async def start_pomodoro_tool(
+    bus,
     work_minutes: int = 25,
     short_break_minutes: int = 5,
     long_break_minutes: int = 15,
@@ -28,6 +29,7 @@ async def start_pomodoro_tool(
     Start a Pomodoro work session with customizable timings.
 
     Args:
+        bus: MessageBus instance for communication (injected by ToolingService)
         work_minutes: Duration of work sessions (default: 25)
         short_break_minutes: Duration of short breaks (default: 5)
         long_break_minutes: Duration of long breaks (default: 15)
@@ -71,9 +73,12 @@ async def start_pomodoro_tool(
 
 
 @tool
-async def stop_pomodoro_tool() -> str:
+async def stop_pomodoro_tool(bus) -> str:
     """
     Stop the current Pomodoro session.
+
+    Args:
+        bus: MessageBus instance for communication (injected by ToolingService)
 
     Returns:
         Confirmation message with session summary
@@ -108,9 +113,12 @@ async def stop_pomodoro_tool() -> str:
 
 
 @tool
-async def pomodoro_status_tool() -> str:
+async def pomodoro_status_tool(bus) -> str:
     """
     Get the current status of the Pomodoro session.
+
+    Args:
+        bus: MessageBus instance for communication (injected by ToolingService)
 
     Returns:
         Current session information
@@ -168,8 +176,7 @@ def work_session_end(**kwargs) -> dict[str, Any]:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
 
-        from app.tts.tts_engine import play
-
+        bus = kwargs.get("bus")
         cycle = _current_session["cycle"]
         cycles_before_long_break = _current_session.get("cycles_before_long_break", 4)
 
@@ -177,7 +184,7 @@ def work_session_end(**kwargs) -> dict[str, Any]:
         if cycle >= cycles_before_long_break:
             # Long break
             break_minutes = _current_session.get("long_break_minutes", 15)
-            play(f"Trabalho concluído! Hora de uma pausa longa de {break_minutes} minutos. Você completou {cycle} ciclos!")
+            message = f"Trabalho concluído! Hora de uma pausa longa de {break_minutes} minutos. Você completou {cycle} ciclos!"
             _current_session.update(
                 {
                     "type": "long_break",
@@ -188,8 +195,27 @@ def work_session_end(**kwargs) -> dict[str, Any]:
         else:
             # Short break
             break_minutes = _current_session.get("short_break_minutes", 5)
-            play(f"Trabalho concluído! Hora de uma pausa de {break_minutes} minutos. Ciclo {cycle} de {cycles_before_long_break}.")
+            message = f"Trabalho concluído! Hora de uma pausa de {break_minutes} minutos. Ciclo {cycle} de {cycles_before_long_break}."
             _current_session.update({"type": "short_break", "start_time": datetime.now()})
+
+        # Send TTS via bus
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=message, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(message)
 
         # Schedule break end
         async def schedule_break_end():
@@ -227,18 +253,36 @@ def break_session_end(**kwargs) -> dict[str, Any]:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
 
-        from app.tts.tts_engine import play
-
+        bus = kwargs.get("bus")
         session_type = _current_session["type"]
         work_minutes = _current_session.get("work_minutes", 25)
 
         if session_type == "long_break":
-            play(f"Pausa longa terminada! Vamos começar um novo ciclo. Trabalhe por {work_minutes} minutos!")
+            message = f"Pausa longa terminada! Vamos começar um novo ciclo. Trabalhe por {work_minutes} minutos!"
             _current_session.update({"type": "work", "cycle": 1, "start_time": datetime.now()})
         else:  # short_break
             cycle = _current_session["cycle"] + 1
-            play(f"Pausa terminada! Hora de trabalhar novamente por {work_minutes} minutos. Ciclo {cycle}!")
+            message = f"Pausa terminada! Hora de trabalhar novamente por {work_minutes} minutos. Ciclo {cycle}!"
             _current_session.update({"type": "work", "cycle": cycle, "start_time": datetime.now()})
+
+        # Send TTS via bus
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=message, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(message)
 
         # Schedule next work session end
         async def schedule_work_end():

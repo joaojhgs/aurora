@@ -10,7 +10,7 @@ from app.scheduler import get_cron_service
 
 
 @tool()
-async def schedule_task_tool(task_name: str, schedule_time: str, action: str, message: Optional[str] = None, **kwargs) -> str:
+async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bus, message: Optional[str] = None, **kwargs) -> str:
     """
     Schedule a task to be executed at a specified time.
 
@@ -18,6 +18,7 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, me
         task_name: A descriptive name for the scheduled task
         schedule_time: When to execute the task in natural language (e.g., "in 30 minutes", "tomorrow at 3pm", "every day at 9am")
         action: The action to perform. Available actions:
+        bus: MessageBus instance for communication (injected by ToolingService)
             - "speak" or "say": Make the assistant speak the message
             - "reminder": Send a reminder notification (speaks the message)
             - "greeting": Daily motivational greeting (random message)
@@ -93,9 +94,12 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, me
 
 
 @tool
-async def list_scheduled_tasks_tool() -> str:
+async def list_scheduled_tasks_tool(bus) -> str:
     """
     List all currently scheduled tasks.
+
+    Args:
+        bus: MessageBus instance for communication (injected by ToolingService)
 
     Returns:
         A formatted list of all active scheduled tasks
@@ -139,12 +143,13 @@ async def list_scheduled_tasks_tool() -> str:
 
 
 @tool
-async def cancel_scheduled_task_tool(task_identifier: str) -> str:
+async def cancel_scheduled_task_tool(task_identifier: str, bus) -> str:
     """
     Cancel a scheduled task by name or ID.
 
     Args:
         task_identifier: Either the task name or job ID (first 8 characters are sufficient)
+        bus: MessageBus instance for communication (injected by ToolingService)
 
     Returns:
         Confirmation message
@@ -180,9 +185,13 @@ def speak_reminder(**kwargs) -> dict[str, Any]:
     """
     Make the assistant speak a message.
     This is the primary callback for speech reminders.
+
+    Note: This callback should receive the bus instance from the scheduler.
+    For now, it falls back to direct TTS import for backward compatibility.
     """
     try:
-        from app.tts.tts_engine import play
+        # Try to get bus from kwargs (new architecture)
+        bus = kwargs.get("bus")
 
         job_name = kwargs.get("job_name", "unknown")
         text = kwargs.get("text", "")
@@ -192,7 +201,26 @@ def speak_reminder(**kwargs) -> dict[str, Any]:
             message = f"This is a scheduled reminder: {job_name}"
 
         log_info(f"[{datetime.now()}] Speaking reminder: {message}")
-        play(message)
+
+        if bus:
+            # New architecture: use bus to send TTS request
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=message, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            # Fallback: direct TTS import (for backward compatibility)
+            from app.tts.tts_engine import play
+
+            play(message)
 
         return {"success": True, "message": f'Spoke reminder: "{message}"', "spoken_text": message}
 
@@ -206,7 +234,7 @@ def daily_greeting(**kwargs) -> dict[str, Any]:
     A daily greeting that can be scheduled.
     """
     try:
-        from app.tts.tts_engine import play
+        bus = kwargs.get("bus")
 
         greetings = [
             "Good morning! Hope you have a wonderful day ahead!",
@@ -219,7 +247,24 @@ def daily_greeting(**kwargs) -> dict[str, Any]:
         greeting = random.choice(greetings)
 
         log_info(f"[{datetime.now()}] Daily greeting: {greeting}")
-        play(greeting)
+
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=greeting, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(greeting)
 
         return {
             "success": True,
@@ -237,7 +282,7 @@ def hourly_time_announcement(**kwargs) -> dict[str, Any]:
     Announce the current time (useful for hourly reminders).
     """
     try:
-        from app.tts.tts_engine import play
+        bus = kwargs.get("bus")
 
         now = datetime.now()
         time_str = now.strftime("%I:%M %p")
@@ -245,7 +290,24 @@ def hourly_time_announcement(**kwargs) -> dict[str, Any]:
         message = f"The time is now {time_str}"
 
         log_info(f"Time announcement: {message}")
-        play(message)
+
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=message, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(message)
 
         return {"success": True, "message": f"Time announced: {time_str}", "spoken_text": message}
 
@@ -259,7 +321,7 @@ def break_reminder(**kwargs) -> dict[str, Any]:
     Remind the user to take a break.
     """
     try:
-        from app.tts.tts_engine import play
+        bus = kwargs.get("bus")
 
         reminders = [
             "Time for a break! Step away from the screen and stretch a bit.",
@@ -272,7 +334,24 @@ def break_reminder(**kwargs) -> dict[str, Any]:
         reminder = kwargs.get("message", random.choice(reminders))
 
         log_info(f"Break reminder: {reminder}")
-        play(reminder)
+
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=reminder, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(reminder)
 
         return {
             "success": True,
@@ -290,7 +369,7 @@ def water_reminder(**kwargs) -> dict[str, Any]:
     Remind the user to drink water.
     """
     try:
-        from app.tts.tts_engine import play
+        bus = kwargs.get("bus")
 
         reminders = [
             "Don't forget to stay hydrated! Time for some water.",
@@ -303,7 +382,24 @@ def water_reminder(**kwargs) -> dict[str, Any]:
         reminder = kwargs.get("message", random.choice(reminders))
 
         log_info(f"Water reminder: {reminder}")
-        play(reminder)
+
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=reminder, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(reminder)
 
         return {
             "success": True,
@@ -321,7 +417,7 @@ def motivational_message(**kwargs) -> dict[str, Any]:
     Deliver a motivational message.
     """
     try:
-        from app.tts.tts_engine import play
+        bus = kwargs.get("bus")
 
         messages = [
             "You're doing great! Keep up the excellent work!",
@@ -336,7 +432,24 @@ def motivational_message(**kwargs) -> dict[str, Any]:
         message = kwargs.get("message", random.choice(messages))
 
         log_info(f"Motivational message: {message}")
-        play(message)
+
+        if bus:
+            from app.messaging.service_topics import TTSTopics
+            from app.tts.service import TTSRequest
+
+            asyncio.create_task(
+                bus.publish(
+                    TTSTopics.REQUEST,
+                    TTSRequest(text=message, interrupt=False),
+                    event=False,
+                    priority=10,
+                    origin="internal",
+                )
+            )
+        else:
+            from app.tts.tts_engine import play
+
+            play(message)
 
         return {
             "success": True,
