@@ -151,6 +151,45 @@ class ToolsManager:
             except Exception as e:
                 log_warning(f"Failed to load GitHub tools: {e}")
 
+        # Search tools (Brave or DuckDuckGo as fallback)
+        if config_manager.get("plugins.brave_search.activate", False):
+            try:
+                from app.tooling.tools.brave_search import search_brave_tool
+
+                self.tools.append(search_brave_tool)
+                log_info("Loaded Brave Search tool")
+            except Exception as e:
+                log_warning(f"Failed to load Brave Search tool: {e}")
+        else:
+            # DuckDuckGo as fallback when Brave is not activated
+            try:
+                from app.tooling.tools.duckduckgo_search import duckduckgo_search_tool
+
+                self.tools.append(duckduckgo_search_tool)
+                log_info("Loaded DuckDuckGo Search tool")
+            except Exception as e:
+                log_warning(f"Failed to load DuckDuckGo Search tool: {e}")
+
+        # Gmail plugin
+        if config_manager.get("plugins.gmail.activate", False):
+            try:
+                from app.tooling.tools.gmail_toolkit import gmail_tools
+
+                self.tools.extend(gmail_tools)
+                log_info(f"Loaded {len(gmail_tools)} Gmail plugin tools")
+            except Exception as e:
+                log_warning(f"Failed to load Gmail tools: {e}")
+
+        # GCalendar plugin
+        if config_manager.get("plugins.gcalendar.activate", False):
+            try:
+                from app.tooling.tools.gcalendar_toolkit import gcalendar_tools
+
+                self.tools.extend(gcalendar_tools)
+                log_info(f"Loaded {len(gcalendar_tools)} GCalendar plugin tools")
+            except Exception as e:
+                log_warning(f"Failed to load GCalendar tools: {e}")
+
     async def _load_mcp_tools(self) -> None:
         """Load MCP (Model Context Protocol) tools."""
         if not config_manager.get("mcp.enabled", True):
@@ -206,6 +245,7 @@ class ToolsManager:
             self.tool_lookup.clear()
             for tool in self.tools:
                 self.tool_lookup[tool.name] = tool
+                log_debug(f"Registered tool: {tool.name}")
 
             # Import and call the sync function
             from app.tooling.tools.tools import sync_tools_with_database
