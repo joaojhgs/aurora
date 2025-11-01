@@ -52,10 +52,6 @@
             "use_local": true
         },
         "speech_to_text": {
-            "architecture": {
-                "use_streaming": true,
-                "legacy_mode": false
-            },
             "language": "en",
             "ambient_transcription": {
                 "enable": false,
