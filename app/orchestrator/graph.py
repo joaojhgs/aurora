@@ -1,61 +1,168 @@
+"""LangGraph orchestration for Aurora voice assistant.
+
+This module manages the conversational flow using LangGraph, coordinating
+between the chatbot agent and tool execution via the message bus.
+"""
+
 from typing import Any, Literal, Union
 
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AnyMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import tools_condition
 from pydantic import BaseModel
 
-from app.helpers.aurora_logger import log_debug, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.messaging import ToolingTopics
+from app.messaging.bus_runtime import get_bus
+from app.messaging.service_topics import TTSTopics
 from app.orchestrator.agents.chatbot import chatbot
 from app.orchestrator.memory_store import get_combined_store
 from app.orchestrator.state import State
-from app.tts.tts_engine import play
-
-# Lazy initialization to avoid premature tool loading
-_graph = None
-_graph_builder = None
-_memory = None
-_store = None
+from app.tooling.service import ExecuteToolCommand
+from app.tts.service import TTSRequest
 
 
-def _build_graph_if_needed():
-    """Build the graph lazily on first use.
+class GraphOrchestrator:
+    """Graph orchestrator using message bus for tool execution and TTS."""
 
-    This ensures tools are only loaded when actually needed,
-    preventing double initialization issues.
-    """
-    global _graph, _graph_builder, _memory, _store
+    def __init__(self):
+        """Initialize the graph orchestrator."""
+        log_debug("Initializing GraphOrchestrator...")
+        
+        self.bus = get_bus()
+        self.graph_builder = StateGraph(State)
+        
+        # Add nodes
+        self.graph_builder.add_node("chatbot", chatbot)
+        self.graph_builder.add_node("tools", self._execute_tools_via_bus)
+        
+        # Connect chatbot to tools or end
+        self.graph_builder.add_conditional_edges(
+            "chatbot",
+            tools_condition,
+        )
+        
+        # Connect tools back to chatbot or end
+        self.graph_builder.add_conditional_edges(
+            "tools",
+            self._tools_end_condition,
+            {"END": END, "chatbot": "chatbot"}
+        )
+        
+        # Set entry point
+        self.graph_builder.set_entry_point("chatbot")
+        
+        # Initialize memory and store
+        self.memory = MemorySaver()
+        self.store = get_combined_store()
+        
+        # Compile graph
+        self.graph = self.graph_builder.compile(
+            checkpointer=self.memory,
+            store=self.store
+        )
+        
+        # Save visualization
+        self._save_graph_visualization()
+        
+        log_info("GraphOrchestrator initialized successfully")
 
-    if _graph is not None:
-        return _graph
+    def _save_graph_visualization(self):
+        """Save graph visualization to PNG file."""
+        try:
+            with open("./assets/graph.png", "wb") as f:
+                f.write(self.graph.get_graph().draw_mermaid_png())
+            log_debug("Graph visualization saved to ./assets/graph.png")
+        except Exception as e:
+            log_debug(f"Could not save graph visualization: {e}")
 
-    log_debug("Building LangGraph (lazy initialization)...")
+    async def _execute_tools_via_bus(self, state: State) -> dict[str, list[ToolMessage]]:
+        """Execute tools via message bus.
+        
+        This node intercepts tool calls from the chatbot and executes them
+        via the message bus instead of calling them directly.
+        
+        Args:
+            state: Current graph state containing messages
+            
+        Returns:
+            Updated state with tool execution results
+        """
+        messages = state["messages"]
+        last_message = messages[-1]
+        
+        # Check if last message has tool calls
+        if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+            log_debug("No tool calls found in last message")
+            return {"messages": []}
+        
+        tool_messages = []
+        
+        # Execute each tool call via bus
+        for tool_call in last_message.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call.get("args", {})
+            tool_id = tool_call.get("id", "")
+            
+            log_debug(f"Executing tool via bus: {tool_name} with args: {tool_args}")
+            
+            try:
+                # Send tool execution command via bus and wait for response
+                result = await self.bus.request(
+                    ToolingTopics.EXECUTE_TOOL,
+                    ExecuteToolCommand(tool_name=tool_name, arguments=tool_args),
+                    timeout=30.0,  # 30 second timeout for tool execution
+                    priority=10,
+                )
+                
+                if result.ok:
+                    log_debug(f"Tool {tool_name} executed successfully")
+                    tool_messages.append(
+                        ToolMessage(
+                            content=str(result.data),
+                            tool_call_id=tool_id,
+                            name=tool_name,
+                        )
+                    )
+                else:
+                    error_msg = result.error or "Unknown error"
+                    log_error(f"Tool {tool_name} execution failed: {error_msg}")
+                    tool_messages.append(
+                        ToolMessage(
+                            content=f"Error: {error_msg}",
+                            tool_call_id=tool_id,
+                            name=tool_name,
+                        )
+                    )
+                    
+            except Exception as e:
+                error_msg = f"Failed to execute tool via bus: {str(e)}"
+                log_error(error_msg, exc_info=True)
+                tool_messages.append(
+                    ToolMessage(
+                        content=f"Error: {error_msg}",
+                        tool_call_id=tool_id,
+                        name=tool_name,
+                    )
+                )
+        
+        return {"messages": tool_messages}
 
-    # Import tools lazily to avoid premature initialization
-    from app.tooling.tools.tools import tools
-
-    log_debug("Loaded tools from app.tooling.tools")
-
-    _graph_builder = StateGraph(State)
-
-    # Init tools node
-    tool_node = ToolNode(tools=tools)
-    _graph_builder.add_node("tools", tool_node)
-
-    # Add the chatbot agent node
-    _graph_builder.add_node("chatbot", chatbot)
-
-    # Connect the chatbot agent and the tool nodes
-    _graph_builder.add_conditional_edges(
-        "chatbot",
-        tools_condition,
-    )
-
-    def tools_end_condition(
+    def _tools_end_condition(
+        self,
         state: Union[list[AnyMessage], dict[str, Any], BaseModel],
         messages_key: str = "messages",
-    ) -> Literal["tools", "__end__"]:
+    ) -> Literal["tools", "chatbot", "END"]:
+        """Determine next step after tool execution.
+        
+        Args:
+            state: Current graph state
+            messages_key: Key to access messages in state
+            
+        Returns:
+            Next node to execute ("chatbot" or "END")
+        """
         if isinstance(state, list):
             ai_message = state[-1]
         elif isinstance(state, dict) and (messages := state.get(messages_key, [])):
@@ -64,110 +171,153 @@ def _build_graph_if_needed():
             ai_message = messages[-1]
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
+        
         if hasattr(ai_message, "content") and ai_message.content == "END":
             return "END"
+        
         return "chatbot"
 
-    _graph_builder.add_conditional_edges("tools", tools_end_condition, {"END": END, "chatbot": "chatbot"})
-
-    # Set the entry point to the chatbot
-    _graph_builder.set_entry_point("chatbot")
-
-    _memory = MemorySaver()
-    _store = get_combined_store()
-
-    # Compile the graph
-    _graph = _graph_builder.compile(checkpointer=_memory, store=_store)
-
-    # Save the graph visualization
-    try:
-        with open("./assets/graph.png", "wb") as f:
-            f.write(_graph.get_graph().draw_mermaid_png())
-    except Exception:
-        # This requires some extra dependencies and is optional
-        pass
-
-    log_info("LangGraph built successfully")
-    return _graph
+    async def _send_tts_via_bus(self, text: str, interrupt: bool = False):
+        """Send TTS request via message bus.
+        
+        Args:
+            text: Text to convert to speech
+            interrupt: Whether to interrupt current playback
+        """
+        try:
+            log_debug(f"Sending TTS request via bus: {text[:50]}...")
+            await self.bus.publish(
+                TTSTopics.REQUEST,
+                TTSRequest(text=text, interrupt=interrupt),
+                event=False,
+                priority=10,
+                origin="internal",
+            )
+        except Exception as e:
+            log_error(f"Failed to send TTS request via bus: {e}", exc_info=True)
 
 
-def get_graph():
-    """Get the compiled graph, building it lazily if needed."""
-    return _build_graph_if_needed()
+    async def stream_graph_updates(self, user_input: str, tts_result: bool = True) -> str:
+        """Process user input through the graph with optional TTS output.
+        
+        Args:
+            user_input: User's text input or custom message object
+            tts_result: Whether to play result through TTS
+            
+        Returns:
+            Assistant's response text
+        """
+        # Handle custom UIMessage objects
+        input_content = user_input
+        if hasattr(user_input, "text"):
+            input_content = user_input.text
+            log_debug(f"Graph: Processing input from custom object: {input_content[:30]}...")
+        else:
+            log_debug(f"Graph: Processing input: {str(user_input)[:30]}...")
+
+        # Invoke the graph
+        response = await self.graph.ainvoke(
+            input={"messages": [{"role": "user", "content": input_content}]},
+            config={"configurable": {"thread_id": "1"}},
+            stream_mode="values",
+        )
+
+        # Get the LLM response text
+        text = response["messages"][-1].content
+
+        if text != "END":
+            log_info(f"Jarvis: {text[:100]}...")
+            # Send to TTS via bus if requested
+            if tts_result:
+                await self._send_tts_via_bus(text)
+        else:
+            log_debug("Graph: Response was END, not sending to TTS")
+
+        return text
+
+    async def process_text_input(self, user_input: str) -> str:
+        """Process text input from UI without using TTS.
+        
+        Args:
+            user_input: User's text input or custom message object
+            
+        Returns:
+            Assistant's response text
+        """
+        # Handle custom UIMessage objects
+        input_content = user_input
+        if hasattr(user_input, "text"):
+            input_content = user_input.text
+            log_debug(f"Graph: Processing UI text input from object: {input_content[:30]}...")
+        else:
+            log_debug(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
+
+        # Invoke the graph
+        response = await self.graph.ainvoke(
+            input={"messages": [{"role": "user", "content": input_content}]},
+            config={"configurable": {"thread_id": "1"}},
+            stream_mode="values",
+        )
+
+        # Get the LLM response text
+        text = response["messages"][-1].content
+
+        if text != "END":
+            log_info(f"Jarvis (UI text response): {text[:100]}...")
+        else:
+            log_debug("Graph: Response was END, not processing further")
+
+        return text
 
 
-def get_graph_builder():
-    """Get the graph builder, building it lazily if needed."""
-    _build_graph_if_needed()
-    return _graph_builder
+# Global orchestrator instance
+_orchestrator: GraphOrchestrator | None = None
 
 
-# The `stream_graph_updates` function takes user input and streams it
-# through the graph, printing the assistant's responses
-async def stream_graph_updates(user_input: str, ttsResult: bool = True):
-    # Handle custom UIMessage objects
-    input_content = user_input
-
-    if hasattr(user_input, "text"):
-        input_content = user_input.text
-        log_debug(f"Graph: Processing input from custom object: {input_content[:30]}...")
-    else:
-        log_debug(f"Graph: Processing input: {str(user_input)[:30]}...")
-
-    # Get the lazily-built graph
-    graph_instance = get_graph()
-
-    # Invoke the graph with the user input
-    response = await graph_instance.ainvoke(
-        input={"messages": [{"role": "user", "content": input_content}]},
-        # Hard coded thread id, it will keep all interactions saved in memory in the same thread
-        config={"configurable": {"thread_id": "1"}},
-        stream_mode="values",
-    )
-
-    # Get the LLM response text
-    text = response["messages"][-1].content
-
-    if text != "END":
-        log_info(f"Jarvis: {text}...")
-        # Play the text through TTS - this is used for STT messages that need speech output
-        if ttsResult:
-            play(text)
-    else:
-        log_debug("Graph: Response was END, not sending to TTS")
-
-    return text
+def get_orchestrator() -> GraphOrchestrator:
+    """Get or create the global graph orchestrator instance.
+    
+    Returns:
+        GraphOrchestrator instance
+        
+    Raises:
+        RuntimeError: If called before message bus is initialized
+    """
+    global _orchestrator
+    
+    if _orchestrator is None:
+        _orchestrator = GraphOrchestrator()
+    
+    return _orchestrator
 
 
-# New function for text input that doesn't use TTS
-async def process_text_input(user_input: str):
-    """Process text input from UI without using TTS"""
-    # Handle custom UIMessage objects
-    input_content = user_input
-    if hasattr(user_input, "text"):
-        input_content = user_input.text
-        log_debug(f"Graph: Processing UI text input from object: {input_content[:30]}...")
-    else:
-        log_debug(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
+# Backward-compatible API
+async def stream_graph_updates(user_input: str, ttsResult: bool = True) -> str:
+    """Process user input through the graph with optional TTS output.
+    
+    This is a backward-compatible wrapper around GraphOrchestrator.
+    
+    Args:
+        user_input: User's text input
+        ttsResult: Whether to play result through TTS
+        
+    Returns:
+        Assistant's response text
+    """
+    orchestrator = get_orchestrator()
+    return await orchestrator.stream_graph_updates(user_input, ttsResult)
 
-    # Get the lazily-built graph
-    graph_instance = get_graph()
 
-    # Invoke the graph with the user input
-    response = await graph_instance.ainvoke(
-        input={"messages": [{"role": "user", "content": input_content}]},
-        # Hard coded thread id, it will keep all interactions saved in memory in the same thread
-        config={"configurable": {"thread_id": "1"}},
-        stream_mode="values",
-    )
-
-    # Get the LLM response text
-    text = response["messages"][-1].content
-
-    if text != "END":
-        log_info(f"Jarvis (UI text response): {text[:100]}...")
-        # No TTS for UI text input
-    else:
-        log_debug("Graph: Response was END, not processing further")
-
-    return text
+async def process_text_input(user_input: str) -> str:
+    """Process text input from UI without using TTS.
+    
+    This is a backward-compatible wrapper around GraphOrchestrator.
+    
+    Args:
+        user_input: User's text input
+        
+    Returns:
+        Assistant's response text
+    """
+    orchestrator = get_orchestrator()
+    return await orchestrator.process_text_input(user_input)
