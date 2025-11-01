@@ -362,21 +362,6 @@
                         "ambient_transcription"
                     ],
                     "properties": {
-                        "architecture": {
-                            "type": "object",
-                            "required": ["use_streaming", "legacy_mode"],
-                            "properties": {
-                                "use_streaming": {
-                                    "type": "boolean",
-                                    "description": "Use new streaming STT architecture"
-                                },
-                                "legacy_mode": {
-                                    "type": "boolean",
-                                    "description": "Enable legacy monolithic STT mode"
-                                }
-                            },
-                            "additionalProperties": false
-                        },
                         "language": {
                             "type": "string",
                             "enum": [
