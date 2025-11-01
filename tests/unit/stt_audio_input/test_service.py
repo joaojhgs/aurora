@@ -1,14 +1,11 @@
 """Unit tests for STT audio input service."""
 
-import asyncio
 import sys
-import threading
-import time
-from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from app.messaging import Envelope, Event, MessageBus
+from app.messaging import Envelope, MessageBus
 from app.stt_audio_input.service import AudioInputControl, AudioInputService
 
 # Mock pyaudio before importing the service

@@ -14,9 +14,7 @@ Tests cover:
 
 import asyncio
 import sys
-import threading
-import time
-from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
 import pytest
@@ -29,8 +27,6 @@ from app.messaging import (
     Envelope,
     MessageBus,
     TranscriptionControl,
-    TranscriptionError,
-    TranscriptionResult,
     TranscriptionTopics,
     TranscriptionType,
 )

@@ -4,7 +4,6 @@ import asyncio
 
 import pytest
 import pytest_asyncio
-from pydantic import BaseModel
 
 from app.messaging.bus import Command, Envelope, Event, QueryResult
 from app.messaging.local_bus import LocalBus
