@@ -373,11 +373,11 @@ class LocalBus:
 
                 # If result_data has 'ok' field, it's already a QueryResult-like structure
                 if isinstance(result_data, dict) and "ok" in result_data:
-                    logger.debug(f"Reply handler: Creating QueryResult from dict with ok field")
+                    logger.debug("Reply handler: Creating QueryResult from dict with ok field")
                     fut.set_result(QueryResult(**result_data))
                 else:
                     # Wrap the data in a successful QueryResult
-                    logger.debug(f"Reply handler: Wrapping data in QueryResult")
+                    logger.debug("Reply handler: Wrapping data in QueryResult")
                     fut.set_result(QueryResult(ok=True, data=result_data))
 
         # Temporarily disable validation for reply topic subscription
