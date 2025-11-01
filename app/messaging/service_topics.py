@@ -75,10 +75,10 @@ AUDIO_PROTOCOL_TOPIC_DEFS: list[TopicDefinition] = [
 
 class AudioInputTopics:
     """Topics specific to AudioInputService.
-    
+
     For generic audio streaming topics (stream types, chunks, lifecycle),
     use AudioTopics from audio_messages.py.
-    
+
     This class contains only service-specific control and coordination topics.
     """
 
@@ -606,7 +606,7 @@ def register_all_service_topics() -> None:
 
     # Register audio protocol topics (generic, used by multiple services)
     registry.register_service_topics("AudioProtocol", AUDIO_PROTOCOL_TOPIC_DEFS)
-    
+
     # Register service-specific topics
     registry.register_service_topics("AudioInputService", AUDIO_INPUT_TOPIC_DEFS)
     registry.register_service_topics("WakeWordService", WAKEWORD_TOPIC_DEFS)
