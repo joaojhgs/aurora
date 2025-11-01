@@ -6,15 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from app.messaging import TranscriptionResult, TranscriptionType
-from app.messaging.bus import Command, Envelope, Event, MessageBus
+from app.messaging.bus import Envelope, MessageBus
 from app.stt_coordinator.service import (
     STTCoordinatorControl,
     STTCoordinatorService,
     STTCoordinatorTopics,
-    STTSessionEnded,
-    STTSessionStarted,
     STTState,
-    STTUserSpeechCaptured,
     TranscriptionControl,
     TranscriptionTopics,
     WakeWordTopics,
