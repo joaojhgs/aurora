@@ -9,6 +9,7 @@ from langgraph.store.base import BaseStore
 @tool
 def upsert_memory_tool(
     content: str,
+    bus,
     *,
     memory_id: Optional[uuid.UUID] = None,
     store: Annotated[BaseStore, InjectedStore],
@@ -17,6 +18,12 @@ def upsert_memory_tool(
     Upsert a memory in the database if the LLM deems the user input being important information.
     If the memory_id is not provided, a new memory will be created.
     If the LLM has been feeded memories, it can use this tool to update them with their ID if it deems the user changed it.
+
+    Args:
+        content: The memory content to store
+        bus: MessageBus instance for communication (injected by ToolingService)
+        memory_id: Optional existing memory ID to update
+        store: LangGraph store for persistence
     """
     # The LLM can use this tool to store a new memory
     mem_id = memory_id or uuid.uuid4()
