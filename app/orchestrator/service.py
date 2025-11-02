@@ -22,7 +22,8 @@ from app.messaging import (
     STTCoordinatorTopics,
     TTSTopics,
 )
-from app.orchestrator.graph import stream_graph_updates
+from app.messaging.priority_helpers import get_interactive_priority
+from app.orchestrator.graph import GraphOrchestrator, set_orchestrator
 
 
 # Message definitions
@@ -77,10 +78,16 @@ class OrchestratorService:
             bus: MessageBus instance
         """
         self.bus = bus
+        self.orchestrator: GraphOrchestrator | None = None
 
     async def start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
         log_info("Starting Orchestrator service...")
+
+        # Initialize graph orchestrator with bus dependency injection
+        self.orchestrator = GraphOrchestrator(bus=self.bus)
+        set_orchestrator(self.orchestrator)
+        log_info("Graph orchestrator initialized with bus dependency")
 
         # Subscribe to input sources using typed topics
         self.bus.subscribe(STTCoordinatorTopics.USER_SPEECH_CAPTURED, self._on_transcription)
@@ -187,10 +194,11 @@ class OrchestratorService:
         try:
             log_debug(f"Processing input from {source}: {text}")
 
-            # Run LangGraph agent
-            # stream_graph_updates returns a single result (not an async generator)
+            # Run LangGraph agent via orchestrator instance
             # DON'T use TTS internally - orchestrator handles TTS via message bus
-            response_text = await stream_graph_updates(text, ttsResult=False)
+            if self.orchestrator is None:
+                raise RuntimeError("Orchestrator not initialized")
+            response_text = await self.orchestrator.stream_graph_updates(text, tts_result=False)
 
             log_info(f"🤖 LLM response: {response_text[:100]}...")
 
@@ -204,7 +212,7 @@ class OrchestratorService:
                         session_id=session_id,
                         metadata={"source": source},
                     ),
-                    priority=10,  # High priority for interactive response
+                    priority=get_interactive_priority(),  # High priority for interactive response
                     origin="internal",
                 )
 
@@ -215,7 +223,7 @@ class OrchestratorService:
                     TTSTopics.REQUEST,
                     TTSRequest(text=response_text, interrupt=True),
                     event=False,  # Command, not event
-                    priority=10,
+                    priority=get_interactive_priority(),
                     origin="internal",
                 )
 
