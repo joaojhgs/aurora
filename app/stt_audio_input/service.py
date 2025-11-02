@@ -35,6 +35,7 @@ from app.messaging import (
     Envelope,
     MessageBus,
 )
+from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 
 
 # Control messages
@@ -204,7 +205,7 @@ class AudioInputService:
                     format=audio_format,
                 ),
                 event=True,
-                priority=10,
+                priority=get_interactive_priority(),
             )
 
             # Open PyAudio stream
@@ -276,7 +277,7 @@ class AudioInputService:
                         reason=reason,
                     ),
                     event=True,
-                    priority=10,
+                    priority=get_interactive_priority(),
                 ),
                 self._loop,
             )
@@ -325,7 +326,7 @@ class AudioInputService:
                                 AudioTopics.STREAM_MICROPHONE,
                                 chunk,
                                 event=True,
-                                priority=20,  # Medium priority
+                                priority=get_system_priority(),  # Medium priority for audio streaming
                             ),
                             self._loop,
                         )

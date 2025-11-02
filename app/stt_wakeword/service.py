@@ -24,6 +24,7 @@ from app.messaging import (
     MessageBus,
     WakeWordTopics,
 )
+from app.messaging.priority_helpers import get_interactive_priority
 from app.stt_wakeword.backends import (
     OpenWakeWordBackend,
     PorcupineBackend,
@@ -209,7 +210,7 @@ class WakeWordService:
                         backend=self._backend_type,
                     ),
                     event=True,
-                    priority=5,  # High priority
+                    priority=get_interactive_priority(),  # High priority for wake word detection
                 )
 
         except Exception as e:

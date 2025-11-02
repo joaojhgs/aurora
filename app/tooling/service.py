@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, Envelope, Event, MessageBus, Query, ToolingTopics
+from app.messaging.priority_helpers import get_system_priority
 from app.tooling.tools_manager import ToolsManager, set_tools_manager
 
 
@@ -132,7 +133,7 @@ class ToolingService:
             ToolingTopics.TOOLS_INITIALIZED,
             ToolsInitialized(total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]),
             event=True,
-            priority=50,
+            priority=get_system_priority(),
             origin="internal",
         )
 
@@ -364,7 +365,9 @@ class ToolingService:
 
             # Emit reloaded event
             stats = self.tools_manager.get_stats()
-            await self.bus.publish("Tooling.Reloaded", ToolsReloaded(total_tools=stats["total_tools"]), event=True, priority=50, origin="internal")
+            await self.bus.publish(
+                "Tooling.Reloaded", ToolsReloaded(total_tools=stats["total_tools"]), event=True, priority=get_system_priority(), origin="internal"
+            )
 
             log_info("MCP tools reloaded successfully")
 

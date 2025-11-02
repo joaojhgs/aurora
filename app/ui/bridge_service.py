@@ -21,6 +21,7 @@ from app.messaging import (
     STTCoordinatorTopics,
     TTSTopics,
 )
+from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator import UserInput
 
 
@@ -96,7 +97,7 @@ class UIBridge(QObject):
             from app.db.service import GetMessagesForDate
             from app.messaging import DBTopics
 
-            log_info("📚 UI Bridge: Requesting today's messages from database...")
+            log_info("UI Bridge: Requesting today's messages from database...")
 
             # Request messages for today (date=None means today)
             await self.bus.publish(DBTopics.GET_MESSAGES_FOR_DATE, GetMessagesForDate(date=None), event=False, origin="internal")  # Command/Query
@@ -116,7 +117,7 @@ class UIBridge(QObject):
             response = MessagesResponse.model_validate(env.payload)
             messages = response.messages
 
-            log_info(f"📚 UI Bridge: Received {len(messages)} historical messages")
+            log_info(f"UI Bridge: Received {len(messages)} historical messages")
 
             # Add each message to UI using the UI's built-in signals (thread-safe)
             if hasattr(self.ui_window, "signals"):
@@ -150,7 +151,7 @@ class UIBridge(QObject):
                 OrchestratorTopics.UI_USER_INPUT,
                 UserInput(text=text, source="ui"),
                 event=False,  # Command
-                priority=10,  # Interactive priority
+                priority=get_interactive_priority(),
                 origin="internal",
             ),
             self._loop,
@@ -158,14 +159,15 @@ class UIBridge(QObject):
 
     def _on_stop_tts_request(self):
         """Handle stop TTS request from UI button."""
-        log_info("🔊 UI Bridge: Stop TTS button pressed - sending stop command")
+        log_info("UI Bridge: Stop TTS button pressed - sending stop command")
 
         # Publish TTS stop command to message bus
         from app.messaging import TTSTopics
         from app.tts import TTSStop
 
         asyncio.run_coroutine_threadsafe(
-            self.bus.publish(TTSTopics.STOP, TTSStop(), event=False, priority=10, origin="internal"), self._loop  # Command  # High priority
+            self.bus.publish(TTSTopics.STOP, TTSStop(), event=False, priority=get_interactive_priority(), origin="internal"),
+            self._loop,  # Command  # High priority
         )
 
     async def _on_llm_response(self, env: Envelope) -> None:
@@ -178,7 +180,7 @@ class UIBridge(QObject):
             from app.orchestrator import LLMResponseReady
 
             response = LLMResponseReady.model_validate(env.payload)
-            log_info(f"📨 UI Bridge: Received LLM response: {response.text[:50]}...")
+            log_info(f"UI Bridge: Received LLM response: {response.text[:50]}...")
 
             # Update UI status to idle (processing complete)
             if hasattr(self.ui_window, "signals"):
@@ -186,7 +188,7 @@ class UIBridge(QObject):
 
             # Use the UI's built-in signals to add message (thread-safe)
             if hasattr(self.ui_window, "signals"):
-                log_info("📨 UI Bridge: Adding assistant message to UI via signal")
+                log_info("UI Bridge: Adding assistant message to UI via signal")
                 self.ui_window.signals.message_received.emit(response.text, False, None)
             else:
                 log_error("UI window does not have signals!")
@@ -206,7 +208,7 @@ class UIBridge(QObject):
             transcription = STTUserSpeechCaptured.model_validate(env.payload)
 
             if transcription.is_final:
-                log_info(f"🎤 UI Bridge: Received transcription: {transcription.text}")
+                log_info(f"UI Bridge: Received transcription: {transcription.text}")
 
                 # Update UI status to processing (transcription captured, now processing with LLM)
                 if hasattr(self.ui_window, "signals"):
@@ -214,7 +216,7 @@ class UIBridge(QObject):
 
                 # Use the UI's built-in signals to add message (thread-safe)
                 if hasattr(self.ui_window, "signals"):
-                    log_info("🎤 UI Bridge: Adding user message (STT) to UI via signal")
+                    log_info("UI Bridge: Adding user message (STT) to UI via signal")
                     self.ui_window.signals.message_received.emit(transcription.text, True, "STT")
                 else:
                     log_error("UI window does not have signals!")
@@ -229,7 +231,7 @@ class UIBridge(QObject):
             env: Message envelope containing STTSessionStarted event
         """
         try:
-            log_info("🎤 UI Bridge: STT session started - updating status to 'listening'")
+            log_info("UI Bridge: STT session started - updating status to 'listening'")
 
             # Update UI status to listening
             if hasattr(self.ui_window, "signals"):
@@ -248,7 +250,7 @@ class UIBridge(QObject):
             from app.tts import TTSStarted
 
             event = TTSStarted.model_validate(env.payload)
-            log_info("🔊 UI Bridge: TTS started - updating status to 'speaking'")
+            log_info("UI Bridge: TTS started - updating status to 'speaking'")
 
             # Emit Qt signal
             self.tts_started.emit(event.text)
@@ -267,7 +269,7 @@ class UIBridge(QObject):
             env: Message envelope containing TTSStopped event
         """
         try:
-            log_info("🔊 UI Bridge: TTS stopped - updating status to 'idle'")
+            log_info("UI Bridge: TTS stopped - updating status to 'idle'")
 
             # Emit Qt signal
             self.tts_stopped.emit()
