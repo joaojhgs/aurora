@@ -1,4 +1,4 @@
-import os
+from datetime import datetime
 
 from langchain_core.tools import StructuredTool
 from langgraph.store.base import BaseStore
@@ -283,7 +283,7 @@ async def chatbot(state: State, store: BaseStore, bus: MessageBus):
             tools = []
 
     llm_with_tools = llm.bind_tools(tools, tool_choice="auto") if tools else llm
-    print(state["messages"])
+    log_debug(f"Processing {len(state['messages'])} messages in chatbot node")
     return {
         "messages": [
             llm_with_tools.invoke(
@@ -301,7 +301,7 @@ async def chatbot(state: State, store: BaseStore, bus: MessageBus):
                             "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
                             "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
                             f"{memories}"
-                            f"\nCurrent time: {os.popen('date').read().strip()}"
+                            f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                         ),
                     },
                     *state["messages"][-4:],

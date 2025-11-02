@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import traceback
 from collections.abc import Iterator
 from typing import (
     Literal,
@@ -20,6 +19,8 @@ from llama_cpp_cuda.llama_chat_format import (
     _grammar_for_response_format,
     register_chat_completion_handler,
 )
+
+from app.helpers.aurora_logger import log_debug, log_warning
 
 
 @register_chat_completion_handler("function-calling")
@@ -194,8 +195,7 @@ def function_calling_handler(
         except Exception as e:
             grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
             if llama.verbose:
-                print("Failed to parse function body as JSON schema, falling back to default grammar")
-                print(e)
+                log_warning(f"Failed to parse function body as JSON schema, falling back to default grammar: {e}")
         completion_or_chunks = llama.create_completion(
             prompt=prompt,
             temperature=temperature,
@@ -231,16 +231,16 @@ def function_calling_handler(
         add_generation_prompt=True,
     )
 
-    print("[DEBUG] ===== RECEIVED MESSAGES =====")
-    for i, message in enumerate(messages):
-        print(f"[DEBUG] Message {i}, role: {message.get('role')}")
-        if "content" in message and message["content"]:
-            print(f"[DEBUG] Content: {message['content'][:100]}...")
-        if "tool_calls" in message:
-            print(f"[DEBUG] Tool calls: {message['tool_calls']}")
-    print("[DEBUG] ===== END MESSAGES =====")
-
-    print("[DEBUG] Tool choice auto prompt:", prompt)
+    if llama.verbose:
+        log_debug("===== RECEIVED MESSAGES =====")
+        for i, message in enumerate(messages):
+            log_debug(f"Message {i}, role: {message.get('role')}")
+            if "content" in message and message["content"]:
+                log_debug(f"Content: {message['content'][:100]}...")
+            if "tool_calls" in message:
+                log_debug(f"Tool calls: {message['tool_calls']}")
+        log_debug("===== END MESSAGES =====")
+        log_debug(f"Tool choice auto prompt: {prompt[:200]}...")
 
     completion_or_chunks = llama.create_completion(
         prompt=prompt,
@@ -265,9 +265,11 @@ def function_calling_handler(
     )
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
-    print(f"[DEBUG] Initial choice text: '{text}'")
+    if llama.verbose:
+        log_debug(f"Initial choice text: '{text}'")
     if "message" in text:
-        print("[DEBUG] Model chose to respond with message")
+        if llama.verbose:
+            log_debug("Model chose to respond with message")
         completion_result = llama.create_completion(
             prompt=prompt + "message:\n",
             temperature=temperature,
@@ -293,8 +295,8 @@ def function_calling_handler(
             # ),
         )
 
-        if not stream:
-            print(f"[DEBUG] Message completion: {completion_result['choices'][0]['text']}")
+        if not stream and llama.verbose:
+            log_debug(f"Message completion: {completion_result['choices'][0]['text']}")
 
         return _convert_completion_to_chat(
             completion_result,
@@ -304,21 +306,22 @@ def function_calling_handler(
     # One or more function calls
     tool_name = text[len("functions.") :]
     tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
-    print(f"[DEBUG] Selected tool_name: '{tool_name}', Found tool: {tool is not None}")
+    if llama.verbose:
+        log_debug(f"Selected tool_name: '{tool_name}', Found tool: {tool is not None}")
 
     if not stream:
         completions: list[llama_types.CreateCompletionResponse] = []
         completions_tool_name: list[str] = []
         while tool is not None:
-            print(f"[DEBUG] Processing tool: {tool_name}")
+            if llama.verbose:
+                log_debug(f"Processing tool: {tool_name}")
             prompt += f"functions.{tool_name}:\n"
             try:
                 grammar = llama_grammar.LlamaGrammar.from_json_schema(json.dumps(tool["function"]["parameters"]), verbose=llama.verbose)
             except Exception as e:
                 grammar = llama_grammar.LlamaGrammar.from_string(llama_grammar.JSON_GBNF, verbose=llama.verbose)
                 if llama.verbose:
-                    print("Failed to parse function body as JSON schema, falling back to default grammar")
-                    print(e)
+                    log_warning(f"Failed to parse function body as JSON schema, falling back to default grammar: {e}")
             completion_or_chunks = llama.create_completion(
                 prompt=prompt,
                 temperature=temperature,
@@ -344,12 +347,14 @@ def function_calling_handler(
             completions.append(completion_or_chunks)
             completions_tool_name.append(tool_name)
 
-            print(f"[DEBUG] Tool completion: {completion_or_chunks['choices'][0]['text'][:100]}...")
+            if llama.verbose:
+                log_debug(f"Tool completion: {completion_or_chunks['choices'][0]['text'][:100]}...")
 
             prompt += completion_or_chunks["choices"][0]["text"]
             prompt += "\n"
 
-            print(f"[DEBUG] Checking for additional tool calls with prompt: {prompt[-100:]}")
+            if llama.verbose:
+                log_debug(f"Checking for additional tool calls with prompt: {prompt[-100:]}")
             response = llama.create_completion(
                 prompt=prompt,
                 temperature=temperature,
@@ -373,28 +378,35 @@ def function_calling_handler(
             )
             response = cast(llama_types.CreateCompletionResponse, response)
 
-            print(f"[DEBUG] Follow-up response: {response['choices'][0]['text']}")
+            if llama.verbose:
+                log_debug(f"Follow-up response: {response['choices'][0]['text']}")
 
             try:
                 text_response = response["choices"][0]["text"]
-                print(f"[DEBUG] Full follow-up text: '{text_response}'")
+                if llama.verbose:
+                    log_debug(f"Full follow-up text: '{text_response}'")
                 if text_response.startswith("functions."):
                     tool_name = text_response[len("functions.") :]
-                    print(f"[DEBUG] Next tool_name extracted: '{tool_name}'")
+                    if llama.verbose:
+                        log_debug(f"Next tool_name extracted: '{tool_name}'")
                     tool = next((tool for tool in tools if tool["function"]["name"] == tool_name), None)
-                    print(f"[DEBUG] Found next tool: {tool is not None}")
+                    if llama.verbose:
+                        log_debug(f"Found next tool: {tool is not None}")
                 elif text_response.startswith("message:"):
-                    print("[DEBUG] Model switched to message response, ending tool calls")
+                    if llama.verbose:
+                        log_debug("Model switched to message response, ending tool calls")
                     tool = None
                 elif text_response == "<|im_end|>" or not text_response:
-                    print("[DEBUG] Model completed response or returned empty, ending tool calls")
+                    if llama.verbose:
+                        log_debug("Model completed response or returned empty, ending tool calls")
                     tool = None
                 else:
-                    print(f"[DEBUG] Unexpected response format: '{text_response}'")
+                    if llama.verbose:
+                        log_debug(f"Unexpected response format: '{text_response}'")
                     tool = None
             except Exception as e:
-                print(f"[DEBUG] Error parsing next tool: {e}")
-                traceback.print_exc()
+                if llama.verbose:
+                    log_debug(f"Error parsing next tool: {e}", exc_info=True)
                 tool = None
 
         # Merge completions
@@ -415,8 +427,9 @@ def function_calling_handler(
             else {}
         )
 
-        print(f"[DEBUG] Completed tool calls. Number of completions: {len(completions)}")
-        print(f"[DEBUG] Tool names used: {completions_tool_name}")
+        if llama.verbose:
+            log_debug(f"Completed tool calls. Number of completions: {len(completions)}")
+            log_debug(f"Tool names used: {completions_tool_name}")
 
         response_dict = {
             "id": "chat" + completion["id"],
@@ -453,7 +466,8 @@ def function_calling_handler(
             },
         }
 
-        print(f"[DEBUG] Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls")
+        if llama.verbose:
+            log_debug(f"Returning final response with {len(response_dict['choices'][0]['message'].get('tool_calls', []))} tool calls")
         return response_dict
 
     raise ValueError("Automatic streaming tool choice is not supported")
