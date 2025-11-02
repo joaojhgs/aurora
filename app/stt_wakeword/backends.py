@@ -95,7 +95,7 @@ class OpenWakeWordBackend(WakeWordBackend):
                 inference_framework="onnx",
             )
 
-            log_info(f"✅ OpenWakeWord models loaded: {self.wake_words}")
+            log_info(f"OpenWakeWord models loaded: {self.wake_words}")
 
         except Exception as e:
             log_error(f"Failed to initialize OpenWakeWord: {e}", exc_info=True)
@@ -187,7 +187,7 @@ class PorcupineBackend(WakeWordBackend):
                 sensitivities=[self.sensitivity] * len(self.model_paths),
             )
 
-            log_info(f"✅ Porcupine models loaded: {self.wake_words}")
+            log_info(f"Porcupine models loaded: {self.wake_words}")
 
         except Exception as e:
             log_error(f"Failed to initialize Porcupine: {e}", exc_info=True)

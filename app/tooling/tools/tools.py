@@ -280,7 +280,7 @@ def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     # Search vector store
     results = store.search(("tools",), query=query, limit=top_k)
 
-    log_info(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
+    log_info(f"Found {len(results)} tools matching query '{query}': {[result.value.name for result in results]}")
 
     # Get unique tool names from results
     tool_names = {result.key for result in results}

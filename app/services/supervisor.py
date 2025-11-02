@@ -21,8 +21,6 @@ from app.messaging.bus import MessageBus
 from app.messaging.bus_runtime import set_bus
 from app.messaging.local_bus import LocalBus
 
-logger = logging.getLogger(__name__)
-
 
 class Supervisor:
     """Supervisor for managing Aurora services.
@@ -102,7 +100,6 @@ class Supervisor:
 
     async def start_services(self) -> None:
         """Start all Aurora services in parallel."""
-        print(">>> SUPERVISOR: start_services() called!", flush=True)
         log_info("Starting Aurora services...")
 
         # Import services
@@ -112,7 +109,7 @@ class Supervisor:
         from app.tooling import ToolingService
         from app.tts import TTSService
 
-        log_info("✓ Service imports complete")
+        log_info("Service imports complete")
 
         # Create service instances
         # Order matters: DB and Tooling first (foundation services)
@@ -124,14 +121,14 @@ class Supervisor:
         tts_service = TTSService(self.bus)
         orchestrator_service = OrchestratorService(self.bus)
 
-        log_info("✓ Service instances created")
+        log_info("Service instances created")
 
         # Start foundation services first (DB, Tooling)
         try:
             log_info("Starting foundation services (DB, Tooling)...")
             await asyncio.gather(db_service.start(), tooling_service.start())
             self.services.extend([db_service, tooling_service])
-            log_info("✓ Foundation services started")
+            log_info("Foundation services started")
         except Exception as e:
             log_error(f"Failed to start foundation services: {e}")
             raise
@@ -141,7 +138,7 @@ class Supervisor:
             log_info("Starting Scheduler service...")
             await scheduler_service.start()
             self.services.append(scheduler_service)
-            log_info("✓ Scheduler service started")
+            log_info("Scheduler service started")
         except Exception as e:
             log_error(f"Failed to start Scheduler service: {e}")
             raise
@@ -149,19 +146,19 @@ class Supervisor:
         # Use new modular streaming STT architecture
         log_info(">>> Starting streaming STT architecture (modular) <<<")
         await self._start_streaming_stt_services()
-        log_info("✓ STT services started")
+        log_info("STT services started")
 
         # Start remaining services (TTS, Orchestrator)
         try:
             log_info("Starting TTS and Orchestrator services...")
             await asyncio.gather(tts_service.start(), orchestrator_service.start())
             self.services.extend([tts_service, orchestrator_service])
-            log_info("✓ TTS and Orchestrator started")
+            log_info("TTS and Orchestrator started")
         except Exception as e:
             log_error(f"Failed to start services: {e}")
             raise
 
-        log_info(f"✅ All {len(self.services)} services started successfully")
+        log_info(f"All {len(self.services)} services started successfully")
 
     async def _start_streaming_stt_services(self) -> None:
         """Start new modular streaming STT services."""

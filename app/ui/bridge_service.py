@@ -10,7 +10,6 @@ This service:
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -23,8 +22,6 @@ from app.messaging import (
     TTSTopics,
 )
 from app.orchestrator import UserInput
-
-logger = logging.getLogger(__name__)
 
 
 class UIBridge(QObject):
@@ -132,7 +129,7 @@ class UIBridge(QObject):
 
                     self.ui_window.signals.message_received.emit(msg["content"], is_user, source_type)
 
-                log_info(f"✅ UI Bridge: Emitted {len(messages)} messages to UI")
+                log_debug(f"UI Bridge: Emitted {len(messages)} messages to UI")
             else:
                 log_error("UI window does not have signals!")
 

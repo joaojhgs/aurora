@@ -9,8 +9,6 @@ This service:
 
 from __future__ import annotations
 
-import logging
-
 from pydantic import BaseModel
 
 from app.db.manager import DatabaseManager
@@ -18,8 +16,6 @@ from app.db.models import CronJob, Message
 from app.db.scheduler_db_service import SchedulerDatabaseService
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, DBTopics, Envelope, MessageBus, Query, QueryResult
-
-logger = logging.getLogger(__name__)
 
 
 # Message definitions

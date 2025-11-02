@@ -620,7 +620,7 @@ def register_all_service_topics() -> None:
 
     from app.helpers.aurora_logger import log_info
 
-    log_info(f"✅ Registered {len(registry.get_all_topics())} topics for {len(registry.get_all_services())} services")
+    log_info(f"Registered {len(registry.get_all_topics())} topics for {len(registry.get_all_services())} services")
 
 
 # Export all topic classes

@@ -585,9 +585,9 @@ class MemoryStoreManager:
             if memories_reembedded or tools_reembedded:
                 log_info("Embedding model update completed!")
                 if memories_reembedded:
-                    log_info("  ✅ Memories re-embedded successfully")
+                    log_debug("Memories re-embedded successfully")
                 if tools_reembedded:
-                    log_info("  ✅ Tools re-embedded successfully")
+                    log_debug("Tools re-embedded successfully")
             else:
                 log_info("Embedding model unchanged - no re-embedding needed")
 
