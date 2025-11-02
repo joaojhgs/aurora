@@ -263,11 +263,17 @@ class STTCoordinatorService:
             # Timeout reached
             log_warning(f"Session timeout ({self._listen_timeout_seconds}s)")
 
+            # Check state and mark for timeout handling (release lock before calling methods that acquire it)
+            should_timeout = False
             async with self._state_lock:
                 if self._state == STTState.LISTENING:
-                    await self._transition_to(STTState.TIMEOUT)
+                    should_timeout = True
                     self._sessions_timeout += 1
-                    await self._end_session("timeout")
+
+            # Handle timeout outside the lock to avoid deadlock
+            if should_timeout:
+                await self._transition_to(STTState.TIMEOUT)
+                await self._end_session("timeout")
 
         except asyncio.CancelledError:
             # Timeout was cancelled (normal - speech was captured)

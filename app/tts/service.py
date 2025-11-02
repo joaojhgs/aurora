@@ -334,16 +334,20 @@ class TTSService:
             reason: Reason for stopping
         """
         if self._playing:
+            # Capture request_id before clearing state
+            request_id = self._current_request_id
+
             # Stop audio stream
             self.stream.stop()
 
             self._playing = False
             self._paused = False
             self._current_text = None
+            self._current_request_id = None
 
             await self.bus.publish(
                 TTSTopics.STOPPED,
-                TTSStopped(reason=reason),
+                TTSStopped(request_id=request_id, reason=reason),
                 event=True,
                 origin="internal",
             )
