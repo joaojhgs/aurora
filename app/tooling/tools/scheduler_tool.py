@@ -6,6 +6,7 @@ from typing import Any, Optional
 from langchain_core.tools import tool
 
 from app.helpers.aurora_logger import log_error, log_info
+from app.messaging.priority_helpers import get_interactive_priority
 from app.scheduler import get_cron_service
 
 
@@ -221,8 +222,8 @@ async def speak_reminder(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=message, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {"success": True, "message": f'Spoke reminder: "{message}"', "spoken_text": message}
@@ -264,8 +265,8 @@ async def daily_greeting(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=greeting, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {
@@ -306,8 +307,8 @@ async def hourly_time_announcement(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=message, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {"success": True, "message": f"Time announced: {time_str}", "spoken_text": message}
@@ -349,8 +350,8 @@ async def break_reminder(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=reminder, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {
@@ -396,8 +397,8 @@ async def water_reminder(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=reminder, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {
@@ -445,8 +446,8 @@ async def motivational_message(bus, **kwargs) -> dict[str, Any]:
             TTSTopics.REQUEST,
             TTSRequest(text=message, interrupt=False),
             event=False,
-            priority=10,
-            origin="scheduler",
+            priority=get_interactive_priority(),
+            origin="system",
         )
 
         return {
