@@ -33,6 +33,7 @@ from app.messaging import (
     TranscriptionTopics,
     WakeWordTopics,
 )
+from app.messaging.priority_helpers import get_interactive_priority
 
 
 # States for the coordinator state machine
@@ -239,7 +240,7 @@ class STTCoordinatorService:
                 from app.messaging import TTSTopics
                 from app.tts import TTSPause
 
-                await self.bus.publish(TTSTopics.PAUSE, TTSPause(), event=False, priority=10)
+                await self.bus.publish(TTSTopics.PAUSE, TTSPause(), event=False, priority=get_interactive_priority())
             except Exception as e:
                 log_warning(f"Failed to pause TTS: {e}")
 

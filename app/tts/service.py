@@ -157,12 +157,12 @@ class TTSService:
     def _on_audio_start(self):
         """Called when audio stream starts playing."""
         reduce_volume_except_current()
-        log_debug("🔊 Audio stream started")
+        log_debug("Audio stream started")
 
     def _on_audio_stop(self):
         """Called when audio stream stops playing."""
         restore_volume_except_current()
-        log_info("🔊 Audio stream stopped - emitting TTS stopped event")
+        log_info("Audio stream stopped - emitting TTS stopped event")
 
         # Emit stopped event when audio finishes
         if self._loop and self._playing:
@@ -313,7 +313,7 @@ class TTSService:
             )
 
             # Feed text to stream and play asynchronously
-            log_info(f"🔊 Playing TTS: {text[:50]}...")
+            log_info(f"Playing TTS: {text[:50]}...")
             self.stream.feed(text)
             self.stream.play_async()
 

@@ -58,10 +58,15 @@ async def main_async():
             log_info("OpenRecall started in background thread")
 
         # Initial greeting via bus
+        from app.messaging.priority_helpers import get_interactive_priority
         from app.tts import TTSRequest
 
         await supervisor.bus.publish(
-            "TTS.Request", TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False), event=False, priority=10, origin="internal"
+            "TTS.Request",
+            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
+            event=False,
+            priority=get_interactive_priority(),
+            origin="internal",
         )
 
         # Run supervisor (blocks until shutdown signal)
@@ -171,11 +176,16 @@ def main_with_ui():
     log_info("✓ UI bridge started")
 
     # Send initial greeting
+    from app.messaging.priority_helpers import get_interactive_priority
     from app.tts import TTSRequest
 
     greeting_future = asyncio.run_coroutine_threadsafe(
         supervisor.bus.publish(
-            "TTS.Request", TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False), event=False, priority=10, origin="internal"
+            "TTS.Request",
+            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
+            event=False,
+            priority=get_interactive_priority(),
+            origin="internal",
         ),
         supervisor_loop,
     )
