@@ -11,7 +11,7 @@ import aiosqlite
 
 from app.db.migration_manager import MigrationManager
 from app.db.models import CronJob
-from app.helpers.aurora_logger import log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 
 class SchedulerDatabaseService:
@@ -61,7 +61,7 @@ class SchedulerDatabaseService:
                 )
                 await db.commit()
 
-            log_info(f"Added job: {job.name} (next run: {job.next_run_time})")
+            log_debug(f"Added job: {job.name} (next run: {job.next_run_time})")
             return True
 
         except Exception as e:
@@ -146,7 +146,9 @@ class SchedulerDatabaseService:
     async def get_ready_jobs(self) -> list[CronJob]:
         """Get jobs that are ready to execute"""
         try:
-            now = datetime.now().isoformat()
+            now = datetime.now()
+            now_iso = now.isoformat()
+
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
@@ -157,16 +159,19 @@ class SchedulerDatabaseService:
                     AND status IN ('pending', 'failed')
                     ORDER BY next_run_time ASC
                 """,
-                    (now,),
+                    (now_iso,),
                 )
                 rows = await cursor.fetchall()
 
                 jobs = [CronJob.from_dict(dict(row)) for row in rows]
+
                 # Filter by retry logic
-                return [job for job in jobs if job.is_ready_to_run()]
+                ready_jobs = [job for job in jobs if job.is_ready_to_run()]
+
+                return ready_jobs
 
         except Exception as e:
-            log_error(f"Error getting ready jobs: {e}")
+            log_error(f"Error getting ready jobs: {e}", exc_info=True)
             return []
 
     async def delete_job(self, job_id: str) -> bool:
@@ -176,7 +181,7 @@ class SchedulerDatabaseService:
                 await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
             await db.commit()
 
-            log_info(f"Deleted job: {job_id}")
+            log_debug(f"Deleted job: {job_id}")
             return True
 
         except Exception as e:
@@ -197,7 +202,7 @@ class SchedulerDatabaseService:
                 )
                 await db.commit()
 
-            log_info(f"Deactivated job: {job_id}")
+            log_debug(f"Deactivated job: {job_id}")
             return True
 
         except Exception as e:

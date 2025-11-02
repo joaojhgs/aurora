@@ -1,12 +1,11 @@
 """
 Main scheduler manager for Aurora cron jobs.
 Handles job execution, timing, and persistence using the database module.
+Runs in the main event loop - no separate thread needed.
 """
 
 import asyncio
 import importlib
-import re
-import threading
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -14,18 +13,22 @@ from croniter import croniter
 
 from ..db import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
 from ..helpers.aurora_logger import log_debug, log_error, log_info
+from ..messaging import MessageBus
 
 
 class SchedulerManager:
-    """Main scheduler that manages and executes cron jobs"""
+    """Main scheduler that manages and executes cron jobs.
 
-    def __init__(self, db_path: str = None):
+    Runs in the main event loop - no separate thread needed.
+    All operations are async and use the BUS for communication.
+    """
+
+    def __init__(self, db_path: str = None, bus: MessageBus | None = None):
         self.db_service = SchedulerDatabaseService(db_path)
+        self.bus = bus  # Bus instance for injecting into callbacks
         self._running = False
-        self._thread = None
-        self._loop = None
+        self._scheduler_task: asyncio.Task | None = None
         self._jobs_cache: dict[str, CronJob] = {}
-        self._lock = threading.Lock()
 
     async def initialize(self):
         """Initialize the scheduler database and load jobs"""
@@ -33,56 +36,55 @@ class SchedulerManager:
         await self._load_jobs()
         log_info("Scheduler initialization completed")
 
-    def start(self):
-        """Start the scheduler in a separate thread"""
+    async def start(self):
+        """Start the scheduler loop in the current event loop"""
         if self._running:
             log_info("Scheduler is already running")
             return
 
         self._running = True
-        self._thread = threading.Thread(target=self._run_scheduler, daemon=True)
-        self._thread.start()
-        log_info("Scheduler started in background thread")
+        # Start scheduler loop as background task
+        self._scheduler_task = asyncio.create_task(self._scheduler_loop())
+        log_info("Scheduler started in main event loop")
 
-    def stop(self):
+    async def stop(self):
         """Stop the scheduler"""
         if not self._running:
             return
 
         self._running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5)
+
+        # Cancel the scheduler task if it's running
+        if self._scheduler_task and not self._scheduler_task.done():
+            self._scheduler_task.cancel()
+            try:
+                await self._scheduler_task
+            except asyncio.CancelledError:
+                pass
+
         log_info("Scheduler stopped")
 
-    def _run_scheduler(self):
-        """Main scheduler loop running in separate thread"""
-        # Create a new event loop for this thread
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-
-        try:
-            self._loop.run_until_complete(self._scheduler_loop())
-        except Exception as e:
-            log_error(f"Scheduler error: {e}")
-        finally:
-            self._loop.close()
-
     async def _scheduler_loop(self):
-        """Main async scheduler loop"""
+        """Main async scheduler loop - runs in main event loop"""
         while self._running:
             try:
                 # Check for jobs that need to run
                 ready_jobs = await self.db_service.get_ready_jobs()
 
-                for job in ready_jobs:
-                    # Execute job in background task
-                    asyncio.create_task(self._execute_job(job))
+                if ready_jobs:
+                    for job in ready_jobs:
+                        log_info(f"Executing scheduled job: {job.name}")
+                        # Execute job in background task
+                        asyncio.create_task(self._execute_job(job))
 
                 # Sleep for a short interval before checking again
                 await asyncio.sleep(1)  # Check every second
 
+            except asyncio.CancelledError:
+                log_info("Scheduler loop cancelled")
+                break
             except Exception as e:
-                log_error(f"Error in scheduler loop: {e}")
+                log_error(f"Error in scheduler loop: {e}", exc_info=True)
                 await asyncio.sleep(5)  # Wait longer on errors
 
     async def _load_jobs(self):
@@ -90,15 +92,14 @@ class SchedulerManager:
         try:
             active_jobs = await self.db_service.get_active_jobs()
 
-            with self._lock:
-                self._jobs_cache.clear()
-                for job in active_jobs:
-                    # Calculate next run time if not set
-                    if job.next_run_time is None:
-                        job.next_run_time = self._calculate_next_run_time(job)
-                        await self.db_service.update_job(job)
+            self._jobs_cache.clear()
+            for job in active_jobs:
+                # Calculate next run time if not set
+                if job.next_run_time is None:
+                    job.next_run_time = self._calculate_next_run_time(job)
+                    await self.db_service.update_job(job)
 
-                    self._jobs_cache[job.id] = job
+                self._jobs_cache[job.id] = job
 
             log_info(f"Loaded {len(self._jobs_cache)} active jobs")
 
@@ -122,7 +123,7 @@ class SchedulerManager:
                 job.update_status(JobStatus.COMPLETED, str(result.get("message", "Success")))
 
                 # Calculate next run time for recurring jobs
-                if job.schedule_type in [ScheduleType.RELATIVE, ScheduleType.CRON]:
+                if job.schedule_type == ScheduleType.CRON:
                     job.next_run_time = self._calculate_next_run_time(job)
                 else:
                     # One-time absolute job - deactivate
@@ -154,14 +155,16 @@ class SchedulerManager:
         await self.db_service.update_job(job)
 
         # Update cache
-        with self._lock:
-            if job.is_active:
-                self._jobs_cache[job.id] = job
-            else:
-                self._jobs_cache.pop(job.id, None)
+        if job.is_active:
+            self._jobs_cache[job.id] = job
+        else:
+            self._jobs_cache.pop(job.id, None)
 
     async def _call_job_callback(self, job: CronJob) -> Optional[dict[str, Any]]:
-        """Call the job's callback function"""
+        """Call the job's callback function.
+
+        Injects the bus instance into callback arguments (like tool manager does).
+        """
         try:
             # Import the module
             module = importlib.import_module(job.callback_module)
@@ -169,10 +172,16 @@ class SchedulerManager:
             # Get the function
             callback_func = getattr(module, job.callback_function)
 
-            # Prepare arguments
-            args = job.callback_args or {}
+            # Prepare arguments - create a copy to avoid modifying the original job.callback_args
+            # (which could contain non-serializable objects like bus if it was stored)
+            args = dict(job.callback_args) if job.callback_args else {}
             args["job_id"] = job.id
             args["job_name"] = job.name
+
+            # Inject bus instance if available (like tool manager does)
+            # This is added at runtime and never stored in the database
+            if self.bus:
+                args["bus"] = self.bus
 
             # Call the function
             if asyncio.iscoroutinefunction(callback_func):
@@ -193,65 +202,31 @@ class SchedulerManager:
                 cron = croniter(job.schedule_value, datetime.now())
                 return cron.get_next(datetime)
 
-            elif job.schedule_type == ScheduleType.RELATIVE:
-                return self._parse_relative_time(job.schedule_value)
-
             elif job.schedule_type == ScheduleType.ABSOLUTE:
                 return self._parse_absolute_time(job.schedule_value)
+
+            # RELATIVE type is no longer supported - should use cron expressions instead
+            else:
+                raise ValueError(f"Unsupported schedule type: {job.schedule_type}")
 
         except Exception as e:
             log_error(f"Error calculating next run time for job {job.name}: {e}")
             return None
 
-    def _parse_relative_time(self, relative_time: str) -> Optional[datetime]:
-        """Parse relative time expressions like 'in 5 minutes', 'every 1 hour'"""
-        relative_time = relative_time.lower().strip()
-
-        # Pattern for "in X time" (one-time)
-        in_pattern = r"^in\s+(\d+)\s+(second|minute|hour|day)s?$"
-        match = re.match(in_pattern, relative_time)
-        if match:
-            amount = int(match.group(1))
-            unit = match.group(2)
-
-            if unit == "second":
-                return datetime.now() + timedelta(seconds=amount)
-            elif unit == "minute":
-                return datetime.now() + timedelta(minutes=amount)
-            elif unit == "hour":
-                return datetime.now() + timedelta(hours=amount)
-            elif unit == "day":
-                return datetime.now() + timedelta(days=amount)
-
-        # Pattern for "every X time" (recurring)
-        every_pattern = r"^every\s+(\d+)\s+(second|minute|hour|day)s?$"
-        match = re.match(every_pattern, relative_time)
-        if match:
-            amount = int(match.group(1))
-            unit = match.group(2)
-
-            if unit == "second":
-                return datetime.now() + timedelta(seconds=amount)
-            elif unit == "minute":
-                return datetime.now() + timedelta(minutes=amount)
-            elif unit == "hour":
-                return datetime.now() + timedelta(hours=amount)
-            elif unit == "day":
-                return datetime.now() + timedelta(days=amount)
-
-        raise ValueError(f"Invalid relative time format: {relative_time}")
-
     def _parse_absolute_time(self, absolute_time: str) -> Optional[datetime]:
-        """Parse absolute time expressions like '2025-05-28 15:00'"""
+        """Parse absolute time expressions like '2025-05-28 15:00' or '28/05/2025 15:00'"""
         try:
-            # Try various datetime formats
+            # Try various datetime formats (including Portuguese/Brazilian DD/MM/YYYY format)
             formats = [
-                "%Y-%m-%d %H:%M:%S",
-                "%Y-%m-%d %H:%M",
-                "%Y-%m-%d",
-                "%m/%d/%Y %H:%M:%S",
-                "%m/%d/%Y %H:%M",
-                "%m/%d/%Y",
+                "%Y-%m-%d %H:%M:%S",  # ISO format with time
+                "%Y-%m-%d %H:%M",  # ISO format without seconds
+                "%Y-%m-%d",  # ISO date only
+                "%d/%m/%Y %H:%M:%S",  # Portuguese/Brazilian format with time
+                "%d/%m/%Y %H:%M",  # Portuguese/Brazilian format without seconds
+                "%d/%m/%Y",  # Portuguese/Brazilian date only
+                "%m/%d/%Y %H:%M:%S",  # US format with time
+                "%m/%d/%Y %H:%M",  # US format without seconds
+                "%m/%d/%Y",  # US date only
             ]
 
             for fmt in formats:
@@ -267,34 +242,6 @@ class SchedulerManager:
             raise ValueError(f"Invalid absolute time format: {absolute_time}")
 
     # Public API methods
-    async def create_relative_job(
-        self,
-        name: str,
-        relative_time: str,
-        callback_module: str,
-        callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
-    ) -> Optional[str]:
-        """Create a relative time job and return its ID"""
-        job = CronJob.create_relative_job(
-            name=name,
-            relative_time=relative_time,
-            callback_module=callback_module,
-            callback_function=callback_function,
-            callback_args=callback_args,
-        )
-
-        # Calculate initial next run time
-        job.next_run_time = self._calculate_next_run_time(job)
-
-        if await self.db_service.add_job(job):
-            # Add to cache if active
-            if job.is_active:
-                with self._lock:
-                    self._jobs_cache[job.id] = job
-            return job.id
-        return None
-
     async def create_absolute_job(
         self,
         name: str,
@@ -318,8 +265,7 @@ class SchedulerManager:
         if await self.db_service.add_job(job):
             # Add to cache if active
             if job.is_active:
-                with self._lock:
-                    self._jobs_cache[job.id] = job
+                self._jobs_cache[job.id] = job
             return job.id
         return None
 
@@ -346,8 +292,7 @@ class SchedulerManager:
         if await self.db_service.add_job(job):
             # Add to cache if active
             if job.is_active:
-                with self._lock:
-                    self._jobs_cache[job.id] = job
+                self._jobs_cache[job.id] = job
             return job.id
         return None
 
@@ -363,14 +308,12 @@ class SchedulerManager:
         """Delete a job"""
         result = await self.db_service.delete_job(job_id)
         if result:
-            with self._lock:
-                self._jobs_cache.pop(job_id, None)
+            self._jobs_cache.pop(job_id, None)
         return result
 
     async def deactivate_job(self, job_id: str) -> bool:
         """Deactivate a job"""
         result = await self.db_service.deactivate_job(job_id)
         if result:
-            with self._lock:
-                self._jobs_cache.pop(job_id, None)
+            self._jobs_cache.pop(job_id, None)
         return result
