@@ -129,8 +129,23 @@ class DBService:
             cmd = StoreMessage.model_validate(env.payload)
             log_debug(f"Storing message: {cmd.role} - {cmd.content[:50]}...")
 
-            # Create Message object
-            message = Message(role=cmd.role, content=cmd.content, metadata=cmd.metadata if cmd.metadata else {})
+            # Map role to MessageType
+            if cmd.role == "user":
+                # Determine if it's text or voice based on metadata
+                source_type = cmd.metadata.get("source_type", "Text") if cmd.metadata else "Text"
+                if source_type == "STT":
+                    message = Message.create_user_voice_message(cmd.content, cmd.session_id)
+                else:
+                    message = Message.create_user_text_message(cmd.content, cmd.session_id)
+            elif cmd.role == "assistant":
+                message = Message.create_assistant_message(cmd.content, cmd.session_id)
+            else:
+                # Default to user text if role is unknown
+                message = Message.create_user_text_message(cmd.content, cmd.session_id)
+
+            # Set metadata if provided
+            if cmd.metadata:
+                message.metadata = cmd.metadata
 
             # Store in database
             success = await self.db_manager.store_message(message)
@@ -210,7 +225,7 @@ class DBService:
                 for msg in messages
             ]
 
-            log_info(f"📚 Retrieved {len(messages_data)} messages for date {target_date}")
+            log_info(f"Retrieved {len(messages_data)} messages for date {target_date}")
 
             # Send response - publish as event with MESSAGES_RESPONSE topic
             await self.bus.publish(

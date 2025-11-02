@@ -179,7 +179,7 @@ class SchedulerDatabaseService:
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
-            await db.commit()
+                await db.commit()
 
             log_debug(f"Deleted job: {job_id}")
             return True
