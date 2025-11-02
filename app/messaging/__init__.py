@@ -13,6 +13,12 @@ from .audio_messages import (
 from .bus import Command, Envelope, Event, Handler, MessageBus, Query, QueryResult
 from .bus_runtime import get_bus, set_bus
 from .event_registry import EventRegistry, TopicDefinition, get_event_registry, set_event_registry
+from .priority_helpers import (
+    get_external_priority,
+    get_interactive_priority,
+    get_priority,
+    get_system_priority,
+)
 from .service_topics import (
     AUDIO_PROTOCOL_TOPIC_DEFS,
     AudioInputTopics,
@@ -43,6 +49,11 @@ __all__ = [
     "Handler",
     "get_bus",
     "set_bus",
+    # Priority helpers
+    "get_priority",
+    "get_interactive_priority",
+    "get_system_priority",
+    "get_external_priority",
     # Event Registry
     "EventRegistry",
     "TopicDefinition",
