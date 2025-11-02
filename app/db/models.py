@@ -129,7 +129,7 @@ class CronJob:
     id: str
     name: str
     schedule_type: ScheduleType
-    schedule_value: str  # The actual schedule (relative time, absolute time, or cron)
+    schedule_value: str  # The actual schedule (absolute time or cron expression)
     next_run_time: Optional[datetime]
     callback_module: str  # Module path for the callback function
     callback_function: str  # Function name to call
@@ -150,29 +150,6 @@ class CronJob:
             self.created_at = datetime.now()
         if self.updated_at is None:
             self.updated_at = datetime.now()
-
-    @classmethod
-    def create_relative_job(
-        cls,
-        name: str,
-        relative_time: str,
-        callback_module: str,
-        callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
-        **kwargs,
-    ) -> "CronJob":
-        """Create a relative time job (e.g., 'in 5 minutes', 'every 1 hour')"""
-        return cls(
-            id=str(uuid.uuid4()),
-            name=name,
-            schedule_type=ScheduleType.RELATIVE,
-            schedule_value=relative_time,
-            next_run_time=None,  # Will be calculated by scheduler
-            callback_module=callback_module,
-            callback_function=callback_function,
-            callback_args=callback_args,
-            **kwargs,
-        )
 
     @classmethod
     def create_absolute_job(
@@ -222,6 +199,33 @@ class CronJob:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for database storage"""
+        # Safely serialize callback_args, filtering out non-serializable objects (like bus)
+        callback_args_safe = None
+        if self.callback_args:
+            try:
+                # First, try to serialize as-is
+                json.dumps(self.callback_args)
+                callback_args_safe = json.dumps(self.callback_args)
+            except (TypeError, ValueError):
+                # If serialization fails, filter out non-serializable objects
+                # Common non-serializable objects: bus, store, etc.
+                safe_args = {}
+                for k, v in self.callback_args.items():
+                    # Skip known non-serializable objects
+                    if k in ["bus", "store"]:
+                        continue
+                    # Try to serialize the value
+                    try:
+                        json.dumps(v)
+                        safe_args[k] = v
+                    except (TypeError, ValueError):
+                        # Skip non-serializable values
+                        from app.helpers.aurora_logger import log_debug
+
+                        log_debug(f"Skipping non-serializable callback_arg '{k}' for job {self.name}")
+                        continue
+                callback_args_safe = json.dumps(safe_args) if safe_args else None
+
         return {
             "id": self.id,
             "name": self.name,
@@ -230,7 +234,7 @@ class CronJob:
             "next_run_time": self.next_run_time.isoformat() if self.next_run_time else None,
             "callback_module": self.callback_module,
             "callback_function": self.callback_function,
-            "callback_args": json.dumps(self.callback_args) if self.callback_args else None,
+            "callback_args": callback_args_safe,
             "is_active": self.is_active,
             "status": self.status.value,
             "last_run_time": self.last_run_time.isoformat() if self.last_run_time else None,

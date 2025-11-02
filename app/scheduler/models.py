@@ -35,7 +35,7 @@ class CronJob:
     id: str
     name: str
     schedule_type: ScheduleType
-    schedule_value: str  # The actual schedule (relative time, absolute time, or cron)
+    schedule_value: str  # The actual schedule (absolute time or cron expression)
     next_run_time: Optional[datetime]
     callback_module: str  # Module path for the callback function
     callback_function: str  # Function name to call
@@ -56,29 +56,6 @@ class CronJob:
             self.created_at = datetime.now()
         if self.updated_at is None:
             self.updated_at = datetime.now()
-
-    @classmethod
-    def create_relative_job(
-        cls,
-        name: str,
-        relative_time: str,
-        callback_module: str,
-        callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
-        **kwargs,
-    ) -> "CronJob":
-        """Create a relative time job (e.g., 'in 5 minutes', 'every 1 hour')"""
-        return cls(
-            id=str(uuid.uuid4()),
-            name=name,
-            schedule_type=ScheduleType.RELATIVE,
-            schedule_value=relative_time,
-            next_run_time=None,  # Will be calculated by scheduler
-            callback_module=callback_module,
-            callback_function=callback_function,
-            callback_args=callback_args,
-            **kwargs,
-        )
 
     @classmethod
     def create_absolute_job(

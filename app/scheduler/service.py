@@ -9,13 +9,12 @@ This service:
 
 from __future__ import annotations
 
-import logging
-
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, Envelope, Event, MessageBus, SchedulerTopics
 from app.scheduler import get_cron_service
 
-logger = logging.getLogger(__name__)
+# Global scheduler service instance for callback access
+_scheduler_service_instance: SchedulerService | None = None
 
 
 # Message definitions
@@ -49,7 +48,7 @@ class ResumeJob(Command):
 class SchedulerJobFired(Event):
     """Event emitted when a scheduled job fires."""
 
-    job_id: int
+    job_id: str
     job_name: str
     action: str
     scheduled_time: str
@@ -58,7 +57,7 @@ class SchedulerJobFired(Event):
 class SchedulerJobCompleted(Event):
     """Event emitted when a scheduled job completes."""
 
-    job_id: int
+    job_id: str
     job_name: str
     success: bool
     error: str | None = None
@@ -81,15 +80,20 @@ class SchedulerService:
         Args:
             bus: MessageBus instance
         """
+        global _scheduler_service_instance
+
         self.bus = bus
-        self.cron_service = get_cron_service()
+        # Pass bus to cron service so it can inject it into callbacks
+        self.cron_service = get_cron_service(bus=bus)
         self._jobs: dict = {}
+        # Store instance globally for callback access
+        _scheduler_service_instance = self
 
     async def start(self) -> None:
         """Start the scheduler service and subscribe to commands."""
         log_info("Starting Scheduler service...")
 
-        # Initialize cron service
+        # Initialize cron service (this will start the scheduler loop in the main event loop)
         await self.cron_service.initialize()
 
         # Subscribe to commands using typed topics
@@ -106,7 +110,7 @@ class SchedulerService:
 
         # Stop all running jobs via CronService
         if self.cron_service:
-            self.cron_service.shutdown()
+            await self.cron_service.shutdown()
             log_debug("All scheduled jobs stopped")
 
         log_info("Scheduler service stopped")
@@ -121,20 +125,17 @@ class SchedulerService:
             cmd = ScheduleJob.model_validate(env.payload)
             log_info(f"Scheduling job: {cmd.name} ({cmd.schedule})")
 
-            # Create callback function that will fire the job via message bus
-            async def job_callback():
-                # Get the job_id from the stored jobs
-                job_id = None
-                for jid, job_cmd in self._jobs.items():
-                    if job_cmd.name == cmd.name:
-                        job_id = jid
-                        break
-
-                if job_id:
-                    await self.fire_job(job_id, cmd.name, cmd.action)
-
-            # Schedule using CronService
-            job_id = await self.cron_service.schedule_from_text(text=cmd.schedule, callback=job_callback, job_name=cmd.name)
+            # Schedule using CronService with a proper callback function
+            # The callback will be called by scheduler_manager with job_id, job_name from callback_args
+            job_id = await self.cron_service.schedule_from_text(
+                text=cmd.schedule,
+                callback="app.scheduler.service.fire_scheduled_job",  # Module.function string
+                job_name=cmd.name,
+                callback_args={
+                    "job_name": cmd.name,
+                    "action": cmd.action,
+                },
+            )
 
             if job_id:
                 # Store job for tracking
@@ -169,7 +170,7 @@ class SchedulerService:
 
             # Cancel job via CronService
             job_id_str = str(cmd.job_id)
-            success = self.cron_service.cancel_job(job_id_str)
+            success = await self.cron_service.cancel_job(job_id_str)
 
             if success:
                 # Remove from local tracking
@@ -199,7 +200,7 @@ class SchedulerService:
 
             # Pause job via CronService
             job_id_str = str(cmd.job_id)
-            success = self.cron_service.pause_job(job_id_str)
+            success = await self.cron_service.pause_job(job_id_str)
 
             if success:
                 log_debug(f"Job {cmd.job_id} paused successfully")
@@ -229,14 +230,18 @@ class SchedulerService:
                 original_cmd = self._jobs[job_id_str]
 
                 # Cancel the paused job
-                self.cron_service.cancel_job(job_id_str)
+                await self.cron_service.cancel_job(job_id_str)
 
                 # Reschedule it (effectively resuming)
-                # Create the callback again
-                async def job_callback():
-                    await self.fire_job(cmd.job_id, original_cmd.name, original_cmd.action)
-
-                new_job_id = await self.cron_service.schedule_from_text(text=original_cmd.schedule, callback=job_callback, job_name=original_cmd.name)
+                new_job_id = await self.cron_service.schedule_from_text(
+                    text=original_cmd.schedule,
+                    callback="app.scheduler.service.fire_scheduled_job",
+                    job_name=original_cmd.name,
+                    callback_args={
+                        "job_name": original_cmd.name,
+                        "action": original_cmd.action,
+                    },
+                )
 
                 if new_job_id:
                     # Update tracking with new job_id
@@ -251,13 +256,13 @@ class SchedulerService:
         except Exception as e:
             log_error(f"Error resuming job: {e}", exc_info=True)
 
-    async def fire_job(self, job_id: int, job_name: str, action: str) -> None:
+    async def fire_job(self, job_id: str, job_name: str, action: str) -> None:
         """Fire a scheduled job.
 
         This is called by the scheduler when a job's time arrives.
 
         Args:
-            job_id: Job identifier
+            job_id: Job identifier (UUID string)
             job_name: Job name
             action: Action to execute
         """
@@ -345,3 +350,48 @@ class SchedulerService:
                 priority=50,
                 origin="system",
             )
+
+
+# Callback function that can be called by scheduler_manager
+async def fire_scheduled_job(**kwargs) -> dict:
+    """Callback function to fire a scheduled job.
+
+    This function is called by the scheduler manager when a job's time arrives.
+    It can be referenced as "app.scheduler.service.fire_scheduled_job" in the cron service.
+
+    The scheduler_manager now runs in the main event loop, so we can directly call
+    the scheduler service's fire_job method without cross-thread complications.
+
+    The scheduler_manager passes:
+    - job_id: Job identifier (from job.id)
+    - job_name: Job name (from job.name)
+    - action: Action to execute (from callback_args)
+    - Other fields from callback_args
+
+    Returns:
+        Dictionary with success status
+    """
+    try:
+        # Extract arguments from kwargs
+        job_id = kwargs.get("job_id")
+        job_name = kwargs.get("job_name", "")
+        action = kwargs.get("action", "")
+
+        if not job_id:
+            log_error("fire_scheduled_job called without job_id")
+            return {"success": False, "error": "job_id is required"}
+
+        # Get scheduler service instance
+        if _scheduler_service_instance is None:
+            log_error("Scheduler service instance not available - cannot fire job")
+            return {"success": False, "error": "Scheduler service not initialized"}
+
+        # Call fire_job directly - we're in the same event loop now
+        # job_id is already a string (UUID) from the database, pass it directly
+        await _scheduler_service_instance.fire_job(job_id, job_name, action)
+
+        return {"success": True, "message": f"Job {job_name} fired successfully"}
+
+    except Exception as e:
+        log_error(f"Error in fire_scheduled_job callback: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
