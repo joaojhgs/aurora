@@ -5,6 +5,8 @@ from typing import Any
 from langchain_core.tools import tool
 
 from app.helpers.aurora_logger import log_error
+from app.messaging import MessageBus
+from app.messaging.priority_helpers import get_interactive_priority
 from app.scheduler import get_cron_service
 
 # Simple in-memory storage for current Pomodoro session
@@ -62,7 +64,7 @@ async def start_pomodoro_tool(
         await cron.schedule_from_text(
             name="pomodoro_work_end",
             schedule_text=f"in {work_minutes} minutes",
-            callback="app.langgraph.tools.pomodoro_tool.work_session_end",
+            callback="app.tooling.tools.pomodoro_tool.work_session_end",
             callback_args={},
         )
 
@@ -113,7 +115,7 @@ async def stop_pomodoro_tool(bus) -> str:
 
 
 @tool
-async def pomodoro_status_tool(bus) -> str:
+async def pomodoro_status_tool(bus: MessageBus) -> str:
     """
     Get the current status of the Pomodoro session.
 
@@ -208,7 +210,7 @@ def work_session_end(**kwargs) -> dict[str, Any]:
                     TTSTopics.REQUEST,
                     TTSRequest(text=message, interrupt=False),
                     event=False,
-                    priority=10,
+                    priority=get_interactive_priority(),
                     origin="internal",
                 )
             )
@@ -223,7 +225,7 @@ def work_session_end(**kwargs) -> dict[str, Any]:
             await cron.schedule_from_text(
                 name="pomodoro_break_end",
                 schedule_text=f"in {break_minutes} minutes",
-                callback="app.langgraph.tools.pomodoro_tool.break_session_end",
+                callback="app.tooling.tools.pomodoro_tool.break_session_end",
                 callback_args={},
             )
 
@@ -275,7 +277,7 @@ def break_session_end(**kwargs) -> dict[str, Any]:
                     TTSTopics.REQUEST,
                     TTSRequest(text=message, interrupt=False),
                     event=False,
-                    priority=10,
+                    priority=get_interactive_priority(),
                     origin="internal",
                 )
             )
@@ -290,7 +292,7 @@ def break_session_end(**kwargs) -> dict[str, Any]:
             await cron.schedule_from_text(
                 name="pomodoro_work_end",
                 schedule_text=f"in {work_minutes} minutes",
-                callback="app.langgraph.tools.pomodoro_tool.work_session_end",
+                callback="app.tooling.tools.pomodoro_tool.work_session_end",
                 callback_args={},
             )
 

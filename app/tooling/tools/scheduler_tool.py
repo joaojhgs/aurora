@@ -6,12 +6,13 @@ from typing import Any, Optional
 from langchain_core.tools import tool
 
 from app.helpers.aurora_logger import log_error, log_info
+from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.scheduler import get_cron_service
 
 
 @tool()
-async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bus, message: Optional[str] = None, **kwargs) -> str:
+async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bus: MessageBus, message: Optional[str] = None, **kwargs) -> str:
     """
     Schedule a task to be executed at a specified time.
 
@@ -95,16 +96,16 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bu
         )
 
         if job_id:
-            return f"✓ Task '{task_name}' scheduled successfully (ID: {job_id[:8]}...) for: {schedule_time}"
+            return f"Task '{task_name}' scheduled successfully (ID: {job_id[:8]}...) for: {schedule_time}"
         else:
-            return f"✗ Failed to schedule task '{task_name}'. Please check the schedule format."
+            return f"Failed to schedule task '{task_name}'. Please check the schedule format."
 
     except Exception as e:
         return f"Error scheduling task: {e}"
 
 
 @tool
-async def list_scheduled_tasks_tool(bus) -> str:
+async def list_scheduled_tasks_tool(bus: MessageBus) -> str:
     """
     List all currently scheduled tasks.
 
@@ -153,7 +154,7 @@ async def list_scheduled_tasks_tool(bus) -> str:
 
 
 @tool
-async def cancel_scheduled_task_tool(task_identifier: str, bus) -> str:
+async def cancel_scheduled_task_tool(task_identifier: str, bus: MessageBus) -> str:
     """
     Cancel a scheduled task by name or ID.
 
@@ -182,16 +183,16 @@ async def cancel_scheduled_task_tool(task_identifier: str, bus) -> str:
         success = await cron.scheduler_manager.delete_job(target_job.id)
 
         if success:
-            return f"✓ Task '{target_job.name}' (ID: {target_job.id[:8]}...) has been cancelled."
+            return f"Task '{target_job.name}' (ID: {target_job.id[:8]}...) has been cancelled."
         else:
-            return f"✗ Failed to cancel task '{target_job.name}'. It may have already completed or been cancelled."
+            return f"Failed to cancel task '{target_job.name}'. It may have already completed or been cancelled."
 
     except Exception as e:
         return f"Error cancelling task: {e}"
 
 
 # Assistant-specific callbacks for scheduled tasks
-async def speak_reminder(bus, **kwargs) -> dict[str, Any]:
+async def speak_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     Make the assistant speak a message.
     This is the primary callback for speech reminders.
@@ -233,7 +234,7 @@ async def speak_reminder(bus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to speak reminder: {e}"}
 
 
-async def daily_greeting(bus, **kwargs) -> dict[str, Any]:
+async def daily_greeting(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     A daily greeting that can be scheduled.
 
@@ -280,7 +281,7 @@ async def daily_greeting(bus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver daily greeting: {e}"}
 
 
-async def hourly_time_announcement(bus, **kwargs) -> dict[str, Any]:
+async def hourly_time_announcement(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     Announce the current time (useful for hourly reminders).
 
@@ -318,7 +319,7 @@ async def hourly_time_announcement(bus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to announce time: {e}"}
 
 
-async def break_reminder(bus, **kwargs) -> dict[str, Any]:
+async def break_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     Remind the user to take a break.
 
@@ -365,7 +366,7 @@ async def break_reminder(bus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver break reminder: {e}"}
 
 
-async def water_reminder(bus, **kwargs) -> dict[str, Any]:
+async def water_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     Remind the user to drink water.
 
@@ -412,7 +413,7 @@ async def water_reminder(bus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver water reminder: {e}"}
 
 
-async def motivational_message(bus, **kwargs) -> dict[str, Any]:
+async def motivational_message(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
     Deliver a motivational message.
 
