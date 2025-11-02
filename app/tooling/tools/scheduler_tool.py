@@ -14,11 +14,26 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bu
     """
     Schedule a task to be executed at a specified time.
 
+    IMPORTANT: The schedule_time parameter accepts ONLY two formats:
+    1. Absolute time (one-time execution): "YYYY-MM-DD HH:MM" or "DD/MM/YYYY HH:MM"
+       Examples: "2025-10-31 15:30", "31/10/2025 14:00"
+
+    2. Cron expression (recurring): Standard 5-field format "minute hour day month weekday"
+       Format: minute (0-59) hour (0-23) day (1-31) month (1-12) weekday (0-6, where 0=Sunday)
+       Special characters: * (any), / (step), - (range), , (list)
+
+       Common cron examples:
+       - "0 9 * * *" = Daily at 9:00 AM
+       - "0 9 * * 1-5" = Weekdays (Mon-Fri) at 9:00 AM
+       - "0 */2 * * *" = Every 2 hours
+       - "30 14 * * 0" = Every Sunday at 2:30 PM
+       - "0 9 1 * *" = First day of every month at 9:00 AM
+       - "*/15 * * * *" = Every 15 minutes
+
     Args:
         task_name: A descriptive name for the scheduled task
-        schedule_time: When to execute the task in natural language (e.g., "in 30 minutes", "tomorrow at 3pm", "every day at 9am")
+        schedule_time: Either absolute time ("YYYY-MM-DD HH:MM" or "DD/MM/YYYY HH:MM") or cron expression ("minute hour day month weekday")
         action: The action to perform. Available actions:
-        bus: MessageBus instance for communication (injected by ToolingService)
             - "speak" or "say": Make the assistant speak the message
             - "reminder": Send a reminder notification (speaks the message)
             - "greeting": Daily motivational greeting (random message)
@@ -27,6 +42,7 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bu
             - "motivational": Deliver a motivational message
             - "time_announcement": Announce the current time
             - "callback": Call a custom function (advanced usage)
+        bus: MessageBus instance for communication (injected by ToolingService)
         message: The message to speak or remind about (optional for some actions like "greeting", "break_reminder")
         **kwargs: Additional arguments for the action
 
@@ -34,23 +50,16 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bu
         Confirmation message with job ID if successful
 
     Examples:
-        # Schedule a spoken reminder
-        schedule_task_tool("morning reminder", "tomorrow at 8am", "speak", "Good morning! Time to start your day.")
+        # Absolute time (one-time execution)
+        schedule_task_tool("meeting reminder", "2025-10-31 15:30", "speak", "Team meeting starts now")
+        schedule_task_tool("doctor appointment", "31/10/2025 14:00", "reminder", "Time for your doctor appointment")
 
-        # Schedule a recurring daily greeting
-        schedule_task_tool("daily motivation", "every day at 9am", "greeting")
-
-        # Schedule a break reminder
-        schedule_task_tool("hourly break", "every hour", "break_reminder")
-
-        # Schedule water reminders
-        schedule_task_tool("hydration check", "every 2 hours", "water_reminder")
-
-        # Schedule time announcements
-        schedule_task_tool("hourly time", "every hour", "time_announcement")
-
-        # Custom message
-        schedule_task_tool("meeting reminder", "in 30 minutes", "reminder", "Team meeting starts in 5 minutes")
+        # Cron expressions (recurring)
+        schedule_task_tool("daily motivation", "0 9 * * *", "greeting")  # Daily at 9am
+        schedule_task_tool("hourly break", "0 * * * *", "break_reminder")  # Every hour
+        schedule_task_tool("weekday water", "0 */2 * * 1-5", "water_reminder")  # Every 2 hours on weekdays
+        schedule_task_tool("weekly report", "0 8 * * 1", "speak", "Time for weekly report")  # Every Monday at 8am
+        schedule_task_tool("15min check", "*/15 * * * *", "time_announcement")  # Every 15 minutes
     """
     try:
         # Get the scheduler service
@@ -181,17 +190,19 @@ async def cancel_scheduled_task_tool(task_identifier: str, bus) -> str:
 
 
 # Assistant-specific callbacks for scheduled tasks
-def speak_reminder(**kwargs) -> dict[str, Any]:
+async def speak_reminder(bus, **kwargs) -> dict[str, Any]:
     """
     Make the assistant speak a message.
     This is the primary callback for speech reminders.
 
-    Note: This callback should receive the bus instance from the scheduler.
-    For now, it falls back to direct TTS import for backward compatibility.
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments including job_name, message, etc.
     """
     try:
-        # Try to get bus from kwargs (new architecture)
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot speak reminder")
+            return {"success": False, "message": "Bus not available"}
 
         job_name = kwargs.get("job_name", "unknown")
         text = kwargs.get("text", "")
@@ -200,41 +211,39 @@ def speak_reminder(**kwargs) -> dict[str, Any]:
         if not message:
             message = f"This is a scheduled reminder: {job_name}"
 
-        log_info(f"[{datetime.now()}] Speaking reminder: {message}")
+        log_info(f"Speaking reminder: {message}")
 
-        if bus:
-            # New architecture: use bus to send TTS request
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        # Use bus to send TTS request
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=message, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            # Fallback: direct TTS import (for backward compatibility)
-            from app.tts.tts_engine import play
-
-            play(message)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=message, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {"success": True, "message": f'Spoke reminder: "{message}"', "spoken_text": message}
 
     except Exception as e:
-        log_error(f"Error in speak_reminder: {e}")
+        log_error(f"Error in speak_reminder: {e}", exc_info=True)
         return {"success": False, "message": f"Failed to speak reminder: {e}"}
 
 
-def daily_greeting(**kwargs) -> dict[str, Any]:
+async def daily_greeting(bus, **kwargs) -> dict[str, Any]:
     """
     A daily greeting that can be scheduled.
+
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments
     """
     try:
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot deliver greeting")
+            return {"success": False, "message": "Bus not available"}
 
         greetings = [
             "Good morning! Hope you have a wonderful day ahead!",
@@ -246,25 +255,18 @@ def daily_greeting(**kwargs) -> dict[str, Any]:
 
         greeting = random.choice(greetings)
 
-        log_info(f"[{datetime.now()}] Daily greeting: {greeting}")
+        log_info(f"Daily greeting: {greeting}")
 
-        if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=greeting, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            from app.tts.tts_engine import play
-
-            play(greeting)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=greeting, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {
             "success": True,
@@ -273,16 +275,22 @@ def daily_greeting(**kwargs) -> dict[str, Any]:
         }
 
     except Exception as e:
-        log_error(f"Error in daily_greeting: {e}")
+        log_error(f"Error in daily_greeting: {e}", exc_info=True)
         return {"success": False, "message": f"Failed to deliver daily greeting: {e}"}
 
 
-def hourly_time_announcement(**kwargs) -> dict[str, Any]:
+async def hourly_time_announcement(bus, **kwargs) -> dict[str, Any]:
     """
     Announce the current time (useful for hourly reminders).
+
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments
     """
     try:
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot announce time")
+            return {"success": False, "message": "Bus not available"}
 
         now = datetime.now()
         time_str = now.strftime("%I:%M %p")
@@ -291,23 +299,16 @@ def hourly_time_announcement(**kwargs) -> dict[str, Any]:
 
         log_info(f"Time announcement: {message}")
 
-        if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=message, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            from app.tts.tts_engine import play
-
-            play(message)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=message, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {"success": True, "message": f"Time announced: {time_str}", "spoken_text": message}
 
@@ -316,12 +317,18 @@ def hourly_time_announcement(**kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to announce time: {e}"}
 
 
-def break_reminder(**kwargs) -> dict[str, Any]:
+async def break_reminder(bus, **kwargs) -> dict[str, Any]:
     """
     Remind the user to take a break.
+
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments including message
     """
     try:
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot deliver break reminder")
+            return {"success": False, "message": "Bus not available"}
 
         reminders = [
             "Time for a break! Step away from the screen and stretch a bit.",
@@ -335,23 +342,16 @@ def break_reminder(**kwargs) -> dict[str, Any]:
 
         log_info(f"Break reminder: {reminder}")
 
-        if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=reminder, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            from app.tts.tts_engine import play
-
-            play(reminder)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=reminder, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {
             "success": True,
@@ -364,12 +364,18 @@ def break_reminder(**kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver break reminder: {e}"}
 
 
-def water_reminder(**kwargs) -> dict[str, Any]:
+async def water_reminder(bus, **kwargs) -> dict[str, Any]:
     """
     Remind the user to drink water.
+
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments including message
     """
     try:
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot deliver water reminder")
+            return {"success": False, "message": "Bus not available"}
 
         reminders = [
             "Don't forget to stay hydrated! Time for some water.",
@@ -383,23 +389,16 @@ def water_reminder(**kwargs) -> dict[str, Any]:
 
         log_info(f"Water reminder: {reminder}")
 
-        if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=reminder, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            from app.tts.tts_engine import play
-
-            play(reminder)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=reminder, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {
             "success": True,
@@ -412,12 +411,18 @@ def water_reminder(**kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver water reminder: {e}"}
 
 
-def motivational_message(**kwargs) -> dict[str, Any]:
+async def motivational_message(bus, **kwargs) -> dict[str, Any]:
     """
     Deliver a motivational message.
+
+    Args:
+        bus: MessageBus instance (injected by scheduler_manager)
+        **kwargs: Additional arguments including message
     """
     try:
-        bus = kwargs.get("bus")
+        if not bus:
+            log_error("Bus not provided to callback - cannot deliver motivational message")
+            return {"success": False, "message": "Bus not available"}
 
         messages = [
             "You're doing great! Keep up the excellent work!",
@@ -433,23 +438,16 @@ def motivational_message(**kwargs) -> dict[str, Any]:
 
         log_info(f"Motivational message: {message}")
 
-        if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+        from app.messaging import TTSTopics
+        from app.tts import TTSRequest
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSTopics.REQUEST,
-                    TTSRequest(text=message, interrupt=False),
-                    event=False,
-                    priority=10,
-                    origin="internal",
-                )
-            )
-        else:
-            from app.tts.tts_engine import play
-
-            play(message)
+        await bus.publish(
+            TTSTopics.REQUEST,
+            TTSRequest(text=message, interrupt=False),
+            event=False,
+            priority=10,
+            origin="scheduler",
+        )
 
         return {
             "success": True,
@@ -473,35 +471,35 @@ def _get_callback_for_action(action: str, message: str = None, **kwargs) -> tupl
 
     if action in ["speak", "say"]:
         # Use the local speak_reminder callback
-        return "app.langgraph.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
+        return "app.tooling.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
 
     elif action == "reminder":
         # Use the local speak_reminder callback with reminder prefix
         reminder_text = f"Reminder: {message}" if message else "Scheduled reminder"
-        return "app.langgraph.tools.scheduler_tool.speak_reminder", {"message": reminder_text}
+        return "app.tooling.tools.scheduler_tool.speak_reminder", {"message": reminder_text}
 
     elif action in ["greeting", "daily_greeting"]:
         # Use the local daily_greeting callback
-        return "app.langgraph.tools.scheduler_tool.daily_greeting", {}
+        return "app.tooling.tools.scheduler_tool.daily_greeting", {}
 
     elif action == "break_reminder":
         # Use the local break_reminder callback
         callback_args = {"message": message} if message else {}
-        return "app.langgraph.tools.scheduler_tool.break_reminder", callback_args
+        return "app.tooling.tools.scheduler_tool.break_reminder", callback_args
 
     elif action == "water_reminder":
         # Use the local water_reminder callback
         callback_args = {"message": message} if message else {}
-        return "app.langgraph.tools.scheduler_tool.water_reminder", callback_args
+        return "app.tooling.tools.scheduler_tool.water_reminder", callback_args
 
     elif action in ["motivational", "motivational_message"]:
         # Use the local motivational_message callback
         callback_args = {"message": message} if message else {}
-        return "app.langgraph.tools.scheduler_tool.motivational_message", callback_args
+        return "app.tooling.tools.scheduler_tool.motivational_message", callback_args
 
     elif action in ["time_announcement", "hourly_time_announcement"]:
         # Use the local hourly_time_announcement callback
-        return "app.langgraph.tools.scheduler_tool.hourly_time_announcement", {}
+        return "app.tooling.tools.scheduler_tool.hourly_time_announcement", {}
 
     elif action == "callback":
         # Advanced usage - user can specify custom callback
