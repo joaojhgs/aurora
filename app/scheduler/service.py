@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, Envelope, Event, MessageBus, SchedulerTopics
+from app.messaging.priority_helpers import get_system_priority
 from app.scheduler import get_cron_service
 
 # Global scheduler service instance for callback access
@@ -280,7 +281,7 @@ class SchedulerService:
                     action=action,
                     scheduled_time=datetime.utcnow().isoformat(),
                 ),
-                priority=50,  # System priority
+                priority=get_system_priority(),  # System priority
                 origin="system",
             )
 
@@ -303,14 +304,14 @@ class SchedulerService:
                         from app.messaging import TTSTopics
                         from app.tts import TTSRequest
 
-                        await self.bus.publish(TTSTopics.REQUEST, TTSRequest(text=text, interrupt=False), event=False, origin="scheduler")
+                        await self.bus.publish(TTSTopics.REQUEST, TTSRequest(text=text, interrupt=False), event=False, origin="system")
                     elif service == "orchestrator":
                         # Send to orchestrator as user input
                         from app.messaging import OrchestratorTopics
                         from app.orchestrator.service import UserInput
 
                         await self.bus.publish(
-                            OrchestratorTopics.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="scheduler"
+                            OrchestratorTopics.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="system"
                         )
                     else:
                         log_warning(f"Unknown action service: {service}")
@@ -331,7 +332,7 @@ class SchedulerService:
                     job_name=job_name,
                     success=True,
                 ),
-                priority=50,
+                priority=get_system_priority(),
                 origin="system",
             )
 
@@ -347,7 +348,7 @@ class SchedulerService:
                     success=False,
                     error=str(e),
                 ),
-                priority=50,
+                priority=get_system_priority(),
                 origin="system",
             )
 
