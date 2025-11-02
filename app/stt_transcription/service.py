@@ -14,7 +14,6 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 import time
 from collections import deque
@@ -41,8 +40,6 @@ from app.messaging import (
     TranscriptionTopics,
     TranscriptionType,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class VADMode(Enum):
@@ -141,7 +138,7 @@ class TranscriptionService:
         # Start processing thread
         self._start_processing_thread()
 
-        log_info("✅ Transcription service started")
+        log_info("Transcription service started")
 
     async def stop(self) -> None:
         """Stop the transcription service."""
@@ -156,15 +153,15 @@ class TranscriptionService:
         if self._process_thread and self._process_thread.is_alive():
             self._process_thread.join(timeout=5.0)
 
-        log_info("✅ Transcription service stopped")
+        log_info("Transcription service stopped")
 
     def _initialize_vad(self) -> None:
         """Initialize Voice Activity Detection."""
         try:
             self._vad = webrtcvad.Vad(self._vad_mode.value)
-            log_info(f"✅ VAD initialized (mode: {self._vad_mode.name})")
+            log_info(f"VAD initialized (mode: {self._vad_mode.name})")
         except Exception as e:
-            log_error(f"❌ Failed to initialize VAD: {e}")
+            log_error(f"Failed to initialize VAD: {e}")
             self._vad = None
 
     async def _load_models(self) -> None:
@@ -193,7 +190,7 @@ class TranscriptionService:
                 self._realtime_model = WhisperModel(
                     realtime_model_size, device=realtime_device, compute_type=realtime_compute_type, download_root=download_root
                 )
-                log_info(f"✅ Realtime model loaded ({realtime_model_size})")
+                log_info(f"Realtime model loaded ({realtime_model_size})")
 
             # Load accurate model (slower, higher accuracy)
             if self._accurate_enabled:
@@ -201,10 +198,10 @@ class TranscriptionService:
                 self._accurate_model = WhisperModel(
                     accurate_model_size, device=accurate_device, compute_type=accurate_compute_type, download_root=download_root
                 )
-                log_info(f"✅ Accurate model loaded ({accurate_model_size})")
+                log_info(f"Accurate model loaded ({accurate_model_size})")
 
         except Exception as e:
-            log_error(f"❌ Failed to load models: {e}", exc_info=True)
+            log_error(f"Failed to load models: {e}", exc_info=True)
             raise
 
     def _start_processing_thread(self) -> None:
@@ -212,7 +209,7 @@ class TranscriptionService:
         self._transcribing = True
         self._process_thread = threading.Thread(target=self._processing_loop, daemon=False, name="Transcription-Processor")
         self._process_thread.start()
-        log_info("✅ Processing thread started")
+        log_info("Processing thread started")
 
     def _processing_loop(self) -> None:
         """Main processing loop (runs in thread)."""
@@ -309,7 +306,7 @@ class TranscriptionService:
             log_debug(f"Segment too short ({duration_ms:.0f}ms), skipping")
             return
 
-        log_info(f"📝 Transcribing segment ({duration_ms:.0f}ms, {len(segment_data)} bytes)")
+        log_debug(f"Transcribing segment ({duration_ms:.0f}ms, {len(segment_data)} bytes)")
 
         # Convert to float32 numpy array
         audio_np = self._bytes_to_numpy(segment_data)
@@ -371,7 +368,7 @@ class TranscriptionService:
                 return
 
             elapsed_ms = (time.time() - start_time) * 1000
-            log_info(f"✅ {transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)")
+            log_info(f"{transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)")
 
             # Emit result
             self._emit_result(
@@ -386,7 +383,7 @@ class TranscriptionService:
             self._transcriptions_done += 1
 
         except Exception as e:
-            log_error(f"❌ Transcription error ({transcription_type.value}): {e}", exc_info=True)
+            log_error(f"Transcription error ({transcription_type.value}): {e}", exc_info=True)
             self._emit_error(error_message=str(e), error_type="transcription_failed")
 
     def _emit_result(
@@ -475,8 +472,8 @@ class TranscriptionService:
         # Store audio format if first chunk
         if self._audio_format is None:
             self._audio_format = chunk.format
-            log_info(f"Audio format: {chunk.format.sample_rate}Hz, {chunk.format.channels}ch, {chunk.format.encoding.value}")
-            log_info(f"Audio source: {self._current_source}, stream_id: {self._current_stream_id}")
+            log_debug(f"Audio format: {chunk.format.sample_rate}Hz, {chunk.format.channels}ch, {chunk.format.encoding.value}")
+            log_debug(f"Audio source: {self._current_source}, stream_id: {self._current_stream_id}")
 
         # Add to buffer
         with self._buffer_lock:

@@ -11,15 +11,14 @@ This implementation provides:
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections import defaultdict
 
 from pydantic import BaseModel
 
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+
 from .bus import Envelope, Handler, QueryResult
 from .event_registry import get_event_registry
-
-logger = logging.getLogger(__name__)
 
 
 class LocalBus:
@@ -82,14 +81,14 @@ class LocalBus:
 
     async def start(self) -> None:
         """Start the message bus."""
-        logger.info("LocalBus started")
+        log_info("LocalBus started")
 
     async def stop(self) -> None:
         """Stop the message bus and cleanup resources."""
-        logger.info("Stopping LocalBus...")
+        log_info("Stopping LocalBus...")
         self._shutdown.set()
         await asyncio.sleep(0.1)  # Give workers time to finish
-        logger.info("LocalBus stopped")
+        log_info("LocalBus stopped")
 
     def subscribe(self, topic: str, handler: Handler) -> None:
         """Subscribe to a topic with a handler.
@@ -107,11 +106,11 @@ class LocalBus:
                 registry = get_event_registry()
                 registry.validate_subscribe(topic)
             except ValueError as e:
-                logger.error(f"Topic validation failed for subscription: {e}")
+                log_error(f"Topic validation failed for subscription: {e}")
                 raise
 
         self._subs[topic].append(handler)
-        logger.debug(f"Subscribed handler to topic: {topic}")
+        log_debug(f"Subscribed handler to topic: {topic}")
 
         # Start event worker for this topic if not already started
         if not self._evt_workers_started[topic]:
@@ -134,7 +133,7 @@ class LocalBus:
                 matching_handlers.extend(handlers)
 
         if not matching_handlers:
-            logger.debug(f"No subscribers for topic: {topic}")
+            log_debug(f"No subscribers for topic: {topic}")
             return
 
         # Run all handlers concurrently
@@ -143,7 +142,7 @@ class LocalBus:
                 await handler(env)
                 self._stats["delivered"] += 1
             except Exception as e:
-                logger.error(
+                log_error(
                     f"Error in handler for topic {topic}: {e}",
                     exc_info=True,
                 )
@@ -185,7 +184,7 @@ class LocalBus:
             topic: Topic to process events for
         """
         queue = self._evt_queues[topic]
-        logger.debug(f"Event worker started for topic: {topic}")
+        log_debug(f"Event worker started for topic: {topic}")
 
         while not self._shutdown.is_set():
             try:
@@ -195,7 +194,7 @@ class LocalBus:
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                logger.error(f"Error in event worker for {topic}: {e}")
+                log_error(f"Error in event worker for {topic}: {e}")
 
     async def _command_worker(self, topic: str) -> None:
         """Worker for processing command messages with retry logic.
@@ -204,7 +203,7 @@ class LocalBus:
             topic: Topic to process commands for
         """
         queue = self._cmd_queues[topic]
-        logger.info(f"Command worker started for topic: {topic}")
+        log_info(f"Command worker started for topic: {topic}")
 
         while not self._shutdown.is_set():
             try:
@@ -214,7 +213,7 @@ class LocalBus:
                 try:
                     await self._deliver(topic, env, raise_errors=True)
                 except Exception as e:
-                    logger.error(f"Error delivering command to {topic} " f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}")
+                    log_error(f"Error delivering command to {topic} " f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}")
 
                     # Retry with exponential backoff
                     env.attempts += 1
@@ -227,12 +226,12 @@ class LocalBus:
                         queue.task_done()  # Mark current task done before re-queueing
                         self._counter += 1
                         await queue.put((prio, self._counter, env))
-                        logger.info(f"Re-queued command {env.id} to {topic} " f"(attempt {env.attempts}/{env.max_attempts})")
+                        log_info(f"Re-queued command {env.id} to {topic} " f"(attempt {env.attempts}/{env.max_attempts})")
                     else:
                         # Dead-letter
                         self._stats["dead_letters"] += 1
                         await self._dead_letter.put(env)
-                        logger.error(f"Command {env.id} to {topic} exceeded max attempts, " f"moved to dead-letter queue")
+                        log_error(f"Command {env.id} to {topic} exceeded max attempts, " f"moved to dead-letter queue")
                         queue.task_done()
                 else:
                     # Success case
@@ -241,7 +240,7 @@ class LocalBus:
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                logger.error(f"Error in command worker for {topic}: {e}")
+                log_error(f"Error in command worker for {topic}: {e}")
 
     async def publish(
         self,
@@ -278,7 +277,7 @@ class LocalBus:
                 registry = get_event_registry()
                 registry.validate_publish(topic)
             except ValueError as e:
-                logger.error(f"Topic validation failed for publish: {e}")
+                log_error(f"Topic validation failed for publish: {e}")
                 raise
 
         env = Envelope(
@@ -300,9 +299,9 @@ class LocalBus:
 
             try:
                 await self._evt_queues[topic].put(env)
-                logger.debug(f"Published event to {topic}")
+                log_debug(f"Published event to {topic}")
             except asyncio.QueueFull:
-                logger.warning(f"Event queue full for {topic}, dropping message")
+                log_warning(f"Event queue full for {topic}, dropping message")
         else:
             # Command: point-to-point with priority
             if not self._cmd_workers_started[topic]:
@@ -313,9 +312,9 @@ class LocalBus:
                 # Use counter as tiebreaker to ensure FIFO for same priority
                 self._counter += 1
                 await self._cmd_queues[topic].put((priority, self._counter, env))
-                logger.debug(f"Published command to {topic} with priority {priority}")
+                log_debug(f"Published command to {topic} with priority {priority}")
             except asyncio.QueueFull:
-                logger.error(f"Command queue full for {topic}, cannot publish")
+                log_error(f"Command queue full for {topic}, cannot publish")
                 raise
 
     async def request(
@@ -359,25 +358,25 @@ class LocalBus:
                 if hasattr(env.payload, "__class__") and hasattr(env.payload.__class__, "model_dump"):
                     try:
                         result_data = env.payload.model_dump()
-                        logger.debug(f"Reply handler: model_dump result = {result_data}")
+                        log_debug(f"Reply handler: model_dump result = {result_data}")
                     except Exception as e:
-                        logger.error(f"Failed to dump model: {e}")
+                        log_error(f"Failed to dump model: {e}")
                         result_data = {"data": str(env.payload)}
                 elif isinstance(env.payload, dict):
                     result_data = env.payload
-                    logger.debug(f"Reply handler: dict payload = {result_data}")
+                    log_debug(f"Reply handler: dict payload = {result_data}")
                 else:
                     # Unexpected payload type, wrap it
-                    logger.warning(f"Reply handler: unexpected payload type {type(env.payload)}")
+                    log_warning(f"Reply handler: unexpected payload type {type(env.payload)}")
                     result_data = {"data": str(env.payload)}
 
                 # If result_data has 'ok' field, it's already a QueryResult-like structure
                 if isinstance(result_data, dict) and "ok" in result_data:
-                    logger.debug("Reply handler: Creating QueryResult from dict with ok field")
+                    log_debug("Reply handler: Creating QueryResult from dict with ok field")
                     fut.set_result(QueryResult(**result_data))
                 else:
                     # Wrap the data in a successful QueryResult
-                    logger.debug("Reply handler: Wrapping data in QueryResult")
+                    log_debug("Reply handler: Wrapping data in QueryResult")
                     fut.set_result(QueryResult(ok=True, data=result_data))
 
         # Temporarily disable validation for reply topic subscription
@@ -402,7 +401,7 @@ class LocalBus:
             result = await asyncio.wait_for(fut, timeout)
             return result
         except asyncio.TimeoutError:
-            logger.error(f"Request to {topic} timed out after {timeout}s")
+            log_error(f"Request to {topic} timed out after {timeout}s")
             return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
 
     def get_stats(self) -> dict:

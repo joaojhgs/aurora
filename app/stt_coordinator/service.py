@@ -16,7 +16,6 @@ independently without coordination.
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime
 from enum import Enum
 
@@ -34,8 +33,6 @@ from app.messaging import (
     TranscriptionTopics,
     WakeWordTopics,
 )
-
-logger = logging.getLogger(__name__)
 
 
 # States for the coordinator state machine
@@ -155,7 +152,7 @@ class STTCoordinatorService:
         # Set initial state
         await self._transition_to(STTState.IDLE)
 
-        log_info("✅ STT coordinator started")
+        log_info("STT coordinator started")
         log_info(f"   Listen timeout: {self._listen_timeout_seconds}s")
         log_info(f"   Multi-turn: {'enabled' if self._multi_turn_enabled else 'disabled'}")
         log_info(f"   Pause TTS: {'yes' if self._pause_tts_on_listening else 'no'}")
@@ -181,7 +178,7 @@ class STTCoordinatorService:
         if self._current_session_id:
             await self._end_session("manual")
 
-        log_info("✅ STT coordinator stopped")
+        log_info("STT coordinator stopped")
         log_info(f"   Sessions: {self._sessions_started} started, " f"{self._sessions_completed} completed, {self._sessions_timeout} timeout")
 
     async def _transition_to(self, new_state: STTState) -> None:
@@ -195,7 +192,7 @@ class STTCoordinatorService:
             self._state = new_state
 
             if old_state != new_state:
-                log_info(f"🔄 State transition: {old_state.value} → {new_state.value}")
+                log_info(f"State transition: {old_state.value} → {new_state.value}")
 
     async def _on_wake_word_detected(self, envelope: Envelope) -> None:
         """Handle wake word detection event.
@@ -206,7 +203,7 @@ class STTCoordinatorService:
         wake_word_event = envelope.payload
         wake_word = wake_word_event.wake_word
 
-        log_info(f"🎤 Wake word detected: '{wake_word}'")
+        log_info(f"Wake word detected: '{wake_word}'")
 
         # Only start new session if in IDLE state
         async with self._state_lock:
@@ -230,7 +227,7 @@ class STTCoordinatorService:
         self._accumulated_transcription = ""
         self._sessions_started += 1
 
-        log_info(f"▶️  Starting STT session: {session_id}")
+        log_info(f"Starting STT session: {session_id}")
 
         # Transition to LISTENING state
         await self._transition_to(STTState.LISTENING)
@@ -264,7 +261,7 @@ class STTCoordinatorService:
             await asyncio.sleep(self._listen_timeout_seconds)
 
             # Timeout reached
-            log_warning(f"⏱️  Session timeout ({self._listen_timeout_seconds}s)")
+            log_warning(f"Session timeout ({self._listen_timeout_seconds}s)")
 
             async with self._state_lock:
                 if self._state == STTState.LISTENING:
@@ -294,7 +291,7 @@ class STTCoordinatorService:
                 log_debug(f"Ignoring transcription (state: {self._state.value})")
                 return
 
-        log_info(f"📝 Transcription captured: '{text}'")
+        log_info(f"Transcription captured: '{text}'")
 
         # Cancel timeout
         if self._timeout_task and not self._timeout_task.done():
@@ -312,16 +309,16 @@ class STTCoordinatorService:
         # Emit user speech captured event
         speech_event = STTUserSpeechCaptured(session_id=self._current_session_id or "unknown", text=text, confidence=result.confidence, is_final=True)
 
-        log_info(f"🚀 Publishing STTUserSpeechCaptured to topic: {STTCoordinatorTopics.USER_SPEECH_CAPTURED}")
-        log_info(f"   Event data: session={speech_event.session_id}, text='{speech_event.text}', is_final={speech_event.is_final}")
+        log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTCoordinatorTopics.USER_SPEECH_CAPTURED}")
+        log_debug(f"Event data: session={speech_event.session_id}, text='{speech_event.text}', is_final={speech_event.is_final}")
 
         await self.bus.publish(STTCoordinatorTopics.USER_SPEECH_CAPTURED, speech_event)
 
-        log_info("✅ Successfully published STTUserSpeechCaptured event")
+        log_debug("Successfully published STTUserSpeechCaptured event")
 
         # Check if we should continue listening (multi-turn)
         if self._multi_turn_enabled:
-            log_info("💬 Multi-turn enabled, continuing to listen...")
+            log_debug("Multi-turn enabled, continuing to listen...")
             await self._transition_to(STTState.LISTENING)
             self._timeout_task = asyncio.create_task(self._timeout_handler())
         else:
@@ -340,7 +337,7 @@ class STTCoordinatorService:
         session_id = self._current_session_id
         transcription = self._accumulated_transcription
 
-        log_info(f"⏹️  Ending session {session_id} (reason: {reason})")
+        log_info(f"Ending session {session_id} (reason: {reason})")
 
         if reason == "complete":
             self._sessions_completed += 1

@@ -14,7 +14,6 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 import uuid
 from datetime import datetime
@@ -36,8 +35,6 @@ from app.messaging import (
     Envelope,
     MessageBus,
 )
-
-logger = logging.getLogger(__name__)
 
 
 # Control messages
@@ -115,7 +112,7 @@ class AudioInputService:
         if config_manager.get("general.speech_to_text.audio_input.auto_start", True):
             await self._start_capture()
 
-        log_info("✅ AudioInputService started")
+        log_info("AudioInputService started")
 
     async def stop(self) -> None:
         """Stop the audio input service."""
@@ -132,7 +129,7 @@ class AudioInputService:
             self._pyaudio.terminate()
             self._pyaudio = None
 
-        log_info("✅ AudioInputService stopped")
+        log_info("AudioInputService stopped")
 
     def _load_config(self) -> None:
         """Load configuration from config manager."""
@@ -153,12 +150,12 @@ class AudioInputService:
             self._pyaudio = pyaudio.PyAudio()
 
             # Log available devices
-            log_info("Available audio input devices:")
+            log_debug("Available audio input devices:")
             for i in range(self._pyaudio.get_device_count()):
                 try:
                     info = self._pyaudio.get_device_info_by_index(i)
                     if info.get("maxInputChannels", 0) > 0:
-                        log_info(
+                        log_debug(
                             f"  [{i}] {info.get('name')} " f"(channels: {info.get('maxInputChannels')}, " f"rate: {info.get('defaultSampleRate')})"
                         )
                 except Exception as e:
@@ -168,7 +165,7 @@ class AudioInputService:
             if self._device_index is None:
                 default_device = self._pyaudio.get_default_input_device_info()
                 self._device_index = default_device["index"]
-                log_info(f"Using default input device: {default_device['name']}")
+                log_debug(f"Using default input device: {default_device['name']}")
 
         except Exception as e:
             log_error(f"Failed to initialize PyAudio: {e}", exc_info=True)
@@ -228,7 +225,7 @@ class AudioInputService:
             self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True, name="AudioCapture")
             self._capture_thread.start()
 
-            log_info(f"✅ Audio capture started (stream_id: {self._stream_id})")
+            log_info(f"Audio capture started (stream_id: {self._stream_id})")
 
         except Exception as e:
             log_error(f"Failed to start audio capture: {e}", exc_info=True)
@@ -284,7 +281,7 @@ class AudioInputService:
                 self._loop,
             )
 
-        log_info(f"✅ Audio capture stopped ({self._total_chunks} chunks)")
+        log_info(f"Audio capture stopped ({self._total_chunks} chunks)")
 
     def _capture_loop(self) -> None:
         """Capture loop running in separate thread."""

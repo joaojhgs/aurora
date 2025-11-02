@@ -7,13 +7,10 @@ Ensures proper initialization order: load MCP tools first, then sync with databa
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Callable
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-
-logger = logging.getLogger(__name__)
 
 
 class ToolsManager:

@@ -9,7 +9,6 @@ This service:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from pydantic import BaseModel
@@ -17,8 +16,6 @@ from pydantic import BaseModel
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, Envelope, Event, MessageBus, Query, ToolingTopics
 from app.tooling.tools_manager import ToolsManager, set_tools_manager
-
-logger = logging.getLogger(__name__)
 
 
 # Message definitions

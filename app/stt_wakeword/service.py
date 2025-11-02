@@ -14,8 +14,6 @@ Features:
 
 from __future__ import annotations
 
-import logging
-
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
@@ -36,8 +34,6 @@ from app.stt_wakeword.messages import (
     WakeWordControl,
     WakeWordDetected,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class WakeWordService:
@@ -93,7 +89,7 @@ class WakeWordService:
         self._running = True
         self._enabled = True
 
-        log_info(f"✅ WakeWordService started (backend: {self._backend_type.value})")
+        log_info(f"WakeWordService started (backend: {self._backend_type.value})")
 
     async def stop(self) -> None:
         """Stop the wake word service."""
@@ -107,7 +103,7 @@ class WakeWordService:
             await self._backend.cleanup()
             self._backend = None
 
-        log_info("✅ WakeWordService stopped")
+        log_info("WakeWordService stopped")
 
     def _load_config(self) -> None:
         """Load configuration from config manager."""
@@ -159,7 +155,7 @@ class WakeWordService:
             raise ValueError(f"Unknown wake word backend: {self._backend_type}")
 
         await self._backend.initialize()
-        log_info("✅ Wake word backend initialized")
+        log_info("Wake word backend initialized")
 
     async def _on_audio_chunk(self, env: Envelope) -> None:
         """Handle incoming audio chunks.

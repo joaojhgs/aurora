@@ -12,16 +12,15 @@ This implementation uses Redis and BullMQ for distributed message processing:
 from __future__ import annotations
 
 import asyncio
-import logging
 import uuid as uuid_lib
 from collections import defaultdict
 
 from pydantic import BaseModel
 
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+
 from .bus import Envelope, Handler, QueryResult
 from .event_registry import get_event_registry
-
-logger = logging.getLogger(__name__)
 
 
 class BullMQBus:
@@ -84,7 +83,7 @@ class BullMQBus:
             self._QueueEvents = QueueEvents
             self._available = True
         except ImportError:
-            logger.warning("bullmq package not available. Install with: pip install bullmq")
+            log_warning("bullmq package not available. Install with: pip install bullmq")
             self._available = False
 
     async def start(self) -> None:
@@ -93,30 +92,30 @@ class BullMQBus:
             raise RuntimeError("BullMQ not available. Install with: pip install bullmq")
 
         self._started = True
-        logger.info(f"BullMQBus started with Redis at {self.redis_url}")
+        log_info(f"BullMQBus started with Redis at {self.redis_url}")
 
     async def stop(self) -> None:
         """Stop the message bus and cleanup resources."""
-        logger.info("Stopping BullMQBus...")
+        log_info("Stopping BullMQBus...")
 
         # Close all workers
         for topic, worker in list(self._workers.items()):
             try:
                 await worker.close()
-                logger.debug(f"Closed worker for topic: {topic}")
+                log_debug(f"Closed worker for topic: {topic}")
             except Exception as e:
-                logger.error(f"Error closing worker for {topic}: {e}")
+                log_error(f"Error closing worker for {topic}: {e}")
 
         # Close all queues
         for topic, queue in list(self._queues.items()):
             try:
                 await queue.close()
-                logger.debug(f"Closed queue for topic: {topic}")
+                log_debug(f"Closed queue for topic: {topic}")
             except Exception as e:
-                logger.error(f"Error closing queue for {topic}: {e}")
+                log_error(f"Error closing queue for {topic}: {e}")
 
         self._started = False
-        logger.info("BullMQBus stopped")
+        log_info("BullMQBus stopped")
 
     def subscribe(self, topic: str, handler: Handler) -> None:
         """Subscribe to a topic with a handler.
@@ -139,7 +138,7 @@ class BullMQBus:
                 registry = get_event_registry()
                 registry.validate_subscribe(topic)
             except ValueError as e:
-                logger.error(f"Topic validation failed for subscription: {e}")
+                log_error(f"Topic validation failed for subscription: {e}")
                 raise
 
         # Check if topic has wildcard
@@ -155,7 +154,7 @@ class BullMQBus:
             if base_queue not in self._workers:
                 self._create_worker(base_queue)
 
-            logger.debug(f"Subscribed wildcard handler to pattern: {topic}")
+            log_debug(f"Subscribed wildcard handler to pattern: {topic}")
         else:
             # Direct topic subscription
             self._handlers[topic].append(handler)
@@ -164,7 +163,7 @@ class BullMQBus:
             if topic not in self._workers:
                 self._create_worker(topic)
 
-            logger.debug(f"Subscribed handler to topic: {topic}")
+            log_debug(f"Subscribed handler to topic: {topic}")
 
     def _create_worker(self, queue_name: str) -> None:
         """Create a BullMQ worker for a queue.
@@ -204,14 +203,14 @@ class BullMQBus:
                         matching_handlers.extend(handlers)
 
                 if not matching_handlers:
-                    logger.debug(f"No handlers for topic: {actual_topic}")
+                    log_debug(f"No handlers for topic: {actual_topic}")
                     return
 
                 # Execute all handlers concurrently
                 await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
 
                 self._stats["delivered"] += 1
-                logger.debug(f"Processed job {job.id} for topic {actual_topic}")
+                log_debug(f"Processed job {job.id} for topic {actual_topic}")
 
                 # Handle reply_to for request/response
                 if env.reply_to:
@@ -230,7 +229,7 @@ class BullMQBus:
                                 fut.set_result(QueryResult(ok=True, data=result_data))
 
             except Exception as e:
-                logger.error(
+                log_error(
                     f"Error processing job {job.id} for queue {queue_name}: {e}",
                     exc_info=True,
                 )
@@ -251,7 +250,7 @@ class BullMQBus:
         worker.on("failed", lambda job, error: self._on_job_failed(job, error))
 
         self._workers[queue_name] = worker
-        logger.info(f"Created BullMQ worker for queue: {queue_name}")
+        log_info(f"Created BullMQ worker for queue: {queue_name}")
 
     async def _call_handler(self, handler: Handler, env: Envelope) -> None:
         """Call a handler with error handling.
@@ -263,7 +262,7 @@ class BullMQBus:
         try:
             await handler(env)
         except Exception as e:
-            logger.error(f"Error in handler for topic {env.type}: {e}", exc_info=True)
+            log_error(f"Error in handler for topic {env.type}: {e}", exc_info=True)
             raise
 
     def _on_job_failed(self, job, error) -> None:
@@ -274,7 +273,7 @@ class BullMQBus:
             error: Error that caused failure
         """
         self._stats["dead_letters"] += 1
-        logger.error(f"Job {job.id} moved to dead-letter: {error}", exc_info=True if error else False)
+        log_error(f"Job {job.id} moved to dead-letter: {error}", exc_info=True if error else False)
 
     def _topic_matches(self, topic: str, pattern: str) -> bool:
         """Check if a topic matches a subscription pattern.
@@ -331,7 +330,7 @@ class BullMQBus:
                 registry = get_event_registry()
                 registry.validate_publish(topic)
             except ValueError as e:
-                logger.error(f"Topic validation failed for publish: {e}")
+                log_error(f"Topic validation failed for publish: {e}")
                 raise
 
         # Determine target queue (for wildcards, use base queue)
@@ -382,7 +381,7 @@ class BullMQBus:
         await queue.add(queue_name, job_data, job_opts)
         self._stats["published"] += 1
 
-        logger.debug(f"Published message to BullMQ queue {queue_name} (topic: {topic}) " f"with priority {priority}")
+        log_debug(f"Published message to BullMQ queue {queue_name} (topic: {topic}) " f"with priority {priority}")
 
     async def request(
         self,
@@ -488,15 +487,15 @@ class BullMQBus:
         await queue.add(queue_name, job_data, job_opts)
         self._stats["published"] += 1
 
-        logger.debug(f"Sent request to {topic} with correlation_id {correlation_id}")
+        log_debug(f"Sent request to {topic} with correlation_id {correlation_id}")
 
         # Wait for response with timeout
         try:
             result = await asyncio.wait_for(fut, timeout)
-            logger.debug(f"Received response for correlation_id {correlation_id}")
+            log_debug(f"Received response for correlation_id {correlation_id}")
             return result
         except asyncio.TimeoutError:
-            logger.error(f"Request to {topic} timed out after {timeout}s")
+            log_error(f"Request to {topic} timed out after {timeout}s")
             # Clean up future
             self._response_futures.pop(correlation_id, None)
             return QueryResult(ok=False, error=f"Request timeout after {timeout}s")

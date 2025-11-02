@@ -10,7 +10,6 @@ This service:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -24,8 +23,6 @@ from app.messaging import (
     TTSTopics,
 )
 from app.orchestrator.graph import stream_graph_updates
-
-logger = logging.getLogger(__name__)
 
 
 # Message definitions
@@ -121,11 +118,11 @@ class OrchestratorService:
                 log_info("   Skipping non-final transcription")
                 return
 
-            log_info("✅ Processing transcription: {event.text}")
+            log_info(f"Processing transcription: {event.text}")
             await self._process_input(event.text, source="stt")
 
         except Exception as e:
-            log_error(f"❌ Error processing transcription: {e}", exc_info=True)
+            log_error(f"Error processing transcription: {e}", exc_info=True)
 
     async def _on_user_input(self, env: Envelope) -> None:
         """Handle UI user input command.

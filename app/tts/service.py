@@ -10,7 +10,6 @@ This service:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
@@ -31,8 +30,6 @@ def restore_volume_except_current():
     """Placeholder for restoring system volume after TTS."""
     pass
 
-
-logger = logging.getLogger(__name__)
 
 file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
