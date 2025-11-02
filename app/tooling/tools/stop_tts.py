@@ -1,11 +1,13 @@
 from langchain_core.tools import tool
 
+from app.messaging import MessageBus
 from app.messaging.service_topics import TTSTopics
+from app.messaging.priority_helpers import get_interactive_priority
 from app.tts.service import TTSStop
 
 
 @tool
-async def stop_tts_tool(bus):
+async def stop_tts_tool(bus: MessageBus):
     """
     This tool should be used by the assistant whenever it thinks the user want's it to stop or interrupt current response from being spoken.
     It will stop whatever previous answer was being played before, if one was being played.
@@ -18,7 +20,7 @@ async def stop_tts_tool(bus):
         TTSTopics.STOP,
         TTSStop(),
         event=False,
-        priority=0,  # Highest priority
+        priority=get_interactive_priority(),  # Highest priority for stop commands
         origin="internal",
     )
     return "END"
