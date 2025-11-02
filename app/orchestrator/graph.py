@@ -10,11 +10,12 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import tools_condition
+from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
-from app.messaging import ToolingTopics
-from app.messaging.bus_runtime import get_bus
+from app.messaging import MessageBus, ToolingTopics
+from app.messaging.priority_helpers import get_interactive_priority
 from app.messaging.service_topics import TTSTopics
 from app.orchestrator.agents.chatbot import chatbot
 from app.orchestrator.memory_store import get_combined_store
@@ -26,15 +27,23 @@ from app.tts.service import TTSRequest
 class GraphOrchestrator:
     """Graph orchestrator using message bus for tool execution and TTS."""
 
-    def __init__(self):
-        """Initialize the graph orchestrator."""
+    def __init__(self, bus: MessageBus):
+        """Initialize the graph orchestrator.
+
+        Args:
+            bus: MessageBus instance (injected as dependency)
+        """
         log_debug("Initializing GraphOrchestrator...")
 
-        self.bus = get_bus()
+        self.bus = bus
         self.graph_builder = StateGraph(State)
 
+        # Create a wrapper function to pass bus to chatbot
+        async def chatbot_wrapper(state: State, store: BaseStore):
+            return await chatbot(state, store, bus=self.bus)
+
         # Add nodes
-        self.graph_builder.add_node("chatbot", chatbot)
+        self.graph_builder.add_node("chatbot", chatbot_wrapper)
         self.graph_builder.add_node("tools", self._execute_tools_via_bus)
 
         # Connect chatbot to tools or end
@@ -106,7 +115,7 @@ class GraphOrchestrator:
                     ToolingTopics.EXECUTE_TOOL,
                     ExecuteToolCommand(tool_name=tool_name, arguments=tool_args),
                     timeout=30.0,  # 30 second timeout for tool execution
-                    priority=10,
+                    priority=get_interactive_priority(),
                 )
 
                 if result.ok:
@@ -183,7 +192,7 @@ class GraphOrchestrator:
                 TTSTopics.REQUEST,
                 TTSRequest(text=text, interrupt=interrupt),
                 event=False,
-                priority=10,
+                priority=get_interactive_priority(),
                 origin="internal",
             )
         except Exception as e:
@@ -262,23 +271,33 @@ class GraphOrchestrator:
         return text
 
 
-# Global orchestrator instance
+# Global orchestrator instance (managed by OrchestratorService)
 _orchestrator: GraphOrchestrator | None = None
 
 
+def set_orchestrator(orchestrator: GraphOrchestrator) -> None:
+    """Set the global orchestrator instance.
+
+    This is called by OrchestratorService during initialization.
+
+    Args:
+        orchestrator: GraphOrchestrator instance
+    """
+    global _orchestrator
+    _orchestrator = orchestrator
+
+
 def get_orchestrator() -> GraphOrchestrator:
-    """Get or create the global graph orchestrator instance.
+    """Get the global graph orchestrator instance.
 
     Returns:
         GraphOrchestrator instance
 
     Raises:
-        RuntimeError: If called before message bus is initialized
+        RuntimeError: If called before orchestrator is initialized
     """
-    global _orchestrator
-
     if _orchestrator is None:
-        _orchestrator = GraphOrchestrator()
+        raise RuntimeError("Orchestrator not initialized. Call OrchestratorService.start() first.")
 
     return _orchestrator
 

@@ -7,8 +7,8 @@ from pydantic import create_model
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
-from app.messaging import ToolingTopics
-from app.messaging.bus_runtime import get_bus
+from app.messaging import MessageBus, ToolingTopics
+from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator.state import State
 from app.tooling.service import GetToolsQuery
 
@@ -228,7 +228,14 @@ def _json_schema_type_to_python(json_type: str) -> type:
 
 
 # Def the chatbot node
-async def chatbot(state: State, store: BaseStore):
+async def chatbot(state: State, store: BaseStore, bus: MessageBus):
+    """Chatbot node for LangGraph.
+
+    Args:
+        state: Current graph state
+        store: LangGraph store for memory access
+        bus: MessageBus instance (injected as dependency)
+    """
     # Check if llm is initialized
     if llm is None:
         raise ValueError("The language model (llm) is not initialized.")
@@ -246,14 +253,13 @@ async def chatbot(state: State, store: BaseStore):
     # well, +plugins = +tools to load
 
     # Get tools via message bus (from ToolingService)
-    bus = get_bus()
 
     # Request tools from ToolingService via bus
     result = await bus.request(
         ToolingTopics.GET_TOOLS,
         GetToolsQuery(query=state["messages"][-1].content, top_k=10),
         timeout=5.0,
-        priority=10,
+        priority=get_interactive_priority(),
     )
 
     if not result.ok:
