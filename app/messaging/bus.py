@@ -35,7 +35,7 @@ class Envelope(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: str
-    payload: BaseModel | dict
+    payload: dict | BaseModel
     reply_to: str | None = None
     correlation_id: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
