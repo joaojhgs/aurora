@@ -133,8 +133,8 @@ class BullMQBus:
         if not self._available:
             raise RuntimeError("BullMQ not available")
 
-        # Validate topic if enabled
-        if self._validate_topics:
+        # Validate topic if enabled (skip dynamic reply topics)
+        if self._validate_topics and not topic.startswith("reply."):
             try:
                 registry = get_event_registry()
                 registry.validate_subscribe(topic)
@@ -183,7 +183,7 @@ class BullMQBus:
                 env = Envelope(
                     id=job_data.get("id"),
                     type=actual_topic,
-                    payload=BaseModel.parse_obj(job_data.get("payload", {})),
+                    payload=job_data.get("payload", {}),
                     origin=job_data.get("origin", "system"),
                     priority=job.opts.get("priority", 50),
                     attempts=job.attemptsMade,
@@ -325,8 +325,8 @@ class BullMQBus:
         if not self._available:
             raise RuntimeError("BullMQ not available")
 
-        # Validate topic if enabled
-        if self._validate_topics:
+        # Validate topic if enabled (skip dynamic reply topics)
+        if self._validate_topics and not topic.startswith("reply."):
             try:
                 registry = get_event_registry()
                 registry.validate_publish(topic)
@@ -358,7 +358,7 @@ class BullMQBus:
         job_data = {
             "id": job_id,
             "type": topic,  # Store actual topic
-            "payload": message.model_dump() if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
             "origin": origin,
             "reply_to": reply_to,
         }
@@ -447,7 +447,7 @@ class BullMQBus:
         job_data = {
             "id": str(uuid_lib.uuid4()),
             "type": topic,
-            "payload": message.model_dump() if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
             "origin": origin,
             "reply_to": reply_topic,
             "correlation_id": correlation_id,
