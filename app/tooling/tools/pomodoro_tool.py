@@ -19,6 +19,11 @@ _current_session = {
 }
 
 
+def _format_absolute_time(target_time: datetime) -> str:
+    """Format datetime for CronService absolute scheduling."""
+    return target_time.replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+
+
 @tool
 async def start_pomodoro_tool(
     bus,
@@ -61,9 +66,10 @@ async def start_pomodoro_tool(
 
         # Schedule the first work session end
         cron = get_cron_service()
-        await cron.schedule_from_text(
+        work_end_time = (_current_session["start_time"] or datetime.now()) + timedelta(minutes=work_minutes)
+        await cron.schedule_absolute(
             name="pomodoro_work_end",
-            schedule_text=f"in {work_minutes} minutes",
+            absolute_time=_format_absolute_time(work_end_time),
             callback="app.tooling.tools.pomodoro_tool.work_session_end",
             callback_args={},
         )
@@ -222,9 +228,11 @@ def work_session_end(**kwargs) -> dict[str, Any]:
         # Schedule break end
         async def schedule_break_end():
             cron = get_cron_service()
-            await cron.schedule_from_text(
+            break_start = _current_session.get("start_time") or datetime.now()
+            break_end_time = break_start + timedelta(minutes=break_minutes)
+            await cron.schedule_absolute(
                 name="pomodoro_break_end",
-                schedule_text=f"in {break_minutes} minutes",
+                absolute_time=_format_absolute_time(break_end_time),
                 callback="app.tooling.tools.pomodoro_tool.break_session_end",
                 callback_args={},
             )
@@ -289,9 +297,11 @@ def break_session_end(**kwargs) -> dict[str, Any]:
         # Schedule next work session end
         async def schedule_work_end():
             cron = get_cron_service()
-            await cron.schedule_from_text(
+            work_start = _current_session.get("start_time") or datetime.now()
+            work_end_time = work_start + timedelta(minutes=work_minutes)
+            await cron.schedule_absolute(
                 name="pomodoro_work_end",
-                schedule_text=f"in {work_minutes} minutes",
+                absolute_time=_format_absolute_time(work_end_time),
                 callback="app.tooling.tools.pomodoro_tool.work_session_end",
                 callback_args={},
             )
