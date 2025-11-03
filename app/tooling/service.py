@@ -102,7 +102,7 @@ class ToolingService:
             bus: MessageBus instance
         """
         self.bus = bus
-        self.tools_manager = ToolsManager()
+        self.tools_manager = ToolsManager(bus)
         self._started = False
 
     async def start(self) -> None:
@@ -159,7 +159,38 @@ class ToolingService:
             query = GetToolsQuery.model_validate(env.payload)
             log_debug(f"Getting tools with query: {query.query}")
 
-            tools = self.tools_manager.get_tools(query.query, query.top_k)
+            # Use RAG search via bus if query is provided
+            if query.query:
+                from app.db.service import RAGSearchQuery
+                from app.messaging import DBTopics
+
+                tools = []
+                try:
+                    result = await self.bus.request(
+                        DBTopics.RAG_SEARCH,
+                        RAGSearchQuery(namespace=("tools",), query=query.query, limit=query.top_k),
+                        timeout=5.0,
+                    )
+                    names: list[str] = []
+                    if result.ok and result.data and "items" in result.data:
+                        names = [item.get("key") for item in result.data["items"] if item.get("key")]
+
+                    # Map names to tool callables
+                    for name in names:
+                        tool = self.tools_manager.get_tool_by_name(name)
+                        if tool:
+                            tools.append(tool)
+
+                except Exception as e:
+                    log_warning(f"RAG tool search failed, falling back: {e}")
+                    tools = []
+
+                # Fallback to all tools if none found
+                if not tools:
+                    tools = self.tools_manager.get_tools(None, query.top_k)
+            else:
+                # No query, return all tools
+                tools = self.tools_manager.get_tools(None, query.top_k)
 
             # Serialize tools to send through bus (only name, description, and argument descriptions)
             serialized_tools = []
