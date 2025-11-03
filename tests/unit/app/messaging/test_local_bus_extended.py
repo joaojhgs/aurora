@@ -9,13 +9,13 @@ from app.messaging.bus import Command, Envelope, Event, QueryResult
 from app.messaging.local_bus import LocalBus
 
 
-class TestEvent(Event):
+class BusEvent(Event):
     """Test event."""
 
     data: str
 
 
-class TestCommand(Command):
+class BusCommand(Command):
     """Test command."""
 
     action: str
@@ -49,7 +49,7 @@ class TestLocalBusEdgeCases:
         local_bus.subscribe("test.error", working_handler)
 
         # Publish event
-        await local_bus.publish("test.error", TestEvent(data="test"))
+        await local_bus.publish("test.error", BusEvent(data="test"))
         await asyncio.sleep(0.1)
 
         # Working handler should still receive message
@@ -67,7 +67,7 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.command", failing_command_handler)
 
-        await local_bus.publish("test.command", TestCommand(action="retry_test"), event=False, max_attempts=3)
+        await local_bus.publish("test.command", BusCommand(action="retry_test"), event=False, max_attempts=3)
 
         # Wait for retries
         await asyncio.sleep(2.0)
@@ -84,7 +84,7 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.deadletter", always_failing_handler)
 
-        await local_bus.publish("test.deadletter", TestCommand(action="will_fail"), event=False, max_attempts=2)
+        await local_bus.publish("test.deadletter", BusCommand(action="will_fail"), event=False, max_attempts=2)
 
         # Wait for all retries and dead letter
         await asyncio.sleep(1.0)
@@ -97,7 +97,7 @@ class TestLocalBusEdgeCases:
     async def test_no_subscribers(self, local_bus):
         """Test publishing to topic with no subscribers."""
         # Should not raise error
-        await local_bus.publish("nonexistent.topic", TestEvent(data="test"))
+        await local_bus.publish("nonexistent.topic", BusEvent(data="test"))
         await asyncio.sleep(0.1)
 
     # @pytest.mark.asyncio
@@ -143,7 +143,7 @@ class TestLocalBusEdgeCases:
 
         # Publish several events
         for i in range(5):
-            await local_bus.publish("test.event.many", TestEvent(data=f"msg{i}"))
+            await local_bus.publish("test.event.many", BusEvent(data=f"msg{i}"))
 
         await asyncio.sleep(0.3)
 
@@ -162,9 +162,9 @@ class TestLocalBusEdgeCases:
         local_bus.subscribe("test.wildcard.*", handler)
 
         # Publish to matching topics
-        await local_bus.publish("test.wildcard.one", TestEvent(data="1"))
-        await local_bus.publish("test.wildcard.two", TestEvent(data="2"))
-        await local_bus.publish("test.other.topic", TestEvent(data="3"))
+        await local_bus.publish("test.wildcard.one", BusEvent(data="1"))
+        await local_bus.publish("test.wildcard.two", BusEvent(data="2"))
+        await local_bus.publish("test.other.topic", BusEvent(data="3"))
 
         await asyncio.sleep(0.2)
 
@@ -185,7 +185,7 @@ class TestLocalBusEdgeCases:
         local_bus.subscribe("test.request", request_handler)
 
         # Make request
-        result = await local_bus.request("test.request", TestCommand(action="ping"), timeout=2.0)
+        result = await local_bus.request("test.request", BusCommand(action="ping"), timeout=2.0)
 
         assert result.ok is True
         assert result.data == {"response": "success"}
@@ -197,7 +197,7 @@ class TestLocalBusEdgeCases:
 
         # Request should timeout
         try:
-            result = await local_bus.request("test.nonexistent", TestCommand(action="test"), timeout=0.2)
+            result = await local_bus.request("test.nonexistent", BusCommand(action="test"), timeout=0.2)
             # If we get here, check if result is None or error
             assert result is None or not result.ok
         except (asyncio.TimeoutError, Exception):
@@ -222,7 +222,7 @@ class TestLocalBusEdgeCases:
         local_bus.subscribe("test.concurrent", handler1)
         local_bus.subscribe("test.concurrent", handler2)
 
-        await local_bus.publish("test.concurrent", TestEvent(data="test"))
+        await local_bus.publish("test.concurrent", BusEvent(data="test"))
         await asyncio.sleep(0.2)
 
         # Both should start before either finishes (concurrent execution)
@@ -241,7 +241,7 @@ class TestLocalBusEdgeCases:
 
         # Publish some messages
         for i in range(5):
-            await local_bus.publish("test.stats", TestEvent(data=f"msg{i}"))
+            await local_bus.publish("test.stats", BusEvent(data=f"msg{i}"))
 
         await asyncio.sleep(0.2)
 
@@ -257,7 +257,7 @@ class TestLocalBusEdgeCases:
             pass
 
         local_bus.subscribe("test.cleanup", handler)
-        await local_bus.publish("test.cleanup", TestEvent(data="test"))
+        await local_bus.publish("test.cleanup", BusEvent(data="test"))
 
         await asyncio.sleep(0.1)
 
@@ -282,7 +282,7 @@ class TestLocalBusEdgeCases:
         local_bus.subscribe("test.multi", handler1)
         local_bus.subscribe("test.multi", handler2)
 
-        await local_bus.publish("test.multi", TestEvent(data="test"))
+        await local_bus.publish("test.multi", BusEvent(data="test"))
         await asyncio.sleep(0.1)
 
         # Both handlers should receive
@@ -302,7 +302,7 @@ class TestLocalBusEdgeCases:
         # Publish commands with various priorities
         priorities = [99, 1, 50, 25, 75, 10, 5]
         for p in priorities:
-            await local_bus.publish("test.priority", TestCommand(action=f"prio_{p}"), event=False, priority=p)
+            await local_bus.publish("test.priority", BusCommand(action=f"prio_{p}"), event=False, priority=p)
 
         await asyncio.sleep(0.5)
 
@@ -319,7 +319,7 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.metadata", handler)
 
-        await local_bus.publish("test.metadata", TestEvent(data="test"), origin="external", priority=25)
+        await local_bus.publish("test.metadata", BusEvent(data="test"), origin="external", priority=25)
 
         await asyncio.sleep(0.1)
 

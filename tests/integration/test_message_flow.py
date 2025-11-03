@@ -29,7 +29,7 @@ async def test_tts_request_flow(bus):
     events_received: list[str] = []
 
     async def event_handler(env):
-        events_received.append(env.topic)
+        events_received.append(env.type)
 
     # Subscribe to TTS events
     bus.subscribe("TTS.*", event_handler)

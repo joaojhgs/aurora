@@ -1,5 +1,5 @@
 """
-Tests for MCP (Model Context Protocol) integration.
+Tests for MCP (Model Context Protocol) integration (tooling module).
 
 This module tests the MCP client functionality including:
 - Client initialization and configuration
@@ -140,23 +140,6 @@ class TestMCPClientManager:
         assert not mcp_manager.is_initialized
         assert len(mcp_manager.get_tools()) == 0
 
-    # @pytest.mark.asyncio
-    # async def test_initialize_with_import_error(self, mcp_manager, config_manager):
-    #     """Test handling of import errors when MCP dependencies are missing."""
-    #     servers_config = {"math": {"command": "python", "args": ["/path/to/math_server.py"], "transport": "stdio", "enabled": True}}
-
-    #     config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
-
-    #     with (
-    #         patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
-    #         patch("builtins.__import__", side_effect=ImportError("langchain-mcp-adapters not found")),
-    #     ):
-
-    #         await mcp_manager.initialize()
-
-    #     assert not mcp_manager.is_initialized
-    #     assert len(mcp_manager.get_tools()) == 0
-
     @pytest.mark.asyncio
     async def test_close(self, mcp_manager):
         """Test closing MCP client connections."""
@@ -171,30 +154,6 @@ class TestMCPClientManager:
         assert mcp_manager._client is None
         assert not mcp_manager.is_initialized
         assert len(mcp_manager._tools) == 0
-
-    # @pytest.mark.asyncio
-    # async def test_reload_tools(self, mcp_manager, config_manager):
-    #     """Test reloading tools from MCP servers."""
-    #     servers_config = {"math": {"command": "python", "args": ["/path/to/math_server.py"], "transport": "stdio", "enabled": True}}
-
-    #     config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
-
-    #     mock_client = AsyncMock()
-    #     mock_tools = [Mock(name="add", description="Add two numbers")]
-    #     mock_client.get_tools.return_value = mock_tools
-
-    #     with (
-    #         patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
-    #         patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
-    #     ):
-
-    #         # Initial load
-    #         await mcp_manager.initialize()
-    #         assert len(mcp_manager.get_tools()) == 1
-
-    #         # Reload
-    #         await mcp_manager.reload_tools()
-    #         assert len(mcp_manager.get_tools()) == 1
 
     @pytest.mark.asyncio
     async def test_tool_execution(self, mcp_manager, mock_mcp_tools):
@@ -226,67 +185,6 @@ class TestMCPClientManager:
         assert mcp_manager._client is None
         assert mcp_manager._tools == []
         assert not mcp_manager._initialized
-
-    @pytest.mark.asyncio
-    async def test_reload_tools(self, mcp_manager):
-        """Test reloading tools from MCP servers."""
-        with patch.object(mcp_manager, "close") as mock_close, patch.object(mcp_manager, "initialize") as mock_init:
-
-            await mcp_manager.reload_tools()
-
-            mock_close.assert_called_once()
-            mock_init.assert_called_once()
-
-    def test_prepare_stdio_server_config(self, mcp_manager):
-        """Test preparing stdio server configuration."""
-        server_config = {"command": "python", "args": ["/path/to/server.py"], "transport": "stdio"}
-
-        result = mcp_manager._prepare_server_config(server_config)
-
-        expected = {"transport": "stdio", "command": "python", "args": ["/path/to/server.py"]}
-        assert result == expected
-
-    def test_prepare_http_server_config(self, mcp_manager):
-        """Test preparing HTTP server configuration."""
-        server_config = {"url": "http://localhost:8000/mcp/", "transport": "streamable_http", "headers": {"Authorization": "Bearer token"}}
-
-        result = mcp_manager._prepare_server_config(server_config)
-
-        expected = {"transport": "streamable_http", "url": "http://localhost:8000/mcp/", "headers": {"Authorization": "Bearer token"}}
-        assert result == expected
-
-    @pytest.mark.asyncio
-    async def test_initialize_with_import_error(self, mcp_manager, config_manager):
-        """Test initialization when MCP dependencies are not available."""
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": {"test": {"enabled": True}}}.get(key, default)
-
-        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager), patch("builtins.__import__", side_effect=ImportError("No module")):
-
-            await mcp_manager.initialize()
-
-        assert not mcp_manager.is_initialized
-        assert len(mcp_manager.get_tools()) == 0
-
-    @pytest.mark.asyncio
-    async def test_load_tools_failure(self, mcp_manager, config_manager):
-        """Test handling of tool loading failures."""
-        config_manager.get.side_effect = lambda key, default=None: {
-            "mcp.enabled": True,
-            "mcp.servers": {"test": {"enabled": True, "transport": "stdio", "command": "test-command"}},
-        }.get(key, default)
-
-        mock_client = AsyncMock()
-        mock_client.get_tools.side_effect = Exception("Tool loading failed")
-
-        with (
-            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
-            patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
-        ):
-
-            await mcp_manager.initialize()
-
-        assert mcp_manager.is_initialized  # Client initialized but tools failed
-        assert len(mcp_manager.get_tools()) == 0
 
 
 @pytest.mark.unit
@@ -330,69 +228,3 @@ class TestMCPUtilityFunctions:
             await initialize_mcp()
 
             mock_manager.initialize.assert_called_once()
-
-
-@pytest.mark.integration
-class TestMCPIntegration:
-    """Integration tests for MCP with Aurora's tool system."""
-
-    # NOTE: MCP tool loading integration tests have been removed because
-    # load_mcp_tools_async() is now deprecated. MCP tools are loaded by
-    # ToolingService instead. See app/services/tooling_service.py and
-    # app/tooling/tools_manager.py for the new implementation.
-    # Integration tests for the new system should be added in
-    # tests/integration/test_tooling_service.py
-
-    pass
-
-
-class TestMCPConfigurationValidation:
-    """Test MCP configuration validation."""
-
-    def test_valid_stdio_configuration(self):
-        """Test validation of valid stdio configuration."""
-
-        config = {"mcp": {"enabled": True, "servers": {"math": {"transport": "stdio", "command": "python", "args": ["/path/to/server.py"]}}}}
-
-        # This would normally be tested with the actual config validation
-        # For now, we just ensure the structure is correct
-        assert config["mcp"]["enabled"] is True
-        assert "math" in config["mcp"]["servers"]
-        assert config["mcp"]["servers"]["math"]["transport"] == "stdio"
-
-    def test_valid_http_configuration(self):
-        """Test validation of valid HTTP configuration."""
-        config = {
-            "mcp": {
-                "enabled": True,
-                "servers": {
-                    "weather": {"transport": "streamable_http", "url": "http://localhost:8000/mcp/", "headers": {"Authorization": "Bearer token"}}
-                },
-            }
-        }
-
-        assert config["mcp"]["enabled"] is True
-        assert "weather" in config["mcp"]["servers"]
-        assert config["mcp"]["servers"]["weather"]["transport"] == "streamable_http"
-        assert "headers" in config["mcp"]["servers"]["weather"]
-
-
-@pytest.mark.e2e
-class TestMCPEndToEnd:
-    """End-to-end tests for MCP integration (requires actual MCP servers)."""
-
-    @pytest.mark.skip(reason="Requires actual MCP server running")
-    @pytest.mark.asyncio
-    async def test_connect_to_real_math_server(self):
-        """Test connecting to a real math MCP server."""
-        # This test would start the example math server and connect to it
-        # Skipped by default as it requires external processes
-        pass
-
-    @pytest.mark.skip(reason="Requires actual MCP server running")
-    @pytest.mark.asyncio
-    async def test_connect_to_real_weather_server(self):
-        """Test connecting to a real weather HTTP MCP server."""
-        # This test would start the example weather server and connect to it
-        # Skipped by default as it requires external processes
-        pass

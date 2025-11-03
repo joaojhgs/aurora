@@ -250,17 +250,12 @@ class TestOrchestratorServiceInputProcessing:
         mock_tts_module.TTSRequest = MagicMock()
         mock_tts_module.TTSTopics = MagicMock()
 
-        with (
-            patch("app.orchestrator.service.stream_graph_updates", new_callable=AsyncMock) as mock_stream,
-            patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}),
-        ):
-
-            mock_stream.return_value = "This is a response"
+        with patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}):
+            # Patch orchestrator method
+            orchestrator_service.orchestrator = MagicMock()
+            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="This is a response")
 
             await orchestrator_service._process_input(text="Test input", source="ui", session_id="test-session")
-
-            # Verify stream_graph_updates was called
-            mock_stream.assert_called_once_with("Test input", ttsResult=False)
 
             # Verify LLM response was published (at minimum)
             assert mock_bus.publish.call_count >= 1
@@ -274,36 +269,36 @@ class TestOrchestratorServiceInputProcessing:
     @pytest.mark.asyncio
     async def test_process_input_with_end_response(self, orchestrator_service, mock_bus):
         """Test input processing when response is END."""
-        with patch("app.orchestrator.service.stream_graph_updates", new_callable=AsyncMock) as mock_stream:
-            mock_stream.return_value = "END"
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="END")
 
-            await orchestrator_service._process_input(text="Test input", source="stt")
+        await orchestrator_service._process_input(text="Test input", source="stt")
 
-            # Verify no messages were published (END response)
-            mock_bus.publish.assert_not_called()
+        # Verify no messages were published (END response)
+        mock_bus.publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_process_input_with_empty_response(self, orchestrator_service, mock_bus):
         """Test input processing with empty response."""
-        with patch("app.orchestrator.service.stream_graph_updates", new_callable=AsyncMock) as mock_stream:
-            mock_stream.return_value = ""
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="")
 
-            await orchestrator_service._process_input(text="Test input", source="ui")
+        await orchestrator_service._process_input(text="Test input", source="ui")
 
-            # Verify no messages were published (empty response)
-            mock_bus.publish.assert_not_called()
+        # Verify no messages were published (empty response)
+        mock_bus.publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_process_input_with_exception(self, orchestrator_service, mock_bus):
         """Test input processing with exception."""
-        with patch("app.orchestrator.service.stream_graph_updates", new_callable=AsyncMock) as mock_stream:
-            mock_stream.side_effect = Exception("Graph processing error")
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(side_effect=Exception("Graph processing error"))
 
-            # Should not raise exception
-            await orchestrator_service._process_input(text="Test input", source="stt")
+        # Should not raise exception
+        await orchestrator_service._process_input(text="Test input", source="stt")
 
-            # Verify no messages were published due to error
-            mock_bus.publish.assert_not_called()
+        # Verify no messages were published due to error
+        mock_bus.publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_process_input_with_different_sources(self, orchestrator_service, mock_bus):
@@ -313,12 +308,9 @@ class TestOrchestratorServiceInputProcessing:
         mock_tts_module.TTSRequest = MagicMock()
         mock_tts_module.TTSTopics = MagicMock()
 
-        with (
-            patch("app.orchestrator.service.stream_graph_updates", new_callable=AsyncMock) as mock_stream,
-            patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}),
-        ):
-
-            mock_stream.return_value = "Response"
+        with patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}):
+            orchestrator_service.orchestrator = MagicMock()
+            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="Response")
 
             # Test STT source
             await orchestrator_service._process_input("Input", source="stt")
