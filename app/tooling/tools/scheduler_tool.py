@@ -12,7 +12,9 @@ from app.scheduler import get_cron_service
 
 
 @tool()
-async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bus: MessageBus, message: Optional[str] = None, **kwargs) -> str:
+async def schedule_task_tool(
+    task_name: str, schedule_time: str, action: str, bus: MessageBus | None = None, message: Optional[str] = None, **kwargs
+) -> str:
     """
     Schedule a task to be executed at a specified time.
 
@@ -105,7 +107,7 @@ async def schedule_task_tool(task_name: str, schedule_time: str, action: str, bu
 
 
 @tool
-async def list_scheduled_tasks_tool(bus: MessageBus) -> str:
+async def list_scheduled_tasks_tool(bus: MessageBus | None = None) -> str:
     """
     List all currently scheduled tasks.
 
@@ -154,7 +156,7 @@ async def list_scheduled_tasks_tool(bus: MessageBus) -> str:
 
 
 @tool
-async def cancel_scheduled_task_tool(task_identifier: str, bus: MessageBus) -> str:
+async def cancel_scheduled_task_tool(task_identifier: str, bus: MessageBus | None = None) -> str:
     """
     Cancel a scheduled task by name or ID.
 

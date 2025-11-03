@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -85,6 +85,7 @@ class QueryResult(BaseModel):
 Handler = Callable[[Envelope], Awaitable[None]]
 
 
+@runtime_checkable
 class MessageBus(Protocol):
     """Protocol defining the MessageBus interface.
 
