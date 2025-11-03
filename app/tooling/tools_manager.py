@@ -11,6 +11,7 @@ from typing import Callable
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging import MessageBus
 
 
 class ToolsManager:
@@ -24,8 +25,9 @@ class ToolsManager:
     - Provide tool discovery and retrieval
     """
 
-    def __init__(self):
+    def __init__(self, bus: MessageBus):
         """Initialize the ToolsManager."""
+        self.bus = bus
         self.tools: list[Callable] = []
         self.tool_lookup: dict[str, Callable] = {}
         self.always_active_tools: list[Callable] = []
@@ -247,7 +249,7 @@ class ToolsManager:
             # Import and call the sync function
             from app.tooling.tools.tools import sync_tools_with_database
 
-            sync_tools_with_database()
+            await sync_tools_with_database(self.bus)
 
             log_info("Tools synchronized with database")
 
@@ -272,13 +274,11 @@ class ToolsManager:
             return self.tools
 
         # Use the original get_tools function for semantic search
-        try:
-            from app.tooling.tools.tools import get_tools
-
-            return get_tools(query, top_k)
-        except Exception as e:
-            log_error(f"Error in get_tools: {e}")
-            return self.tools[:top_k]
+        # Note: This is now async, but ToolsManager.get_tools is sync
+        # We need to handle this differently - for now, return tools without search
+        # The actual RAG search happens in ToolingService._on_get_tools
+        log_warning("get_tools called with query but ToolsManager.get_tools is sync - falling back to all tools")
+        return self.tools[:top_k]
 
     def get_tool_by_name(self, name: str) -> Callable | None:
         """Get a specific tool by name.

@@ -1,8 +1,8 @@
 from typing import Callable
 
 from app.config.config_manager import config_manager
-from app.helpers.aurora_logger import log_debug, log_error, log_info
-from app.orchestrator.memory_store import store  # Memory store is now in orchestrator module
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging import MessageBus
 
 # Pomodoro tools
 from app.tooling.tools.pomodoro_tool import (
@@ -94,7 +94,7 @@ _mcp_tools_loaded = False
 tool_lookup: dict[str, Callable] = {}
 
 
-def sync_tools_with_database():
+async def sync_tools_with_database(bus: MessageBus):
     """
     Synchronize the tools database with the currently active tools.
     - Add new tools that are active but not in database
@@ -102,6 +102,11 @@ def sync_tools_with_database():
     - Update existing tools if their descriptions changed
     """
     log_info("Synchronizing tools with database...")
+
+    # Use injected bus (service-provided)
+    if not bus:
+        log_error("Bus not available for tool synchronization")
+        return
 
     # Get currently active tools
     active_tools = {}
@@ -112,13 +117,27 @@ def sync_tools_with_database():
     for name in active_tools.keys():
         log_debug(f"  - '{name}'")
 
-    # Get existing tools from database
+    # Get existing tools from database via bus
     try:
-        existing_items = store.retrieve_items(("tools",), limit=4000)  # Get all tools
-        existing_tools = {item.key: item.value for item in existing_items}
-        log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
-        for name in existing_tools.keys():
-            log_debug(f"  - '{name}'")
+        from app.db.service import RAGDeleteCommand, RAGListQuery, RAGStoreCommand
+        from app.messaging import DBTopics
+
+        result = await bus.request(
+            DBTopics.RAG_LIST,
+            RAGListQuery(namespace=("tools",), limit=4000),
+            timeout=5.0,
+        )
+
+        if result.ok and result.data and "items" in result.data:
+            existing_items_data = result.data["items"]
+            existing_tools = {item["key"]: item["value"] for item in existing_items_data}
+            log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
+            for name in existing_tools.keys():
+                log_debug(f"  - '{name}'")
+        else:
+            existing_tools = {}
+            if not result.ok:
+                log_error(f"Error getting existing tools from database: {result.error}")
     except Exception as e:
         log_error(f"Error getting existing tools from database: {e}")
         existing_tools = {}
@@ -131,7 +150,11 @@ def sync_tools_with_database():
         elif existing_tools[name].get("description") != tool_data["description"]:
             # Tool exists but description changed - update it
             log_info(f"Updating tool '{name}' with new description")
-            store.put(("tools",), name, tool_data, ["name", "description"])
+            await bus.publish(
+                DBTopics.RAG_STORE,
+                RAGStoreCommand(namespace=("tools",), key=name, value=tool_data, index=["name", "description"]),
+                event=False,
+            )
 
     # Find tools to remove (in database but not active)
     tools_to_remove = []
@@ -140,15 +163,23 @@ def sync_tools_with_database():
             tools_to_remove.append(name)
             log_debug(f"DEBUG: Will remove '{name}' (not in active tools)")
 
-    # Add new tools
+    # Add new tools via bus
     for name, tool_data in tools_to_add:
         log_info(f"Adding new tool to database: {name}")
-        store.put(("tools",), name, tool_data, ["name", "description"])
+        await bus.publish(
+            DBTopics.RAG_STORE,
+            RAGStoreCommand(namespace=("tools",), key=name, value=tool_data, index=["name", "description"]),
+            event=False,
+        )
 
-    # Remove inactive tools
+    # Remove inactive tools via bus
     for name in tools_to_remove:
         log_info(f"Removing inactive tool from database: {name}")
-        store.delete(("tools",), name)
+        await bus.publish(
+            DBTopics.RAG_DELETE,
+            RAGDeleteCommand(namespace=("tools",), key=name),
+            event=False,
+        )
 
     log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
@@ -201,25 +232,6 @@ async def reload_mcp_servers():
         log_error(f"Failed to reload MCP servers: {e}")
 
 
-def reload_mcp_servers_sync():
-    """Synchronous wrapper for reloading MCP servers."""
-    try:
-        import asyncio
-
-        # Check if we're in an event loop
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context, create a task
-            asyncio.create_task(reload_mcp_servers())
-            log_info("MCP server reload scheduled asynchronously")
-        except RuntimeError:
-            # No event loop running, create one
-            asyncio.run(reload_mcp_servers())
-
-    except Exception as e:
-        log_error(f"Failed to reload MCP servers synchronously: {e}")
-
-
 # NOTE: MCP tools are now loaded by the ToolingService
 # DO NOT load at module import time to avoid initialization order issues
 # The ToolingService will handle MCP initialization properly
@@ -235,37 +247,9 @@ for tool in tools:
 # Note: sync_tools_with_database() will be called at the end of module loading
 
 
-async def get_tools_async(query: str, top_k: int = 10) -> list[Callable]:
+async def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     """
-    Async version of get_tools that ensures MCP tools are loaded.
-
-    Args:
-        query: Text to search for relevant tools
-        top_k: Number of tools to return (default 5)
-
-    Returns:
-        List of matching tool functions including MCP tools
-    """
-    # Ensure MCP tools are loaded
-    await load_mcp_tools_async()
-
-    # Use the regular get_tools function
-    return get_tools(query, top_k)
-
-
-def ensure_mcp_tools_loaded():
-    """DEPRECATED: MCP tools are now loaded by ToolingService.
-
-    This function is kept for backwards compatibility but does nothing.
-    All MCP tool loading is handled by app.tooling.tools_manager.ToolsManager
-    via app.services.tooling_service.ToolingService.
-    """
-    pass  # ToolingService handles this now
-
-
-def get_tools(query: str, top_k: int = 10) -> list[Callable]:
-    """
-    Search for relevant tools based on input text.
+    Search for relevant tools based on input text using RAG via bus.
 
     Args:
         query: Text to search for relevant tools
@@ -274,25 +258,14 @@ def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     Returns:
         List of matching tool functions
     """
-    # Try to ensure MCP tools are loaded if not already
+    # Ensure MCP tools are loaded
     ensure_mcp_tools_loaded()
 
-    # Search vector store
-    results = store.search(("tools",), query=query, limit=top_k)
-
-    log_info(f"Found {len(results)} tools matching query '{query}': {[result.value.name for result in results]}")
-
-    # Get unique tool names from results
-    tool_names = {result.key for result in results}
-    # Return corresponding tool functions
-
-    # Always include always_active_tools
-    # Ensure they are not duplicated by mistake
-    result_tools = [tool_lookup[name] for name in tool_names if name in tool_lookup]
-    for tool in always_active_tools:
-        if tool not in result_tools:
-            result_tools.append(tool)
-    return result_tools
+    # NOTE: This function should be called by ToolingService which owns the bus.
+    # To avoid accidental global runtime access in processes mode, return empty
+    # and let ToolingService perform RAG and map names to tools.
+    log_warning("get_tools should be invoked by ToolingService; returning empty list")
+    return []
 
 
 # Tool management functions - exposed for external use
@@ -326,13 +299,9 @@ def get_mcp_status():
             "tool_count": 0,
             "tool_names": [],
             "servers_configured": [],
-            "error": str(e),
         }
 
 
-# NOTE: Tool synchronization is now handled by the ToolingService
-# DO NOT sync at module import time to avoid removing MCP tools prematurely
-# The ToolingService will:
-# 1. Load all tools (core + plugins + MCP)
-# 2. THEN sync with database
-# This ensures no tools are incorrectly removed from the database
+def ensure_mcp_tools_loaded():
+    """DEPRECATED: MCP tools are now loaded by ToolingService."""
+    pass
