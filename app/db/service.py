@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.db.manager import DatabaseManager
 from app.db.models import CronJob, Message
+from app.db.rag_service import RAGService
 from app.db.scheduler_db_service import SchedulerDatabaseService
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, DBTopics, Envelope, MessageBus, Query, QueryResult
@@ -68,6 +69,62 @@ class DeleteCronJob(Command):
     job_id: int
 
 
+# RAG Message definitions
+class RAGStoreCommand(Command):
+    """Command to store an item in RAG vector store."""
+
+    namespace: tuple[str, ...]
+    key: str
+    value: dict
+    index: list[str] | None = None
+
+
+class RAGDeleteCommand(Command):
+    """Command to delete an item from RAG vector store."""
+
+    namespace: tuple[str, ...]
+    key: str
+
+
+class RAGSearchQuery(Query):
+    """Query to search items in RAG vector store."""
+
+    namespace: tuple[str, ...]
+    query: str
+    limit: int = 10
+    offset: int = 0
+
+
+class RAGGetQuery(Query):
+    """Query to get an item from RAG vector store."""
+
+    namespace: tuple[str, ...]
+    key: str
+
+
+class RAGListQuery(Query):
+    """Query to list items in RAG vector store namespace."""
+
+    namespace: tuple[str, ...]
+    limit: int = 10
+    offset: int = 0
+
+
+class RAGItemResponse(BaseModel):
+    """Response containing a single RAG item."""
+
+    value: dict
+    key: str
+    namespace: tuple[str, ...]
+    search_score: float | None = None
+
+
+class RAGListResponse(BaseModel):
+    """Response containing a list of RAG items."""
+
+    items: list[RAGItemResponse]
+
+
 # Service implementation
 class DBService:
     """Database service.
@@ -89,6 +146,7 @@ class DBService:
         self.bus = bus
         self.db_manager = DatabaseManager(db_path)
         self.scheduler_db = SchedulerDatabaseService(db_path)
+        self.rag_service = RAGService()
 
     async def start(self) -> None:
         """Start the DB service and subscribe to commands."""
@@ -105,6 +163,13 @@ class DBService:
         self.bus.subscribe(DBTopics.STORE_CRON_JOB, self._store_cron_job)
         self.bus.subscribe(DBTopics.GET_CRON_JOBS, self._get_cron_jobs)
         self.bus.subscribe(DBTopics.DELETE_CRON_JOB, self._delete_cron_job)
+
+        # Subscribe to RAG commands and queries
+        self.bus.subscribe(DBTopics.RAG_STORE, self._rag_store)
+        self.bus.subscribe(DBTopics.RAG_DELETE, self._rag_delete)
+        self.bus.subscribe(DBTopics.RAG_SEARCH, self._rag_search)
+        self.bus.subscribe(DBTopics.RAG_GET, self._rag_get)
+        self.bus.subscribe(DBTopics.RAG_LIST, self._rag_list)
 
         log_info("DB service started")
 
@@ -336,3 +401,165 @@ class DBService:
 
         except Exception as e:
             log_error(f"Error deleting cron job: {e}", exc_info=True)
+
+    async def _rag_store(self, env: Envelope) -> None:
+        """Handle RAG store command.
+
+        Args:
+            env: Message envelope containing RAGStoreCommand
+        """
+        try:
+            cmd = RAGStoreCommand.model_validate(env.payload)
+            log_debug(f"Storing RAG item: {cmd.namespace}/{cmd.key}")
+
+            # Get the appropriate store based on namespace
+            store = self.rag_service.combined_store
+            store.put(cmd.namespace, cmd.key, cmd.value, cmd.index)
+
+            log_debug(f"RAG item stored successfully: {cmd.namespace}/{cmd.key}")
+
+        except Exception as e:
+            log_error(f"Error storing RAG item: {e}", exc_info=True)
+
+    async def _rag_delete(self, env: Envelope) -> None:
+        """Handle RAG delete command.
+
+        Args:
+            env: Message envelope containing RAGDeleteCommand
+        """
+        try:
+            cmd = RAGDeleteCommand.model_validate(env.payload)
+            log_debug(f"Deleting RAG item: {cmd.namespace}/{cmd.key}")
+
+            # Get the appropriate store based on namespace
+            store = self.rag_service.combined_store
+            store.delete(cmd.namespace, cmd.key)
+
+            log_debug(f"RAG item deleted successfully: {cmd.namespace}/{cmd.key}")
+
+        except Exception as e:
+            log_error(f"Error deleting RAG item: {e}", exc_info=True)
+
+    async def _rag_search(self, env: Envelope) -> None:
+        """Handle RAG search query.
+
+        Args:
+            env: Message envelope containing RAGSearchQuery
+        """
+        try:
+            query = RAGSearchQuery.model_validate(env.payload)
+            log_debug(f"Searching RAG store: namespace={query.namespace}, query='{query.query}', limit={query.limit}")
+
+            # Get the appropriate store based on namespace
+            store = self.rag_service.combined_store
+            items = store.search(query.namespace, query=query.query, limit=query.limit, offset=query.offset)
+
+            # Convert items to response format
+            rag_items = []
+            for item in items:
+                search_score = None
+                if isinstance(item.value, dict) and "_search_score" in item.value:
+                    search_score = item.value.pop("_search_score")
+                rag_items.append(RAGItemResponse(value=item.value, key=item.key, namespace=item.namespace, search_score=search_score))
+
+            # Send response to reply topic
+            if env.reply_to:
+                result = QueryResult(ok=True, data={"items": [item.model_dump() for item in rag_items]})
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
+
+        except Exception as e:
+            log_error(f"Error searching RAG store: {e}", exc_info=True)
+            if env.reply_to:
+                result = QueryResult(ok=False, error=str(e))
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
+
+    async def _rag_get(self, env: Envelope) -> None:
+        """Handle RAG get query.
+
+        Args:
+            env: Message envelope containing RAGGetQuery
+        """
+        try:
+            query = RAGGetQuery.model_validate(env.payload)
+            log_debug(f"Getting RAG item: {query.namespace}/{query.key}")
+
+            # Get the appropriate store based on namespace
+            store = self.rag_service.combined_store
+            item = store.get(query.namespace, query.key)
+
+            # Send response to reply topic
+            if env.reply_to:
+                if item:
+                    result = QueryResult(
+                        ok=True,
+                        data={
+                            "value": item.value,
+                            "key": item.key,
+                            "namespace": item.namespace,
+                            "search_score": None,
+                        },
+                    )
+                else:
+                    result = QueryResult(ok=False, error=f"Item not found: {query.namespace}/{query.key}")
+
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
+
+        except Exception as e:
+            log_error(f"Error getting RAG item: {e}", exc_info=True)
+            if env.reply_to:
+                result = QueryResult(ok=False, error=str(e))
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
+
+    async def _rag_list(self, env: Envelope) -> None:
+        """Handle RAG list query.
+
+        Args:
+            env: Message envelope containing RAGListQuery
+        """
+        try:
+            query = RAGListQuery.model_validate(env.payload)
+            log_debug(f"Listing RAG items: namespace={query.namespace}, limit={query.limit}, offset={query.offset}")
+
+            # Get the appropriate store based on namespace
+            store = self.rag_service.combined_store
+            items = store.retrieve_items(query.namespace, limit=query.limit, offset=query.offset)
+
+            # Convert items to response format
+            rag_items = []
+            for item in items:
+                rag_items.append(RAGItemResponse(value=item.value, key=item.key, namespace=item.namespace, search_score=None))
+
+            # Send response to reply topic
+            if env.reply_to:
+                result = QueryResult(ok=True, data={"items": [item.model_dump() for item in rag_items]})
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
+
+        except Exception as e:
+            log_error(f"Error listing RAG items: {e}", exc_info=True)
+            if env.reply_to:
+                result = QueryResult(ok=False, error=str(e))
+                await self.bus.publish(
+                    env.reply_to,
+                    result,
+                    origin="internal",
+                )
