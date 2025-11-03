@@ -5,9 +5,12 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 
+from app.db.service import RAGStoreCommand
+from app.messaging import DBTopics
+
 
 @tool
-def upsert_memory_tool(
+async def upsert_memory_tool(
     content: str,
     bus,
     *,
@@ -23,13 +26,19 @@ def upsert_memory_tool(
         content: The memory content to store
         bus: MessageBus instance for communication (injected by ToolingService)
         memory_id: Optional existing memory ID to update
-        store: LangGraph store for persistence
+        store: LangGraph store for persistence (kept for backward compatibility, but not used)
     """
-    # The LLM can use this tool to store a new memory
+    # The LLM can use this tool to store a new memory via bus
     mem_id = memory_id or uuid.uuid4()
-    store.put(
-        ("main", "memories"),
-        key=str(mem_id),
-        value={"text": content},
+
+    # Store via bus instead of direct store access
+    await bus.publish(
+        DBTopics.RAG_STORE,
+        RAGStoreCommand(
+            namespace=("main", "memories"),
+            key=str(mem_id),
+            value={"text": content},
+        ),
+        event=False,
     )
     return f"Stored memory {mem_id}"
