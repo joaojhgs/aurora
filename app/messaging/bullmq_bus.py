@@ -76,11 +76,12 @@ class BullMQBus:
 
         # Check if bullmq is available
         try:
-            from bullmq import Queue, QueueEvents, Worker  # type: ignore
+            # Some versions of python-bullmq expose only Queue and Worker
+            # QueueEvents may not be available. Import only what we use.
+            from bullmq import Queue, Worker  # type: ignore
 
             self._Queue = Queue
             self._Worker = Worker
-            self._QueueEvents = QueueEvents
             self._available = True
         except ImportError:
             log_warning("bullmq package not available. Install with: pip install bullmq")
