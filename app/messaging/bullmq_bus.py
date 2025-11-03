@@ -213,21 +213,7 @@ class BullMQBus:
                 self._stats["delivered"] += 1
                 log_debug(f"Processed job {job.id} for topic {actual_topic}")
 
-                # Handle reply_to for request/response
-                if env.reply_to:
-                    # Check if this is a response to a pending request
-                    if env.correlation_id in self._response_futures:
-                        fut = self._response_futures.pop(env.correlation_id)
-                        if not fut.done():
-                            if hasattr(env.payload, "model_dump"):
-                                result_data = env.payload.model_dump()
-                            else:
-                                result_data = env.payload
-
-                            if isinstance(result_data, dict) and "ok" in result_data:
-                                fut.set_result(QueryResult(**result_data))
-                            else:
-                                fut.set_result(QueryResult(ok=True, data=result_data))
+                # Do not resolve futures here; reply handling is managed by request()'s temporary subscriber
 
             except Exception as e:
                 log_error(
