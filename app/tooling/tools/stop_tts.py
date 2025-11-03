@@ -7,7 +7,7 @@ from app.tts.service import TTSStop
 
 
 @tool
-async def stop_tts_tool(bus: MessageBus):
+async def stop_tts_tool(bus: MessageBus | None = None):
     """
     This tool should be used by the assistant whenever it thinks the user want's it to stop or interrupt current response from being spoken.
     It will stop whatever previous answer was being played before, if one was being played.

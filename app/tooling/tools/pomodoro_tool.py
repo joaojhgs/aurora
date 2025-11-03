@@ -26,7 +26,7 @@ def _format_absolute_time(target_time: datetime) -> str:
 
 @tool
 async def start_pomodoro_tool(
-    bus,
+    bus: MessageBus | None = None,
     work_minutes: int = 25,
     short_break_minutes: int = 5,
     long_break_minutes: int = 15,
@@ -121,7 +121,7 @@ async def stop_pomodoro_tool(bus) -> str:
 
 
 @tool
-async def pomodoro_status_tool(bus: MessageBus) -> str:
+async def pomodoro_status_tool(bus: MessageBus | None = None) -> str:
     """
     Get the current status of the Pomodoro session.
 
