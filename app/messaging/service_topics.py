@@ -395,6 +395,15 @@ class DBTopics:
     # Responses
     MESSAGES_RESPONSE = "DB.MessagesResponse"
 
+    # RAG Commands
+    RAG_STORE = "DB.RAG.Store"
+    RAG_DELETE = "DB.RAG.Delete"
+
+    # RAG Queries
+    RAG_SEARCH = "DB.RAG.Search"
+    RAG_GET = "DB.RAG.Get"
+    RAG_LIST = "DB.RAG.List"
+
 
 DB_TOPIC_DEFS: list[TopicDefinition] = [
     TopicDefinition(
@@ -433,6 +442,41 @@ DB_TOPIC_DEFS: list[TopicDefinition] = [
         message_type="Response",
         payload_class="MessagesResponse",
         description="Response with messages",
+    ),
+    TopicDefinition(
+        topic=DBTopics.RAG_STORE,
+        service="DBService",
+        message_type="Command",
+        payload_class="RAGStoreCommand",
+        description="Store item in RAG vector store",
+    ),
+    TopicDefinition(
+        topic=DBTopics.RAG_DELETE,
+        service="DBService",
+        message_type="Command",
+        payload_class="RAGDeleteCommand",
+        description="Delete item from RAG vector store",
+    ),
+    TopicDefinition(
+        topic=DBTopics.RAG_SEARCH,
+        service="DBService",
+        message_type="Query",
+        payload_class="RAGSearchQuery",
+        description="Search items in RAG vector store using semantic search",
+    ),
+    TopicDefinition(
+        topic=DBTopics.RAG_GET,
+        service="DBService",
+        message_type="Query",
+        payload_class="RAGGetQuery",
+        description="Get item from RAG vector store by namespace and key",
+    ),
+    TopicDefinition(
+        topic=DBTopics.RAG_LIST,
+        service="DBService",
+        message_type="Query",
+        payload_class="RAGListQuery",
+        description="List items in RAG vector store namespace",
     ),
 ]
 

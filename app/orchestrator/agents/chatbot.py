@@ -1,13 +1,13 @@
 from datetime import datetime
 
 from langchain_core.tools import StructuredTool
-from langgraph.store.base import BaseStore
 from pydantic import create_model
 
 from app.config.config_manager import config_manager
+from app.db.service import RAGSearchQuery
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
-from app.messaging import MessageBus, ToolingTopics
+from app.messaging import DBTopics, MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator.state import State
 from app.tooling.service import GetToolsQuery
@@ -228,23 +228,39 @@ def _json_schema_type_to_python(json_type: str) -> type:
 
 
 # Def the chatbot node
-async def chatbot(state: State, store: BaseStore, bus: MessageBus):
+async def chatbot(state: State, bus: MessageBus):
     """Chatbot node for LangGraph.
 
     Args:
         state: Current graph state
-        store: LangGraph store for memory access
         bus: MessageBus instance (injected as dependency)
     """
     # Check if llm is initialized
     if llm is None:
         raise ValueError("The language model (llm) is not initialized.")
 
-    # Vector search for the history of memories
+    # Vector search for the history of memories via bus
+    try:
+        result = await bus.request(
+            DBTopics.RAG_SEARCH,
+            RAGSearchQuery(namespace=("main", "memories"), query=state["messages"][-1].content, limit=3),
+            timeout=5.0,
+            priority=get_interactive_priority(),
+        )
 
-    items = store.search(("main", "memories"), query=state["messages"][-1].content, limit=3)
-    memories = "\n".join(f"{item.value['text']} (score: {item.value['_search_score']})" for item in items)
-    memories = f"## Similar memories\n{memories}" if memories else ""
+        if result.ok and result.data and "items" in result.data:
+            items_data = result.data["items"]
+            memories = "\n".join(
+                f"{item['value']['text']} (score: {item.get('search_score', 'N/A')})" for item in items_data if item.get("value", {}).get("text")
+            )
+            memories = f"## Similar memories\n{memories}" if memories else ""
+        else:
+            memories = ""
+            if not result.ok:
+                log_error(f"Failed to search memories via bus: {result.error}")
+    except Exception as e:
+        log_error(f"Error searching memories via bus: {e}")
+        memories = ""
 
     # RAG Search tools to bind for each chatbot call
     # Reduce the top_k parameter to reduce token usage

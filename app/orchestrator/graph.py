@@ -10,7 +10,6 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import tools_condition
-from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -18,7 +17,6 @@ from app.messaging import MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_interactive_priority
 from app.messaging.service_topics import TTSTopics
 from app.orchestrator.agents.chatbot import chatbot
-from app.orchestrator.memory_store import get_combined_store
 from app.orchestrator.state import State
 from app.tooling.service import ExecuteToolCommand
 from app.tts.service import TTSRequest
@@ -39,8 +37,8 @@ class GraphOrchestrator:
         self.graph_builder = StateGraph(State)
 
         # Create a wrapper function to pass bus to chatbot
-        async def chatbot_wrapper(state: State, store: BaseStore):
-            return await chatbot(state, store, bus=self.bus)
+        async def chatbot_wrapper(state: State):
+            return await chatbot(state, bus=self.bus)
 
         # Add nodes
         self.graph_builder.add_node("chatbot", chatbot_wrapper)
@@ -58,12 +56,11 @@ class GraphOrchestrator:
         # Set entry point
         self.graph_builder.set_entry_point("chatbot")
 
-        # Initialize memory and store
+        # Initialize memory - store is no longer needed as RAG is handled via bus
         self.memory = MemorySaver()
-        self.store = get_combined_store()
 
-        # Compile graph
-        self.graph = self.graph_builder.compile(checkpointer=self.memory, store=self.store)
+        # Compile graph without store (RAG operations go through bus)
+        self.graph = self.graph_builder.compile(checkpointer=self.memory)
 
         # Save visualization
         self._save_graph_visualization()
