@@ -21,7 +21,9 @@ from enum import Enum
 
 from pydantic import Field
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 from app.messaging import (
     Envelope,
@@ -83,10 +85,10 @@ class STTCoordinatorService:
         self._accumulated_transcription: str = ""
 
         # Configuration
-        self._listen_timeout_seconds = config_manager.get("general.speech_to_text.coordinator.session_timeout_s", 10.0)  # Default: 10 seconds
-        self._multi_turn_enabled = config_manager.get("general.speech_to_text.coordinator.multi_turn_enabled", False)  # Default: single turn
-        self._pause_tts_on_listening = config_manager.get("general.speech_to_text.coordinator.pause_tts_on_listen", True)  # Default: pause TTS
-        self._ambient_transcription_enabled = config_manager.get("general.speech_to_text.ambient_transcription.enable", False)  # Default: disabled
+        self._listen_timeout_seconds = config_api.get("general.speech_to_text.coordinator.session_timeout_s", 10.0)  # Default: 10 seconds
+        self._multi_turn_enabled = config_api.get("general.speech_to_text.coordinator.multi_turn_enabled", False)  # Default: single turn
+        self._pause_tts_on_listening = config_api.get("general.speech_to_text.coordinator.pause_tts_on_listen", True)  # Default: pause TTS
+        self._ambient_transcription_enabled = config_api.get("general.speech_to_text.ambient_transcription.enable", False)  # Default: disabled
 
         # Timeout task
         self._timeout_task: asyncio.Task | None = None

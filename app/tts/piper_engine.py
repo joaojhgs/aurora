@@ -8,7 +8,9 @@ from typing import Optional
 import pyaudio
 from RealtimeTTS import BaseEngine
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
@@ -60,7 +62,7 @@ class PiperEngine(BaseEngine):
         """
         # If piper_path is None, check config manager or default to 'piper.exe'.
         if piper_path is None:
-            config_path = config_manager.get("general.text_to_speech.piper_path", "")
+            config_path = config_api.get("general.text_to_speech.piper_path", "")
             self.piper_path = config_path if config_path else "piper.exe"
         else:
             self.piper_path = piper_path
@@ -83,7 +85,7 @@ class PiperEngine(BaseEngine):
         return (
             pyaudio.paInt16,
             1,
-            int(config_manager.get("general.text_to_speech.model_sample_rate", 24000)),
+            int(config_api.get("general.text_to_speech.model_sample_rate", 24000)),
         )
 
     def synthesize(self, text: str) -> bool:
@@ -135,7 +137,7 @@ class PiperEngine(BaseEngine):
                 # If you require specific WAV properties, check them:
                 if (
                     wf.getnchannels() != 1
-                    or wf.getframerate() != int(config_manager.get("general.text_to_speech.model_sample_rate", 24000))
+                    or wf.getframerate() != int(config_api.get("general.text_to_speech.model_sample_rate", 24000))
                     or wf.getsampwidth() != 2
                 ):
                     log_warning(

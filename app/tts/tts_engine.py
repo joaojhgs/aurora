@@ -2,7 +2,9 @@ import os
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.tts.piper_engine import PiperEngine
 from app.tts.service import reduce_volume_except_current, restore_volume_except_current
 
@@ -19,8 +21,8 @@ def on_audio_stream_stop():
 
 
 def get_voice():
-    model_file = file_root + config_manager.get("general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx")
-    config_file = file_root + config_manager.get("general.text_to_speech.model_config_file_path", "/voice_models/en_US-lessac-medium.onnx.txt")
+    model_file = file_root + config_api.get("general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx")
+    config_file = file_root + config_api.get("general.text_to_speech.model_config_file_path", "/voice_models/en_US-lessac-medium.onnx.txt")
     return PiperVoice(model_file=model_file, config_file=config_file)
 
 

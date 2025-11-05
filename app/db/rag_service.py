@@ -13,13 +13,15 @@ from typing import Any, Optional
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 
 def get_embeddings():
     """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
-    use_local = config_manager.get("general.embeddings.use_local", False)
+    use_local = config_api.get("general.embeddings.use_local", False)
 
     if use_local:
         from langchain_huggingface import HuggingFaceEmbeddings

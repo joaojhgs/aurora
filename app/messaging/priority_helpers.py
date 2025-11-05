@@ -4,7 +4,9 @@ Provides config-based priority lookup functions to ensure consistent
 priority usage across services.
 """
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 
 
 def get_priority(level: str) -> int:
@@ -28,7 +30,7 @@ def get_priority(level: str) -> int:
     }
 
     try:
-        return config_manager.get(f"messaging.priorities.{level}", default_priorities.get(level, 50))
+        return config_api.get(f"messaging.priorities.{level}", default_priorities.get(level, 50))
     except Exception:
         # Fallback to defaults if config lookup fails
         return default_priorities.get(level, 50)

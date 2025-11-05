@@ -3,7 +3,9 @@ from datetime import datetime
 from langchain_core.tools import StructuredTool
 from pydantic import create_model
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.db.service import RAGSearchQuery
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
@@ -20,12 +22,12 @@ The chatbot agent is the main agent coordinator in the graph.
 llm = None
 
 # Get the configured LLM provider
-provider = config_manager.get("general.llm.provider", "openai")
+provider = config_api.get("general.llm.provider", "openai")
 
 if provider == "openai":
     from langchain_openai import ChatOpenAI
 
-    openai_options = config_manager.get_section("general.llm.third_party.openai.options")
+    openai_options = config_api.get_section("general.llm.third_party.openai.options")
     if openai_options and openai_options.get("model"):
         try:
             llm = ChatOpenAI(**openai_options)
@@ -35,7 +37,7 @@ if provider == "openai":
             llm = None
 
 elif provider == "huggingface_endpoint":
-    hf_endpoint_options = config_manager.get_section("general.llm.third_party.huggingface_endpoint.options")
+    hf_endpoint_options = config_api.get_section("general.llm.third_party.huggingface_endpoint.options")
 
     if hf_endpoint_options and hf_endpoint_options.get("endpoint_url") and hf_endpoint_options.get("access_token"):
         try:
@@ -59,7 +61,7 @@ elif provider == "huggingface_endpoint":
             log_error(f"Failed to initialize HuggingFace Endpoint: {e}")
 
 elif provider == "huggingface_pipeline":
-    hf_pipeline_options = config_manager.get_section("llm.local.huggingface_pipeline.options")
+    hf_pipeline_options = config_api.get_section("llm.local.huggingface_pipeline.options")
 
     if hf_pipeline_options and hf_pipeline_options.get("model"):
         try:
@@ -111,7 +113,7 @@ elif provider == "llama_cpp":
     # Import handler to register it on the directory of chat formats
     from app.orchestrator.chat_llama_cpp_fn_handler import *  # noqa: F401,F403
 
-    llama_options = config_manager.get_section("llm.local.llama_cpp.options")
+    llama_options = config_api.get_section("llm.local.llama_cpp.options")
     model_path = llama_options.get("model_path") if llama_options else None
 
     if model_path:

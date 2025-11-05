@@ -14,7 +14,9 @@ import logging
 import signal
 from typing import Any
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging import register_all_service_topics
 from app.messaging.bus import MessageBus
@@ -49,7 +51,7 @@ class Supervisor:
 
         # Get architecture mode from config
         try:
-            self._mode = config_manager.get("general.architecture.mode", "threads")
+            self._mode = config_api.get("general.architecture.mode", "threads")
         except Exception:
             log_warning("Architecture mode not configured, using 'threads'")
             self._mode = "threads"
@@ -89,7 +91,7 @@ class Supervisor:
 
         # Get Redis URL from config
         try:
-            redis_url = config_manager.get("messaging.redis.url", "redis://localhost:6379")
+            redis_url = config_api.get("messaging.redis.url", "redis://localhost:6379")
         except Exception:
             log_warning("Redis URL not configured, using default")
             redis_url = "redis://localhost:6379"

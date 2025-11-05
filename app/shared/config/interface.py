@@ -70,6 +70,61 @@ class ConfigAPI:
             log_error(f"Error getting config: {e}")
             return {}
 
+    def get(self, key_path: str, default: Any = None) -> Any:
+        """Get configuration value using dot notation (e.g., 'ui.activate').
+
+        This method provides backward compatibility with config_manager.get().
+
+        Args:
+            key_path: Configuration key path (e.g., 'llm.provider')
+            default: Default value if key not found
+
+        Returns:
+            Configuration value or default
+        """
+        try:
+            # Get the full config
+            config = self.get_config()
+            
+            # Navigate to the value using dot notation
+            keys = key_path.split(".")
+            value = config
+            
+            for k in keys:
+                if isinstance(value, dict):
+                    value = value.get(k)
+                    if value is None:
+                        return default
+                else:
+                    return default
+            
+            return value if value is not None else default
+        except Exception as e:
+            log_error(f"Error getting config value: {e}")
+            return default
+
+    def get_config_dict(self) -> dict[str, Any]:
+        """Get a copy of the entire configuration dictionary.
+
+        Returns:
+            Configuration dictionary
+        """
+        return self.get_config()
+
+    def get_section(self, section_path: str, default: Any = None) -> Any:
+        """Get an entire configuration section using dot notation.
+
+        This method provides backward compatibility with config_manager.get_section().
+
+        Args:
+            section_path: Configuration section path (e.g., 'llm.third_party.openai.options')
+            default: Default value if section not found
+
+        Returns:
+            Configuration section dictionary or default
+        """
+        return self.get(section_path, default)
+
     def update_config(self, key_path: str, value: Any) -> bool:
         """Update a specific configuration value.
 
@@ -184,6 +239,19 @@ class ConfigAPI:
         except Exception as e:
             log_error(f"Error validating config: {e}")
             return []
+
+    def migrate_from_env(self):
+        """Migrate existing environment variables to config.json.
+
+        This method directly accesses the ConfigManager for administrative operations.
+        """
+        try:
+            from app.services.config.config_manager import ConfigManager
+
+            config_manager = ConfigManager()
+            config_manager.migrate_from_env()
+        except Exception as e:
+            log_error(f"Error migrating from environment: {e}")
 
     def add_config_observer(self, callback):
         """Add observer for configuration changes.

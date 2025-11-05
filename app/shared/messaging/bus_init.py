@@ -85,13 +85,15 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
     Returns:
         The initialized MessageBus instance
     """
-    from app.config.config_manager import config_manager
+    from app.shared.config.interface import ConfigAPI
+
+    config_api = ConfigAPI()
     from app.helpers.aurora_logger import log_info
     from app.messaging.bullmq_bus import BullMQBus
     from app.messaging.local_bus import LocalBus
 
     # Get architecture mode from config
-    mode = config_manager.get("general.architecture.mode", "threads")
+    mode = config_api.get("general.architecture.mode", "threads")
 
     if mode == "threads":
         # In threads mode, use global singleton
@@ -104,7 +106,7 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
         # In processes mode, create per-service singleton
         if service_name not in _service_buses:
             # Get Redis URL from config
-            redis_url = config_manager.get("messaging.redis.url", "redis://localhost:6379")
+            redis_url = config_api.get("messaging.redis.url", "redis://localhost:6379")
             bus = BullMQBus(redis_url=redis_url)
             set_bus_for_service(service_name, bus)
             log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}'")

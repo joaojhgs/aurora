@@ -25,7 +25,9 @@ import numpy as np
 import webrtcvad
 from faster_whisper import WhisperModel
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.messaging import (
@@ -97,9 +99,9 @@ class TranscriptionService:
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
 
         # Configuration
-        self._language = config_manager.get("general.speech_to_text.language", "")
-        self._realtime_enabled = config_manager.get("general.speech_to_text.transcription.realtime_model.enabled", True)
-        self._accurate_enabled = config_manager.get("general.speech_to_text.transcription.accurate_model.enabled", True)
+        self._language = config_api.get("general.speech_to_text.language", "")
+        self._realtime_enabled = config_api.get("general.speech_to_text.transcription.realtime_model.enabled", True)
+        self._accurate_enabled = config_api.get("general.speech_to_text.transcription.accurate_model.enabled", True)
         self._min_audio_length_ms = 500  # Minimum audio length to transcribe
 
         # Processing thread
@@ -170,18 +172,18 @@ class TranscriptionService:
 
         try:
             # Get model configuration
-            accurate_model_size = config_manager.get("general.speech_to_text.transcription.accurate_model.model_size", "base")
-            realtime_model_size = config_manager.get("general.speech_to_text.transcription.realtime_model.model_size", "tiny")
+            accurate_model_size = config_api.get("general.speech_to_text.transcription.accurate_model.model_size", "base")
+            realtime_model_size = config_api.get("general.speech_to_text.transcription.realtime_model.model_size", "tiny")
             # Use device from new config structure, with fallback to legacy hardware_acceleration
-            realtime_device = config_manager.get("general.speech_to_text.transcription.realtime_model.device", None)
-            accurate_device = config_manager.get("general.speech_to_text.transcription.accurate_model.device", None)
+            realtime_device = config_api.get("general.speech_to_text.transcription.realtime_model.device", None)
+            accurate_device = config_api.get("general.speech_to_text.transcription.accurate_model.device", None)
             if realtime_device is None or accurate_device is None:
                 # Fallback to legacy hardware_acceleration setting
                 legacy_device = getUseHardwareAcceleration("stt")
                 realtime_device = realtime_device or legacy_device
                 accurate_device = accurate_device or legacy_device
-            accurate_compute_type = config_manager.get("general.speech_to_text.transcription.accurate_model.compute_type", "int8")
-            realtime_compute_type = config_manager.get("general.speech_to_text.transcription.realtime_model.compute_type", "int8")
+            accurate_compute_type = config_api.get("general.speech_to_text.transcription.accurate_model.compute_type", "int8")
+            realtime_compute_type = config_api.get("general.speech_to_text.transcription.realtime_model.compute_type", "int8")
             download_root = "chat_models"  # Default download location
 
             # Load realtime model (fast, lower accuracy)

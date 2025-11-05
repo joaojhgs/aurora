@@ -14,7 +14,9 @@ import os
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope, MessageBus, TTSTopics
 from app.shared.messaging.models.tts_models import (
@@ -77,8 +79,8 @@ class TTSService:
         """Initialize the RealtimeTTS engine with Piper voice."""
         try:
             # Get voice model paths from config
-            model_file = file_root + config_manager.get("general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx")
-            config_file = file_root + config_manager.get(
+            model_file = file_root + config_api.get("general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx")
+            config_file = file_root + config_api.get(
                 "general.text_to_speech.model_config_file_path", "/voice_models/en_US-lessac-medium.onnx.txt"
             )
 

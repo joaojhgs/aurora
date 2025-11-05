@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
 
@@ -111,7 +113,7 @@ class ToolsManager:
         log_info("Loading plugin tools...")
 
         # OpenRecall plugin
-        if config_manager.get("plugins.openrecall.activate", False):
+        if config_api.get("plugins.openrecall.activate", False):
             try:
                 from app.tooling.tools.current_screen import current_screen_tool
 
@@ -121,7 +123,7 @@ class ToolsManager:
                 log_warning(f"Failed to load OpenRecall tools: {e}")
 
         # Jira plugin
-        if config_manager.get("plugins.jira.activate", False):
+        if config_api.get("plugins.jira.activate", False):
             try:
                 from app.tooling.tools.jira_toolkit import jira_tools
 
@@ -131,7 +133,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Jira tools: {e}")
 
         # Slack plugin
-        if config_manager.get("plugins.slack.activate", False):
+        if config_api.get("plugins.slack.activate", False):
             try:
                 from app.tooling.tools.slack_toolkit import slack_tools
 
@@ -141,7 +143,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Slack tools: {e}")
 
         # GitHub plugin
-        if config_manager.get("plugins.github.activate", False):
+        if config_api.get("plugins.github.activate", False):
             try:
                 from app.tooling.tools.github_toolkit import github_tools
 
@@ -151,7 +153,7 @@ class ToolsManager:
                 log_warning(f"Failed to load GitHub tools: {e}")
 
         # Search tools (Brave or DuckDuckGo as fallback)
-        if config_manager.get("plugins.brave_search.activate", False):
+        if config_api.get("plugins.brave_search.activate", False):
             try:
                 from app.tooling.tools.brave_search import search_brave_tool
 
@@ -170,7 +172,7 @@ class ToolsManager:
                 log_warning(f"Failed to load DuckDuckGo Search tool: {e}")
 
         # Gmail plugin
-        if config_manager.get("plugins.gmail.activate", False):
+        if config_api.get("plugins.gmail.activate", False):
             try:
                 from app.tooling.tools.gmail_toolkit import gmail_tools
 
@@ -180,7 +182,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Gmail tools: {e}")
 
         # GCalendar plugin
-        if config_manager.get("plugins.gcalendar.activate", False):
+        if config_api.get("plugins.gcalendar.activate", False):
             try:
                 from app.tooling.tools.gcalendar_toolkit import gcalendar_tools
 
@@ -191,7 +193,7 @@ class ToolsManager:
 
     async def _load_mcp_tools(self) -> None:
         """Load MCP (Model Context Protocol) tools."""
-        if not config_manager.get("mcp.enabled", True):
+        if not config_api.get("mcp.enabled", True):
             log_info("MCP is disabled in configuration")
             return
 
@@ -429,17 +431,17 @@ class ToolsManager:
                 mcp_tool_names = [tool.name for tool in current_mcp_tools]
 
             return {
-                "enabled": config_manager.get("mcp.enabled", True),
+                "enabled": config_api.get("mcp.enabled", True),
                 "initialized": mcp_client_manager.is_initialized,
                 "tools_loaded": self._mcp_tools_loaded,
                 "tool_count": mcp_tool_count,
                 "tool_names": mcp_tool_names,
-                "servers_configured": list(config_manager.get("mcp.servers", {}).keys()),
+                "servers_configured": list(config_api.get("mcp.servers", {}).keys()),
             }
         except Exception as e:
             log_error(f"Failed to get MCP status: {e}")
             return {
-                "enabled": config_manager.get("mcp.enabled", True),
+                "enabled": config_api.get("mcp.enabled", True),
                 "initialized": False,
                 "tools_loaded": False,
                 "tool_count": 0,
@@ -510,12 +512,12 @@ def get_mcp_status() -> dict:
     except RuntimeError:
         # ToolsManager not initialized, return minimal status
         return {
-            "enabled": config_manager.get("mcp.enabled", True),
+            "enabled": config_api.get("mcp.enabled", True),
             "initialized": False,
             "tools_loaded": False,
             "tool_count": 0,
             "tool_names": [],
-            "servers_configured": list(config_manager.get("mcp.servers", {}).keys()),
+            "servers_configured": list(config_api.get("mcp.servers", {}).keys()),
         }
 
 

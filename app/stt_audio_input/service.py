@@ -21,7 +21,9 @@ from datetime import datetime
 import pyaudio
 from pydantic import Field
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
     AudioChunk,
@@ -110,7 +112,7 @@ class AudioInputService:
 
         # Automatically start capturing if configured
         # Note: auto_start_audio is not in new config schema, defaulting to True
-        if config_manager.get("general.speech_to_text.audio_input.auto_start", True):
+        if config_api.get("general.speech_to_text.audio_input.auto_start", True):
             await self._start_capture()
 
         log_info("AudioInputService started")
@@ -134,10 +136,10 @@ class AudioInputService:
 
     def _load_config(self) -> None:
         """Load configuration from config manager."""
-        self._sample_rate = config_manager.get("general.speech_to_text.audio_input.sample_rate", 16000)
-        self._channels = config_manager.get("general.speech_to_text.audio_input.channels", 1)
-        self._chunk_size = config_manager.get("general.speech_to_text.audio_input.chunk_size", 1024)
-        self._device_index = config_manager.get("general.speech_to_text.audio_input.device_index", None)
+        self._sample_rate = config_api.get("general.speech_to_text.audio_input.sample_rate", 16000)
+        self._channels = config_api.get("general.speech_to_text.audio_input.channels", 1)
+        self._chunk_size = config_api.get("general.speech_to_text.audio_input.chunk_size", 1024)
+        self._device_index = config_api.get("general.speech_to_text.audio_input.device_index", None)
 
         log_info("Audio input configuration:")
         log_info(f"  Sample rate: {self._sample_rate} Hz")

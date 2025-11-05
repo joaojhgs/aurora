@@ -11,7 +11,9 @@ import sys
 
 from dotenv import load_dotenv
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.supervisor import Supervisor
 
@@ -27,7 +29,7 @@ logging.getLogger("alsa").setLevel(logging.ERROR)
 
 # Load environment variables
 load_dotenv()
-config_manager.migrate_from_env()
+config_api.migrate_from_env()
 
 
 async def main_async():
@@ -49,7 +51,7 @@ async def main_async():
         log_info("✓ All services started!")
 
         # Start OpenRecall if enabled
-        if config_manager.get("plugins.openrecall.activate"):
+        if config_api.get("plugins.openrecall.activate"):
             log_info("Starting OpenRecall integration...")
             from threading import Thread
 
@@ -229,7 +231,7 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        if config_manager.get("ui.activate"):
+        if config_api.get("ui.activate"):
             # UI mode - run supervisor in background thread
             main_with_ui()
         else:
