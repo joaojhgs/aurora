@@ -6,12 +6,12 @@ This module handles text-to-speech synthesis including:
 - Audio playback
 """
 
-from app.tts.service import (
+from app.services.tts.service import TTSService
+from app.shared.messaging.models.tts_models import (
     TTSError,
     TTSPause,
     TTSRequest,
     TTSResume,
-    TTSService,
     TTSStarted,
     TTSStop,
     TTSStopped,

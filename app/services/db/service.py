@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from app.db.manager import DatabaseManager
-from app.db.models import CronJob, Message
-from app.db.rag_service import RAGService
-from app.db.scheduler_db_service import SchedulerDatabaseService
+from app.services.db.manager import DatabaseManager
+from app.services.db.models import CronJob, Message
+from app.services.db.rag_service import RAGService
+from app.services.db.scheduler_db_service import SchedulerDatabaseService
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import DBTopics, Envelope, MessageBus, QueryResult
 from app.shared.messaging.models.db_models import (
@@ -226,7 +226,7 @@ class DBService:
             # Create CronJob object from command
             import uuid
 
-            from app.db.models import JobStatus, ScheduleType
+            from app.services.db.models import JobStatus, ScheduleType
 
             job = CronJob(
                 id=str(uuid.uuid4()),

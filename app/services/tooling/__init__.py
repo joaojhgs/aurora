@@ -8,7 +8,7 @@ This module manages all tools including:
 - Tooling service for tool lifecycle management
 """
 
-from app.tooling.service import ToolingService
-from app.tooling.tools_manager import ToolsManager
+from app.services.tooling.service import ToolingService
+from app.services.tooling.tools_manager import ToolsManager
 
 __all__ = ["ToolsManager", "ToolingService"]

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope, MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_system_priority
-from app.tooling.tools_manager import ToolsManager, set_tools_manager
+from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
 
 
 from app.shared.messaging.models.tooling_models import (

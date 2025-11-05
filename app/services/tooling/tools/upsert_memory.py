@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 
-from app.db.service import RAGStoreCommand
+from app.shared.messaging.models.db_models import RAGStoreCommand
 from app.messaging import DBTopics
 
 

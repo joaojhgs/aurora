@@ -6,13 +6,13 @@ from pydantic import create_model
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.db.service import RAGSearchQuery
+from app.services.db.service import RAGSearchQuery
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.messaging import DBTopics, MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_interactive_priority
-from app.orchestrator.state import State
-from app.tooling.service import GetToolsQuery
+from app.services.orchestrator.state import State
+from app.shared.messaging.models.tooling_models import GetToolsQuery
 
 """
 The chatbot agent is the main agent coordinator in the graph.
@@ -108,10 +108,10 @@ elif provider == "huggingface_pipeline":
             llm = None
 
 elif provider == "llama_cpp":
-    from app.orchestrator.chat_llama_cpp import ChatLlamaCpp
+    from app.services.orchestrator.chat_llama_cpp import ChatLlamaCpp
 
     # Import handler to register it on the directory of chat formats
-    from app.orchestrator.chat_llama_cpp_fn_handler import *  # noqa: F401,F403
+    from app.services.orchestrator.chat_llama_cpp_fn_handler import *  # noqa: F401,F403
 
     llama_options = config_api.get_section("llm.local.llama_cpp.options")
     model_path = llama_options.get("model_path") if llama_options else None

@@ -72,19 +72,19 @@ class ToolsManager:
 
         try:
             # Import core tools
-            from app.tooling.tools.pomodoro_tool import (
+            from app.services.tooling.tools.pomodoro_tool import (
                 pomodoro_status_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
             )
-            from app.tooling.tools.resume_tts import resume_tts_tool
-            from app.tooling.tools.scheduler_tool import (
+            from app.services.tooling.tools.resume_tts import resume_tts_tool
+            from app.services.tooling.tools.scheduler_tool import (
                 cancel_scheduled_task_tool,
                 list_scheduled_tasks_tool,
                 schedule_task_tool,
             )
-            from app.tooling.tools.stop_tts import stop_tts_tool
-            from app.tooling.tools.upsert_memory import upsert_memory_tool
+            from app.services.tooling.tools.stop_tts import stop_tts_tool
+            from app.services.tooling.tools.upsert_memory import upsert_memory_tool
 
             # Always active tools
             self.always_active_tools = [upsert_memory_tool]
@@ -115,7 +115,7 @@ class ToolsManager:
         # OpenRecall plugin
         if config_api.get("plugins.openrecall.activate", False):
             try:
-                from app.tooling.tools.current_screen import current_screen_tool
+                from app.services.tooling.tools.current_screen import current_screen_tool
 
                 self.tools.append(current_screen_tool)
                 log_info("Loaded OpenRecall plugin tools")
@@ -125,7 +125,7 @@ class ToolsManager:
         # Jira plugin
         if config_api.get("plugins.jira.activate", False):
             try:
-                from app.tooling.tools.jira_toolkit import jira_tools
+                from app.services.tooling.tools.jira_toolkit import jira_tools
 
                 self.tools.extend(jira_tools)
                 log_info(f"Loaded {len(jira_tools)} Jira plugin tools")
@@ -135,7 +135,7 @@ class ToolsManager:
         # Slack plugin
         if config_api.get("plugins.slack.activate", False):
             try:
-                from app.tooling.tools.slack_toolkit import slack_tools
+                from app.services.tooling.tools.slack_toolkit import slack_tools
 
                 self.tools.extend(slack_tools)
                 log_info(f"Loaded {len(slack_tools)} Slack plugin tools")
@@ -145,7 +145,7 @@ class ToolsManager:
         # GitHub plugin
         if config_api.get("plugins.github.activate", False):
             try:
-                from app.tooling.tools.github_toolkit import github_tools
+                from app.services.tooling.tools.github_toolkit import github_tools
 
                 self.tools.extend(github_tools)
                 log_info(f"Loaded {len(github_tools)} GitHub plugin tools")
@@ -155,7 +155,7 @@ class ToolsManager:
         # Search tools (Brave or DuckDuckGo as fallback)
         if config_api.get("plugins.brave_search.activate", False):
             try:
-                from app.tooling.tools.brave_search import search_brave_tool
+                from app.services.tooling.tools.brave_search import search_brave_tool
 
                 self.tools.append(search_brave_tool)
                 log_info("Loaded Brave Search tool")
@@ -164,7 +164,7 @@ class ToolsManager:
         else:
             # DuckDuckGo as fallback when Brave is not activated
             try:
-                from app.tooling.tools.duckduckgo_search import duckduckgo_search_tool
+                from app.services.tooling.tools.duckduckgo_search import duckduckgo_search_tool
 
                 self.tools.append(duckduckgo_search_tool)
                 log_info("Loaded DuckDuckGo Search tool")
@@ -174,7 +174,7 @@ class ToolsManager:
         # Gmail plugin
         if config_api.get("plugins.gmail.activate", False):
             try:
-                from app.tooling.tools.gmail_toolkit import gmail_tools
+                from app.services.tooling.tools.gmail_toolkit import gmail_tools
 
                 self.tools.extend(gmail_tools)
                 log_info(f"Loaded {len(gmail_tools)} Gmail plugin tools")
@@ -184,7 +184,7 @@ class ToolsManager:
         # GCalendar plugin
         if config_api.get("plugins.gcalendar.activate", False):
             try:
-                from app.tooling.tools.gcalendar_toolkit import gcalendar_tools
+                from app.services.tooling.tools.gcalendar_toolkit import gcalendar_tools
 
                 self.tools.extend(gcalendar_tools)
                 log_info(f"Loaded {len(gcalendar_tools)} GCalendar plugin tools")
@@ -200,7 +200,7 @@ class ToolsManager:
         log_info("Loading MCP tools...")
 
         try:
-            from app.tooling.mcp.mcp_client import get_mcp_tools, initialize_mcp
+            from app.services.tooling.mcp.mcp_client import get_mcp_tools, initialize_mcp
 
             # Initialize MCP client with timeout
             log_debug("Initializing MCP client...")
@@ -388,7 +388,7 @@ class ToolsManager:
 
         # Remove existing MCP tools
         if self._mcp_tools_loaded:
-            from app.tooling.mcp.mcp_client import mcp_client_manager
+            from app.services.tooling.mcp.mcp_client import mcp_client_manager
 
             if mcp_client_manager.is_initialized:
                 current_mcp_tools = mcp_client_manager.get_tools()
@@ -420,7 +420,7 @@ class ToolsManager:
             Dictionary with MCP status information
         """
         try:
-            from app.tooling.mcp.mcp_client import mcp_client_manager
+            from app.services.tooling.mcp.mcp_client import mcp_client_manager
 
             # Count MCP tools
             mcp_tool_count = 0

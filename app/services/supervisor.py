@@ -105,11 +105,11 @@ class Supervisor:
         log_info("Starting Aurora services...")
 
         # Import services
-        from app.db import DBService
-        from app.orchestrator import OrchestratorService
-        from app.scheduler import SchedulerService
-        from app.tooling import ToolingService
-        from app.tts import TTSService
+        from app.services.db import DBService
+        from app.services.orchestrator import OrchestratorService
+        from app.services.scheduler import SchedulerService
+        from app.services.tooling import ToolingService
+        from app.services.tts import TTSService
 
         log_info("Service imports complete")
 
@@ -164,10 +164,10 @@ class Supervisor:
 
     async def _start_streaming_stt_services(self) -> None:
         """Start new modular streaming STT services."""
-        from app.stt_audio_input import AudioInputService
-        from app.stt_coordinator import STTCoordinatorService
-        from app.stt_transcription import TranscriptionService
-        from app.stt_wakeword import WakeWordService
+        from app.services.stt_audio_input import AudioInputService
+        from app.services.stt_coordinator import STTCoordinatorService
+        from app.services.stt_transcription import TranscriptionService
+        from app.services.stt_wakeword import WakeWordService
 
         log_info("Starting streaming STT services (Audio Input, Wake Word, Transcription, Coordinator)...")
 

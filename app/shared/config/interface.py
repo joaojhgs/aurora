@@ -318,7 +318,7 @@ class ConfigAPI:
         """
         try:
             from app.messaging import ToolingTopics
-            from app.tooling.service import ReloadMCPToolsCommand
+            from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
                 ToolingTopics.RELOAD_MCP_TOOLS,
@@ -350,7 +350,7 @@ class ConfigAPI:
 
             # Reload servers via bus
             from app.messaging import ToolingTopics
-            from app.tooling.service import ReloadMCPToolsCommand
+            from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
                 ToolingTopics.RELOAD_MCP_TOOLS,
@@ -375,7 +375,7 @@ class ConfigAPI:
         try:
             import asyncio
 
-            from app.tooling.mcp.mcp_discovery import discover_mcp_servers
+            from app.services.tooling.mcp.mcp_discovery import discover_mcp_servers
 
             # Run discovery
             discovered = asyncio.run(discover_mcp_servers())
@@ -411,7 +411,7 @@ class ConfigAPI:
             Dictionary containing add result
         """
         try:
-            from app.tooling.mcp.mcp_discovery import mcp_discovery
+            from app.services.tooling.mcp.mcp_discovery import mcp_discovery
 
             discovered = mcp_discovery.get_server_configs_for_aurora()
 
@@ -433,7 +433,7 @@ class ConfigAPI:
 
             # Reload servers via bus
             from app.messaging import ToolingTopics
-            from app.tooling.service import ReloadMCPToolsCommand
+            from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
                 ToolingTopics.RELOAD_MCP_TOOLS,

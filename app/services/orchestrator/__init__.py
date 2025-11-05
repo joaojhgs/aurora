@@ -7,11 +7,8 @@ This module contains the LangGraph-based orchestration system including:
 - LLM integration
 """
 
-from app.orchestrator.service import (
-    LLMResponseReady,
-    OrchestratorService,
-    UserInput,
-)
+from app.services.orchestrator.service import OrchestratorService
+from app.shared.messaging.models.orchestrator_models import LLMResponseReady, UserInput
 
 __all__ = [
     "OrchestratorService",

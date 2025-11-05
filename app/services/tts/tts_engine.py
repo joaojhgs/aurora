@@ -5,8 +5,8 @@ from RealtimeTTS import PiperVoice, TextToAudioStream
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.tts.piper_engine import PiperEngine
-from app.tts.service import reduce_volume_except_current, restore_volume_except_current
+from app.services.tts.piper_engine import PiperEngine
+from app.services.tts.service import reduce_volume_except_current, restore_volume_except_current
 
 file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -21,7 +21,7 @@ from app.messaging import (
     TTSTopics,
 )
 from app.messaging.priority_helpers import get_interactive_priority
-from app.orchestrator.graph import GraphOrchestrator, set_orchestrator
+from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
 
 
 from app.shared.messaging.models.orchestrator_models import (

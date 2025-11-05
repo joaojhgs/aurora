@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.messaging.service_topics import TTSTopics
-from app.tts.service import TTSStop
+from app.shared.messaging.models.tts_models import TTSStop
 
 
 @tool
