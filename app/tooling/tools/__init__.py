@@ -15,11 +15,6 @@ from app.tooling.tools.scheduler_tool import (
     schedule_task_tool,
 )
 from app.tooling.tools.stop_tts import stop_tts_tool
-from app.tooling.tools.tools import (
-    always_active_tools,
-    get_tools,
-    sync_tools_with_database,
-)
 from app.tooling.tools.upsert_memory import upsert_memory_tool
 
 __all__ = [
@@ -33,8 +28,4 @@ __all__ = [
     "stop_pomodoro_tool",
     "pomodoro_status_tool",
     "upsert_memory_tool",
-    # Tool management functions
-    "get_tools",
-    "sync_tools_with_database",
-    "always_active_tools",
 ]
