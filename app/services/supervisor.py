@@ -40,6 +40,7 @@ class Supervisor:
         self.services: list[Any] = []
         self.shutdown_event = asyncio.Event()
         self._mode = "threads"  # "threads" or "processes"
+        self.process_launcher = None  # ProcessLauncher instance for processes mode
 
     async def initialize(self) -> None:
         """Initialize the supervisor and message bus."""
@@ -108,6 +109,15 @@ class Supervisor:
         """Start all Aurora services in parallel."""
         log_info("Starting Aurora services...")
 
+        if self._mode == "processes":
+            await self._start_services_processes()
+        else:
+            await self._start_services_threads()
+
+    async def _start_services_threads(self) -> None:
+        """Start all services in threads mode (same process)."""
+        log_info("Starting services in threads mode...")
+
         # Import services
         from app.services.db import DBService
         from app.services.orchestrator import OrchestratorService
@@ -129,6 +139,18 @@ class Supervisor:
 
         log_info("Service instances created")
 
+        # Start ConfigService first (needed by other services)
+        try:
+            from app.services.config import ConfigService
+
+            config_service = ConfigService()
+            await config_service.start()
+            self.services.append(config_service)
+            log_info("✓ ConfigService started")
+        except Exception as e:
+            log_error(f"Failed to start ConfigService: {e}", exc_info=True)
+            raise
+
         # Start foundation services first (DB, Tooling)
         try:
             log_info("Starting foundation services (DB, Tooling)...")
@@ -136,7 +158,7 @@ class Supervisor:
             self.services.extend([db_service, tooling_service])
             log_info("Foundation services started")
         except Exception as e:
-            log_error(f"Failed to start foundation services: {e}")
+            log_error(f"Failed to start foundation services: {e}", exc_info=True)
             raise
 
         # Start scheduler service
@@ -165,6 +187,47 @@ class Supervisor:
             raise
 
         log_info(f"All {len(self.services)} services started successfully")
+
+    async def _start_services_processes(self) -> None:
+        """Start all services as separate processes (processes mode)."""
+        log_info("Starting services in processes mode...")
+
+        from app.shared.services.process_launcher import ProcessLauncher
+
+        self.process_launcher = ProcessLauncher()
+
+        # Service definitions: (service_name, module_path)
+        services = [
+            ("ConfigService", "app.services.config"),
+            ("DBService", "app.services.db"),
+            ("ToolingService", "app.services.tooling"),
+            ("SchedulerService", "app.services.scheduler"),
+            ("TTSService", "app.services.tts"),
+            ("OrchestratorService", "app.services.orchestrator"),
+        ]
+
+        # Start STT services if enabled
+        if config_api.get("general.speech_to_text.enabled", True):
+            stt_services = [
+                ("AudioInputService", "app.services.stt_audio_input"),
+                ("WakeWordService", "app.services.stt_wakeword"),
+                ("TranscriptionService", "app.services.stt_transcription"),
+                ("STTCoordinatorService", "app.services.stt_coordinator"),
+            ]
+            services.extend(stt_services)
+
+        # Start services in order
+        for service_name, module_path in services:
+            try:
+                self.process_launcher.start_service(service_name, module_path, daemon=False)
+                log_info(f"✓ {service_name} process started")
+                # Small delay between service starts
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                log_error(f"Failed to start {service_name} process: {e}", exc_info=True)
+                raise
+
+        log_info("All service processes started successfully")
 
     async def _start_streaming_stt_services(self) -> None:
         """Start new modular streaming STT services."""
@@ -243,19 +306,28 @@ class Supervisor:
         """Shutdown all services gracefully."""
         log_info("Stopping Aurora services...")
 
-        # Stop services in reverse order
-        for service in reversed(self.services):
-            try:
-                await service.stop()
-                log_info(f"Stopped {service.__class__.__name__}")
-            except Exception as e:
-                log_error(f"Error stopping {service.__class__.__name__}: {e}")
+        if self._mode == "processes":
+            # Stop all service processes
+            if self.process_launcher:
+                self.process_launcher.stop_all(timeout=10.0)
+        else:
+            # Stop all services in threads mode
+            for service in reversed(self.services):  # Stop in reverse order
+                try:
+                    await service.stop()
+                    log_info(f"Stopped {service.__class__.__name__}")
+                except Exception as e:
+                    log_error(f"Error stopping {service.__class__.__name__}: {e}", exc_info=True)
 
         # Stop message bus
         if self.bus:
-            await self.bus.stop()
-            log_info("Message bus stopped")
+            try:
+                await self.bus.stop()
+                log_info("Message bus stopped")
+            except Exception as e:
+                log_error(f"Error stopping bus: {e}", exc_info=True)
 
+        self.shutdown_event.set()
         log_info("Supervisor shutdown complete")
 
     async def start(self) -> None:

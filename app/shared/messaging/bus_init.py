@@ -119,7 +119,9 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
             bus = BullMQBus(redis_url=redis_url)
             set_bus_for_service(service_name, bus)
             log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}'")
-        return get_bus_for_service(service_name)
+        else:
+            bus = get_bus_for_service(service_name)
+        return bus
     else:
         raise ValueError(f"Unknown architecture mode: {mode}")
 
