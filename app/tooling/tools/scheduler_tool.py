@@ -196,12 +196,18 @@ async def cancel_scheduled_task_tool(task_identifier: str, bus: MessageBus | Non
 # Assistant-specific callbacks for scheduled tasks
 async def speak_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
     """
-    Make the assistant speak a message.
-    This is the primary callback for speech reminders.
+    Asynchronously make the assistant speak a message.
+    This is the primary async callback for speech reminders.
 
     Args:
-        bus: MessageBus instance (injected by scheduler_manager)
+        bus (MessageBus): The message bus instance used to send TTS requests. Must be provided; injected by scheduler_manager.
         **kwargs: Additional arguments including job_name, message, etc.
+
+    Returns:
+        dict[str, Any]: Result indicating success and the spoken message.
+
+    Note:
+        This function is asynchronous and must be awaited.
     """
     try:
         if not bus:

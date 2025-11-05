@@ -146,6 +146,87 @@ class ToolingService:
         self._started = False
         log_info("Tooling service stopped")
 
+    def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
+        """Extract schema manually from tool, filtering out non-serializable fields.
+        
+        This helper is used when automatic schema generation fails due to non-serializable types
+        (e.g., BaseStore, MessageBus) in the tool's args_schema.
+        
+        Args:
+            tool: The tool object with an args_schema attribute
+            
+        Returns:
+            A dictionary containing the extracted schema with type, properties, and required fields
+        """
+        # Try to get schema fields directly and filter out non-serializable ones
+        if not hasattr(tool.args_schema, "model_fields"):
+            return {"type": "object", "properties": {}}
+            
+        filtered_properties = {}
+        required_fields = []
+
+        for field_name, field_info in tool.args_schema.model_fields.items():
+            # Skip runtime-injected parameters (bus, store, etc.)
+            if field_name in ["bus", "store"]:
+                continue
+
+            # Skip fields with non-serializable types
+            field_type = field_info.annotation
+
+            # Handle Annotated types (e.g., Annotated[BaseStore, InjectedStore])
+            if hasattr(field_type, "__origin__") and hasattr(field_type.__origin__, "__name__"):
+                if field_type.__origin__.__name__ == "Annotated":
+                    # Extract the actual type from Annotated
+                    args = getattr(field_type, "__args__", [])
+                    if args:
+                        field_type = args[0]
+
+            # Check if it's a non-serializable type
+            type_name = None
+            if hasattr(field_type, "__name__"):
+                type_name = field_type.__name__
+            elif hasattr(field_type, "__qualname__"):
+                type_name = field_type.__qualname__
+
+            if type_name and type_name in ["BaseStore", "InjectedStore"]:
+                continue
+
+            # Try to get type info
+            try:
+                # Create a simple type schema
+                if field_info.is_required():
+                    required_fields.append(field_name)
+
+                # Determine type from annotation
+                if hasattr(field_info, "annotation"):
+                    ann = field_info.annotation
+                    if hasattr(ann, "__origin__"):
+                        ann = ann.__origin__
+
+                    type_str = "string"
+                    if hasattr(ann, "__name__"):
+                        type_name = ann.__name__
+                        if type_name == "int":
+                            type_str = "integer"
+                        elif type_name == "float":
+                            type_str = "number"
+                        elif type_name == "bool":
+                            type_str = "boolean"
+
+                    filtered_properties[field_name] = {"type": type_str, "description": field_info.description or ""}
+            except Exception:
+                # Skip fields we can't process
+                continue
+
+        if filtered_properties:
+            return {
+                "type": "object",
+                "properties": filtered_properties,
+                **({"required": required_fields} if required_fields else {}),
+            }
+        else:
+            return {"type": "object", "properties": {}}
+
     async def _on_get_tools(self, env: Envelope) -> None:
         """Handle get tools query.
 
@@ -212,78 +293,9 @@ class ToolingService:
                                 full_schema = tool.args_schema.model_json_schema()
                             except Exception as json_schema_error:
                                 # If schema generation fails due to non-serializable types,
-                                # try to manually build a schema excluding problematic fields
+                                # use helper method to manually build a schema excluding problematic fields
                                 log_debug(f"Direct schema generation failed for {tool.name}, attempting manual extraction: {json_schema_error}")
-
-                                # Try to get schema fields directly and filter out non-serializable ones
-                                if hasattr(tool.args_schema, "model_fields"):
-                                    filtered_properties = {}
-                                    required_fields = []
-
-                                    for field_name, field_info in tool.args_schema.model_fields.items():
-                                        # Skip runtime-injected parameters (bus, store, etc.)
-                                        if field_name in ["bus", "store"]:
-                                            continue
-
-                                        # Skip fields with non-serializable types
-                                        field_type = field_info.annotation
-
-                                        # Handle Annotated types (e.g., Annotated[BaseStore, InjectedStore])
-                                        if hasattr(field_type, "__origin__") and hasattr(field_type.__origin__, "__name__"):
-                                            if field_type.__origin__.__name__ == "Annotated":
-                                                # Extract the actual type from Annotated
-                                                args = getattr(field_type, "__args__", [])
-                                                if args:
-                                                    field_type = args[0]
-
-                                        # Check if it's a non-serializable type
-                                        type_name = None
-                                        if hasattr(field_type, "__name__"):
-                                            type_name = field_type.__name__
-                                        elif hasattr(field_type, "__qualname__"):
-                                            type_name = field_type.__qualname__
-
-                                        if type_name and type_name in ["BaseStore", "InjectedStore"]:
-                                            continue
-
-                                        # Try to get type info
-                                        try:
-                                            # Create a simple type schema
-                                            if field_info.is_required():
-                                                required_fields.append(field_name)
-
-                                            # Determine type from annotation
-                                            if hasattr(field_info, "annotation"):
-                                                ann = field_info.annotation
-                                                if hasattr(ann, "__origin__"):
-                                                    ann = ann.__origin__
-
-                                                type_str = "string"
-                                                if hasattr(ann, "__name__"):
-                                                    type_name = ann.__name__
-                                                    if type_name == "int":
-                                                        type_str = "integer"
-                                                    elif type_name == "float":
-                                                        type_str = "number"
-                                                    elif type_name == "bool":
-                                                        type_str = "boolean"
-
-                                                filtered_properties[field_name] = {"type": type_str, "description": field_info.description or ""}
-                                        except Exception:
-                                            # Skip fields we can't process
-                                            continue
-
-                                    if filtered_properties:
-                                        tool_schema["args_schema"] = {
-                                            "type": "object",
-                                            "properties": filtered_properties,
-                                            **({"required": required_fields} if required_fields else {}),
-                                        }
-                                    else:
-                                        tool_schema["args_schema"] = {"type": "object", "properties": {}}
-                                else:
-                                    # Fallback to empty schema
-                                    tool_schema["args_schema"] = {"type": "object", "properties": {}}
+                                tool_schema["args_schema"] = self._extract_schema_manually(tool)
 
                                 # Skip the rest of the schema processing
                                 serialized_tools.append(tool_schema)
