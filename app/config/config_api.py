@@ -2,6 +2,9 @@ from typing import Any
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_error
+from app.messaging import ToolingTopics
+from app.messaging.bus_runtime import get_bus
+from app.tooling.service import ReloadMCPToolsCommand
 
 
 class ConfigAPI:
@@ -50,41 +53,63 @@ class ConfigAPI:
         config_manager.remove_observer(callback)
 
     @staticmethod
-    def get_mcp_status() -> dict[str, Any]:
-        """Get MCP system status"""
+    async def get_mcp_status() -> dict[str, Any]:
+        """Get MCP system status via message bus"""
         try:
-            from app.tooling.tools.tools import get_mcp_status
-
-            return get_mcp_status()
+            bus = get_bus()
+            result = await bus.request(
+                ToolingTopics.GET_MCP_STATUS,
+                {},
+                timeout=5.0,
+            )
+            if result.ok and result.data:
+                return result.data
+            else:
+                return {"error": result.error or "Unknown error"}
+        except RuntimeError as e:
+            log_error(f"Bus not initialized: {e}")
+            return {"error": "Bus not initialized"}
         except Exception as e:
             log_error(f"Error getting MCP status: {e}")
             return {"error": str(e)}
 
     @staticmethod
-    def reload_mcp_servers() -> dict[str, Any]:
-        """Reload MCP servers from configuration"""
+    async def reload_mcp_servers() -> dict[str, Any]:
+        """Reload MCP servers from configuration via message bus"""
         try:
-            from app.tooling.tools.tools import reload_mcp_servers_sync
-
-            reload_mcp_servers_sync()
+            bus = get_bus()
+            await bus.publish(
+                ToolingTopics.RELOAD_MCP_TOOLS,
+                ReloadMCPToolsCommand(),
+                event=False,
+            )
             return {"success": True, "message": "MCP servers reload initiated"}
+        except RuntimeError as e:
+            log_error(f"Bus not initialized: {e}")
+            return {"success": False, "error": "Bus not initialized"}
         except Exception as e:
             log_error(f"Error reloading MCP servers: {e}")
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def update_mcp_config(servers_config: dict[str, Any]) -> dict[str, Any]:
-        """Update MCP servers configuration and reload"""
+    async def update_mcp_config(servers_config: dict[str, Any]) -> dict[str, Any]:
+        """Update MCP servers configuration and reload via message bus"""
         try:
             # Update configuration
             config_manager.set("mcp.servers", servers_config)
 
-            # Reload servers
-            from app.tooling.tools.tools import reload_mcp_servers_sync
-
-            reload_mcp_servers_sync()
+            # Reload servers via bus
+            bus = get_bus()
+            await bus.publish(
+                ToolingTopics.RELOAD_MCP_TOOLS,
+                ReloadMCPToolsCommand(),
+                event=False,
+            )
 
             return {"success": True, "message": "MCP configuration updated and servers reloaded"}
+        except RuntimeError as e:
+            log_error(f"Bus not initialized: {e}")
+            return {"success": False, "error": "Bus not initialized"}
         except Exception as e:
             log_error(f"Error updating MCP config: {e}")
             return {"success": False, "error": str(e)}
@@ -122,8 +147,8 @@ class ConfigAPI:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def add_discovered_servers_to_config(server_names: list[str] = None) -> dict[str, Any]:
-        """Add discovered servers to Aurora's MCP configuration"""
+    async def add_discovered_servers_to_config(server_names: list[str] = None) -> dict[str, Any]:
+        """Add discovered servers to Aurora's MCP configuration and reload via message bus"""
         try:
             from app.tooling.mcp.mcp_discovery import mcp_discovery
 
@@ -143,10 +168,13 @@ class ConfigAPI:
             # Update configuration
             config_manager.set("mcp.servers", updated_servers)
 
-            # Reload servers
-            from app.tooling.tools.tools import reload_mcp_servers_sync
-
-            reload_mcp_servers_sync()
+            # Reload servers via bus
+            bus = get_bus()
+            await bus.publish(
+                ToolingTopics.RELOAD_MCP_TOOLS,
+                ReloadMCPToolsCommand(),
+                event=False,
+            )
 
             return {
                 "success": True,
@@ -155,6 +183,9 @@ class ConfigAPI:
                 "message": f"Added {len(discovered)} discovered servers to configuration",
             }
 
+        except RuntimeError as e:
+            log_error(f"Bus not initialized: {e}")
+            return {"success": False, "error": "Bus not initialized"}
         except Exception as e:
             log_error(f"Error adding discovered servers: {e}")
             return {"success": False, "error": str(e)}
