@@ -16,8 +16,10 @@ from app.helpers.aurora_logger import log_error, log_info
 from app.services.supervisor import Supervisor
 
 # CRITICAL: Force unbuffered output FIRST before any logging
-sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, "reconfigure") else None
-sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, "reconfigure") else None
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
 
 
 # Reduce ALSA noise
