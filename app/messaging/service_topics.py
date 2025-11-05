@@ -568,6 +568,7 @@ class ToolingTopics:
     QUERY_TOOLS = "Tooling.QueryTools"  # Query with filters
     GET_TOOL_BY_NAME = "Tooling.GetToolByName"
     GET_STATS = "Tooling.GetStats"
+    GET_MCP_STATUS = "Tooling.GetMCPStatus"
 
 
 TOOLING_TOPIC_DEFS: list[TopicDefinition] = [
@@ -633,6 +634,13 @@ TOOLING_TOPIC_DEFS: list[TopicDefinition] = [
         message_type="Command",
         payload_class="ExecuteToolCommand",
         description="Execute a tool by name with arguments",
+    ),
+    TopicDefinition(
+        topic=ToolingTopics.GET_MCP_STATUS,
+        service="ToolingService",
+        message_type="Query",
+        payload_class="GetMCPStatusQuery",
+        description="Get MCP integration status",
     ),
 ]
 
