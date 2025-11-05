@@ -6,7 +6,6 @@ import asyncio
 import multiprocessing
 import os
 import time
-from datetime import datetime  # noqa: F401
 
 import pytest
 
