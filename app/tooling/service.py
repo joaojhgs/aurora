@@ -170,20 +170,20 @@ class ToolingService:
 
     def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
         """Extract schema manually from tool, filtering out non-serializable fields.
-        
+
         This helper is used when automatic schema generation fails due to non-serializable types
         (e.g., BaseStore, MessageBus) in the tool's args_schema.
-        
+
         Args:
             tool: The tool object with an args_schema attribute
-            
+
         Returns:
             A dictionary containing the extracted schema with type, properties, and required fields
         """
         # Try to get schema fields directly and filter out non-serializable ones
         if not hasattr(tool.args_schema, "model_fields"):
             return {"type": "object", "properties": {}}
-            
+
         filtered_properties = {}
         required_fields = []
 
