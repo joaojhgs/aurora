@@ -69,6 +69,27 @@ class GetToolStatsQuery(Query):
     pass
 
 
+class GetMCPStatusQuery(Query):
+    """Query to get MCP integration status."""
+
+    pass
+
+
+class GetMCPStatusResponse(BaseModel):
+    """Response for GetMCPStatusQuery.
+
+    This response will be wrapped in QueryResult by the message bus,
+    so it should not have an 'ok' field.
+    """
+
+    enabled: bool
+    initialized: bool
+    tools_loaded: bool
+    tool_count: int
+    tool_names: list[str]
+    servers_configured: list[str]
+
+
 class ExecuteToolCommand(Command):
     """Command to execute a tool by name."""
 
@@ -120,6 +141,7 @@ class ToolingService:
         self.bus.subscribe(ToolingTopics.GET_TOOLS, self._on_get_tools)
         self.bus.subscribe(ToolingTopics.GET_TOOL_BY_NAME, self._on_get_tool_by_name)
         self.bus.subscribe(ToolingTopics.GET_STATS, self._on_get_stats)
+        self.bus.subscribe(ToolingTopics.GET_MCP_STATUS, self._on_get_mcp_status)
         self.bus.subscribe(ToolingTopics.RELOAD_MCP_TOOLS, self._on_reload_mcp)
         self.bus.subscribe(ToolingTopics.EXECUTE_TOOL, self._on_execute_tool)
 
@@ -383,6 +405,29 @@ class ToolingService:
             log_error(f"Error handling get stats query: {e}", exc_info=True)
             if env.reply_to:
                 await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
+
+    async def _on_get_mcp_status(self, env: Envelope) -> None:
+        """Handle get MCP status query.
+
+        Args:
+            env: Message envelope (no payload required)
+        """
+        try:
+            status = self.tools_manager.get_mcp_status()
+            log_debug(f"MCP status: {status}")
+
+            # Send response
+            if env.reply_to:
+                response = GetMCPStatusResponse(**status)
+                await self.bus.publish(env.reply_to, response, origin="internal")
+
+        except Exception as e:
+            log_error(f"Error handling get MCP status query: {e}", exc_info=True)
+            if env.reply_to:
+                from app.messaging.bus import QueryResult
+
+                error_response = QueryResult(ok=False, error=str(e), data=None)
+                await self.bus.publish(env.reply_to, error_response, origin="internal", event=False, reliable=False)
 
     async def _on_reload_mcp(self, env: Envelope) -> None:
         """Handle reload MCP tools command.
