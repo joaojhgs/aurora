@@ -190,7 +190,9 @@ class CronService:
         """Shutdown the cron service"""
         if self.scheduler_manager:
             await self.scheduler_manager.stop()
-        # Executor is managed by scheduler_manager
+            # Ensure executor and other resources are properly cleaned up
+            if hasattr(self.scheduler_manager, "shutdown"):
+                self.scheduler_manager.shutdown()
         log_info("Cron service shutdown")
 
     async def schedule_from_text(
