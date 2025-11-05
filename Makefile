@@ -1,7 +1,7 @@
 # Aurora Voice Assistant - Makefile
 # Simple commands for common development tasks
 
-.PHONY: help setup lint test format check coverage clean
+.PHONY: help setup lint test format check coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart
 
 # Default target when just running 'make'
 help:
@@ -16,6 +16,15 @@ help:
 	@echo "make integration - Run integration tests only"
 	@echo "make coverage    - Generate test coverage report"
 	@echo "make clean       - Remove temporary files"
+	@echo ""
+	@echo "Docker Process Mode Commands:"
+	@echo "------------------------------"
+	@echo "make docker-process-mode  - Setup and start Aurora in process mode"
+	@echo "make docker-process-up    - Start all Aurora services"
+	@echo "make docker-process-down  - Stop all Aurora services"
+	@echo "make docker-process-logs  - View logs from all services"
+	@echo "make docker-process-ps    - Show status of all services"
+	@echo "make docker-process-restart - Restart all services"
 
 # Setup development environment
 setup:
@@ -78,3 +87,28 @@ clean:
 	rm -rf dist
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+
+# Docker Process Mode Commands
+docker-process-mode:
+	@echo "Setting up and starting Aurora in process mode..."
+	@bash scripts/docker-process-mode.sh
+
+docker-process-up:
+	@echo "Starting Aurora services in process mode..."
+	@docker-compose -f docker-compose.process.yml up -d
+
+docker-process-down:
+	@echo "Stopping Aurora services in process mode..."
+	@docker-compose -f docker-compose.process.yml down
+
+docker-process-logs:
+	@echo "Viewing logs from all Aurora services..."
+	@docker-compose -f docker-compose.process.yml logs -f
+
+docker-process-ps:
+	@echo "Status of Aurora services:"
+	@docker-compose -f docker-compose.process.yml ps
+
+docker-process-restart:
+	@echo "Restarting Aurora services..."
+	@docker-compose -f docker-compose.process.yml restart

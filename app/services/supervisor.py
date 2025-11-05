@@ -94,12 +94,13 @@ class Supervisor:
 
         from app.messaging.bullmq_bus import BullMQBus
 
-        # Get Redis URL from config
+        # Get Redis URL from config or environment variable
+        import os
         try:
-            redis_url = config_api.get("messaging.redis.url", "redis://localhost:6379")
+            redis_url = os.getenv("REDIS_URL") or config_api.get("messaging.redis.url", "redis://localhost:6379")
         except Exception:
             log_warning("Redis URL not configured, using default")
-            redis_url = "redis://localhost:6379"
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
         self.bus = BullMQBus(redis_url=redis_url)
         await self.bus.start()

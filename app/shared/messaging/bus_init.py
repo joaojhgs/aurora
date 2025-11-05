@@ -114,11 +114,12 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
     elif mode == "processes":
         # In processes mode, create per-service singleton
         if service_name not in _service_buses:
-            # Get Redis URL from config
-            redis_url = config_api.get("messaging.redis.url", "redis://localhost:6379")
+            # Get Redis URL from config or environment variable
+            import os
+            redis_url = os.getenv("REDIS_URL") or config_api.get("messaging.redis.url", "redis://localhost:6379")
             bus = BullMQBus(redis_url=redis_url)
             set_bus_for_service(service_name, bus)
-            log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}'")
+            log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}' with Redis: {redis_url}")
         else:
             bus = get_bus_for_service(service_name)
         return bus

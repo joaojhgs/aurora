@@ -1,0 +1,46 @@
+# Aurora Voice Assistant - Process Mode Dockerfile
+# Base image for all Aurora services in process mode
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    portaudio19-dev \
+    ffmpeg \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements-docker.txt .
+RUN pip install --no-cache-dir -r requirements-docker.txt
+
+# Copy application code
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+COPY --chown=aurora:aurora main.py .
+COPY --chown=aurora:aurora pyproject.toml .
+COPY --chown=aurora:aurora setup.cfg .
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+# Switch to non-root user
+USER aurora
+
+# Default command (should be overridden in docker-compose)
+# This is just a fallback - each service should specify its own command
+CMD ["python", "-m", "app.services.config"]
