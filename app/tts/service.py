@@ -16,7 +16,19 @@ from RealtimeTTS import PiperVoice, TextToAudioStream
 
 from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info
-from app.messaging import Command, Envelope, Event, MessageBus, TTSTopics
+from app.messaging import Envelope, MessageBus, TTSTopics
+from app.shared.messaging.models.tts_models import (
+    TTSError,
+    TTSEvent,
+    TTSPause,
+    TTSPaused,
+    TTSRequest,
+    TTSResume,
+    TTSResumed,
+    TTSStarted,
+    TTSStop,
+    TTSStopped,
+)
 from app.tts.piper_engine import PiperEngine
 
 
@@ -32,70 +44,6 @@ def restore_volume_except_current():
 
 
 file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-# Message definitions
-class TTSRequest(Command):
-    """Command to play text-to-speech audio."""
-
-    text: str
-    interrupt: bool = False
-    voice: str | None = None
-    speed: float = 1.0
-
-
-class TTSStop(Command):
-    """Command to stop TTS playback."""
-
-    pass
-
-
-class TTSPause(Command):
-    """Command to pause TTS playback."""
-
-    pass
-
-
-class TTSResume(Command):
-    """Command to resume TTS playback."""
-
-    pass
-
-
-class TTSEvent(Event):
-    """Base event for TTS lifecycle."""
-
-    request_id: str | None = None
-
-
-class TTSStarted(TTSEvent):
-    """Event emitted when TTS playback starts."""
-
-    text: str
-
-
-class TTSStopped(TTSEvent):
-    """Event emitted when TTS playback stops."""
-
-    reason: str = "completed"  # "completed", "interrupted", "error"
-
-
-class TTSPaused(TTSEvent):
-    """Event emitted when TTS playback is paused."""
-
-    pass
-
-
-class TTSResumed(TTSEvent):
-    """Event emitted when TTS playback is resumed."""
-
-    pass
-
-
-class TTSError(TTSEvent):
-    """Event emitted when TTS encounters an error."""
-
-    error: str
 
 
 # Service implementation

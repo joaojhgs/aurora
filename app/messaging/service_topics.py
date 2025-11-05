@@ -547,6 +547,81 @@ SCHEDULER_TOPIC_DEFS: list[TopicDefinition] = [
 
 
 # =============================================================================
+# CONFIG SERVICE
+# =============================================================================
+
+
+class ConfigTopics:
+    """Topics for ConfigService."""
+
+    # Queries
+    GET_CONFIG = "Config.GetConfig"
+    VALIDATE_CONFIG = "Config.ValidateConfig"
+    GET_PLUGIN_STATUS = "Config.GetPluginStatus"
+
+    # Commands
+    UPDATE_CONFIG = "Config.UpdateConfig"
+    UPDATE_PLUGIN_STATUS = "Config.UpdatePluginStatus"
+    RELOAD_SERVICE = "Config.ReloadService"
+
+    # Events
+    CHANGED = "Config.Changed"
+
+
+CONFIG_TOPIC_DEFS: list[TopicDefinition] = [
+    TopicDefinition(
+        topic=ConfigTopics.GET_CONFIG,
+        service="ConfigService",
+        message_type="Query",
+        payload_class="GetConfigQuery",
+        description="Get configuration",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.UPDATE_CONFIG,
+        service="ConfigService",
+        message_type="Command",
+        payload_class="UpdateConfigCommand",
+        description="Update configuration",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.VALIDATE_CONFIG,
+        service="ConfigService",
+        message_type="Query",
+        payload_class="ValidateConfigQuery",
+        description="Validate configuration",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.GET_PLUGIN_STATUS,
+        service="ConfigService",
+        message_type="Query",
+        payload_class="GetPluginStatusQuery",
+        description="Get plugin status",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.UPDATE_PLUGIN_STATUS,
+        service="ConfigService",
+        message_type="Command",
+        payload_class="UpdatePluginStatusCommand",
+        description="Update plugin status",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.CHANGED,
+        service="ConfigService",
+        message_type="Event",
+        payload_class="ConfigChangedEvent",
+        description="Configuration changed",
+    ),
+    TopicDefinition(
+        topic=ConfigTopics.RELOAD_SERVICE,
+        service="ConfigService",
+        message_type="Command",
+        payload_class="ReloadServiceCommand",
+        description="Reload a specific service",
+    ),
+]
+
+
+# =============================================================================
 # TOOLING SERVICE
 # =============================================================================
 
@@ -669,6 +744,7 @@ def register_all_service_topics() -> None:
     registry.register_service_topics("DBService", DB_TOPIC_DEFS)
     registry.register_service_topics("SchedulerService", SCHEDULER_TOPIC_DEFS)
     registry.register_service_topics("ToolingService", TOOLING_TOPIC_DEFS)
+    registry.register_service_topics("ConfigService", CONFIG_TOPIC_DEFS)
 
     from app.helpers.aurora_logger import log_info
 
@@ -686,6 +762,7 @@ __all__ = [
     "DBTopics",
     "SchedulerTopics",
     "ToolingTopics",
+    "ConfigTopics",
     "register_all_service_topics",
     "AUDIO_PROTOCOL_TOPIC_DEFS",  # Export for documentation/testing
 ]

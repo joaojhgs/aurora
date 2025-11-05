@@ -1,0 +1,122 @@
+"""Shared payload validation models for all services."""
+
+from app.shared.messaging.models.db_models import (
+    DeleteCronJob,
+    GetCronJobs,
+    GetMessagesForDate,
+    GetRecentMessages,
+    MessagesResponse,
+    RAGDeleteCommand,
+    RAGGetQuery,
+    RAGItemResponse,
+    RAGListQuery,
+    RAGSearchQuery,
+    RAGStoreCommand,
+    StoreCronJob,
+    StoreMessage,
+)
+from app.shared.messaging.models.orchestrator_models import (
+    AuroraMessage,
+    LLMResponseReady,
+    MessageSource,
+    ToolRequest,
+    ToolResult,
+    UserInput,
+)
+from app.shared.messaging.models.stt_coordinator_models import (
+    STTCoordinatorControl,
+    STTSessionEnded,
+    STTSessionStarted,
+    STTState,
+    STTUserSpeechCaptured,
+)
+from app.shared.messaging.models.stt_wakeword_models import (
+    WakeWordBackendType,
+    WakeWordControl,
+    WakeWordDetected,
+    WakeWordTimeout,
+)
+from app.shared.messaging.models.tooling_models import (
+    ExecuteToolCommand,
+    ExecuteToolResponse,
+    GetMCPStatusQuery,
+    GetMCPStatusResponse,
+    GetToolByNameQuery,
+    GetToolStatsQuery,
+    GetToolsQuery,
+    GetToolsResponse,
+    ReloadMCPToolsCommand,
+    ToolsInitialized,
+    ToolsReloaded,
+)
+from app.shared.messaging.models.tts_models import (
+    TTSError,
+    TTSEvent,
+    TTSPause,
+    TTSPaused,
+    TTSRequest,
+    TTSResume,
+    TTSResumed,
+    TTSStarted,
+    TTSStop,
+    TTSStopped,
+)
+
+__all__ = [
+    # DB models
+    "StoreMessage",
+    "GetRecentMessages",
+    "GetMessagesForDate",
+    "MessagesResponse",
+    "StoreCronJob",
+    "GetCronJobs",
+    "DeleteCronJob",
+    "RAGStoreCommand",
+    "RAGDeleteCommand",
+    "RAGSearchQuery",
+    "RAGGetQuery",
+    "RAGListQuery",
+    "RAGItemResponse",
+    "RAGListResponse",
+    # TTS models
+    "TTSRequest",
+    "TTSStop",
+    "TTSPause",
+    "TTSResume",
+    "TTSEvent",
+    "TTSStarted",
+    "TTSStopped",
+    "TTSPaused",
+    "TTSResumed",
+    "TTSError",
+    # Tooling models
+    "ToolsInitialized",
+    "ToolsReloaded",
+    "GetToolsQuery",
+    "GetToolsResponse",
+    "GetToolByNameQuery",
+    "ReloadMCPToolsCommand",
+    "GetToolStatsQuery",
+    "GetMCPStatusQuery",
+    "GetMCPStatusResponse",
+    "ExecuteToolCommand",
+    "ExecuteToolResponse",
+    # Orchestrator models
+    "UserInput",
+    "LLMResponseReady",
+    "ToolRequest",
+    "ToolResult",
+    "MessageSource",
+    "AuroraMessage",
+    # STT Wake Word models
+    "WakeWordBackendType",
+    "WakeWordDetected",
+    "WakeWordTimeout",
+    "WakeWordControl",
+    # STT Coordinator models
+    "STTState",
+    "STTSessionStarted",
+    "STTSessionEnded",
+    "STTUserSpeechCaptured",
+    "STTCoordinatorControl",
+]

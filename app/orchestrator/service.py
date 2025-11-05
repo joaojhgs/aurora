@@ -14,9 +14,7 @@ from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import (
-    Command,
     Envelope,
-    Event,
     MessageBus,
     OrchestratorTopics,
     STTCoordinatorTopics,
@@ -26,38 +24,12 @@ from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator.graph import GraphOrchestrator, set_orchestrator
 
 
-# Message definitions
-class UserInput(Command):
-    """Command representing user input for processing."""
-
-    text: str
-    source: str = "stt"  # "stt", "ui", "external"
-    session_id: str | None = None
-
-
-class LLMResponseReady(Event):
-    """Event emitted when LLM response is ready."""
-
-    text: str
-    session_id: str | None = None
-    metadata: dict = {}
-
-
-class ToolRequest(Command):
-    """Command to execute a tool."""
-
-    tool_name: str
-    parameters: dict
-    request_id: str
-
-
-class ToolResult(Event):
-    """Event with tool execution result."""
-
-    request_id: str
-    result: Any
-    success: bool
-    error: str | None = None
+from app.shared.messaging.models.orchestrator_models import (
+    LLMResponseReady,
+    ToolRequest,
+    ToolResult,
+    UserInput,
+)
 
 
 # Service implementation

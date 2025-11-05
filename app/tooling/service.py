@@ -14,95 +14,24 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import Command, Envelope, Event, MessageBus, Query, ToolingTopics
+from app.messaging import Envelope, MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_system_priority
 from app.tooling.tools_manager import ToolsManager, set_tools_manager
 
 
-# Message definitions
-class ToolsInitialized(Event):
-    """Event emitted when tools are initialized."""
-
-    total_tools: int
-    mcp_tools_loaded: bool
-
-
-class ToolsReloaded(Event):
-    """Event emitted when tools are reloaded."""
-
-    total_tools: int
-
-
-class GetToolsQuery(Query):
-    """Query to get available tools."""
-
-    query: str | None = None
-    top_k: int = 10
-
-
-class GetToolsResponse(BaseModel):
-    """Response for GetToolsQuery.
-
-    This response will be wrapped in QueryResult by the message bus,
-    so it should not have an 'ok' field.
-    """
-
-    tools: list[dict[str, Any]] = []
-    count: int = 0
-
-
-class GetToolByNameQuery(Query):
-    """Query to get a specific tool by name."""
-
-    name: str
-
-
-class ReloadMCPToolsCommand(Command):
-    """Command to reload MCP tools."""
-
-    pass
-
-
-class GetToolStatsQuery(Query):
-    """Query to get tooling statistics."""
-
-    pass
-
-
-class GetMCPStatusQuery(Query):
-    """Query to get MCP integration status."""
-
-    pass
-
-
-class GetMCPStatusResponse(BaseModel):
-    """Response for GetMCPStatusQuery.
-
-    This response will be wrapped in QueryResult by the message bus,
-    so it should not have an 'ok' field.
-    """
-
-    enabled: bool
-    initialized: bool
-    tools_loaded: bool
-    tool_count: int
-    tool_names: list[str]
-    servers_configured: list[str]
-
-
-class ExecuteToolCommand(Command):
-    """Command to execute a tool by name."""
-
-    tool_name: str
-    arguments: dict[str, Any] = {}
-
-
-class ExecuteToolResponse(BaseModel):
-    """Response for ExecuteToolCommand."""
-
-    ok: bool
-    data: Any = None
-    error: str | None = None
+from app.shared.messaging.models.tooling_models import (
+    ExecuteToolCommand,
+    ExecuteToolResponse,
+    GetMCPStatusQuery,
+    GetMCPStatusResponse,
+    GetToolByNameQuery,
+    GetToolStatsQuery,
+    GetToolsQuery,
+    GetToolsResponse,
+    ReloadMCPToolsCommand,
+    ToolsInitialized,
+    ToolsReloaded,
+)
 
 
 # Service implementation
