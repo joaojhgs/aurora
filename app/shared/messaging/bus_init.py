@@ -22,11 +22,20 @@ _service_buses: dict[str, MessageBus] = {}
 def set_bus(bus: MessageBus) -> None:
     """Set the global MessageBus instance (threads mode).
 
+    This function also updates the legacy bus_runtime singleton for backward compatibility.
+
     Args:
         bus: MessageBus implementation to use globally
     """
     global _bus
     _bus = bus
+    
+    # Also update legacy bus_runtime for backward compatibility
+    try:
+        from app.messaging.bus_runtime import set_bus as set_runtime_bus
+        set_runtime_bus(bus)
+    except Exception:
+        pass  # Ignore if bus_runtime not available
 
 
 def get_bus() -> MessageBus:

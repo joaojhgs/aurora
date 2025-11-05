@@ -42,6 +42,7 @@ from app.messaging import (
     TranscriptionTopics,
     TranscriptionType,
 )
+from app.shared.services.base_service import BaseService
 
 
 class VADMode(Enum):
@@ -53,7 +54,7 @@ class VADMode(Enum):
     AGGRESSIVE = 3  # Most aggressive (best latency, may cut off speech)
 
 
-class TranscriptionService:
+class TranscriptionService(BaseService):
     """Transcription service for speech-to-text.
 
     Responsibilities:
@@ -65,13 +66,9 @@ class TranscriptionService:
     - Emit TranscriptionResult events
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize transcription service.
-
-        Args:
-            bus: MessageBus instance for communication
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize transcription service."""
+        super().__init__("TranscriptionService")
         self._running = False
         self._transcribing = False
         self._paused = False
@@ -140,6 +137,7 @@ class TranscriptionService:
         # Start processing thread
         self._start_processing_thread()
 
+        self._set_started(True)
         log_info("Transcription service started")
 
     async def stop(self) -> None:
@@ -155,7 +153,39 @@ class TranscriptionService:
         if self._process_thread and self._process_thread.is_alive():
             self._process_thread.join(timeout=5.0)
 
+        # Clean up models
+        if self._realtime_model:
+            del self._realtime_model
+            self._realtime_model = None
+        if self._accurate_model:
+            del self._accurate_model
+            self._accurate_model = None
+
+        self._set_started(False)
         log_info("Transcription service stopped")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading TranscriptionService configuration: section={config_section}")
+        # Reload transcription models if config changed
+        if config_section is None or config_section in ["speech_to_text", "general"]:
+            log_info("Reloading transcription models due to config change...")
+            if self._realtime_model:
+                del self._realtime_model
+                self._realtime_model = None
+            if self._accurate_model:
+                del self._accurate_model
+                self._accurate_model = None
+            # Reload config and models
+            self._language = config_api.get("general.speech_to_text.language", "")
+            self._realtime_enabled = config_api.get("general.speech_to_text.transcription.realtime_model.enabled", True)
+            self._accurate_enabled = config_api.get("general.speech_to_text.transcription.accurate_model.enabled", True)
+            await self._load_models()
+        log_info("TranscriptionService configuration reloaded")
 
     def _initialize_vad(self) -> None:
         """Initialize Voice Activity Detection."""

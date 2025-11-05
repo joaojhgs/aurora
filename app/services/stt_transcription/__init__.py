@@ -6,6 +6,6 @@ This module handles speech-to-text transcription including:
 - Multiple backend support
 """
 
-from app.stt_transcription.service import TranscriptionService
+from app.services.stt_transcription.service import TranscriptionService
 
 __all__ = ["TranscriptionService"]

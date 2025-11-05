@@ -31,7 +31,8 @@ from app.shared.messaging.models.tts_models import (
     TTSStop,
     TTSStopped,
 )
-from app.tts.piper_engine import PiperEngine
+from app.shared.services.base_service import BaseService
+from app.services.tts.piper_engine import PiperEngine
 
 
 # TODO: Implement volume control functions
@@ -49,7 +50,7 @@ file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 
 # Service implementation
-class TTSService:
+class TTSService(BaseService):
     """Text-to-Speech service.
 
     Responsibilities:
@@ -59,13 +60,9 @@ class TTSService:
     - Emit lifecycle events
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize TTS service with RealtimeTTS engine.
-
-        Args:
-            bus: MessageBus instance
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize TTS service with RealtimeTTS engine."""
+        super().__init__("TTSService")
         self._playing = False
         self._paused = False
         self._current_text: str | None = None
@@ -144,6 +141,7 @@ class TTSService:
         self.bus.subscribe(TTSTopics.PAUSE, self._on_pause)
         self.bus.subscribe(TTSTopics.RESUME, self._on_resume)
 
+        self._set_started(True)
         log_info("TTS service started")
 
     async def stop(self) -> None:

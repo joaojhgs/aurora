@@ -33,10 +33,11 @@ from app.shared.messaging.models.db_models import (
     StoreCronJob,
     StoreMessage,
 )
+from app.shared.services.base_service import BaseService
 
 
 # Service implementation
-class DBService:
+class DBService(BaseService):
     """Database service.
 
     Responsibilities:
@@ -46,14 +47,13 @@ class DBService:
     - Ensure data integrity
     """
 
-    def __init__(self, bus: MessageBus, db_path: str | None = None):
+    def __init__(self, db_path: str | None = None):
         """Initialize DB service with DatabaseManager.
 
         Args:
-            bus: MessageBus instance
             db_path: Optional path to database file
         """
-        self.bus = bus
+        super().__init__("DBService")
         self.db_manager = DatabaseManager(db_path)
         self.scheduler_db = SchedulerDatabaseService(db_path)
         self.rag_service = RAGService()
@@ -81,6 +81,7 @@ class DBService:
         self.bus.subscribe(DBTopics.RAG_GET, self._rag_get)
         self.bus.subscribe(DBTopics.RAG_LIST, self._rag_list)
 
+        self._set_started(True)
         log_info("DB service started")
 
     async def stop(self) -> None:

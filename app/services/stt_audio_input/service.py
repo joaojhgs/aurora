@@ -38,6 +38,7 @@ from app.messaging import (
     MessageBus,
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
+from app.shared.services.base_service import BaseService
 
 
 # Control messages
@@ -48,7 +49,7 @@ class AudioInputControl(Command):
     device_index: int | None = Field(default=None, description="Specific audio device index to use (None for default)")
 
 
-class AudioInputService:
+class AudioInputService(BaseService):
     """Audio Input service for microphone capture.
 
     Responsibilities:
@@ -58,13 +59,9 @@ class AudioInputService:
     - Manage audio input lifecycle (start/stop/pause/resume)
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize audio input service.
-
-        Args:
-            bus: MessageBus instance for communication
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize audio input service."""
+        super().__init__("AudioInputService")
         self._running = False
         self._capturing = False
         self._paused = False
@@ -115,6 +112,7 @@ class AudioInputService:
         if config_api.get("general.speech_to_text.audio_input.auto_start", True):
             await self._start_capture()
 
+        self._set_started(True)
         log_info("AudioInputService started")
 
     async def stop(self) -> None:

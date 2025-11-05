@@ -5,9 +5,9 @@ Provides easy-to-use functions for scheduling tasks.
 
 from typing import Any, Callable, Optional, Union
 
-from ..db import CronJob
-from ..helpers.aurora_logger import log_error, log_info, log_warning
-from ..messaging import MessageBus
+from app.services.db.models import CronJob
+from app.helpers.aurora_logger import log_error, log_info, log_warning
+from app.messaging import MessageBus
 from .scheduler_manager import SchedulerManager
 
 

@@ -32,10 +32,11 @@ from app.shared.messaging.models.tooling_models import (
     ToolsInitialized,
     ToolsReloaded,
 )
+from app.shared.services.base_service import BaseService
 
 
 # Service implementation
-class ToolingService:
+class ToolingService(BaseService):
     """Tooling service.
 
     Responsibilities:
@@ -45,19 +46,14 @@ class ToolingService:
     - Manage tool lifecycle
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize tooling service.
-
-        Args:
-            bus: MessageBus instance
-        """
-        self.bus = bus
-        self.tools_manager = ToolsManager(bus)
-        self._started = False
+    def __init__(self):
+        """Initialize tooling service."""
+        super().__init__("ToolingService")
+        self.tools_manager = ToolsManager(self.bus)
 
     async def start(self) -> None:
         """Start the tooling service and initialize tools."""
-        if self._started:
+        if self._is_started():
             log_warning("ToolingService already started")
             return
 
@@ -88,14 +84,27 @@ class ToolingService:
             origin="internal",
         )
 
-        self._started = True
+        self._set_started(True)
         log_info(f"Tooling service started with {stats['total_tools']} tools")
 
     async def stop(self) -> None:
         """Stop the tooling service."""
         log_info("Stopping Tooling service...")
-        self._started = False
+        self._set_started(False)
         log_info("Tooling service stopped")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading ToolingService configuration: section={config_section}")
+        # Reload tools if MCP config changed
+        if config_section is None or config_section in ["mcp", "plugins"]:
+            log_info("Reloading tools due to config change...")
+            await self.tools_manager.reload()
+        log_info("ToolingService configuration reloaded")
 
     def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
         """Extract schema manually from tool, filtering out non-serializable fields.

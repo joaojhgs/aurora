@@ -43,6 +43,7 @@ from app.shared.messaging.models.stt_coordinator_models import (
     STTState,
     STTUserSpeechCaptured,
 )
+from app.shared.services.base_service import BaseService
 
 
 # Topics
@@ -55,7 +56,7 @@ class STTCoordinatorTopics:
     CONTROL = "STT.Coordinator.Control"
 
 
-class STTCoordinatorService:
+class STTCoordinatorService(BaseService):
     """STT Coordinator service.
 
     Responsibilities:
@@ -66,13 +67,9 @@ class STTCoordinatorService:
     - Emit events for orchestrator integration
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize STT coordinator.
-
-        Args:
-            bus: MessageBus instance
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize STT coordinator."""
+        super().__init__("STTCoordinatorService")
         self._running = False
 
         # State machine
@@ -116,6 +113,7 @@ class STTCoordinatorService:
         # Set initial state
         await self._transition_to(STTState.IDLE)
 
+        self._set_started(True)
         log_info("STT coordinator started")
         log_info(f"   Listen timeout: {self._listen_timeout_seconds}s")
         log_info(f"   Multi-turn: {'enabled' if self._multi_turn_enabled else 'disabled'}")

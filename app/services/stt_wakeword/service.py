@@ -14,7 +14,9 @@ Features:
 
 from __future__ import annotations
 
-from app.config.config_manager import config_manager
+from app.shared.config.interface import ConfigAPI
+
+config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
     AudioChunk,
@@ -25,15 +27,16 @@ from app.messaging import (
     WakeWordTopics,
 )
 from app.messaging.priority_helpers import get_interactive_priority
-from app.stt_wakeword.backends import (
+from app.services.stt_wakeword.backends import (
     OpenWakeWordBackend,
     PorcupineBackend,
     WakeWordBackend,
 )
-from app.stt_wakeword.messages import (
+from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordBackendType,
     WakeWordControl,
     WakeWordDetected,
+    WakeWordTimeout,
 )
 
 
@@ -48,13 +51,9 @@ class WakeWordService:
     - Handle wake word timeout logic
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize wake word service.
-
-        Args:
-            bus: MessageBus instance for communication
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize wake word service."""
+        super().__init__("WakeWordService")
         self._running = False
         self._enabled = False
         self._backend: WakeWordBackend | None = None
@@ -90,6 +89,7 @@ class WakeWordService:
         self._running = True
         self._enabled = True
 
+        self._set_started(True)
         log_info(f"WakeWordService started (backend: {self._backend_type.value})")
 
     async def stop(self) -> None:
@@ -104,17 +104,35 @@ class WakeWordService:
             await self._backend.cleanup()
             self._backend = None
 
+        self._set_started(False)
         log_info("WakeWordService stopped")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading WakeWordService configuration: section={config_section}")
+        # Reload wake word backend if config changed
+        if config_section is None or config_section in ["speech_to_text", "general"]:
+            log_info("Reloading wake word backend due to config change...")
+            if self._backend:
+                await self._backend.cleanup()
+                self._backend = None
+            self._load_config()
+            await self._initialize_backend()
+        log_info("WakeWordService configuration reloaded")
 
     def _load_config(self) -> None:
         """Load configuration from config manager."""
         # Backend configuration
-        backend_str = config_manager.get("general.speech_to_text.wake_word.backend", "oww")
+        backend_str = config_api.get("general.speech_to_text.wake_word.backend", "oww")
         self._backend_type = WakeWordBackendType(backend_str)
 
         # Wake word configuration
-        self._sensitivity = config_manager.get("general.speech_to_text.wake_word.threshold", 0.5)
-        model_path = config_manager.get("general.speech_to_text.wake_word.model_path", "voice_models/jarvis.onnx")
+        self._sensitivity = config_api.get("general.speech_to_text.wake_word.threshold", 0.5)
+        model_path = config_api.get("general.speech_to_text.wake_word.model_path", "voice_models/jarvis.onnx")
 
         # Convert model path to list if it's a string or None
         if model_path is None:

@@ -4,11 +4,8 @@ This module coordinates the workflow between wake word detection and transcripti
 providing the classic voice assistant experience.
 """
 
-from app.stt_coordinator.service import (
-    STTCoordinatorService,
-    STTState,
-    STTUserSpeechCaptured,
-)
+from app.services.stt_coordinator.service import STTCoordinatorService
+from app.shared.messaging.models.stt_coordinator_models import STTState, STTUserSpeechCaptured
 
 __all__ = [
     "STTCoordinatorService",

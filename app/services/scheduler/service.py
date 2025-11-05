@@ -12,7 +12,8 @@ from __future__ import annotations
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Command, Envelope, Event, MessageBus, SchedulerTopics
 from app.messaging.priority_helpers import get_system_priority
-from app.scheduler import get_cron_service
+from app.services.scheduler.cron_service import get_cron_service
+from app.shared.services.base_service import BaseService
 
 # Global scheduler service instance for callback access
 _scheduler_service_instance: SchedulerService | None = None
@@ -65,7 +66,7 @@ class SchedulerJobCompleted(Event):
 
 
 # Service implementation
-class SchedulerService:
+class SchedulerService(BaseService):
     """Scheduler service.
 
     Responsibilities:
@@ -75,17 +76,12 @@ class SchedulerService:
     - Handle scheduling commands
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize scheduler service with CronService.
-
-        Args:
-            bus: MessageBus instance
-        """
+    def __init__(self):
+        """Initialize scheduler service with CronService."""
         global _scheduler_service_instance
-
-        self.bus = bus
+        super().__init__("SchedulerService")
         # Pass bus to cron service so it can inject it into callbacks
-        self.cron_service = get_cron_service(bus=bus)
+        self.cron_service = get_cron_service(bus=self.bus)
         self._jobs: dict = {}
         # Store instance globally for callback access
         _scheduler_service_instance = self
@@ -103,6 +99,7 @@ class SchedulerService:
         self.bus.subscribe(SchedulerTopics.PAUSE_JOB, self._on_pause)
         self.bus.subscribe(SchedulerTopics.RESUME_JOB, self._on_resume)
 
+        self._set_started(True)
         log_info("Scheduler service started")
 
     async def stop(self) -> None:

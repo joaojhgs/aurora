@@ -30,10 +30,11 @@ from app.shared.messaging.models.orchestrator_models import (
     ToolResult,
     UserInput,
 )
+from app.shared.services.base_service import BaseService
 
 
 # Service implementation
-class OrchestratorService:
+class OrchestratorService(BaseService):
     """Orchestrator service using LangGraph.
 
     Responsibilities:
@@ -43,13 +44,9 @@ class OrchestratorService:
     - Coordinate with other services
     """
 
-    def __init__(self, bus: MessageBus):
-        """Initialize orchestrator service with LangGraph integration.
-
-        Args:
-            bus: MessageBus instance
-        """
-        self.bus = bus
+    def __init__(self):
+        """Initialize orchestrator service with LangGraph integration."""
+        super().__init__("OrchestratorService")
         self.orchestrator: GraphOrchestrator | None = None
 
     async def start(self) -> None:
@@ -67,12 +64,29 @@ class OrchestratorService:
         self.bus.subscribe(OrchestratorTopics.EXTERNAL_USER_INPUT, self._on_external_input)
         self.bus.subscribe(OrchestratorTopics.TOOL_RESULT, self._on_tool_result)
 
+        self._set_started(True)
         log_info("Orchestrator service started")
 
     async def stop(self) -> None:
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
+        self._set_started(False)
         log_info("Orchestrator service stopped")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading OrchestratorService configuration: section={config_section}")
+        # Reload orchestrator if LLM config changed
+        if config_section is None or config_section in ["llm", "general"]:
+            log_info("Reloading orchestrator due to LLM config change...")
+            # Reinitialize orchestrator with new config
+            await self.stop()
+            await self.start()
+        log_info("OrchestratorService configuration reloaded")
 
     async def _on_transcription(self, env: Envelope) -> None:
         """Handle STT transcription event.
@@ -86,7 +100,7 @@ class OrchestratorService:
         log_info(f"   Payload: {env.payload}")
 
         try:
-            from app.stt_coordinator import STTUserSpeechCaptured
+            from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 
             event = STTUserSpeechCaptured.model_validate(env.payload)
 

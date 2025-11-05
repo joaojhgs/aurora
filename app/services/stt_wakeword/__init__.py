@@ -6,19 +6,19 @@ This module handles wake word detection including:
 - Wake word event emission
 """
 
-from app.stt_wakeword.backends import (
+from app.services.stt_wakeword.backends import (
     DetectionResult,
     OpenWakeWordBackend,
     PorcupineBackend,
     WakeWordBackend,
 )
-from app.stt_wakeword.messages import (
+from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordBackendType,
     WakeWordControl,
     WakeWordDetected,
     WakeWordTimeout,
 )
-from app.stt_wakeword.service import WakeWordService
+from app.services.stt_wakeword.service import WakeWordService
 
 __all__ = [
     "WakeWordService",

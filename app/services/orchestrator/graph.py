@@ -16,10 +16,10 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import MessageBus, ToolingTopics
 from app.messaging.priority_helpers import get_interactive_priority
 from app.messaging.service_topics import TTSTopics
-from app.orchestrator.agents.chatbot import chatbot
-from app.orchestrator.state import State
-from app.tooling.service import ExecuteToolCommand
-from app.tts.service import TTSRequest
+from app.services.orchestrator.agents.chatbot import chatbot
+from app.services.orchestrator.state import State
+from app.shared.messaging.models.tooling_models import ExecuteToolCommand
+from app.shared.messaging.models.tts_models import TTSRequest
 
 
 class GraphOrchestrator:

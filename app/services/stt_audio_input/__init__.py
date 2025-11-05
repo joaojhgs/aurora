@@ -6,6 +6,6 @@ This module handles audio input including:
 - Audio format handling
 """
 
-from app.stt_audio_input.service import AudioInputService
+from app.services.stt_audio_input.service import AudioInputService
 
 __all__ = ["AudioInputService"]

@@ -66,8 +66,12 @@ class Supervisor:
         else:
             raise ValueError(f"Unknown architecture mode: {self._mode}")
 
-        # Set global bus instance
+        # Set global bus instance (for threads mode singleton)
         set_bus(self.bus)
+        
+        # Also set in shared bus_init for consistency
+        from app.shared.messaging.bus_init import set_bus as set_shared_bus
+        set_shared_bus(self.bus)
 
         log_info("Supervisor initialized")
 
@@ -117,11 +121,11 @@ class Supervisor:
         # Order matters: DB and Tooling first (foundation services)
         # Then Scheduler, TTS, STT (old or new), and finally Orchestrator
         log_info("Creating service instances...")
-        db_service = DBService(self.bus)
-        tooling_service = ToolingService(self.bus)
-        scheduler_service = SchedulerService(self.bus)
-        tts_service = TTSService(self.bus)
-        orchestrator_service = OrchestratorService(self.bus)
+        db_service = DBService()
+        tooling_service = ToolingService()
+        scheduler_service = SchedulerService()
+        tts_service = TTSService()
+        orchestrator_service = OrchestratorService()
 
         log_info("Service instances created")
 
@@ -172,10 +176,10 @@ class Supervisor:
         log_info("Starting streaming STT services (Audio Input, Wake Word, Transcription, Coordinator)...")
 
         # Create service instances
-        audio_input = AudioInputService(self.bus)
-        wake_word = WakeWordService(self.bus)
-        transcription = TranscriptionService(self.bus)
-        coordinator = STTCoordinatorService(self.bus)
+        audio_input = AudioInputService()
+        wake_word = WakeWordService()
+        transcription = TranscriptionService()
+        coordinator = STTCoordinatorService()
 
         # Start services in order:
         # 1. Audio Input (provides audio stream)
