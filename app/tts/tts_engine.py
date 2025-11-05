@@ -6,7 +6,6 @@ from app.config.config_manager import config_manager
 from app.tts.piper_engine import PiperEngine
 from app.tts.service import reduce_volume_except_current, restore_volume_except_current
 
-
 file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
