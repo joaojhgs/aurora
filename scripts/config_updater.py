@@ -11,7 +11,7 @@ import argparse
 import os
 import sys
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 # Add the root directory to path to import app modules
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

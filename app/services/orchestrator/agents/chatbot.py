@@ -6,7 +6,7 @@ from pydantic import create_model
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.services.db.service import RAGSearchQuery
+from app.shared.messaging.models.db_models import RAGSearchQuery
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.messaging import DBTopics, MessageBus, ToolingTopics

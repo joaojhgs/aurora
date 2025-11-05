@@ -9,8 +9,8 @@ from typing import Optional
 
 import aiosqlite
 
-from app.db.migration_manager import MigrationManager
-from app.db.models import CronJob
+from app.services.db.migration_manager import MigrationManager
+from app.services.db.models import CronJob
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 

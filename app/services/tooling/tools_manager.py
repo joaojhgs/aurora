@@ -262,7 +262,7 @@ class ToolsManager:
                 log_debug(f"  - '{name}'")
 
             # Get existing tools from database via bus
-            from app.db.service import RAGDeleteCommand, RAGListQuery, RAGStoreCommand
+            from app.shared.messaging.models.db_models import RAGDeleteCommand, RAGListQuery, RAGStoreCommand
             from app.messaging import DBTopics
 
             result = await self.bus.request(

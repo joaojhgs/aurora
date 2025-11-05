@@ -141,7 +141,7 @@ class SchedulerService(BaseService):
                 log_debug(f"Job '{cmd.name}' scheduled successfully with ID: {job_id}")
 
                 # Store in database via DBService
-                from app.db.service import StoreCronJob
+                from app.shared.messaging.models.db_models import StoreCronJob
                 from app.messaging import DBTopics
 
                 await self.bus.publish(
@@ -176,7 +176,7 @@ class SchedulerService(BaseService):
                 log_debug(f"Job {cmd.job_id} canceled successfully")
 
                 # Delete from database
-                from app.db.service import DeleteCronJob
+                from app.shared.messaging.models.db_models import DeleteCronJob
                 from app.messaging import DBTopics
 
                 await self.bus.publish(DBTopics.DELETE_CRON_JOB, DeleteCronJob(job_id=cmd.job_id), event=False, origin="internal")  # Command
@@ -305,7 +305,7 @@ class SchedulerService(BaseService):
                     elif service == "orchestrator":
                         # Send to orchestrator as user input
                         from app.messaging import OrchestratorTopics
-                        from app.orchestrator.service import UserInput
+                        from app.shared.messaging.models.orchestrator_models import UserInput
 
                         await self.bus.publish(
                             OrchestratorTopics.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="system"

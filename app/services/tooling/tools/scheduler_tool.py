@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from app.helpers.aurora_logger import log_error, log_info
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
-from app.scheduler import get_cron_service
+from app.services.scheduler.cron_service import get_cron_service
 
 
 @tool()
@@ -225,7 +225,7 @@ async def speak_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
 
         # Use bus to send TTS request
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,
@@ -268,7 +268,7 @@ async def daily_greeting(bus: MessageBus, **kwargs) -> dict[str, Any]:
         log_info(f"Daily greeting: {greeting}")
 
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,
@@ -310,7 +310,7 @@ async def hourly_time_announcement(bus: MessageBus, **kwargs) -> dict[str, Any]:
         log_info(f"Time announcement: {message}")
 
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,
@@ -353,7 +353,7 @@ async def break_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
         log_info(f"Break reminder: {reminder}")
 
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,
@@ -400,7 +400,7 @@ async def water_reminder(bus: MessageBus, **kwargs) -> dict[str, Any]:
         log_info(f"Water reminder: {reminder}")
 
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,
@@ -449,7 +449,7 @@ async def motivational_message(bus: MessageBus, **kwargs) -> dict[str, Any]:
         log_info(f"Motivational message: {message}")
 
         from app.messaging import TTSTopics
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await bus.publish(
             TTSTopics.REQUEST,

@@ -202,7 +202,7 @@ class ToolingService(BaseService):
 
             # Use RAG search via bus if query is provided
             if query.query:
-                from app.db.service import RAGSearchQuery
+                from app.shared.messaging.models.db_models import RAGSearchQuery
                 from app.messaging import DBTopics
 
                 tools = []

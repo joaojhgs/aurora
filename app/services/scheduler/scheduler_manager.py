@@ -11,9 +11,10 @@ from typing import Any, Optional
 
 from croniter import croniter
 
-from ..db import CronJob, JobStatus, SchedulerDatabaseService, ScheduleType
-from ..helpers.aurora_logger import log_debug, log_error, log_info
-from ..messaging import MessageBus
+from app.services.db.models import CronJob, JobStatus, ScheduleType
+from app.services.db.scheduler_db_service import SchedulerDatabaseService
+from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.messaging import MessageBus
 
 
 class SchedulerManager:

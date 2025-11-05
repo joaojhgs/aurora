@@ -63,7 +63,7 @@ async def main_async():
 
         # Initial greeting via bus
         from app.messaging.priority_helpers import get_interactive_priority
-        from app.tts import TTSRequest
+        from app.shared.messaging.models.tts_models import TTSRequest
 
         await supervisor.bus.publish(
             "TTS.Request",
@@ -181,7 +181,7 @@ def main_with_ui():
 
     # Send initial greeting
     from app.messaging.priority_helpers import get_interactive_priority
-    from app.tts import TTSRequest
+    from app.shared.messaging.models.tts_models import TTSRequest
 
     greeting_future = asyncio.run_coroutine_threadsafe(
         supervisor.bus.publish(

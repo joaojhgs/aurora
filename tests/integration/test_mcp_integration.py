@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.config.config_manager import config_manager
-from app.tooling.mcp.mcp_client import MCPClientManager
+from app.services.config.config_manager import config_manager
+from app.services.tooling.mcp.mcp_client import MCPClientManager
 
 # Set dummy OpenAI API key BEFORE any imports that might initialize OpenAI
 os.environ.setdefault("OPENAI_API_KEY", "test-key-dummy-integration")

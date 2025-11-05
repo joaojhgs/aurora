@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 from jsonschema import ValidationError
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 
 class TestConfigManager:

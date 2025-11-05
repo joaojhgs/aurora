@@ -4,7 +4,7 @@ Tests for file field functionality in the configuration system
 
 import pytest
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 
 class TestFileFieldMetadata:
