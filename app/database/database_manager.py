@@ -28,10 +28,17 @@ class DatabaseManager:
             db_path = str(data_dir / "aurora.db")
 
         self.db_path = db_path
+        self._connection: Optional[aiosqlite.Connection] = None
 
         # Set up migrations
         migrations_dir = Path(__file__).parent / "migrations"
         self.migration_manager = MigrationManager(db_path, str(migrations_dir))
+
+    async def _get_connection(self) -> aiosqlite.Connection:
+        """Get or create a persistent database connection"""
+        if self._connection is None:
+            self._connection = await aiosqlite.connect(self.db_path)
+        return self._connection
 
     async def initialize(self):
         """Initialize the database and run migrations"""
@@ -43,31 +50,34 @@ class DatabaseManager:
         # Run migrations
         await self.migration_manager.run_migrations()
 
+        # Initialize persistent connection
+        await self._get_connection()
+
         log_info("Database initialization completed")
 
     async def store_message(self, message: Message) -> bool:
         """Store a message in the database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    """
-                    INSERT INTO messages (
-                        id, content, message_type, timestamp,
-                        session_id, metadata, source_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        message.id,
-                        message.content,
-                        message.message_type.value,
-                        message.timestamp.isoformat(),
-                        message.session_id,
-                        json.dumps(message.metadata) if message.metadata else None,
-                        message.source_type,
-                    ),
-                )
-                await db.commit()
-                return True
+            db = await self._get_connection()
+            await db.execute(
+                """
+                INSERT INTO messages (
+                    id, content, message_type, timestamp,
+                    session_id, metadata, source_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    message.id,
+                    message.content,
+                    message.message_type.value,
+                    message.timestamp.isoformat(),
+                    message.session_id,
+                    json.dumps(message.metadata) if message.metadata else None,
+                    message.source_type,
+                ),
+            )
+            await db.commit()
+            return True
         except Exception as e:
             log_error(f"Error storing message: {e}")
             return False
@@ -82,29 +92,29 @@ class DatabaseManager:
         end_datetime = datetime.combine(target_date, datetime.max.time())
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM messages
-                    WHERE timestamp BETWEEN ? AND ?
-                    ORDER BY timestamp ASC
-                """,
-                    (start_datetime.isoformat(), end_datetime.isoformat()),
-                )
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT * FROM messages
+                WHERE timestamp BETWEEN ? AND ?
+                ORDER BY timestamp ASC
+            """,
+                (start_datetime.isoformat(), end_datetime.isoformat()),
+            )
 
-                rows = await cursor.fetchall()
-                messages = []
+            rows = await cursor.fetchall()
+            messages = []
 
-                for row in rows:
-                    message_data = dict(row)
-                    # Parse metadata if present
-                    if message_data["metadata"]:
-                        message_data["metadata"] = json.loads(message_data["metadata"])
+            for row in rows:
+                message_data = dict(row)
+                # Parse metadata if present
+                if message_data["metadata"]:
+                    message_data["metadata"] = json.loads(message_data["metadata"])
 
-                    messages.append(Message.from_dict(message_data))
+                messages.append(Message.from_dict(message_data))
 
-                return messages
+            return messages
         except Exception as e:
             log_error(f"Error retrieving messages for date {target_date}: {e}")
             return []
@@ -112,30 +122,30 @@ class DatabaseManager:
     async def get_recent_messages(self, limit: int = 50) -> list[Message]:
         """Get the most recent messages"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM messages
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                """,
-                    (limit,),
-                )
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT * FROM messages
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
 
-                rows = await cursor.fetchall()
-                messages = []
+            rows = await cursor.fetchall()
+            messages = []
 
-                for row in rows:
-                    message_data = dict(row)
-                    # Parse metadata if present
-                    if message_data["metadata"]:
-                        message_data["metadata"] = json.loads(message_data["metadata"])
+            for row in rows:
+                message_data = dict(row)
+                # Parse metadata if present
+                if message_data["metadata"]:
+                    message_data["metadata"] = json.loads(message_data["metadata"])
 
-                    messages.append(Message.from_dict(message_data))
+                messages.append(Message.from_dict(message_data))
 
-                # Return in chronological order (oldest first)
-                return list(reversed(messages))
+            # Return in chronological order (oldest first)
+            return list(reversed(messages))
         except Exception as e:
             log_error(f"Error retrieving recent messages: {e}")
             return []
@@ -143,18 +153,18 @@ class DatabaseManager:
     async def get_message_by_id(self, message_id: str) -> Optional[Message]:
         """Get a specific message by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
-                row = await cursor.fetchone()
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
+            row = await cursor.fetchone()
 
-                if row:
-                    message_data = dict(row)
-                    if message_data["metadata"]:
-                        message_data["metadata"] = json.loads(message_data["metadata"])
-                    return Message.from_dict(message_data)
+            if row:
+                message_data = dict(row)
+                if message_data["metadata"]:
+                    message_data["metadata"] = json.loads(message_data["metadata"])
+                return Message.from_dict(message_data)
 
-                return None
+            return None
         except Exception as e:
             log_error(f"Error retrieving message {message_id}: {e}")
             return None
@@ -162,10 +172,10 @@ class DatabaseManager:
     async def delete_message(self, message_id: str) -> bool:
         """Delete a message by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
-                await db.commit()
-                return True
+            db = await self._get_connection()
+            await db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+            await db.commit()
+            return True
         except Exception as e:
             log_error(f"Error deleting message {message_id}: {e}")
             return False
@@ -179,17 +189,17 @@ class DatabaseManager:
         end_datetime = datetime.combine(target_date, datetime.max.time())
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    """
-                    SELECT COUNT(*) FROM messages
-                    WHERE timestamp BETWEEN ? AND ?
-                """,
-                    (start_datetime.isoformat(), end_datetime.isoformat()),
-                )
+            db = await self._get_connection()
+            cursor = await db.execute(
+                """
+                SELECT COUNT(*) FROM messages
+                WHERE timestamp BETWEEN ? AND ?
+            """,
+                (start_datetime.isoformat(), end_datetime.isoformat()),
+            )
 
-                result = await cursor.fetchone()
-                return result[0] if result else 0
+            result = await cursor.fetchone()
+            return result[0] if result else 0
         except Exception as e:
             log_error(f"Error getting message count for date {target_date}: {e}")
             return 0
@@ -200,10 +210,10 @@ class DatabaseManager:
         cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_to_keep)
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),))
-                await db.commit()
-                return cursor.rowcount
+            db = await self._get_connection()
+            cursor = await db.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),))
+            await db.commit()
+            return cursor.rowcount
         except Exception as e:
             log_error(f"Error cleaning up old messages: {e}")
             return 0
@@ -211,27 +221,27 @@ class DatabaseManager:
     async def get_session_messages(self, session_id: str) -> list[Message]:
         """Get all messages for a specific session"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM messages
-                    WHERE session_id = ?
-                    ORDER BY timestamp ASC
-                """,
-                    (session_id,),
-                )
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT * FROM messages
+                WHERE session_id = ?
+                ORDER BY timestamp ASC
+            """,
+                (session_id,),
+            )
 
-                rows = await cursor.fetchall()
-                messages = []
+            rows = await cursor.fetchall()
+            messages = []
 
-                for row in rows:
-                    message_data = dict(row)
-                    if message_data["metadata"]:
-                        message_data["metadata"] = json.loads(message_data["metadata"])
-                    messages.append(Message.from_dict(message_data))
+            for row in rows:
+                message_data = dict(row)
+                if message_data["metadata"]:
+                    message_data["metadata"] = json.loads(message_data["metadata"])
+                messages.append(Message.from_dict(message_data))
 
-                return messages
+            return messages
         except Exception as e:
             log_error(f"Error retrieving session messages: {e}")
             return []
@@ -239,36 +249,36 @@ class DatabaseManager:
     async def update_message(self, message: Message) -> bool:
         """Update an existing message in the database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    """
-                    UPDATE messages
-                    SET content = ?,
-                        message_type = ?,
-                        timestamp = ?,
-                        session_id = ?,
-                        metadata = ?,
-                        source_type = ?
-                    WHERE id = ?
-                """,
-                    (
-                        message.content,
-                        message.message_type.value,
-                        message.timestamp.isoformat(),
-                        message.session_id,
-                        json.dumps(message.metadata) if message.metadata else None,
-                        message.source_type,
-                        message.id,
-                    ),
-                )
-                await db.commit()
-                return True
+            db = await self._get_connection()
+            await db.execute(
+                """
+                UPDATE messages
+                SET content = ?,
+                    message_type = ?,
+                    timestamp = ?,
+                    session_id = ?,
+                    metadata = ?,
+                    source_type = ?
+                WHERE id = ?
+            """,
+                (
+                    message.content,
+                    message.message_type.value,
+                    message.timestamp.isoformat(),
+                    message.session_id,
+                    json.dumps(message.metadata) if message.metadata else None,
+                    message.source_type,
+                    message.id,
+                ),
+            )
+            await db.commit()
+            return True
         except Exception as e:
             log_error(f"Error updating message {message.id}: {e}")
             return False
 
     async def close(self):
         """Close any open connections and resources"""
-        # This is a no-op since we use connection per operation
-        # but included for API consistency and future use
-        pass
+        if self._connection is not None:
+            await self._connection.close()
+            self._connection = None

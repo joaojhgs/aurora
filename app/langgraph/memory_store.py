@@ -11,8 +11,19 @@ from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 
+# Cache for embeddings to avoid reinitializing
+_embeddings_cache = None
+_embeddings_model_info_cache = None
+
+
 def get_embeddings():
     """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
+    global _embeddings_cache, _embeddings_model_info_cache
+
+    # Return cached embeddings if available
+    if _embeddings_cache is not None and _embeddings_model_info_cache is not None:
+        return _embeddings_cache, _embeddings_model_info_cache
+
     use_local = config_manager.get("general.embeddings.use_local", False)
 
     if use_local:
@@ -29,6 +40,10 @@ def get_embeddings():
         embeddings = init_embeddings("openai:text-embedding-3-small")
         model_info = {"type": "openai", "model_name": "text-embedding-3-small", "version": "openai"}
         log_info("Using OpenAI embeddings (text-embedding-3-small)")
+
+    # Cache the embeddings
+    _embeddings_cache = embeddings
+    _embeddings_model_info_cache = model_info
 
     return embeddings, model_info
 

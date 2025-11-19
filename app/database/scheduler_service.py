@@ -27,10 +27,17 @@ class SchedulerDatabaseService:
             db_path = str(data_dir / "aurora.db")
 
         self.db_path = db_path
+        self._connection: Optional[aiosqlite.Connection] = None
 
         # Set up migrations
         migrations_dir = Path(__file__).parent / "migrations"
         self.migration_manager = MigrationManager(db_path, str(migrations_dir))
+
+    async def _get_connection(self) -> aiosqlite.Connection:
+        """Get or create a persistent database connection"""
+        if self._connection is None:
+            self._connection = await aiosqlite.connect(self.db_path)
+        return self._connection
 
     async def initialize(self):
         """Initialize the scheduler database and run migrations"""
@@ -42,25 +49,28 @@ class SchedulerDatabaseService:
         # Run migrations
         await self.migration_manager.run_migrations()
 
+        # Initialize persistent connection
+        await self._get_connection()
+
         log_info("Scheduler database initialization completed")
 
     async def add_job(self, job: CronJob) -> bool:
         """Add a new job to the database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
-                placeholders = ", ".join(["?" for _ in job_dict])
-                columns = ", ".join(job_dict.keys())
-                values = list(job_dict.values())
+            db = await self._get_connection()
+            job_dict = job.to_dict()
+            placeholders = ", ".join(["?" for _ in job_dict])
+            columns = ", ".join(job_dict.keys())
+            values = list(job_dict.values())
 
-                await db.execute(
-                    f"""
-                    INSERT INTO cron_jobs ({columns})
-                    VALUES ({placeholders})
-                """,
-                    values,
-                )
-                await db.commit()
+            await db.execute(
+                f"""
+                INSERT INTO cron_jobs ({columns})
+                VALUES ({placeholders})
+            """,
+                values,
+            )
+            await db.commit()
 
             log_info(f"Added job: {job.name} (next run: {job.next_run_time})")
             return True
@@ -73,20 +83,20 @@ class SchedulerDatabaseService:
         """Update job in database"""
         try:
             job.updated_at = datetime.now()
-            async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
-                set_clause = ", ".join([f"{k} = ?" for k in job_dict.keys() if k != "id"])
-                values = [v for k, v in job_dict.items() if k != "id"] + [job.id]
+            db = await self._get_connection()
+            job_dict = job.to_dict()
+            set_clause = ", ".join([f"{k} = ?" for k in job_dict.keys() if k != "id"])
+            values = [v for k, v in job_dict.items() if k != "id"] + [job.id]
 
-                await db.execute(
-                    f"""
-                    UPDATE cron_jobs
-                    SET {set_clause}
-                    WHERE id = ?
-                """,
-                    values,
-                )
-                await db.commit()
+            await db.execute(
+                f"""
+                UPDATE cron_jobs
+                SET {set_clause}
+                WHERE id = ?
+            """,
+                values,
+            )
+            await db.commit()
 
             return True
 
@@ -97,14 +107,14 @@ class SchedulerDatabaseService:
     async def get_job(self, job_id: str) -> Optional[CronJob]:
         """Get a job by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute("SELECT * FROM cron_jobs WHERE id = ?", (job_id,))
-                row = await cursor.fetchone()
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM cron_jobs WHERE id = ?", (job_id,))
+            row = await cursor.fetchone()
 
-                if row:
-                    return CronJob.from_dict(dict(row))
-                return None
+            if row:
+                return CronJob.from_dict(dict(row))
+            return None
 
         except Exception as e:
             log_error(f"Error getting job: {e}")
@@ -113,12 +123,12 @@ class SchedulerDatabaseService:
     async def get_all_jobs(self) -> list[CronJob]:
         """Get all jobs"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute("SELECT * FROM cron_jobs ORDER BY created_at DESC")
-                rows = await cursor.fetchall()
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM cron_jobs ORDER BY created_at DESC")
+            rows = await cursor.fetchall()
 
-                return [CronJob.from_dict(dict(row)) for row in rows]
+            return [CronJob.from_dict(dict(row)) for row in rows]
 
         except Exception as e:
             log_error(f"Error getting all jobs: {e}")
@@ -127,18 +137,18 @@ class SchedulerDatabaseService:
     async def get_active_jobs(self) -> list[CronJob]:
         """Get all active jobs"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM cron_jobs
-                    WHERE is_active = 1
-                    ORDER BY next_run_time ASC
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
                 """
-                )
-                rows = await cursor.fetchall()
+                SELECT * FROM cron_jobs
+                WHERE is_active = 1
+                ORDER BY next_run_time ASC
+            """
+            )
+            rows = await cursor.fetchall()
 
-                return [CronJob.from_dict(dict(row)) for row in rows]
+            return [CronJob.from_dict(dict(row)) for row in rows]
 
         except Exception as e:
             log_error(f"Error getting active jobs: {e}")
@@ -148,23 +158,23 @@ class SchedulerDatabaseService:
         """Get jobs that are ready to execute"""
         try:
             now = datetime.now().isoformat()
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM cron_jobs
-                    WHERE is_active = 1
-                    AND next_run_time <= ?
-                    AND status IN ('pending', 'failed')
-                    ORDER BY next_run_time ASC
-                """,
-                    (now,),
-                )
-                rows = await cursor.fetchall()
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT * FROM cron_jobs
+                WHERE is_active = 1
+                AND next_run_time <= ?
+                AND status IN ('pending', 'failed')
+                ORDER BY next_run_time ASC
+            """,
+                (now,),
+            )
+            rows = await cursor.fetchall()
 
-                jobs = [CronJob.from_dict(dict(row)) for row in rows]
-                # Filter by retry logic
-                return [job for job in jobs if job.is_ready_to_run()]
+            jobs = [CronJob.from_dict(dict(row)) for row in rows]
+            # Filter by retry logic
+            return [job for job in jobs if job.is_ready_to_run()]
 
         except Exception as e:
             log_error(f"Error getting ready jobs: {e}")
@@ -173,8 +183,8 @@ class SchedulerDatabaseService:
     async def delete_job(self, job_id: str) -> bool:
         """Delete a job"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
+            db = await self._get_connection()
+            await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
             await db.commit()
 
             log_info(f"Deleted job: {job_id}")
@@ -187,16 +197,16 @@ class SchedulerDatabaseService:
     async def deactivate_job(self, job_id: str) -> bool:
         """Deactivate a job"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    """
-                    UPDATE cron_jobs
-                    SET is_active = 0, updated_at = ?
-                    WHERE id = ?
-                """,
-                    (datetime.now().isoformat(), job_id),
-                )
-                await db.commit()
+            db = await self._get_connection()
+            await db.execute(
+                """
+                UPDATE cron_jobs
+                SET is_active = 0, updated_at = ?
+                WHERE id = ?
+            """,
+                (datetime.now().isoformat(), job_id),
+            )
+            await db.commit()
 
             log_info(f"Deactivated job: {job_id}")
             return True
@@ -208,20 +218,20 @@ class SchedulerDatabaseService:
     async def get_job_history(self, limit: int = 50) -> list[CronJob]:
         """Get job execution history"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT * FROM cron_jobs
-                    WHERE last_run_time IS NOT NULL
-                    ORDER BY last_run_time DESC
-                    LIMIT ?
-                """,
-                    (limit,),
-                )
-                rows = await cursor.fetchall()
+            db = await self._get_connection()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT * FROM cron_jobs
+                WHERE last_run_time IS NOT NULL
+                ORDER BY last_run_time DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
+            rows = await cursor.fetchall()
 
-                return [CronJob.from_dict(dict(row)) for row in rows]
+            return [CronJob.from_dict(dict(row)) for row in rows]
 
         except Exception as e:
             log_error(f"Error getting job history: {e}")
@@ -233,19 +243,25 @@ class SchedulerDatabaseService:
             cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_to_keep)
 
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    """
-                    DELETE FROM cron_jobs
-                    WHERE is_active = 0
-                    AND status IN ('completed', 'failed', 'cancelled')
-                    AND updated_at < ?
-                """,
-                    (cutoff_date.isoformat(),),
-                )
-                await db.commit()
-                return cursor.rowcount
+            db = await self._get_connection()
+            cursor = await db.execute(
+                """
+                DELETE FROM cron_jobs
+                WHERE is_active = 0
+                AND status IN ('completed', 'failed', 'cancelled')
+                AND updated_at < ?
+            """,
+                (cutoff_date.isoformat(),),
+            )
+            await db.commit()
+            return cursor.rowcount
 
         except Exception as e:
             log_error(f"Error cleaning up old jobs: {e}")
             return 0
+
+    async def close(self):
+        """Close any open connections and resources"""
+        if self._connection is not None:
+            await self._connection.close()
+            self._connection = None

@@ -29,65 +29,96 @@ def on_wakeword_detection_start():
     log_info(f"{say_wakeword_str}")
 
 
-def check_bluetooth_headphones():
+async def check_bluetooth_headphones():
     try:
-        result = subprocess.run(["bluetoothctl", "info"], capture_output=True, text=True)
-        return "Connected: yes" in result.stdout
+        import asyncio
+
+        process = await asyncio.create_subprocess_exec("bluetoothctl", "info", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await process.communicate()
+        return b"Connected: yes" in stdout
     except Exception as e:
         log_error(f"Error checking Bluetooth headphones: {e}")
         return False
 
 
-def get_system_volume():
+async def get_system_volume():
     try:
-        cmd = "pactl get-sink-volume 0"
-        result = subprocess.run(cmd.split(), stdout=subprocess.PIPE, text=True)
-        volume = result.stdout.split()[4]
+        import asyncio
+
+        process = await asyncio.create_subprocess_exec("pactl", "get-sink-volume", "0", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await process.communicate()
+        volume = stdout.decode().split()[4]
         return volume
     except Exception as e:
         log_error(f"Error getting system volume: {e}")
         return None
 
 
-def set_system_volume(volume):
+async def set_system_volume(volume):
     try:
-        cmd = "pactl set-sink-volume 0"
-        subprocess.call(cmd.split() + [f"{volume}"])
+        import asyncio
+
+        await asyncio.create_subprocess_exec("pactl", "set-sink-volume", "0", f"{volume}", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     except Exception as e:
         log_error(f"Error setting system volume: {e}")
 
 
-def reduce_system_volume():
-    if not check_bluetooth_headphones():
+async def reduce_system_volume():
+    if not await check_bluetooth_headphones():
         global original_volume
-        original_volume = get_system_volume()
-        set_system_volume("-40%")
+        original_volume = await get_system_volume()
+        await set_system_volume("-40%")
 
 
-def restore_system_volume():
-    if not check_bluetooth_headphones():
-        set_system_volume(original_volume)
+async def restore_system_volume():
+    if not await check_bluetooth_headphones():
+        await set_system_volume(original_volume)
 
 
 def on_recording_start():
-    reduce_system_volume()
+    # Note: These callbacks are called synchronously by the audio recording library
+    # We'll keep the sync wrappers for compatibility
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(reduce_system_volume())
+        else:
+            asyncio.run(reduce_system_volume())
+    except Exception as e:
+        log_error(f"Error in on_recording_start: {e}")
 
 
 def on_recording_stop():
-    restore_system_volume()
+    # Note: These callbacks are called synchronously by the audio recording library
+    # We'll keep the sync wrappers for compatibility
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(restore_system_volume())
+        else:
+            asyncio.run(restore_system_volume())
+    except Exception as e:
+        log_error(f"Error in on_recording_stop: {e}")
 
 
 original_volumes = {}
 
 
-def reduce_volume_except_current():
+async def reduce_volume_except_current():
     global original_volumes
     try:
+        import asyncio
+        import re
+
         pid = os.getpid()
         # Get full output without language-specific filtering
-        cmd = "pactl list sink-inputs"
-        result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
-        output = result.stdout
+        process = await asyncio.create_subprocess_shell("pactl list sink-inputs", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await process.communicate()
+        output = stdout.decode()
 
         # Split the output by sink input sections
         # This works regardless of language as it relies on the structure of the output
@@ -100,8 +131,6 @@ def reduce_volume_except_current():
                 continue
 
             # Extract sink index using regex (works in any language)
-            import re
-
             index_match = re.search(r"#(\d+)", section)
             if not index_match:
                 continue
@@ -124,17 +153,19 @@ def reduce_volume_except_current():
             if process_id and volume_percentage and process_id != str(pid):
                 original_volumes[sink_index] = volume_percentage
                 # Reduce volume by 40%
-                subprocess.run(["pactl", "set-sink-input-volume", sink_index, "-40%"])
+                await asyncio.create_subprocess_exec("pactl", "set-sink-input-volume", sink_index, "-40%", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
     except Exception as e:
         log_error(f"Error reducing volume for other processes: {e}")
 
 
-def restore_volume_except_current():
+async def restore_volume_except_current():
     try:
+        import asyncio
+
         # Restore the volume levels for all other processes
         for input_index, volume in original_volumes.items():
-            subprocess.run(["pactl", "set-sink-input-volume", input_index, volume])
+            await asyncio.create_subprocess_exec("pactl", "set-sink-input-volume", input_index, volume, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         original_volumes.clear()
     except Exception as e:
         log_error(f"Error restoring volume for other processes: {e}")

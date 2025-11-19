@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Callable
 
 from app.config.config_manager import config_manager
@@ -148,6 +149,9 @@ def sync_tools_with_database():
         log_info(f"Removing inactive tool from database: {name}")
         store.delete(("tools",), name)
 
+    # Clear tool search cache when tools are updated
+    _cached_tool_search.cache_clear()
+
     log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
 
 
@@ -234,6 +238,9 @@ async def reload_mcp_servers():
 
         # Reset the loaded flag
         _mcp_tools_loaded = False
+
+        # Clear tool search cache when reloading
+        _cached_tool_search.cache_clear()
 
         # Close existing client connections
         await mcp_client_manager.close()
@@ -349,6 +356,18 @@ def ensure_mcp_tools_loaded():
         log_debug(f"Could not load MCP tools in sync context: {e}")
 
 
+@lru_cache(maxsize=128)
+def _cached_tool_search(query: str, top_k: int = 10) -> tuple:
+    """
+    Cached version of tool search to avoid repeated vector searches.
+    Returns a tuple of tool names for caching compatibility.
+    """
+    # Search vector store
+    results = store.search(("tools",), query=query, limit=top_k)
+    # Return tool names as a tuple (hashable for cache)
+    return tuple(result.key for result in results)
+
+
 def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     """
     Search for relevant tools based on input text.
@@ -363,15 +382,12 @@ def get_tools(query: str, top_k: int = 10) -> list[Callable]:
     # Try to ensure MCP tools are loaded if not already
     ensure_mcp_tools_loaded()
 
-    # Search vector store
-    results = store.search(("tools",), query=query, limit=top_k)
+    # Use cached search for tool names
+    tool_names = set(_cached_tool_search(query, top_k))
 
-    log_info(f"Found {len(results)} tools matching query '{query}': {[result.value for result in results]}")
+    log_info(f"Found {len(tool_names)} tools matching query '{query}': {list(tool_names)}")
 
-    # Get unique tool names from results
-    tool_names = {result.key for result in results}
     # Return corresponding tool functions
-
     # Always include always_active_tools
     # Ensure they are not duplicated by mistake
     result_tools = [tool_lookup[name] for name in tool_names if name in tool_lookup]

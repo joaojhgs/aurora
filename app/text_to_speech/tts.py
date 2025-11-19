@@ -10,12 +10,30 @@ file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 
 def on_audio_stream_start():
-    reduce_volume_except_current()
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(reduce_volume_except_current())
+        else:
+            asyncio.run(reduce_volume_except_current())
+    except Exception:
+        pass  # Fail silently if async operations not available
 
 
 def on_audio_stream_stop():
     # Restore the system volume when the audio stream stops
-    restore_volume_except_current()
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(restore_volume_except_current())
+        else:
+            asyncio.run(restore_volume_except_current())
+    except Exception:
+        pass  # Fail silently if async operations not available
 
 
 def get_voice():
