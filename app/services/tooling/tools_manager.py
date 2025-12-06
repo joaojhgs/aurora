@@ -271,7 +271,7 @@ class ToolsManager:
 
             result = await self.bus.request(
                 DBMethods.RAG_LIST,
-                DBRAGListRequest(namespace="tools", limit=4000),
+                DBRAGListRequest(namespace="main.tools", limit=4000),
                 timeout=5.0,
             )
 
@@ -296,7 +296,7 @@ class ToolsManager:
                     log_info(f"Updating tool '{name}' with new description")
                     await self.bus.publish(
                         DBMethods.RAG_STORE,
-                        DBRAGStoreRequest(namespace="tools", key=name, value=tool_data, index=True),
+                        DBRAGStoreRequest(namespace="main.tools", key=name, value=tool_data, index=True),
                         event=False,
                     )
 
@@ -312,7 +312,7 @@ class ToolsManager:
                 log_info(f"Adding new tool to database: {name}")
                 await self.bus.publish(
                     DBMethods.RAG_STORE,
-                    DBRAGStoreRequest(namespace="tools", key=name, value=tool_data, index=True),
+                    DBRAGStoreRequest(namespace="main.tools", key=name, value=tool_data, index=True),
                     event=False,
                 )
 
@@ -321,7 +321,7 @@ class ToolsManager:
                 log_info(f"Removing inactive tool from database: {name}")
                 await self.bus.publish(
                     DBMethods.RAG_DELETE,
-                    DBRAGDeleteRequest(namespace="tools", key=name),
+                    DBRAGDeleteRequest(namespace="main.tools", key=name),
                     event=False,
                 )
 
