@@ -4,7 +4,7 @@ Tests for configuration field metadata extraction
 
 import pytest
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 
 class TestConfigFieldMetadata:

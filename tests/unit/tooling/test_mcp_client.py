@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.config.config_manager import ConfigManager
-from app.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
+from app.services.config.config_manager import ConfigManager
+from app.services.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
 
 
 @pytest.mark.unit
