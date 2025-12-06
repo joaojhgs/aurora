@@ -183,13 +183,16 @@ class ConfigAPI:
             # Request only the needed section instead of full config
             if section:
                 config = self.get_config(section=section)
+                # Skip the first key since we already navigated to the section
+                keys_to_iterate = keys[1:]
             else:
                 config = self.get_config()
+                keys_to_iterate = keys
 
             # Navigate to the value using dot notation
             value = config
 
-            for k in keys:
+            for k in keys_to_iterate:
                 if isinstance(value, dict):
                     value = value.get(k)
                     if value is None:
@@ -235,13 +238,16 @@ class ConfigAPI:
             # Request only the needed section instead of full config
             if section:
                 config = await self.aget_config(section=section)
+                # Skip the first key since we already navigated to the section
+                keys_to_iterate = keys[1:]
             else:
                 config = await self.aget_config()
+                keys_to_iterate = keys
 
             # Navigate to the value using dot notation
             value = config
 
-            for k in keys:
+            for k in keys_to_iterate:
                 if isinstance(value, dict):
                     value = value.get(k)
                     if value is None:
