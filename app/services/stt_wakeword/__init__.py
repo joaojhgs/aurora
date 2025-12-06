@@ -12,13 +12,13 @@ from app.services.stt_wakeword.backends import (
     PorcupineBackend,
     WakeWordBackend,
 )
+from app.services.stt_wakeword.service import WakeWordService
 from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordBackendType,
     WakeWordControl,
     WakeWordDetected,
     WakeWordTimeout,
 )
-from app.services.stt_wakeword.service import WakeWordService
 
 __all__ = [
     "WakeWordService",

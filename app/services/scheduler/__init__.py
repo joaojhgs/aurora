@@ -7,6 +7,7 @@ Uses the db module for all persistence operations.
 """
 
 from app.services.db.models import CronJob, JobStatus, ScheduleType
+
 from .cron_service import CronService, get_cron_service
 from .scheduler_manager import SchedulerManager
 from .service import SchedulerService
