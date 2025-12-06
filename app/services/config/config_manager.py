@@ -259,6 +259,13 @@ class ConfigManager:
             "TTS_MODEL_CONFIG_FILE_PATH": ("text_to_speech.model_config_file_path", str),
             "TTS_MODEL_SAMPLE_RATE": ("text_to_speech.model_sample_rate", int),
             "PIPER_PATH": ("text_to_speech.piper_path", str),
+            # New Docker Hub environment variables
+            "AURORA_TTS_MODEL_FILE_PATH": ("general.text_to_speech.model_file_path", str),
+            "AURORA_TTS_MODEL_CONFIG_FILE_PATH": ("general.text_to_speech.model_config_file_path", str),
+            "AURORA_WAKE_WORD_MODEL_PATH": ("general.speech_to_text.wake_word.model_path", str),
+            "AURORA_LLAMA_CPP_MODEL_PATH": ("general.llm.local.llama_cpp.options.model_path", str),
+            "AURORA_HUGGINGFACE_MODEL_ID": ("general.llm.local.huggingface_pipeline.options.model", str),
+            "AURORA_MODELS_DIR": ("general.models_dir", str),
             "USE_CUDA_TTS": ("cuda.use_cuda_tts", lambda x: x.lower() == "true"),
             "USE_CUDA_STT": ("cuda.use_cuda_stt", lambda x: x.lower() == "true"),
             "USE_CUDA_OCR_BG": ("cuda.use_cuda_ocr_bg", lambda x: x.lower() == "true"),

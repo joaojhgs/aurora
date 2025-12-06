@@ -20,7 +20,7 @@ Aurora has a comprehensive testing suite divided into several categories:
 
 Install test dependencies:
 ```bash
-pip install -r requirements-test.txt
+pip install -e .[test]
 ```
 
 Run all tests (except performance tests):

@@ -37,7 +37,7 @@ check_docker() {
     fi
 }
 
-# Check if config.json exists and has process mode configured
+# Check if config.json exists
 check_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         print_warning "config.json not found. Creating from defaults..."
@@ -45,49 +45,12 @@ check_config() {
             print_error "Could not create config.json. Please create it manually."
             exit 1
         }
+        print_info "✓ Config file created from defaults"
     fi
-
-    # Check if process mode is configured
-    if ! grep -q '"mode": "processes"' "$CONFIG_FILE" 2>/dev/null; then
-        print_warning "config.json does not have process mode enabled."
-        print_info "Updating config.json to enable process mode..."
-        
-        # Use Python to update config safely
-        python3 << EOF
-import json
-import sys
-
-try:
-    with open('$CONFIG_FILE', 'r') as f:
-        config = json.load(f)
     
-    # Set architecture mode to processes
-    if 'general' not in config:
-        config['general'] = {}
-    if 'architecture' not in config['general']:
-        config['general']['architecture'] = {}
-    config['general']['architecture']['mode'] = 'processes'
-    
-    # Set Redis URL for Docker
-    if 'messaging' not in config:
-        config['messaging'] = {}
-    if 'redis' not in config['messaging']:
-        config['messaging']['redis'] = {}
-    config['messaging']['redis']['url'] = 'redis://redis:6379'
-    
-    with open('$CONFIG_FILE', 'w') as f:
-        json.dump(config, f, indent=4)
-    
-    print("✓ Config updated successfully")
-except Exception as e:
-    print(f"✗ Error updating config: {e}")
-    sys.exit(1)
-EOF
-        if [ $? -ne 0 ]; then
-            print_error "Failed to update config.json"
-            exit 1
-        fi
-    fi
+    print_info "Note: Architecture mode and Redis URL are configured via environment variables:"
+    print_info "  - AURORA_ARCHITECTURE_MODE (default: threads)"
+    print_info "  - REDIS_URL (default: redis://localhost:6379)"
 }
 
 # Create necessary directories

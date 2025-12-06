@@ -18,18 +18,6 @@
                 "hardware_acceleration"
             ],
             "properties": {
-                "architecture": {
-                    "type": "object",
-                    "required": ["mode"],
-                    "properties": {
-                        "mode": {
-                            "type": "string",
-                            "enum": ["threads", "processes"],
-                            "description": "Architecture mode: 'threads' for LocalBus, 'processes' for BullMQBus"
-                        }
-                    },
-                    "additionalProperties": false
-                },
                 "llm": {
                     "type": "object",
                     "required": [
@@ -989,47 +977,6 @@
                 "debug": {
                     "type": "boolean",
                     "description": "Enable debug mode for verbose logging"
-                }
-            },
-            "additionalProperties": false
-        },
-        "messaging": {
-            "type": "object",
-            "properties": {
-                "redis": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "format": "uri",
-                            "description": "Redis connection URL for BullMQ message bus"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "priorities": {
-                    "type": "object",
-                    "properties": {
-                        "interactive": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 100,
-                            "description": "Priority level for interactive messages"
-                        },
-                        "system": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 100,
-                            "description": "Priority level for system messages"
-                        },
-                        "external": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 100,
-                            "description": "Priority level for external messages"
-                        }
-                    },
-                    "additionalProperties": false
                 }
             },
             "additionalProperties": false

@@ -14,17 +14,25 @@ import logging
 import signal
 from typing import Any
 
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_error, log_info, log_warning
-from app.messaging import register_all_service_topics
+from app.messaging import Envelope
 from app.messaging.bus import MessageBus
 from app.messaging.bus_runtime import set_bus
 from app.messaging.local_bus import LocalBus
+from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.supervisor import (
+    GetStatusResponse,
+    ServiceControlCommand,
+    ServiceControlResponse,
+    ServiceStatus,
+    SupervisorMethods,
+    SupervisorModule,
+)
+from app.shared.contracts.registry import method_contract
+from app.shared.services.base_service import BaseService
 
 
-class Supervisor:
+class Supervisor(BaseService):
     """Supervisor for managing Aurora services.
 
     Responsibilities:
@@ -36,7 +44,9 @@ class Supervisor:
 
     def __init__(self):
         """Initialize the supervisor."""
-        self.bus: MessageBus | None = None
+        super().__init__(
+            module=SupervisorModule.NAME, summary="Service supervisor and manager", capabilities=["service_management", "health_monitoring"]
+        )
         self.services: list[Any] = []
         self.shutdown_event = asyncio.Event()
         self._mode = "threads"  # "threads" or "processes"
@@ -46,16 +56,12 @@ class Supervisor:
         """Initialize the supervisor and message bus."""
         log_info("Initializing Aurora Supervisor...")
 
-        # Register all service topics in the event registry FIRST
-        log_info("Registering service topics...")
-        register_all_service_topics()
+        log_info("Initializing Aurora Supervisor...")
 
-        # Get architecture mode from config
-        try:
-            self._mode = config_api.get("general.architecture.mode", "threads")
-        except Exception:
-            log_warning("Architecture mode not configured, using 'threads'")
-            self._mode = "threads"
+        # Get architecture mode from environment variable (default: threads)
+        import os
+
+        self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
         log_info(f"Architecture mode: {self._mode}")
 
@@ -68,11 +74,17 @@ class Supervisor:
             raise ValueError(f"Unknown architecture mode: {self._mode}")
 
         # Set global bus instance (for threads mode singleton)
-        set_bus(self.bus)
-        
+        set_bus(self._bus)
+
         # Also set in shared bus_init for consistency
         from app.shared.messaging.bus_init import set_bus as set_shared_bus
-        set_shared_bus(self.bus)
+
+        set_shared_bus(self._bus)
+
+        # Also set in bus_runtime for ConfigAPI compatibility
+        from app.messaging.bus_runtime import set_bus as set_runtime_bus
+
+        set_runtime_bus(self._bus)
 
         log_info("Supervisor initialized")
 
@@ -80,30 +92,27 @@ class Supervisor:
         """Initialize LocalBus for thread mode."""
         log_info("Initializing LocalBus (thread mode)...")
 
-        self.bus = LocalBus(
+        self._bus = LocalBus(
             command_queue_size=1000,
             event_queue_size=5000,
         )
 
-        await self.bus.start()
+        await self._bus.start()
         log_info("LocalBus initialized")
 
     async def _initialize_bullmq_bus(self) -> None:
         """Initialize BullMQBus for process mode."""
         log_info("Initializing BullMQBus (process mode)...")
 
+        # Get Redis URL from environment variable
+        import os
+
         from app.messaging.bullmq_bus import BullMQBus
 
-        # Get Redis URL from config or environment variable
-        import os
-        try:
-            redis_url = os.getenv("REDIS_URL") or config_api.get("messaging.redis.url", "redis://localhost:6379")
-        except Exception:
-            log_warning("Redis URL not configured, using default")
-            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-        self.bus = BullMQBus(redis_url=redis_url)
-        await self.bus.start()
+        self._bus = BullMQBus(redis_url=redis_url)
+        await self._bus.start()
         log_info("BullMQBus initialized")
 
     async def start_services(self) -> None:
@@ -207,15 +216,14 @@ class Supervisor:
             ("OrchestratorService", "app.services.orchestrator"),
         ]
 
-        # Start STT services if enabled
-        if config_api.get("general.speech_to_text.enabled", True):
-            stt_services = [
-                ("AudioInputService", "app.services.stt_audio_input"),
-                ("WakeWordService", "app.services.stt_wakeword"),
-                ("TranscriptionService", "app.services.stt_transcription"),
-                ("STTCoordinatorService", "app.services.stt_coordinator"),
-            ]
-            services.extend(stt_services)
+        # Always start STT services (speech_to_text cannot be disabled via config)
+        stt_services = [
+            # Note: AudioInputService merged into STTCoordinatorService
+            ("WakeWordService", "app.services.stt_wakeword"),
+            ("TranscriptionService", "app.services.stt_transcription"),
+            ("STTCoordinatorService", "app.services.stt_coordinator"),
+        ]
+        services.extend(stt_services)
 
         # Start services in order
         for service_name, module_path in services:
@@ -231,40 +239,35 @@ class Supervisor:
         log_info("All service processes started successfully")
 
     async def _start_streaming_stt_services(self) -> None:
-        """Start new modular streaming STT services."""
-        from app.services.stt_audio_input import AudioInputService
+        """Start new modular streaming STT services.
+
+        Note: AudioInputService has been merged into STTCoordinatorService.
+        Audio capture is now handled internally by the coordinator.
+        """
         from app.services.stt_coordinator import STTCoordinatorService
         from app.services.stt_transcription import TranscriptionService
         from app.services.stt_wakeword import WakeWordService
 
-        log_info("Starting streaming STT services (Audio Input, Wake Word, Transcription, Coordinator)...")
+        log_info("Starting streaming STT services (Wake Word, Transcription, Coordinator with audio)...")
 
         # Create service instances
-        audio_input = AudioInputService()
         wake_word = WakeWordService()
         transcription = TranscriptionService()
-        coordinator = STTCoordinatorService()
+        coordinator = STTCoordinatorService()  # Now includes audio capture
 
         # Start services in order:
-        # 1. Audio Input (provides audio stream)
-        # 2. Wake Word & Transcription (consume audio stream - can start in parallel)
-        # 3. Coordinator (orchestrates the workflow)
+        # 1. Wake Word & Transcription (can start in parallel, will consume audio from coordinator)
+        # 2. Coordinator (starts audio capture and orchestrates the workflow)
 
         try:
-            # Start audio input first
-            log_info("Starting Audio Input service...")
-            await audio_input.start()
-            self.services.append(audio_input)
-            log_info("Audio Input service started")
-
             # Start wake word and transcription in parallel
             log_info("Starting Wake Word and Transcription services...")
             await asyncio.gather(wake_word.start(), transcription.start())
             self.services.extend([wake_word, transcription])
             log_info("Wake Word and Transcription services started")
 
-            # Start coordinator last
-            log_info("Starting STT Coordinator service...")
+            # Start coordinator last (includes audio capture)
+            log_info("Starting STT Coordinator service (with audio capture)...")
             await coordinator.start()
             self.services.append(coordinator)
             log_info("STT Coordinator service started")
@@ -321,9 +324,9 @@ class Supervisor:
                     log_error(f"Error stopping {service.__class__.__name__}: {e}", exc_info=True)
 
         # Stop message bus
-        if self.bus:
+        if self._bus:
             try:
-                await self.bus.stop()
+                await self._bus.stop()
                 log_info("Message bus stopped")
             except Exception as e:
                 log_error(f"Error stopping bus: {e}", exc_info=True)
@@ -332,13 +335,70 @@ class Supervisor:
         log_info("Supervisor shutdown complete")
 
     async def start(self) -> None:
-        """Start the supervisor (convenience method)."""
+        """Start the supervisor."""
         try:
+            # 1. Initialize bus (custom logic)
             await self.initialize()
-            await self.start_services()
+
+            # 2. Call BaseService.start() which handles subscriptions and calls on_start
+            await super().start()
+
+            # 3. Run main loop
             await self.run()
         finally:
             await self.shutdown()
+
+    async def on_start(self) -> None:
+        """Service-specific startup logic."""
+        await self.start_services()
+
+    async def on_stop(self) -> None:
+        """Service-specific shutdown logic."""
+        pass
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration."""
+        pass
+
+    @method_contract(
+        method_id=SupervisorMethods.GET_STATUS,
+        summary="Get status of all services",
+        input_model=EmptyInput,
+        output_model=GetStatusResponse,
+        exposure="both",
+    )
+    async def _handle_get_status(self, envelope: Envelope) -> None:
+        """Handle GetStatus query."""
+        try:
+            statuses = []
+            for service in self.services:
+                # Basic status check
+                is_running = getattr(service, "_started", False)
+                name = getattr(service, "module", getattr(service, "service_name", str(type(service).__name__)))
+
+                statuses.append(ServiceStatus(name=name, running=is_running, details={}))
+
+            response = GetStatusResponse(services=statuses, mode=self._mode)
+
+            if envelope.reply_to:
+                await self.bus.publish(envelope.reply_to, response, event=False)
+
+        except Exception as e:
+            log_error(f"Error handling GetStatus: {e}")
+
+    @method_contract(
+        method_id=SupervisorMethods.RESTART_SERVICE,
+        summary="Restart a specific service",
+        input_model=ServiceControlCommand,
+        output_model=ServiceControlResponse,
+        exposure="internal",
+    )
+    async def _handle_restart_service(self, envelope: Envelope) -> None:
+        """Handle RestartService command."""
+        # TODO: Implement service restart logic
+        # For now, just return success
+        if envelope.reply_to:
+            await self.bus.publish(envelope.reply_to, ServiceControlResponse(success=True, message="Not implemented yet"), event=False)
 
 
 # Convenience function for running supervisor

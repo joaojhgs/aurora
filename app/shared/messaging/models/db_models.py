@@ -60,7 +60,7 @@ class DeleteCronJob(Command):
 class RAGStoreCommand(Command):
     """Command to store an item in RAG vector store."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     key: str
     value: dict
     index: list[str] | None = None
@@ -69,14 +69,14 @@ class RAGStoreCommand(Command):
 class RAGDeleteCommand(Command):
     """Command to delete an item from RAG vector store."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     key: str
 
 
 class RAGSearchQuery(Query):
     """Query to search items in RAG vector store."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     query: str
     limit: int = 10
     offset: int = 0
@@ -85,14 +85,14 @@ class RAGSearchQuery(Query):
 class RAGGetQuery(Query):
     """Query to get an item from RAG vector store."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     key: str
 
 
 class RAGListQuery(Query):
     """Query to list items in RAG vector store."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     limit: int = 100
     offset: int = 0
 
@@ -100,7 +100,7 @@ class RAGListQuery(Query):
 class RAGItemResponse(BaseModel):
     """Response containing a RAG item."""
 
-    namespace: tuple[str, ...]
+    namespace: str  # Dot-separated namespace, e.g., "main.memories"
     key: str
     value: dict | None = None
     search_score: float | None = None

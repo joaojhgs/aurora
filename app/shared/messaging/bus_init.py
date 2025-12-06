@@ -29,10 +29,11 @@ def set_bus(bus: MessageBus) -> None:
     """
     global _bus
     _bus = bus
-    
+
     # Also update legacy bus_runtime for backward compatibility
     try:
         from app.messaging.bus_runtime import set_bus as set_runtime_bus
+
         set_runtime_bus(bus)
     except Exception:
         pass  # Ignore if bus_runtime not available
@@ -83,7 +84,7 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
     """Initialize bus singleton for a service (processes mode).
 
     This function:
-    1. Determines the mode (threads vs processes)
+    1. Determines the mode (threads vs processes) from environment variable
     2. Creates the appropriate bus instance
     3. Registers it for the service
     4. Returns the bus instance
@@ -94,15 +95,14 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
     Returns:
         The initialized MessageBus instance
     """
-    from app.shared.config.interface import ConfigAPI
+    import os
 
-    config_api = ConfigAPI()
     from app.helpers.aurora_logger import log_info
     from app.messaging.bullmq_bus import BullMQBus
     from app.messaging.local_bus import LocalBus
 
-    # Get architecture mode from config
-    mode = config_api.get("general.architecture.mode", "threads")
+    # Get architecture mode from environment variable (default: threads)
+    mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
     if mode == "threads":
         # In threads mode, use global singleton
@@ -114,9 +114,8 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
     elif mode == "processes":
         # In processes mode, create per-service singleton
         if service_name not in _service_buses:
-            # Get Redis URL from config or environment variable
-            import os
-            redis_url = os.getenv("REDIS_URL") or config_api.get("messaging.redis.url", "redis://localhost:6379")
+            # Get Redis URL from environment variable
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
             bus = BullMQBus(redis_url=redis_url)
             set_bus_for_service(service_name, bus)
             log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}' with Redis: {redis_url}")
@@ -124,7 +123,7 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
             bus = get_bus_for_service(service_name)
         return bus
     else:
-        raise ValueError(f"Unknown architecture mode: {mode}")
+        raise ValueError(f"Unknown architecture mode: {mode}. Use 'threads' or 'processes'.")
 
 
 def get_bus_singleton() -> MessageBus:

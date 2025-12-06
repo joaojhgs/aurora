@@ -1,43 +1,56 @@
 """STT Coordinator Service for Aurora.
 
-This service coordinates the workflow between wake word detection and transcription,
-providing the classic voice assistant experience:
+This service coordinates the complete STT workflow including:
+- Audio capture from microphone (PyAudio)
+- Wake word detection integration
+- Transcription coordination
+- Session management with timeouts
+- Multi-turn conversation support
 
-1. Listen for wake word ("Jarvis")
-2. When detected, activate transcription
-3. Capture user's speech
-4. Send to orchestrator for processing
-5. Handle timeouts and multi-turn conversations
-
-This service is OPTIONAL - you can use WakeWord and Transcription services
-independently without coordination.
+This service combines the former AudioInputService and STTCoordinatorService
+into a single cohesive internal service.
 """
 
 from __future__ import annotations
 
 import asyncio
+import threading
+import uuid
 from datetime import datetime
 from enum import Enum
 
+import pyaudio
 from pydantic import Field
 
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
-from app.helpers.aurora_logger import log_debug, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
+    AudioChunk,
+    AudioEncoding,
+    AudioFormat,
+    AudioStreamStarted,
+    AudioStreamStopped,
+    AudioTopics,
+    Command,
     Envelope,
     MessageBus,
     TranscriptionControl,
     TranscriptionResult,
-    TranscriptionTopics,
-    WakeWordTopics,
 )
-from app.messaging.priority_helpers import get_interactive_priority
-
-
-from app.shared.messaging.models.stt_coordinator_models import (
+from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
+from app.shared.config.interface import ConfigAPI
+from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.stt import (
+    STTAudioChunk,
     STTCoordinatorControl,
+    STTListenRequest,
+    STTMethods,
+    STTModule,
+    STTStopListeningRequest,
+    TranscriptionMethods,
+    WakeWordMethods,
+)
+from app.shared.contracts.registry import method_contract
+from app.shared.messaging.models.stt_coordinator_models import (
     STTSessionEnded,
     STTSessionStarted,
     STTState,
@@ -45,33 +58,27 @@ from app.shared.messaging.models.stt_coordinator_models import (
 )
 from app.shared.services.base_service import BaseService
 
-
-# Topics
-class STTCoordinatorTopics:
-    """Standard topics for STT coordinator events."""
-
-    SESSION_STARTED = "STT.Session.Started"
-    SESSION_ENDED = "STT.Session.Ended"
-    USER_SPEECH_CAPTURED = "STT.UserSpeechCaptured"  # Fixed to match Orchestrator subscription
-    CONTROL = "STT.Coordinator.Control"
+config_api = ConfigAPI()
 
 
 class STTCoordinatorService(BaseService):
-    """STT Coordinator service.
+    """STT Coordinator service with integrated audio capture.
 
     Responsibilities:
+    - Capture audio from microphone using PyAudio
     - Coordinate wake word detection and transcription
     - Manage conversation sessions
-    - Handle timeouts
-    - Interrupt TTS when listening
-    - Emit events for orchestrator integration
+    - Handle timeouts and multi-turn conversations
+    - Stream audio chunks to wake word and transcription services
     """
 
     def __init__(self):
-        """Initialize STT coordinator."""
-        super().__init__("STTCoordinatorService")
-        self._running = False
-
+        """Initialize STT coordinator with audio capture."""
+        super().__init__(
+            module=STTModule.NAME,
+            summary="STT coordination service with integrated audio capture",
+            capabilities=["audio_capture", "session_management", "stt_coordination"],
+        )
         # State machine
         self._state = STTState.IDLE
         self._state_lock = asyncio.Lock()
@@ -81,11 +88,37 @@ class STTCoordinatorService(BaseService):
         self._session_start_time: datetime | None = None
         self._accumulated_transcription: str = ""
 
-        # Configuration
-        self._listen_timeout_seconds = config_api.get("general.speech_to_text.coordinator.session_timeout_s", 10.0)  # Default: 10 seconds
-        self._multi_turn_enabled = config_api.get("general.speech_to_text.coordinator.multi_turn_enabled", False)  # Default: single turn
-        self._pause_tts_on_listening = config_api.get("general.speech_to_text.coordinator.pause_tts_on_listen", True)  # Default: pause TTS
-        self._ambient_transcription_enabled = config_api.get("general.speech_to_text.ambient_transcription.enable", False)  # Default: disabled
+        # PyAudio resources
+        self._pyaudio: pyaudio.PyAudio | None = None
+        self._stream: pyaudio.Stream | None = None
+        self._capture_thread: threading.Thread | None = None
+
+        # Audio capture state
+        self._capturing = False
+        self._paused = False
+        self._running = False  # Service running state
+
+        # Audio configuration
+        self._sample_rate = 16000
+        self._channels = 1
+        self._chunk_size = 1024  # Frames per buffer
+        self._format = pyaudio.paInt16
+        self._device_index: int | None = None
+
+        # Stream tracking
+        self._stream_id: str | None = None
+        self._sequence = 0
+        self._total_chunks = 0
+        self._stream_start_time: datetime | None = None
+
+        # Event loop for async operations
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+        # Coordinator configuration
+        self._listen_timeout_seconds = 10.0
+        self._multi_turn_enabled = False
+        self._pause_tts_on_listening = True
+        self._ambient_transcription_enabled = False
 
         # Timeout task
         self._timeout_task: asyncio.Task | None = None
@@ -95,8 +128,8 @@ class STTCoordinatorService(BaseService):
         self._sessions_completed = 0
         self._sessions_timeout = 0
 
-    async def start(self) -> None:
-        """Start the STT coordinator service."""
+    async def on_start(self) -> None:
+        """Start the STT coordinator service with audio capture."""
         if self._running:
             log_warning("STT coordinator already running")
             return
@@ -104,29 +137,48 @@ class STTCoordinatorService(BaseService):
         log_info("Starting STT coordinator service...")
         self._running = True
 
-        # Subscribe to events
-        self.bus.subscribe(WakeWordTopics.DETECTED, self._on_wake_word_detected)
-        self.bus.subscribe(TranscriptionTopics.RESULT_ACCURATE, self._on_transcription_result)
-        self.bus.subscribe(TranscriptionTopics.RESULT_FINAL, self._on_transcription_result)
-        self.bus.subscribe(STTCoordinatorTopics.CONTROL, self._on_control)
+        # Load configuration
+        await self._load_config()
+
+        # Store event loop
+        self._loop = asyncio.get_event_loop()
+
+        # Initialize PyAudio
+        self._initialize_pyaudio()
 
         # Set initial state
         await self._transition_to(STTState.IDLE)
 
-        self._set_started(True)
-        log_info("STT coordinator started")
+        # Auto-start audio capture if configured
+        auto_start = await config_api.aget("general.speech_to_text.audio_input.auto_start", True)
+        if auto_start:
+            await self._start_audio_capture()
+
+        # Subscribe to wake word detection events
+        self.bus.subscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected)
+
+        # Subscribe to transcription result events
+        self.bus.subscribe(TranscriptionMethods.RESULT, self._on_transcription_result)
+
+        log_info("STT coordinator started with audio capture")
+        log_info(f"   Audio: {self._sample_rate}Hz, {self._channels}ch, {self._chunk_size} frames")
+        log_info(f"   Device: {self._device_index or 'default'}")
         log_info(f"   Listen timeout: {self._listen_timeout_seconds}s")
         log_info(f"   Multi-turn: {'enabled' if self._multi_turn_enabled else 'disabled'}")
         log_info(f"   Pause TTS: {'yes' if self._pause_tts_on_listening else 'no'}")
         log_info(f"   Ambient transcription: {'enabled' if self._ambient_transcription_enabled else 'disabled'}")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """Stop the STT coordinator service."""
         if not self._running:
             return
 
         log_info("Stopping STT coordinator service...")
         self._running = False
+
+        # Stop audio capture if active
+        if self._capturing:
+            await self._stop_audio_capture()
 
         # Cancel any pending timeout
         if self._timeout_task and not self._timeout_task.done():
@@ -140,8 +192,254 @@ class STTCoordinatorService(BaseService):
         if self._current_session_id:
             await self._end_session("manual")
 
-        log_info("STT coordinator stopped")
-        log_info(f"   Sessions: {self._sessions_started} started, " f"{self._sessions_completed} completed, {self._sessions_timeout} timeout")
+        # Cleanup PyAudio resources
+        if self._pyaudio:
+            self._pyaudio.terminate()
+            self._pyaudio = None
+
+        log_info("STT coordinator service stopped")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading STT coordinator configuration (section: {config_section})")
+
+        # If STT or audio config changed, reload
+        if config_section is None or config_section == "general" or config_section == "speech_to_text":
+            log_info("STT coordinator configuration changed, reloading...")
+            was_capturing = self._capturing
+
+            # Stop capturing if active
+            if was_capturing:
+                await self._stop_audio_capture()
+
+            # Reload configuration
+            await self._load_config()
+
+            # Restart capturing if it was active before
+            if was_capturing:
+                await self._start_audio_capture()
+
+            log_info("STT coordinator configuration reloaded")
+        else:
+            log_debug(f"STT coordinator reloaded for section: {config_section}")
+
+    async def _load_config(self) -> None:
+        """Load configuration from config manager."""
+        # Audio configuration
+        self._sample_rate = await config_api.aget("general.speech_to_text.audio_input.sample_rate", 16000)
+        self._channels = await config_api.aget("general.speech_to_text.audio_input.channels", 1)
+        self._chunk_size = await config_api.aget("general.speech_to_text.audio_input.chunk_size", 1024)
+        self._device_index = await config_api.aget("general.speech_to_text.audio_input.device_index", None)
+
+        # Coordinator configuration
+        self._listen_timeout_seconds = await config_api.aget("general.speech_to_text.coordinator.session_timeout_s", 10.0)
+        self._multi_turn_enabled = await config_api.aget("general.speech_to_text.coordinator.multi_turn_enabled", False)
+        self._pause_tts_on_listening = await config_api.aget("general.speech_to_text.coordinator.pause_tts_on_listen", True)
+        self._ambient_transcription_enabled = await config_api.aget("general.speech_to_text.ambient_transcription.enable", False)
+
+    def _initialize_pyaudio(self) -> None:
+        """Initialize PyAudio and enumerate devices."""
+        try:
+            self._pyaudio = pyaudio.PyAudio()
+
+            # Log available devices
+            log_debug("Available audio input devices:")
+            for i in range(self._pyaudio.get_device_count()):
+                try:
+                    info = self._pyaudio.get_device_info_by_index(i)
+                    if info.get("maxInputChannels", 0) > 0:
+                        log_debug(
+                            f"  [{i}] {info.get('name')} " f"(channels: {info.get('maxInputChannels')}, " f"rate: {info.get('defaultSampleRate')})"
+                        )
+                except Exception as e:
+                    log_debug(f"Could not get info for device {i}: {e}")
+
+            # If no device index specified, use default
+            if self._device_index is None:
+                default_device = self._pyaudio.get_default_input_device_info()
+                self._device_index = default_device["index"]
+                log_debug(f"Using default input device: {default_device['name']}")
+
+        except Exception as e:
+            log_error(f"Failed to initialize PyAudio: {e}", exc_info=True)
+            raise
+
+    async def _start_audio_capture(self) -> None:
+        """Start audio capture from microphone."""
+        if self._capturing:
+            log_warning("Audio capture already active")
+            return
+
+        log_info("Starting audio capture...")
+
+        try:
+            # Generate new stream ID
+            self._stream_id = str(uuid.uuid4())
+            self._sequence = 0
+            self._total_chunks = 0
+            self._stream_start_time = datetime.utcnow()
+
+            # Create audio format descriptor
+            audio_format = AudioFormat(
+                sample_rate=self._sample_rate,
+                channels=self._channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+                chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
+            )
+
+            # Emit stream started event
+            await self.bus.publish(
+                AudioTopics.STARTED,
+                AudioStreamStarted(
+                    stream_id=self._stream_id,
+                    source="microphone",
+                    format=audio_format,
+                ),
+                event=True,
+                priority=get_interactive_priority(),
+            )
+
+            # Open PyAudio stream
+            self._stream = self._pyaudio.open(
+                format=self._format,
+                channels=self._channels,
+                rate=self._sample_rate,
+                input=True,
+                input_device_index=self._device_index,
+                frames_per_buffer=self._chunk_size,
+                stream_callback=None,  # We'll use blocking read
+            )
+
+            self._capturing = True
+            self._paused = False
+
+            # Start capture thread
+            self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True, name="AudioCapture")
+            self._capture_thread.start()
+
+            log_info(f"Audio capture started (stream_id: {self._stream_id})")
+
+        except Exception as e:
+            log_error(f"Failed to start audio capture: {e}", exc_info=True)
+            raise
+
+    async def _stop_audio_capture(self, reason: str = "user_request") -> None:
+        """Stop audio capture.
+
+        Args:
+            reason: Reason for stopping
+        """
+        if not self._capturing:
+            return
+
+        log_info(f"Stopping audio capture (reason: {reason})...")
+
+        self._capturing = False
+
+        # Wait for capture thread to finish
+        if self._capture_thread and self._capture_thread.is_alive():
+            self._capture_thread.join(timeout=5.0)
+
+        # Close PyAudio stream
+        if self._stream:
+            try:
+                self._stream.stop_stream()
+                self._stream.close()
+            except Exception as e:
+                log_error(f"Error closing audio stream: {e}")
+            self._stream = None
+
+        # Calculate total duration
+        total_duration_ms = 0.0
+        if self._stream_start_time:
+            duration = datetime.utcnow() - self._stream_start_time
+            total_duration_ms = duration.total_seconds() * 1000
+
+        # Emit stream stopped event
+        if self._loop and self._stream_id:
+            asyncio.run_coroutine_threadsafe(
+                self.bus.publish(
+                    AudioTopics.STOPPED,
+                    AudioStreamStopped(
+                        stream_id=self._stream_id,
+                        source="microphone",
+                        total_chunks=self._total_chunks,
+                        total_duration_ms=total_duration_ms,
+                        reason=reason,
+                    ),
+                    event=True,
+                    priority=get_interactive_priority(),
+                ),
+                self._loop,
+            )
+
+        log_info(f"Audio capture stopped ({self._total_chunks} chunks)")
+
+    def _capture_loop(self) -> None:
+        """Capture loop running in separate thread."""
+        log_info("Audio capture loop started")
+
+        try:
+            while self._capturing:
+                if self._paused:
+                    # Sleep briefly when paused
+                    threading.Event().wait(0.1)
+                    continue
+
+                try:
+                    # Read audio data from stream
+                    audio_data = self._stream.read(self._chunk_size, exception_on_overflow=False)
+
+                    # Create audio chunk
+                    chunk = AudioChunk(
+                        data=audio_data,
+                        source="microphone",
+                        stream_id=self._stream_id,
+                        sequence=self._sequence,
+                        # Only send format with first chunk
+                        format=(
+                            None
+                            if self._sequence > 0
+                            else AudioFormat(
+                                sample_rate=self._sample_rate,
+                                channels=self._channels,
+                                encoding=AudioEncoding.PCM_S16LE,
+                                bits_per_sample=16,
+                                chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
+                            )
+                        ),
+                    )
+
+                    # Publish chunk to message bus
+                    if self._loop and self._loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            self.bus.publish(
+                                AudioTopics.STREAM_MICROPHONE,
+                                chunk,
+                                event=True,
+                                priority=get_system_priority(),
+                            ),
+                            self._loop,
+                        )
+
+                    self._sequence += 1
+                    self._total_chunks += 1
+
+                except Exception as e:
+                    if self._capturing:
+                        log_error(f"Error reading audio: {e}", exc_info=True)
+                    break
+
+        except Exception as e:
+            log_error(f"Fatal error in capture loop: {e}", exc_info=True)
+
+        finally:
+            log_info("Audio capture loop ended")
 
     async def _transition_to(self, new_state: STTState) -> None:
         """Transition to a new state.
@@ -198,16 +496,16 @@ class STTCoordinatorService(BaseService):
         if self._pause_tts_on_listening:
             log_debug("Pausing TTS playback")
             try:
-                from app.messaging import TTSTopics
-                from app.tts import TTSPause
+                from app.shared.contracts.models.tts import TTSMethods
+                from app.shared.messaging.models.tts_models import TTSPause
 
-                await self.bus.publish(TTSTopics.PAUSE, TTSPause(), event=False, priority=get_interactive_priority())
+                await self.bus.publish(TTSMethods.PAUSE, TTSPause(), event=False, priority=get_interactive_priority())
             except Exception as e:
                 log_warning(f"Failed to pause TTS: {e}")
 
         # Enable transcription (unpause if paused)
         try:
-            await self.bus.publish(TranscriptionTopics.CONTROL, TranscriptionControl(action="resume"), event=False)
+            await self.bus.publish(TranscriptionMethods.CONTROL, TranscriptionControl(action="resume"), event=False)
         except Exception as e:
             log_warning(f"Failed to enable transcription: {e}")
 
@@ -215,7 +513,7 @@ class STTCoordinatorService(BaseService):
         self._timeout_task = asyncio.create_task(self._timeout_handler())
 
         # Emit session started event
-        await self.bus.publish(STTCoordinatorTopics.SESSION_STARTED, STTSessionStarted(wake_word=wake_word, session_id=session_id))
+        await self.bus.publish(STTMethods.SESSION_STARTED, STTSessionStarted(wake_word=wake_word, session_id=session_id))
 
     async def _timeout_handler(self) -> None:
         """Handle session timeout."""
@@ -225,7 +523,7 @@ class STTCoordinatorService(BaseService):
             # Timeout reached
             log_warning(f"Session timeout ({self._listen_timeout_seconds}s)")
 
-            # Check state and mark for timeout handling (release lock before calling methods that acquire it)
+            # Check state and mark for timeout handling
             should_timeout = False
             async with self._state_lock:
                 if self._state == STTState.LISTENING:
@@ -277,12 +575,8 @@ class STTCoordinatorService(BaseService):
         # Emit user speech captured event
         speech_event = STTUserSpeechCaptured(session_id=self._current_session_id or "unknown", text=text, confidence=result.confidence, is_final=True)
 
-        log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTCoordinatorTopics.USER_SPEECH_CAPTURED}")
-        log_debug(f"Event data: session={speech_event.session_id}, text='{speech_event.text}', is_final={speech_event.is_final}")
-
-        await self.bus.publish(STTCoordinatorTopics.USER_SPEECH_CAPTURED, speech_event)
-
-        log_debug("Successfully published STTUserSpeechCaptured event")
+        log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTMethods.USER_SPEECH_CAPTURED}")
+        await self.bus.publish(STTMethods.USER_SPEECH_CAPTURED, speech_event)
 
         # Check if we should continue listening (multi-turn)
         if self._multi_turn_enabled:
@@ -312,14 +606,14 @@ class STTCoordinatorService(BaseService):
 
         # Emit session ended event
         await self.bus.publish(
-            STTCoordinatorTopics.SESSION_ENDED,
+            STTMethods.SESSION_ENDED,
             STTSessionEnded(session_id=session_id, reason=reason, transcription=transcription if transcription else None),
         )
 
         # Pause transcription to save resources (ONLY if ambient transcription is disabled)
         if not self._ambient_transcription_enabled:
             try:
-                await self.bus.publish(TranscriptionTopics.CONTROL, TranscriptionControl(action="pause"), event=False)
+                await self.bus.publish(TranscriptionMethods.CONTROL, TranscriptionControl(action="pause"), event=False)
                 log_debug("Transcription paused (ambient mode disabled)")
             except Exception as e:
                 log_warning(f"Failed to pause transcription: {e}")
@@ -330,10 +624,10 @@ class STTCoordinatorService(BaseService):
         if self._pause_tts_on_listening:
             log_debug("Resuming TTS playback")
             try:
-                from app.messaging import TTSTopics
-                from app.tts import TTSResume
+                from app.shared.contracts.models.tts import TTSMethods
+                from app.shared.messaging.models.tts_models import TTSResume
 
-                await self.bus.publish(TTSTopics.RESUME, TTSResume(), event=False)
+                await self.bus.publish(TTSMethods.RESUME, TTSResume(), event=False)
             except Exception as e:
                 log_warning(f"Failed to resume TTS: {e}")
 
@@ -345,6 +639,60 @@ class STTCoordinatorService(BaseService):
         # Return to IDLE state
         await self._transition_to(STTState.IDLE)
 
+    @method_contract(
+        method_id=STTMethods.LISTEN, summary="Start listening for speech", input_model=STTListenRequest, output_model=EmptyOutput, exposure="both"
+    )
+    async def _on_listen(self, env: Envelope) -> None:
+        """Handle listen command."""
+        try:
+            req = STTListenRequest.model_validate(env.payload)
+            log_info(f"Received listen request (session_id={req.session_id})")
+
+            # Start listening logic...
+            # For now, just acknowledge
+            await self.bus.publish(
+                STTMethods.SESSION_STARTED,
+                STTSessionStarted(session_id=req.session_id or "manual", wake_word="manual"),
+                event=True,
+                origin="internal",
+            )
+
+        except Exception as e:
+            log_error(f"Error handling listen request: {e}", exc_info=True)
+
+    @method_contract(
+        method_id=STTMethods.STOP_LISTENING,
+        summary="Stop listening for speech",
+        input_model=STTStopListeningRequest,
+        output_model=EmptyOutput,
+        exposure="both",
+    )
+    async def _on_stop_listening(self, env: Envelope) -> None:
+        """Handle stop listening command."""
+        try:
+            STTStopListeningRequest.model_validate(env.payload)
+            log_info("Received stop listening request")
+
+            # Stop listening logic...
+
+        except Exception as e:
+            log_error(f"Error handling stop listening request: {e}", exc_info=True)
+
+    @method_contract(
+        method_id=STTMethods.AUDIO, summary="Process raw audio chunk", input_model=STTAudioChunk, output_model=EmptyOutput, exposure="internal"
+    )
+    async def _on_audio_chunk(self, env: Envelope) -> None:
+        """Handle audio chunk."""
+        # Processing logic...
+        pass
+
+    @method_contract(
+        method_id=STTMethods.CONTROL,
+        summary="Handle STT coordinator control commands",
+        input_model=STTCoordinatorControl,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
     async def _on_control(self, envelope: Envelope) -> None:
         """Handle control commands.
 
@@ -383,5 +731,4 @@ __all__ = [
     "STTSessionEnded",
     "STTUserSpeechCaptured",
     "STTCoordinatorControl",
-    "STTCoordinatorTopics",
 ]

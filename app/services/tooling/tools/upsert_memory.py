@@ -5,8 +5,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 
-from app.shared.messaging.models.db_models import RAGStoreCommand
-from app.messaging import DBTopics
+from app.shared.contracts.models.db import DBMethods, DBRAGStoreRequest
 
 
 @tool
@@ -33,11 +32,12 @@ async def upsert_memory_tool(
 
     # Store via bus instead of direct store access
     await bus.publish(
-        DBTopics.RAG_STORE,
-        RAGStoreCommand(
-            namespace=("main", "memories"),
+        DBMethods.RAG_STORE,
+        DBRAGStoreRequest(
+            namespace="main.memories",
             key=str(mem_id),
             value={"text": content},
+            index=True,
         ),
         event=False,
     )

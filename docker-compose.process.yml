@@ -23,7 +23,7 @@ services:
   config-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
+      dockerfile: docker/services/Dockerfile.config
     container_name: aurora-config
     command: python -m app.services.config
     environment:
@@ -43,17 +43,14 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Database Service
+  # DB Service
   db-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
+      dockerfile: docker/services/Dockerfile.db
+      args:
+        DB_EMBEDDINGS_MODE: ${DB_EMBEDDINGS_MODE:-openai}
     container_name: aurora-db
     command: python -m app.services.db
     environment:
@@ -70,17 +67,81 @@ services:
     networks:
       - aurora-network
     depends_on:
-      - redis
       - config-service
+      - redis
     restart: unless-stopped
 
-  # Tooling Service
-  tooling-service:
+  # Orchestrator Service
+  orchestrator-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-tooling
-    command: python -m app.services.tooling
+      dockerfile: docker/services/Dockerfile.orchestrator
+      args:
+        ORCHESTRATOR_LLM_MODE: ${ORCHESTRATOR_LLM_MODE:-openai}
+        ORCHESTRATOR_HARDWARE: ${ORCHESTRATOR_HARDWARE:-cpu}
+    container_name: aurora-orchestrator
+    command: python -m app.services.orchestrator
+    environment:
+      - AURORA_ENV=production
+      - AURORA_ARCHITECTURE_MODE=processes
+      - REDIS_URL=redis://redis:6379
+      - AURORA_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - AURORA_LLAMA_CPP_MODEL_PATH=${AURORA_LLAMA_CPP_MODEL_PATH:-/app/models/llama/model.gguf}
+      - AURORA_HUGGINGFACE_MODEL_ID=${AURORA_HUGGINGFACE_MODEL_ID:-}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./config.json:/app/config.json:ro
+      - ./models:/app/models
+    networks:
+      - aurora-network
+    depends_on:
+      - config-service
+      - db-service
+      - tooling-service
+    restart: unless-stopped
+
+  # TTS Service
+  tts-service:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile.tts
+      args:
+        TTS_HARDWARE: ${TTS_HARDWARE:-cpu}
+    container_name: aurora-tts
+    command: python -m app.services.tts
+    environment:
+      - AURORA_ENV=production
+      - AURORA_ARCHITECTURE_MODE=processes
+      - REDIS_URL=redis://redis:6379
+      - AURORA_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - AURORA_TTS_MODEL_FILE_PATH=${AURORA_TTS_MODEL_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx}
+      - AURORA_TTS_MODEL_CONFIG_FILE_PATH=${AURORA_TTS_MODEL_CONFIG_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx.txt}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./config.json:/app/config.json:ro
+      - ./models:/app/models
+    networks:
+      - aurora-network
+    depends_on:
+      - config-service
+      - redis
+    restart: unless-stopped
+
+  # STT Transcription Service
+  stt-transcription-service:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile.transcription
+      args:
+        STT_TRANSCRIPTION_HARDWARE: ${STT_TRANSCRIPTION_HARDWARE:-cpu}
+    container_name: aurora-stt-transcription
+    command: python -m app.services.stt_transcription
     environment:
       - AURORA_ENV=production
       - AURORA_ARCHITECTURE_MODE=processes
@@ -95,16 +156,44 @@ services:
     networks:
       - aurora-network
     depends_on:
-      - redis
       - config-service
-      - db-service
+      - redis
+    restart: unless-stopped
+
+  # STT Wakeword Service
+  stt-wakeword-service:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile.wakeword
+      args:
+        STT_WAKEWORD_HARDWARE: ${STT_WAKEWORD_HARDWARE:-cpu}
+    container_name: aurora-stt-wakeword
+    command: python -m app.services.stt_wakeword
+    environment:
+      - AURORA_ENV=production
+      - AURORA_ARCHITECTURE_MODE=processes
+      - REDIS_URL=redis://redis:6379
+      - AURORA_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - AURORA_WAKE_WORD_MODEL_PATH=${AURORA_WAKE_WORD_MODEL_PATH:-/app/models/wakeword/jarvis.onnx}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./config.json:/app/config.json:ro
+      - ./models:/app/models
+    networks:
+      - aurora-network
+    depends_on:
+      - config-service
+      - redis
     restart: unless-stopped
 
   # Scheduler Service
   scheduler-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
+      dockerfile: docker/services/Dockerfile.scheduler
     container_name: aurora-scheduler
     command: python -m app.services.scheduler
     environment:
@@ -121,18 +210,18 @@ services:
     networks:
       - aurora-network
     depends_on:
-      - redis
       - config-service
       - db-service
+      - redis
     restart: unless-stopped
 
-  # TTS Service
-  tts-service:
+  # Tooling Service
+  tooling-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-tts
-    command: python -m app.services.tts
+      dockerfile: docker/services/Dockerfile.tooling
+    container_name: aurora-tooling
+    command: python -m app.services.tooling
     environment:
       - AURORA_ENV=production
       - AURORA_ARCHITECTURE_MODE=processes
@@ -147,96 +236,18 @@ services:
     networks:
       - aurora-network
     depends_on:
-      - redis
       - config-service
+      - db-service
+      - redis
     restart: unless-stopped
 
-  # Audio Input Service
-  audio-input-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-audio-input
-    command: python -m app.services.stt_audio_input
-    environment:
-      - AURORA_ENV=production
-      - AURORA_ARCHITECTURE_MODE=processes
-      - REDIS_URL=redis://redis:6379
-      - AURORA_LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./config.json:/app/config.json:ro
-    devices:
-      - /dev/snd:/dev/snd  # Audio devices (Linux only)
-    networks:
-      - aurora-network
-    depends_on:
-      - redis
-      - config-service
-    restart: unless-stopped
 
-  # Wake Word Service
-  wakeword-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-wakeword
-    command: python -m app.services.stt_wakeword
-    environment:
-      - AURORA_ENV=production
-      - AURORA_ARCHITECTURE_MODE=processes
-      - REDIS_URL=redis://redis:6379
-      - AURORA_LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./voice_models:/app/voice_models
-      - ./config.json:/app/config.json:ro
-    networks:
-      - aurora-network
-    depends_on:
-      - redis
-      - config-service
-      - audio-input-service
-    restart: unless-stopped
 
-  # Transcription Service
-  transcription-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-transcription
-    command: python -m app.services.stt_transcription
-    environment:
-      - AURORA_ENV=production
-      - AURORA_ARCHITECTURE_MODE=processes
-      - REDIS_URL=redis://redis:6379
-      - AURORA_LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./chat_models:/app/chat_models
-      - ./config.json:/app/config.json:ro
-    networks:
-      - aurora-network
-    depends_on:
-      - redis
-      - config-service
-      - audio-input-service
-    restart: unless-stopped
-
-  # STT Coordinator Service
+  # STT Coordinator Service (now includes audio capture)
   stt-coordinator-service:
     build:
       context: .
-      dockerfile: Dockerfile.process
+      dockerfile: docker/services/Dockerfile.stt-coordinator
     container_name: aurora-stt-coordinator
     command: python -m app.services.stt_coordinator
     environment:
@@ -250,43 +261,15 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./config.json:/app/config.json:ro
+    devices:
+      - /dev/snd:/dev/snd  # Audio devices (now needed for microphone access)
     networks:
       - aurora-network
     depends_on:
-      - redis
       - config-service
-      - wakeword-service
-      - transcription-service
-    restart: unless-stopped
-
-  # Orchestrator Service (starts last)
-  orchestrator-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.process
-    container_name: aurora-orchestrator
-    command: python -m app.services.orchestrator
-    environment:
-      - AURORA_ENV=production
-      - AURORA_ARCHITECTURE_MODE=processes
-      - REDIS_URL=redis://redis:6379
-      - AURORA_LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./chat_models:/app/chat_models
-      - ./config.json:/app/config.json:ro
-    networks:
-      - aurora-network
-    depends_on:
+      - stt-wakeword-service
+      - stt-transcription-service
       - redis
-      - config-service
-      - db-service
-      - tooling-service
-      - tts-service
-      - stt-coordinator-service
     restart: unless-stopped
 
 networks:

@@ -13,10 +13,10 @@ from typing import Any, Optional
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
 
+from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.helpers.aurora_logger import log_debug, log_error, log_info
 
 
 def get_embeddings():
@@ -24,7 +24,17 @@ def get_embeddings():
     use_local = config_api.get("general.embeddings.use_local", False)
 
     if use_local:
-        from langchain_huggingface import HuggingFaceEmbeddings
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+        except ImportError:
+            log_error(
+                "langchain-huggingface is required for local embeddings but not installed. "
+                "Install with: pip install -e .[service-db-local-embeddings] "
+                "Or build Docker image with: DB_EMBEDDINGS_MODE=local docker-compose build db-service"
+            )
+            raise ImportError(
+                "langchain-huggingface is required for local embeddings. " "Install with: pip install -e .[service-db-local-embeddings]"
+            )
 
         # Use local HuggingFace embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")

@@ -3,7 +3,7 @@
 Contains MCP client and discovery functionality.
 """
 
-from app.tooling.mcp.mcp_client import (
+from app.services.tooling.mcp.mcp_client import (
     MCPClientManager,
     get_mcp_tools,
     initialize_mcp,

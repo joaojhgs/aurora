@@ -107,7 +107,8 @@ runtime = [
     "duckduckgo-search==7.5.2",
     
     # Utilities
-    "halo==0.0.31",
+    # Note: halo removed (not used), tqdm/emoji/regex are transitive, Jinja2/MarkupSafe are transitive
+    # Keeping some for version pinning, but they're transitive dependencies
     "tqdm==4.67.1",
     "emoji==2.14.0",
     "regex==2024.11.6",
@@ -135,6 +136,143 @@ torch-cpu = [
 ]
 
 # Note: runtime-no-torch section removed - 'runtime' no longer includes torch by default
+
+# ============================================================================
+# SERVICE-SPECIFIC DEPENDENCIES
+# ============================================================================
+# Dependencies for individual services (for process mode / Docker)
+# Install with: pip install -e .[service-{name}]
+
+service-config = [
+    # Only uses jsonschema (already in core dependencies)
+]
+
+service-db = [
+    "aiosqlite>=0.19.0",
+    "sqlite-vec",
+    "SQLAlchemy==2.0.38",
+    "langchain==0.3.25",
+    "langchain-community==0.3.24",
+    "langgraph==0.4.6",
+    # Note: langchain-huggingface moved to service-db-local-embeddings (only needed when use_local=true)
+    # Without local embeddings, DB service is ~500MB. With local embeddings, it's ~8GB due to torch/transformers.
+]
+
+# Optional: Local embeddings for DB service (only needed when general.embeddings.use_local=true)
+# This pulls in heavy ML dependencies (torch, transformers, sentence-transformers) - ~7GB
+# Install with: pip install -e .[service-db,service-db-local-embeddings]
+service-db-local-embeddings = [
+    "langchain-huggingface==0.2.0",
+    # These are transitive dependencies but listed for clarity:
+    # - sentence-transformers (requires torch, transformers, tokenizers, huggingface-hub)
+    # - torch, torchaudio, torchvision (huge - several GB)
+]
+
+service-scheduler = [
+    "croniter==6.0.0",
+]
+
+service-tooling = [
+    "aiohttp==3.11.12",
+    "langchain-community==0.3.24",
+    "langchain-core==0.3.62",
+    "langchain-google-community==2.0.7",
+    "langchain-mcp-adapters>=0.1.8",
+    "langgraph==0.4.6",
+]
+
+
+
+service-stt-wakeword = [
+    "openwakeword==0.6.0",
+    "pvporcupine==1.9.5",
+    "numpy==1.26.4",
+    "scipy==1.15.1",
+    "onnxruntime==1.20.1",
+]
+
+service-stt-transcription = [
+    "faster-whisper==1.1.1",
+    "RealtimeSTT==0.3.94",
+    "webrtcvad-wheels==2.0.14",
+    "ctranslate2==4.5.0",
+    "numpy==1.26.4",
+]
+
+service-stt-coordinator = [
+    "PyAudio==0.2.14",  # Now includes audio capture
+]
+
+service-tts = [
+    "realtimetts==0.4.47",
+    "piper-tts==1.2.0",
+    "piper-phonemize==1.1.0",
+    "PyAudio==0.2.14",
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+    "onnxruntime==1.20.1",
+]
+
+service-orchestrator = [
+    "langchain-core==0.3.62",
+    "langchain-openai==0.3.18",  # Lightweight API client (default provider)
+    "langgraph==0.4.6",
+    "Jinja2==3.1.6",
+    "typing-extensions>=4.10.0",
+    # Note: langchain-huggingface moved to optional groups (only needed for HuggingFace providers)
+    # Note: llama-cpp moved to optional groups (only needed for llama.cpp provider)
+]
+
+# Optional: HuggingFace Endpoint (lightweight - API client only)
+# For provider: huggingface_endpoint
+service-orchestrator-huggingface-endpoint = [
+    "langchain-huggingface==0.2.0",  # Lightweight - just API client
+]
+
+# Optional: HuggingFace Pipeline (heavy - requires torch/transformers)
+# For provider: huggingface_pipeline
+# This pulls in heavy ML dependencies (torch, transformers, sentence-transformers) - ~7GB
+service-orchestrator-huggingface-local = [
+    "langchain-huggingface==0.2.0",
+    # These are transitive dependencies but listed for clarity:
+    # - sentence-transformers (requires torch, transformers, tokenizers, huggingface-hub)
+    # - torch, torchaudio, torchvision (huge - several GB)
+]
+
+# Optional: Llama.cpp CPU (for local llama.cpp models)
+# For provider: llama_cpp (CPU mode)
+service-orchestrator-llama-cpp = [
+    # Note: llama-cpp-python is installed separately by setup script
+    # This group is for documentation - actual installation handled by setup scripts
+    # Size: ~500MB-1GB
+]
+
+# Optional: Llama.cpp CUDA (for local llama.cpp models with GPU)
+# For provider: llama_cpp (CUDA mode)
+service-orchestrator-llama-cpp-cuda = [
+    # Note: llama-cpp-python[cuda] is installed separately by setup script
+    # This group is for documentation - actual installation handled by setup scripts
+    # Size: ~500MB-1GB
+]
+
+all-services = [
+    "aurora[service-config,service-db,service-scheduler,service-tooling,service-stt-wakeword,service-stt-transcription,service-stt-coordinator,service-tts,service-orchestrator]",
+]
+
+# ============================================================================
+# MODE-SPECIFIC DEPENDENCIES
+# ============================================================================
+# Dependencies for different architecture modes
+
+mode-threads = [
+    # No additional dependencies - uses asyncio (stdlib) for messaging
+]
+
+mode-processes = [
+    "bullmq>=1.7.0",
+    # Note: Redis is required as external service (not Python package)
+]
 
 # ============================================================================
 # APPROACH 2: Executable Building - PyInstaller Support

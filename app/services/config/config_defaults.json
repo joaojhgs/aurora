@@ -1,8 +1,5 @@
 {
     "general": {
-        "architecture": {
-            "mode": "threads"
-        },
         "llm": {
             "provider": "openai",
             "third_party": {
@@ -154,15 +151,5 @@
     "mcp": {
         "enabled": true,
         "servers": {}
-    },
-    "messaging": {
-        "redis": {
-            "url": "redis://localhost:6379"
-        },
-        "priorities": {
-            "interactive": 10,
-            "system": 50,
-            "external": 80
-        }
     }
 }

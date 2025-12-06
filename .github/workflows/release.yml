@@ -382,7 +382,148 @@ jobs:
           
           echo "🎉 AI summary generation completed"
 
-  # Job 4: Create release (independent of build success)
+  # Job 4: Build and push Docker images
+  docker-build:
+    name: 🐳 Build Docker Images
+    needs: [validate]
+    if: needs.validate.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Config Service
+          - service: config
+            dockerfile: docker/services/Dockerfile.config
+            variant: latest
+            build_args: ""
+          # DB Service
+          - service: db
+            dockerfile: docker/services/Dockerfile.db
+            variant: openai
+            build_args: DB_EMBEDDINGS_MODE=openai
+          - service: db
+            dockerfile: docker/services/Dockerfile.db
+            variant: local
+            build_args: DB_EMBEDDINGS_MODE=local
+          # Orchestrator Service
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: openai
+            build_args: ORCHESTRATOR_LLM_MODE=openai
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: huggingface-endpoint
+            build_args: ORCHESTRATOR_LLM_MODE=huggingface-endpoint
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: huggingface-local
+            build_args: ORCHESTRATOR_LLM_MODE=huggingface-local
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: llama-cpp-cpu
+            build_args: |
+              ORCHESTRATOR_LLM_MODE=llama-cpp
+              ORCHESTRATOR_HARDWARE=cpu
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: llama-cpp-cuda
+            build_args: |
+              ORCHESTRATOR_LLM_MODE=llama-cpp
+              ORCHESTRATOR_HARDWARE=cuda
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: llama-cpp-rocm
+            build_args: |
+              ORCHESTRATOR_LLM_MODE=llama-cpp
+              ORCHESTRATOR_HARDWARE=rocm
+          - service: orchestrator
+            dockerfile: docker/services/Dockerfile.orchestrator
+            variant: llama-cpp-metal
+            build_args: |
+              ORCHESTRATOR_LLM_MODE=llama-cpp
+              ORCHESTRATOR_HARDWARE=metal
+          # TTS Service
+          - service: tts
+            dockerfile: docker/services/Dockerfile.tts
+            variant: cpu
+            build_args: TTS_HARDWARE=cpu
+          - service: tts
+            dockerfile: docker/services/Dockerfile.tts
+            variant: cuda
+            build_args: TTS_HARDWARE=cuda
+          - service: tts
+            dockerfile: docker/services/Dockerfile.tts
+            variant: rocm
+            build_args: TTS_HARDWARE=rocm
+          - service: tts
+            dockerfile: docker/services/Dockerfile.tts
+            variant: metal
+            build_args: TTS_HARDWARE=metal
+          # STT Transcription Service
+          - service: stt-transcription
+            dockerfile: docker/services/Dockerfile.transcription
+            variant: cpu
+            build_args: STT_TRANSCRIPTION_HARDWARE=cpu
+          - service: stt-transcription
+            dockerfile: docker/services/Dockerfile.transcription
+            variant: cuda
+            build_args: STT_TRANSCRIPTION_HARDWARE=cuda
+          # STT Wakeword Service
+          - service: stt-wakeword
+            dockerfile: docker/services/Dockerfile.wakeword
+            variant: cpu
+            build_args: STT_WAKEWORD_HARDWARE=cpu
+          - service: stt-wakeword
+            dockerfile: docker/services/Dockerfile.wakeword
+            variant: cuda
+            build_args: STT_WAKEWORD_HARDWARE=cuda
+          # Other Services
+          - service: scheduler
+            dockerfile: docker/services/Dockerfile.scheduler
+            variant: latest
+            build_args: ""
+          - service: tooling
+            dockerfile: docker/services/Dockerfile.tooling
+            variant: latest
+            build_args: ""
+          - service: stt-audio-input
+            dockerfile: docker/services/Dockerfile.audio-input
+            variant: latest
+            build_args: ""
+          - service: stt-coordinator
+            dockerfile: docker/services/Dockerfile.stt-coordinator
+            variant: latest
+            build_args: ""
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 🏗️ Build and push Docker image
+        uses: docker/build-push-action@v5
+        id: build
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            docker.io/${{ secrets.DOCKER_NAMESPACE || 'aurora-ai' }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-${{ needs.validate.outputs.next_version }}
+            docker.io/${{ secrets.DOCKER_NAMESPACE || 'aurora-ai' }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-latest
+          build-args: |
+            ${{ matrix.build_args }}
+          cache-from: type=registry,ref=docker.io/${{ secrets.DOCKER_NAMESPACE || 'aurora-ai' }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-latest
+          cache-to: type=inline
+
+  # Job 5: Create release (independent of build success)
   release:
     name: 🎉 Create Release
     needs: [validate, generate-summary]
@@ -540,7 +681,7 @@ jobs:
             exit 1
           fi
 
-  # Job 5: Upload release artifacts (only if builds succeeded)
+  # Job 6: Upload release artifacts (only if builds succeeded)
   upload-artifacts:
     name: 📦 Upload Release Artifacts  
     needs: [validate, build, release]
@@ -597,10 +738,10 @@ jobs:
             echo "ℹ️ Windows executable not found - skipping"
           fi
 
-  # Job 6: Notify completion
+  # Job 7: Notify completion
   notify:
     name: 📢 Notify Completion
-    needs: [validate, build, generate-summary, release, upload-artifacts]
+    needs: [validate, build, generate-summary, release, upload-artifacts, docker-build]
     if: always() && needs.validate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -621,13 +762,21 @@ jobs:
           fi
           echo ""
           echo "### 🏗️ Build Status:"
-          echo "- **Build Job**: ${{ needs.build.result }}"
+          echo "- **Executable Build Job**: ${{ needs.build.result }}"
           if [ "${{ needs.build.result }}" = "success" ]; then
             echo "  ✅ Executable builds completed successfully"
           elif [ "${{ needs.build.result }}" = "failure" ]; then
             echo "  ⚠️ Executable builds failed (release still created)"
           else
             echo "  ℹ️ Build status: ${{ needs.build.result }}"
+          fi
+          echo "- **Docker Build Job**: ${{ needs.docker-build.result }}"
+          if [ "${{ needs.docker-build.result }}" = "success" ]; then
+            echo "  ✅ Docker images built and pushed successfully"
+          elif [ "${{ needs.docker-build.result }}" = "failure" ]; then
+            echo "  ⚠️ Docker builds failed (some images may not be available)"
+          else
+            echo "  ℹ️ Docker build status: ${{ needs.docker-build.result }}"
           fi
           echo ""
           echo "### 🤖 AI Summary Generated:"
@@ -644,6 +793,7 @@ jobs:
           echo "### Job Status:"
           echo "- **Validate**: ${{ needs.validate.result }}"
           echo "- **Build**: ${{ needs.build.result }}" 
+          echo "- **Docker Build**: ${{ needs.docker-build.result }}"
           echo "- **Generate Summary**: ${{ needs.generate-summary.result }}"
           echo "- **Release**: ${{ needs.release.result }}"
           echo "- **Upload Artifacts**: ${{ needs.upload-artifacts.result }}"

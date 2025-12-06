@@ -10,59 +10,25 @@ This service:
 from __future__ import annotations
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import Command, Envelope, Event, MessageBus, SchedulerTopics
+from app.messaging import Envelope
 from app.messaging.priority_helpers import get_system_priority
 from app.services.scheduler.cron_service import get_cron_service
+from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.scheduler import (
+    SchedulerCancelJobRequest,
+    SchedulerJobCompletedEvent,
+    SchedulerJobFiredEvent,
+    SchedulerMethods,
+    SchedulerModule,
+    SchedulerPauseJobRequest,
+    SchedulerResumeJobRequest,
+    SchedulerScheduleJobRequest,
+)
+from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
 # Global scheduler service instance for callback access
 _scheduler_service_instance: SchedulerService | None = None
-
-
-# Message definitions
-class ScheduleJob(Command):
-    """Command to schedule a job."""
-
-    name: str
-    schedule: str  # Cron expression
-    action: str
-    enabled: bool = True
-
-
-class CancelJob(Command):
-    """Command to cancel a scheduled job."""
-
-    job_id: int
-
-
-class PauseJob(Command):
-    """Command to pause a scheduled job."""
-
-    job_id: int
-
-
-class ResumeJob(Command):
-    """Command to resume a paused job."""
-
-    job_id: int
-
-
-class SchedulerJobFired(Event):
-    """Event emitted when a scheduled job fires."""
-
-    job_id: str
-    job_name: str
-    action: str
-    scheduled_time: str
-
-
-class SchedulerJobCompleted(Event):
-    """Event emitted when a scheduled job completes."""
-
-    job_id: str
-    job_name: str
-    success: bool
-    error: str | None = None
 
 
 # Service implementation
@@ -79,48 +45,52 @@ class SchedulerService(BaseService):
     def __init__(self):
         """Initialize scheduler service with CronService."""
         global _scheduler_service_instance
-        super().__init__("SchedulerService")
+        super().__init__(module=SchedulerModule.NAME, summary="Manages scheduled jobs and timers", capabilities=["cron_scheduling", "job_execution"])
         # Pass bus to cron service so it can inject it into callbacks
         self.cron_service = get_cron_service(bus=self.bus)
         self._jobs: dict = {}
         # Store instance globally for callback access
         _scheduler_service_instance = self
 
-    async def start(self) -> None:
-        """Start the scheduler service and subscribe to commands."""
+    async def on_start(self) -> None:
+        """Start the scheduler service."""
         log_info("Starting Scheduler service...")
 
         # Initialize cron service (this will start the scheduler loop in the main event loop)
         await self.cron_service.initialize()
 
-        # Subscribe to commands using typed topics
-        self.bus.subscribe(SchedulerTopics.SCHEDULE_JOB, self._on_schedule)
-        self.bus.subscribe(SchedulerTopics.CANCEL_JOB, self._on_cancel)
-        self.bus.subscribe(SchedulerTopics.PAUSE_JOB, self._on_pause)
-        self.bus.subscribe(SchedulerTopics.RESUME_JOB, self._on_resume)
-
-        self._set_started(True)
-        log_info("Scheduler service started")
-
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """Stop the scheduler service."""
         log_info("Stopping Scheduler service...")
 
-        # Stop all running jobs via CronService
-        if self.cron_service:
-            await self.cron_service.shutdown()
-            log_debug("All scheduled jobs stopped")
+        # Stop cron service
+        await self.cron_service.shutdown()
 
         log_info("Scheduler service stopped")
 
-    async def _on_schedule(self, env: Envelope) -> None:
-        """Handle schedule job command.
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
 
         Args:
-            env: Message envelope containing ScheduleJob command
+            config_section: The configuration section that changed (None = full reload)
         """
+        log_info(f"Reloading Scheduler service configuration (section: {config_section})")
+
+        # For scheduler service, most config changes don't require action
+        # Schedule changes would require reloading jobs, but that's handled by commands
+        # Just log the reload event
+        log_debug(f"Scheduler service reloaded for section: {config_section}")
+
+    @method_contract(
+        method_id=SchedulerMethods.SCHEDULE,
+        summary="Schedule a new job",
+        input_model=SchedulerScheduleJobRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def schedule_job(self, cmd: SchedulerScheduleJobRequest) -> EmptyOutput:
+        """Handle schedule job command."""
         try:
-            cmd = ScheduleJob.model_validate(env.payload)
             log_info(f"Scheduling job: {cmd.name} ({cmd.schedule})")
 
             # Schedule using CronService with a proper callback function
@@ -141,11 +111,11 @@ class SchedulerService(BaseService):
                 log_debug(f"Job '{cmd.name}' scheduled successfully with ID: {job_id}")
 
                 # Store in database via DBService
-                from app.db.service import StoreCronJob
-                from app.messaging import DBTopics
+                from app.shared.contracts.models.db import DBMethods
+                from app.shared.messaging.models.db_models import StoreCronJob
 
                 await self.bus.publish(
-                    DBTopics.STORE_CRON_JOB,
+                    DBMethods.SAVE_CRON_JOB,
                     StoreCronJob(name=cmd.name, schedule=cmd.schedule, action=cmd.action, enabled=cmd.enabled),
                     event=False,  # Command
                     origin="internal",
@@ -153,17 +123,22 @@ class SchedulerService(BaseService):
             else:
                 log_warning(f"Failed to schedule job '{cmd.name}'")
 
+            return EmptyOutput()
+
         except Exception as e:
             log_error(f"Error scheduling job: {e}", exc_info=True)
+            return EmptyOutput()
 
-    async def _on_cancel(self, env: Envelope) -> None:
-        """Handle cancel job command.
-
-        Args:
-            env: Message envelope containing CancelJob command
-        """
+    @method_contract(
+        method_id=SchedulerMethods.CANCEL,
+        summary="Cancel a scheduled job",
+        input_model=SchedulerCancelJobRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def cancel_job(self, cmd: SchedulerCancelJobRequest) -> EmptyOutput:
+        """Handle cancel job command."""
         try:
-            cmd = CancelJob.model_validate(env.payload)
             log_info(f"Canceling job: {cmd.job_id}")
 
             # Cancel job via CronService
@@ -176,24 +151,29 @@ class SchedulerService(BaseService):
                 log_debug(f"Job {cmd.job_id} canceled successfully")
 
                 # Delete from database
-                from app.db.service import DeleteCronJob
-                from app.messaging import DBTopics
+                from app.shared.contracts.models.db import DBMethods
+                from app.shared.messaging.models.db_models import DeleteCronJob
 
-                await self.bus.publish(DBTopics.DELETE_CRON_JOB, DeleteCronJob(job_id=cmd.job_id), event=False, origin="internal")  # Command
+                await self.bus.publish(DBMethods.DELETE_CRON_JOB, DeleteCronJob(job_id=cmd.job_id), event=False, origin="internal")  # Command
             else:
                 log_warning(f"Failed to cancel job {cmd.job_id}")
 
+            return EmptyOutput()
+
         except Exception as e:
             log_error(f"Error canceling job: {e}", exc_info=True)
+            return EmptyOutput()
 
-    async def _on_pause(self, env: Envelope) -> None:
-        """Handle pause job command.
-
-        Args:
-            env: Message envelope containing PauseJob command
-        """
+    @method_contract(
+        method_id=SchedulerMethods.PAUSE,
+        summary="Pause a scheduled job",
+        input_model=SchedulerPauseJobRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def pause_job(self, cmd: SchedulerPauseJobRequest) -> EmptyOutput:
+        """Handle pause job command."""
         try:
-            cmd = PauseJob.model_validate(env.payload)
             log_info(f"Pausing job: {cmd.job_id}")
 
             # Pause job via CronService
@@ -205,17 +185,22 @@ class SchedulerService(BaseService):
             else:
                 log_warning(f"Failed to pause job {cmd.job_id}")
 
+            return EmptyOutput()
+
         except Exception as e:
             log_error(f"Error pausing job: {e}", exc_info=True)
+            return EmptyOutput()
 
-    async def _on_resume(self, env: Envelope) -> None:
-        """Handle resume job command.
-
-        Args:
-            env: Message envelope containing ResumeJob command
-        """
+    @method_contract(
+        method_id=SchedulerMethods.RESUME,
+        summary="Resume a paused job",
+        input_model=SchedulerResumeJobRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def resume_job(self, cmd: SchedulerResumeJobRequest) -> EmptyOutput:
+        """Handle resume job command."""
         try:
-            cmd = ResumeJob.model_validate(env.payload)
             log_info(f"Resuming job: {cmd.job_id}")
 
             # Resume job via CronService (unpause)
@@ -251,8 +236,11 @@ class SchedulerService(BaseService):
             else:
                 log_warning(f"Job {cmd.job_id} not found in tracking")
 
+            return EmptyOutput()
+
         except Exception as e:
             log_error(f"Error resuming job: {e}", exc_info=True)
+            return EmptyOutput()
 
     async def fire_job(self, job_id: str, job_name: str, action: str) -> None:
         """Fire a scheduled job.
@@ -271,8 +259,8 @@ class SchedulerService(BaseService):
 
             # Emit job fired event
             await self.bus.publish(
-                SchedulerTopics.JOB_FIRED,
-                SchedulerJobFired(
+                SchedulerMethods.JOB_FIRED,
+                SchedulerJobFiredEvent(
                     job_id=job_id,
                     job_name=job_name,
                     action=action,
@@ -298,17 +286,17 @@ class SchedulerService(BaseService):
                     if service == "tts" and command.startswith("speak:"):
                         # TTS speak command
                         text = command[6:]  # Remove "speak:" prefix
-                        from app.messaging import TTSTopics
-                        from app.tts import TTSRequest
+                        from app.shared.contracts.models.tts import TTSMethods
+                        from app.shared.messaging.models.tts_models import TTSRequest
 
-                        await self.bus.publish(TTSTopics.REQUEST, TTSRequest(text=text, interrupt=False), event=False, origin="system")
+                        await self.bus.publish(TTSMethods.REQUEST, TTSRequest(text=text, interrupt=False), event=False, origin="system")
                     elif service == "orchestrator":
                         # Send to orchestrator as user input
-                        from app.messaging import OrchestratorTopics
-                        from app.orchestrator.service import UserInput
+                        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+                        from app.shared.messaging.models.orchestrator_models import UserInput
 
                         await self.bus.publish(
-                            OrchestratorTopics.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="system"
+                            OrchestratorMethods.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="system"
                         )
                     else:
                         log_warning(f"Unknown action service: {service}")
@@ -323,8 +311,8 @@ class SchedulerService(BaseService):
 
             # Emit completion event
             await self.bus.publish(
-                SchedulerTopics.JOB_COMPLETED,
-                SchedulerJobCompleted(
+                SchedulerMethods.JOB_COMPLETED,
+                SchedulerJobCompletedEvent(
                     job_id=job_id,
                     job_name=job_name,
                     success=True,
@@ -338,8 +326,8 @@ class SchedulerService(BaseService):
 
             # Emit failure event
             await self.bus.publish(
-                SchedulerTopics.JOB_COMPLETED,
-                SchedulerJobCompleted(
+                SchedulerMethods.JOB_COMPLETED,
+                SchedulerJobCompletedEvent(
                     job_id=job_id,
                     job_name=job_name,
                     success=False,

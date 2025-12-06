@@ -16,9 +16,9 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.registry import all_contracts
 
 from .bus import Envelope, Handler, QueryResult
-from .event_registry import get_event_registry
 
 
 class LocalBus:
@@ -100,14 +100,11 @@ class LocalBus:
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
         """
-        # Validate topic if enabled
-        if self._validate_topics:
-            try:
-                registry = get_event_registry()
-                registry.validate_subscribe(topic)
-            except ValueError as e:
-                log_error(f"Topic validation failed for subscription: {e}")
-                raise
+        # Note: Subscriptions are always allowed for events.
+        # Events don't need to be registered as contracts - they're published and subscribed to.
+        # Only callable methods (queries/commands) need @method_contract decorators.
+        # We don't validate subscriptions because services may subscribe to events
+        # that are published by other services without contracts.
 
         self._subs[topic].append(handler)
         log_debug(f"Subscribed handler to topic: {topic}")
@@ -271,14 +268,16 @@ class LocalBus:
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
         """
-        # Validate topic if enabled (skip validation for reply topics)
-        if self._validate_topics and not topic.startswith("reply."):
-            try:
-                registry = get_event_registry()
-                registry.validate_publish(topic)
-            except ValueError as e:
-                log_error(f"Topic validation failed for publish: {e}")
-                raise
+        # Validate topic if enabled (skip dynamic reply topics)
+        # Only validate commands/queries (event=False) - events don't need contracts
+        if self._validate_topics and not topic.startswith("reply.") and not event:
+            # Commands/queries must be registered as contracts
+            contracts = all_contracts()
+            if not any(topic == (c.bus_topic or c.name) for c in contracts.values()):
+                available_topics = [c.bus_topic or c.name for c in contracts.values()][:10]
+                error_msg = f"Topic '{topic}' is not registered in the contract registry.\n  Available topics: {', '.join(available_topics)}"
+                log_error(error_msg)
+                raise ValueError(error_msg)
 
         env = Envelope(
             type=topic,

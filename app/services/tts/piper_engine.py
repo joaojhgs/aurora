@@ -8,11 +8,7 @@ from typing import Optional
 import pyaudio
 from RealtimeTTS import BaseEngine
 
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
-from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 
 
 # This is a custom PiperEngine class definition to override the default
@@ -50,6 +46,7 @@ class PiperEngine(BaseEngine):
         piper_path: Optional[str] = None,
         voice: Optional[PiperVoice] = None,
         debug: bool = False,
+        sample_rate: Optional[int] = None,
     ):
         """
         Initializes the Piper text-to-speech engine.
@@ -59,17 +56,37 @@ class PiperEngine(BaseEngine):
                                         If not provided, checks the PIPER_PATH environment variable.
                                         If that's not set, defaults to 'piper.exe'.
             voice (Optional[PiperVoice]): A PiperVoice instance with the model and optional config.
+            debug (bool): Enable debug logging.
+            sample_rate (Optional[int]): Sample rate for audio stream. If None, will be loaded from config.
         """
-        # If piper_path is None, check config manager or default to 'piper.exe'.
+        # If piper_path is None, check environment variable or default to 'piper'.
         if piper_path is None:
-            config_path = config_api.get("general.text_to_speech.piper_path", "")
-            self.piper_path = config_path if config_path else "piper.exe"
+            import os
+
+            env_path = os.getenv("AURORA_PIPER_PATH")
+            self.piper_path = env_path if env_path else "piper"
         else:
             self.piper_path = piper_path
 
         self.voice = voice
         self.debug = debug
         self.queue = Queue()
+
+        # Cache sample rate to avoid repeated config requests during playback
+        if sample_rate is None:
+            import os
+
+            # Use environment variable or default
+            env_rate = os.getenv("AURORA_TTS_SAMPLE_RATE")
+            self._sample_rate = int(env_rate) if env_rate else 24000
+        else:
+            self._sample_rate = sample_rate
+
+        # Cache hardware acceleration setting using environment variables (no config requests)
+        from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
+
+        self._use_cuda = getUseHardwareAcceleration("tts")
+
         self.post_init()
 
     def post_init(self):
@@ -85,7 +102,7 @@ class PiperEngine(BaseEngine):
         return (
             pyaudio.paInt16,
             1,
-            int(config_api.get("general.text_to_speech.model_sample_rate", 24000)),
+            self._sample_rate,
         )
 
     def synthesize(self, text: str) -> bool:
@@ -108,14 +125,26 @@ class PiperEngine(BaseEngine):
 
         # Build the argument list for Piper (no shell piping).
         # If piper_path is on the PATH, you can use just "piper". Otherwise, use the full path.
-        cmd_list = [self.piper_path, "-m", self.voice.model_file, "-f", output_wav_path]
+        # Use absolute path for model file to avoid Piper's voice name validation
+        model_file_abs = os.path.abspath(self.voice.model_file) if not os.path.isabs(self.voice.model_file) else self.voice.model_file
+
+        # Verify model file exists before calling Piper
+        if not os.path.exists(model_file_abs):
+            log_error(f"Piper model file not found: {model_file_abs}")
+            return False
+
+        cmd_list = [self.piper_path, "-m", model_file_abs, "-f", output_wav_path]
 
         # If a JSON config file is available, add it.
         if self.voice.config_file:
-            cmd_list.extend(["-c", self.voice.config_file])
+            config_file_abs = os.path.abspath(self.voice.config_file) if not os.path.isabs(self.voice.config_file) else self.voice.config_file
+            if not os.path.exists(config_file_abs):
+                log_warning(f"Piper config file not found: {config_file_abs}, continuing without it")
+            else:
+                cmd_list.extend(["-c", config_file_abs])
 
-        # If CUDA is set for TTS
-        if getUseHardwareAcceleration("tts"):
+        # If CUDA is set for TTS (use cached value to avoid config requests)
+        if self._use_cuda == "cuda":
             cmd_list.extend(["--cuda"])
 
         # Debug: show the exact command (helpful for troubleshooting)
@@ -135,11 +164,7 @@ class PiperEngine(BaseEngine):
             # Open the synthesized WAV file and (optionally) validate audio properties.
             with wave.open(output_wav_path, "rb") as wf:
                 # If you require specific WAV properties, check them:
-                if (
-                    wf.getnchannels() != 1
-                    or wf.getframerate() != int(config_api.get("general.text_to_speech.model_sample_rate", 24000))
-                    or wf.getsampwidth() != 2
-                ):
+                if wf.getnchannels() != 1 or wf.getframerate() != self._sample_rate or wf.getsampwidth() != 2:
                     log_warning(
                         f"Unexpected WAV properties: " f"Channels={wf.getnchannels()}, " f"Rate={wf.getframerate()}, " f"Width={wf.getsampwidth()}"
                     )

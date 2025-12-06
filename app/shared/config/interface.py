@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.helpers.aurora_logger import log_error
-from app.messaging.service_topics import ConfigTopics
+from app.helpers.aurora_logger import log_debug, log_error
 from app.services.config.messages import (
     GetConfigQuery,
     GetPluginStatusQuery,
@@ -17,6 +16,7 @@ from app.services.config.messages import (
     UpdatePluginStatusCommand,
     ValidateConfigQuery,
 )
+from app.shared.contracts.models.config import ConfigMethods
 from app.shared.messaging.bus_init import get_bus_singleton
 
 
@@ -24,12 +24,33 @@ class ConfigAPI:
     """API for runtime configuration changes via message bus."""
 
     def __init__(self):
-        """Initialize ConfigAPI."""
+        """Initialize ConfigAPI.
+
+        Note: Bus access is lazy - it won't be accessed until first use.
+        This allows ConfigAPI to be instantiated before ConfigService is ready.
+        """
         self._bus = None
+        self._bus_initialized = False
 
     @property
     def bus(self):
-        """Get the message bus instance (lazy initialization)."""
+        """Get the message bus instance (lazy initialization).
+
+        This property is only accessed when actually making config requests,
+        ensuring ConfigService is ready before we try to use the bus.
+        """
+        if self._bus is None and not self._bus_initialized:
+            try:
+                self._bus = get_bus_singleton()
+                self._bus_initialized = True
+            except RuntimeError:
+                # Bus not ready yet - this is OK, we'll try again on first use
+                self._bus_initialized = True
+                return None
+        return self._bus
+
+    def _ensure_bus(self):
+        """Ensure bus is available, retrying if needed."""
         if self._bus is None:
             try:
                 self._bus = get_bus_singleton()
@@ -37,11 +58,15 @@ class ConfigAPI:
                 # Fallback: try to initialize bus
                 from app.shared.messaging.bus_init import initialize_bus_for_service
 
-                self._bus = initialize_bus_for_service("ConfigAPI")
-        return self._bus
+                try:
+                    self._bus = initialize_bus_for_service("ConfigAPI")
+                except Exception:
+                    # Bus still not available
+                    return False
+        return self._bus is not None
 
     def get_config(self, section: str = None) -> dict[str, Any]:
-        """Get entire config or specific section.
+        """Get entire config or specific section (sync version).
 
         Args:
             section: Optional section name to get
@@ -49,11 +74,28 @@ class ConfigAPI:
         Returns:
             Configuration dictionary
         """
+        # Ensure bus is available
+        if not self._ensure_bus():
+            log_error("Bus not available for config request. ConfigService may not be ready yet.")
+            return {}
+
         try:
             import asyncio
 
             query = GetConfigQuery(section=section)
-            result = asyncio.run(self.bus.request(ConfigTopics.GET_CONFIG, query, timeout=5.0))
+
+            # Check if we're already in an async context
+            try:
+                asyncio.get_running_loop()
+                # If we're in an async context, we can't use asyncio.run()
+                # We also can't use run_coroutine_threadsafe from the same thread
+                # Best we can do is return empty dict and log warning
+                # Callers should use aget_config() instead
+                log_error("get_config() called from async context. Use aget_config() or await bus.request() directly.")
+                return {}
+            except RuntimeError:
+                # No running loop, safe to use asyncio.run()
+                result = asyncio.run(self.bus.request(ConfigMethods.GET, query, timeout=5.0))
 
             if result.ok and result.data:
                 # Extract config from response
@@ -70,10 +112,49 @@ class ConfigAPI:
             log_error(f"Error getting config: {e}")
             return {}
 
+    async def aget_config(self, section: str = None) -> dict[str, Any]:
+        """Get entire config or specific section (async version).
+
+        Args:
+            section: Optional section name to get
+
+        Returns:
+            Configuration dictionary
+        """
+        # Ensure bus is available
+        if not self._ensure_bus():
+            log_error("Bus not available for config request. ConfigService may not be ready yet.")
+            return {}
+
+        try:
+            query = GetConfigQuery(section=section)
+            result = await self.bus.request(ConfigMethods.GET, query, timeout=5.0)
+
+            if result.ok and result.data:
+                # Extract config from response
+                if hasattr(result.data, "config"):
+                    return result.data.config
+                # Check if result.data is a dict with a 'config' key (wrapped response)
+                if isinstance(result.data, dict) and "config" in result.data:
+                    return result.data["config"]
+                return result.data
+            else:
+                log_error(f"Error getting config: {result.error}")
+                return {}
+        except RuntimeError as e:
+            log_error(f"Bus not initialized: {e}")
+            return {}
+        except Exception as e:
+            log_error(f"Error getting config: {e}")
+            return {}
+
     def get(self, key_path: str, default: Any = None) -> Any:
         """Get configuration value using dot notation (e.g., 'ui.activate').
 
         This method provides backward compatibility with config_manager.get().
+
+        OPTIMIZATION: Instead of requesting full config, request only the needed section
+        to avoid flooding the bus with full config requests.
 
         Args:
             key_path: Configuration key path (e.g., 'llm.provider')
@@ -82,14 +163,32 @@ class ConfigAPI:
         Returns:
             Configuration value or default
         """
+        import inspect
+        import os
+
         try:
-            # Get the full config
-            config = self.get_config()
-            
-            # Navigate to the value using dot notation
+            # Extract section from key_path to optimize request (e.g., 'llm.provider' -> 'llm')
             keys = key_path.split(".")
+            section = keys[0] if keys else None
+
+            # Debug: Log caller for repeated calls
+            stack = inspect.stack()
+            if len(stack) > 1:
+                caller_frame = stack[1]
+                caller_file = os.path.relpath(caller_frame.filename) if "aurora" in caller_frame.filename else caller_frame.filename
+                caller_line = caller_frame.lineno
+                caller_func = caller_frame.function
+                log_debug(f"ConfigAPI.get('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()")
+
+            # Request only the needed section instead of full config
+            if section:
+                config = self.get_config(section=section)
+            else:
+                config = self.get_config()
+
+            # Navigate to the value using dot notation
             value = config
-            
+
             for k in keys:
                 if isinstance(value, dict):
                     value = value.get(k)
@@ -97,7 +196,59 @@ class ConfigAPI:
                         return default
                 else:
                     return default
-            
+
+            return value if value is not None else default
+        except Exception as e:
+            log_error(f"Error getting config value: {e}")
+            return default
+
+    async def aget(self, key_path: str, default: Any = None) -> Any:
+        """Get configuration value using dot notation (async version).
+
+        OPTIMIZATION: Instead of requesting full config, request only the needed section
+        to avoid flooding the bus with full config requests.
+
+        Args:
+            key_path: Configuration key path (e.g., 'llm.provider')
+            default: Default value if key not found
+
+        Returns:
+            Configuration value or default
+        """
+        import inspect
+        import os
+
+        try:
+            # Extract section from key_path to optimize request (e.g., 'llm.provider' -> 'llm')
+            keys = key_path.split(".")
+            section = keys[0] if keys else None
+
+            # Debug: Log caller for repeated calls
+            stack = inspect.stack()
+            if len(stack) > 1:
+                caller_frame = stack[1]
+                caller_file = os.path.relpath(caller_frame.filename) if "aurora" in caller_frame.filename else caller_frame.filename
+                caller_line = caller_frame.lineno
+                caller_func = caller_frame.function
+                log_debug(f"ConfigAPI.aget('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()")
+
+            # Request only the needed section instead of full config
+            if section:
+                config = await self.aget_config(section=section)
+            else:
+                config = await self.aget_config()
+
+            # Navigate to the value using dot notation
+            value = config
+
+            for k in keys:
+                if isinstance(value, dict):
+                    value = value.get(k)
+                    if value is None:
+                        return default
+                else:
+                    return default
+
             return value if value is not None else default
         except Exception as e:
             log_error(f"Error getting config value: {e}")
@@ -139,7 +290,7 @@ class ConfigAPI:
             import asyncio
 
             command = UpdateConfigCommand(key_path=key_path, value=value)
-            result = asyncio.run(self.bus.request(ConfigTopics.UPDATE_CONFIG, command, timeout=5.0))
+            result = asyncio.run(self.bus.request(ConfigMethods.SET, command, timeout=5.0))
 
             if result.ok and result.data:
                 if hasattr(result.data, "success"):
@@ -169,7 +320,7 @@ class ConfigAPI:
             import asyncio
 
             command = UpdatePluginStatusCommand(plugin_name=plugin_name, active=active)
-            result = asyncio.run(self.bus.request(ConfigTopics.UPDATE_PLUGIN_STATUS, command, timeout=5.0))
+            result = asyncio.run(self.bus.request(ConfigMethods.SET_PLUGIN, command, timeout=5.0))
 
             if result.ok and result.data:
                 if hasattr(result.data, "success"):
@@ -198,7 +349,7 @@ class ConfigAPI:
             import asyncio
 
             query = GetPluginStatusQuery(plugin_name=plugin_name)
-            result = asyncio.run(self.bus.request(ConfigTopics.GET_PLUGIN_STATUS, query, timeout=5.0))
+            result = asyncio.run(self.bus.request(ConfigMethods.GET_PLUGIN, query, timeout=5.0))
 
             if result.ok and result.data:
                 if hasattr(result.data, "active"):
@@ -224,7 +375,7 @@ class ConfigAPI:
             import asyncio
 
             query = ValidateConfigQuery()
-            result = asyncio.run(self.bus.request(ConfigTopics.VALIDATE_CONFIG, query, timeout=5.0))
+            result = asyncio.run(self.bus.request(ConfigMethods.VALIDATE, query, timeout=5.0))
 
             if result.ok and result.data:
                 if hasattr(result.data, "errors"):
@@ -270,7 +421,7 @@ class ConfigAPI:
                     getattr(payload, "new_value", None),
                 )
 
-            self.bus.subscribe(ConfigTopics.CHANGED, on_config_changed)
+            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
         except Exception as e:
             log_error(f"Error adding config observer: {e}")
 
@@ -292,10 +443,10 @@ class ConfigAPI:
             Dictionary containing MCP status
         """
         try:
-            from app.messaging import ToolingTopics
+            from app.shared.contracts.models.tooling import ToolingMethods
 
             result = await self.bus.request(
-                ToolingTopics.GET_MCP_STATUS,
+                ToolingMethods.GET_MCP_STATUS,
                 {},
                 timeout=5.0,
             )
@@ -317,11 +468,11 @@ class ConfigAPI:
             Dictionary containing reload result
         """
         try:
-            from app.messaging import ToolingTopics
+            from app.shared.contracts.models.tooling import ToolingMethods
             from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
-                ToolingTopics.RELOAD_MCP_TOOLS,
+                ToolingMethods.RELOAD_MCP_TOOLS,
                 ReloadMCPToolsCommand(),
                 event=False,
             )
@@ -349,11 +500,11 @@ class ConfigAPI:
                 return {"success": False, "error": "Failed to update config"}
 
             # Reload servers via bus
-            from app.messaging import ToolingTopics
+            from app.shared.contracts.models.tooling import ToolingMethods
             from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
-                ToolingTopics.RELOAD_MCP_TOOLS,
+                ToolingMethods.RELOAD_MCP_TOOLS,
                 ReloadMCPToolsCommand(),
                 event=False,
             )
@@ -432,11 +583,11 @@ class ConfigAPI:
                 return {"success": False, "error": "Failed to update config"}
 
             # Reload servers via bus
-            from app.messaging import ToolingTopics
+            from app.shared.contracts.models.tooling import ToolingMethods
             from app.shared.messaging.models.tooling_models import ReloadMCPToolsCommand
 
             await self.bus.publish(
-                ToolingTopics.RELOAD_MCP_TOOLS,
+                ToolingMethods.RELOAD_MCP_TOOLS,
                 ReloadMCPToolsCommand(),
                 event=False,
             )

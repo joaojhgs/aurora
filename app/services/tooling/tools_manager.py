@@ -9,11 +9,11 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging import MessageBus
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import MessageBus
 
 
 class ToolsManager:
@@ -113,7 +113,7 @@ class ToolsManager:
         log_info("Loading plugin tools...")
 
         # OpenRecall plugin
-        if config_api.get("plugins.openrecall.activate", False):
+        if await config_api.aget("plugins.openrecall.activate", False):
             try:
                 from app.services.tooling.tools.current_screen import current_screen_tool
 
@@ -123,7 +123,7 @@ class ToolsManager:
                 log_warning(f"Failed to load OpenRecall tools: {e}")
 
         # Jira plugin
-        if config_api.get("plugins.jira.activate", False):
+        if await config_api.aget("plugins.jira.activate", False):
             try:
                 from app.services.tooling.tools.jira_toolkit import jira_tools
 
@@ -133,7 +133,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Jira tools: {e}")
 
         # Slack plugin
-        if config_api.get("plugins.slack.activate", False):
+        if await config_api.aget("plugins.slack.activate", False):
             try:
                 from app.services.tooling.tools.slack_toolkit import slack_tools
 
@@ -143,7 +143,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Slack tools: {e}")
 
         # GitHub plugin
-        if config_api.get("plugins.github.activate", False):
+        if await config_api.aget("plugins.github.activate", False):
             try:
                 from app.services.tooling.tools.github_toolkit import github_tools
 
@@ -153,7 +153,7 @@ class ToolsManager:
                 log_warning(f"Failed to load GitHub tools: {e}")
 
         # Search tools (Brave or DuckDuckGo as fallback)
-        if config_api.get("plugins.brave_search.activate", False):
+        if await config_api.aget("plugins.brave_search.activate", False):
             try:
                 from app.services.tooling.tools.brave_search import search_brave_tool
 
@@ -172,7 +172,7 @@ class ToolsManager:
                 log_warning(f"Failed to load DuckDuckGo Search tool: {e}")
 
         # Gmail plugin
-        if config_api.get("plugins.gmail.activate", False):
+        if await config_api.aget("plugins.gmail.activate", False):
             try:
                 from app.services.tooling.tools.gmail_toolkit import gmail_tools
 
@@ -182,7 +182,7 @@ class ToolsManager:
                 log_warning(f"Failed to load Gmail tools: {e}")
 
         # GCalendar plugin
-        if config_api.get("plugins.gcalendar.activate", False):
+        if await config_api.aget("plugins.gcalendar.activate", False):
             try:
                 from app.services.tooling.tools.gcalendar_toolkit import gcalendar_tools
 
@@ -193,7 +193,7 @@ class ToolsManager:
 
     async def _load_mcp_tools(self) -> None:
         """Load MCP (Model Context Protocol) tools."""
-        if not config_api.get("mcp.enabled", True):
+        if not await config_api.aget("mcp.enabled", True):
             log_info("MCP is disabled in configuration")
             return
 
@@ -262,12 +262,16 @@ class ToolsManager:
                 log_debug(f"  - '{name}'")
 
             # Get existing tools from database via bus
-            from app.db.service import RAGDeleteCommand, RAGListQuery, RAGStoreCommand
-            from app.messaging import DBTopics
+            from app.shared.contracts.models.db import (
+                DBMethods,
+                DBRAGDeleteRequest,
+                DBRAGListRequest,
+                DBRAGStoreRequest,
+            )
 
             result = await self.bus.request(
-                DBTopics.RAG_LIST,
-                RAGListQuery(namespace=("tools",), limit=4000),
+                DBMethods.RAG_LIST,
+                DBRAGListRequest(namespace="tools", limit=4000),
                 timeout=5.0,
             )
 
@@ -291,8 +295,8 @@ class ToolsManager:
                     # Tool exists but description changed - update it
                     log_info(f"Updating tool '{name}' with new description")
                     await self.bus.publish(
-                        DBTopics.RAG_STORE,
-                        RAGStoreCommand(namespace=("tools",), key=name, value=tool_data, index=["name", "description"]),
+                        DBMethods.RAG_STORE,
+                        DBRAGStoreRequest(namespace="tools", key=name, value=tool_data, index=True),
                         event=False,
                     )
 
@@ -307,8 +311,8 @@ class ToolsManager:
             for name, tool_data in tools_to_add:
                 log_info(f"Adding new tool to database: {name}")
                 await self.bus.publish(
-                    DBTopics.RAG_STORE,
-                    RAGStoreCommand(namespace=("tools",), key=name, value=tool_data, index=["name", "description"]),
+                    DBMethods.RAG_STORE,
+                    DBRAGStoreRequest(namespace="tools", key=name, value=tool_data, index=True),
                     event=False,
                 )
 
@@ -316,8 +320,8 @@ class ToolsManager:
             for name in tools_to_remove:
                 log_info(f"Removing inactive tool from database: {name}")
                 await self.bus.publish(
-                    DBTopics.RAG_DELETE,
-                    RAGDeleteCommand(namespace=("tools",), key=name),
+                    DBMethods.RAG_DELETE,
+                    DBRAGDeleteRequest(namespace="tools", key=name),
                     event=False,
                 )
 

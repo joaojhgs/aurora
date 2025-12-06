@@ -14,21 +14,27 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import Envelope, MessageBus, ToolingTopics
-from app.messaging.priority_helpers import get_system_priority
+from app.messaging import Envelope, MessageBus
+from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
-
-
+from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.tooling import (
+    ToolingExecuteToolRequest,
+    ToolingExecuteToolResponse,
+    ToolingGetMCPStatusRequest,
+    ToolingGetMCPStatusResponse,
+    ToolingGetStatsRequest,
+    ToolingGetStatsResponse,
+    ToolingGetToolByNameRequest,
+    ToolingGetToolByNameResponse,
+    ToolingGetToolsRequest,
+    ToolingGetToolsResponse,
+    ToolingMethods,
+    ToolingModule,
+    ToolingReloadMCPRequest,
+)
+from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.tooling_models import (
-    ExecuteToolCommand,
-    ExecuteToolResponse,
-    GetMCPStatusQuery,
-    GetMCPStatusResponse,
-    GetToolByNameQuery,
-    GetToolStatsQuery,
-    GetToolsQuery,
-    GetToolsResponse,
-    ReloadMCPToolsCommand,
     ToolsInitialized,
     ToolsReloaded,
 )
@@ -48,27 +54,19 @@ class ToolingService(BaseService):
 
     def __init__(self):
         """Initialize tooling service."""
-        super().__init__("ToolingService")
+        super().__init__(
+            module=ToolingModule.NAME,
+            summary="Tool management and execution service",
+            capabilities=["tool_discovery", "tool_execution", "mcp_integration"],
+        )
         self.tools_manager = ToolsManager(self.bus)
 
-    async def start(self) -> None:
+    async def on_start(self) -> None:
         """Start the tooling service and initialize tools."""
-        if self._is_started():
-            log_warning("ToolingService already started")
-            return
-
         log_info("Starting Tooling service...")
 
         # Set as global instance
         set_tools_manager(self.tools_manager)
-
-        # Subscribe to commands and queries using typed topics
-        self.bus.subscribe(ToolingTopics.GET_TOOLS, self._on_get_tools)
-        self.bus.subscribe(ToolingTopics.GET_TOOL_BY_NAME, self._on_get_tool_by_name)
-        self.bus.subscribe(ToolingTopics.GET_STATS, self._on_get_stats)
-        self.bus.subscribe(ToolingTopics.GET_MCP_STATUS, self._on_get_mcp_status)
-        self.bus.subscribe(ToolingTopics.RELOAD_MCP_TOOLS, self._on_reload_mcp)
-        self.bus.subscribe(ToolingTopics.EXECUTE_TOOL, self._on_execute_tool)
 
         # Initialize tools
         log_info("Initializing tools...")
@@ -77,21 +75,18 @@ class ToolingService(BaseService):
         # Emit initialization event
         stats = self.tools_manager.get_stats()
         await self.bus.publish(
-            ToolingTopics.TOOLS_INITIALIZED,
+            ToolingMethods.TOOLS_INITIALIZED,
             ToolsInitialized(total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]),
             event=True,
             priority=get_system_priority(),
             origin="internal",
         )
 
-        self._set_started(True)
         log_info(f"Tooling service started with {stats['total_tools']} tools")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """Stop the tooling service."""
         log_info("Stopping Tooling service...")
-        self._set_started(False)
-        log_info("Tooling service stopped")
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -187,30 +182,37 @@ class ToolingService(BaseService):
         else:
             return {"type": "object", "properties": {}}
 
-    async def _on_get_tools(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.GET_TOOLS,
+        summary="Get available tools with optional RAG search",
+        input_model=ToolingGetToolsRequest,
+        output_model=ToolingGetToolsResponse,
+        exposure="both",
+    )
+    async def _on_get_tools(self, request: ToolingGetToolsRequest) -> ToolingGetToolsResponse:
         """Handle get tools query.
 
         Serializes tools to send through the bus (name, description, and argument descriptions only).
         The bus remains agnostic - it just transports the serialized data.
 
         Args:
-            env: Message envelope containing GetToolsQuery
+            request: Request containing optional search query and top_k limit
         """
         try:
-            query = GetToolsQuery.model_validate(env.payload)
-            log_debug(f"Getting tools with query: {query.query}")
+            log_debug(f"Getting tools with query: {request.query}")
 
             # Use RAG search via bus if query is provided
-            if query.query:
-                from app.db.service import RAGSearchQuery
-                from app.messaging import DBTopics
+            if request.query:
+                from app.shared.contracts.models.db import DBMethods
+                from app.shared.messaging.models.db_models import RAGSearchQuery
 
                 tools = []
                 try:
                     result = await self.bus.request(
-                        DBTopics.RAG_SEARCH,
-                        RAGSearchQuery(namespace=("tools",), query=query.query, limit=query.top_k),
+                        DBMethods.RAG_SEARCH,
+                        RAGSearchQuery(namespace="main.tools", query=request.query, limit=request.top_k),
                         timeout=5.0,
+                        priority=get_interactive_priority(),
                     )
                     names: list[str] = []
                     if result.ok and result.data and "items" in result.data:
@@ -228,10 +230,10 @@ class ToolingService(BaseService):
 
                 # Fallback to all tools if none found
                 if not tools:
-                    tools = self.tools_manager.get_tools(None, query.top_k)
+                    tools = self.tools_manager.get_tools(None, request.top_k)
             else:
                 # No query, return all tools
-                tools = self.tools_manager.get_tools(None, query.top_k)
+                tools = self.tools_manager.get_tools(None, request.top_k)
 
             # Serialize tools to send through bus (only name, description, and argument descriptions)
             serialized_tools = []
@@ -299,91 +301,106 @@ class ToolingService(BaseService):
                     log_warning(f"Failed to serialize tool {tool.name}: {tool_error}")
                     continue
 
-            # Send response
-            if env.reply_to:
-                response = GetToolsResponse(tools=serialized_tools, count=len(serialized_tools))
-                await self.bus.publish(env.reply_to, response, origin="internal", event=False, reliable=False)
+            # Return response
+            return ToolingGetToolsResponse(tools=serialized_tools, count=len(serialized_tools))
 
         except Exception as e:
             log_error(f"Error handling get tools query: {e}", exc_info=True)
-            if env.reply_to:
-                from app.messaging.bus import QueryResult
+            return ToolingGetToolsResponse(tools=[], count=0)
 
-                error_response = QueryResult(ok=False, error=str(e), data=None)
-                await self.bus.publish(env.reply_to, error_response, origin="internal", event=False, reliable=False)
-
-    async def _on_get_tool_by_name(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.GET_TOOL_BY_NAME,
+        summary="Get a specific tool by name",
+        input_model=ToolingGetToolByNameRequest,
+        output_model=ToolingGetToolByNameResponse,
+        exposure="both",
+    )
+    async def _on_get_tool_by_name(self, request: ToolingGetToolByNameRequest) -> ToolingGetToolByNameResponse:
         """Handle get tool by name query.
 
         Args:
-            env: Message envelope containing GetToolByNameQuery
+            request: Request containing tool name
         """
         try:
-            query = GetToolByNameQuery.model_validate(env.payload)
-            log_debug(f"Getting tool: {query.name}")
+            log_debug(f"Getting tool: {request.name}")
 
-            tool = self.tools_manager.get_tool_by_name(query.name)
+            tool = self.tools_manager.get_tool_by_name(request.name)
 
-            # Send response
-            if env.reply_to:
-                if tool:
-                    response = {"found": True, "name": tool.name, "description": getattr(tool, "description", "")}
-                else:
-                    response = {"found": False, "name": query.name}
-                await self.bus.publish(env.reply_to, response, origin="internal")
+            # Return response
+            if tool:
+                return ToolingGetToolByNameResponse(found=True, name=tool.name, description=getattr(tool, "description", ""))
+            else:
+                return ToolingGetToolByNameResponse(found=False, name=request.name)
 
         except Exception as e:
             log_error(f"Error handling get tool by name query: {e}", exc_info=True)
-            if env.reply_to:
-                await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
+            return ToolingGetToolByNameResponse(found=False, name=request.name)
 
-    async def _on_get_stats(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.GET_STATS,
+        summary="Get tooling statistics",
+        input_model=ToolingGetStatsRequest,
+        output_model=ToolingGetStatsResponse,
+        exposure="internal",
+    )
+    async def _on_get_stats(self, request: ToolingGetStatsRequest) -> ToolingGetStatsResponse:
         """Handle get stats query.
 
         Args:
-            env: Message envelope containing GetToolStatsQuery
+            request: Empty request
         """
         try:
             stats = self.tools_manager.get_stats()
             log_debug(f"Tool stats: {stats}")
 
-            # Send response
-            if env.reply_to:
-                await self.bus.publish(env.reply_to, stats, origin="internal")
+            # Return response
+            return ToolingGetStatsResponse(
+                total_tools=stats.get("total_tools", 0),
+                mcp_tools_loaded=stats.get("mcp_tools_loaded", 0),
+                core_tools=stats.get("core_tools"),
+                plugin_tools=stats.get("plugin_tools"),
+            )
 
         except Exception as e:
             log_error(f"Error handling get stats query: {e}", exc_info=True)
-            if env.reply_to:
-                await self.bus.publish(env.reply_to, {"error": str(e)}, origin="internal")
+            return ToolingGetStatsResponse(total_tools=0, mcp_tools_loaded=0)
 
-    async def _on_get_mcp_status(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.GET_MCP_STATUS,
+        summary="Get MCP server status",
+        input_model=ToolingGetMCPStatusRequest,
+        output_model=ToolingGetMCPStatusResponse,
+        exposure="internal",
+    )
+    async def _on_get_mcp_status(self, request: ToolingGetMCPStatusRequest) -> ToolingGetMCPStatusResponse:
         """Handle get MCP status query.
 
         Args:
-            env: Message envelope (no payload required)
+            request: Empty request
         """
         try:
             status = self.tools_manager.get_mcp_status()
             log_debug(f"MCP status: {status}")
 
-            # Send response
-            if env.reply_to:
-                response = GetMCPStatusResponse(**status)
-                await self.bus.publish(env.reply_to, response, origin="internal")
+            # Return response
+            return ToolingGetMCPStatusResponse(**status)
 
         except Exception as e:
             log_error(f"Error handling get MCP status query: {e}", exc_info=True)
-            if env.reply_to:
-                from app.messaging.bus import QueryResult
+            return ToolingGetMCPStatusResponse(servers=[], total_servers=0, active_servers=0)
 
-                error_response = QueryResult(ok=False, error=str(e), data=None)
-                await self.bus.publish(env.reply_to, error_response, origin="internal", event=False, reliable=False)
-
-    async def _on_reload_mcp(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.RELOAD_MCP_TOOLS,
+        summary="Reload MCP tools",
+        input_model=ToolingReloadMCPRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def _on_reload_mcp(self, request: ToolingReloadMCPRequest) -> EmptyOutput:
         """Handle reload MCP tools command.
 
         Args:
-            env: Message envelope containing ReloadMCPToolsCommand
+            request: Empty request
         """
         try:
             log_info("Reloading MCP tools...")
@@ -392,34 +409,46 @@ class ToolingService(BaseService):
             # Emit reloaded event
             stats = self.tools_manager.get_stats()
             await self.bus.publish(
-                "Tooling.Reloaded", ToolsReloaded(total_tools=stats["total_tools"]), event=True, priority=get_system_priority(), origin="internal"
+                ToolingMethods.TOOLS_RELOADED,
+                ToolsReloaded(total_tools=stats["total_tools"]),
+                event=True,
+                priority=get_system_priority(),
+                origin="internal",
             )
 
             log_info("MCP tools reloaded successfully")
+            return EmptyOutput()
 
         except Exception as e:
             log_error(f"Error reloading MCP tools: {e}", exc_info=True)
+            return EmptyOutput()
 
-    async def _on_execute_tool(self, env: Envelope) -> None:
+    @method_contract(
+        method_id=ToolingMethods.EXECUTE_TOOL,
+        summary="Execute a tool by name",
+        input_model=ToolingExecuteToolRequest,
+        output_model=ToolingExecuteToolResponse,
+        exposure="both",
+    )
+    async def _on_execute_tool(self, request: ToolingExecuteToolRequest) -> ToolingExecuteToolResponse:
         """Handle execute tool command.
 
         Args:
-            env: Message envelope containing ExecuteToolCommand
+            request: Request containing tool name and arguments
         """
         try:
-            command = ExecuteToolCommand.model_validate(env.payload)
-            log_debug(f"Executing tool: {command.tool_name} with args: {command.arguments}")
+            log_debug(f"Executing tool: {request.tool_name} with args: {request.arguments}")
 
             # Get the tool
-            tool = self.tools_manager.get_tool_by_name(command.tool_name)
+            tool = self.tools_manager.get_tool_by_name(request.tool_name)
             if not tool:
                 # Try to find similar tool names (case-insensitive, partial match)
                 all_tool_names = self.tools_manager.get_all_tool_names()
                 similar_tools = [
-                    name for name in all_tool_names if command.tool_name.lower() in name.lower() or name.lower() in command.tool_name.lower()
+                    name for name in all_tool_names if request.tool_name.lower() in name.lower() or name.lower() in request.tool_name.lower()
                 ]
 
-                error_msg = f"Tool not found: '{command.tool_name}'"
+                error_msg = f"Tool not found: '{request.tool_name}'"
                 if similar_tools:
                     error_msg += f". Similar tools found: {', '.join(similar_tools)}"
                 else:
@@ -431,36 +460,27 @@ class ToolingService(BaseService):
                 log_error(error_msg)
                 log_debug(f"Tool lookup contains: {list(self.tools_manager.tool_lookup.keys())}")
 
-                if env.reply_to:
-                    response = ExecuteToolResponse(ok=False, error=error_msg, data=None)
-                    await self.bus.publish(env.reply_to, response, origin="internal", event=False)
-                return
+                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
 
             # Execute the tool
             try:
                 # Always inject the bus into tool arguments
-                tool_args = command.arguments.copy()
+                tool_args = request.arguments.copy()
                 tool_args["bus"] = self.bus
 
                 # Execute the tool - LangChain will handle argument validation
                 # The bus parameter is injected at runtime and not in the schema
                 result = await tool.ainvoke(tool_args) if hasattr(tool, "ainvoke") else tool.invoke(tool_args)
-                log_debug(f"Tool {command.tool_name} executed successfully: {result}")
+                log_debug(f"Tool {request.tool_name} executed successfully: {result}")
 
-                # Send response
-                if env.reply_to:
-                    response = ExecuteToolResponse(ok=True, data=result, error=None)
-                    await self.bus.publish(env.reply_to, response, origin="internal", event=False)
+                # Return response
+                return ToolingExecuteToolResponse(ok=True, data=result, error=None)
 
             except Exception as tool_error:
                 error_msg = f"Tool execution failed: {str(tool_error)}"
                 log_error(error_msg, exc_info=True)
-                if env.reply_to:
-                    response = ExecuteToolResponse(ok=False, error=error_msg, data=None)
-                    await self.bus.publish(env.reply_to, response, origin="internal", event=False)
+                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
 
         except Exception as e:
             log_error(f"Error handling execute tool command: {e}", exc_info=True)
-            if env.reply_to:
-                response = ExecuteToolResponse(ok=False, error=str(e), data=None)
-                await self.bus.publish(env.reply_to, response, origin="internal", event=False)
+            return ToolingExecuteToolResponse(ok=False, error=str(e), data=None)

@@ -10,10 +10,10 @@ from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 
 
 class MCPClientManager:
@@ -26,11 +26,11 @@ class MCPClientManager:
 
     async def initialize(self) -> None:
         """Initialize MCP client and load tools from configured servers."""
-        if not config_api.get("mcp.enabled", True):
+        if not await config_api.aget("mcp.enabled", True):
             log_info("MCP integration disabled in configuration")
             return
 
-        servers_config = config_api.get("mcp.servers", {})
+        servers_config = await config_api.aget_config("mcp.servers") or {}
         if not servers_config:
             log_info("No MCP servers configured")
             return

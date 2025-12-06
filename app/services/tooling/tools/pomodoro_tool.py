@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 from app.helpers.aurora_logger import log_error
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
-from app.scheduler import get_cron_service
+from app.services.scheduler.cron_service import get_cron_service
 
 # Simple in-memory storage for current Pomodoro session
 _current_session = {
@@ -208,12 +208,12 @@ def work_session_end(**kwargs) -> dict[str, Any]:
 
         # Send TTS via bus
         if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+            from app.shared.contracts.models.tts import TTSMethods
+            from app.shared.messaging.models.tts_models import TTSRequest
 
             asyncio.create_task(
                 bus.publish(
-                    TTSTopics.REQUEST,
+                    TTSMethods.REQUEST,
                     TTSRequest(text=message, interrupt=False),
                     event=False,
                     priority=get_interactive_priority(),
@@ -221,7 +221,7 @@ def work_session_end(**kwargs) -> dict[str, Any]:
                 )
             )
         else:
-            from app.tts.tts_engine import play
+            from app.services.tts.tts_engine import play
 
             play(message)
 
@@ -277,12 +277,12 @@ def break_session_end(**kwargs) -> dict[str, Any]:
 
         # Send TTS via bus
         if bus:
-            from app.messaging.service_topics import TTSTopics
-            from app.tts.service import TTSRequest
+            from app.shared.contracts.models.tts import TTSMethods
+            from app.shared.messaging.models.tts_models import TTSRequest
 
             asyncio.create_task(
                 bus.publish(
-                    TTSTopics.REQUEST,
+                    TTSMethods.REQUEST,
                     TTSRequest(text=message, interrupt=False),
                     event=False,
                     priority=get_interactive_priority(),
@@ -290,7 +290,7 @@ def break_session_end(**kwargs) -> dict[str, Any]:
                 )
             )
         else:
-            from app.tts.tts_engine import play
+            from app.services.tts.tts_engine import play
 
             play(message)
 

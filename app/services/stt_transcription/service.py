@@ -25,9 +25,6 @@ import numpy as np
 import webrtcvad
 from faster_whisper import WhisperModel
 
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
 from app.messaging import (
@@ -39,10 +36,20 @@ from app.messaging import (
     TranscriptionControl,
     TranscriptionError,
     TranscriptionResult,
-    TranscriptionTopics,
     TranscriptionType,
 )
+from app.shared.config.interface import ConfigAPI
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.stt import (
+    STTAudioChunk,
+    STTControl,
+    TranscriptionMethods,
+    TranscriptionModule,
+)
+from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
+
+config_api = ConfigAPI()
 
 
 class VADMode(Enum):
@@ -68,7 +75,11 @@ class TranscriptionService(BaseService):
 
     def __init__(self):
         """Initialize transcription service."""
-        super().__init__("TranscriptionService")
+        super().__init__(
+            module=TranscriptionModule.NAME,
+            summary="Speech transcription service using Faster Whisper",
+            capabilities=["audio_transcription", "vad", "whisper"],
+        )
         self._running = False
         self._transcribing = False
         self._paused = False
@@ -79,7 +90,7 @@ class TranscriptionService(BaseService):
         self._model_lock = threading.Lock()
 
         # Audio buffering
-        self._audio_buffer: Deque[bytes] = deque(maxlen=1000)  # ~10 seconds at 16kHz
+        self._audio_buffer: Deque[tuple[bytes, str, str]] = deque(maxlen=1000)  # ~10 seconds at 16kHz
         self._audio_format: AudioFormat | None = None
         self._buffer_lock = threading.Lock()
 
@@ -95,10 +106,10 @@ class TranscriptionService(BaseService):
         self._silence_chunks = 0
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
 
-        # Configuration
-        self._language = config_api.get("general.speech_to_text.language", "")
-        self._realtime_enabled = config_api.get("general.speech_to_text.transcription.realtime_model.enabled", True)
-        self._accurate_enabled = config_api.get("general.speech_to_text.transcription.accurate_model.enabled", True)
+        # Configuration (will be loaded in on_start)
+        self._language = ""
+        self._realtime_enabled = True
+        self._accurate_enabled = True
         self._min_audio_length_ms = 500  # Minimum audio length to transcribe
 
         # Processing thread
@@ -109,11 +120,16 @@ class TranscriptionService(BaseService):
         self._chunks_received = 0
         self._transcriptions_done = 0
 
-    async def start(self) -> None:
+    async def on_start(self) -> None:
         """Start the transcription service."""
         if self._running:
             log_warning("Transcription service already running")
             return
+
+        # Load configuration (async)
+        self._language = await config_api.aget("general.speech_to_text.language", "")
+        self._realtime_enabled = await config_api.aget("general.speech_to_text.transcription.realtime_model.enabled", True)
+        self._accurate_enabled = await config_api.aget("general.speech_to_text.transcription.accurate_model.enabled", True)
 
         log_info("Starting transcription service...")
         self._running = True
@@ -127,12 +143,8 @@ class TranscriptionService(BaseService):
         # Load models
         await self._load_models()
 
-        # Subscribe to audio streams and control commands
+        # Subscribe to audio stream
         self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
-        self.bus.subscribe(AudioTopics.STREAM_WEBSOCKET, self._on_audio_chunk)
-        self.bus.subscribe(AudioTopics.STREAM_FILE, self._on_audio_chunk)
-        self.bus.subscribe(AudioTopics.STREAM_GENERIC, self._on_audio_chunk)
-        self.bus.subscribe(TranscriptionTopics.CONTROL, self._on_control)
 
         # Start processing thread
         self._start_processing_thread()
@@ -140,7 +152,7 @@ class TranscriptionService(BaseService):
         self._set_started(True)
         log_info("Transcription service started")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """Stop the transcription service."""
         if not self._running:
             return
@@ -181,9 +193,9 @@ class TranscriptionService(BaseService):
                 del self._accurate_model
                 self._accurate_model = None
             # Reload config and models
-            self._language = config_api.get("general.speech_to_text.language", "")
-            self._realtime_enabled = config_api.get("general.speech_to_text.transcription.realtime_model.enabled", True)
-            self._accurate_enabled = config_api.get("general.speech_to_text.transcription.accurate_model.enabled", True)
+            self._language = await config_api.aget("general.speech_to_text.language", "")
+            self._realtime_enabled = await config_api.aget("general.speech_to_text.transcription.realtime_model.enabled", True)
+            self._accurate_enabled = await config_api.aget("general.speech_to_text.transcription.accurate_model.enabled", True)
             await self._load_models()
         log_info("TranscriptionService configuration reloaded")
 
@@ -202,18 +214,18 @@ class TranscriptionService(BaseService):
 
         try:
             # Get model configuration
-            accurate_model_size = config_api.get("general.speech_to_text.transcription.accurate_model.model_size", "base")
-            realtime_model_size = config_api.get("general.speech_to_text.transcription.realtime_model.model_size", "tiny")
+            accurate_model_size = await config_api.aget("general.speech_to_text.transcription.accurate_model.model_size", "base")
+            realtime_model_size = await config_api.aget("general.speech_to_text.transcription.realtime_model.model_size", "tiny")
             # Use device from new config structure, with fallback to legacy hardware_acceleration
-            realtime_device = config_api.get("general.speech_to_text.transcription.realtime_model.device", None)
-            accurate_device = config_api.get("general.speech_to_text.transcription.accurate_model.device", None)
+            realtime_device = await config_api.aget("general.speech_to_text.transcription.realtime_model.device", None)
+            accurate_device = await config_api.aget("general.speech_to_text.transcription.accurate_model.device", None)
             if realtime_device is None or accurate_device is None:
                 # Fallback to legacy hardware_acceleration setting
                 legacy_device = getUseHardwareAcceleration("stt")
                 realtime_device = realtime_device or legacy_device
                 accurate_device = accurate_device or legacy_device
-            accurate_compute_type = config_api.get("general.speech_to_text.transcription.accurate_model.compute_type", "int8")
-            realtime_compute_type = config_api.get("general.speech_to_text.transcription.realtime_model.compute_type", "int8")
+            accurate_compute_type = await config_api.aget("general.speech_to_text.transcription.accurate_model.compute_type", "int8")
+            realtime_compute_type = await config_api.aget("general.speech_to_text.transcription.realtime_model.compute_type", "int8")
             download_root = "chat_models"  # Default download location
 
             # Load realtime model (fast, lower accuracy)
@@ -271,7 +283,29 @@ class TranscriptionService(BaseService):
                 return
 
             # Get next chunk
-            audio_data = self._audio_buffer.popleft()
+            item = self._audio_buffer.popleft()
+
+            # Handle tuple (data, stream_id, source)
+            if isinstance(item, tuple):
+                audio_data, stream_id, source = item
+            else:
+                # Fallback for legacy bytes (should not happen with new code)
+                audio_data = item
+                stream_id = self._current_stream_id
+                source = self._current_source
+
+        # Check for stream switch
+        if stream_id != self._current_stream_id:
+            # If we have pending speech, transcribe it now (flush)
+            if self._speech_segments:
+                log_debug(f"Stream switch ({self._current_stream_id} -> {stream_id}): flushing segment")
+                self._transcribe_segment()
+                self._reset_speech_state()
+
+            # Update context
+            self._current_stream_id = stream_id
+            self._current_source = source
+            log_debug(f"Switched to stream: {stream_id} ({source})")
 
         # Run VAD on chunk
         is_speech = self._detect_speech(audio_data)
@@ -448,17 +482,7 @@ class TranscriptionService(BaseService):
         )
 
         # Emit to general result topic
-        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionTopics.RESULT, result), self._loop)
-
-        # Emit to specific topic based on type
-        if transcription_type == TranscriptionType.REALTIME:
-            topic = TranscriptionTopics.RESULT_REALTIME
-        elif transcription_type == TranscriptionType.ACCURATE:
-            topic = TranscriptionTopics.RESULT_ACCURATE
-        else:
-            topic = TranscriptionTopics.RESULT_FINAL
-
-        asyncio.run_coroutine_threadsafe(self.bus.publish(topic, result), self._loop)
+        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionMethods.RESULT, result), self._loop)
 
     def _emit_error(self, error_message: str, error_type: str) -> None:
         """Emit transcription error event.
@@ -478,7 +502,7 @@ class TranscriptionService(BaseService):
             timestamp=datetime.now(),
         )
 
-        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionTopics.ERROR, error), self._loop)
+        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionMethods.ERROR, error), self._loop)
 
     def _reset_speech_state(self) -> None:
         """Reset speech detection state after transcribing segment."""
@@ -486,36 +510,70 @@ class TranscriptionService(BaseService):
         self._in_speech = False
         self._silence_chunks = 0
 
-    async def _on_audio_chunk(self, envelope: Envelope) -> None:
-        """Handle incoming audio chunks.
+    async def _process_audio_data(
+        self, data: bytes, audio_format: AudioFormat | None = None, stream_id: str = "default", source: str = "unknown"
+    ) -> None:
+        """Process raw audio data for transcription.
 
         Args:
-            envelope: Message envelope containing AudioChunk
+            data: Raw audio bytes
+            audio_format: Optional audio format info (only needed for first chunk)
+            stream_id: ID of the audio stream
+            source: Source of the audio
         """
         if self._paused:
             return
 
-        chunk: AudioChunk = envelope.payload
+        # Store audio format if provided and not yet set
+        if audio_format and self._audio_format is None:
+            self._audio_format = audio_format
+            log_info(f"Audio format set: {audio_format.sample_rate}Hz, {audio_format.channels}ch, {audio_format.bits_per_sample}bits")
 
-        # Track current audio source and stream ID
-        self._current_source = chunk.source
-        self._current_stream_id = chunk.stream_id
-
-        # Store audio format if first chunk
-        if self._audio_format is None:
-            self._audio_format = chunk.format
-            log_debug(f"Audio format: {chunk.format.sample_rate}Hz, {chunk.format.channels}ch, {chunk.format.encoding.value}")
-            log_debug(f"Audio source: {self._current_source}, stream_id: {self._current_stream_id}")
-
-        # Add to buffer
+        # Add to buffer with metadata
         with self._buffer_lock:
-            self._audio_buffer.append(chunk.data)
+            self._audio_buffer.append((data, stream_id, source))
 
+        # Update stats
         self._chunks_received += 1
 
-        if self._chunks_received % 100 == 0:
-            log_debug(f"Received {self._chunks_received} audio chunks, transcribed {self._transcriptions_done} segments")
+    async def _on_audio_chunk(self, envelope: Envelope) -> None:
+        """Handle incoming audio chunks from internal bus.
 
+        Args:
+            envelope: Message envelope containing AudioChunk
+        """
+        chunk: AudioChunk = envelope.payload
+        await self._process_audio_data(chunk.data, chunk.format, stream_id=chunk.stream_id, source=chunk.source)
+
+    @method_contract(
+        method_id=TranscriptionMethods.PROCESS_AUDIO,
+        summary="Process external audio chunk for transcription",
+        input_model=STTAudioChunk,
+        output_model=EmptyOutput,
+        exposure="external",
+    )
+    async def _on_external_audio(self, envelope: Envelope) -> None:
+        """Handle audio chunks from external API/WebRTC calls.
+
+        Args:
+            envelope: Message envelope containing STTAudioChunk
+        """
+        chunk: STTAudioChunk = envelope.payload
+
+        # Convert STT format to internal AudioFormat
+        audio_format = AudioFormat(sample_rate=chunk.sample_rate, channels=chunk.channels, sample_width=chunk.sample_width, codec=chunk.format)
+
+        import time
+
+        await self._process_audio_data(chunk.data, audio_format, stream_id="external", source="external")  # TODO: Should come from envelope or chunk?
+
+    @method_contract(
+        method_id=TranscriptionMethods.CONTROL,
+        summary="Handle transcription control commands",
+        input_model=STTControl,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
     async def _on_control(self, envelope: Envelope) -> None:
         """Handle control commands.
 

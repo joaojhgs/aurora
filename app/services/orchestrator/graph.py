@@ -13,11 +13,12 @@ from langgraph.prebuilt import tools_condition
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
-from app.messaging import MessageBus, ToolingTopics
+from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
-from app.messaging.service_topics import TTSTopics
 from app.services.orchestrator.agents.chatbot import chatbot
 from app.services.orchestrator.state import State
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.messaging.models.tooling_models import ExecuteToolCommand
 from app.shared.messaging.models.tts_models import TTSRequest
 
@@ -109,7 +110,7 @@ class GraphOrchestrator:
             try:
                 # Send tool execution command via bus and wait for response
                 result = await self.bus.request(
-                    ToolingTopics.EXECUTE_TOOL,
+                    ToolingMethods.EXECUTE_TOOL,
                     ExecuteToolCommand(tool_name=tool_name, arguments=tool_args),
                     timeout=30.0,  # 30 second timeout for tool execution
                     priority=get_interactive_priority(),
@@ -186,7 +187,7 @@ class GraphOrchestrator:
         try:
             log_debug(f"Sending TTS request via bus: {text[:50]}...")
             await self.bus.publish(
-                TTSTopics.REQUEST,
+                TTSMethods.REQUEST,
                 TTSRequest(text=text, interrupt=interrupt),
                 event=False,
                 priority=get_interactive_priority(),

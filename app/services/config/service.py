@@ -27,7 +27,9 @@ from app.services.config.messages import (
     ValidateConfigQuery,
     ValidateConfigResponse,
 )
-from app.messaging.service_topics import ConfigTopics
+from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.config import ConfigMethods, ConfigModule
+from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
 
@@ -36,12 +38,15 @@ class ConfigService(BaseService):
 
     def __init__(self):
         """Initialize the config service."""
-        super().__init__("ConfigService")
+        super().__init__(
+            module=ConfigModule.NAME, summary="Configuration management service", capabilities=["config_management", "plugin_management"]
+        )
         self.config_manager = ConfigManager()
         self._setup_config_observers()
 
     def _setup_config_observers(self) -> None:
         """Set up config observers to publish change events."""
+
         def on_config_change(key_path: str, old_value: Any, new_value: Any) -> None:
             """Handle config change and publish event."""
             # Determine affected sections
@@ -52,7 +57,7 @@ class ConfigService(BaseService):
                     affected_sections.append(parts[0])
                     # Add parent sections
                     for i in range(1, len(parts)):
-                        affected_sections.append(".".join(parts[:i+1]))
+                        affected_sections.append(".".join(parts[: i + 1]))
 
             # Publish config change event
             try:
@@ -64,6 +69,7 @@ class ConfigService(BaseService):
                 )
                 # Use asyncio to publish event
                 import asyncio
+
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
@@ -82,31 +88,48 @@ class ConfigService(BaseService):
     async def _publish_config_change(self, event: ConfigChangedEvent) -> None:
         """Publish config change event to bus."""
         try:
-            await self.bus.publish(ConfigTopics.CHANGED, event, event=True)
+            await self.bus.publish(ConfigMethods.UPDATED, event, event=True)
             log_debug(f"Published config change event: {event.key_path}")
         except Exception as e:
             log_error(f"Failed to publish config change event: {e}")
 
-    async def _handle_get_config(self, envelope: Envelope) -> None:
-        """Handle GetConfig query."""
-        try:
-            query = envelope.payload
-            if not isinstance(query, GetConfigQuery):
-                log_error(f"Invalid payload type for GetConfig: {type(query)}")
-                return
+    @method_contract(
+        method_id=ConfigMethods.GET, summary="Get configuration value", input_model=GetConfigQuery, output_model=GetConfigResponse, exposure="both"
+    )
+    async def _handle_get_config(self, query: GetConfigQuery) -> GetConfigResponse:
+        """Handle GetConfig query.
 
+        Args:
+            query: GetConfigQuery (payload already extracted by base_service wrapper)
+
+            Returns:
+                GetConfigResponse (automatically published to reply_to by base_service wrapper)
+        """
+        try:
             section = query.section
+
+            # Log the request with debug details (only shown when AURORA_DEBUG_LOGS=true)
+            log_debug(f"[GetConfig] section='{section}'")
+
             if section:
                 config = self.config_manager.get(section, {})
             else:
                 config = self.config_manager.get_config_dict()
 
             response = GetConfigResponse(config=config)
-            await self.bus.publish(envelope.reply_to, response, event=False)
-            log_debug(f"Handled GetConfig query: section={section}")
+            return response
         except Exception as e:
-            log_error(f"Error handling GetConfig query: {e}")
+            log_error(f"Error handling GetConfig query: {e}", exc_info=True)
+            # Return empty config on error
+            return GetConfigResponse(config={})
 
+    @method_contract(
+        method_id=ConfigMethods.SET,
+        summary="Update configuration value",
+        input_model=UpdateConfigCommand,
+        output_model=UpdateConfigResponse,
+        exposure="both",
+    )
     async def _handle_update_config(self, envelope: Envelope) -> None:
         """Handle UpdateConfig command."""
         try:
@@ -128,6 +151,13 @@ class ConfigService(BaseService):
         except Exception as e:
             log_error(f"Error handling UpdateConfig command: {e}")
 
+    @method_contract(
+        method_id=ConfigMethods.VALIDATE,
+        summary="Validate current configuration",
+        input_model=ValidateConfigQuery,
+        output_model=ValidateConfigResponse,
+        exposure="both",
+    )
     async def _handle_validate_config(self, envelope: Envelope) -> None:
         """Handle ValidateConfig query."""
         try:
@@ -138,6 +168,13 @@ class ConfigService(BaseService):
         except Exception as e:
             log_error(f"Error handling ValidateConfig query: {e}")
 
+    @method_contract(
+        method_id=ConfigMethods.GET_PLUGIN,
+        summary="Get plugin status",
+        input_model=GetPluginStatusQuery,
+        output_model=GetPluginStatusResponse,
+        exposure="both",
+    )
     async def _handle_get_plugin_status(self, envelope: Envelope) -> None:
         """Handle GetPluginStatus query."""
         try:
@@ -153,6 +190,13 @@ class ConfigService(BaseService):
         except Exception as e:
             log_error(f"Error handling GetPluginStatus query: {e}")
 
+    @method_contract(
+        method_id=ConfigMethods.SET_PLUGIN,
+        summary="Update plugin status",
+        input_model=UpdatePluginStatusCommand,
+        output_model=UpdateConfigResponse,
+        exposure="both",
+    )
     async def _handle_update_plugin_status(self, envelope: Envelope) -> None:
         """Handle UpdatePluginStatus command."""
         try:
@@ -174,6 +218,13 @@ class ConfigService(BaseService):
         except Exception as e:
             log_error(f"Error handling UpdatePluginStatus command: {e}")
 
+    @method_contract(
+        method_id=ConfigMethods.RELOAD_SERVICE,
+        summary="Reload a service",
+        input_model=ReloadServiceCommand,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
     async def _handle_reload_service(self, envelope: Envelope) -> None:
         """Handle ReloadService command."""
         try:
@@ -190,17 +241,11 @@ class ConfigService(BaseService):
         except Exception as e:
             log_error(f"Error handling ReloadService command: {e}")
 
-    async def start(self) -> None:
+    async def on_start(self) -> None:
         """Start the config service."""
         log_info("Starting ConfigService...")
 
-        # Subscribe to config topics
-        self.bus.subscribe(ConfigTopics.GET_CONFIG, self._handle_get_config)
-        self.bus.subscribe(ConfigTopics.UPDATE_CONFIG, self._handle_update_config)
-        self.bus.subscribe(ConfigTopics.VALIDATE_CONFIG, self._handle_validate_config)
-        self.bus.subscribe(ConfigTopics.GET_PLUGIN_STATUS, self._handle_get_plugin_status)
-        self.bus.subscribe(ConfigTopics.UPDATE_PLUGIN_STATUS, self._handle_update_plugin_status)
-        self.bus.subscribe(ConfigTopics.RELOAD_SERVICE, self._handle_reload_service)
+        # Note: Subscriptions are now handled automatically by BaseService via @method_contract
 
         # Subscribe to config changes for reload mechanism
         self._subscribe_to_config_changes()
@@ -208,7 +253,7 @@ class ConfigService(BaseService):
         self._set_started(True)
         log_info("ConfigService started")
 
-    async def stop(self) -> None:
+    async def on_stop(self) -> None:
         """Stop the config service."""
         log_info("Stopping ConfigService...")
         self._set_started(False)

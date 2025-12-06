@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
-from app.messaging.service_topics import TTSTopics
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.messaging.models.tts_models import TTSStop
 
 
@@ -17,7 +17,7 @@ async def stop_tts_tool(bus: MessageBus | None = None):
         bus: MessageBus instance for communication (injected by ToolingService)
     """
     await bus.publish(
-        TTSTopics.STOP,
+        TTSMethods.STOP,
         TTSStop(),
         event=False,
         priority=get_interactive_priority(),  # Highest priority for stop commands

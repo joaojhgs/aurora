@@ -1,0 +1,43 @@
+# Transcription Service Dockerfile
+FROM python:3.11-slim
+
+ARG STT_TRANSCRIPTION_HARDWARE=cpu
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml setup.cfg ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+
+# Install dependencies using pyproject.toml optional groups
+# Transcription service needs core + service-stt-transcription + mode-processes
+RUN pip install --no-cache-dir -e .[service-stt-transcription,mode-processes]
+
+# faster-whisper uses ctranslate2 which supports CUDA
+# CPU is default, CUDA requires ctranslate2 with CUDA support
+RUN if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
+    pip install ctranslate2 --extra-index-url=https://pypi.org/simple/ || \
+    pip install ctranslate2[cuda]; \
+fi
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.stt_transcription"]
+

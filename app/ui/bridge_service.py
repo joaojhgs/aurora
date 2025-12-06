@@ -17,12 +17,13 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import (
     Envelope,
     MessageBus,
-    OrchestratorTopics,
-    STTCoordinatorTopics,
-    TTSTopics,
 )
 from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator import UserInput
+from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.stt import STTMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 
 class UIBridge(QObject):
@@ -61,18 +62,15 @@ class UIBridge(QObject):
         # Subscribe to relevant events using typed topics
         # NOTE: LocalBus now delivers messages concurrently, so subscription order doesn't matter
         # USER_SPEECH_CAPTURED signals end of "listening" state → transition to "processing"
-        self.bus.subscribe(STTCoordinatorTopics.USER_SPEECH_CAPTURED, self._on_transcription)
-        self.bus.subscribe(STTCoordinatorTopics.SESSION_STARTED, self._on_stt_session_started)
+        self.bus.subscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
+        self.bus.subscribe(STTMethods.SESSION_STARTED, self._on_stt_session_started)
 
         # Subscribe to orchestrator and TTS events
-        self.bus.subscribe(OrchestratorTopics.LLM_RESPONSE, self._on_llm_response)
-        self.bus.subscribe(TTSTopics.STARTED, self._on_tts_started)
-        self.bus.subscribe(TTSTopics.STOPPED, self._on_tts_stopped)
+        self.bus.subscribe(OrchestratorMethods.LLM_RESPONSE, self._on_llm_response)
+        self.bus.subscribe(TTSMethods.STARTED, self._on_tts_started)
+        self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_stopped)
 
-        # Subscribe to database messages response
-        from app.messaging import DBTopics
-
-        self.bus.subscribe(DBTopics.MESSAGES_RESPONSE, self._on_messages_loaded)
+        self.bus.subscribe(DBMethods.MESSAGES_RESPONSE, self._on_messages_loaded)
 
         # Connect UI signals to bus messages
         self._connect_ui_signals()
@@ -94,13 +92,12 @@ class UIBridge(QObject):
     async def _load_today_messages(self):
         """Load today's messages from database."""
         try:
-            from app.db.service import GetMessagesForDate
-            from app.messaging import DBTopics
+            from app.shared.messaging.models.db_models import GetMessagesForDate
 
             log_info("UI Bridge: Requesting today's messages from database...")
 
             # Request messages for today (date=None means today)
-            await self.bus.publish(DBTopics.GET_MESSAGES_FOR_DATE, GetMessagesForDate(date=None), event=False, origin="internal")  # Command/Query
+            await self.bus.publish(DBMethods.GET_MESSAGES_FOR_DATE, GetMessagesForDate(date=None), event=False, origin="internal")  # Command/Query
 
         except Exception as e:
             log_error(f"Error loading today's messages: {e}", exc_info=True)
@@ -148,7 +145,7 @@ class UIBridge(QObject):
         # Publish to bus as UserInput command with high priority
         asyncio.run_coroutine_threadsafe(
             self.bus.publish(
-                OrchestratorTopics.UI_USER_INPUT,
+                OrchestratorMethods.UI_USER_INPUT,
                 UserInput(text=text, source="ui"),
                 event=False,  # Command
                 priority=get_interactive_priority(),
@@ -162,11 +159,10 @@ class UIBridge(QObject):
         log_info("UI Bridge: Stop TTS button pressed - sending stop command")
 
         # Publish TTS stop command to message bus
-        from app.messaging import TTSTopics
-        from app.tts import TTSStop
+        from app.shared.messaging.models.tts_models import TTSStop
 
         asyncio.run_coroutine_threadsafe(
-            self.bus.publish(TTSTopics.STOP, TTSStop(), event=False, priority=get_interactive_priority(), origin="internal"),
+            self.bus.publish(TTSMethods.STOP, TTSStop(), event=False, priority=get_interactive_priority(), origin="internal"),
             self._loop,  # Command  # High priority
         )
 

@@ -4,13 +4,13 @@ import asyncio
 import sys
 from pathlib import Path
 
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
-
 from app.helpers.aurora_logger import log_error, log_info
-from app.messaging.event_registry import register_all_service_topics
+from app.messaging import register_all_service_topics
 from app.services.db.service import DBService
 from app.shared.messaging.bus_init import initialize_bus_for_service
+
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 
 async def main():
