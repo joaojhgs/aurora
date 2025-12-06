@@ -213,8 +213,6 @@ docker-login:
 docker-build-all:
 	@echo "Building all service images..."
 	$(MAKE) docker-build-config
-	$(MAKE) docker-build-db-openai
-	$(MAKE) docker-build-db-local
 	$(MAKE) docker-build-orchestrator-openai
 	$(MAKE) docker-build-orchestrator-hf-endpoint
 	$(MAKE) docker-build-orchestrator-hf-local
@@ -240,21 +238,6 @@ docker-build-config:
 	docker build -f docker/services/Dockerfile.config \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-config:$(VERSION) \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-config:latest \
-		.
-
-# DB Service builds
-docker-build-db-openai:
-	docker build --build-arg DB_EMBEDDINGS_MODE=openai \
-		-f docker/services/Dockerfile.db \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:openai-$(VERSION) \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:openai-latest \
-		.
-
-docker-build-db-local:
-	docker build --build-arg DB_EMBEDDINGS_MODE=local \
-		-f docker/services/Dockerfile.db \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:local-$(VERSION) \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:local-latest \
 		.
 
 # Orchestrator Service builds
