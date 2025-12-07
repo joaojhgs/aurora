@@ -39,6 +39,7 @@ htmlcov/
 .tox/
 
 # Documentation
+docs/
 docs/_build/
 
 # Logs
@@ -57,15 +58,24 @@ voice_models/
 # Git
 .git/
 .gitignore
+.github/
+.gitlab-ci.yml
+.travis.yml
 
 # Docker
 Dockerfile*
 docker-compose*.yml
+
+# Process mode specific artifacts
+*.process.yml
+README.process-mode.md
 .dockerignore
 
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
 
 # OS
 .DS_Store
@@ -75,7 +85,8 @@ Thumbs.db
 tests/
 assets/
 *.md
+!readme.md
 LICENSE
 CHANGELOG.md
 SECURITY.md
-readme.md
+scripts/docker-process-mode.sh
