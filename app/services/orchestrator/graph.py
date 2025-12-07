@@ -52,7 +52,9 @@ class GraphOrchestrator:
         )
 
         # Connect tools back to chatbot or end
-        self.graph_builder.add_conditional_edges("tools", self._tools_end_condition, {"END": END, "chatbot": "chatbot"})
+        self.graph_builder.add_conditional_edges(
+            "tools", self._tools_end_condition, {"END": END, "chatbot": "chatbot"}
+        )
 
         # Set entry point
         self.graph_builder.set_entry_point("chatbot")
@@ -151,7 +153,7 @@ class GraphOrchestrator:
 
     def _tools_end_condition(
         self,
-        state: Union[list[AnyMessage], dict[str, Any], BaseModel],
+        state: list[AnyMessage] | dict[str, Any] | BaseModel,
         messages_key: str = "messages",
     ) -> Literal["tools", "chatbot", "END"]:
         """Determine next step after tool execution.
@@ -165,9 +167,11 @@ class GraphOrchestrator:
         """
         if isinstance(state, list):
             ai_message = state[-1]
-        elif isinstance(state, dict) and (messages := state.get(messages_key, [])):
-            ai_message = messages[-1]
-        elif messages := getattr(state, messages_key, []):
+        elif (
+            isinstance(state, dict)
+            and (messages := state.get(messages_key, []))
+            or (messages := getattr(state, messages_key, []))
+        ):
             ai_message = messages[-1]
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
@@ -301,20 +305,20 @@ def get_orchestrator() -> GraphOrchestrator:
 
 
 # Backward-compatible API
-async def stream_graph_updates(user_input: str, ttsResult: bool = True) -> str:
+async def stream_graph_updates(user_input: str, tts_result: bool = True) -> str:
     """Process user input through the graph with optional TTS output.
 
     This is a backward-compatible wrapper around GraphOrchestrator.
 
     Args:
         user_input: User's text input
-        ttsResult: Whether to play result through TTS
+        tts_result: Whether to play result through TTS
 
     Returns:
         Assistant's response text
     """
     orchestrator = get_orchestrator()
-    return await orchestrator.stream_graph_updates(user_input, ttsResult)
+    return await orchestrator.stream_graph_updates(user_input, tts_result)
 
 
 async def process_text_input(user_input: str) -> str:

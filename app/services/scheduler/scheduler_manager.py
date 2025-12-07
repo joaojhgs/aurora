@@ -5,6 +5,7 @@ Runs in the main event loop - no separate thread needed.
 """
 
 import asyncio
+import contextlib
 import importlib
 from datetime import datetime, timedelta
 from typing import Any, Optional
@@ -58,10 +59,8 @@ class SchedulerManager:
         # Cancel the scheduler task if it's running
         if self._scheduler_task and not self._scheduler_task.done():
             self._scheduler_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._scheduler_task
-            except asyncio.CancelledError:
-                pass
 
         log_info("Scheduler stopped")
 
@@ -161,7 +160,7 @@ class SchedulerManager:
         else:
             self._jobs_cache.pop(job.id, None)
 
-    async def _call_job_callback(self, job: CronJob) -> Optional[dict[str, Any]]:
+    async def _call_job_callback(self, job: CronJob) -> dict[str, Any] | None:
         """Call the job's callback function.
 
         Injects the bus instance into callback arguments (like tool manager does).
@@ -195,7 +194,7 @@ class SchedulerManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _calculate_next_run_time(self, job: CronJob) -> Optional[datetime]:
+    def _calculate_next_run_time(self, job: CronJob) -> datetime | None:
         """Calculate the next run time for a job"""
         try:
             if job.schedule_type == ScheduleType.CRON:
@@ -214,7 +213,7 @@ class SchedulerManager:
             log_error(f"Error calculating next run time for job {job.name}: {e}")
             return None
 
-    def _parse_absolute_time(self, absolute_time: str) -> Optional[datetime]:
+    def _parse_absolute_time(self, absolute_time: str) -> datetime | None:
         """Parse absolute time expressions like '2025-05-28 15:00' or '28/05/2025 15:00'"""
         try:
             # Try various datetime formats (including Portuguese/Brazilian DD/MM/YYYY format)
@@ -239,8 +238,8 @@ class SchedulerManager:
             # If no format worked, try parsing ISO format
             return datetime.fromisoformat(absolute_time)
 
-        except Exception:
-            raise ValueError(f"Invalid absolute time format: {absolute_time}")
+        except Exception as e:
+            raise ValueError(f"Invalid absolute time format: {absolute_time}") from e
 
     # Public API methods
     async def create_absolute_job(
@@ -249,8 +248,8 @@ class SchedulerManager:
         absolute_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
-    ) -> Optional[str]:
+        callback_args: dict[str, Any] | None = None,
+    ) -> str | None:
         """Create an absolute time job and return its ID"""
         job = CronJob.create_absolute_job(
             name=name,
@@ -276,8 +275,8 @@ class SchedulerManager:
         cron_expression: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
-    ) -> Optional[str]:
+        callback_args: dict[str, Any] | None = None,
+    ) -> str | None:
         """Create a cron expression job and return its ID"""
         job = CronJob.create_cron_job(
             name=name,
@@ -297,7 +296,7 @@ class SchedulerManager:
             return job.id
         return None
 
-    async def get_job(self, job_id: str) -> Optional[CronJob]:
+    async def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID"""
         return await self.db_service.get_job(job_id)
 

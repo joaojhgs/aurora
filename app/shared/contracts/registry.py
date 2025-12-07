@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -227,7 +228,9 @@ def method_contract(
     return decorator
 
 
-def register_method(module_name: str, method_name: str, fn: Callable[..., Any], metadata: dict[str, Any]) -> None:
+def register_method(
+    module_name: str, method_name: str, fn: Callable[..., Any], metadata: dict[str, Any]
+) -> None:
     """Register a method contract (called by BaseService).
 
     Args:

@@ -85,7 +85,11 @@ class MigrationManager:
         migration_files = self.get_migration_files()
         applied_migrations = await self.get_applied_migrations()
 
-        pending_migrations = [(version, filename) for version, filename in migration_files if version not in applied_migrations]
+        pending_migrations = [
+            (version, filename)
+            for version, filename in migration_files
+            if version not in applied_migrations
+        ]
 
         if not pending_migrations:
             log_info("No pending migrations")

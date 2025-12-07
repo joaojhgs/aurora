@@ -42,7 +42,9 @@ class ProcessLauncher:
         """Initialize the process launcher."""
         self.processes: dict[str, multiprocessing.Process] = {}
 
-    def start_service(self, service_name: str, service_module_path: str, daemon: bool = False) -> multiprocessing.Process:
+    def start_service(
+        self, service_name: str, service_module_path: str, daemon: bool = False
+    ) -> multiprocessing.Process:
         """Start a service in a separate process.
 
         Args:

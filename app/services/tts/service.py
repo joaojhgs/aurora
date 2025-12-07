@@ -28,8 +28,8 @@ from app.shared.contracts.models.tts import (
     TTSStatus,
 )
 from app.shared.contracts.registry import method_contract
-from app.shared.messaging.models.tts_models import TTSError as TTSErrorEvent
 from app.shared.messaging.models.tts_models import (
+    TTSError as TTSErrorEvent,
     TTSEvent,
     TTSPaused,
     TTSResumed,
@@ -53,7 +53,9 @@ def restore_volume_except_current():
 
 
 # Calculate project root: go up from app/services/tts/service.py -> app/services/tts -> app/services -> app -> project root
-file_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+file_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 
 # Service implementation
@@ -70,7 +72,9 @@ class TTSService(BaseService):
     def __init__(self):
         """Initialize TTS service with RealtimeTTS engine."""
         super().__init__(
-            module=TTSModule.NAME, summary="Text-to-Speech synthesis and playback service", capabilities=["speech_synthesis", "audio_playback"]
+            module=TTSModule.NAME,
+            summary="Text-to-Speech synthesis and playback service",
+            capabilities=["speech_synthesis", "audio_playback"],
         )
         self._playing = False
         self._paused = False
@@ -87,14 +91,19 @@ class TTSService(BaseService):
 
         # Fall back to config if env vars not set
         if model_file is None:
-            config_path = await config_api.aget("general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx")
+            config_path = await config_api.aget(
+                "general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx"
+            )
             # Ensure absolute path
             if os.path.isabs(config_path):
                 model_file = config_path
             else:
                 model_file = os.path.join(file_root, config_path.lstrip("/"))
         if config_file is None:
-            config_path = await config_api.aget("general.text_to_speech.model_config_file_path", "/voice_models/en_US-lessac-medium.onnx.txt")
+            config_path = await config_api.aget(
+                "general.text_to_speech.model_config_file_path",
+                "/voice_models/en_US-lessac-medium.onnx.txt",
+            )
             # Ensure absolute path
             if os.path.isabs(config_path):
                 config_file = config_path
@@ -192,7 +201,11 @@ class TTSService(BaseService):
         log_info(f"Reloading TTS service configuration (section: {config_section})")
 
         # If TTS config changed, reinitialize the engine
-        if config_section is None or config_section == "general" or config_section == "text_to_speech":
+        if (
+            config_section is None
+            or config_section == "general"
+            or config_section == "text_to_speech"
+        ):
             log_info("TTS configuration changed, reinitializing engine...")
             try:
                 # Stop current playback if active
@@ -209,7 +222,11 @@ class TTSService(BaseService):
             log_debug(f"TTS service reloaded for section: {config_section}")
 
     @method_contract(
-        method_id=TTSMethods.REQUEST, summary="Process text-to-speech request", input_model=TTSRequest, output_model=EmptyOutput, exposure="both"
+        method_id=TTSMethods.REQUEST,
+        summary="Process text-to-speech request",
+        input_model=TTSRequest,
+        output_model=EmptyOutput,
+        exposure="both",
     )
     async def _on_tts_request(self, request: TTSRequest) -> None:
         """Handle TTS request command.
@@ -246,7 +263,11 @@ class TTSService(BaseService):
             )
 
     @method_contract(
-        method_id=TTSMethods.STOP, summary="Stop current TTS playback", input_model=EmptyInput, output_model=EmptyOutput, exposure="both"
+        method_id=TTSMethods.STOP,
+        summary="Stop current TTS playback",
+        input_model=EmptyInput,
+        output_model=EmptyOutput,
+        exposure="both",
     )
     async def _on_stop(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS stop command.
@@ -263,7 +284,11 @@ class TTSService(BaseService):
             return EmptyOutput()
 
     @method_contract(
-        method_id=TTSMethods.PAUSE, summary="Pause current TTS playback", input_model=EmptyInput, output_model=EmptyOutput, exposure="internal"
+        method_id=TTSMethods.PAUSE,
+        summary="Pause current TTS playback",
+        input_model=EmptyInput,
+        output_model=EmptyOutput,
+        exposure="internal",
     )
     async def _on_pause(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS pause command.
@@ -291,7 +316,11 @@ class TTSService(BaseService):
             return EmptyOutput()
 
     @method_contract(
-        method_id=TTSMethods.RESUME, summary="Resume paused TTS playback", input_model=EmptyInput, output_model=EmptyOutput, exposure="internal"
+        method_id=TTSMethods.RESUME,
+        summary="Resume paused TTS playback",
+        input_model=EmptyInput,
+        output_model=EmptyOutput,
+        exposure="internal",
     )
     async def _on_resume(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS resume command.

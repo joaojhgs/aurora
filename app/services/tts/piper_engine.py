@@ -23,7 +23,7 @@ class PiperVoice:
                                      If not provided, it will be derived by appending ".json" to model_file.
     """
 
-    def __init__(self, model_file: str, config_file: Optional[str] = None):
+    def __init__(self, model_file: str, config_file: str | None = None):
         self.model_file = model_file
         if config_file is None:
             # If the .json file exists, assume we should use it.
@@ -33,7 +33,7 @@ class PiperVoice:
             self.config_file = config_file
 
     def __repr__(self):
-        return f"PiperVoice(model_file={self.model_file}, " f"config_file={self.config_file})"
+        return f"PiperVoice(model_file={self.model_file}, config_file={self.config_file})"
 
 
 class PiperEngine(BaseEngine):
@@ -43,10 +43,10 @@ class PiperEngine(BaseEngine):
 
     def __init__(
         self,
-        piper_path: Optional[str] = None,
-        voice: Optional[PiperVoice] = None,
+        piper_path: str | None = None,
+        voice: PiperVoice | None = None,
         debug: bool = False,
-        sample_rate: Optional[int] = None,
+        sample_rate: int | None = None,
     ):
         """
         Initializes the Piper text-to-speech engine.
@@ -83,9 +83,9 @@ class PiperEngine(BaseEngine):
             self._sample_rate = sample_rate
 
         # Cache hardware acceleration setting using environment variables (no config requests)
-        from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
+        from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 
-        self._use_cuda = getUseHardwareAcceleration("tts")
+        self._use_cuda = get_use_hardware_acceleration("tts")
 
         self.post_init()
 
@@ -126,7 +126,11 @@ class PiperEngine(BaseEngine):
         # Build the argument list for Piper (no shell piping).
         # If piper_path is on the PATH, you can use just "piper". Otherwise, use the full path.
         # Use absolute path for model file to avoid Piper's voice name validation
-        model_file_abs = os.path.abspath(self.voice.model_file) if not os.path.isabs(self.voice.model_file) else self.voice.model_file
+        model_file_abs = (
+            os.path.abspath(self.voice.model_file)
+            if not os.path.isabs(self.voice.model_file)
+            else self.voice.model_file
+        )
 
         # Verify model file exists before calling Piper
         if not os.path.exists(model_file_abs):
@@ -137,9 +141,15 @@ class PiperEngine(BaseEngine):
 
         # If a JSON config file is available, add it.
         if self.voice.config_file:
-            config_file_abs = os.path.abspath(self.voice.config_file) if not os.path.isabs(self.voice.config_file) else self.voice.config_file
+            config_file_abs = (
+                os.path.abspath(self.voice.config_file)
+                if not os.path.isabs(self.voice.config_file)
+                else self.voice.config_file
+            )
             if not os.path.exists(config_file_abs):
-                log_warning(f"Piper config file not found: {config_file_abs}, continuing without it")
+                log_warning(
+                    f"Piper config file not found: {config_file_abs}, continuing without it"
+                )
             else:
                 cmd_list.extend(["-c", config_file_abs])
 
@@ -164,9 +174,16 @@ class PiperEngine(BaseEngine):
             # Open the synthesized WAV file and (optionally) validate audio properties.
             with wave.open(output_wav_path, "rb") as wf:
                 # If you require specific WAV properties, check them:
-                if wf.getnchannels() != 1 or wf.getframerate() != self._sample_rate or wf.getsampwidth() != 2:
+                if (
+                    wf.getnchannels() != 1
+                    or wf.getframerate() != self._sample_rate
+                    or wf.getsampwidth() != 2
+                ):
                     log_warning(
-                        f"Unexpected WAV properties: " f"Channels={wf.getnchannels()}, " f"Rate={wf.getframerate()}, " f"Width={wf.getsampwidth()}"
+                        f"Unexpected WAV properties: "
+                        f"Channels={wf.getnchannels()}, "
+                        f"Rate={wf.getframerate()}, "
+                        f"Width={wf.getsampwidth()}"
                     )
                     return False
 

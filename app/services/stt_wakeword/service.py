@@ -29,9 +29,8 @@ from app.services.stt_wakeword.backends import (
     WakeWordBackend,
 )
 from app.shared.config.interface import ConfigAPI
-from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
-    EmptyOutput,
     STTAudioChunk,
     WakewordControl,
     WakeWordMethods,
@@ -40,11 +39,7 @@ from app.shared.contracts.models.stt import (
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordBackendType,
-)
-from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordControl as WakeWordControlEvent,  # Rename to avoid conflict
-)
-from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordDetected,
     WakeWordTimeout,
 )
@@ -67,7 +62,9 @@ class WakeWordService(BaseService):
     def __init__(self):
         """Initialize wake word service."""
         super().__init__(
-            module=WakeWordModule.NAME, summary="Wake word detection service", capabilities=["wake_word_detection", "openwakeword", "porcupine"]
+            module=WakeWordModule.NAME,
+            summary="Wake word detection service",
+            capabilities=["wake_word_detection", "openwakeword", "porcupine"],
         )
         self._running = False
         self._running = False
@@ -152,7 +149,9 @@ class WakeWordService(BaseService):
 
         # Fall back to config if env var not set
         if model_path is None:
-            model_path = await config_api.aget("general.speech_to_text.wake_word.model_path", "voice_models/jarvis.onnx")
+            model_path = await config_api.aget(
+                "general.speech_to_text.wake_word.model_path", "voice_models/jarvis.onnx"
+            )
 
         # Convert model path to list if it's a string or None
         # Support comma-separated paths from env var
@@ -201,7 +200,13 @@ class WakeWordService(BaseService):
         await self._backend.initialize()
         log_info("Wake word backend initialized")
 
-    async def _process_audio_data(self, data: bytes, stream_id: str = "default", source: str = "unknown", timestamp: float | None = None) -> None:
+    async def _process_audio_data(
+        self,
+        data: bytes,
+        stream_id: str = "default",
+        source: str = "unknown",
+        timestamp: float | None = None,
+    ) -> None:
         """Process raw audio data for wake word detection.
 
         Args:
@@ -218,13 +223,16 @@ class WakeWordService(BaseService):
             result = await self._backend.detect(data)
 
             if result.detected:
-                log_info(f"Wake word detected! (index: {result.wake_word_index}, conf: {result.confidence:.2f})")
+                log_info(
+                    f"Wake word detected! (index: {result.wake_word_index}, conf: {result.confidence:.2f})"
+                )
 
                 # Emit event
                 event = WakeWordDetected(
                     wake_word=(
                         self._wake_words[result.wake_word_index]
-                        if result.wake_word_index >= 0 and result.wake_word_index < len(self._wake_words)
+                        if result.wake_word_index >= 0
+                        and result.wake_word_index < len(self._wake_words)
                         else "unknown"
                     ),
                     confidence=result.confidence,
@@ -235,7 +243,8 @@ class WakeWordService(BaseService):
                     metadata={
                         "model": (
                             self._model_paths[result.wake_word_index]
-                            if result.wake_word_index >= 0 and result.wake_word_index < len(self._model_paths)
+                            if result.wake_word_index >= 0
+                            and result.wake_word_index < len(self._model_paths)
                             else "unknown"
                         )
                     },
@@ -253,7 +262,9 @@ class WakeWordService(BaseService):
             env: Message envelope containing AudioChunk
         """
         chunk: AudioChunk = env.payload
-        await self._process_audio_data(chunk.data, stream_id=chunk.stream_id, source=chunk.source, timestamp=chunk.timestamp)
+        await self._process_audio_data(
+            chunk.data, stream_id=chunk.stream_id, source=chunk.source, timestamp=chunk.timestamp
+        )
 
     @method_contract(
         method_id=WakeWordMethods.PROCESS_AUDIO,
@@ -272,7 +283,10 @@ class WakeWordService(BaseService):
         import time
 
         await self._process_audio_data(
-            chunk.data, stream_id="external", source="external", timestamp=time.time()  # TODO: Should come from envelope or chunk?
+            chunk.data,
+            stream_id="external",
+            source="external",
+            timestamp=time.time(),  # TODO: Should come from envelope or chunk?
         )
 
     async def _process_audio_chunk(self, chunk: AudioChunk) -> None:

@@ -1,7 +1,7 @@
 import os
 
 
-def getUseHardwareAcceleration(config_key: str):
+def get_use_hardware_acceleration(config_key: str):
     """Get hardware acceleration configuration from environment variables.
 
     Checks environment variable AURORA_HARDWARE_ACCELERATION_{KEY} (uppercase).

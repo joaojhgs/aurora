@@ -45,7 +45,9 @@ class Supervisor(BaseService):
     def __init__(self):
         """Initialize the supervisor."""
         super().__init__(
-            module=SupervisorModule.NAME, summary="Service supervisor and manager", capabilities=["service_management", "health_monitoring"]
+            module=SupervisorModule.NAME,
+            summary="Service supervisor and manager",
+            capabilities=["service_management", "health_monitoring"],
         )
         self.services: list[Any] = []
         self.shutdown_event = asyncio.Event()
@@ -248,7 +250,9 @@ class Supervisor(BaseService):
         from app.services.stt_transcription import TranscriptionService
         from app.services.stt_wakeword import WakeWordService
 
-        log_info("Starting streaming STT services (Wake Word, Transcription, Coordinator with audio)...")
+        log_info(
+            "Starting streaming STT services (Wake Word, Transcription, Coordinator with audio)..."
+        )
 
         # Create service instances
         wake_word = WakeWordService()
@@ -374,7 +378,9 @@ class Supervisor(BaseService):
             for service in self.services:
                 # Basic status check
                 is_running = getattr(service, "_started", False)
-                name = getattr(service, "module", getattr(service, "service_name", str(type(service).__name__)))
+                name = getattr(
+                    service, "module", getattr(service, "service_name", str(type(service).__name__))
+                )
 
                 statuses.append(ServiceStatus(name=name, running=is_running, details={}))
 
@@ -398,7 +404,11 @@ class Supervisor(BaseService):
         # TODO: Implement service restart logic
         # For now, just return success
         if envelope.reply_to:
-            await self.bus.publish(envelope.reply_to, ServiceControlResponse(success=True, message="Not implemented yet"), event=False)
+            await self.bus.publish(
+                envelope.reply_to,
+                ServiceControlResponse(success=True, message="Not implemented yet"),
+                event=False,
+            )
 
 
 # Convenience function for running supervisor
@@ -411,7 +421,9 @@ async def run_supervisor() -> None:
 # Entry point for running in threads mode
 def main():
     """Main entry point for supervisor."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     try:
         asyncio.run(run_supervisor())

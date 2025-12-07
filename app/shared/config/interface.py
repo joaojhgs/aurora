@@ -65,6 +65,20 @@ class ConfigAPI:
                     return False
         return self._bus is not None
 
+    def _is_config_service_ready(self) -> bool:
+        """Check if ConfigService has registered its contracts."""
+        try:
+            from app.shared.contracts.registry import all_contracts
+
+            contracts = all_contracts()
+            # Check if Config.Get is registered
+            return any(
+                c.bus_topic == ConfigMethods.GET or c.name == ConfigMethods.GET
+                for c in contracts.values()
+            )
+        except Exception:
+            return False
+
     def get_config(self, section: str = None) -> dict[str, Any]:
         """Get entire config or specific section (sync version).
 
@@ -76,7 +90,12 @@ class ConfigAPI:
         """
         # Ensure bus is available
         if not self._ensure_bus():
-            log_error("Bus not available for config request. ConfigService may not be ready yet.")
+            log_debug("Bus not available for config request. ConfigService may not be ready yet.")
+            return {}
+
+        # Check if ConfigService has registered its contracts
+        if not self._is_config_service_ready():
+            log_debug("ConfigService contracts not registered yet. Returning empty config.")
             return {}
 
         try:
@@ -91,7 +110,9 @@ class ConfigAPI:
                 # We also can't use run_coroutine_threadsafe from the same thread
                 # Best we can do is return empty dict and log warning
                 # Callers should use aget_config() instead
-                log_error("get_config() called from async context. Use aget_config() or await bus.request() directly.")
+                log_error(
+                    "get_config() called from async context. Use aget_config() or await bus.request() directly."
+                )
                 return {}
             except RuntimeError:
                 # No running loop, safe to use asyncio.run()
@@ -123,7 +144,12 @@ class ConfigAPI:
         """
         # Ensure bus is available
         if not self._ensure_bus():
-            log_error("Bus not available for config request. ConfigService may not be ready yet.")
+            log_debug("Bus not available for config request. ConfigService may not be ready yet.")
+            return {}
+
+        # Check if ConfigService has registered its contracts
+        if not self._is_config_service_ready():
+            log_debug("ConfigService contracts not registered yet. Returning empty config.")
             return {}
 
         try:
@@ -167,6 +193,22 @@ class ConfigAPI:
         import os
 
         try:
+            import asyncio
+
+            # Check if we're in an async context
+            try:
+                asyncio.get_running_loop()
+                # We're in an async context - can't use sync get_config()
+                # Return default value and log debug message
+                log_debug(
+                    f"ConfigAPI.get('{key_path}') called from async context. "
+                    "Use aget() or await config_api.aget() instead. Returning default."
+                )
+                return default
+            except RuntimeError:
+                # No running loop, safe to proceed
+                pass
+
             # Extract section from key_path to optimize request (e.g., 'llm.provider' -> 'llm')
             keys = key_path.split(".")
             section = keys[0] if keys else None
@@ -175,10 +217,16 @@ class ConfigAPI:
             stack = inspect.stack()
             if len(stack) > 1:
                 caller_frame = stack[1]
-                caller_file = os.path.relpath(caller_frame.filename) if "aurora" in caller_frame.filename else caller_frame.filename
+                caller_file = (
+                    os.path.relpath(caller_frame.filename)
+                    if "aurora" in caller_frame.filename
+                    else caller_frame.filename
+                )
                 caller_line = caller_frame.lineno
                 caller_func = caller_frame.function
-                log_debug(f"ConfigAPI.get('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()")
+                log_debug(
+                    f"ConfigAPI.get('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()"
+                )
 
             # Request only the needed section instead of full config
             if section:
@@ -230,10 +278,16 @@ class ConfigAPI:
             stack = inspect.stack()
             if len(stack) > 1:
                 caller_frame = stack[1]
-                caller_file = os.path.relpath(caller_frame.filename) if "aurora" in caller_frame.filename else caller_frame.filename
+                caller_file = (
+                    os.path.relpath(caller_frame.filename)
+                    if "aurora" in caller_frame.filename
+                    else caller_frame.filename
+                )
                 caller_line = caller_frame.lineno
                 caller_func = caller_frame.function
-                log_debug(f"ConfigAPI.aget('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()")
+                log_debug(
+                    f"ConfigAPI.aget('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()"
+                )
 
             # Request only the needed section instead of full config
             if section:
@@ -552,13 +606,20 @@ class ConfigAPI:
                     "installed": server.installed,
                 }
 
-            return {"success": True, "servers": servers_info, "count": len(servers_info), "message": f"Discovered {len(servers_info)} MCP servers"}
+            return {
+                "success": True,
+                "servers": servers_info,
+                "count": len(servers_info),
+                "message": f"Discovered {len(servers_info)} MCP servers",
+            }
 
         except Exception as e:
             log_error(f"Error discovering MCP servers: {e}")
             return {"success": False, "error": str(e)}
 
-    async def add_discovered_servers_to_config(self, server_names: list[str] = None) -> dict[str, Any]:
+    async def add_discovered_servers_to_config(
+        self, server_names: list[str] = None
+    ) -> dict[str, Any]:
         """Add discovered servers to Aurora's MCP configuration and reload via message bus.
 
         Args:
@@ -574,7 +635,9 @@ class ConfigAPI:
 
             # Filter by requested server names if provided
             if server_names:
-                discovered = {name: config for name, config in discovered.items() if name in server_names}
+                discovered = {
+                    name: config for name, config in discovered.items() if name in server_names
+                }
 
             # Get current MCP config
             current_servers = self.get_config().get("mcp", {}).get("servers", {})

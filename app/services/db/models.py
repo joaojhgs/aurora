@@ -45,12 +45,12 @@ class Message:
     content: str
     message_type: MessageType
     timestamp: datetime
-    session_id: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
-    source_type: Optional[str] = None  # "Text", "STT", etc.
+    session_id: str | None = None
+    metadata: dict[str, Any] | None = None
+    source_type: str | None = None  # "Text", "STT", etc.
 
     @classmethod
-    def create_user_text_message(cls, content: str, session_id: Optional[str] = None) -> "Message":
+    def create_user_text_message(cls, content: str, session_id: str | None = None) -> "Message":
         """Create a new user text message"""
         return cls(
             id=str(uuid.uuid4()),
@@ -62,7 +62,7 @@ class Message:
         )
 
     @classmethod
-    def create_user_voice_message(cls, content: str, session_id: Optional[str] = None) -> "Message":
+    def create_user_voice_message(cls, content: str, session_id: str | None = None) -> "Message":
         """Create a new user voice message"""
         return cls(
             id=str(uuid.uuid4()),
@@ -74,7 +74,7 @@ class Message:
         )
 
     @classmethod
-    def create_assistant_message(cls, content: str, session_id: Optional[str] = None) -> "Message":
+    def create_assistant_message(cls, content: str, session_id: str | None = None) -> "Message":
         """Create a new assistant message"""
         return cls(
             id=str(uuid.uuid4()),
@@ -113,7 +113,7 @@ class Message:
         """Check if this is a user message"""
         return self.message_type in [MessageType.USER_TEXT, MessageType.USER_VOICE]
 
-    def get_ui_source_type(self) -> Optional[str]:
+    def get_ui_source_type(self) -> str | None:
         """Get the source type for UI display"""
         if self.message_type == MessageType.USER_TEXT:
             return "Text"
@@ -130,19 +130,19 @@ class CronJob:
     name: str
     schedule_type: ScheduleType
     schedule_value: str  # The actual schedule (absolute time or cron expression)
-    next_run_time: Optional[datetime]
+    next_run_time: datetime | None
     callback_module: str  # Module path for the callback function
     callback_function: str  # Function name to call
-    callback_args: Optional[dict[str, Any]] = None  # Arguments to pass to callback
+    callback_args: dict[str, Any] | None = None  # Arguments to pass to callback
     is_active: bool = True
     status: JobStatus = JobStatus.PENDING
-    last_run_time: Optional[datetime] = None
-    last_run_result: Optional[str] = None
+    last_run_time: datetime | None = None
+    last_run_result: str | None = None
     retry_count: int = 0
     max_retries: int = 3
     created_at: datetime = None
     updated_at: datetime = None
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Initialize timestamps if not provided"""
@@ -158,7 +158,7 @@ class CronJob:
         absolute_time: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
+        callback_args: dict[str, Any] | None = None,
         **kwargs,
     ) -> "CronJob":
         """Create an absolute time job (e.g., '2025-05-28 15:00')"""
@@ -181,7 +181,7 @@ class CronJob:
         cron_expression: str,
         callback_module: str,
         callback_function: str,
-        callback_args: Optional[dict[str, Any]] = None,
+        callback_args: dict[str, Any] | None = None,
         **kwargs,
     ) -> "CronJob":
         """Create a cron expression job (e.g., '0 9 * * 1-5')"""
@@ -222,7 +222,9 @@ class CronJob:
                         # Skip non-serializable values
                         from app.helpers.aurora_logger import log_debug
 
-                        log_debug(f"Skipping non-serializable callback_arg '{k}' for job {self.name}")
+                        log_debug(
+                            f"Skipping non-serializable callback_arg '{k}' for job {self.name}"
+                        )
                         continue
                 callback_args_safe = json.dumps(safe_args) if safe_args else None
 
@@ -254,13 +256,17 @@ class CronJob:
             name=data["name"],
             schedule_type=ScheduleType(data["schedule_type"]),
             schedule_value=data["schedule_value"],
-            next_run_time=(datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None),
+            next_run_time=(
+                datetime.fromisoformat(data["next_run_time"]) if data["next_run_time"] else None
+            ),
             callback_module=data["callback_module"],
             callback_function=data["callback_function"],
             callback_args=json.loads(data["callback_args"]) if data["callback_args"] else None,
             is_active=data["is_active"],
             status=JobStatus(data["status"]),
-            last_run_time=(datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None),
+            last_run_time=(
+                datetime.fromisoformat(data["last_run_time"]) if data["last_run_time"] else None
+            ),
             last_run_result=data["last_run_result"],
             retry_count=data["retry_count"],
             max_retries=data["max_retries"],
@@ -269,7 +275,7 @@ class CronJob:
             metadata=json.loads(data["metadata"]) if data["metadata"] else None,
         )
 
-    def update_status(self, status: JobStatus, result: Optional[str] = None):
+    def update_status(self, status: JobStatus, result: str | None = None):
         """Update job status and last run information"""
         self.status = status
         self.last_run_time = datetime.now()

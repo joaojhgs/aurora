@@ -17,4 +17,13 @@ from app.shared.messaging.models.tts_models import (
     TTSStopped,
 )
 
-__all__ = ["TTSService", "TTSStarted", "TTSRequest", "TTSStop", "TTSStopped", "TTSPause", "TTSResume", "TTSError"]
+__all__ = [
+    "TTSService",
+    "TTSStarted",
+    "TTSRequest",
+    "TTSStop",
+    "TTSStopped",
+    "TTSPause",
+    "TTSResume",
+    "TTSError",
+]

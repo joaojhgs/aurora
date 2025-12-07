@@ -33,8 +33,9 @@ def get_embeddings():
                 "Or build Docker image with: DB_EMBEDDINGS_MODE=local docker-compose build db-service"
             )
             raise ImportError(
-                "langchain-huggingface is required for local embeddings. " "Install with: pip install -e .[service-db-local-embeddings]"
-            )
+                "langchain-huggingface is required for local embeddings. "
+                "Install with: pip install -e .[service-db-local-embeddings]"
+            ) from None
 
         # Use local HuggingFace embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -56,7 +57,9 @@ def get_embedding_model_signature(model_info: dict[str, str]) -> str:
     return f"{model_info['type']}:{model_info['model_name']}:{model_info['version']}"
 
 
-def check_and_update_embedding_model(store: "SQLiteVecStore", current_model_info: dict[str, str]) -> bool:
+def check_and_update_embedding_model(
+    store: "SQLiteVecStore", current_model_info: dict[str, str]
+) -> bool:
     """
     Check if the embedding model has changed and re-embed all data if necessary.
 
@@ -85,7 +88,9 @@ def check_and_update_embedding_model(store: "SQLiteVecStore", current_model_info
     temp_connection.commit()
 
     # Check stored model signature
-    cursor = temp_connection.execute("SELECT value FROM embedding_metadata WHERE key = 'model_signature'")
+    cursor = temp_connection.execute(
+        "SELECT value FROM embedding_metadata WHERE key = 'model_signature'"
+    )
     result = cursor.fetchone()
     stored_signature = result[0] if result else None
 
@@ -96,7 +101,9 @@ def check_and_update_embedding_model(store: "SQLiteVecStore", current_model_info
         log_info(f"  Re-embedding all data in {store.table} table...")
 
         # Check if the table exists
-        cursor = temp_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (store.table,))
+        cursor = temp_connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (store.table,)
+        )
         table_exists = cursor.fetchone() is not None
 
         if not table_exists:
@@ -247,7 +254,7 @@ class SQLiteVecStore(BaseStore):
         namespace: tuple[str, ...],
         key: str,
         value: dict[str, Any],
-        index: Optional[list[str]] = None,
+        index: list[str] | None = None,
     ) -> None:
         """Async version of put - just calls the sync version."""
         return self.put(namespace, key, value, index)
@@ -256,7 +263,7 @@ class SQLiteVecStore(BaseStore):
         self,
         namespace: tuple[str, ...],
         key: str,
-    ) -> Optional[Item]:
+    ) -> Item | None:
         """Async version of get - just calls the sync version."""
         return self.get(namespace, key)
 
@@ -302,7 +309,7 @@ class SQLiteVecStore(BaseStore):
         namespace: tuple[str, ...],
         key: str,
         value: dict[str, Any],
-        index: Optional[list[str]] = None,
+        index: list[str] | None = None,
     ) -> None:
         """
         Store a key-value pair in the vector store.
@@ -332,13 +339,15 @@ class SQLiteVecStore(BaseStore):
 
         # Store in vector database
         vector_store = self._get_vector_store()
-        vector_store.add_texts(texts=[text_content], metadatas=[metadata], ids=[f"{metadata['namespace']}_{key}"])
+        vector_store.add_texts(
+            texts=[text_content], metadatas=[metadata], ids=[f"{metadata['namespace']}_{key}"]
+        )
 
     def get(
         self,
         namespace: tuple[str, ...],
         key: str,
-    ) -> Optional[Item]:
+    ) -> Item | None:
         """
         Get an item by namespace and key.
 
@@ -356,14 +365,19 @@ class SQLiteVecStore(BaseStore):
         try:
             # Use the key as search query and filter by exact metadata match
             vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(query=key, k=50)  # Get more results to find exact match
+            results = vector_store.similarity_search_with_score(
+                query=key, k=50
+            )  # Get more results to find exact match
 
             for item in results:
                 # Handle both (doc, score) tuples and doc objects
                 doc = item[0] if isinstance(item, tuple) else item
                 if not hasattr(doc, "metadata"):
                     continue
-                if doc.metadata.get("namespace") == namespace_str and doc.metadata.get("key") == key:
+                if (
+                    doc.metadata.get("namespace") == namespace_str
+                    and doc.metadata.get("key") == key
+                ):
                     # Parse the stored value
                     value = json.loads(doc.metadata["value"])
                     return Item(
@@ -475,24 +489,26 @@ class SQLiteVecStore(BaseStore):
                     log_debug(f"Skipping result without metadata: {result}")
                     continue
 
-                if doc.metadata.get("namespace") == namespace_str:
-                    if count >= offset:
-                        if len(items) < limit:
-                            try:
-                                value = json.loads(doc.metadata["value"])
-                                items.append(
-                                    Item(
-                                        value=value,
-                                        key=doc.metadata["key"],
-                                        namespace=namespace,
-                                        created_at=datetime.now(),
-                                        updated_at=datetime.now(),
-                                    )
-                                )
-                            except (json.JSONDecodeError, KeyError) as e:
-                                log_debug(f"Skipping malformed item: {e}")
-                                continue
-                    count += 1
+                if (
+                    doc.metadata.get("namespace") == namespace_str
+                    and count >= offset
+                    and len(items) < limit
+                ):
+                    try:
+                        value = json.loads(doc.metadata["value"])
+                        items.append(
+                            Item(
+                                value=value,
+                                key=doc.metadata["key"],
+                                namespace=namespace,
+                                created_at=datetime.now(),
+                                updated_at=datetime.now(),
+                            )
+                        )
+                    except (json.JSONDecodeError, KeyError) as e:
+                        log_debug(f"Skipping malformed item: {e}")
+                        continue
+                count += 1
 
             return items
 
@@ -525,28 +541,30 @@ class SQLiteVecStore(BaseStore):
         try:
             # Perform vector similarity search
             vector_store = self._get_vector_store()
-            results = vector_store.similarity_search_with_score(query=query, k=limit + offset + 20)  # Get extra to handle filtering
+            results = vector_store.similarity_search_with_score(
+                query=query, k=limit + offset + 20
+            )  # Get extra to handle filtering
 
             # Filter by namespace and apply offset/limit
             items = []
-            count = 0
-            for doc, score in results:
-                if doc.metadata.get("namespace") == namespace_str:
-                    if count >= offset:
-                        if len(items) < limit:
-                            value = json.loads(doc.metadata["value"])
-                            item = Item(
-                                value=value,
-                                key=doc.metadata["key"],
-                                namespace=namespace,
-                                created_at=datetime.now(),
-                                updated_at=datetime.now(),
-                            )
-                            # Store score in the value if needed
-                            if isinstance(item.value, dict):
-                                item.value["_search_score"] = float(score)
-                            items.append(item)
-                    count += 1
+            for count, (doc, score) in enumerate(results):
+                if (
+                    doc.metadata.get("namespace") == namespace_str
+                    and count >= offset
+                    and len(items) < limit
+                ):
+                    value = json.loads(doc.metadata["value"])
+                    item = Item(
+                        value=value,
+                        key=doc.metadata["key"],
+                        namespace=namespace,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now(),
+                    )
+                    # Store score in the value if needed
+                    if isinstance(item.value, dict):
+                        item.value["_search_score"] = float(score)
+                    items.append(item)
 
             return items
 
@@ -582,20 +600,26 @@ class CombinedSQLiteVecStore(BaseStore):
         namespace: tuple[str, ...],
         key: str,
         value: dict[str, Any],
-        index: Optional[list[str]] = None,
+        index: list[str] | None = None,
     ) -> None:
         return self._get_store(namespace).put(namespace, key, value, index)
 
-    def get(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
+    def get(self, namespace: tuple[str, ...], key: str) -> Item | None:
         return self._get_store(namespace).get(namespace, key)
 
     def delete(self, namespace: tuple[str, ...], key: str) -> None:
         return self._get_store(namespace).delete(namespace, key)
 
-    def retrieve_items(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
-        return self._get_store(namespace).list_items_in_namespace(namespace, limit=limit, offset=offset)
+    def retrieve_items(
+        self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0
+    ) -> list[Item]:
+        return self._get_store(namespace).list_items_in_namespace(
+            namespace, limit=limit, offset=offset
+        )
 
-    def search(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
+    def search(
+        self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0
+    ) -> list[Item]:
         return self._get_store(namespace).search(namespace, query=query, limit=limit, offset=offset)
 
     # Implement the missing abstract methods by delegating to the appropriate store
@@ -604,21 +628,27 @@ class CombinedSQLiteVecStore(BaseStore):
         namespace: tuple[str, ...],
         key: str,
         value: dict[str, Any],
-        index: Optional[list[str]] = None,
+        index: list[str] | None = None,
     ) -> None:
         return await self._get_store(namespace).aput(namespace, key, value, index)
 
-    async def aget(self, namespace: tuple[str, ...], key: str) -> Optional[Item]:
+    async def aget(self, namespace: tuple[str, ...], key: str) -> Item | None:
         return await self._get_store(namespace).aget(namespace, key)
 
     async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
         return await self._get_store(namespace).adelete(namespace, key)
 
-    async def alist(self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0) -> list[Item]:
+    async def alist(
+        self, namespace: tuple[str, ...], *, limit: int = 10, offset: int = 0
+    ) -> list[Item]:
         return await self._get_store(namespace).alist(namespace, limit=limit, offset=offset)
 
-    async def asearch(self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0) -> list[Item]:
-        return await self._get_store(namespace).asearch(namespace, query=query, limit=limit, offset=offset)
+    async def asearch(
+        self, namespace: tuple[str, ...], *, query: str, limit: int = 10, offset: int = 0
+    ) -> list[Item]:
+        return await self._get_store(namespace).asearch(
+            namespace, query=query, limit=limit, offset=offset
+        )
 
     def batch(self, ops) -> list[Any]:
         raise NotImplementedError("Batch operations not implemented")
@@ -656,8 +686,12 @@ class RAGService:
             embeddings, model_info = get_embeddings()
 
             # Create separate SQLite vector stores for memories and tools in the data folder
-            self._memories_store = SQLiteVecStore(db_file="./data/memories.db", table="memories", embeddings=embeddings)
-            self._tools_store = SQLiteVecStore(db_file="./data/tools.db", table="tools", embeddings=embeddings)
+            self._memories_store = SQLiteVecStore(
+                db_file="./data/memories.db", table="memories", embeddings=embeddings
+            )
+            self._tools_store = SQLiteVecStore(
+                db_file="./data/tools.db", table="tools", embeddings=embeddings
+            )
 
             # Check if embedding model changed and re-embed if necessary
             log_info("Checking for embedding model changes...")

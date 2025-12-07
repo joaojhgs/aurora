@@ -120,18 +120,24 @@ class DBService(BaseService):
                 # Determine if it's text or voice based on metadata
                 source_type = cmd.metadata.get("source_type", "Text") if cmd.metadata else "Text"
                 # Using session_id from metadata if not explicitly passed, or generating one
-                session_id = cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                session_id = (
+                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                )
 
                 if source_type == "STT":
                     message = Message.create_user_voice_message(cmd.content, session_id)
                 else:
                     message = Message.create_user_text_message(cmd.content, session_id)
             elif cmd.role == "assistant":
-                session_id = cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                session_id = (
+                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                )
                 message = Message.create_assistant_message(cmd.content, session_id)
             else:
                 # Default to user text if role is unknown
-                session_id = cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                session_id = (
+                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
+                )
                 message = Message.create_user_text_message(cmd.content, session_id)
 
             # Set metadata if provided
@@ -169,9 +175,19 @@ class DBService(BaseService):
             messages = await self.db_manager.get_recent_messages(limit=query.limit)
 
             # Convert to dict format
-            messages_data = [{"role": msg.role, "content": msg.content, "timestamp": msg.timestamp, "metadata": msg.metadata} for msg in messages]
+            messages_data = [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp,
+                    "metadata": msg.metadata,
+                }
+                for msg in messages
+            ]
 
-            return DBGetMessagesResponse(messages=messages_data, total=len(messages_data), has_more=False)  # Simplified for now
+            return DBGetMessagesResponse(
+                messages=messages_data, total=len(messages_data), has_more=False
+            )  # Simplified for now
 
         except Exception as e:
             log_error(f"Error retrieving messages: {e}", exc_info=True)
@@ -184,7 +200,9 @@ class DBService(BaseService):
         summary="Get messages for a specific date",
         exposure="internal",
     )
-    async def get_messages_for_date(self, query: DBGetMessagesForDateRequest) -> DBGetMessagesResponse:
+    async def get_messages_for_date(
+        self, query: DBGetMessagesForDateRequest
+    ) -> DBGetMessagesResponse:
         """Handle get messages for date query."""
         try:
             from datetime import date, datetime
@@ -204,7 +222,9 @@ class DBService(BaseService):
                 {
                     "role": msg.role,
                     "content": msg.content,
-                    "timestamp": msg.timestamp.isoformat() if hasattr(msg.timestamp, "isoformat") else str(msg.timestamp),
+                    "timestamp": msg.timestamp.isoformat()
+                    if hasattr(msg.timestamp, "isoformat")
+                    else str(msg.timestamp),
                     "metadata": msg.metadata,
                 }
                 for msg in messages
@@ -212,7 +232,9 @@ class DBService(BaseService):
 
             log_info(f"Retrieved {len(messages_data)} messages for date {target_date}")
 
-            return DBGetMessagesResponse(messages=messages_data, total=len(messages_data), has_more=False)
+            return DBGetMessagesResponse(
+                messages=messages_data, total=len(messages_data), has_more=False
+            )
 
         except Exception as e:
             log_error(f"Error retrieving messages for date: {e}", exc_info=True)
@@ -314,7 +336,11 @@ class DBService(BaseService):
             return EmptyOutput()
 
     @method_contract(
-        method_id=DBMethods.RAG_STORE, input_model=DBRAGStoreRequest, output_model=EmptyOutput, summary="Store item in RAG", exposure="internal"
+        method_id=DBMethods.RAG_STORE,
+        input_model=DBRAGStoreRequest,
+        output_model=EmptyOutput,
+        summary="Store item in RAG",
+        exposure="internal",
     )
     async def rag_store(self, cmd: DBRAGStoreRequest) -> EmptyOutput:
         """Handle RAG store command."""
@@ -340,7 +366,11 @@ class DBService(BaseService):
             return EmptyOutput()
 
     @method_contract(
-        method_id=DBMethods.RAG_DELETE, input_model=DBRAGDeleteRequest, output_model=EmptyOutput, summary="Delete item from RAG", exposure="internal"
+        method_id=DBMethods.RAG_DELETE,
+        input_model=DBRAGDeleteRequest,
+        output_model=EmptyOutput,
+        summary="Delete item from RAG",
+        exposure="internal",
     )
     async def rag_delete(self, cmd: DBRAGDeleteRequest) -> EmptyOutput:
         """Handle RAG delete command."""
@@ -375,7 +405,9 @@ class DBService(BaseService):
     async def rag_search(self, query: DBRAGSearchRequest) -> DBRAGListResponse:
         """Handle RAG search query."""
         try:
-            log_debug(f"Searching RAG store: namespace={query.namespace}, query='{query.query}', limit={query.limit}")
+            log_debug(
+                f"Searching RAG store: namespace={query.namespace}, query='{query.query}', limit={query.limit}"
+            )
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -386,7 +418,9 @@ class DBService(BaseService):
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
-            items = store.search(namespace_tuple, query=query.query, limit=query.limit, offset=query.offset)
+            items = store.search(
+                namespace_tuple, query=query.query, limit=query.limit, offset=query.offset
+            )
 
             # Convert items to response format
             rag_items = []
@@ -395,8 +429,19 @@ class DBService(BaseService):
                 if isinstance(item.value, dict) and "_search_score" in item.value:
                     search_score = item.value.pop("_search_score")
                 # Convert tuple namespace to string (contract expects string)
-                namespace_str = ".".join(item.namespace) if isinstance(item.namespace, tuple) else item.namespace
-                rag_items.append(DBRAGItemResponse(value=item.value, key=item.key, namespace=namespace_str, search_score=search_score))
+                namespace_str = (
+                    ".".join(item.namespace)
+                    if isinstance(item.namespace, tuple)
+                    else item.namespace
+                )
+                rag_items.append(
+                    DBRAGItemResponse(
+                        value=item.value,
+                        key=item.key,
+                        namespace=namespace_str,
+                        search_score=search_score,
+                    )
+                )
 
             return DBRAGListResponse(items=rag_items)
 
@@ -405,7 +450,11 @@ class DBService(BaseService):
             return DBRAGListResponse(items=[])
 
     @method_contract(
-        method_id=DBMethods.RAG_GET, input_model=DBRAGGetRequest, output_model=DBRAGItemResponse, summary="Get RAG item", exposure="internal"
+        method_id=DBMethods.RAG_GET,
+        input_model=DBRAGGetRequest,
+        output_model=DBRAGItemResponse,
+        summary="Get RAG item",
+        exposure="internal",
     )
     async def rag_get(self, query: DBRAGGetRequest) -> DBRAGItemResponse | None:
         """Handle RAG get query."""
@@ -425,8 +474,14 @@ class DBService(BaseService):
 
             if item:
                 # Convert tuple namespace to string (contract expects string)
-                namespace_str = ".".join(item.namespace) if isinstance(item.namespace, tuple) else item.namespace
-                return DBRAGItemResponse(value=item.value, key=item.key, namespace=namespace_str, search_score=None)
+                namespace_str = (
+                    ".".join(item.namespace)
+                    if isinstance(item.namespace, tuple)
+                    else item.namespace
+                )
+                return DBRAGItemResponse(
+                    value=item.value, key=item.key, namespace=namespace_str, search_score=None
+                )
             return None
 
         except Exception as e:
@@ -434,12 +489,18 @@ class DBService(BaseService):
             return None
 
     @method_contract(
-        method_id=DBMethods.RAG_LIST, input_model=DBRAGListRequest, output_model=DBRAGListResponse, summary="List RAG items", exposure="internal"
+        method_id=DBMethods.RAG_LIST,
+        input_model=DBRAGListRequest,
+        output_model=DBRAGListResponse,
+        summary="List RAG items",
+        exposure="internal",
     )
     async def rag_list(self, query: DBRAGListRequest) -> DBRAGListResponse:
         """Handle RAG list query."""
         try:
-            log_debug(f"Listing RAG items: namespace={query.namespace}, limit={query.limit}, offset={query.offset}")
+            log_debug(
+                f"Listing RAG items: namespace={query.namespace}, limit={query.limit}, offset={query.offset}"
+            )
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -456,8 +517,16 @@ class DBService(BaseService):
             rag_items = []
             for item in items:
                 # Convert tuple namespace to string (contract expects string)
-                namespace_str = ".".join(item.namespace) if isinstance(item.namespace, tuple) else item.namespace
-                rag_items.append(DBRAGItemResponse(value=item.value, key=item.key, namespace=namespace_str, search_score=None))
+                namespace_str = (
+                    ".".join(item.namespace)
+                    if isinstance(item.namespace, tuple)
+                    else item.namespace
+                )
+                rag_items.append(
+                    DBRAGItemResponse(
+                        value=item.value, key=item.key, namespace=namespace_str, search_score=None
+                    )
+                )
 
             return DBRAGListResponse(items=rag_items)
 

@@ -5,7 +5,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
+from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.state import State
@@ -58,7 +58,9 @@ async def _initialize_llm() -> None:
             # Get OpenAI config - navigate through the config structure
             # Try getting the full config first to see structure
             full_config = await config_api.aget_config()
-            log_debug(f"Full config top-level keys: {list(full_config.keys()) if full_config else 'None'}")
+            log_debug(
+                f"Full config top-level keys: {list(full_config.keys()) if full_config else 'None'}"
+            )
 
             # Get general section
             general_config_raw = await config_api.aget_config("general")
@@ -86,15 +88,25 @@ async def _initialize_llm() -> None:
             else:
                 general_llm = general_config.get("llm", {})
                 log_info(f"General LLM config: {general_llm}")
-                log_debug(f"General LLM config keys: {list(general_llm.keys()) if general_llm else 'None'}")
+                log_debug(
+                    f"General LLM config keys: {list(general_llm.keys()) if general_llm else 'None'}"
+                )
 
-                third_party = general_llm.get("third_party", {}) if isinstance(general_llm, dict) else {}
+                third_party = (
+                    general_llm.get("third_party", {}) if isinstance(general_llm, dict) else {}
+                )
                 log_info(f"Third party config: {third_party}")
-                log_debug(f"Third party config keys: {list(third_party.keys()) if third_party else 'None'}")
+                log_debug(
+                    f"Third party config keys: {list(third_party.keys()) if third_party else 'None'}"
+                )
 
-                openai_config = third_party.get("openai", {}) if isinstance(third_party, dict) else {}
+                openai_config = (
+                    third_party.get("openai", {}) if isinstance(third_party, dict) else {}
+                )
                 log_info(f"OpenAI config: {openai_config}")
-                log_debug(f"OpenAI config keys: {list(openai_config.keys()) if openai_config else 'None'}")
+                log_debug(
+                    f"OpenAI config keys: {list(openai_config.keys()) if openai_config else 'None'}"
+                )
 
                 if isinstance(openai_config, dict):
                     openai_options = openai_config.get("options", {})
@@ -105,7 +117,9 @@ async def _initialize_llm() -> None:
                     )
                     log_info(options_type_msg)
                 else:
-                    log_error(f"OpenAI config is not a dict! Type: {type(openai_config)}, Value: {openai_config}")
+                    log_error(
+                        f"OpenAI config is not a dict! Type: {type(openai_config)}, Value: {openai_config}"
+                    )
                     openai_options = {}
 
             if openai_options and openai_options.get("model"):
@@ -116,7 +130,9 @@ async def _initialize_llm() -> None:
                 api_key = os.getenv("OPENAI_API_KEY")
                 if not api_key:
                     log_error("OPENAI_API_KEY environment variable is not set!")
-                    log_error("OpenAI LLM requires OPENAI_API_KEY to be set in environment variables")
+                    log_error(
+                        "OpenAI LLM requires OPENAI_API_KEY to be set in environment variables"
+                    )
                     llm = None
                 else:
                     log_debug(f"OPENAI_API_KEY found (length: {len(api_key)} chars)")
@@ -143,17 +159,27 @@ async def _initialize_llm() -> None:
         log_info("Initializing HuggingFace Endpoint LLM...")
         try:
             llm_config = await config_api.aget_config("general")
-            log_debug(f"Retrieved general config: {list(llm_config.keys()) if llm_config else 'None'}")
+            log_debug(
+                f"Retrieved general config: {list(llm_config.keys()) if llm_config else 'None'}"
+            )
             general_llm = llm_config.get("llm", {}) if llm_config else {}
             third_party = general_llm.get("third_party", {})
             hf_endpoint_config = third_party.get("huggingface_endpoint", {})
-            hf_endpoint_options = hf_endpoint_config.get("options", {}) if hf_endpoint_config else {}
-            log_info(f"HuggingFace Endpoint options retrieved: {list(hf_endpoint_options.keys()) if hf_endpoint_options else 'None'}")
+            hf_endpoint_options = (
+                hf_endpoint_config.get("options", {}) if hf_endpoint_config else {}
+            )
+            log_info(
+                f"HuggingFace Endpoint options retrieved: {list(hf_endpoint_options.keys()) if hf_endpoint_options else 'None'}"
+            )
         except Exception as e:
             log_error(f"Error fetching HuggingFace Endpoint config: {e}", exc_info=True)
             hf_endpoint_options = {}
 
-        if hf_endpoint_options and hf_endpoint_options.get("endpoint_url") and hf_endpoint_options.get("access_token"):
+        if (
+            hf_endpoint_options
+            and hf_endpoint_options.get("endpoint_url")
+            and hf_endpoint_options.get("access_token")
+        ):
             try:
                 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
             except ImportError:
@@ -169,14 +195,18 @@ async def _initialize_llm() -> None:
                     # huggingfacehub_api_token)
                     endpoint_options = hf_endpoint_options.copy()
                     if "access_token" in endpoint_options:
-                        endpoint_options["huggingfacehub_api_token"] = endpoint_options.pop("access_token")
+                        endpoint_options["huggingfacehub_api_token"] = endpoint_options.pop(
+                            "access_token"
+                        )
                     if "max_tokens" in endpoint_options:
                         endpoint_options["max_new_tokens"] = endpoint_options.pop("max_tokens")
 
                     # Create HuggingFace endpoint and chat interface
                     hf_endpoint = HuggingFaceEndpoint(**endpoint_options)
                     llm = ChatHuggingFace(llm=hf_endpoint)
-                    log_info(f"Initialized HuggingFace Endpoint LLM with URL: {hf_endpoint_options['endpoint_url']}")
+                    log_info(
+                        f"Initialized HuggingFace Endpoint LLM with URL: {hf_endpoint_options['endpoint_url']}"
+                    )
                 except Exception as e:
                     log_error(f"Failed to initialize HuggingFace Endpoint: {e}")
                     llm = None
@@ -188,8 +218,12 @@ async def _initialize_llm() -> None:
             log_debug(f"Retrieved llm config: {list(llm_config.keys()) if llm_config else 'None'}")
             local_config = llm_config.get("local", {}) if llm_config else {}
             hf_pipeline_config = local_config.get("huggingface_pipeline", {})
-            hf_pipeline_options = hf_pipeline_config.get("options", {}) if hf_pipeline_config else {}
-            log_info(f"HuggingFace Pipeline options retrieved: {list(hf_pipeline_options.keys()) if hf_pipeline_options else 'None'}")
+            hf_pipeline_options = (
+                hf_pipeline_config.get("options", {}) if hf_pipeline_config else {}
+            )
+            log_info(
+                f"HuggingFace Pipeline options retrieved: {list(hf_pipeline_options.keys()) if hf_pipeline_options else 'None'}"
+            )
         except Exception as e:
             log_error(f"Error fetching HuggingFace Pipeline config: {e}", exc_info=True)
             hf_pipeline_options = {}
@@ -212,8 +246,10 @@ async def _initialize_llm() -> None:
             else:
                 try:
                     # Get device configuration from hardware acceleration settings
-                    use_hardware_acceleration = getUseHardwareAcceleration("llm")
-                    device_value = 0 if use_hardware_acceleration == "cuda" else -1  # 0 for GPU, -1 for CPU
+                    use_hardware_acceleration = get_use_hardware_acceleration("llm")
+                    device_value = (
+                        0 if use_hardware_acceleration == "cuda" else -1
+                    )  # 0 for GPU, -1 for CPU
 
                     # Prepare options for HuggingFacePipeline
                     pipeline_options = hf_pipeline_options.copy() if hf_pipeline_options else {}
@@ -240,10 +276,14 @@ async def _initialize_llm() -> None:
                         model_kwargs=model_kwargs,
                     )
 
-                    log_info("HuggingFace Pipeline initialized successfully, initializing ChatHuggingFace...")
+                    log_info(
+                        "HuggingFace Pipeline initialized successfully, initializing ChatHuggingFace..."
+                    )
                     llm = ChatHuggingFace(llm=pipeline, verbose=True, model_id=model_id)
                     device_name = "GPU" if use_hardware_acceleration else "CPU"
-                    log_info(f"Initialized HuggingFace Pipeline LLM with model: {model_id} on device: {device_name}")
+                    log_info(
+                        f"Initialized HuggingFace Pipeline LLM with model: {model_id} on device: {device_name}"
+                    )
                 except Exception as e:
                     log_error(f"Failed to initialize HuggingFace Pipeline: {e}")
                     llm = None
@@ -266,18 +306,24 @@ async def _initialize_llm() -> None:
         else:
             # Check environment variable first
             model_path = os.getenv("AURORA_LLAMA_CPP_MODEL_PATH")
-            log_debug(f"AURORA_LLAMA_CPP_MODEL_PATH env var: {model_path if model_path else 'Not set'}")
+            log_debug(
+                f"AURORA_LLAMA_CPP_MODEL_PATH env var: {model_path if model_path else 'Not set'}"
+            )
 
             # Fall back to config if env var not set
             if model_path is None:
                 try:
                     llm_config = await config_api.aget_config("llm")
-                    log_debug(f"Retrieved llm config: {list(llm_config.keys()) if llm_config else 'None'}")
+                    log_debug(
+                        f"Retrieved llm config: {list(llm_config.keys()) if llm_config else 'None'}"
+                    )
                     local_config = llm_config.get("local", {}) if llm_config else {}
                     llama_config = local_config.get("llama_cpp", {})
                     llama_options = llama_config.get("options", {}) if llama_config else {}
                     model_path = llama_options.get("model_path") if llama_options else None
-                    log_info(f"Llama.cpp model path from config: {model_path if model_path else 'Not found'}")
+                    log_info(
+                        f"Llama.cpp model path from config: {model_path if model_path else 'Not found'}"
+                    )
                 except Exception as e:
                     log_error(f"Error fetching Llama.cpp config: {e}", exc_info=True)
                     model_path = None
@@ -294,7 +340,9 @@ async def _initialize_llm() -> None:
                     llama_init_options["disable_streaming"] = True
 
                     log_info(f"Attempting to initialize Llama.cpp LLM with model: {model_path}")
-                    log_debug(f"Llama.cpp initialization options: {list(llama_init_options.keys())}")
+                    log_debug(
+                        f"Llama.cpp initialization options: {list(llama_init_options.keys())}"
+                    )
 
                     llm = ChatLlamaCpp(**llama_init_options)
                     log_info(f"Successfully initialized Llama.cpp LLM with model: {model_path}")
@@ -303,7 +351,9 @@ async def _initialize_llm() -> None:
                     llm = None
             else:
                 log_error("Llama.cpp model path not configured")
-                log_error("Please set AURORA_LLAMA_CPP_MODEL_PATH environment variable or configure model_path in config")
+                log_error(
+                    "Please set AURORA_LLAMA_CPP_MODEL_PATH environment variable or configure model_path in config"
+                )
                 llm = None
 
     # Final check to ensure LLM is initialized
@@ -342,7 +392,11 @@ def _deserialize_tools(tool_schemas: list[dict]) -> list[StructuredTool]:
 
             # Create a Pydantic model from the JSON schema
             # If the schema has properties, create a model with those fields
-            if args_schema_dict and isinstance(args_schema_dict, dict) and "properties" in args_schema_dict:
+            if (
+                args_schema_dict
+                and isinstance(args_schema_dict, dict)
+                and "properties" in args_schema_dict
+            ):
                 properties = args_schema_dict["properties"]
                 required_fields = args_schema_dict.get("required", [])
 
@@ -357,33 +411,46 @@ def _deserialize_tools(tool_schemas: list[dict]) -> list[StructuredTool]:
                         if field_name in required_fields:
                             # Required field - use Ellipsis (...) with Field description if available
                             if field_description:
-                                field_defs[field_name] = (field_type, Field(..., description=field_description))
+                                field_defs[field_name] = (
+                                    field_type,
+                                    Field(..., description=field_description),
+                                )
                             else:
                                 field_defs[field_name] = (field_type, ...)
                         else:
                             # Optional field - use Field with default None and description if available
                             if field_description:
-                                field_defs[field_name] = (field_type, Field(default=None, description=field_description))
+                                field_defs[field_name] = (
+                                    field_type,
+                                    Field(default=None, description=field_description),
+                                )
                             else:
                                 field_defs[field_name] = (field_type, None)
 
                 # Create the Pydantic model dynamically (empty field_defs creates empty model)
-                ArgsModel = create_model(f"{tool_name}Args", **field_defs)
+                args_model = create_model(f"{tool_name}Args", **field_defs)
             else:
                 # No arguments
-                ArgsModel = create_model(f"{tool_name}Args")
+                args_model = create_model(f"{tool_name}Args")
 
             # Create a dummy function for the tool (execution happens via bus)
-            def dummy_func(**kwargs):
-                """This function is never called - tool execution happens via bus."""
-                raise NotImplementedError(f"Tool {tool_name} should be executed via message bus, not directly")
+            # Use a factory function to properly capture tool_name and avoid B023
+            def _create_dummy_func(name: str):
+                def func(**kwargs):
+                    raise NotImplementedError(
+                        f"Tool {name} should be executed via message bus, not directly"
+                    )
+
+                return func
+
+            dummy_func = _create_dummy_func(tool_name)
 
             # Create the StructuredTool
             tool = StructuredTool(
                 name=tool_name,
                 description=tool_description,
                 func=dummy_func,
-                args_schema=ArgsModel,
+                args_schema=args_model,
             )
 
             tools.append(tool)
@@ -452,7 +519,9 @@ async def chatbot(state: State, bus: MessageBus):
         if result.ok and result.data and "items" in result.data:
             items_data = result.data["items"]
             memories = "\n".join(
-                f"{item['value']['text']} (score: {item.get('search_score', 'N/A')})" for item in items_data if item.get("value", {}).get("text")
+                f"{item['value']['text']} (score: {item.get('search_score', 'N/A')})"
+                for item in items_data
+                if item.get("value", {}).get("text")
             )
             memories = f"## Similar memories\n{memories}" if memories else ""
         else:

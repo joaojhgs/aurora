@@ -19,14 +19,13 @@ import time
 from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Deque
 
 import numpy as np
 import webrtcvad
 from faster_whisper import WhisperModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.helpers.getUseHardwareAcceleration import getUseHardwareAcceleration
+from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import (
     AudioChunk,
     AudioFormat,
@@ -90,7 +89,9 @@ class TranscriptionService(BaseService):
         self._model_lock = threading.Lock()
 
         # Audio buffering
-        self._audio_buffer: Deque[tuple[bytes, str, str]] = deque(maxlen=1000)  # ~10 seconds at 16kHz
+        self._audio_buffer: deque[tuple[bytes, str, str]] = deque(
+            maxlen=1000
+        )  # ~10 seconds at 16kHz
         self._audio_format: AudioFormat | None = None
         self._buffer_lock = threading.Lock()
 
@@ -101,7 +102,7 @@ class TranscriptionService(BaseService):
         # VAD for speech detection
         self._vad: webrtcvad.Vad | None = None
         self._vad_mode = VADMode.MEDIUM
-        self._speech_segments: Deque[bytes] = deque(maxlen=100)
+        self._speech_segments: deque[bytes] = deque(maxlen=100)
         self._in_speech = False
         self._silence_chunks = 0
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
@@ -128,8 +129,12 @@ class TranscriptionService(BaseService):
 
         # Load configuration (async)
         self._language = await config_api.aget("general.speech_to_text.language", "")
-        self._realtime_enabled = await config_api.aget("general.speech_to_text.transcription.realtime_model.enabled", True)
-        self._accurate_enabled = await config_api.aget("general.speech_to_text.transcription.accurate_model.enabled", True)
+        self._realtime_enabled = await config_api.aget(
+            "general.speech_to_text.transcription.realtime_model.enabled", True
+        )
+        self._accurate_enabled = await config_api.aget(
+            "general.speech_to_text.transcription.accurate_model.enabled", True
+        )
 
         log_info("Starting transcription service...")
         self._running = True
@@ -194,8 +199,12 @@ class TranscriptionService(BaseService):
                 self._accurate_model = None
             # Reload config and models
             self._language = await config_api.aget("general.speech_to_text.language", "")
-            self._realtime_enabled = await config_api.aget("general.speech_to_text.transcription.realtime_model.enabled", True)
-            self._accurate_enabled = await config_api.aget("general.speech_to_text.transcription.accurate_model.enabled", True)
+            self._realtime_enabled = await config_api.aget(
+                "general.speech_to_text.transcription.realtime_model.enabled", True
+            )
+            self._accurate_enabled = await config_api.aget(
+                "general.speech_to_text.transcription.accurate_model.enabled", True
+            )
             await self._load_models()
         log_info("TranscriptionService configuration reloaded")
 
@@ -214,25 +223,40 @@ class TranscriptionService(BaseService):
 
         try:
             # Get model configuration
-            accurate_model_size = await config_api.aget("general.speech_to_text.transcription.accurate_model.model_size", "base")
-            realtime_model_size = await config_api.aget("general.speech_to_text.transcription.realtime_model.model_size", "tiny")
+            accurate_model_size = await config_api.aget(
+                "general.speech_to_text.transcription.accurate_model.model_size", "base"
+            )
+            realtime_model_size = await config_api.aget(
+                "general.speech_to_text.transcription.realtime_model.model_size", "tiny"
+            )
             # Use device from new config structure, with fallback to legacy hardware_acceleration
-            realtime_device = await config_api.aget("general.speech_to_text.transcription.realtime_model.device", None)
-            accurate_device = await config_api.aget("general.speech_to_text.transcription.accurate_model.device", None)
+            realtime_device = await config_api.aget(
+                "general.speech_to_text.transcription.realtime_model.device", None
+            )
+            accurate_device = await config_api.aget(
+                "general.speech_to_text.transcription.accurate_model.device", None
+            )
             if realtime_device is None or accurate_device is None:
                 # Fallback to legacy hardware_acceleration setting
-                legacy_device = getUseHardwareAcceleration("stt")
+                legacy_device = get_use_hardware_acceleration("stt")
                 realtime_device = realtime_device or legacy_device
                 accurate_device = accurate_device or legacy_device
-            accurate_compute_type = await config_api.aget("general.speech_to_text.transcription.accurate_model.compute_type", "int8")
-            realtime_compute_type = await config_api.aget("general.speech_to_text.transcription.realtime_model.compute_type", "int8")
+            accurate_compute_type = await config_api.aget(
+                "general.speech_to_text.transcription.accurate_model.compute_type", "int8"
+            )
+            realtime_compute_type = await config_api.aget(
+                "general.speech_to_text.transcription.realtime_model.compute_type", "int8"
+            )
             download_root = "chat_models"  # Default download location
 
             # Load realtime model (fast, lower accuracy)
             if self._realtime_enabled:
                 log_info(f"Loading realtime model ({realtime_model_size}) on {realtime_device}...")
                 self._realtime_model = WhisperModel(
-                    realtime_model_size, device=realtime_device, compute_type=realtime_compute_type, download_root=download_root
+                    realtime_model_size,
+                    device=realtime_device,
+                    compute_type=realtime_compute_type,
+                    download_root=download_root,
                 )
                 log_info(f"Realtime model loaded ({realtime_model_size})")
 
@@ -240,7 +264,10 @@ class TranscriptionService(BaseService):
             if self._accurate_enabled:
                 log_info(f"Loading accurate model ({accurate_model_size}) on {accurate_device}...")
                 self._accurate_model = WhisperModel(
-                    accurate_model_size, device=accurate_device, compute_type=accurate_compute_type, download_root=download_root
+                    accurate_model_size,
+                    device=accurate_device,
+                    compute_type=accurate_compute_type,
+                    download_root=download_root,
                 )
                 log_info(f"Accurate model loaded ({accurate_model_size})")
 
@@ -251,7 +278,9 @@ class TranscriptionService(BaseService):
     def _start_processing_thread(self) -> None:
         """Start the audio processing thread."""
         self._transcribing = True
-        self._process_thread = threading.Thread(target=self._processing_loop, daemon=False, name="Transcription-Processor")
+        self._process_thread = threading.Thread(
+            target=self._processing_loop, daemon=False, name="Transcription-Processor"
+        )
         self._process_thread.start()
         log_info("Processing thread started")
 
@@ -298,7 +327,9 @@ class TranscriptionService(BaseService):
         if stream_id != self._current_stream_id:
             # If we have pending speech, transcribe it now (flush)
             if self._speech_segments:
-                log_debug(f"Stream switch ({self._current_stream_id} -> {stream_id}): flushing segment")
+                log_debug(
+                    f"Stream switch ({self._current_stream_id} -> {stream_id}): flushing segment"
+                )
                 self._transcribe_segment()
                 self._reset_speech_state()
 
@@ -379,11 +410,15 @@ class TranscriptionService(BaseService):
 
         # Transcribe with realtime model (fast)
         if self._realtime_enabled and self._realtime_model:
-            self._transcribe_with_model(audio_np, self._realtime_model, TranscriptionType.REALTIME, duration_ms)
+            self._transcribe_with_model(
+                audio_np, self._realtime_model, TranscriptionType.REALTIME, duration_ms
+            )
 
         # Transcribe with accurate model (slow)
         if self._accurate_enabled and self._accurate_model:
-            self._transcribe_with_model(audio_np, self._accurate_model, TranscriptionType.ACCURATE, duration_ms)
+            self._transcribe_with_model(
+                audio_np, self._accurate_model, TranscriptionType.ACCURATE, duration_ms
+            )
 
     def _bytes_to_numpy(self, audio_data: bytes) -> np.ndarray:
         """Convert PCM bytes to float32 numpy array.
@@ -402,7 +437,13 @@ class TranscriptionService(BaseService):
 
         return audio_float32
 
-    def _transcribe_with_model(self, audio: np.ndarray, model: WhisperModel, transcription_type: TranscriptionType, duration_ms: float) -> None:
+    def _transcribe_with_model(
+        self,
+        audio: np.ndarray,
+        model: WhisperModel,
+        transcription_type: TranscriptionType,
+        duration_ms: float,
+    ) -> None:
         """Transcribe audio with specified model.
 
         Args:
@@ -434,7 +475,9 @@ class TranscriptionService(BaseService):
                 return
 
             elapsed_ms = (time.time() - start_time) * 1000
-            log_info(f"{transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)")
+            log_info(
+                f"{transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)"
+            )
 
             # Emit result
             self._emit_result(
@@ -453,7 +496,13 @@ class TranscriptionService(BaseService):
             self._emit_error(error_message=str(e), error_type="transcription_failed")
 
     def _emit_result(
-        self, text: str, transcription_type: TranscriptionType, confidence: float | None, language: str | None, duration_ms: float, model: str
+        self,
+        text: str,
+        transcription_type: TranscriptionType,
+        confidence: float | None,
+        language: str | None,
+        duration_ms: float,
+        model: str,
     ) -> None:
         """Emit transcription result event.
 
@@ -482,7 +531,9 @@ class TranscriptionService(BaseService):
         )
 
         # Emit to general result topic
-        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionMethods.RESULT, result), self._loop)
+        asyncio.run_coroutine_threadsafe(
+            self.bus.publish(TranscriptionMethods.RESULT, result), self._loop
+        )
 
     def _emit_error(self, error_message: str, error_type: str) -> None:
         """Emit transcription error event.
@@ -502,7 +553,9 @@ class TranscriptionService(BaseService):
             timestamp=datetime.now(),
         )
 
-        asyncio.run_coroutine_threadsafe(self.bus.publish(TranscriptionMethods.ERROR, error), self._loop)
+        asyncio.run_coroutine_threadsafe(
+            self.bus.publish(TranscriptionMethods.ERROR, error), self._loop
+        )
 
     def _reset_speech_state(self) -> None:
         """Reset speech detection state after transcribing segment."""
@@ -511,7 +564,11 @@ class TranscriptionService(BaseService):
         self._silence_chunks = 0
 
     async def _process_audio_data(
-        self, data: bytes, audio_format: AudioFormat | None = None, stream_id: str = "default", source: str = "unknown"
+        self,
+        data: bytes,
+        audio_format: AudioFormat | None = None,
+        stream_id: str = "default",
+        source: str = "unknown",
     ) -> None:
         """Process raw audio data for transcription.
 
@@ -527,7 +584,9 @@ class TranscriptionService(BaseService):
         # Store audio format if provided and not yet set
         if audio_format and self._audio_format is None:
             self._audio_format = audio_format
-            log_info(f"Audio format set: {audio_format.sample_rate}Hz, {audio_format.channels}ch, {audio_format.bits_per_sample}bits")
+            log_info(
+                f"Audio format set: {audio_format.sample_rate}Hz, {audio_format.channels}ch, {audio_format.bits_per_sample}bits"
+            )
 
         # Add to buffer with metadata
         with self._buffer_lock:
@@ -543,7 +602,9 @@ class TranscriptionService(BaseService):
             envelope: Message envelope containing AudioChunk
         """
         chunk: AudioChunk = envelope.payload
-        await self._process_audio_data(chunk.data, chunk.format, stream_id=chunk.stream_id, source=chunk.source)
+        await self._process_audio_data(
+            chunk.data, chunk.format, stream_id=chunk.stream_id, source=chunk.source
+        )
 
     @method_contract(
         method_id=TranscriptionMethods.PROCESS_AUDIO,
@@ -561,11 +622,18 @@ class TranscriptionService(BaseService):
         chunk: STTAudioChunk = envelope.payload
 
         # Convert STT format to internal AudioFormat
-        audio_format = AudioFormat(sample_rate=chunk.sample_rate, channels=chunk.channels, sample_width=chunk.sample_width, codec=chunk.format)
+        audio_format = AudioFormat(
+            sample_rate=chunk.sample_rate,
+            channels=chunk.channels,
+            sample_width=chunk.sample_width,
+            codec=chunk.format,
+        )
 
         import time
 
-        await self._process_audio_data(chunk.data, audio_format, stream_id="external", source="external")  # TODO: Should come from envelope or chunk?
+        await self._process_audio_data(
+            chunk.data, audio_format, stream_id="external", source="external"
+        )  # TODO: Should come from envelope or chunk?
 
     @method_contract(
         method_id=TranscriptionMethods.CONTROL,
@@ -600,14 +668,12 @@ class TranscriptionService(BaseService):
             if control.language:
                 self._language = control.language
                 log_info(f"Language set to: {self._language}")
-        elif action == "enable_realtime":
-            if control.enabled is not None:
-                self._realtime_enabled = control.enabled
-                log_info(f"Realtime transcription: {'enabled' if control.enabled else 'disabled'}")
-        elif action == "enable_accurate":
-            if control.enabled is not None:
-                self._accurate_enabled = control.enabled
-                log_info(f"Accurate transcription: {'enabled' if control.enabled else 'disabled'}")
+        elif action == "enable_realtime" and control.enabled is not None:
+            self._realtime_enabled = control.enabled
+            log_info(f"Realtime transcription: {'enabled' if control.enabled else 'disabled'}")
+        elif action == "enable_accurate" and control.enabled is not None:
+            self._accurate_enabled = control.enabled
+            log_info(f"Accurate transcription: {'enabled' if control.enabled else 'disabled'}")
 
 
 # Export service

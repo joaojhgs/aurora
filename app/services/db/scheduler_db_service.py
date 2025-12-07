@@ -74,7 +74,7 @@ class SchedulerDatabaseService:
             job.updated_at = datetime.now()
             async with aiosqlite.connect(self.db_path) as db:
                 job_dict = job.to_dict()
-                set_clause = ", ".join([f"{k} = ?" for k in job_dict.keys() if k != "id"])
+                set_clause = ", ".join([f"{k} = ?" for k in job_dict if k != "id"])
                 values = [v for k, v in job_dict.items() if k != "id"] + [job.id]
 
                 await db.execute(
@@ -93,7 +93,7 @@ class SchedulerDatabaseService:
             log_error(f"Error updating job: {e}")
             return False
 
-    async def get_job(self, job_id: str) -> Optional[CronJob]:
+    async def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID"""
         try:
             async with aiosqlite.connect(self.db_path) as db:

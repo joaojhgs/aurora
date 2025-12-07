@@ -134,7 +134,10 @@ def main():
                     with open(pyproject_file) as f:
                         data = toml.load(f)
                 except ImportError:
-                    print("Error: Need tomllib (Python 3.11+) or toml package to read pyproject.toml", file=sys.stderr)
+                    print(
+                        "Error: Need tomllib (Python 3.11+) or toml package to read pyproject.toml",
+                        file=sys.stderr,
+                    )
                     sys.exit(1)
 
             # Get core dependencies
@@ -146,12 +149,19 @@ def main():
 
             # Get all optional dependencies
             optional_deps = project.get("optional-dependencies", {})
-            for group_name, deps in optional_deps.items():
+            for _group_name, deps in optional_deps.items():
                 for dep in deps:
                     # Handle nested extras (e.g., "aurora[extra1,extra2]")
                     if isinstance(dep, str):
                         # Extract package name (before ==, >=, etc., and before [)
-                        pkg = dep.split(">=")[0].split("<=")[0].split("==")[0].split("[")[0].strip().lower()
+                        pkg = (
+                            dep.split(">=")[0]
+                            .split("<=")[0]
+                            .split("==")[0]
+                            .split("[")[0]
+                            .strip()
+                            .lower()
+                        )
                         if pkg and not pkg.startswith("aurora"):
                             declared.add(pkg)
         except Exception as e:

@@ -20,7 +20,6 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set
 
 # Mapping of import names to package names
 # Some packages have different import names (e.g., PIL -> Pillow)
@@ -67,7 +66,6 @@ IMPORT_TO_PACKAGE = {
     "onnxruntime": "onnxruntime",
     "pyaudio": "PyAudio",
     "pydantic": "pydantic",
-    "pydantic_settings": "pydantic-settings",
     "jsonschema": "jsonschema",
     "aiosqlite": "aiosqlite",
     "sqlalchemy": "SQLAlchemy",
@@ -135,7 +133,13 @@ def get_package_name(import_name: str) -> str:
         return None
 
     # Skip __future__ and other special imports
-    if import_name.startswith("__") or import_name in ["future", "typing", "collections", "enum", "abc"]:
+    if import_name.startswith("__") or import_name in [
+        "future",
+        "typing",
+        "collections",
+        "enum",
+        "abc",
+    ]:
         return None
 
     # Check mapping first
@@ -229,33 +233,12 @@ def get_package_name(import_name: str) -> str:
         "test",
         "lib2to3",
         "pydoc",
-        "doctest",
-        "unittest",
         "2to3",
-        "pydoc",
         "distutils",
         "ensurepip",
         "venv",
         "zipapp",
         "faulthandler",
-        "pdb",
-        "profile",
-        "pstats",
-        "timeit",
-        "trace",
-        "tracemalloc",
-        "gc",
-        "inspect",
-        "site",
-        "sysconfig",
-        "platform",
-        "errno",
-        "ctypes",
-        "struct",
-        "codecs",
-        "unicodedata",
-        "locale",
-        "gettext",
     }
     if import_name in stdlib_modules:
         return None  # Standard library, not a package
@@ -317,7 +300,9 @@ def find_shared_dependencies(service_results: dict[str, dict]) -> dict[str, list
 
     # Find packages used by multiple services
     shared = {pkg: services for pkg, services in all_packages.items() if len(services) > 1}
-    service_specific = {pkg: services for pkg, services in all_packages.items() if len(services) == 1}
+    service_specific = {
+        pkg: services for pkg, services in all_packages.items() if len(services) == 1
+    }
 
     return {
         "shared": shared,
@@ -343,7 +328,10 @@ def get_dependencies_from_pyproject(pyproject_file: Path) -> set[str]:
                 with open(pyproject_file) as f:
                     data = toml.load(f)
             except ImportError:
-                print("Error: Need tomllib (Python 3.11+) or toml package to read pyproject.toml", file=sys.stderr)
+                print(
+                    "Error: Need tomllib (Python 3.11+) or toml package to read pyproject.toml",
+                    file=sys.stderr,
+                )
                 return set()
 
         declared_packages = set()
@@ -357,7 +345,7 @@ def get_dependencies_from_pyproject(pyproject_file: Path) -> set[str]:
 
         # Get all optional dependencies
         optional_deps = project.get("optional-dependencies", {})
-        for group_name, deps in optional_deps.items():
+        for _group_name, deps in optional_deps.items():
             for dep in deps:
                 # Handle nested extras (e.g., "aurora[extra1,extra2]")
                 if isinstance(dep, str):
@@ -377,7 +365,9 @@ def compare_with_requirements(requirements_file: Path, service_results: dict[str
     declared_packages = set()
 
     # Check if it's pyproject.toml or requirements file
-    if requirements_file.name == "pyproject.toml" or str(requirements_file).endswith("pyproject.toml"):
+    if requirements_file.name == "pyproject.toml" or str(requirements_file).endswith(
+        "pyproject.toml"
+    ):
         declared_packages = get_dependencies_from_pyproject(requirements_file)
         if not declared_packages:
             return {"error": f"Failed to read dependencies from {requirements_file}"}

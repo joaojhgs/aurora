@@ -20,7 +20,7 @@ class MCPClientManager:
     """Manages MCP server connections and tool loading."""
 
     def __init__(self):
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
         self._tools: list[BaseTool] = []
         self._initialized = False
 
@@ -37,7 +37,11 @@ class MCPClientManager:
 
         try:
             # Filter enabled servers
-            enabled_servers = {name: config for name, config in servers_config.items() if config.get("enabled", True)}
+            enabled_servers = {
+                name: config
+                for name, config in servers_config.items()
+                if config.get("enabled", True)
+            }
 
             if not enabled_servers:
                 log_info("No enabled MCP servers found")
@@ -52,7 +56,9 @@ class MCPClientManager:
             client_config = {}
             for name, server_config in enabled_servers.items():
                 try:
-                    log_debug(f"Preparing config for server '{name}' with transport '{server_config.get('transport')}'")
+                    log_debug(
+                        f"Preparing config for server '{name}' with transport '{server_config.get('transport')}'"
+                    )
                     client_config[name] = self._prepare_server_config(server_config)
                     log_debug(f"Prepared config for server '{name}': {client_config[name]}")
                 except Exception as e:
@@ -82,7 +88,7 @@ class MCPClientManager:
                     log_debug("Loading tools from MCP servers...")
                     await self._load_tools()
                     log_debug("Tool loading completed")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log_error("MCP client initialization timed out after 30 seconds")
                 if self._client:
                     try:
@@ -176,9 +182,15 @@ class MCPClientManager:
 
             # Check if this is an Atlassian MCP server that needs authentication
             if "atlassian.com" in url and transport == "sse":
-                log_warning(f"Server '{url}' appears to be an Atlassian MCP server using SSE transport.")
-                log_warning("SSE transport requires authentication. Consider using 'stdio' transport with 'mcp-remote' for automatic OAuth handling.")
-                log_warning("Example: transport='stdio', command='npm', args=['exec', 'mcp-remote', '{url}']")
+                log_warning(
+                    f"Server '{url}' appears to be an Atlassian MCP server using SSE transport."
+                )
+                log_warning(
+                    "SSE transport requires authentication. Consider using 'stdio' transport with 'mcp-remote' for automatic OAuth handling."
+                )
+                log_warning(
+                    "Example: transport='stdio', command='npm', args=['exec', 'mcp-remote', '{url}']"
+                )
         else:
             raise ValueError(f"Unsupported transport type: {transport}")
 
@@ -206,11 +218,17 @@ class MCPClientManager:
             error_str = str(e)
             if "401 Unauthorized" in error_str:
                 log_error("MCP server authentication failed (401 Unauthorized)")
-                log_error("The MCP server requires authentication headers. Add them to the 'headers' section in config.")
+                log_error(
+                    "The MCP server requires authentication headers. Add them to the 'headers' section in config."
+                )
             elif "Connection refused" in error_str or "Failed to connect" in error_str:
-                log_error("Failed to connect to MCP server. Check if the server is running and accessible.")
+                log_error(
+                    "Failed to connect to MCP server. Check if the server is running and accessible."
+                )
             elif "TimeoutError" in error_str or "timeout" in error_str.lower():
-                log_error("Connection to MCP server timed out. The server may be slow or unreachable.")
+                log_error(
+                    "Connection to MCP server timed out. The server may be slow or unreachable."
+                )
 
             # Log the full traceback for better debugging
             import traceback

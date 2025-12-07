@@ -47,7 +47,9 @@ async def start_pomodoro_tool(
     """
     try:
         if _current_session["active"]:
-            return "❌ A Pomodoro session is already active. Use stop_pomodoro_tool to end it first."
+            return (
+                "❌ A Pomodoro session is already active. Use stop_pomodoro_tool to end it first."
+            )
 
         # Reset session state
         _current_session.update(
@@ -66,7 +68,9 @@ async def start_pomodoro_tool(
 
         # Schedule the first work session end
         cron = get_cron_service()
-        work_end_time = (_current_session["start_time"] or datetime.now()) + timedelta(minutes=work_minutes)
+        work_end_time = (_current_session["start_time"] or datetime.now()) + timedelta(
+            minutes=work_minutes
+        )
         await cron.schedule_absolute(
             name="pomodoro_work_end",
             absolute_time=_format_absolute_time(work_end_time),
@@ -112,7 +116,9 @@ async def stop_pomodoro_tool(bus) -> str:
         # Reset session
         cycle = _current_session.get("cycle", 0)
         session_type = _current_session.get("type", "work")
-        _current_session.update({"active": False, "type": None, "cycle": 0, "total_cycles": 0, "start_time": None})
+        _current_session.update(
+            {"active": False, "type": None, "cycle": 0, "total_cycles": 0, "start_time": None}
+        )
 
         return f"🛑 Pomodoro stopped. Last session: {session_type} (Cycle {cycle}), Duration: {duration_str}"
 

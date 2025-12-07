@@ -26,12 +26,12 @@ class DiscoveredServer:
 
     name: str
     transport: str  # stdio, http, sse, websocket
-    command: Optional[str] = None
-    args: Optional[list[str]] = None
-    url: Optional[str] = None
-    env: Optional[dict[str, str]] = None
+    command: str | None = None
+    args: list[str] | None = None
+    url: str | None = None
+    env: dict[str, str] | None = None
     source: str = "unknown"  # discovery method
-    description: Optional[str] = None
+    description: str | None = None
     installed: bool = True
 
 
@@ -64,9 +64,13 @@ class MCPServerDiscovery:
 
         config_paths = [
             # Claude Desktop configs
-            os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json"),  # macOS
+            os.path.expanduser(
+                "~/Library/Application Support/Claude/claude_desktop_config.json"
+            ),  # macOS
             os.path.expanduser("~/.config/claude/claude_desktop_config.json"),  # Linux
-            os.path.join(os.environ.get("APPDATA", ""), "Claude", "claude_desktop_config.json"),  # Windows
+            os.path.join(
+                os.environ.get("APPDATA", ""), "Claude", "claude_desktop_config.json"
+            ),  # Windows
             # Other potential MCP config locations
             os.path.expanduser("~/.mcp/servers.json"),
             os.path.expanduser("~/.config/mcp/servers.json"),
@@ -123,16 +127,23 @@ class MCPServerDiscovery:
                 return
 
             # List global npm packages
-            result = subprocess.run(["npm", "list", "-g", "--depth=0", "--json"], capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                ["npm", "list", "-g", "--depth=0", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
 
             if result.returncode == 0:
                 npm_data = json.loads(result.stdout)
                 dependencies = npm_data.get("dependencies", {})
 
-                for package_name, package_info in dependencies.items():
+                for package_name, _package_info in dependencies.items():
                     if self._is_mcp_package(package_name):
                         await self._add_discovered_server(
-                            name=package_name.replace("@modelcontextprotocol/server-", "").replace("mcp-server-", ""),
+                            name=package_name.replace("@modelcontextprotocol/server-", "").replace(
+                                "mcp-server-", ""
+                            ),
                             transport="stdio",
                             command="npx",
                             args=["-y", package_name],
@@ -142,16 +153,23 @@ class MCPServerDiscovery:
 
             # Check local packages too
             if os.path.exists("package.json"):
-                result = subprocess.run(["npm", "list", "--depth=0", "--json"], capture_output=True, text=True, timeout=30)
+                result = subprocess.run(
+                    ["npm", "list", "--depth=0", "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
 
                 if result.returncode == 0:
                     npm_data = json.loads(result.stdout)
                     dependencies = npm_data.get("dependencies", {})
 
-                    for package_name, package_info in dependencies.items():
+                    for package_name, _package_info in dependencies.items():
                         if self._is_mcp_package(package_name):
                             await self._add_discovered_server(
-                                name=package_name.replace("@modelcontextprotocol/server-", "").replace("mcp-server-", ""),
+                                name=package_name.replace(
+                                    "@modelcontextprotocol/server-", ""
+                                ).replace("mcp-server-", ""),
                                 transport="stdio",
                                 command="npx",
                                 args=[package_name],
@@ -168,7 +186,9 @@ class MCPServerDiscovery:
 
         try:
             # List installed pip packages
-            result = subprocess.run(["pip", "list", "--format=json"], capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                ["pip", "list", "--format=json"], capture_output=True, text=True, timeout=30
+            )
 
             if result.returncode == 0:
                 packages = json.loads(result.stdout)
@@ -176,7 +196,9 @@ class MCPServerDiscovery:
                 for package in packages:
                     package_name = package["name"]
                     if self._is_mcp_package(package_name):
-                        server_name = package_name.replace("mcp-server-", "").replace("mcp_server_", "")
+                        server_name = package_name.replace("mcp-server-", "").replace(
+                            "mcp_server_", ""
+                        )
 
                         await self._add_discovered_server(
                             name=server_name,
@@ -231,16 +253,15 @@ class MCPServerDiscovery:
                 result = sock.connect_ex(("localhost", port))
                 sock.close()
 
-                if result == 0:
-                    # Port is open, test if it's an MCP server
-                    if await self._test_mcp_http_server(port):
-                        await self._add_discovered_server(
-                            name=f"http_server_{port}",
-                            transport="http",
-                            url=f"http://localhost:{port}",
-                            source="network_scan",
-                            description=f"HTTP server on port {port}",
-                        )
+                if result == 0 and await self._test_mcp_http_server(port):
+                    # Port is open and it's an MCP server
+                    await self._add_discovered_server(
+                        name=f"http_server_{port}",
+                        transport="http",
+                        url=f"http://localhost:{port}",
+                        source="network_scan",
+                        description=f"HTTP server on port {port}",
+                    )
 
             except Exception as e:
                 log_debug(f"Error testing port {port}: {e}")
@@ -253,11 +274,19 @@ class MCPServerDiscovery:
         key = f"{name}_{transport}_{kwargs.get('source', 'unknown')}"
         if key not in self.discovered_servers:
             self.discovered_servers[key] = server
-            log_debug(f"Discovered server: {name} ({transport}) from {kwargs.get('source', 'unknown')}")
+            log_debug(
+                f"Discovered server: {name} ({transport}) from {kwargs.get('source', 'unknown')}"
+            )
 
     def _is_mcp_package(self, package_name: str) -> bool:
         """Check if a package name indicates an MCP server"""
-        mcp_indicators = ["@modelcontextprotocol/server-", "mcp-server-", "mcp_server_", "mcp-", "-mcp"]
+        mcp_indicators = [
+            "@modelcontextprotocol/server-",
+            "mcp-server-",
+            "mcp_server_",
+            "mcp-",
+            "-mcp",
+        ]
         return any(indicator in package_name.lower() for indicator in mcp_indicators)
 
     def _is_mcp_process(self, cmdline: list[str]) -> bool:
@@ -277,12 +306,12 @@ class MCPServerDiscovery:
             "mcp-",
             "-mcp",
         ]
-        isMcpProcess = any(indicator in cmdline_str for indicator in mcp_indicators)
-        if isMcpProcess:
-            log_debug(f"MCP process detected: {isMcpProcess}, Command line: {cmdline_str}")
-        return isMcpProcess
+        is_mcp_process = any(indicator in cmdline_str for indicator in mcp_indicators)
+        if is_mcp_process:
+            log_debug(f"MCP process detected: {is_mcp_process}, Command line: {cmdline_str}")
+        return is_mcp_process
 
-    def _extract_server_name_from_cmdline(self, cmdline: list[str]) -> Optional[str]:
+    def _extract_server_name_from_cmdline(self, cmdline: list[str]) -> str | None:
         """Extract server name from command line"""
 
         # Look for package names
@@ -317,7 +346,10 @@ class MCPServerDiscovery:
                         async with session.get(url) as response:
                             # Look for MCP-specific headers or content
                             content = await response.text()
-                            if "mcp" in content.lower() or "model context protocol" in content.lower():
+                            if (
+                                "mcp" in content.lower()
+                                or "model context protocol" in content.lower()
+                            ):
                                 return True
                     except BaseException:
                         continue
@@ -332,7 +364,11 @@ class MCPServerDiscovery:
 
     def get_servers_by_source(self, source: str) -> list[DiscoveredServer]:
         """Get discovered servers by discovery source"""
-        return [server for server in self.discovered_servers.values() if server.source.startswith(source)]
+        return [
+            server
+            for server in self.discovered_servers.values()
+            if server.source.startswith(source)
+        ]
 
     def get_server_configs_for_aurora(self) -> dict[str, dict[str, Any]]:
         """Convert discovered servers to Aurora MCP configuration format"""

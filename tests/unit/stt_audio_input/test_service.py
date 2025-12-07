@@ -147,7 +147,9 @@ class TestAudioInputServiceCapture:
     """Test audio capture functionality."""
 
     @pytest.mark.asyncio
-    async def test_service_starts_capture_automatically(self, audio_service, mock_bus, mock_pyaudio):
+    async def test_service_starts_capture_automatically(
+        self, audio_service, mock_bus, mock_pyaudio
+    ):
         """Test that service automatically starts capture on start."""
         await audio_service.start()
 
@@ -202,7 +204,7 @@ class TestAudioInputServiceErrorHandling:
             service = AudioInputService(bus=mock_bus)
 
             # Should handle error gracefully
-            with pytest.raises(Exception):
+            with pytest.raises((RuntimeError, OSError, ValueError)):
                 await service.start()
 
     @pytest.mark.asyncio

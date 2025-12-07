@@ -99,7 +99,9 @@ class OrchestratorService(BaseService):
         try:
             event = STTUserSpeechCaptured.model_validate(env.payload)
 
-            log_info(f"   Validated event: session={event.session_id}, text='{event.text}', is_final={event.is_final}")
+            log_info(
+                f"   Validated event: session={event.session_id}, text='{event.text}', is_final={event.is_final}"
+            )
 
             # Only process final transcriptions
             if not event.is_final:
@@ -123,7 +125,9 @@ class OrchestratorService(BaseService):
         """Handle UI user input command."""
         try:
             log_info(f"Processing UI input: {cmd.message}")
-            await self._process_input(cmd.message, source="ui", session_id=None)  # cmd doesn't have session_id in current model?
+            await self._process_input(
+                cmd.message, source="ui", session_id=None
+            )  # cmd doesn't have session_id in current model?
             # Wait, OrchestratorProcessRequest has session_id?
             # Let's check the model definition I created.
             # It has 'message', 'context', 'stream', 'max_tokens'.
@@ -174,7 +178,9 @@ class OrchestratorService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
     )
-    async def process_tool_result(self, cmd: OrchestratorToolResultRequest) -> EmptyOutput:  # Need to check model
+    async def process_tool_result(
+        self, cmd: OrchestratorToolResultRequest
+    ) -> EmptyOutput:  # Need to check model
         """Handle tool execution result."""
         try:
             log_info(f"Tool result received: {cmd.request_id}")

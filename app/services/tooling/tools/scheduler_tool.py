@@ -13,7 +13,12 @@ from app.services.scheduler.cron_service import get_cron_service
 
 @tool()
 async def schedule_task_tool(
-    task_name: str, schedule_time: str, action: str, bus: MessageBus | None = None, message: Optional[str] = None, **kwargs
+    task_name: str,
+    schedule_time: str,
+    action: str,
+    bus: MessageBus | None = None,
+    message: str | None = None,
+    **kwargs,
 ) -> str:
     """
     Schedule a task to be executed at a specified time.
@@ -140,7 +145,11 @@ async def list_scheduled_tasks_tool(bus: MessageBus | None = None) -> str:
                 "cancelled": "🚫",
             }.get(job.status.value, "❓")
 
-            next_run = job.next_run_time.strftime("%Y-%m-%d %H:%M:%S") if job.next_run_time else "Not scheduled"
+            next_run = (
+                job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
+                if job.next_run_time
+                else "Not scheduled"
+            )
 
             result += f"{status_emoji} **{job.name}**\n"
             result += f"   ID: {job.id[:8]}...\n"
@@ -174,7 +183,11 @@ async def cancel_scheduled_task_tool(task_identifier: str, bus: MessageBus | Non
         # Find job by name or ID
         target_job = None
         for job in jobs:
-            if job.name.lower() == task_identifier.lower() or job.id.startswith(task_identifier) or job.id == task_identifier:
+            if (
+                job.name.lower() == task_identifier.lower()
+                or job.id.startswith(task_identifier)
+                or job.id == task_identifier
+            ):
                 target_job = job
                 break
 
@@ -470,7 +483,9 @@ async def motivational_message(bus: MessageBus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver motivational message: {e}"}
 
 
-def _get_callback_for_action(action: str, message: str = None, **kwargs) -> tuple[str, dict[str, Any]]:
+def _get_callback_for_action(
+    action: str, message: str = None, **kwargs
+) -> tuple[str, dict[str, Any]]:
     """
     Get the appropriate callback function and arguments for the given action.
 
@@ -481,7 +496,9 @@ def _get_callback_for_action(action: str, message: str = None, **kwargs) -> tupl
 
     if action in ["speak", "say"]:
         # Use the local speak_reminder callback
-        return "app.tooling.tools.scheduler_tool.speak_reminder", {"message": message or "Scheduled reminder"}
+        return "app.tooling.tools.scheduler_tool.speak_reminder", {
+            "message": message or "Scheduled reminder"
+        }
 
     elif action == "reminder":
         # Use the local speak_reminder callback with reminder prefix
@@ -531,7 +548,9 @@ def schedule_speech_reminder(task_name: str, schedule_time: str, message: str) -
     """
     try:
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(schedule_task_tool(task_name, schedule_time, "speak", message))
+        return loop.run_until_complete(
+            schedule_task_tool(task_name, schedule_time, "speak", message)
+        )
     except RuntimeError:
         # No event loop running, create a new one
         return asyncio.run(schedule_task_tool(task_name, schedule_time, "speak", message))

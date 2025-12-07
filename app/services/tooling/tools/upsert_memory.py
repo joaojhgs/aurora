@@ -13,7 +13,7 @@ async def upsert_memory_tool(
     content: str,
     bus,
     *,
-    memory_id: Optional[uuid.UUID] = None,
+    memory_id: uuid.UUID | None = None,
     store: Annotated[BaseStore, InjectedStore],
 ):
     """

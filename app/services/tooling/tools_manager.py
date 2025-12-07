@@ -7,7 +7,7 @@ Ensures proper initialization order: load MCP tools first, then sync with databa
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from collections.abc import Callable
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
@@ -208,7 +208,7 @@ class ToolsManager:
                 async with asyncio.timeout(60):
                     await initialize_mcp()
                 log_debug("MCP initialization completed")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log_error("MCP initialization timed out")
                 return
             except Exception as e:
@@ -258,7 +258,7 @@ class ToolsManager:
                 active_tools[tool.name] = {"name": tool.name, "description": tool.description}
 
             log_debug(f"DEBUG: Found {len(active_tools)} active tools:")
-            for name in active_tools.keys():
+            for name in active_tools:
                 log_debug(f"  - '{name}'")
 
             # Get existing tools from database via bus
@@ -279,7 +279,7 @@ class ToolsManager:
                 existing_items_data = result.data["items"]
                 existing_tools = {item["key"]: item["value"] for item in existing_items_data}
                 log_debug(f"DEBUG: Found {len(existing_tools)} existing tools in database:")
-                for name in existing_tools.keys():
+                for name in existing_tools:
                     log_debug(f"  - '{name}'")
             else:
                 existing_tools = {}
@@ -296,13 +296,15 @@ class ToolsManager:
                     log_info(f"Updating tool '{name}' with new description")
                     await self.bus.publish(
                         DBMethods.RAG_STORE,
-                        DBRAGStoreRequest(namespace="main.tools", key=name, value=tool_data, index=True),
+                        DBRAGStoreRequest(
+                            namespace="main.tools", key=name, value=tool_data, index=True
+                        ),
                         event=False,
                     )
 
             # Find tools to remove (in database but not active)
             tools_to_remove = []
-            for name in existing_tools.keys():
+            for name in existing_tools:
                 if name not in active_tools:
                     tools_to_remove.append(name)
                     log_debug(f"DEBUG: Will remove '{name}' (not in active tools)")
@@ -312,7 +314,9 @@ class ToolsManager:
                 log_info(f"Adding new tool to database: {name}")
                 await self.bus.publish(
                     DBMethods.RAG_STORE,
-                    DBRAGStoreRequest(namespace="main.tools", key=name, value=tool_data, index=True),
+                    DBRAGStoreRequest(
+                        namespace="main.tools", key=name, value=tool_data, index=True
+                    ),
                     event=False,
                 )
 
@@ -325,7 +329,9 @@ class ToolsManager:
                     event=False,
                 )
 
-            log_info(f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}")
+            log_info(
+                f"Tool synchronization complete. Added: {len(tools_to_add)}, Removed: {len(tools_to_remove)}"
+            )
 
         except Exception as e:
             log_error(f"Failed to sync tools with database: {e}", exc_info=True)
@@ -351,7 +357,9 @@ class ToolsManager:
         # Note: This is now async, but ToolsManager.get_tools is sync
         # We need to handle this differently - for now, return tools without search
         # The actual RAG search happens in ToolingService._on_get_tools
-        log_warning("get_tools called with query but ToolsManager.get_tools is sync - falling back to all tools")
+        log_warning(
+            "get_tools called with query but ToolsManager.get_tools is sync - falling back to all tools"
+        )
         return self.tools[:top_k]
 
     def get_tool_by_name(self, name: str) -> Callable | None:

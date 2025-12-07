@@ -26,13 +26,15 @@ def mock_bus():
 @pytest.fixture
 def graph_orchestrator(mock_bus):
     """Create a GraphOrchestrator instance."""
-    with patch("app.orchestrator.graph.chatbot") as mock_chatbot:
-        with patch("app.orchestrator.graph.StateGraph"):
-            with patch("app.orchestrator.graph.MemorySaver"):
-                mock_chatbot.return_value = {"messages": []}
+    with (
+        patch("app.orchestrator.graph.chatbot") as mock_chatbot,
+        patch("app.orchestrator.graph.StateGraph"),
+        patch("app.orchestrator.graph.MemorySaver"),
+    ):
+        mock_chatbot.return_value = {"messages": []}
 
-                orchestrator = GraphOrchestrator(bus=mock_bus)
-                return orchestrator
+        orchestrator = GraphOrchestrator(bus=mock_bus)
+        return orchestrator
 
 
 class TestGraphOrchestratorInitialization:
@@ -40,50 +42,56 @@ class TestGraphOrchestratorInitialization:
 
     def test_init(self, mock_bus):
         """Test orchestrator initialization."""
-        with patch("app.orchestrator.graph.chatbot"):
-            with patch("app.orchestrator.graph.StateGraph"):
-                with patch("app.orchestrator.graph.MemorySaver"):
-                    with patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"):
-                        orchestrator = GraphOrchestrator(bus=mock_bus)
-                        assert orchestrator.bus == mock_bus
+        with (
+            patch("app.orchestrator.graph.chatbot"),
+            patch("app.orchestrator.graph.StateGraph"),
+            patch("app.orchestrator.graph.MemorySaver"),
+            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+        ):
+            orchestrator = GraphOrchestrator(bus=mock_bus)
+            assert orchestrator.bus == mock_bus
 
     def test_graph_compilation(self, mock_bus):
         """Test graph compilation."""
-        with patch("app.orchestrator.graph.chatbot"):
-            with patch("app.orchestrator.graph.StateGraph") as mock_graph_builder:
-                with patch("app.orchestrator.graph.MemorySaver"):
-                    with patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"):
-                        mock_graph = MagicMock()
-                        mock_graph_builder_instance = MagicMock()
-                        mock_graph_builder_instance.add_node = Mock()
-                        mock_graph_builder_instance.add_conditional_edges = Mock()
-                        mock_graph_builder_instance.set_entry_point = Mock()
-                        mock_graph_builder_instance.compile.return_value = mock_graph
-                        mock_graph_builder.return_value = mock_graph_builder_instance
+        with (
+            patch("app.orchestrator.graph.chatbot"),
+            patch("app.orchestrator.graph.StateGraph") as mock_graph_builder,
+            patch("app.orchestrator.graph.MemorySaver"),
+            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+        ):
+            mock_graph = MagicMock()
+            mock_graph_builder_instance = MagicMock()
+            mock_graph_builder_instance.add_node = Mock()
+            mock_graph_builder_instance.add_conditional_edges = Mock()
+            mock_graph_builder_instance.set_entry_point = Mock()
+            mock_graph_builder_instance.compile.return_value = mock_graph
+            mock_graph_builder.return_value = mock_graph_builder_instance
 
-                        orchestrator = GraphOrchestrator(bus=mock_bus)
+            orchestrator = GraphOrchestrator(bus=mock_bus)
 
-                        # Verify initialization completed
-                        assert orchestrator.graph is not None
+            # Verify initialization completed
+            assert orchestrator.graph is not None
 
     def test_graph_compiles_without_store(self, mock_bus):
         """Test graph compiles without store parameter."""
-        with patch("app.orchestrator.graph.chatbot"):
-            with patch("app.orchestrator.graph.StateGraph") as mock_graph_builder:
-                with patch("app.orchestrator.graph.MemorySaver"):
-                    with patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"):
-                        mock_graph = MagicMock()
-                        mock_graph_builder_instance = MagicMock()
-                        mock_graph_builder_instance.add_node = Mock()
-                        mock_graph_builder_instance.add_conditional_edges = Mock()
-                        mock_graph_builder_instance.set_entry_point = Mock()
-                        mock_graph_builder_instance.compile.return_value = mock_graph
-                        mock_graph_builder.return_value = mock_graph_builder_instance
+        with (
+            patch("app.orchestrator.graph.chatbot"),
+            patch("app.orchestrator.graph.StateGraph") as mock_graph_builder,
+            patch("app.orchestrator.graph.MemorySaver"),
+            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+        ):
+            mock_graph = MagicMock()
+            mock_graph_builder_instance = MagicMock()
+            mock_graph_builder_instance.add_node = Mock()
+            mock_graph_builder_instance.add_conditional_edges = Mock()
+            mock_graph_builder_instance.set_entry_point = Mock()
+            mock_graph_builder_instance.compile.return_value = mock_graph
+            mock_graph_builder.return_value = mock_graph_builder_instance
 
-                        orchestrator = GraphOrchestrator(bus=mock_bus)
+            orchestrator = GraphOrchestrator(bus=mock_bus)
 
-                        # Verify graph exists
-                        assert orchestrator.graph is not None
+            # Verify graph exists
+            assert orchestrator.graph is not None
 
 
 class TestGraphOrchestratorToolExecution:

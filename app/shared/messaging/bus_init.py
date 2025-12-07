@@ -76,7 +76,9 @@ def get_bus_for_service(service_name: str) -> MessageBus:
         RuntimeError: If bus has not been initialized for this service
     """
     if service_name not in _service_buses:
-        raise RuntimeError(f"MessageBus not initialized for service '{service_name}'. Call set_bus_for_service() before using get_bus_for_service().")
+        raise RuntimeError(
+            f"MessageBus not initialized for service '{service_name}'. Call set_bus_for_service() before using get_bus_for_service()."
+        )
     return _service_buses[service_name]
 
 
@@ -118,7 +120,9 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
             bus = BullMQBus(redis_url=redis_url)
             set_bus_for_service(service_name, bus)
-            log_info(f"Initialized BullMQBus (processes mode) for service '{service_name}' with Redis: {redis_url}")
+            log_info(
+                f"Initialized BullMQBus (processes mode) for service '{service_name}' with Redis: {redis_url}"
+            )
         else:
             bus = get_bus_for_service(service_name)
         return bus
@@ -149,4 +153,6 @@ def get_bus_singleton() -> MessageBus:
         # Return first available service bus (for processes mode)
         return next(iter(_service_buses.values()))
 
-    raise RuntimeError("MessageBus not initialized. Call set_bus() or initialize_bus_for_service() before using get_bus_singleton().")
+    raise RuntimeError(
+        "MessageBus not initialized. Call set_bus() or initialize_bus_for_service() before using get_bus_singleton()."
+    )

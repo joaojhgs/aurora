@@ -33,21 +33,35 @@ class TranscriptionResult(Event):
 
     text: str = Field(description="The transcribed text")
 
-    transcription_type: TranscriptionType = Field(description="Type of transcription (partial, final, realtime, accurate)")
+    transcription_type: TranscriptionType = Field(
+        description="Type of transcription (partial, final, realtime, accurate)"
+    )
 
-    confidence: float | None = Field(default=None, description="Confidence score (0.0 to 1.0) if available")
+    confidence: float | None = Field(
+        default=None, description="Confidence score (0.0 to 1.0) if available"
+    )
 
-    language: str | None = Field(default=None, description="Detected or specified language code (e.g., 'en', 'es')")
+    language: str | None = Field(
+        default=None, description="Detected or specified language code (e.g., 'en', 'es')"
+    )
 
-    source: str = Field(description="Audio source that was transcribed (e.g., 'microphone', 'websocket')")
+    source: str = Field(
+        description="Audio source that was transcribed (e.g., 'microphone', 'websocket')"
+    )
 
     stream_id: str = Field(description="ID of the audio stream")
 
-    duration_ms: float | None = Field(default=None, description="Duration of audio segment transcribed (milliseconds)")
+    duration_ms: float | None = Field(
+        default=None, description="Duration of audio segment transcribed (milliseconds)"
+    )
 
-    timestamp: datetime = Field(default_factory=datetime.now, description="When transcription was completed")
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When transcription was completed"
+    )
 
-    model: str | None = Field(default=None, description="Model used for transcription (e.g., 'faster-whisper-medium')")
+    model: str | None = Field(
+        default=None, description="Model used for transcription (e.g., 'faster-whisper-medium')"
+    )
 
 
 class TranscriptionControl(Command):
@@ -56,13 +70,22 @@ class TranscriptionControl(Command):
     Allows controlling the transcription service behavior.
     """
 
-    action: str = Field(description="Action to perform: 'start', 'stop', 'pause', 'resume', 'set_language', 'enable_realtime', 'enable_accurate'")
+    action: str = Field(
+        description="Action to perform: 'start', 'stop', 'pause', 'resume', 'set_language', 'enable_realtime', 'enable_accurate'"
+    )
 
-    language: str | None = Field(default=None, description="Language code to set (for 'set_language' action)")
+    language: str | None = Field(
+        default=None, description="Language code to set (for 'set_language' action)"
+    )
 
-    enabled: bool | None = Field(default=None, description="Enable/disable flag (for 'enable_realtime' or 'enable_accurate' actions)")
+    enabled: bool | None = Field(
+        default=None,
+        description="Enable/disable flag (for 'enable_realtime' or 'enable_accurate' actions)",
+    )
 
-    stream_id: str | None = Field(default=None, description="Specific stream to control (None for all streams)")
+    stream_id: str | None = Field(
+        default=None, description="Specific stream to control (None for all streams)"
+    )
 
 
 class TranscriptionError(Event):
@@ -73,7 +96,9 @@ class TranscriptionError(Event):
 
     error_message: str = Field(description="Error message describing what went wrong")
 
-    error_type: str = Field(description="Type of error (e.g., 'model_loading', 'processing', 'timeout')")
+    error_type: str = Field(
+        description="Type of error (e.g., 'model_loading', 'processing', 'timeout')"
+    )
 
     source: str = Field(description="Audio source where error occurred")
 

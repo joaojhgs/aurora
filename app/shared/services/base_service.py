@@ -55,14 +55,19 @@ class BaseService(ABC):
                     if method_id:
                         # Validate format: must contain "."
                         if "." not in method_id:
-                            raise ValueError(f"Invalid method_id '{method_id}': must be in format 'Module.Method'")
+                            raise ValueError(
+                                f"Invalid method_id '{method_id}': must be in format 'Module.Method'"
+                            )
 
                         # Parse: "TTS.Request" -> module="TTS", name="Request"
                         parsed_module, method_name = method_id.split(".", 1)
 
                         # Validate module name matches
                         if parsed_module != module:
-                            raise ValueError(f"Method {method_id} module mismatch: " f"expected {module}, got {parsed_module}")
+                            raise ValueError(
+                                f"Method {method_id} module mismatch: "
+                                f"expected {module}, got {parsed_module}"
+                            )
 
                         # Set metadata for registration
                         metadata["module"] = module
@@ -223,7 +228,9 @@ class BaseService(ABC):
                 affected_sections = getattr(payload, "affected_sections", [])
                 key_path = getattr(payload, "key_path", None)
 
-                log_info(f"{self.module} received config change: {key_path} (sections: {affected_sections})")
+                log_info(
+                    f"{self.module} received config change: {key_path} (sections: {affected_sections})"
+                )
 
                 # Determine which section changed
                 config_section = None
@@ -280,7 +287,9 @@ class BaseService(ABC):
 
                     if topic:
                         # Create a wrapper to handle the envelope and types
-                        async def create_wrapper(method=attr, model=input_model, method_name=attr_name):
+                        async def create_wrapper(
+                            method=attr, model=input_model, method_name=attr_name
+                        ):
                             async def wrapper(envelope: Envelope) -> None:
                                 try:
                                     # 1. Unpack and validate input
@@ -294,10 +303,14 @@ class BaseService(ABC):
                                             else:
                                                 # Try to convert (e.g., from Pydantic model)
                                                 data = model.model_validate(
-                                                    envelope.payload.model_dump() if hasattr(envelope.payload, "model_dump") else envelope.payload
+                                                    envelope.payload.model_dump()
+                                                    if hasattr(envelope.payload, "model_dump")
+                                                    else envelope.payload
                                                 )
                                         except Exception as e:
-                                            log_error(f"Input validation failed for {method_name}: {e}")
+                                            log_error(
+                                                f"Input validation failed for {method_name}: {e}"
+                                            )
                                             return
 
                                         # 2. Execute method
@@ -314,22 +327,37 @@ class BaseService(ABC):
                                         payload = result
                                         # Publish response
                                         await self.bus.publish(
-                                            envelope.reply_to, payload, event=False, origin=self.module  # Responses are point-to-point replies
+                                            envelope.reply_to,
+                                            payload,
+                                            event=False,
+                                            origin=self.module,  # Responses are point-to-point replies
                                         )
-                                        log_debug(f"Sent response for {method_name} to {envelope.reply_to}")
+                                        log_debug(
+                                            f"Sent response for {method_name} to {envelope.reply_to}"
+                                        )
                                     elif result is not None:
                                         # Result returned but no reply_to - just log
-                                        log_debug(f"Method {method_name} returned result but no reply_to set")
+                                        log_debug(
+                                            f"Method {method_name} returned result but no reply_to set"
+                                        )
 
                                 except Exception as e:
-                                    log_error(f"Error executing contract method {method_name}: {e}", exc_info=True)
+                                    log_error(
+                                        f"Error executing contract method {method_name}: {e}",
+                                        exc_info=True,
+                                    )
                                     # Optionally send error response if reply_to is set
                                     if envelope.reply_to:
                                         # Send error response
                                         from app.shared.contracts.models.common import ErrorOutput
 
                                         error_response = ErrorOutput(error=str(e))
-                                        await self.bus.publish(envelope.reply_to, error_response, event=False, origin=self.module)
+                                        await self.bus.publish(
+                                            envelope.reply_to,
+                                            error_response,
+                                            event=False,
+                                            origin=self.module,
+                                        )
 
                             return wrapper
 

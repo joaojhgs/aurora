@@ -76,7 +76,9 @@ class ToolingService(BaseService):
         stats = self.tools_manager.get_stats()
         await self.bus.publish(
             ToolingMethods.TOOLS_INITIALIZED,
-            ToolsInitialized(total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]),
+            ToolsInitialized(
+                total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]
+            ),
             event=True,
             priority=get_system_priority(),
             origin="internal",
@@ -129,12 +131,15 @@ class ToolingService(BaseService):
             field_type = field_info.annotation
 
             # Handle Annotated types (e.g., Annotated[BaseStore, InjectedStore])
-            if hasattr(field_type, "__origin__") and hasattr(field_type.__origin__, "__name__"):
-                if field_type.__origin__.__name__ == "Annotated":
-                    # Extract the actual type from Annotated
-                    args = getattr(field_type, "__args__", [])
-                    if args:
-                        field_type = args[0]
+            if (
+                hasattr(field_type, "__origin__")
+                and hasattr(field_type.__origin__, "__name__")
+                and field_type.__origin__.__name__ == "Annotated"
+            ):
+                # Extract the actual type from Annotated
+                args = getattr(field_type, "__args__", [])
+                if args:
+                    field_type = args[0]
 
             # Check if it's a non-serializable type
             type_name = None
@@ -168,7 +173,10 @@ class ToolingService(BaseService):
                         elif type_name == "bool":
                             type_str = "boolean"
 
-                    filtered_properties[field_name] = {"type": type_str, "description": field_info.description or ""}
+                    filtered_properties[field_name] = {
+                        "type": type_str,
+                        "description": field_info.description or "",
+                    }
             except Exception:
                 # Skip fields we can't process
                 continue
@@ -210,13 +218,17 @@ class ToolingService(BaseService):
                 try:
                     result = await self.bus.request(
                         DBMethods.RAG_SEARCH,
-                        RAGSearchQuery(namespace="main.tools", query=request.query, limit=request.top_k),
+                        RAGSearchQuery(
+                            namespace="main.tools", query=request.query, limit=request.top_k
+                        ),
                         timeout=5.0,
                         priority=get_interactive_priority(),
                     )
                     names: list[str] = []
                     if result.ok and result.data and "items" in result.data:
-                        names = [item.get("key") for item in result.data["items"] if item.get("key")]
+                        names = [
+                            item.get("key") for item in result.data["items"] if item.get("key")
+                        ]
 
                     # Map names to tool callables
                     for name in names:
@@ -256,7 +268,9 @@ class ToolingService(BaseService):
                             except Exception as json_schema_error:
                                 # If schema generation fails due to non-serializable types,
                                 # use helper method to manually build a schema excluding problematic fields
-                                log_debug(f"Direct schema generation failed for {tool.name}, attempting manual extraction: {json_schema_error}")
+                                log_debug(
+                                    f"Direct schema generation failed for {tool.name}, attempting manual extraction: {json_schema_error}"
+                                )
                                 tool_schema["args_schema"] = self._extract_schema_manually(tool)
 
                                 # Skip the rest of the schema processing
@@ -280,7 +294,11 @@ class ToolingService(BaseService):
 
                                 # Include required fields if they exist and filter out injected params
                                 if "required" in full_schema:
-                                    filtered_required = [r for r in full_schema["required"] if r not in ["bus", "store"]]
+                                    filtered_required = [
+                                        r
+                                        for r in full_schema["required"]
+                                        if r not in ["bus", "store"]
+                                    ]
                                     if filtered_required:
                                         args_schema["required"] = filtered_required
 
@@ -289,7 +307,9 @@ class ToolingService(BaseService):
                                 # No properties - use empty object schema
                                 tool_schema["args_schema"] = {"type": "object", "properties": {}}
                         except Exception as schema_error:
-                            log_warning(f"Failed to generate JSON schema for {tool.name}: {schema_error}")
+                            log_warning(
+                                f"Failed to generate JSON schema for {tool.name}: {schema_error}"
+                            )
                             tool_schema["args_schema"] = {"type": "object", "properties": {}}
                     else:
                         # No arguments schema available - use empty object schema
@@ -315,7 +335,9 @@ class ToolingService(BaseService):
         output_model=ToolingGetToolByNameResponse,
         exposure="both",
     )
-    async def _on_get_tool_by_name(self, request: ToolingGetToolByNameRequest) -> ToolingGetToolByNameResponse:
+    async def _on_get_tool_by_name(
+        self, request: ToolingGetToolByNameRequest
+    ) -> ToolingGetToolByNameResponse:
         """Handle get tool by name query.
 
         Args:
@@ -328,7 +350,9 @@ class ToolingService(BaseService):
 
             # Return response
             if tool:
-                return ToolingGetToolByNameResponse(found=True, name=tool.name, description=getattr(tool, "description", ""))
+                return ToolingGetToolByNameResponse(
+                    found=True, name=tool.name, description=getattr(tool, "description", "")
+                )
             else:
                 return ToolingGetToolByNameResponse(found=False, name=request.name)
 
@@ -372,7 +396,9 @@ class ToolingService(BaseService):
         output_model=ToolingGetMCPStatusResponse,
         exposure="internal",
     )
-    async def _on_get_mcp_status(self, request: ToolingGetMCPStatusRequest) -> ToolingGetMCPStatusResponse:
+    async def _on_get_mcp_status(
+        self, request: ToolingGetMCPStatusRequest
+    ) -> ToolingGetMCPStatusResponse:
         """Handle get MCP status query.
 
         Args:
@@ -430,7 +456,9 @@ class ToolingService(BaseService):
         output_model=ToolingExecuteToolResponse,
         exposure="both",
     )
-    async def _on_execute_tool(self, request: ToolingExecuteToolRequest) -> ToolingExecuteToolResponse:
+    async def _on_execute_tool(
+        self, request: ToolingExecuteToolRequest
+    ) -> ToolingExecuteToolResponse:
         """Handle execute tool command.
 
         Args:
@@ -445,7 +473,10 @@ class ToolingService(BaseService):
                 # Try to find similar tool names (case-insensitive, partial match)
                 all_tool_names = self.tools_manager.get_all_tool_names()
                 similar_tools = [
-                    name for name in all_tool_names if request.tool_name.lower() in name.lower() or name.lower() in request.tool_name.lower()
+                    name
+                    for name in all_tool_names
+                    if request.tool_name.lower() in name.lower()
+                    or name.lower() in request.tool_name.lower()
                 ]
 
                 error_msg = f"Tool not found: '{request.tool_name}'"
@@ -453,7 +484,9 @@ class ToolingService(BaseService):
                     error_msg += f". Similar tools found: {', '.join(similar_tools)}"
                 else:
                     available = all_tool_names[:10]
-                    error_msg += f". Available tools ({len(all_tool_names)} total): {', '.join(available)}"
+                    error_msg += (
+                        f". Available tools ({len(all_tool_names)} total): {', '.join(available)}"
+                    )
                     if len(all_tool_names) > 10:
                         error_msg += f" ... and {len(all_tool_names) - 10} more"
 
@@ -470,7 +503,11 @@ class ToolingService(BaseService):
 
                 # Execute the tool - LangChain will handle argument validation
                 # The bus parameter is injected at runtime and not in the schema
-                result = await tool.ainvoke(tool_args) if hasattr(tool, "ainvoke") else tool.invoke(tool_args)
+                result = (
+                    await tool.ainvoke(tool_args)
+                    if hasattr(tool, "ainvoke")
+                    else tool.invoke(tool_args)
+                )
                 log_debug(f"Tool {request.tool_name} executed successfully: {result}")
 
                 # Return response

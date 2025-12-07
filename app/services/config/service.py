@@ -39,7 +39,9 @@ class ConfigService(BaseService):
     def __init__(self):
         """Initialize the config service."""
         super().__init__(
-            module=ConfigModule.NAME, summary="Configuration management service", capabilities=["config_management", "plugin_management"]
+            module=ConfigModule.NAME,
+            summary="Configuration management service",
+            capabilities=["config_management", "plugin_management"],
         )
         self.config_manager = ConfigManager()
         self._setup_config_observers()
@@ -94,7 +96,11 @@ class ConfigService(BaseService):
             log_error(f"Failed to publish config change event: {e}")
 
     @method_contract(
-        method_id=ConfigMethods.GET, summary="Get configuration value", input_model=GetConfigQuery, output_model=GetConfigResponse, exposure="both"
+        method_id=ConfigMethods.GET,
+        summary="Get configuration value",
+        input_model=GetConfigQuery,
+        output_model=GetConfigResponse,
+        exposure="both",
     )
     async def _handle_get_config(self, query: GetConfigQuery) -> GetConfigResponse:
         """Handle GetConfig query.

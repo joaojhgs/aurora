@@ -14,6 +14,7 @@ into a single cohesive internal service.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 import uuid
 from datetime import datetime
@@ -166,7 +167,9 @@ class STTCoordinatorService(BaseService):
         log_info(f"   Listen timeout: {self._listen_timeout_seconds}s")
         log_info(f"   Multi-turn: {'enabled' if self._multi_turn_enabled else 'disabled'}")
         log_info(f"   Pause TTS: {'yes' if self._pause_tts_on_listening else 'no'}")
-        log_info(f"   Ambient transcription: {'enabled' if self._ambient_transcription_enabled else 'disabled'}")
+        log_info(
+            f"   Ambient transcription: {'enabled' if self._ambient_transcription_enabled else 'disabled'}"
+        )
 
     async def on_stop(self) -> None:
         """Stop the STT coordinator service."""
@@ -183,10 +186,8 @@ class STTCoordinatorService(BaseService):
         # Cancel any pending timeout
         if self._timeout_task and not self._timeout_task.done():
             self._timeout_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._timeout_task
-            except asyncio.CancelledError:
-                pass
 
         # End current session if active
         if self._current_session_id:
@@ -208,7 +209,11 @@ class STTCoordinatorService(BaseService):
         log_info(f"Reloading STT coordinator configuration (section: {config_section})")
 
         # If STT or audio config changed, reload
-        if config_section is None or config_section == "general" or config_section == "speech_to_text":
+        if (
+            config_section is None
+            or config_section == "general"
+            or config_section == "speech_to_text"
+        ):
             log_info("STT coordinator configuration changed, reloading...")
             was_capturing = self._capturing
 
@@ -230,16 +235,30 @@ class STTCoordinatorService(BaseService):
     async def _load_config(self) -> None:
         """Load configuration from config manager."""
         # Audio configuration
-        self._sample_rate = await config_api.aget("general.speech_to_text.audio_input.sample_rate", 16000)
+        self._sample_rate = await config_api.aget(
+            "general.speech_to_text.audio_input.sample_rate", 16000
+        )
         self._channels = await config_api.aget("general.speech_to_text.audio_input.channels", 1)
-        self._chunk_size = await config_api.aget("general.speech_to_text.audio_input.chunk_size", 1024)
-        self._device_index = await config_api.aget("general.speech_to_text.audio_input.device_index", None)
+        self._chunk_size = await config_api.aget(
+            "general.speech_to_text.audio_input.chunk_size", 1024
+        )
+        self._device_index = await config_api.aget(
+            "general.speech_to_text.audio_input.device_index", None
+        )
 
         # Coordinator configuration
-        self._listen_timeout_seconds = await config_api.aget("general.speech_to_text.coordinator.session_timeout_s", 10.0)
-        self._multi_turn_enabled = await config_api.aget("general.speech_to_text.coordinator.multi_turn_enabled", False)
-        self._pause_tts_on_listening = await config_api.aget("general.speech_to_text.coordinator.pause_tts_on_listen", True)
-        self._ambient_transcription_enabled = await config_api.aget("general.speech_to_text.ambient_transcription.enable", False)
+        self._listen_timeout_seconds = await config_api.aget(
+            "general.speech_to_text.coordinator.session_timeout_s", 10.0
+        )
+        self._multi_turn_enabled = await config_api.aget(
+            "general.speech_to_text.coordinator.multi_turn_enabled", False
+        )
+        self._pause_tts_on_listening = await config_api.aget(
+            "general.speech_to_text.coordinator.pause_tts_on_listen", True
+        )
+        self._ambient_transcription_enabled = await config_api.aget(
+            "general.speech_to_text.ambient_transcription.enable", False
+        )
 
     def _initialize_pyaudio(self) -> None:
         """Initialize PyAudio and enumerate devices."""
@@ -253,7 +272,9 @@ class STTCoordinatorService(BaseService):
                     info = self._pyaudio.get_device_info_by_index(i)
                     if info.get("maxInputChannels", 0) > 0:
                         log_debug(
-                            f"  [{i}] {info.get('name')} " f"(channels: {info.get('maxInputChannels')}, " f"rate: {info.get('defaultSampleRate')})"
+                            f"  [{i}] {info.get('name')} "
+                            f"(channels: {info.get('maxInputChannels')}, "
+                            f"rate: {info.get('defaultSampleRate')})"
                         )
                 except Exception as e:
                     log_debug(f"Could not get info for device {i}: {e}")
@@ -319,7 +340,9 @@ class STTCoordinatorService(BaseService):
             self._paused = False
 
             # Start capture thread
-            self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True, name="AudioCapture")
+            self._capture_thread = threading.Thread(
+                target=self._capture_loop, daemon=True, name="AudioCapture"
+            )
             self._capture_thread.start()
 
             log_info(f"Audio capture started (stream_id: {self._stream_id})")
@@ -499,13 +522,17 @@ class STTCoordinatorService(BaseService):
                 from app.shared.contracts.models.tts import TTSMethods
                 from app.shared.messaging.models.tts_models import TTSPause
 
-                await self.bus.publish(TTSMethods.PAUSE, TTSPause(), event=False, priority=get_interactive_priority())
+                await self.bus.publish(
+                    TTSMethods.PAUSE, TTSPause(), event=False, priority=get_interactive_priority()
+                )
             except Exception as e:
                 log_warning(f"Failed to pause TTS: {e}")
 
         # Enable transcription (unpause if paused)
         try:
-            await self.bus.publish(TranscriptionMethods.CONTROL, TranscriptionControl(action="resume"), event=False)
+            await self.bus.publish(
+                TranscriptionMethods.CONTROL, TranscriptionControl(action="resume"), event=False
+            )
         except Exception as e:
             log_warning(f"Failed to enable transcription: {e}")
 
@@ -513,7 +540,10 @@ class STTCoordinatorService(BaseService):
         self._timeout_task = asyncio.create_task(self._timeout_handler())
 
         # Emit session started event
-        await self.bus.publish(STTMethods.SESSION_STARTED, STTSessionStarted(wake_word=wake_word, session_id=session_id))
+        await self.bus.publish(
+            STTMethods.SESSION_STARTED,
+            STTSessionStarted(wake_word=wake_word, session_id=session_id),
+        )
 
     async def _timeout_handler(self) -> None:
         """Handle session timeout."""
@@ -573,7 +603,12 @@ class STTCoordinatorService(BaseService):
         await self._transition_to(STTState.PROCESSING)
 
         # Emit user speech captured event
-        speech_event = STTUserSpeechCaptured(session_id=self._current_session_id or "unknown", text=text, confidence=result.confidence, is_final=True)
+        speech_event = STTUserSpeechCaptured(
+            session_id=self._current_session_id or "unknown",
+            text=text,
+            confidence=result.confidence,
+            is_final=True,
+        )
 
         log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTMethods.USER_SPEECH_CAPTURED}")
         await self.bus.publish(STTMethods.USER_SPEECH_CAPTURED, speech_event)
@@ -607,13 +642,19 @@ class STTCoordinatorService(BaseService):
         # Emit session ended event
         await self.bus.publish(
             STTMethods.SESSION_ENDED,
-            STTSessionEnded(session_id=session_id, reason=reason, transcription=transcription if transcription else None),
+            STTSessionEnded(
+                session_id=session_id,
+                reason=reason,
+                transcription=transcription if transcription else None,
+            ),
         )
 
         # Pause transcription to save resources (ONLY if ambient transcription is disabled)
         if not self._ambient_transcription_enabled:
             try:
-                await self.bus.publish(TranscriptionMethods.CONTROL, TranscriptionControl(action="pause"), event=False)
+                await self.bus.publish(
+                    TranscriptionMethods.CONTROL, TranscriptionControl(action="pause"), event=False
+                )
                 log_debug("Transcription paused (ambient mode disabled)")
             except Exception as e:
                 log_warning(f"Failed to pause transcription: {e}")
@@ -640,7 +681,11 @@ class STTCoordinatorService(BaseService):
         await self._transition_to(STTState.IDLE)
 
     @method_contract(
-        method_id=STTMethods.LISTEN, summary="Start listening for speech", input_model=STTListenRequest, output_model=EmptyOutput, exposure="both"
+        method_id=STTMethods.LISTEN,
+        summary="Start listening for speech",
+        input_model=STTListenRequest,
+        output_model=EmptyOutput,
+        exposure="both",
     )
     async def _on_listen(self, env: Envelope) -> None:
         """Handle listen command."""
@@ -679,7 +724,11 @@ class STTCoordinatorService(BaseService):
             log_error(f"Error handling stop listening request: {e}", exc_info=True)
 
     @method_contract(
-        method_id=STTMethods.AUDIO, summary="Process raw audio chunk", input_model=STTAudioChunk, output_model=EmptyOutput, exposure="internal"
+        method_id=STTMethods.AUDIO,
+        summary="Process raw audio chunk",
+        input_model=STTAudioChunk,
+        output_model=EmptyOutput,
+        exposure="internal",
     )
     async def _on_audio_chunk(self, env: Envelope) -> None:
         """Handle audio chunk."""

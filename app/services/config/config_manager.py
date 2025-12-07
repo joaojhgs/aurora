@@ -1,7 +1,8 @@
 import json
 import os
+from collections.abc import Callable
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from jsonschema import ValidationError, validate
 
@@ -50,14 +51,14 @@ class ConfigManager:
                     log_info("Configuration loaded and validated from config.json")
                 except ValidationError as e:
                     log_error(f"Configuration validation failed: {e.message}")
-                    raise RuntimeError(f"Configuration validation failed: {e.message}")
+                    raise RuntimeError(f"Configuration validation failed: {e.message}") from e
             else:
                 self._config = self._get_default_config()
                 self.save_config()
                 log_info("Created default configuration file")
         except Exception as e:
             log_error(f"Error loading config: {e}")
-            raise RuntimeError(f"Error loading config: {e}")
+            raise RuntimeError(f"Error loading config: {e}") from e
 
     def save_config(self):
         """Save current configuration to JSON file"""
@@ -119,7 +120,7 @@ class ConfigManager:
                     config_ref[keys[-1]] = old_value
                 else:
                     del config_ref[keys[-1]]
-                raise ValueError(f"Configuration change rejected: {e.message}")
+                raise ValueError(f"Configuration change rejected: {e.message}") from e
 
             # Save to file if requested
             if save:
@@ -261,10 +262,16 @@ class ConfigManager:
             "PIPER_PATH": ("text_to_speech.piper_path", str),
             # New Docker Hub environment variables
             "AURORA_TTS_MODEL_FILE_PATH": ("general.text_to_speech.model_file_path", str),
-            "AURORA_TTS_MODEL_CONFIG_FILE_PATH": ("general.text_to_speech.model_config_file_path", str),
+            "AURORA_TTS_MODEL_CONFIG_FILE_PATH": (
+                "general.text_to_speech.model_config_file_path",
+                str,
+            ),
             "AURORA_WAKE_WORD_MODEL_PATH": ("general.speech_to_text.wake_word.model_path", str),
             "AURORA_LLAMA_CPP_MODEL_PATH": ("general.llm.local.llama_cpp.options.model_path", str),
-            "AURORA_HUGGINGFACE_MODEL_ID": ("general.llm.local.huggingface_pipeline.options.model", str),
+            "AURORA_HUGGINGFACE_MODEL_ID": (
+                "general.llm.local.huggingface_pipeline.options.model",
+                str,
+            ),
             "AURORA_MODELS_DIR": ("general.models_dir", str),
             "USE_CUDA_TTS": ("cuda.use_cuda_tts", lambda x: x.lower() == "true"),
             "USE_CUDA_STT": ("cuda.use_cuda_stt", lambda x: x.lower() == "true"),
@@ -400,7 +407,11 @@ class ConfigManager:
         metadata.update(
             {
                 # Dictionaries that should NOT be expanded (treat as single JSON fields)
-                "plugins.jira.env": {"expand_dict": False, "type": "dict", "description": "Environment variables for Jira plugin"}
+                "plugins.jira.env": {
+                    "expand_dict": False,
+                    "type": "dict",
+                    "description": "Environment variables for Jira plugin",
+                }
             }
         )
 
@@ -412,7 +423,9 @@ class ConfigManager:
             validate(instance=config_data, schema=self._schema)
         except ValidationError as e:
             # Re-raise with more context
-            raise ValidationError(f"Configuration validation failed at '{e.json_path}': {e.message}")
+            raise ValidationError(
+                f"Configuration validation failed at '{e.json_path}': {e.message}"
+            ) from e
 
     def validate_current_config(self) -> list[str]:
         """Validate current configuration and return list of validation errors"""
@@ -466,7 +479,9 @@ class ConfigManager:
         for key in hw_accel_keys:
             value = self.get(f"hardware_acceleration.{key}")
             if not isinstance(value, bool):
-                errors.append(f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}")
+                errors.append(
+                    f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}"
+                )
 
         return errors
 

@@ -97,7 +97,12 @@ class UIBridge(QObject):
             log_info("UI Bridge: Requesting today's messages from database...")
 
             # Request messages for today (date=None means today)
-            await self.bus.publish(DBMethods.GET_MESSAGES_FOR_DATE, GetMessagesForDate(date=None), event=False, origin="internal")  # Command/Query
+            await self.bus.publish(
+                DBMethods.GET_MESSAGES_FOR_DATE,
+                GetMessagesForDate(date=None),
+                event=False,
+                origin="internal",
+            )  # Command/Query
 
         except Exception as e:
             log_error(f"Error loading today's messages: {e}", exc_info=True)
@@ -125,7 +130,9 @@ class UIBridge(QObject):
                     if is_user and msg.get("metadata"):
                         source_type = msg["metadata"].get("source_type")
 
-                    self.ui_window.signals.message_received.emit(msg["content"], is_user, source_type)
+                    self.ui_window.signals.message_received.emit(
+                        msg["content"], is_user, source_type
+                    )
 
                 log_debug(f"UI Bridge: Emitted {len(messages)} messages to UI")
             else:
@@ -162,7 +169,13 @@ class UIBridge(QObject):
         from app.shared.messaging.models.tts_models import TTSStop
 
         asyncio.run_coroutine_threadsafe(
-            self.bus.publish(TTSMethods.STOP, TTSStop(), event=False, priority=get_interactive_priority(), origin="internal"),
+            self.bus.publish(
+                TTSMethods.STOP,
+                TTSStop(),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+            ),
             self._loop,  # Command  # High priority
         )
 

@@ -46,9 +46,13 @@ def update_provider_config(provider_type, llm_backend=None, gpu_backend=None):
                 config.set("llm.local.huggingface_pipeline.options.torch_dtype", "auto", save=False)
             else:
                 config.set("llm.local.huggingface_pipeline.options.device", "cpu", save=False)
-                config.set("llm.local.huggingface_pipeline.options.torch_dtype", "float32", save=False)
+                config.set(
+                    "llm.local.huggingface_pipeline.options.torch_dtype", "float32", save=False
+                )
 
-        print(f"  ✅ Configured HuggingFace pipeline with device: {config.get('llm.local.huggingface_pipeline.options.device')}")
+        print(
+            f"  ✅ Configured HuggingFace pipeline with device: {config.get('llm.local.huggingface_pipeline.options.device')}"
+        )
 
     elif provider_type == "llama_cpp":
         # Set up llama-cpp-python configuration
@@ -57,11 +61,15 @@ def update_provider_config(provider_type, llm_backend=None, gpu_backend=None):
         if gpu_backend:
             # Configure GPU layers based on backend
             if gpu_backend in ["cuda", "rocm", "metal"]:
-                config.set("llm.local.llama_cpp.options.n_gpu_layers", 35, save=False)  # Use most GPU layers
+                config.set(
+                    "llm.local.llama_cpp.options.n_gpu_layers", 35, save=False
+                )  # Use most GPU layers
             else:
                 config.set("llm.local.llama_cpp.options.n_gpu_layers", 0, save=False)  # CPU only
 
-        print(f"  ✅ Configured llama-cpp with GPU layers: {config.get('llm.local.llama_cpp.options.n_gpu_layers')}")
+        print(
+            f"  ✅ Configured llama-cpp with GPU layers: {config.get('llm.local.llama_cpp.options.n_gpu_layers')}"
+        )
 
     # Save all changes
     config.save_config()
@@ -153,7 +161,9 @@ def main():
         choices=["cpu", "cuda", "rocm", "metal", "vulkan", "sycl", "rpc"],
         help="Hardware backend for local models",
     )
-    parser.add_argument("--feature-level", choices=["core", "full", "dev"], help="Feature level to configure")
+    parser.add_argument(
+        "--feature-level", choices=["core", "full", "dev"], help="Feature level to configure"
+    )
     parser.add_argument("--setup-keys", action="store_true", help="Show API key setup instructions")
     parser.add_argument("--tts-gpu", action="store_true", help="Enable GPU acceleration for TTS")
     parser.add_argument("--stt-gpu", action="store_true", help="Enable GPU acceleration for STT")

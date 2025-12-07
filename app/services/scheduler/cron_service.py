@@ -3,7 +3,8 @@ High-level cron service interface for Aurora.
 Provides easy-to-use functions for scheduling tasks.
 """
 
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging import MessageBus
@@ -36,10 +37,10 @@ class CronService:
         self,
         name: str,
         absolute_time: str,
-        callback: Union[Callable, str],
-        callback_args: Optional[dict[str, Any]] = None,
+        callback: Callable | str,
+        callback_args: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Schedule a job with absolute time.
 
@@ -70,10 +71,10 @@ class CronService:
         self,
         name: str,
         cron_expression: str,
-        callback: Union[Callable, str],
-        callback_args: Optional[dict[str, Any]] = None,
+        callback: Callable | str,
+        callback_args: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Schedule a job with cron expression.
 
@@ -103,7 +104,7 @@ class CronService:
             **kwargs,
         )
 
-    async def _schedule_job_async(self, scheduler_method, callback, **kwargs) -> Optional[str]:
+    async def _schedule_job_async(self, scheduler_method, callback, **kwargs) -> str | None:
         """Helper to schedule jobs asynchronously"""
         if not self._initialized:
             log_warning("Warning: CronService not initialized. Call initialize() first.")
@@ -114,7 +115,9 @@ class CronService:
             callback_module, callback_function = self._parse_callback(callback)
 
             # Call the scheduler manager method directly
-            job_id = await scheduler_method(callback_module=callback_module, callback_function=callback_function, **kwargs)
+            job_id = await scheduler_method(
+                callback_module=callback_module, callback_function=callback_function, **kwargs
+            )
 
             return job_id
 
@@ -139,7 +142,7 @@ class CronService:
         else:
             raise ValueError("Callback must be a function or string in format 'module.function'")
 
-    async def get_job(self, job_id: str) -> Optional[CronJob]:
+    async def get_job(self, job_id: str) -> CronJob | None:
         """Get job by ID asynchronously"""
         if not self._initialized:
             return None
@@ -167,7 +170,7 @@ class CronService:
 
         return await self.scheduler_manager.deactivate_job(job_id)
 
-    async def get_job_status(self, job_id: str) -> Optional[dict[str, Any]]:
+    async def get_job_status(self, job_id: str) -> dict[str, Any] | None:
         """Get detailed job status"""
         job = await self.get_job(job_id)
         if not job:
@@ -200,10 +203,10 @@ class CronService:
         self,
         name: str,
         schedule_text: str,
-        callback: Union[Callable, str],
-        callback_args: Optional[dict[str, Any]] = None,
+        callback: Callable | str,
+        callback_args: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Schedule a job using either absolute time or cron expression format.
 
@@ -272,7 +275,7 @@ class CronService:
 
 
 # Global service instance
-_cron_service: Optional[CronService] = None
+_cron_service: CronService | None = None
 
 
 def get_cron_service(bus: MessageBus | None = None) -> CronService:
@@ -297,10 +300,10 @@ def get_cron_service(bus: MessageBus | None = None) -> CronService:
 def schedule_task(
     name: str,
     when: str,
-    callback: Union[Callable, str],
-    callback_args: Optional[dict[str, Any]] = None,
+    callback: Callable | str,
+    callback_args: dict[str, Any] | None = None,
     **kwargs,
-) -> Optional[str]:
+) -> str | None:
     """
     Schedule a task using either absolute time or cron expression format.
 
@@ -339,14 +342,20 @@ def schedule_task(
             result = [None]
 
             def run_async():
-                result[0] = asyncio.run(service.schedule_from_text(name, when, callback, callback_args, **kwargs))
+                result[0] = asyncio.run(
+                    service.schedule_from_text(name, when, callback, callback_args, **kwargs)
+                )
 
             thread = threading.Thread(target=run_async)
             thread.start()
             thread.join()
             return result[0]
         else:
-            return loop.run_until_complete(service.schedule_from_text(name, when, callback, callback_args, **kwargs))
+            return loop.run_until_complete(
+                service.schedule_from_text(name, when, callback, callback_args, **kwargs)
+            )
     except RuntimeError:
         # No event loop, create a new one
-        return asyncio.run(service.schedule_from_text(name, when, callback, callback_args, **kwargs))
+        return asyncio.run(
+            service.schedule_from_text(name, when, callback, callback_args, **kwargs)
+        )

@@ -257,7 +257,9 @@ class BullMQBus:
             error: Error that caused failure
         """
         self._stats["dead_letters"] += 1
-        log_error(f"Job {job.id} moved to dead-letter: {error}", exc_info=True if error else False)
+        log_error(
+            f"Job {job.id} moved to dead-letter: {error}", exc_info=bool(error) if error else False
+        )
 
     def _topic_matches(self, topic: str, pattern: str) -> bool:
         """Check if a topic matches a subscription pattern.
@@ -343,7 +345,9 @@ class BullMQBus:
         job_data = {
             "id": job_id,
             "type": topic,  # Store actual topic
-            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json")
+            if hasattr(message, "model_dump")
+            else message,
             "origin": origin,
             "reply_to": reply_to,
         }
@@ -367,7 +371,10 @@ class BullMQBus:
         await queue.add(queue_name, job_data, job_opts)
         self._stats["published"] += 1
 
-        log_debug(f"Published message to BullMQ queue {queue_name} (topic: {topic}) " f"with priority {priority}")
+        log_debug(
+            f"Published message to BullMQ queue {queue_name} (topic: {topic}) "
+            f"with priority {priority}"
+        )
 
     async def request(
         self,
@@ -413,17 +420,19 @@ class BullMQBus:
         # Subscribe to reply topic (one-time handler)
         async def _on_reply(env: Envelope) -> None:
             """Handle reply message."""
-            if env.correlation_id == correlation_id:
-                if not fut.done():
-                    if hasattr(env.payload, "model_dump"):
-                        result_data = env.payload.model_dump()
-                    else:
-                        result_data = env.payload
+            if (
+                env.correlation_id == correlation_id
+                and not fut.done()
+                and hasattr(env.payload, "model_dump")
+            ):
+                result_data = env.payload.model_dump()
+            elif env.correlation_id == correlation_id and not fut.done():
+                result_data = env.payload
 
-                    if isinstance(result_data, dict) and "ok" in result_data:
-                        fut.set_result(QueryResult(**result_data))
-                    else:
-                        fut.set_result(QueryResult(ok=True, data=result_data))
+                if isinstance(result_data, dict) and "ok" in result_data:
+                    fut.set_result(QueryResult(**result_data))
+                else:
+                    fut.set_result(QueryResult(ok=True, data=result_data))
 
         # Subscribe to reply topic
         self.subscribe(reply_topic, _on_reply)
@@ -432,7 +441,9 @@ class BullMQBus:
         job_data = {
             "id": str(uuid_lib.uuid4()),
             "type": topic,
-            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json")
+            if hasattr(message, "model_dump")
+            else message,
             "origin": origin,
             "reply_to": reply_topic,
             "correlation_id": correlation_id,
@@ -480,7 +491,7 @@ class BullMQBus:
             result = await asyncio.wait_for(fut, timeout)
             log_debug(f"Received response for correlation_id {correlation_id}")
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log_error(f"Request to {topic} timed out after {timeout}s")
             # Clean up future
             self._response_futures.pop(correlation_id, None)

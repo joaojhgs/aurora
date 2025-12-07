@@ -45,7 +45,11 @@ class SchedulerService(BaseService):
     def __init__(self):
         """Initialize scheduler service with CronService."""
         global _scheduler_service_instance
-        super().__init__(module=SchedulerModule.NAME, summary="Manages scheduled jobs and timers", capabilities=["cron_scheduling", "job_execution"])
+        super().__init__(
+            module=SchedulerModule.NAME,
+            summary="Manages scheduled jobs and timers",
+            capabilities=["cron_scheduling", "job_execution"],
+        )
         # Pass bus to cron service so it can inject it into callbacks
         self.cron_service = get_cron_service(bus=self.bus)
         self._jobs: dict = {}
@@ -116,7 +120,9 @@ class SchedulerService(BaseService):
 
                 await self.bus.publish(
                     DBMethods.SAVE_CRON_JOB,
-                    StoreCronJob(name=cmd.name, schedule=cmd.schedule, action=cmd.action, enabled=cmd.enabled),
+                    StoreCronJob(
+                        name=cmd.name, schedule=cmd.schedule, action=cmd.action, enabled=cmd.enabled
+                    ),
                     event=False,  # Command
                     origin="internal",
                 )
@@ -154,7 +160,12 @@ class SchedulerService(BaseService):
                 from app.shared.contracts.models.db import DBMethods
                 from app.shared.messaging.models.db_models import DeleteCronJob
 
-                await self.bus.publish(DBMethods.DELETE_CRON_JOB, DeleteCronJob(job_id=cmd.job_id), event=False, origin="internal")  # Command
+                await self.bus.publish(
+                    DBMethods.DELETE_CRON_JOB,
+                    DeleteCronJob(job_id=cmd.job_id),
+                    event=False,
+                    origin="internal",
+                )  # Command
             else:
                 log_warning(f"Failed to cancel job {cmd.job_id}")
 
@@ -289,14 +300,22 @@ class SchedulerService(BaseService):
                         from app.shared.contracts.models.tts import TTSMethods
                         from app.shared.messaging.models.tts_models import TTSRequest
 
-                        await self.bus.publish(TTSMethods.REQUEST, TTSRequest(text=text, interrupt=False), event=False, origin="system")
+                        await self.bus.publish(
+                            TTSMethods.REQUEST,
+                            TTSRequest(text=text, interrupt=False),
+                            event=False,
+                            origin="system",
+                        )
                     elif service == "orchestrator":
                         # Send to orchestrator as user input
                         from app.shared.contracts.models.orchestrator import OrchestratorMethods
                         from app.shared.messaging.models.orchestrator_models import UserInput
 
                         await self.bus.publish(
-                            OrchestratorMethods.USER_INPUT, UserInput(text=command, source="scheduler"), event=False, origin="system"
+                            OrchestratorMethods.USER_INPUT,
+                            UserInput(text=command, source="scheduler"),
+                            event=False,
+                            origin="system",
                         )
                     else:
                         log_warning(f"Unknown action service: {service}")

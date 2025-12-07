@@ -30,18 +30,20 @@ def mock_bus():
 @pytest.fixture
 def db_service(mock_bus):
     """Create a DBService instance."""
-    with patch("app.db.service.DatabaseManager") as mock_db_mgr:
-        with patch("app.db.service.SchedulerDatabaseService") as mock_scheduler_db:
-            with patch("app.db.service.RAGService") as mock_rag:
-                mock_db_mgr.return_value.initialize = AsyncMock()
-                mock_scheduler_db.return_value.initialize = AsyncMock()
-                mock_rag.return_value.combined_store = MagicMock()
+    with (
+        patch("app.db.service.DatabaseManager") as mock_db_mgr,
+        patch("app.db.service.SchedulerDatabaseService") as mock_scheduler_db,
+        patch("app.db.service.RAGService") as mock_rag,
+    ):
+        mock_db_mgr.return_value.initialize = AsyncMock()
+        mock_scheduler_db.return_value.initialize = AsyncMock()
+        mock_rag.return_value.combined_store = MagicMock()
 
-                service = DBService(bus=mock_bus)
-                service.db_manager = mock_db_mgr.return_value
-                service.scheduler_db = mock_scheduler_db.return_value
-                service.rag_service = mock_rag.return_value
-                return service
+        service = DBService(bus=mock_bus)
+        service.db_manager = mock_db_mgr.return_value
+        service.scheduler_db = mock_scheduler_db.return_value
+        service.rag_service = mock_rag.return_value
+        return service
 
 
 class TestDBServiceInitialization:
@@ -49,11 +51,13 @@ class TestDBServiceInitialization:
 
     def test_init(self, mock_bus):
         """Test service initialization."""
-        with patch("app.db.service.DatabaseManager"):
-            with patch("app.db.service.SchedulerDatabaseService"):
-                with patch("app.db.service.RAGService"):
-                    service = DBService(bus=mock_bus)
-                    assert service.bus == mock_bus
+        with (
+            patch("app.db.service.DatabaseManager"),
+            patch("app.db.service.SchedulerDatabaseService"),
+            patch("app.db.service.RAGService"),
+        ):
+            service = DBService(bus=mock_bus)
+            assert service.bus == mock_bus
 
     @pytest.mark.asyncio
     async def test_start(self, db_service, mock_bus):
@@ -133,7 +137,9 @@ class TestDBServiceRAGOperations:
     @pytest.mark.asyncio
     async def test_rag_store(self, db_service):
         """Test RAG store command."""
-        cmd = RAGStoreCommand(namespace=("main", "memories"), key="test-key", value={"text": "Test memory"})
+        cmd = RAGStoreCommand(
+            namespace=("main", "memories"), key="test-key", value={"text": "Test memory"}
+        )
         env = Envelope(type=DBTopics.RAG_STORE, payload=cmd)
 
         mock_store = MagicMock()
@@ -142,7 +148,9 @@ class TestDBServiceRAGOperations:
 
         await db_service._rag_store(env)
 
-        mock_store.put.assert_called_once_with(("main", "memories"), "test-key", {"text": "Test memory"}, None)
+        mock_store.put.assert_called_once_with(
+            ("main", "memories"), "test-key", {"text": "Test memory"}, None
+        )
 
     @pytest.mark.asyncio
     async def test_rag_delete(self, db_service):
@@ -262,7 +270,13 @@ class TestDBServiceRAGOperations:
         from langgraph.store.base import Item
 
         mock_items = [
-            Item(value={"name": "tool1"}, key="tool1", namespace=("tools",), created_at=datetime.now(), updated_at=datetime.now()),
+            Item(
+                value={"name": "tool1"},
+                key="tool1",
+                namespace=("tools",),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            ),
         ]
 
         mock_store = MagicMock()

@@ -170,7 +170,9 @@ class TestLifecycle:
 
         # Verify subscriptions
         assert service.bus.subscribe.call_count >= 5
-        service.bus.subscribe.assert_any_call(AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk)
+        service.bus.subscribe.assert_any_call(
+            AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk
+        )
         service.bus.subscribe.assert_any_call(TranscriptionTopics.CONTROL, service._on_control)
 
         await service.stop()
@@ -615,7 +617,9 @@ class TestErrorHandling:
     """Test error handling."""
 
     @pytest.mark.asyncio
-    async def test_transcription_error_emits_error_event(self, service, mock_whisper_model, mock_vad):
+    async def test_transcription_error_emits_error_event(
+        self, service, mock_whisper_model, mock_vad
+    ):
         """Test transcription error emits error event."""
         await service.start()
 

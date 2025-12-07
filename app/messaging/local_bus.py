@@ -50,10 +50,14 @@ class LocalBus:
         self._subs: dict[str, list[Handler]] = defaultdict(list)
 
         # Command queues (priority-based)
-        self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(lambda: asyncio.PriorityQueue(maxsize=command_queue_size))
+        self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(
+            lambda: asyncio.PriorityQueue(maxsize=command_queue_size)
+        )
 
         # Event queues (FIFO)
-        self._evt_queues: dict[str, asyncio.Queue] = defaultdict(lambda: asyncio.Queue(maxsize=event_queue_size))
+        self._evt_queues: dict[str, asyncio.Queue] = defaultdict(
+            lambda: asyncio.Queue(maxsize=event_queue_size)
+        )
 
         # Worker tracking
         self._cmd_workers_started: dict[str, bool] = defaultdict(bool)
@@ -149,7 +153,9 @@ class LocalBus:
             return None
 
         # Execute all handlers concurrently
-        results = await asyncio.gather(*[_run_handler(h) for h in matching_handlers], return_exceptions=not raise_errors)
+        results = await asyncio.gather(
+            *[_run_handler(h) for h in matching_handlers], return_exceptions=not raise_errors
+        )
 
         # Check for errors if raise_errors is True
         if raise_errors:
@@ -188,7 +194,7 @@ class LocalBus:
                 env = await asyncio.wait_for(queue.get(), timeout=0.1)
                 await self._deliver(topic, env)
                 queue.task_done()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log_error(f"Error in event worker for {topic}: {e}")
@@ -210,7 +216,10 @@ class LocalBus:
                 try:
                     await self._deliver(topic, env, raise_errors=True)
                 except Exception as e:
-                    log_error(f"Error delivering command to {topic} " f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}")
+                    log_error(
+                        f"Error delivering command to {topic} "
+                        f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}"
+                    )
 
                     # Retry with exponential backoff
                     env.attempts += 1
@@ -223,18 +232,24 @@ class LocalBus:
                         queue.task_done()  # Mark current task done before re-queueing
                         self._counter += 1
                         await queue.put((prio, self._counter, env))
-                        log_info(f"Re-queued command {env.id} to {topic} " f"(attempt {env.attempts}/{env.max_attempts})")
+                        log_info(
+                            f"Re-queued command {env.id} to {topic} "
+                            f"(attempt {env.attempts}/{env.max_attempts})"
+                        )
                     else:
                         # Dead-letter
                         self._stats["dead_letters"] += 1
                         await self._dead_letter.put(env)
-                        log_error(f"Command {env.id} to {topic} exceeded max attempts, " f"moved to dead-letter queue")
+                        log_error(
+                            f"Command {env.id} to {topic} exceeded max attempts, "
+                            f"moved to dead-letter queue"
+                        )
                         queue.task_done()
                 else:
                     # Success case
                     queue.task_done()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log_error(f"Error in command worker for {topic}: {e}")
@@ -354,7 +369,9 @@ class LocalBus:
                 result_data = None
 
                 # Check if it's a BaseModel instance (not the class itself)
-                if hasattr(env.payload, "__class__") and hasattr(env.payload.__class__, "model_dump"):
+                if hasattr(env.payload, "__class__") and hasattr(
+                    env.payload.__class__, "model_dump"
+                ):
                     try:
                         result_data = env.payload.model_dump()
                         log_debug(f"Reply handler: model_dump result = {result_data}")
@@ -399,7 +416,7 @@ class LocalBus:
         try:
             result = await asyncio.wait_for(fut, timeout)
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log_error(f"Request to {topic} timed out after {timeout}s")
             return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
 

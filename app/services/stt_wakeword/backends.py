@@ -16,7 +16,9 @@ class DetectionResult(BaseModel):
     """Result from wake word detection."""
 
     detected: bool = Field(description="Whether a wake word was detected")
-    wake_word_index: int = Field(default=-1, description="Index of the detected wake word (-1 if none)")
+    wake_word_index: int = Field(
+        default=-1, description="Index of the detected wake word (-1 if none)"
+    )
     confidence: float = Field(default=0.0, description="Confidence score (0.0 to 1.0)")
 
 
@@ -85,9 +87,24 @@ class OpenWakeWordBackend(WakeWordBackend):
     async def initialize(self) -> None:
         """Initialize OpenWakeWord backend."""
         try:
+            import os
+
             from openwakeword.model import Model
+            from openwakeword.utils import download_models
 
             log_info("Loading OpenWakeWord models...")
+
+            # Ensure models are downloaded (they're not included in the package)
+            models_dir = os.path.join(
+                os.path.dirname(__import__("openwakeword").__file__),
+                "resources",
+                "models",
+            )
+            melspectrogram_path = os.path.join(models_dir, "melspectrogram.onnx")
+            if not os.path.exists(melspectrogram_path):
+                log_info("Downloading OpenWakeWord model files (first-time setup)...")
+                download_models()
+                log_info("Model files downloaded successfully")
 
             # Load custom models
             self._model = Model(

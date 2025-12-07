@@ -1,11 +1,11 @@
 import json
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from operator import itemgetter
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Optional,
+    Self,
     Union,
     cast,
 )
@@ -50,7 +50,6 @@ from pydantic import (
     Field,
     model_validator,
 )
-from typing_extensions import Self
 
 
 class ChatLlamaCpp(BaseChatModel):
@@ -67,10 +66,10 @@ class ChatLlamaCpp(BaseChatModel):
     model_path: str
     """The path to the Llama model file."""
 
-    lora_base: Optional[str] = None
+    lora_base: str | None = None
     """The path to the Llama LoRA base model."""
 
-    lora_path: Optional[str] = None
+    lora_path: str | None = None
     """The path to the Llama LoRA. If None, no LoRa is loaded."""
 
     n_ctx: int = 512
@@ -95,7 +94,7 @@ class ChatLlamaCpp(BaseChatModel):
     use_mlock: bool = False
     """Force system to keep model in RAM."""
 
-    n_threads: Optional[int] = None
+    n_threads: int | None = None
     """Number of threads to use.
     If None, the number of threads is automatically determined."""
 
@@ -103,10 +102,10 @@ class ChatLlamaCpp(BaseChatModel):
     """Number of tokens to process in parallel.
     Should be a number between 1 and n_ctx."""
 
-    n_gpu_layers: Optional[int] = None
+    n_gpu_layers: int | None = None
     """Number of layers to be loaded into gpu memory. Default None."""
 
-    suffix: Optional[str] = None
+    suffix: str | None = None
     """A suffix to append to the generated text. If None, no suffix is appended."""
 
     max_tokens: int = 256
@@ -121,7 +120,7 @@ class ChatLlamaCpp(BaseChatModel):
     echo: bool = False
     """Whether to echo the prompt."""
 
-    stop: Optional[list[str]] = None
+    stop: list[str] | None = None
     """A list of strings to stop generation when encountered."""
 
     repeat_penalty: float = 1.1
@@ -148,7 +147,7 @@ class ChatLlamaCpp(BaseChatModel):
     streaming: bool = True
     """Whether to stream the results, token by token."""
 
-    grammar_path: Optional[Union[str, Path]] = None
+    grammar_path: str | Path | None = None
     """
     grammar_path: Path to the .gbnf file that defines formal grammars
     for constraining model outputs. For instance, the grammar can be used
@@ -168,9 +167,6 @@ class ChatLlamaCpp(BaseChatModel):
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
         """Validate that llama-cpp-python library is installed."""
-        Llama = None
-        LlamaGrammar = None
-
         # First try the standard llama_cpp import
         try:
             from llama_cpp import Llama, LlamaGrammar
@@ -184,7 +180,7 @@ class ChatLlamaCpp(BaseChatModel):
                     "Could not import llama-cpp-python library. "
                     "Please install the llama-cpp-python library to "
                     "use this embedding model: pip install llama-cpp-python"
-                )
+                ) from None
 
         model_path = self.model_path
         model_param_names = [
@@ -215,12 +211,17 @@ class ChatLlamaCpp(BaseChatModel):
         try:
             self.client = Llama(model_path, **model_params)
         except Exception as e:
-            raise ValueError(f"Could not load Llama model from path: {model_path}. " f"Received error {e}")
+            raise ValueError(
+                f"Could not load Llama model from path: {model_path}. Received error {e}"
+            ) from e
 
         if self.grammar and self.grammar_path:
             grammar = self.grammar
             grammar_path = self.grammar_path
-            raise ValueError("Can only pass in one of grammar and grammar_path. Received " f"{grammar=} and {grammar_path=}.")
+            raise ValueError(
+                "Can only pass in one of grammar and grammar_path. Received "
+                f"{grammar=} and {grammar_path=}."
+            )
         elif isinstance(self.grammar, str):
             self.grammar = LlamaGrammar.from_string(self.grammar)
         elif self.grammar_path:
@@ -229,7 +230,7 @@ class ChatLlamaCpp(BaseChatModel):
             pass
         return self
 
-    def _get_parameters(self, stop: Optional[list[str]]) -> dict[str, Any]:
+    def _get_parameters(self, stop: list[str] | None) -> dict[str, Any]:
         """
         Performs sanity check, preparing parameters in format needed by llama_cpp.
 
@@ -256,7 +257,7 @@ class ChatLlamaCpp(BaseChatModel):
         generations = []
         for res in response["choices"]:
             message = _convert_dict_to_message(res["message"])
-            generation_info = dict(finish_reason=res.get("finish_reason"))
+            generation_info = {"finish_reason": res.get("finish_reason")}
             gen = ChatGeneration(message=message, generation_info=generation_info)
             generations.append(gen)
         token_usage = response.get("usage", {})
@@ -269,8 +270,8 @@ class ChatLlamaCpp(BaseChatModel):
     def _generate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         params = {**self._get_parameters(stop), **kwargs}
@@ -290,8 +291,8 @@ class ChatLlamaCpp(BaseChatModel):
     def _stream(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
         params = {**self._get_parameters(stop), **kwargs}
@@ -322,9 +323,9 @@ class ChatLlamaCpp(BaseChatModel):
 
     def bind_tools(
         self,
-        tools: Sequence[Union[dict[str, Any], type[BaseModel], Callable, BaseTool]],
+        tools: Sequence[dict[str, Any] | type[BaseModel] | Callable | BaseTool],
         *,
-        tool_choice: Optional[Union[dict, bool, str]] = None,
+        tool_choice: dict | bool | str | None = None,
         **kwargs: Any,
     ) -> Runnable[LanguageModelInput, BaseMessage]:
         """Bind tool-like objects to this chat model
@@ -373,11 +374,11 @@ class ChatLlamaCpp(BaseChatModel):
 
     def with_structured_output(
         self,
-        schema: Optional[Union[dict, type[BaseModel]]] = None,
+        schema: dict | type[BaseModel] | None = None,
         *,
         include_raw: bool = False,
         **kwargs: Any,
-    ) -> Runnable[LanguageModelInput, Union[dict, BaseModel]]:
+    ) -> Runnable[LanguageModelInput, dict | BaseModel]:
         """Model wrapper that returns outputs formatted to match the given schema.
 
         Args:
@@ -515,19 +516,27 @@ class ChatLlamaCpp(BaseChatModel):
             raise ValueError(f"Received unsupported arguments {kwargs}")
         is_pydantic_schema = isinstance(schema, type) and is_basemodel_subclass(schema)
         if schema is None:
-            raise ValueError("schema must be specified when method is 'function_calling'. " "Received None.")
+            raise ValueError(
+                "schema must be specified when method is 'function_calling'. Received None."
+            )
         tool_name = convert_to_openai_tool(schema)["function"]["name"]
         tool_choice = {"type": "function", "function": {"name": tool_name}}
         llm = self.bind_tools([schema], tool_choice=tool_choice)
         if is_pydantic_schema:
-            output_parser: OutputParserLike = PydanticToolsParser(tools=[cast(type, schema)], first_tool_only=True)
+            output_parser: OutputParserLike = PydanticToolsParser(
+                tools=[cast(type, schema)], first_tool_only=True
+            )
         else:
             output_parser = JsonOutputKeyToolsParser(key_name=tool_name, first_tool_only=True)
 
         if include_raw:
-            parser_assign = RunnablePassthrough.assign(parsed=itemgetter("raw") | output_parser, parsing_error=lambda _: None)
+            parser_assign = RunnablePassthrough.assign(
+                parsed=itemgetter("raw") | output_parser, parsing_error=lambda _: None
+            )
             parser_none = RunnablePassthrough.assign(parsed=lambda _: None)
-            parser_with_fallback = parser_assign.with_fallbacks([parser_none], exception_key="parsing_error")
+            parser_with_fallback = parser_assign.with_fallbacks(
+                [parser_none], exception_key="parsing_error"
+            )
             return RunnableMap(raw=llm) | parser_with_fallback
         else:
             return llm | output_parser
@@ -613,7 +622,7 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
         content = _dict.get("content", "") or ""
         additional_kwargs: dict = {}
         if function_call := _dict.get("function_call"):
-            additional_kwargs["function_call"] = dict(function_call)
+            additional_kwargs["function_call"] = {**function_call}
         tool_calls = []
         invalid_tool_calls = []
         if raw_tool_calls := _dict.get("tool_calls"):
@@ -640,7 +649,9 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
     elif role == "system":
         return SystemMessage(content=_dict.get("content", ""), name=name, id=id_)
     elif role == "function":
-        return FunctionMessage(content=_dict.get("content", ""), name=cast(str, _dict.get("name")), id=id_)
+        return FunctionMessage(
+            content=_dict.get("content", ""), name=cast(str, _dict.get("name")), id=id_
+        )
     elif role == "tool":
         additional_kwargs = {}
         if "name" in _dict:
@@ -697,14 +708,15 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
         if "function_call" in message.additional_kwargs:
             message_dict["function_call"] = message.additional_kwargs["function_call"]
         if message.tool_calls or message.invalid_tool_calls:
-            message_dict["tool_calls"] = [_lc_tool_call_to_openai_tool_call(tc) for tc in message.tool_calls] + [
-                _lc_invalid_tool_call_to_openai_tool_call(tc) for tc in message.invalid_tool_calls
-            ]
+            message_dict["tool_calls"] = [
+                _lc_tool_call_to_openai_tool_call(tc) for tc in message.tool_calls
+            ] + [_lc_invalid_tool_call_to_openai_tool_call(tc) for tc in message.invalid_tool_calls]
         elif "tool_calls" in message.additional_kwargs:
             message_dict["tool_calls"] = message.additional_kwargs["tool_calls"]
             tool_call_supported_props = {"id", "type", "function"}
             message_dict["tool_calls"] = [
-                {k: v for k, v in tool_call.items() if k in tool_call_supported_props} for tool_call in message_dict["tool_calls"]
+                {k: v for k, v in tool_call.items() if k in tool_call_supported_props}
+                for tool_call in message_dict["tool_calls"]
             ]
         else:
             pass
@@ -726,13 +738,15 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
     return message_dict
 
 
-def _convert_delta_to_message_chunk(_dict: Mapping[str, Any], default_class: type[BaseMessageChunk]) -> BaseMessageChunk:
+def _convert_delta_to_message_chunk(
+    _dict: Mapping[str, Any], default_class: type[BaseMessageChunk]
+) -> BaseMessageChunk:
     id_ = _dict.get("id")
     role = cast(str, _dict.get("role"))
     content = cast(str, _dict.get("content") or "")
     additional_kwargs: dict = {}
     if _dict.get("function_call"):
-        function_call = dict(_dict["function_call"])
+        function_call = {**_dict["function_call"]}
         if "name" in function_call and function_call["name"] is None:
             function_call["name"] = ""
         additional_kwargs["function_call"] = function_call

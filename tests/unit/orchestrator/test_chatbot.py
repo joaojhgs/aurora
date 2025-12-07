@@ -1,5 +1,6 @@
 """Unit tests for chatbot agent."""
 
+import contextlib
 import sys
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -47,29 +48,45 @@ class TestChatbotMemorySearch:
             ok=True,
             data={
                 "items": [
-                    {"value": {"text": "Paris is the capital"}, "key": "key1", "namespace": ("main", "memories"), "search_score": 0.9},
-                    {"value": {"text": "France capital city"}, "key": "key2", "namespace": ("main", "memories"), "search_score": 0.8},
+                    {
+                        "value": {"text": "Paris is the capital"},
+                        "key": "key1",
+                        "namespace": ("main", "memories"),
+                        "search_score": 0.9,
+                    },
+                    {
+                        "value": {"text": "France capital city"},
+                        "key": "key2",
+                        "namespace": ("main", "memories"),
+                        "search_score": 0.8,
+                    },
                 ]
             },
         )
 
         # Mock LLM
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Paris is the capital of France."
-                    mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Paris is the capital of France."
+            mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Verify memory search was called via bus
-                    mock_bus.request.assert_called()
-                    memory_call = [call for call in mock_bus.request.call_args_list if call[0][0] == DBTopics.RAG_SEARCH]
-                    assert len(memory_call) > 0
+            # Verify memory search was called via bus
+            mock_bus.request.assert_called()
+            memory_call = [
+                call
+                for call in mock_bus.request.call_args_list
+                if call[0][0] == DBTopics.RAG_SEARCH
+            ]
+            assert len(memory_call) > 0
 
-                    # Verify memories were included in result
-                    assert "messages" in result
+            # Verify memories were included in result
+            assert "messages" in result
 
     @pytest.mark.asyncio
     async def test_chatbot_memory_search_failure(self, mock_bus, mock_state):
@@ -79,17 +96,19 @@ class TestChatbotMemorySearch:
         # Mock failed memory search
         mock_bus.request.return_value = QueryResult(ok=False, error="Search failed")
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Response"
-                    mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Should still work even if memory search fails
-                    assert "messages" in result
+            # Should still work even if memory search fails
+            assert "messages" in result
 
     @pytest.mark.asyncio
     async def test_chatbot_memory_search_empty(self, mock_bus, mock_state):
@@ -99,17 +118,19 @@ class TestChatbotMemorySearch:
         # Mock empty memory search
         mock_bus.request.return_value = QueryResult(ok=True, data={"items": []})
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Response"
-                    mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Should work with no memories
-                    assert "messages" in result
+            # Should work with no memories
+            assert "messages" in result
 
 
 class TestChatbotToolRetrieval:
@@ -127,25 +148,35 @@ class TestChatbotToolRetrieval:
             QueryResult(ok=True, data={"items": []}),  # Memory search
             QueryResult(
                 ok=True,
-                data={"tools": [{"name": "test_tool", "description": "A test tool", "args_schema": {"properties": {}, "required": []}}]},
+                data={
+                    "tools": [
+                        {
+                            "name": "test_tool",
+                            "description": "A test tool",
+                            "args_schema": {"properties": {}, "required": []},
+                        }
+                    ]
+                },
             ),  # Tool retrieval
         ]
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics") as mock_topics:
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_topics.GET_TOOLS = "Tooling.GetTools"
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Response"
-                    mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics") as mock_topics,
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_topics.GET_TOOLS = "Tooling.GetTools"
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Verify tools were requested via bus
-                    assert mock_bus.request.call_count >= 2
+            # Verify tools were requested via bus
+            assert mock_bus.request.call_count >= 2
 
-                    # LLM was called to produce a response
-                    assert "messages" in result
+            # LLM was called to produce a response
+            assert "messages" in result
 
     @pytest.mark.asyncio
     async def test_chatbot_get_tools_failure(self, mock_bus, mock_state):
@@ -158,17 +189,19 @@ class TestChatbotToolRetrieval:
             QueryResult(ok=False, error="Tool retrieval failed"),  # Tool retrieval
         ]
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Response"
-                    mock_llm.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Should fallback gracefully
-                    assert "messages" in result
+            # Should fallback gracefully
+            assert "messages" in result
 
 
 class TestChatbotLLMIntegration:
@@ -177,12 +210,12 @@ class TestChatbotLLMIntegration:
     @pytest.mark.asyncio
     async def test_chatbot_llm_not_initialized(self, mock_bus, mock_state):
         """Test chatbot with uninitialized LLM."""
-        with patch("app.orchestrator.agents.chatbot.llm", None):
+        with (
+            patch("app.orchestrator.agents.chatbot.llm", None),
+            contextlib.suppress(ValueError),
+        ):
             # Should raise or handle gracefully; accept either
-            try:
-                await chatbot(mock_state, bus=mock_bus)
-            except ValueError:
-                pass
+            await chatbot(mock_state, bus=mock_bus)
 
     @pytest.mark.asyncio
     async def test_chatbot_with_tools(self, mock_bus, mock_state):
@@ -198,34 +231,39 @@ class TestChatbotLLMIntegration:
                         {
                             "name": "search_tool",
                             "description": "Search tool",
-                            "args_schema": {"properties": {"query": {"type": "string"}}, "required": ["query"]},
+                            "args_schema": {
+                                "properties": {"query": {"type": "string"}},
+                                "required": ["query"],
+                            },
                         }
                     ]
                 },
             ),  # Tool retrieval
         ]
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    with patch("app.orchestrator.agents.chatbot._deserialize_tools") as mock_deserialize:
-                        from langchain_core.tools import tool
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.orchestrator.agents.chatbot._deserialize_tools") as mock_deserialize,
+        ):
+            from langchain_core.tools import tool
 
-                        @tool
-                        def search_tool(query: str):
-                            """Search tool."""
-                            return query
+            @tool
+            def search_tool(query: str):
+                """Search tool."""
+                return query
 
-                        mock_deserialize.return_value = [search_tool]
+            mock_deserialize.return_value = [search_tool]
 
-                        mock_llm_response = MagicMock()
-                        mock_llm_response.content = "Response"
-                        mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
-                        result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                        # Verify a response was produced
-                        assert "messages" in result
+            # Verify a response was produced
+            assert "messages" in result
 
     @pytest.mark.asyncio
     async def test_chatbot_without_tools(self, mock_bus, mock_state):
@@ -237,14 +275,16 @@ class TestChatbotLLMIntegration:
             QueryResult(ok=True, data={"tools": []}),  # Empty tools
         ]
 
-        with patch("app.orchestrator.agents.chatbot.llm") as mock_llm:
-            with patch("app.orchestrator.agents.chatbot.ToolingTopics"):
-                with patch("app.orchestrator.agents.chatbot.GetToolsQuery"):
-                    mock_llm_response = MagicMock()
-                    mock_llm_response.content = "Response"
-                    mock_llm.invoke.return_value = mock_llm_response
+        with (
+            patch("app.orchestrator.agents.chatbot.llm") as mock_llm,
+            patch("app.orchestrator.agents.chatbot.ToolingTopics"),
+            patch("app.orchestrator.agents.chatbot.GetToolsQuery"),
+        ):
+            mock_llm_response = MagicMock()
+            mock_llm_response.content = "Response"
+            mock_llm.invoke.return_value = mock_llm_response
 
-                    result = await chatbot(mock_state, bus=mock_bus)
+            result = await chatbot(mock_state, bus=mock_bus)
 
-                    # Ensure response was produced
-                    assert "messages" in result
+            # Ensure response was produced
+            assert "messages" in result
