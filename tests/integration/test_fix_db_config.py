@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 import pytest
 import pytest_asyncio
 
-from app.config.config_manager import ConfigManager
-from app.db.manager import DatabaseManager
-from app.db.models import Message, MessageType
+from app.services.config.config_manager import ConfigManager
+from app.services.db.manager import DatabaseManager
+from app.services.db.models import Message, MessageType
 
 
 class TestDBConfigIntegration:
@@ -52,7 +52,9 @@ class TestDBConfigIntegration:
             config_manager = MagicMock()
             config_manager._config = test_config
             config_manager.get_config.return_value = test_config
-            config_manager.get.side_effect = lambda key: (test_config["database"]["path"] if key == "database.path" else None)
+            config_manager.get.side_effect = lambda key: (
+                test_config["database"]["path"] if key == "database.path" else None
+            )
 
             # Create database manager with the test path
             db_manager = DatabaseManager(db_path=test_db_path)

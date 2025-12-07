@@ -98,7 +98,10 @@ class TestRAGServiceStores:
         mock_conn = MagicMock()
         mock_sqlite.create_connection.return_value = mock_conn
         mock_emb = MagicMock()
-        mock_get_emb.return_value = (mock_emb, {"type": "test", "model_name": "test", "version": "test"})
+        mock_get_emb.return_value = (
+            mock_emb,
+            {"type": "test", "model_name": "test", "version": "test"},
+        )
 
         # Setup connection execution mock
         mock_cursor = MagicMock()
@@ -139,7 +142,9 @@ class TestRAGServiceStores:
 
         # Test put delegation
         combined.put(("main", "memories"), "key1", {"text": "test"})
-        mock_memories.put.assert_called_once_with(("main", "memories"), "key1", {"text": "test"}, None)
+        mock_memories.put.assert_called_once_with(
+            ("main", "memories"), "key1", {"text": "test"}, None
+        )
 
         # Test get delegation
         combined.get(("tools",), "tool1")
@@ -155,7 +160,9 @@ class TestRAGServiceStores:
 
         # Test retrieve_items delegation
         combined.retrieve_items(("main", "memories"), limit=10, offset=0)
-        mock_memories.list_items_in_namespace.assert_called_once_with(("main", "memories"), limit=10, offset=0)
+        mock_memories.list_items_in_namespace.assert_called_once_with(
+            ("main", "memories"), limit=10, offset=0
+        )
 
 
 class TestSQLiteVecStore:
@@ -199,7 +206,11 @@ class TestSQLiteVecStore:
         from unittest.mock import Mock as MockDoc
 
         mock_doc = MockDoc()
-        mock_doc.metadata = {"namespace": "main|memories", "key": "key1", "value": '{"text": "Test"}'}
+        mock_doc.metadata = {
+            "namespace": "main|memories",
+            "key": "key1",
+            "value": '{"text": "Test"}',
+        }
         mock_sqlite.return_value.similarity_search_with_score.return_value = [(mock_doc, 0.9)]
 
         mock_embeddings = MagicMock()
@@ -220,10 +231,21 @@ class TestSQLiteVecStore:
         from unittest.mock import Mock as MockDoc
 
         mock_doc1 = MockDoc()
-        mock_doc1.metadata = {"namespace": "main|memories", "key": "key1", "value": '{"text": "Memory 1"}'}
+        mock_doc1.metadata = {
+            "namespace": "main|memories",
+            "key": "key1",
+            "value": '{"text": "Memory 1"}',
+        }
         mock_doc2 = MockDoc()
-        mock_doc2.metadata = {"namespace": "main|memories", "key": "key2", "value": '{"text": "Memory 2"}'}
-        mock_sqlite.return_value.similarity_search_with_score.return_value = [(mock_doc1, 0.9), (mock_doc2, 0.8)]
+        mock_doc2.metadata = {
+            "namespace": "main|memories",
+            "key": "key2",
+            "value": '{"text": "Memory 2"}',
+        }
+        mock_sqlite.return_value.similarity_search_with_score.return_value = [
+            (mock_doc1, 0.9),
+            (mock_doc2, 0.8),
+        ]
 
         mock_embeddings = MagicMock()
         store = SQLiteVecStore(db_file=":memory:", table="test", embeddings=mock_embeddings)
@@ -279,14 +301,27 @@ class TestEmbeddingModelManagement:
 
         mock_exists.return_value = True
 
-        with patch("app.db.rag_service.get_embeddings") as mock_get_emb:
-            with patch("app.db.rag_service.os.remove"):
-                with patch("app.db.rag_service.SQLiteVec.from_texts"):
-                    mock_emb = MagicMock()
-                    mock_get_emb.return_value = (mock_emb, {"type": "openai", "model_name": "text-embedding-3-small", "version": "openai"})
+        with (
+            patch("app.db.rag_service.get_embeddings") as mock_get_emb,
+            patch("app.db.rag_service.os.remove"),
+            patch("app.db.rag_service.SQLiteVec.from_texts"),
+        ):
+            mock_emb = MagicMock()
+            mock_get_emb.return_value = (
+                mock_emb,
+                {
+                    "type": "openai",
+                    "model_name": "text-embedding-3-small",
+                    "version": "openai",
+                },
+            )
 
-                    model_info = {"type": "openai", "model_name": "text-embedding-3-small", "version": "openai"}
+            model_info = {
+                "type": "openai",
+                "model_name": "text-embedding-3-small",
+                "version": "openai",
+            }
 
-                    result = check_and_update_embedding_model(mock_store, model_info)
+            result = check_and_update_embedding_model(mock_store, model_info)
 
-                    assert result is True  # Re-embedding was performed
+            assert result is True  # Re-embedding was performed

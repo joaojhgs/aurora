@@ -77,7 +77,9 @@ class TestPerformanceMeasurements:
         avg_storage_time = storage_time / 10
 
         # Verify acceptable performance (should be fast since we're using mocks)
-        assert avg_storage_time < 0.01, f"Message storage too slow: {avg_storage_time:.4f}s per operation"
+        assert (
+            avg_storage_time < 0.01
+        ), f"Message storage too slow: {avg_storage_time:.4f}s per operation"
 
         # Measure message retrieval performance
         start_time = time.time()
@@ -89,7 +91,9 @@ class TestPerformanceMeasurements:
         avg_retrieval_time = retrieval_time / 5
 
         # Verify acceptable performance
-        assert avg_retrieval_time < 0.02, f"Message retrieval too slow: {avg_retrieval_time:.4f}s per operation"
+        assert (
+            avg_retrieval_time < 0.02
+        ), f"Message retrieval too slow: {avg_retrieval_time:.4f}s per operation"
 
     @pytest.mark.asyncio
     async def test_graph_processing_performance(self):
@@ -156,14 +160,18 @@ class TestPerformanceMeasurements:
             memory_increase = current_memory - baseline_memory
 
             # Log memory usage
-            print(f"Memory usage: Baseline={baseline_memory:.2f}MB, Current={current_memory:.2f}MB, Increase={memory_increase:.2f}MB")
+            print(
+                f"Memory usage: Baseline={baseline_memory:.2f}MB, Current={current_memory:.2f}MB, Increase={memory_increase:.2f}MB"
+            )
 
             # Clean up
             large_objects = None
 
             # Memory usage should be below a reasonable threshold for test environment
             # This is a very basic check and will vary by system
-            assert memory_increase < 100, f"Memory usage increased too much: {memory_increase:.2f}MB"
+            assert (
+                memory_increase < 100
+            ), f"Memory usage increased too much: {memory_increase:.2f}MB"
 
         except ImportError:
             pytest.skip("psutil not installed, skipping memory usage test")

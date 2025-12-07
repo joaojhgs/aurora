@@ -161,9 +161,13 @@ class TestPerformanceMetricsSimple:
         await mock_tts.speak_text(response)
 
         # Store both messages
-        await mock_db_manager.store_message({"content": transcription, "role": "user", "timestamp": time.time()})
+        await mock_db_manager.store_message(
+            {"content": transcription, "role": "user", "timestamp": time.time()}
+        )
 
-        await mock_db_manager.store_message({"content": response, "role": "assistant", "timestamp": time.time()})
+        await mock_db_manager.store_message(
+            {"content": response, "role": "assistant", "timestamp": time.time()}
+        )
 
         elapsed_time = time.time() - start_time
 

@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.config.config_manager import ConfigManager
-from app.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
+from app.services.config.config_manager import ConfigManager
+from app.services.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
 
 
 @pytest.mark.unit
@@ -51,7 +51,9 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_disabled_mcp(self, mcp_manager, config_manager):
         """Test initialization when MCP is disabled."""
-        config_manager.get.side_effect = lambda key, default=None: False if key == "mcp.enabled" else default
+        config_manager.get.side_effect = (
+            lambda key, default=None: False if key == "mcp.enabled" else default
+        )
 
         with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()
@@ -62,7 +64,10 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_no_servers(self, mcp_manager, config_manager):
         """Test initialization when no servers are configured."""
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": {}}.get(key, default)
+        config_manager.get.side_effect = lambda key, default=None: {
+            "mcp.enabled": True,
+            "mcp.servers": {},
+        }.get(key, default)
 
         with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()
@@ -73,9 +78,19 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_server(self, mcp_manager, config_manager):
         """Test initialization with a stdio server configuration."""
-        servers_config = {"math": {"command": "python", "args": ["/path/to/math_server.py"], "transport": "stdio", "enabled": True}}
+        servers_config = {
+            "math": {
+                "command": "python",
+                "args": ["/path/to/math_server.py"],
+                "transport": "stdio",
+                "enabled": True,
+            }
+        }
 
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
+        config_manager.get.side_effect = lambda key, default=None: {
+            "mcp.enabled": True,
+            "mcp.servers": servers_config,
+        }.get(key, default)
 
         mock_client = AsyncMock()
         mock_tool = Mock()
@@ -88,7 +103,6 @@ class TestMCPClientManager:
             patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
             patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
         ):
-
             await mcp_manager.initialize()
 
         assert mcp_manager.is_initialized
@@ -107,7 +121,10 @@ class TestMCPClientManager:
             }
         }
 
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
+        config_manager.get.side_effect = lambda key, default=None: {
+            "mcp.enabled": True,
+            "mcp.servers": servers_config,
+        }.get(key, default)
 
         mock_client = AsyncMock()
         mock_tool = Mock()
@@ -120,7 +137,6 @@ class TestMCPClientManager:
             patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
             patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
         ):
-
             await mcp_manager.initialize()
 
         assert mcp_manager.is_initialized
@@ -130,9 +146,19 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_disabled_server(self, mcp_manager, config_manager):
         """Test that disabled servers are not loaded."""
-        servers_config = {"math": {"command": "python", "args": ["/path/to/math_server.py"], "transport": "stdio", "enabled": False}}  # Disabled
+        servers_config = {
+            "math": {
+                "command": "python",
+                "args": ["/path/to/math_server.py"],
+                "transport": "stdio",
+                "enabled": False,
+            }
+        }  # Disabled
 
-        config_manager.get.side_effect = lambda key, default=None: {"mcp.enabled": True, "mcp.servers": servers_config}.get(key, default)
+        config_manager.get.side_effect = lambda key, default=None: {
+            "mcp.enabled": True,
+            "mcp.servers": servers_config,
+        }.get(key, default)
 
         with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
             await mcp_manager.initialize()

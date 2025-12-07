@@ -67,7 +67,9 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.command", failing_command_handler)
 
-        await local_bus.publish("test.command", BusCommand(action="retry_test"), event=False, max_attempts=3)
+        await local_bus.publish(
+            "test.command", BusCommand(action="retry_test"), event=False, max_attempts=3
+        )
 
         # Wait for retries
         await asyncio.sleep(2.0)
@@ -84,7 +86,9 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.deadletter", always_failing_handler)
 
-        await local_bus.publish("test.deadletter", BusCommand(action="will_fail"), event=False, max_attempts=2)
+        await local_bus.publish(
+            "test.deadletter", BusCommand(action="will_fail"), event=False, max_attempts=2
+        )
 
         # Wait for all retries and dead letter
         await asyncio.sleep(1.0)
@@ -180,7 +184,9 @@ class TestLocalBusEdgeCases:
         async def request_handler(env: Envelope):
             # Send response to reply_to topic
             if env.reply_to:
-                await local_bus.publish(env.reply_to, QueryResult(ok=True, data={"response": "success"}))
+                await local_bus.publish(
+                    env.reply_to, QueryResult(ok=True, data={"response": "success"})
+                )
 
         local_bus.subscribe("test.request", request_handler)
 
@@ -197,10 +203,12 @@ class TestLocalBusEdgeCases:
 
         # Request should timeout
         try:
-            result = await local_bus.request("test.nonexistent", BusCommand(action="test"), timeout=0.2)
+            result = await local_bus.request(
+                "test.nonexistent", BusCommand(action="test"), timeout=0.2
+            )
             # If we get here, check if result is None or error
             assert result is None or not result.ok
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             # Timeout or other error is expected
             pass
 
@@ -302,7 +310,9 @@ class TestLocalBusEdgeCases:
         # Publish commands with various priorities
         priorities = [99, 1, 50, 25, 75, 10, 5]
         for p in priorities:
-            await local_bus.publish("test.priority", BusCommand(action=f"prio_{p}"), event=False, priority=p)
+            await local_bus.publish(
+                "test.priority", BusCommand(action=f"prio_{p}"), event=False, priority=p
+            )
 
         await asyncio.sleep(0.5)
 
@@ -319,7 +329,9 @@ class TestLocalBusEdgeCases:
 
         local_bus.subscribe("test.metadata", handler)
 
-        await local_bus.publish("test.metadata", BusEvent(data="test"), origin="external", priority=25)
+        await local_bus.publish(
+            "test.metadata", BusEvent(data="test"), origin="external", priority=25
+        )
 
         await asyncio.sleep(0.1)
 
