@@ -397,6 +397,15 @@ jobs:
             dockerfile: docker/services/Dockerfile.config
             variant: latest
             build_args: ""
+          # DB Service
+          - service: db
+            dockerfile: docker/services/Dockerfile.db
+            variant: openai
+            build_args: DB_EMBEDDINGS_MODE=openai
+          - service: db
+            dockerfile: docker/services/Dockerfile.db
+            variant: local
+            build_args: DB_EMBEDDINGS_MODE=local
           # Orchestrator Service
           - service: orchestrator
             dockerfile: docker/services/Dockerfile.orchestrator

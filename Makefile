@@ -1,7 +1,7 @@
 # Aurora Voice Assistant - Makefile
 # Simple commands for common development tasks
 
-.PHONY: help setup lint test format check coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart docker-db-build-openai docker-db-build-local docker-db-build docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -211,6 +211,8 @@ docker-login:
 docker-build-all:
 	@echo "Building all service images..."
 	$(MAKE) docker-build-config
+	$(MAKE) docker-build-db-openai
+	$(MAKE) docker-build-db-local
 	$(MAKE) docker-build-orchestrator-openai
 	$(MAKE) docker-build-orchestrator-hf-endpoint
 	$(MAKE) docker-build-orchestrator-hf-local
@@ -236,6 +238,21 @@ docker-build-config:
 	docker build -f docker/services/Dockerfile.config \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-config:$(VERSION) \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-config:latest \
+		.
+
+# DB Service builds
+docker-build-db-openai:
+	docker build --build-arg DB_EMBEDDINGS_MODE=openai \
+		-f docker/services/Dockerfile.db \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:openai-$(VERSION) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:openai-latest \
+		.
+
+docker-build-db-local:
+	docker build --build-arg DB_EMBEDDINGS_MODE=local \
+		-f docker/services/Dockerfile.db \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:local-$(VERSION) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/aurora-db:local-latest \
 		.
 
 # Orchestrator Service builds
