@@ -15,14 +15,17 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
 WORKDIR /app
 
+# Install UV
+RUN pip install uv
+
 # Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml setup.cfg ./
+COPY --chown=aurora:aurora pyproject.toml ./
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
 
 # Install dependencies using pyproject.toml optional groups
 # Scheduler service needs core + service-scheduler + mode-processes
-RUN pip install --no-cache-dir -e .[service-scheduler,mode-processes]
+RUN uv pip install --no-cache -e .[service-scheduler,mode-processes]
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app

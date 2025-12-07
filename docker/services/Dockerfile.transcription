@@ -18,20 +18,23 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
 WORKDIR /app
 
+# Install UV
+RUN pip install uv
+
 # Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml setup.cfg ./
+COPY --chown=aurora:aurora pyproject.toml ./
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
 
 # Install dependencies using pyproject.toml optional groups
 # Transcription service needs core + service-stt-transcription + mode-processes
-RUN pip install --no-cache-dir -e .[service-stt-transcription,mode-processes]
+RUN uv pip install --no-cache -e .[service-stt-transcription,mode-processes]
 
 # faster-whisper uses ctranslate2 which supports CUDA
 # CPU is default, CUDA requires ctranslate2 with CUDA support
 RUN if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
-    pip install ctranslate2 --extra-index-url=https://pypi.org/simple/ || \
-    pip install ctranslate2[cuda]; \
+    uv pip install ctranslate2 --extra-index-url=https://pypi.org/simple/ || \
+    uv pip install ctranslate2[cuda]; \
 fi
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \

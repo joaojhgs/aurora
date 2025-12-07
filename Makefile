@@ -8,8 +8,8 @@ help:
 	@echo "Aurora Development Commands:"
 	@echo "------------------------"
 	@echo "make setup       - Set up development environment"
-	@echo "make lint        - Run linting on all files (flake8)"
-	@echo "make format      - Run auto-formatting (black + isort)"
+	@echo "make lint        - Run linting on all files (ruff)"
+	@echo "make format      - Run auto-formatting (ruff)"
 	@echo "make check       - Run all checks (lint + typing)"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
@@ -49,15 +49,13 @@ setup:
 # Run linting checks
 lint:
 	@echo "Running linting checks..."
-	black --check app tests
-	flake8 app tests scripts
+	ruff check app tests scripts
 
 # Run auto-formatting
 format:
 	@echo "Running auto-formatting..."
-	black app tests scripts --line-length=150
-	isort app tests scripts
-	autopep8 --in-place --aggressive --aggressive --max-line-length=150 --recursive .
+	ruff check --fix app tests scripts
+	ruff format app tests scripts
 
 # Run type checking
 typing:
@@ -67,8 +65,8 @@ typing:
 # Run all checks
 check:
 	@echo "Running all code quality checks..."
-	black --check app tests --line-length=150
-	flake8 app tests scripts
+	ruff check app tests scripts
+	ruff format --check app tests scripts
 	# mypy --explicit-package-bases app tests scripts
 
 # Run all tests

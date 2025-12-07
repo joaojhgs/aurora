@@ -35,7 +35,7 @@ classifiers = [
     "Topic :: Office/Business",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-requires-python = ">=3.9,<3.12"
+requires-python = ">=3.10,<3.12"
 
 # Minimal core dependencies - only essential runtime requirements
 dependencies = [
@@ -47,7 +47,7 @@ dependencies = [
     
     # Basic utilities (always needed)
     "psutil>=5.0.0",
-    "tenacity>=9.0.0",
+    "tenacity>=8.2.3,<10.0",
     
     # Core data handling
     "pydantic>=2.10.0",
@@ -399,8 +399,14 @@ slack = [
 ]
 
 # Search engines
+# Note: brave-search has dependency conflicts (requires httpx<0.26.0, but we use httpx==0.28.1)
+# It's only loaded when plugins.brave_search.activate=true in config
+# DuckDuckGo is used as fallback when brave-search is not available
+# To use brave-search, install manually: uv pip install brave-search
+# WARNING: This will downgrade httpx and may break other dependencies
 brave-search = [
-    "brave-search",
+    # Disabled due to httpx version conflict - install manually if needed
+    # "brave-search<0.2.0; python_version < '3.12'",
 ]
 
 # OpenRecall integration dependencies (from modules/openrecall)
@@ -429,8 +435,7 @@ dev = [
     "pytest==8.3.5",
     "pytest-asyncio",
     "pytest-cov",
-    "black",
-    "flake8",
+    "ruff>=0.8.4",
     "mypy",
     "pre-commit",
     "ipython",
@@ -519,8 +524,9 @@ third-party = [
 ]
 
 # Third-party providers with additional features
+# Note: brave-search excluded due to dependency conflicts - install manually if needed
 third-party-full = [
-    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,openrecall]",
 ]
 
 # ============================================================================
@@ -630,24 +636,65 @@ app = [
 # voice_models/ and chat_models/ directories contain large model files
 # Users should download/manage these separately
 
-[tool.black]
+# Ruff configuration (see https://docs.astral.sh/ruff/configuration/)
+# Note: Some TOML schema validators may show false positives for nested tool.* sections
+[tool.ruff]
+# Line length matches black's default
 line-length = 100
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | __pycache__
-)/
-'''
+target-version = "py311"
+
+# Exclude common directories
+exclude = [
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+    "scripts/analyze-dependencies.py",  # Script with hyphen in name
+    "scripts/analyze-transitive-deps.py",  # Script with hyphen in name
+]
+
+[tool.ruff.lint]
+# Enable flake8-compatible rules
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+# Ignore specific rules that conflict with our style
+ignore = [
+    "E203",  # whitespace before ':' (conflicts with formatter)
+    "E501",  # line too long (handled by formatter)
+    # W503 removed - not a valid ruff rule (was removed because it conflicts with formatters)
+    "F403",  # star imports
+    "F405",  # name may be undefined due to star imports
+    "F401",  # imported but unused (can be too strict)
+]
+
+[tool.ruff.lint.isort]
+# Use black-compatible import sorting
+# Configure isort to be compatible with black formatter
+combine-as-imports = true
+force-wrap-aliases = true
+split-on-trailing-comma = true
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+# Indent with spaces
+indent-style = "space"
+# Line ending style
+line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.11"
@@ -854,12 +901,6 @@ addopts = [
     "-m", "not performance"  # Don't run performance tests by default
 ]
 
-[tool.autopep8]
-max_line_length = 100
-aggressive = 3
-ignore = "E501,W503,E203"
-in-place = true
-recursive = true
 
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

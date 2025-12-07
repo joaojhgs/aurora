@@ -92,14 +92,14 @@ Contributions to Aurora are welcome! Here's how you can contribute:
 
 3. **Make your changes** and ensure they follow the project's code style:
    ```bash
-   # Run auto-formatting (black + isort)
+   # Run auto-formatting (ruff)
    make format
    
    # Run all code quality checks (lint + typing)
    make check
    
    # Or run individual checks:
-   make lint      # Run flake8 linting
+   make lint      # Run ruff linting
    make typing    # Run mypy type checking
    ```
 
