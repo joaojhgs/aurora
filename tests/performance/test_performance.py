@@ -106,7 +106,9 @@ class TestConcurrentOperations:
         # NOTE: This test needs to be updated for bus-based architecture
         # Graph now uses bus-based RAG instead of direct store access
         # Would need to initialize Supervisor with bus and services
-        pytest.skip("Test needs update for bus-based architecture - graph no longer uses memory_store")
+        pytest.skip(
+            "Test needs update for bus-based architecture - graph no longer uses memory_store"
+        )
 
         # Skipped: run_model intentionally not executed in CI
         def run_model():
@@ -167,7 +169,9 @@ class TestResourceUsage:
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_diff = final_memory - initial_memory
 
-        print(f"Memory usage: initial={initial_memory:.2f}MB, final={final_memory:.2f}MB, diff={memory_diff:.2f}MB")
+        print(
+            f"Memory usage: initial={initial_memory:.2f}MB, final={final_memory:.2f}MB, diff={memory_diff:.2f}MB"
+        )
 
         # Assert memory growth is reasonable (less than 50MB)
         # This threshold may need adjustment based on the specific system

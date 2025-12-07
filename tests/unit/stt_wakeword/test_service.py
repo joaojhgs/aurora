@@ -105,7 +105,10 @@ def test_load_config_with_list_model_paths(mock_bus):
         mock_cfg.get.side_effect = lambda key, default: {
             "general.speech_to_text.wake_word.backend": "pvp",  # Use correct enum value
             "general.speech_to_text.wake_word.threshold": 0.6,
-            "general.speech_to_text.wake_word.model_path": ["voice_models/aurora.ppn", "voice_models/jarvis.ppn"],
+            "general.speech_to_text.wake_word.model_path": [
+                "voice_models/aurora.ppn",
+                "voice_models/jarvis.ppn",
+            ],
         }.get(key, default)
 
         service = WakeWordService(bus=mock_bus)
@@ -153,7 +156,9 @@ async def test_initialize_openwakeword_backend(service):
 
         await service._initialize_backend()
 
-        mock_oww_class.assert_called_once_with(model_paths=["voice_models/jarvis.onnx"], sensitivity=0.5, wake_words=["jarvis"])
+        mock_oww_class.assert_called_once_with(
+            model_paths=["voice_models/jarvis.onnx"], sensitivity=0.5, wake_words=["jarvis"]
+        )
         mock_backend.initialize.assert_called_once()
         assert service._backend == mock_backend
 
@@ -173,7 +178,9 @@ async def test_initialize_porcupine_backend(service):
 
         await service._initialize_backend()
 
-        mock_porcupine_class.assert_called_once_with(model_paths=["voice_models/aurora.ppn"], sensitivity=0.7, wake_words=["aurora"])
+        mock_porcupine_class.assert_called_once_with(
+            model_paths=["voice_models/aurora.ppn"], sensitivity=0.7, wake_words=["aurora"]
+        )
         mock_backend.initialize.assert_called_once()
         assert service._backend == mock_backend
 
@@ -209,7 +216,9 @@ async def test_start_service(service, mock_bus):
         ]
 
         for topic in expected_subscriptions:
-            assert any(call.args[0] == topic for call in mock_bus.subscribe.call_args_list), f"Missing subscription to {topic}"
+            assert any(
+                call.args[0] == topic for call in mock_bus.subscribe.call_args_list
+            ), f"Missing subscription to {topic}"
 
 
 @pytest.mark.asyncio
@@ -563,7 +572,13 @@ async def test_audio_format_tracking(service, mock_backend):
     mock_backend.detect.return_value = Mock(detected=False)
 
     audio_format = AudioFormat(sample_rate=16000, channels=1, bits_per_sample=16)
-    chunk = AudioChunk(data=b"audio_data", sequence=0, stream_id="test-stream", source="microphone", format=audio_format)
+    chunk = AudioChunk(
+        data=b"audio_data",
+        sequence=0,
+        stream_id="test-stream",
+        source="microphone",
+        format=audio_format,
+    )
     envelope = Envelope(type="event", payload=chunk)
 
     await service._on_audio_chunk(envelope)

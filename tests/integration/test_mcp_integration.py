@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.config.config_manager import config_manager
-from app.tooling.mcp.mcp_client import MCPClientManager
+from app.services.config.config_manager import config_manager
+from app.services.tooling.mcp.mcp_client import MCPClientManager
 
 # Set dummy OpenAI API key BEFORE any imports that might initialize OpenAI
 os.environ.setdefault("OPENAI_API_KEY", "test-key-dummy-integration")
@@ -34,7 +34,14 @@ class TestMCPToolIntegration:
         config_data = {
             "mcp": {
                 "enabled": True,
-                "servers": {"math": {"command": "python", "args": ["/tmp/math_server.py"], "transport": "stdio", "enabled": True}},
+                "servers": {
+                    "math": {
+                        "command": "python",
+                        "args": ["/tmp/math_server.py"],
+                        "transport": "stdio",
+                        "enabled": True,
+                    }
+                },
             }
         }
 
@@ -54,7 +61,14 @@ class TestMCPToolIntegration:
         with patch("app.tooling.mcp.mcp_client.config_manager") as mock_config:
             mock_config.get.side_effect = lambda key, default=None: {
                 "mcp.enabled": True,
-                "mcp.servers": {"math": {"command": "python", "args": ["/tmp/math_server.py"], "transport": "stdio", "enabled": True}},
+                "mcp.servers": {
+                    "math": {
+                        "command": "python",
+                        "args": ["/tmp/math_server.py"],
+                        "transport": "stdio",
+                        "enabled": True,
+                    }
+                },
             }.get(key, default)
 
             with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
@@ -76,7 +90,9 @@ class TestMCPToolIntegration:
         with patch("app.tooling.mcp.mcp_client.config_manager") as mock_config:
             mock_config.get.side_effect = lambda key, default=None: {
                 "mcp.enabled": True,
-                "mcp.servers": {"test": {"enabled": True, "transport": "stdio", "command": "python"}},
+                "mcp.servers": {
+                    "test": {"enabled": True, "transport": "stdio", "command": "python"}
+                },
             }.get(key, default)
 
             with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
@@ -117,7 +133,7 @@ class TestMCPConfigurationIntegration:
         assert isinstance(mcp_config.get("servers"), dict)
 
         # Test server configuration structure
-        for server_name, server_config in mcp_config.get("servers", {}).items():
+        for _server_name, server_config in mcp_config.get("servers", {}).items():
             assert isinstance(server_config, dict)
             assert "transport" in server_config
             assert server_config["transport"] in ["stdio", "streamable_http", "sse"]
@@ -132,9 +148,23 @@ class TestMCPConfigurationIntegration:
         test_config = {
             "enabled": True,
             "servers": {
-                "math": {"command": "python", "args": ["/path/to/math_server.py"], "transport": "stdio", "enabled": True},
-                "weather": {"url": "http://localhost:8000/mcp/", "transport": "streamable_http", "enabled": True},
-                "disabled_server": {"command": "python", "args": ["/path/to/disabled.py"], "transport": "stdio", "enabled": False},
+                "math": {
+                    "command": "python",
+                    "args": ["/path/to/math_server.py"],
+                    "transport": "stdio",
+                    "enabled": True,
+                },
+                "weather": {
+                    "url": "http://localhost:8000/mcp/",
+                    "transport": "streamable_http",
+                    "enabled": True,
+                },
+                "disabled_server": {
+                    "command": "python",
+                    "args": ["/path/to/disabled.py"],
+                    "transport": "stdio",
+                    "enabled": False,
+                },
             },
         }
 

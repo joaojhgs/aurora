@@ -1,0 +1,523 @@
+"""Tooling Service for Aurora's parallel architecture.
+
+This service:
+- Manages all tools (core, plugin, MCP)
+- Handles tool initialization and lifecycle
+- Exposes tool queries via message bus
+- Emits events when tools change
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel
+
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging import Envelope, MessageBus
+from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
+from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
+from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.tooling import (
+    ToolingExecuteToolRequest,
+    ToolingExecuteToolResponse,
+    ToolingGetMCPStatusRequest,
+    ToolingGetMCPStatusResponse,
+    ToolingGetStatsRequest,
+    ToolingGetStatsResponse,
+    ToolingGetToolByNameRequest,
+    ToolingGetToolByNameResponse,
+    ToolingGetToolsRequest,
+    ToolingGetToolsResponse,
+    ToolingMethods,
+    ToolingModule,
+    ToolingReloadMCPRequest,
+)
+from app.shared.contracts.registry import method_contract
+from app.shared.messaging.models.tooling_models import (
+    ToolsInitialized,
+    ToolsReloaded,
+)
+from app.shared.services.base_service import BaseService
+
+
+# Service implementation
+class ToolingService(BaseService):
+    """Tooling service.
+
+    Responsibilities:
+    - Initialize ToolsManager
+    - Load all tools in correct order
+    - Handle tool queries via message bus
+    - Manage tool lifecycle
+    """
+
+    def __init__(self):
+        """Initialize tooling service."""
+        super().__init__(
+            module=ToolingModule.NAME,
+            summary="Tool management and execution service",
+            capabilities=["tool_discovery", "tool_execution", "mcp_integration"],
+        )
+        self.tools_manager = ToolsManager(self.bus)
+
+    async def on_start(self) -> None:
+        """Start the tooling service and initialize tools."""
+        log_info("Starting Tooling service...")
+
+        # Set as global instance
+        set_tools_manager(self.tools_manager)
+
+        # Initialize tools
+        log_info("Initializing tools...")
+        await self.tools_manager.initialize()
+
+        # Emit initialization event
+        stats = self.tools_manager.get_stats()
+        await self.bus.publish(
+            ToolingMethods.TOOLS_INITIALIZED,
+            ToolsInitialized(
+                total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]
+            ),
+            event=True,
+            priority=get_system_priority(),
+            origin="internal",
+        )
+
+        log_info(f"Tooling service started with {stats['total_tools']} tools")
+
+    async def on_stop(self) -> None:
+        """Stop the tooling service."""
+        log_info("Stopping Tooling service...")
+
+    async def reload(self, config_section: str | None = None) -> None:
+        """Reload service configuration.
+
+        Args:
+            config_section: The configuration section that changed (None = full reload)
+        """
+        log_info(f"Reloading ToolingService configuration: section={config_section}")
+        # Reload tools if MCP config changed
+        if config_section is None or config_section in ["mcp", "plugins"]:
+            log_info("Reloading tools due to config change...")
+            await self.tools_manager.reload()
+        log_info("ToolingService configuration reloaded")
+
+    def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
+        """Extract schema manually from tool, filtering out non-serializable fields.
+
+        This helper is used when automatic schema generation fails due to non-serializable types
+        (e.g., BaseStore, MessageBus) in the tool's args_schema.
+
+        Args:
+            tool: The tool object with an args_schema attribute
+
+        Returns:
+            A dictionary containing the extracted schema with type, properties, and required fields
+        """
+        # Try to get schema fields directly and filter out non-serializable ones
+        if not hasattr(tool.args_schema, "model_fields"):
+            return {"type": "object", "properties": {}}
+
+        filtered_properties = {}
+        required_fields = []
+
+        for field_name, field_info in tool.args_schema.model_fields.items():
+            # Skip runtime-injected parameters (bus, store, etc.)
+            if field_name in ["bus", "store"]:
+                continue
+
+            # Skip fields with non-serializable types
+            field_type = field_info.annotation
+
+            # Handle Annotated types (e.g., Annotated[BaseStore, InjectedStore])
+            if (
+                hasattr(field_type, "__origin__")
+                and hasattr(field_type.__origin__, "__name__")
+                and field_type.__origin__.__name__ == "Annotated"
+            ):
+                # Extract the actual type from Annotated
+                args = getattr(field_type, "__args__", [])
+                if args:
+                    field_type = args[0]
+
+            # Check if it's a non-serializable type
+            type_name = None
+            if hasattr(field_type, "__name__"):
+                type_name = field_type.__name__
+            elif hasattr(field_type, "__qualname__"):
+                type_name = field_type.__qualname__
+
+            if type_name and type_name in ["BaseStore", "InjectedStore"]:
+                continue
+
+            # Try to get type info
+            try:
+                # Create a simple type schema
+                if field_info.is_required():
+                    required_fields.append(field_name)
+
+                # Determine type from annotation
+                if hasattr(field_info, "annotation"):
+                    ann = field_info.annotation
+                    if hasattr(ann, "__origin__"):
+                        ann = ann.__origin__
+
+                    type_str = "string"
+                    if hasattr(ann, "__name__"):
+                        type_name = ann.__name__
+                        if type_name == "int":
+                            type_str = "integer"
+                        elif type_name == "float":
+                            type_str = "number"
+                        elif type_name == "bool":
+                            type_str = "boolean"
+
+                    filtered_properties[field_name] = {
+                        "type": type_str,
+                        "description": field_info.description or "",
+                    }
+            except Exception:
+                # Skip fields we can't process
+                continue
+
+        if filtered_properties:
+            return {
+                "type": "object",
+                "properties": filtered_properties,
+                **({"required": required_fields} if required_fields else {}),
+            }
+        else:
+            return {"type": "object", "properties": {}}
+
+    @method_contract(
+        method_id=ToolingMethods.GET_TOOLS,
+        summary="Get available tools with optional RAG search",
+        input_model=ToolingGetToolsRequest,
+        output_model=ToolingGetToolsResponse,
+        exposure="both",
+    )
+    async def _on_get_tools(self, request: ToolingGetToolsRequest) -> ToolingGetToolsResponse:
+        """Handle get tools query.
+
+        Serializes tools to send through the bus (name, description, and argument descriptions only).
+        The bus remains agnostic - it just transports the serialized data.
+
+        Args:
+            request: Request containing optional search query and top_k limit
+        """
+        try:
+            log_debug(f"Getting tools with query: {request.query}")
+
+            # Use RAG search via bus if query is provided
+            if request.query:
+                from app.shared.contracts.models.db import DBMethods
+                from app.shared.messaging.models.db_models import RAGSearchQuery
+
+                tools = []
+                try:
+                    result = await self.bus.request(
+                        DBMethods.RAG_SEARCH,
+                        RAGSearchQuery(
+                            namespace="main.tools", query=request.query, limit=request.top_k
+                        ),
+                        timeout=5.0,
+                        priority=get_interactive_priority(),
+                    )
+                    names: list[str] = []
+                    if result.ok and result.data and "items" in result.data:
+                        names = [
+                            item.get("key") for item in result.data["items"] if item.get("key")
+                        ]
+
+                    # Map names to tool callables
+                    for name in names:
+                        tool = self.tools_manager.get_tool_by_name(name)
+                        if tool:
+                            tools.append(tool)
+
+                except Exception as e:
+                    log_warning(f"RAG tool search failed, falling back: {e}")
+                    tools = []
+
+                # Fallback to all tools if none found
+                if not tools:
+                    tools = self.tools_manager.get_tools(None, request.top_k)
+            else:
+                # No query, return all tools
+                tools = self.tools_manager.get_tools(None, request.top_k)
+
+            # Serialize tools to send through bus (only name, description, and argument descriptions)
+            serialized_tools = []
+            for tool in tools:
+                try:
+                    # Extract tool schema information - only what's needed for LLM binding
+                    tool_schema = {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                    }
+
+                    # Get the args schema if available
+                    if hasattr(tool, "args_schema") and tool.args_schema:
+                        try:
+                            # Get the full JSON schema
+                            # Some schemas may contain non-serializable types (e.g., BaseStore)
+                            # We'll catch the error and filter out problematic fields
+                            try:
+                                full_schema = tool.args_schema.model_json_schema()
+                            except Exception as json_schema_error:
+                                # If schema generation fails due to non-serializable types,
+                                # use helper method to manually build a schema excluding problematic fields
+                                log_debug(
+                                    f"Direct schema generation failed for {tool.name}, attempting manual extraction: {json_schema_error}"
+                                )
+                                tool_schema["args_schema"] = self._extract_schema_manually(tool)
+
+                                # Skip the rest of the schema processing
+                                serialized_tools.append(tool_schema)
+                                continue
+
+                            # Extract only properties and required fields (filter out injected params)
+                            if "properties" in full_schema:
+                                filtered_properties = {}
+                                for prop_name, prop_value in full_schema["properties"].items():
+                                    # Skip runtime-injected parameters (bus, store, etc.)
+                                    # These are injected at execution time and shouldn't be in the LLM schema
+                                    if prop_name not in ["bus", "store"]:
+                                        filtered_properties[prop_name] = prop_value
+
+                                # Build minimal args_schema with type, properties, and required fields
+                                args_schema = {
+                                    "type": "object",
+                                    "properties": filtered_properties,
+                                }
+
+                                # Include required fields if they exist and filter out injected params
+                                if "required" in full_schema:
+                                    filtered_required = [
+                                        r
+                                        for r in full_schema["required"]
+                                        if r not in ["bus", "store"]
+                                    ]
+                                    if filtered_required:
+                                        args_schema["required"] = filtered_required
+
+                                tool_schema["args_schema"] = args_schema
+                            else:
+                                # No properties - use empty object schema
+                                tool_schema["args_schema"] = {"type": "object", "properties": {}}
+                        except Exception as schema_error:
+                            log_warning(
+                                f"Failed to generate JSON schema for {tool.name}: {schema_error}"
+                            )
+                            tool_schema["args_schema"] = {"type": "object", "properties": {}}
+                    else:
+                        # No arguments schema available - use empty object schema
+                        tool_schema["args_schema"] = {"type": "object", "properties": {}}
+
+                    serialized_tools.append(tool_schema)
+
+                except Exception as tool_error:
+                    log_warning(f"Failed to serialize tool {tool.name}: {tool_error}")
+                    continue
+
+            # Return response
+            return ToolingGetToolsResponse(tools=serialized_tools, count=len(serialized_tools))
+
+        except Exception as e:
+            log_error(f"Error handling get tools query: {e}", exc_info=True)
+            return ToolingGetToolsResponse(tools=[], count=0)
+
+    @method_contract(
+        method_id=ToolingMethods.GET_TOOL_BY_NAME,
+        summary="Get a specific tool by name",
+        input_model=ToolingGetToolByNameRequest,
+        output_model=ToolingGetToolByNameResponse,
+        exposure="both",
+    )
+    async def _on_get_tool_by_name(
+        self, request: ToolingGetToolByNameRequest
+    ) -> ToolingGetToolByNameResponse:
+        """Handle get tool by name query.
+
+        Args:
+            request: Request containing tool name
+        """
+        try:
+            log_debug(f"Getting tool: {request.name}")
+
+            tool = self.tools_manager.get_tool_by_name(request.name)
+
+            # Return response
+            if tool:
+                return ToolingGetToolByNameResponse(
+                    found=True, name=tool.name, description=getattr(tool, "description", "")
+                )
+            else:
+                return ToolingGetToolByNameResponse(found=False, name=request.name)
+
+        except Exception as e:
+            log_error(f"Error handling get tool by name query: {e}", exc_info=True)
+            return ToolingGetToolByNameResponse(found=False, name=request.name)
+
+    @method_contract(
+        method_id=ToolingMethods.GET_STATS,
+        summary="Get tooling statistics",
+        input_model=ToolingGetStatsRequest,
+        output_model=ToolingGetStatsResponse,
+        exposure="internal",
+    )
+    async def _on_get_stats(self, request: ToolingGetStatsRequest) -> ToolingGetStatsResponse:
+        """Handle get stats query.
+
+        Args:
+            request: Empty request
+        """
+        try:
+            stats = self.tools_manager.get_stats()
+            log_debug(f"Tool stats: {stats}")
+
+            # Return response
+            return ToolingGetStatsResponse(
+                total_tools=stats.get("total_tools", 0),
+                mcp_tools_loaded=stats.get("mcp_tools_loaded", 0),
+                core_tools=stats.get("core_tools"),
+                plugin_tools=stats.get("plugin_tools"),
+            )
+
+        except Exception as e:
+            log_error(f"Error handling get stats query: {e}", exc_info=True)
+            return ToolingGetStatsResponse(total_tools=0, mcp_tools_loaded=0)
+
+    @method_contract(
+        method_id=ToolingMethods.GET_MCP_STATUS,
+        summary="Get MCP server status",
+        input_model=ToolingGetMCPStatusRequest,
+        output_model=ToolingGetMCPStatusResponse,
+        exposure="internal",
+    )
+    async def _on_get_mcp_status(
+        self, request: ToolingGetMCPStatusRequest
+    ) -> ToolingGetMCPStatusResponse:
+        """Handle get MCP status query.
+
+        Args:
+            request: Empty request
+        """
+        try:
+            status = self.tools_manager.get_mcp_status()
+            log_debug(f"MCP status: {status}")
+
+            # Return response
+            return ToolingGetMCPStatusResponse(**status)
+
+        except Exception as e:
+            log_error(f"Error handling get MCP status query: {e}", exc_info=True)
+            return ToolingGetMCPStatusResponse(servers=[], total_servers=0, active_servers=0)
+
+    @method_contract(
+        method_id=ToolingMethods.RELOAD_MCP_TOOLS,
+        summary="Reload MCP tools",
+        input_model=ToolingReloadMCPRequest,
+        output_model=EmptyOutput,
+        exposure="internal",
+    )
+    async def _on_reload_mcp(self, request: ToolingReloadMCPRequest) -> EmptyOutput:
+        """Handle reload MCP tools command.
+
+        Args:
+            request: Empty request
+        """
+        try:
+            log_info("Reloading MCP tools...")
+            await self.tools_manager.reload_mcp_tools()
+
+            # Emit reloaded event
+            stats = self.tools_manager.get_stats()
+            await self.bus.publish(
+                ToolingMethods.TOOLS_RELOADED,
+                ToolsReloaded(total_tools=stats["total_tools"]),
+                event=True,
+                priority=get_system_priority(),
+                origin="internal",
+            )
+
+            log_info("MCP tools reloaded successfully")
+            return EmptyOutput()
+
+        except Exception as e:
+            log_error(f"Error reloading MCP tools: {e}", exc_info=True)
+            return EmptyOutput()
+
+    @method_contract(
+        method_id=ToolingMethods.EXECUTE_TOOL,
+        summary="Execute a tool by name",
+        input_model=ToolingExecuteToolRequest,
+        output_model=ToolingExecuteToolResponse,
+        exposure="both",
+    )
+    async def _on_execute_tool(
+        self, request: ToolingExecuteToolRequest
+    ) -> ToolingExecuteToolResponse:
+        """Handle execute tool command.
+
+        Args:
+            request: Request containing tool name and arguments
+        """
+        try:
+            log_debug(f"Executing tool: {request.tool_name} with args: {request.arguments}")
+
+            # Get the tool
+            tool = self.tools_manager.get_tool_by_name(request.tool_name)
+            if not tool:
+                # Try to find similar tool names (case-insensitive, partial match)
+                all_tool_names = self.tools_manager.get_all_tool_names()
+                similar_tools = [
+                    name
+                    for name in all_tool_names
+                    if request.tool_name.lower() in name.lower()
+                    or name.lower() in request.tool_name.lower()
+                ]
+
+                error_msg = f"Tool not found: '{request.tool_name}'"
+                if similar_tools:
+                    error_msg += f". Similar tools found: {', '.join(similar_tools)}"
+                else:
+                    available = all_tool_names[:10]
+                    error_msg += (
+                        f". Available tools ({len(all_tool_names)} total): {', '.join(available)}"
+                    )
+                    if len(all_tool_names) > 10:
+                        error_msg += f" ... and {len(all_tool_names) - 10} more"
+
+                log_error(error_msg)
+                log_debug(f"Tool lookup contains: {list(self.tools_manager.tool_lookup.keys())}")
+
+                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
+
+            # Execute the tool
+            try:
+                # Always inject the bus into tool arguments
+                tool_args = request.arguments.copy()
+                tool_args["bus"] = self.bus
+
+                # Execute the tool - LangChain will handle argument validation
+                # The bus parameter is injected at runtime and not in the schema
+                result = (
+                    await tool.ainvoke(tool_args)
+                    if hasattr(tool, "ainvoke")
+                    else tool.invoke(tool_args)
+                )
+                log_debug(f"Tool {request.tool_name} executed successfully: {result}")
+
+                # Return response
+                return ToolingExecuteToolResponse(ok=True, data=result, error=None)
+
+            except Exception as tool_error:
+                error_msg = f"Tool execution failed: {str(tool_error)}"
+                log_error(error_msg, exc_info=True)
+                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
+
+        except Exception as e:
+            log_error(f"Error handling execute tool command: {e}", exc_info=True)
+            return ToolingExecuteToolResponse(ok=False, error=str(e), data=None)

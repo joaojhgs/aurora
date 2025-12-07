@@ -114,7 +114,9 @@ class WheelInstaller:
                     "fallback": ["llama-cpp-python"],
                 },
                 "sycl": {
-                    "fallback_env": {"CMAKE_ARGS": "-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"},
+                    "fallback_env": {
+                        "CMAKE_ARGS": "-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
+                    },
                     "fallback": ["llama-cpp-python"],
                     "pre_install_check": "intel_oneapi",
                 },
@@ -125,7 +127,9 @@ class WheelInstaller:
             },
         }
 
-    def install_package(self, package_name: str, variant: str = "cpu", advanced: bool = False) -> bool:
+    def install_package(
+        self, package_name: str, variant: str = "cpu", advanced: bool = False
+    ) -> bool:
         """
         Install a package with smart wheel selection
 
@@ -144,10 +148,11 @@ class WheelInstaller:
         config = self.wheel_configs[package_name][variant]
 
         # Check pre-installation requirements for certain backends
-        if "pre_install_check" in config:
-            if not self._check_requirements(config["pre_install_check"]):
-                print(f"❌ Pre-installation requirements not met for {variant}")
-                return False
+        if "pre_install_check" in config and not self._check_requirements(
+            config["pre_install_check"]
+        ):
+            print(f"❌ Pre-installation requirements not met for {variant}")
+            return False
 
         # Try advanced wheels first if requested and available
         if advanced and "advanced" in config:
@@ -210,7 +215,7 @@ class WheelInstaller:
                 return False
         return True
 
-    def _pip_install(self, args: list[str], env: Optional[dict[str, str]] = None) -> bool:
+    def _pip_install(self, args: list[str], env: dict[str, str] | None = None) -> bool:
         """Execute pip install with given arguments"""
         try:
             cmd = [sys.executable, "-m", "pip", "install"] + args
@@ -286,7 +291,9 @@ class WheelInstaller:
             print(f"❌ Failed to install PyTorch for {hardware.upper()}")
             return False
 
-    def install_both(self, hardware: str = "cpu", advanced: bool = False, legacy_torch: bool = False) -> bool:
+    def install_both(
+        self, hardware: str = "cpu", advanced: bool = False, legacy_torch: bool = False
+    ) -> bool:
         """
         Install both PyTorch and llama-cpp-python with matching hardware support
 
@@ -314,7 +321,9 @@ class WheelInstaller:
 
         if pytorch_success and llama_success:
             print()
-            print(f"🎉 Successfully installed both PyTorch and llama-cpp-python for {hardware.upper()}")
+            print(
+                f"🎉 Successfully installed both PyTorch and llama-cpp-python for {hardware.upper()}"
+            )
             return True
         else:
             print()

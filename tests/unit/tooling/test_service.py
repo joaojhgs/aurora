@@ -28,18 +28,20 @@ def mock_bus():
 @pytest.fixture
 def tooling_service(mock_bus):
     """Create a ToolingService instance."""
-    with patch("app.tooling.service.ToolsManager") as mock_tools_mgr:
-        with patch("app.tooling.service.set_tools_manager"):
-            mock_manager = Mock()
-            mock_manager.initialize = AsyncMock()
-            mock_manager.get_stats = Mock(return_value={"total_tools": 5, "mcp_tools_loaded": False})
-            mock_manager.get_tools = Mock(return_value=[])
-            mock_manager.get_tool_by_name = Mock(return_value=None)
-            mock_tools_mgr.return_value = mock_manager
+    with (
+        patch("app.tooling.service.ToolsManager") as mock_tools_mgr,
+        patch("app.tooling.service.set_tools_manager"),
+    ):
+        mock_manager = Mock()
+        mock_manager.initialize = AsyncMock()
+        mock_manager.get_stats = Mock(return_value={"total_tools": 5, "mcp_tools_loaded": False})
+        mock_manager.get_tools = Mock(return_value=[])
+        mock_manager.get_tool_by_name = Mock(return_value=None)
+        mock_tools_mgr.return_value = mock_manager
 
-            service = ToolingService(bus=mock_bus)
-            service.tools_manager = mock_manager
-            return service
+        service = ToolingService(bus=mock_bus)
+        service.tools_manager = mock_manager
+        return service
 
 
 class TestToolingServiceInitialization:
@@ -110,7 +112,9 @@ class TestToolingServiceQueries:
         # Mock bus.request to return search results
         from app.messaging import QueryResult
 
-        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": [{"key": "test_tool"}]}))
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=True, data={"items": [{"key": "test_tool"}]})
+        )
 
         # Mock tools_manager to map name -> tool
         from langchain_core.tools import tool
@@ -165,7 +169,9 @@ class TestToolingServiceQueries:
     @pytest.mark.asyncio
     async def test_get_stats(self, tooling_service, mock_bus):
         """Test get stats query."""
-        tooling_service.tools_manager.get_stats = Mock(return_value={"total_tools": 10, "mcp_tools_loaded": True})
+        tooling_service.tools_manager.get_stats = Mock(
+            return_value={"total_tools": 10, "mcp_tools_loaded": True}
+        )
 
         query = GetToolStatsQuery()
         env = Envelope(type=ToolingTopics.GET_STATS, payload=query, reply_to="test.reply")

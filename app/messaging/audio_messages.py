@@ -39,9 +39,13 @@ class AudioFormat(BaseModel):
 
     sample_rate: int = Field(description="Sample rate in Hz (e.g., 16000, 44100, 48000)")
     channels: int = Field(default=1, description="Number of audio channels (1=mono, 2=stereo)")
-    encoding: AudioEncoding = Field(default=AudioEncoding.PCM_S16LE, description="Audio encoding format")
+    encoding: AudioEncoding = Field(
+        default=AudioEncoding.PCM_S16LE, description="Audio encoding format"
+    )
     bits_per_sample: int = Field(default=16, description="Bits per sample for PCM formats")
-    chunk_duration_ms: float = Field(default=100.0, description="Expected duration of each audio chunk in milliseconds")
+    chunk_duration_ms: float = Field(
+        default=100.0, description="Expected duration of each audio chunk in milliseconds"
+    )
 
     @property
     def bytes_per_sample(self) -> int:
@@ -68,11 +72,18 @@ class AudioChunk(Event):
     """
 
     data: bytes = Field(description="Raw audio data in the format specified by AudioFormat")
-    source: str = Field(description="Audio source identifier (e.g., 'microphone', 'websocket', 'file')")
+    source: str = Field(
+        description="Audio source identifier (e.g., 'microphone', 'websocket', 'file')"
+    )
     stream_id: str = Field(description="Unique identifier for this audio stream")
     sequence: int = Field(description="Sequence number within the stream (starting from 0)")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when this chunk was captured/generated")
-    format: AudioFormat | None = Field(default=None, description="Audio format (typically only sent with first chunk)")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when this chunk was captured/generated",
+    )
+    format: AudioFormat | None = Field(
+        default=None, description="Audio format (typically only sent with first chunk)"
+    )
 
     @property
     def duration_ms(self) -> float:
@@ -115,7 +126,9 @@ class AudioStreamStarted(Event):
     stream_id: str = Field(description="Unique identifier for this audio stream")
     source: str = Field(description="Audio source identifier")
     format: AudioFormat = Field(description="Format of the audio stream")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when the stream started")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Timestamp when the stream started"
+    )
 
 
 class AudioStreamStopped(Event):
@@ -127,9 +140,15 @@ class AudioStreamStopped(Event):
     stream_id: str = Field(description="Unique identifier for the audio stream that stopped")
     source: str = Field(description="Audio source identifier")
     total_chunks: int = Field(description="Total number of chunks sent in this stream")
-    total_duration_ms: float = Field(description="Total duration of the audio stream in milliseconds")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when the stream stopped")
-    reason: str | None = Field(default=None, description="Reason for stopping (e.g., 'user_request', 'error', 'timeout')")
+    total_duration_ms: float = Field(
+        description="Total duration of the audio stream in milliseconds"
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Timestamp when the stream stopped"
+    )
+    reason: str | None = Field(
+        default=None, description="Reason for stopping (e.g., 'user_request', 'error', 'timeout')"
+    )
 
 
 # Topic naming conventions for audio streams
@@ -160,11 +179,9 @@ class AudioTopics:
             Topic name for the audio stream
         """
         source_lower = source.lower()
-        if source_lower == "microphone":
-            return AudioTopics.STREAM_MICROPHONE
-        elif source_lower == "websocket":
-            return AudioTopics.STREAM_WEBSOCKET
-        elif source_lower == "file":
-            return AudioTopics.STREAM_FILE
-        else:
-            return AudioTopics.STREAM_GENERIC
+        source_map = {
+            "microphone": AudioTopics.STREAM_MICROPHONE,
+            "websocket": AudioTopics.STREAM_WEBSOCKET,
+            "file": AudioTopics.STREAM_FILE,
+        }
+        return source_map.get(source_lower, AudioTopics.STREAM_GENERIC)

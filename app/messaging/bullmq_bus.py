@@ -18,9 +18,9 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.registry import all_contracts
 
 from .bus import Envelope, Handler, QueryResult
-from .event_registry import get_event_registry
 
 
 class BullMQBus:
@@ -133,14 +133,11 @@ class BullMQBus:
         if not self._available:
             raise RuntimeError("BullMQ not available")
 
-        # Validate topic if enabled (skip dynamic reply topics)
-        if self._validate_topics and not topic.startswith("reply."):
-            try:
-                registry = get_event_registry()
-                registry.validate_subscribe(topic)
-            except ValueError as e:
-                log_error(f"Topic validation failed for subscription: {e}")
-                raise
+        # Note: Subscriptions are always allowed for events.
+        # Events don't need to be registered as contracts - they're published and subscribed to.
+        # Only callable methods (queries/commands) need @method_contract decorators.
+        # We don't validate subscriptions because services may subscribe to events
+        # that are published by other services without contracts.
 
         # Check if topic has wildcard
         if "*" in topic:
@@ -260,7 +257,9 @@ class BullMQBus:
             error: Error that caused failure
         """
         self._stats["dead_letters"] += 1
-        log_error(f"Job {job.id} moved to dead-letter: {error}", exc_info=True if error else False)
+        log_error(
+            f"Job {job.id} moved to dead-letter: {error}", exc_info=bool(error) if error else False
+        )
 
     def _topic_matches(self, topic: str, pattern: str) -> bool:
         """Check if a topic matches a subscription pattern.
@@ -312,13 +311,15 @@ class BullMQBus:
             raise RuntimeError("BullMQ not available")
 
         # Validate topic if enabled (skip dynamic reply topics)
-        if self._validate_topics and not topic.startswith("reply."):
-            try:
-                registry = get_event_registry()
-                registry.validate_publish(topic)
-            except ValueError as e:
-                log_error(f"Topic validation failed for publish: {e}")
-                raise
+        # Only validate commands/queries (event=False) - events don't need contracts
+        if self._validate_topics and not topic.startswith("reply.") and not event:
+            # Commands/queries must be registered as contracts
+            contracts = all_contracts()
+            if not any(topic == (c.bus_topic or c.name) for c in contracts.values()):
+                available_topics = [c.bus_topic or c.name for c in contracts.values()][:10]
+                error_msg = f"Topic '{topic}' is not registered in the contract registry.\n  Available topics: {', '.join(available_topics)}"
+                log_error(error_msg)
+                raise ValueError(error_msg)
 
         # Determine target queue (for wildcards, use base queue)
         queue_name = topic
@@ -344,7 +345,9 @@ class BullMQBus:
         job_data = {
             "id": job_id,
             "type": topic,  # Store actual topic
-            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json")
+            if hasattr(message, "model_dump")
+            else message,
             "origin": origin,
             "reply_to": reply_to,
         }
@@ -368,7 +371,10 @@ class BullMQBus:
         await queue.add(queue_name, job_data, job_opts)
         self._stats["published"] += 1
 
-        log_debug(f"Published message to BullMQ queue {queue_name} (topic: {topic}) " f"with priority {priority}")
+        log_debug(
+            f"Published message to BullMQ queue {queue_name} (topic: {topic}) "
+            f"with priority {priority}"
+        )
 
     async def request(
         self,
@@ -414,17 +420,19 @@ class BullMQBus:
         # Subscribe to reply topic (one-time handler)
         async def _on_reply(env: Envelope) -> None:
             """Handle reply message."""
-            if env.correlation_id == correlation_id:
-                if not fut.done():
-                    if hasattr(env.payload, "model_dump"):
-                        result_data = env.payload.model_dump()
-                    else:
-                        result_data = env.payload
+            if (
+                env.correlation_id == correlation_id
+                and not fut.done()
+                and hasattr(env.payload, "model_dump")
+            ):
+                result_data = env.payload.model_dump()
+            elif env.correlation_id == correlation_id and not fut.done():
+                result_data = env.payload
 
-                    if isinstance(result_data, dict) and "ok" in result_data:
-                        fut.set_result(QueryResult(**result_data))
-                    else:
-                        fut.set_result(QueryResult(ok=True, data=result_data))
+                if isinstance(result_data, dict) and "ok" in result_data:
+                    fut.set_result(QueryResult(**result_data))
+                else:
+                    fut.set_result(QueryResult(ok=True, data=result_data))
 
         # Subscribe to reply topic
         self.subscribe(reply_topic, _on_reply)
@@ -433,7 +441,9 @@ class BullMQBus:
         job_data = {
             "id": str(uuid_lib.uuid4()),
             "type": topic,
-            "payload": message.model_dump(mode="json") if hasattr(message, "model_dump") else message,
+            "payload": message.model_dump(mode="json")
+            if hasattr(message, "model_dump")
+            else message,
             "origin": origin,
             "reply_to": reply_topic,
             "correlation_id": correlation_id,
@@ -481,7 +491,7 @@ class BullMQBus:
             result = await asyncio.wait_for(fut, timeout)
             log_debug(f"Received response for correlation_id {correlation_id}")
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log_error(f"Request to {topic} timed out after {timeout}s")
             # Clean up future
             self._response_futures.pop(correlation_id, None)
