@@ -26,7 +26,7 @@ sudo apt update && sudo apt install -y portaudio19-dev python3-pip python3-venv 
 ./setup.sh  # Choose option 3 for Development
 
 # OR manually install development dependencies
-pip install -e .[dev]  # Takes 2-3 minutes, set timeout to 300 seconds
+pip install -r requirements-dev.txt  # Takes 2-3 minutes, set timeout to 300 seconds
 ```
 
 **NEVER CANCEL: Setup takes 5-10 minutes on first run. Set timeout to 900+ seconds.**
@@ -175,8 +175,7 @@ make unit    # Run unit tests
 
 **Build and setup:**
 - `setup.sh` / `setup.bat` - Guided installation scripts
-- `pyproject.toml` - Python dependencies (primary source of truth)
-- `requirements-*.txt` - Legacy files (kept for backward compatibility with tox.ini)
+- `requirements-*.txt` - Python dependencies by category
 - `.github/workflows/` - CI/CD pipeline definitions
 
 **Testing:**

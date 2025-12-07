@@ -79,25 +79,6 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 ### 🚀 Quick Start
 
-#### Option 1: Docker Hub (Fastest - Pre-built Images)
-
-**Best for:** Quick setup with Docker, no local build required
-
-```bash
-# Pull pre-built images
-docker pull aurora-ai/aurora-config:latest
-docker pull aurora-ai/aurora-db:openai-latest
-docker pull aurora-ai/aurora-orchestrator:openai-latest
-docker pull aurora-ai/aurora-tts:cpu-latest
-
-# Use with docker-compose (see docker-compose.process.yml)
-docker-compose -f docker-compose.process.yml up -d
-```
-
-**See [Docker Hub Usage Guide](docs/docker/DOCKER-HUB-USAGE.md) for complete instructions.**
-
-#### Option 2: Source Installation (Recommended for Development)
-
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/joaojhgs/aurora.git

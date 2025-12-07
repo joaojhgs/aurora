@@ -58,9 +58,7 @@ async def test_priority_ordering(bus):
 
     # Publish messages in reverse priority order
     for priority in [50, 10, 80]:
-        await bus.publish(
-            "test.message", {"priority": priority}, event=False, priority=priority, origin="test"
-        )
+        await bus.publish("test.message", {"priority": priority}, event=False, priority=priority, origin="test")
 
     # Give time for processing
     await asyncio.sleep(0.3)
@@ -117,13 +115,7 @@ async def test_request_response_pattern(bus):
     bus.subscribe("DB.GetRecentMessages", query_handler)
 
     # Send query and wait for response
-    result = await bus.request(
-        "DB.GetRecentMessages",
-        TestQuery(query="test", limit=10),
-        timeout=1.0,
-        priority=10,
-        origin="test",
-    )
+    result = await bus.request("DB.GetRecentMessages", TestQuery(query="test", limit=10), timeout=1.0, priority=10, origin="test")
 
     assert result.ok is True
     assert result.data.get("result") == "Processed: test"
@@ -146,9 +138,7 @@ async def test_event_broadcast(bus):
     bus.subscribe("LLM.ResponseReady", handler2)
 
     # Publish event
-    await bus.publish(
-        "LLM.ResponseReady", {"response": "test"}, event=True, priority=50, origin="test"
-    )
+    await bus.publish("LLM.ResponseReady", {"response": "test"}, event=True, priority=50, origin="test")
 
     # Give time for processing
     await asyncio.sleep(0.3)

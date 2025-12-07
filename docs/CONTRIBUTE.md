@@ -20,7 +20,7 @@ Aurora has a comprehensive testing suite divided into several categories:
 
 Install test dependencies:
 ```bash
-pip install -e .[test]
+pip install -r requirements-test.txt
 ```
 
 Run all tests (except performance tests):
@@ -92,14 +92,14 @@ Contributions to Aurora are welcome! Here's how you can contribute:
 
 3. **Make your changes** and ensure they follow the project's code style:
    ```bash
-   # Run auto-formatting (ruff)
+   # Run auto-formatting (black + isort)
    make format
    
    # Run all code quality checks (lint + typing)
    make check
    
    # Or run individual checks:
-   make lint      # Run ruff linting
+   make lint      # Run flake8 linting
    make typing    # Run mypy type checking
    ```
 

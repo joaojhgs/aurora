@@ -3,7 +3,6 @@ Unit tests for the DatabaseManager.
 """
 
 import asyncio
-import contextlib
 import os
 import tempfile
 import uuid
@@ -53,8 +52,10 @@ class TestDatabaseManager:
 
         finally:
             # Clean up the test database file
-            with contextlib.suppress(FileNotFoundError, PermissionError):
+            try:
                 os.unlink(test_db)
+            except (FileNotFoundError, PermissionError):
+                pass
 
     async def test_initialization(self, db_manager):
         """Test database initialization."""
@@ -62,9 +63,7 @@ class TestDatabaseManager:
         # Create a test connection to verify the database is accessible
         async with aiosqlite.connect(db_manager.db_path) as conn:
             # Check that the messages table exists
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
-            )
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
             result = await cursor.fetchone()
             assert result is not None
             assert result[0] == "messages"
@@ -88,9 +87,7 @@ class TestDatabaseManager:
         # Connect to database and check
         async with aiosqlite.connect(db_manager.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(
-                "SELECT content, message_type FROM messages WHERE id = ?", (message_id,)
-            )
+            cursor = await conn.execute("SELECT content, message_type FROM messages WHERE id = ?", (message_id,))
             result = await cursor.fetchone()
 
         assert result is not None
@@ -225,7 +222,7 @@ class TestDatabaseManager:
         db_manager = DatabaseManager(db_path="/nonexistent/path/db.sqlite")
 
         # Initialization should fail but not crash
-        with pytest.raises((OSError, ValueError, RuntimeError)):
+        with pytest.raises(Exception):
             await db_manager.initialize()
 
     async def test_concurrent_operations(self, db_manager):

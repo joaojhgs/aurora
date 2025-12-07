@@ -43,17 +43,15 @@ class TestSupervisorInitialization:
             mock_bus.start = AsyncMock()
             mock_local_bus_class.return_value = mock_bus
 
-            with (
-                patch("app.services.supervisor.register_all_service_topics"),
-                patch("app.services.supervisor.set_bus"),
-                patch("app.services.supervisor.config_manager") as mock_config,
-            ):
-                mock_config.get.return_value = "threads"
+            with patch("app.services.supervisor.register_all_service_topics"):
+                with patch("app.services.supervisor.set_bus"):
+                    with patch("app.services.supervisor.config_manager") as mock_config:
+                        mock_config.get.return_value = "threads"
 
-                await supervisor.initialize()
+                        await supervisor.initialize()
 
-                assert supervisor.bus is not None
-                mock_bus.start.assert_called_once()
+                        assert supervisor.bus is not None
+                        mock_bus.start.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_initialize_bullmq_bus(self, supervisor):
@@ -63,22 +61,16 @@ class TestSupervisorInitialization:
             mock_bus.start = AsyncMock()
             mock_bullmq_class.return_value = mock_bus
 
-            with (
-                patch("app.services.supervisor.register_all_service_topics"),
-                patch("app.services.supervisor.set_bus"),
-                patch("app.services.supervisor.config_manager") as mock_config,
-            ):
-                mock_config.get.return_value = "processes"
-                mock_config.get.side_effect = (
-                    lambda key, default=None: "redis://localhost:6379"
-                    if "redis" in key
-                    else "processes"
-                )
+            with patch("app.services.supervisor.register_all_service_topics"):
+                with patch("app.services.supervisor.set_bus"):
+                    with patch("app.services.supervisor.config_manager") as mock_config:
+                        mock_config.get.return_value = "processes"
+                        mock_config.get.side_effect = lambda key, default=None: "redis://localhost:6379" if "redis" in key else "processes"
 
-                await supervisor.initialize()
+                        await supervisor.initialize()
 
-                assert supervisor.bus is not None
-                mock_bus.start.assert_called_once()
+                        assert supervisor.bus is not None
+                        mock_bus.start.assert_called_once()
 
 
 class TestSupervisorServiceLifecycle:
@@ -89,23 +81,21 @@ class TestSupervisorServiceLifecycle:
         """Test starting foundation services."""
         supervisor.bus = mock_bus
 
-        with (
-            patch("app.db.DBService") as mock_db_service,
-            patch("app.tooling.ToolingService") as mock_tooling_service,
-        ):
-            mock_db = Mock()
-            mock_db.start = AsyncMock()
-            mock_tooling = Mock()
-            mock_tooling.start = AsyncMock()
+        with patch("app.db.DBService") as mock_db_service:
+            with patch("app.tooling.ToolingService") as mock_tooling_service:
+                mock_db = Mock()
+                mock_db.start = AsyncMock()
+                mock_tooling = Mock()
+                mock_tooling.start = AsyncMock()
 
-            mock_db_service.return_value = mock_db
-            mock_tooling_service.return_value = mock_tooling
+                mock_db_service.return_value = mock_db
+                mock_tooling_service.return_value = mock_tooling
 
-            await supervisor.start_services()
+                await supervisor.start_services()
 
-            assert len(supervisor.services) >= 2
-            mock_db.start.assert_called_once()
-            mock_tooling.start.assert_called_once()
+                assert len(supervisor.services) >= 2
+                mock_db.start.assert_called_once()
+                mock_tooling.start.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_start_services_complete(self, supervisor, mock_bus):
@@ -168,11 +158,9 @@ class TestSupervisorErrorHandling:
         with patch("app.services.supervisor.config_manager") as mock_config:
             mock_config.get.return_value = "invalid_mode"
 
-            with (
-                patch("app.services.supervisor.register_all_service_topics"),
-                pytest.raises(ValueError, match="Unknown architecture mode"),
-            ):
-                await supervisor.initialize()
+            with patch("app.services.supervisor.register_all_service_topics"):
+                with pytest.raises(ValueError, match="Unknown architecture mode"):
+                    await supervisor.initialize()
 
     @pytest.mark.asyncio
     async def test_start_services_failure(self, supervisor, mock_bus):

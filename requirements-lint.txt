@@ -1,0 +1,14 @@
+# Aurora Voice Assistant - Lint Requirements
+#
+# This file contains dependencies needed for linting Aurora code
+# Install with: pip install -r requirements-lint.txt
+
+# Linting and static analysis tools
+flake8>=6.0.0
+mypy>=1.0.0
+black>=23.0.0
+pre-commit>=3.0.0
+
+# Type stubs for better mypy checks
+types-requests
+types-setuptools

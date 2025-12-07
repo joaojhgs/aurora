@@ -9,9 +9,9 @@ This module defines the core messaging abstractions including:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 

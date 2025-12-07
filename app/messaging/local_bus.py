@@ -16,9 +16,9 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.shared.contracts.registry import all_contracts
 
 from .bus import Envelope, Handler, QueryResult
+from .event_registry import get_event_registry
 
 
 class LocalBus:
@@ -50,14 +50,10 @@ class LocalBus:
         self._subs: dict[str, list[Handler]] = defaultdict(list)
 
         # Command queues (priority-based)
-        self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(
-            lambda: asyncio.PriorityQueue(maxsize=command_queue_size)
-        )
+        self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(lambda: asyncio.PriorityQueue(maxsize=command_queue_size))
 
         # Event queues (FIFO)
-        self._evt_queues: dict[str, asyncio.Queue] = defaultdict(
-            lambda: asyncio.Queue(maxsize=event_queue_size)
-        )
+        self._evt_queues: dict[str, asyncio.Queue] = defaultdict(lambda: asyncio.Queue(maxsize=event_queue_size))
 
         # Worker tracking
         self._cmd_workers_started: dict[str, bool] = defaultdict(bool)
@@ -104,11 +100,14 @@ class LocalBus:
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
         """
-        # Note: Subscriptions are always allowed for events.
-        # Events don't need to be registered as contracts - they're published and subscribed to.
-        # Only callable methods (queries/commands) need @method_contract decorators.
-        # We don't validate subscriptions because services may subscribe to events
-        # that are published by other services without contracts.
+        # Validate topic if enabled
+        if self._validate_topics:
+            try:
+                registry = get_event_registry()
+                registry.validate_subscribe(topic)
+            except ValueError as e:
+                log_error(f"Topic validation failed for subscription: {e}")
+                raise
 
         self._subs[topic].append(handler)
         log_debug(f"Subscribed handler to topic: {topic}")
@@ -153,9 +152,7 @@ class LocalBus:
             return None
 
         # Execute all handlers concurrently
-        results = await asyncio.gather(
-            *[_run_handler(h) for h in matching_handlers], return_exceptions=not raise_errors
-        )
+        results = await asyncio.gather(*[_run_handler(h) for h in matching_handlers], return_exceptions=not raise_errors)
 
         # Check for errors if raise_errors is True
         if raise_errors:
@@ -194,7 +191,7 @@ class LocalBus:
                 env = await asyncio.wait_for(queue.get(), timeout=0.1)
                 await self._deliver(topic, env)
                 queue.task_done()
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 log_error(f"Error in event worker for {topic}: {e}")
@@ -216,10 +213,7 @@ class LocalBus:
                 try:
                     await self._deliver(topic, env, raise_errors=True)
                 except Exception as e:
-                    log_error(
-                        f"Error delivering command to {topic} "
-                        f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}"
-                    )
+                    log_error(f"Error delivering command to {topic} " f"(attempt {env.attempts + 1}/{env.max_attempts}): {e}")
 
                     # Retry with exponential backoff
                     env.attempts += 1
@@ -232,24 +226,18 @@ class LocalBus:
                         queue.task_done()  # Mark current task done before re-queueing
                         self._counter += 1
                         await queue.put((prio, self._counter, env))
-                        log_info(
-                            f"Re-queued command {env.id} to {topic} "
-                            f"(attempt {env.attempts}/{env.max_attempts})"
-                        )
+                        log_info(f"Re-queued command {env.id} to {topic} " f"(attempt {env.attempts}/{env.max_attempts})")
                     else:
                         # Dead-letter
                         self._stats["dead_letters"] += 1
                         await self._dead_letter.put(env)
-                        log_error(
-                            f"Command {env.id} to {topic} exceeded max attempts, "
-                            f"moved to dead-letter queue"
-                        )
+                        log_error(f"Command {env.id} to {topic} exceeded max attempts, " f"moved to dead-letter queue")
                         queue.task_done()
                 else:
                     # Success case
                     queue.task_done()
 
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 log_error(f"Error in command worker for {topic}: {e}")
@@ -283,16 +271,14 @@ class LocalBus:
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
         """
-        # Validate topic if enabled (skip dynamic reply topics)
-        # Only validate commands/queries (event=False) - events don't need contracts
-        if self._validate_topics and not topic.startswith("reply.") and not event:
-            # Commands/queries must be registered as contracts
-            contracts = all_contracts()
-            if not any(topic == (c.bus_topic or c.name) for c in contracts.values()):
-                available_topics = [c.bus_topic or c.name for c in contracts.values()][:10]
-                error_msg = f"Topic '{topic}' is not registered in the contract registry.\n  Available topics: {', '.join(available_topics)}"
-                log_error(error_msg)
-                raise ValueError(error_msg)
+        # Validate topic if enabled (skip validation for reply topics)
+        if self._validate_topics and not topic.startswith("reply."):
+            try:
+                registry = get_event_registry()
+                registry.validate_publish(topic)
+            except ValueError as e:
+                log_error(f"Topic validation failed for publish: {e}")
+                raise
 
         env = Envelope(
             type=topic,
@@ -369,9 +355,7 @@ class LocalBus:
                 result_data = None
 
                 # Check if it's a BaseModel instance (not the class itself)
-                if hasattr(env.payload, "__class__") and hasattr(
-                    env.payload.__class__, "model_dump"
-                ):
+                if hasattr(env.payload, "__class__") and hasattr(env.payload.__class__, "model_dump"):
                     try:
                         result_data = env.payload.model_dump()
                         log_debug(f"Reply handler: model_dump result = {result_data}")
@@ -416,7 +400,7 @@ class LocalBus:
         try:
             result = await asyncio.wait_for(fut, timeout)
             return result
-        except TimeoutError:
+        except asyncio.TimeoutError:
             log_error(f"Request to {topic} timed out after {timeout}s")
             return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
 

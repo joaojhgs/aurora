@@ -35,7 +35,7 @@ classifiers = [
     "Topic :: Office/Business",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-requires-python = ">=3.10,<3.12"
+requires-python = ">=3.9,<3.12"
 
 # Minimal core dependencies - only essential runtime requirements
 dependencies = [
@@ -47,7 +47,7 @@ dependencies = [
     
     # Basic utilities (always needed)
     "psutil>=5.0.0",
-    "tenacity>=8.2.3,<10.0",
+    "tenacity>=9.0.0",
     
     # Core data handling
     "pydantic>=2.10.0",
@@ -107,8 +107,7 @@ runtime = [
     "duckduckgo-search==7.5.2",
     
     # Utilities
-    # Note: halo removed (not used), tqdm/emoji/regex are transitive, Jinja2/MarkupSafe are transitive
-    # Keeping some for version pinning, but they're transitive dependencies
+    "halo==0.0.31",
     "tqdm==4.67.1",
     "emoji==2.14.0",
     "regex==2024.11.6",
@@ -136,143 +135,6 @@ torch-cpu = [
 ]
 
 # Note: runtime-no-torch section removed - 'runtime' no longer includes torch by default
-
-# ============================================================================
-# SERVICE-SPECIFIC DEPENDENCIES
-# ============================================================================
-# Dependencies for individual services (for process mode / Docker)
-# Install with: pip install -e .[service-{name}]
-
-service-config = [
-    # Only uses jsonschema (already in core dependencies)
-]
-
-service-db = [
-    "aiosqlite>=0.19.0",
-    "sqlite-vec",
-    "SQLAlchemy==2.0.38",
-    "langchain==0.3.25",
-    "langchain-community==0.3.24",
-    "langgraph==0.4.6",
-    # Note: langchain-huggingface moved to service-db-local-embeddings (only needed when use_local=true)
-    # Without local embeddings, DB service is ~500MB. With local embeddings, it's ~8GB due to torch/transformers.
-]
-
-# Optional: Local embeddings for DB service (only needed when general.embeddings.use_local=true)
-# This pulls in heavy ML dependencies (torch, transformers, sentence-transformers) - ~7GB
-# Install with: pip install -e .[service-db,service-db-local-embeddings]
-service-db-local-embeddings = [
-    "langchain-huggingface==0.2.0",
-    # These are transitive dependencies but listed for clarity:
-    # - sentence-transformers (requires torch, transformers, tokenizers, huggingface-hub)
-    # - torch, torchaudio, torchvision (huge - several GB)
-]
-
-service-scheduler = [
-    "croniter==6.0.0",
-]
-
-service-tooling = [
-    "aiohttp==3.11.12",
-    "langchain-community==0.3.24",
-    "langchain-core==0.3.62",
-    "langchain-google-community==2.0.7",
-    "langchain-mcp-adapters>=0.1.8",
-    "langgraph==0.4.6",
-]
-
-
-
-service-stt-wakeword = [
-    "openwakeword==0.6.0",
-    "pvporcupine==1.9.5",
-    "numpy==1.26.4",
-    "scipy==1.15.1",
-    "onnxruntime==1.20.1",
-]
-
-service-stt-transcription = [
-    "faster-whisper==1.1.1",
-    "RealtimeSTT==0.3.94",
-    "webrtcvad-wheels==2.0.14",
-    "ctranslate2==4.5.0",
-    "numpy==1.26.4",
-]
-
-service-stt-coordinator = [
-    "PyAudio==0.2.14",  # Now includes audio capture
-]
-
-service-tts = [
-    "realtimetts==0.4.47",
-    "piper-tts==1.2.0",
-    "piper-phonemize==1.1.0",
-    "PyAudio==0.2.14",
-    "torch==2.6.0",
-    "torchaudio==2.6.0",
-    "torchvision==0.21.0",
-    "onnxruntime==1.20.1",
-]
-
-service-orchestrator = [
-    "langchain-core==0.3.62",
-    "langchain-openai==0.3.18",  # Lightweight API client (default provider)
-    "langgraph==0.4.6",
-    "Jinja2==3.1.6",
-    "typing-extensions>=4.10.0",
-    # Note: langchain-huggingface moved to optional groups (only needed for HuggingFace providers)
-    # Note: llama-cpp moved to optional groups (only needed for llama.cpp provider)
-]
-
-# Optional: HuggingFace Endpoint (lightweight - API client only)
-# For provider: huggingface_endpoint
-service-orchestrator-huggingface-endpoint = [
-    "langchain-huggingface==0.2.0",  # Lightweight - just API client
-]
-
-# Optional: HuggingFace Pipeline (heavy - requires torch/transformers)
-# For provider: huggingface_pipeline
-# This pulls in heavy ML dependencies (torch, transformers, sentence-transformers) - ~7GB
-service-orchestrator-huggingface-local = [
-    "langchain-huggingface==0.2.0",
-    # These are transitive dependencies but listed for clarity:
-    # - sentence-transformers (requires torch, transformers, tokenizers, huggingface-hub)
-    # - torch, torchaudio, torchvision (huge - several GB)
-]
-
-# Optional: Llama.cpp CPU (for local llama.cpp models)
-# For provider: llama_cpp (CPU mode)
-service-orchestrator-llama-cpp = [
-    # Note: llama-cpp-python is installed separately by setup script
-    # This group is for documentation - actual installation handled by setup scripts
-    # Size: ~500MB-1GB
-]
-
-# Optional: Llama.cpp CUDA (for local llama.cpp models with GPU)
-# For provider: llama_cpp (CUDA mode)
-service-orchestrator-llama-cpp-cuda = [
-    # Note: llama-cpp-python[cuda] is installed separately by setup script
-    # This group is for documentation - actual installation handled by setup scripts
-    # Size: ~500MB-1GB
-]
-
-all-services = [
-    "aurora[service-config,service-db,service-scheduler,service-tooling,service-stt-wakeword,service-stt-transcription,service-stt-coordinator,service-tts,service-orchestrator]",
-]
-
-# ============================================================================
-# MODE-SPECIFIC DEPENDENCIES
-# ============================================================================
-# Dependencies for different architecture modes
-
-mode-threads = [
-    # No additional dependencies - uses asyncio (stdlib) for messaging
-]
-
-mode-processes = [
-    "bullmq>=1.7.0",
-    # Note: Redis is required as external service (not Python package)
-]
 
 # ============================================================================
 # APPROACH 2: Executable Building - PyInstaller Support
@@ -399,14 +261,8 @@ slack = [
 ]
 
 # Search engines
-# Note: brave-search has dependency conflicts (requires httpx<0.26.0, but we use httpx==0.28.1)
-# It's only loaded when plugins.brave_search.activate=true in config
-# DuckDuckGo is used as fallback when brave-search is not available
-# To use brave-search, install manually: uv pip install brave-search
-# WARNING: This will downgrade httpx and may break other dependencies
 brave-search = [
-    # Disabled due to httpx version conflict - install manually if needed
-    # "brave-search<0.2.0; python_version < '3.12'",
+    "brave-search",
 ]
 
 # OpenRecall integration dependencies (from modules/openrecall)
@@ -435,7 +291,8 @@ dev = [
     "pytest==8.3.5",
     "pytest-asyncio",
     "pytest-cov",
-    "ruff>=0.8.4",
+    "black",
+    "flake8",
     "mypy",
     "pre-commit",
     "ipython",
@@ -524,9 +381,8 @@ third-party = [
 ]
 
 # Third-party providers with additional features
-# Note: brave-search excluded due to dependency conflicts - install manually if needed
 third-party-full = [
-    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,openrecall]",
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
 ]
 
 # ============================================================================
@@ -636,65 +492,24 @@ app = [
 # voice_models/ and chat_models/ directories contain large model files
 # Users should download/manage these separately
 
-# Ruff configuration (see https://docs.astral.sh/ruff/configuration/)
-# Note: Some TOML schema validators may show false positives for nested tool.* sections
-[tool.ruff]
-# Line length matches black's default
+[tool.black]
 line-length = 100
-target-version = "py311"
-
-# Exclude common directories
-exclude = [
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".tox",
-    ".venv",
-    "build",
-    "dist",
-    "__pycache__",
-    "scripts/analyze-dependencies.py",  # Script with hyphen in name
-    "scripts/analyze-transitive-deps.py",  # Script with hyphen in name
-]
-
-[tool.ruff.lint]
-# Enable flake8-compatible rules
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "SIM", # flake8-simplify
-]
-# Ignore specific rules that conflict with our style
-ignore = [
-    "E203",  # whitespace before ':' (conflicts with formatter)
-    "E501",  # line too long (handled by formatter)
-    # W503 removed - not a valid ruff rule (was removed because it conflicts with formatters)
-    "F403",  # star imports
-    "F405",  # name may be undefined due to star imports
-    "F401",  # imported but unused (can be too strict)
-]
-
-[tool.ruff.lint.isort]
-# Use black-compatible import sorting
-# Configure isort to be compatible with black formatter
-combine-as-imports = true
-force-wrap-aliases = true
-split-on-trailing-comma = true
-
-[tool.ruff.format]
-# Use double quotes for strings
-quote-style = "double"
-# Indent with spaces
-indent-style = "space"
-# Line ending style
-line-ending = "auto"
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
 
 [tool.mypy]
 python_version = "3.11"
@@ -901,6 +716,12 @@ addopts = [
     "-m", "not performance"  # Don't run performance tests by default
 ]
 
+[tool.autopep8]
+max_line_length = 100
+aggressive = 3
+ignore = "E501,W503,E203"
+in-place = true
+recursive = true
 
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

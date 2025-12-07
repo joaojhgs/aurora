@@ -6,9 +6,11 @@ This guide documents the linting and code formatting standards for the Aurora pr
 
 Aurora uses the following tools to enforce code quality and consistency:
 
-1. **Ruff** - Fast Python linter and formatter that replaces black, flake8, and isort
-2. **MyPy** - Static type checker that validates type hints
-3. **pre-commit** - Framework for managing git hooks to run these tools automatically
+1. **Black** - Code formatter that enforces a consistent style
+2. **Flake8** - Linter that checks for syntax and style errors 
+3. **isort** - Import sorter that organizes imports consistently
+4. **MyPy** - Static type checker that validates type hints
+5. **pre-commit** - Framework for managing git hooks to run these tools automatically
 
 ## Pre-commit Setup
 
@@ -50,8 +52,7 @@ pre-commit run --all-files
 pre-commit run
 
 # Run a specific hook
-pre-commit run ruff --all-files
-pre-commit run ruff-format --all-files
+pre-commit run black --all-files
 ```
 
 ## Code Style Guidelines
@@ -94,11 +95,15 @@ For a smoother development experience, consider integrating these tools with you
 
 Install the following extensions:
 - Python (Microsoft)
-- Ruff (astral-sh.ruff) - Provides linting and formatting
+- Black Formatter
+- Flake8
+- isort
 - mypy Type Checker
 
 ### PyCharm
 
 Configure the following tools in Settings → Tools:
-- External Tools → Ruff (for linting and formatting)
+- External Tools → Black
+- External Tools → isort
+- Python Integrated Tools → Flake8
 - Python Integrated Tools → mypy

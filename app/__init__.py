@@ -11,14 +11,12 @@ __email__ = "aurora@example.com"
 __license__ = "MIT"
 
 # Main application components
-from .shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
+from .config.config_manager import config_manager
 
 __all__ = [
     "__version__",
     "__author__",
     "__email__",
     "__license__",
-    "config_api",
+    "config_manager",
 ]

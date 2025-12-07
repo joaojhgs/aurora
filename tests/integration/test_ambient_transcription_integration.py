@@ -15,9 +15,7 @@ def test_main_integration():
 
     def test_ambient_callback(text, timestamp, chunk_id):
         """Test callback for ambient transcription with updated signature"""
-        ambient_results.append(
-            {"text": text, "timestamp": timestamp, "chunk_id": chunk_id, "length": len(text)}
-        )
+        ambient_results.append({"text": text, "timestamp": timestamp, "chunk_id": chunk_id, "length": len(text)})
 
     # Example configuration for real-time processing
     ambient_config = {
@@ -110,7 +108,7 @@ def test_configuration_manager_integration():
     # Test that configuration is well-formed
     config = ambient_config_schema["speech_to_text"]["ambient_transcription"]
     assert isinstance(config["enable"], bool)
-    assert isinstance(config["chunk_duration"], int | float)
+    assert isinstance(config["chunk_duration"], (int, float))
     assert isinstance(config["storage_path"], str)
     assert isinstance(config["filter_short_transcriptions"], bool)
     assert isinstance(config["min_transcription_length"], int)

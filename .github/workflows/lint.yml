@@ -22,19 +22,14 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         
-    - name: Install UV
-      run: pip install uv
-        
     - name: Install linting dependencies
-      run: uv pip install --system -e .[dev]
-        
-    - name: Lint with ruff
       run: |
-        ruff check app tests
+        python -m pip install --upgrade pip
+        pip install -r requirements-lint.txt
         
-    - name: Check formatting with ruff
+    - name: Lint with flake8
       run: |
-        ruff format --check app tests
+        flake8 app tests
         
     # Disabled for now as there are too many errors to be fixed 
     # - name: Type check with mypy

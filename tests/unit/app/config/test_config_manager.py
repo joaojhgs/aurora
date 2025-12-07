@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 from jsonschema import ValidationError
 
-from app.services.config.config_manager import ConfigManager
+from app.config.config_manager import ConfigManager
 
 
 class TestConfigManager:
@@ -73,19 +73,17 @@ class TestConfigManager:
 
             # Mock the open function for writing the default config
             mock_file = mock_open()
-            with (
-                patch("builtins.open", mock_file),
-                patch.object(ConfigManager, "_get_default_config") as mock_default,
-            ):
-                mock_default.return_value = {"app": {"name": "Aurora"}}
-                # Force a reload of the configuration
-                cm.load_config()
+            with patch("builtins.open", mock_file):
+                with patch.object(ConfigManager, "_get_default_config") as mock_default:
+                    mock_default.return_value = {"app": {"name": "Aurora"}}
+                    # Force a reload of the configuration
+                    cm.load_config()
 
-                # The instance should have been initialized with the default config
-                assert cm._config is not None
+                    # The instance should have been initialized with the default config
+                    assert cm._config is not None
 
-                # Check that the file was opened for writing
-                mock_file.assert_called_with(non_existent_path, "w")
+                    # Check that the file was opened for writing
+                    mock_file.assert_called_with(non_existent_path, "w")
 
     @pytest.mark.parametrize(
         "invalid_config",
@@ -170,35 +168,33 @@ class TestConfigManager:
         observer.notify_config_changed = MagicMock()
 
         # Create the instance first
-        with (
-            patch("os.path.exists", return_value=True),
-            patch("builtins.open", mock_open(read_data="{}")),
-            patch.object(ConfigManager, "_validate_config", return_value=True),
-        ):
-            cm = ConfigManager()
-            # Then patch the instance attribute
-            cm.config_file = "/tmp/test_config.json"
+        with patch("os.path.exists", return_value=True):
+            with patch("builtins.open", mock_open(read_data="{}")):
+                with patch.object(ConfigManager, "_validate_config", return_value=True):
+                    cm = ConfigManager()
+                    # Then patch the instance attribute
+                    cm.config_file = "/tmp/test_config.json"
 
-            # Register the observer
-            cm._observers.append(observer)
+                    # Register the observer
+                    cm._observers.append(observer)
 
-            # Use the actual _notify_observers method from the class
-            # since we see it exists in the implementation
-            with patch.object(ConfigManager, "save_config"):
-                # Call the notify function directly
-                cm._notify_observers("test.value", "old_value", 123)
+                    # Use the actual _notify_observers method from the class
+                    # since we see it exists in the implementation
+                    with patch.object(ConfigManager, "save_config"):
+                        # Call the notify function directly
+                        cm._notify_observers("test.value", "old_value", 123)
 
-                # Check that the observer was notified with the right arguments
-                observer.assert_called_once_with("test.value", "old_value", 123)
+                        # Check that the observer was notified with the right arguments
+                        observer.assert_called_once_with("test.value", "old_value", 123)
 
-                # Remove the observer
-                cm._observers.remove(observer)
+                        # Remove the observer
+                        cm._observers.remove(observer)
 
-                # Reset the mock for the second test
-                observer.reset_mock()
+                        # Reset the mock for the second test
+                        observer.reset_mock()
 
-                # Call notify again
-                cm._notify_observers("test.another", "old_value", 456)
+                        # Call notify again
+                        cm._notify_observers("test.another", "old_value", 456)
 
-                # The observer should not have been notified again
-                observer.assert_not_called()
+                        # The observer should not have been notified again
+                        observer.assert_not_called()

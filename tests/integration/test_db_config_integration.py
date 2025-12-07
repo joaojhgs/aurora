@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 import pytest
 import pytest_asyncio
 
-from app.services.config.config_manager import ConfigManager
-from app.services.db.manager import DatabaseManager
-from app.services.db.models import Message, MessageType
+from app.config.config_manager import ConfigManager
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 @pytest.mark.integration

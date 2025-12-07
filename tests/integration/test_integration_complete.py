@@ -13,9 +13,9 @@ from unittest.mock import mock_open, patch
 import pytest
 import pytest_asyncio
 
-from app.services.config.config_manager import ConfigManager
-from app.services.db.manager import DatabaseManager
-from app.services.db.models import Message, MessageType
+from app.config.config_manager import ConfigManager
+from app.db.manager import DatabaseManager
+from app.db.models import Message, MessageType
 
 
 @pytest.mark.integration
@@ -54,22 +54,20 @@ class TestConfigIntegration:
 
         try:
             # Initialize with the test config file
-            with (
-                patch("app.config.config_manager.os.path.exists", return_value=True),
-                patch("builtins.open", mock_open(read_data=json.dumps(expected_config))),
-                patch.object(ConfigManager, "_validate_config"),
-            ):
-                # Create instance with validation disabled
-                config_manager = ConfigManager()
-                config_manager.config_file = path
+            with patch("app.config.config_manager.os.path.exists", return_value=True):
+                with patch("builtins.open", mock_open(read_data=json.dumps(expected_config))):
+                    # Create instance with validation disabled
+                    with patch.object(ConfigManager, "_validate_config"):
+                        config_manager = ConfigManager()
+                        config_manager.config_file = path
 
-                # Load the real config
-                config_manager._config = expected_config
+                        # Load the real config
+                        config_manager._config = expected_config
 
-                # Check if the config was properly loaded
-                assert "app" in config_manager._config
-                assert config_manager._config["app"]["name"] == "Aurora Test"
-                assert config_manager._config["app"]["version"] == "0.1.0"
+                        # Check if the config was properly loaded
+                        assert "app" in config_manager._config
+                        assert config_manager._config["app"]["name"] == "Aurora Test"
+                        assert config_manager._config["app"]["version"] == "0.1.0"
 
         finally:
             # Reset to original instance

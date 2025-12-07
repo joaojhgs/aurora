@@ -284,11 +284,7 @@ class TestBullMQBusCompatibility:
         """Verify BullMQBus has all the same public methods as LocalBus."""
         from app.messaging.local_bus import LocalBus  # noqa: F401
 
-        bullmq_methods = {
-            name
-            for name in dir(BullMQBus)
-            if not name.startswith("_") and callable(getattr(BullMQBus, name))
-        }
+        bullmq_methods = {name for name in dir(BullMQBus) if not name.startswith("_") and callable(getattr(BullMQBus, name))}
 
         # Check all public methods exist
         assert "start" in bullmq_methods

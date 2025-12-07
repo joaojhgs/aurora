@@ -6,9 +6,7 @@ Basic TTS wrapper for testing
 class TextToAudioStream:
     """Mock TextToAudioStream for testing."""
 
-    def __init__(
-        self, engine, frames_per_buffer=1024, on_audio_stream_start=None, on_audio_stream_stop=None
-    ):
+    def __init__(self, engine, frames_per_buffer=1024, on_audio_stream_start=None, on_audio_stream_stop=None):
         self.engine = engine
         self.frames_per_buffer = frames_per_buffer
         self.on_audio_stream_start = on_audio_stream_start

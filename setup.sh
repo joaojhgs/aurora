@@ -520,8 +520,8 @@ fi
 if [[ "$FEATURE_LEVEL" == "dev" ]]; then
     echo "🛠️  Development tools available:"
     echo "   pytest         # Run tests"
-    echo "   ruff check     # Lint code"
-    echo "   ruff format    # Format code"
+    echo "   black .        # Format code"
+    echo "   flake8         # Lint code"
     echo "   mypy           # Type checking"
     echo ""
     

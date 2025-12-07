@@ -58,6 +58,8 @@ def check_requirements():
     issues = []
 
     # Check Python version
+    if sys.version_info < (3, 11):
+        issues.append(f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor})")
 
     # Check if we're in the right directory
     if not Path("pyproject.toml").exists():

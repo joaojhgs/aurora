@@ -38,9 +38,7 @@ class TestMCPEndToEndFlow:
     @pytest.fixture
     def weather_server_path(self):
         """Get path to weather server example."""
-        return (
-            Path(__file__).parent.parent.parent / "examples" / "mcp_servers" / "weather_server.py"
-        )
+        return Path(__file__).parent.parent.parent / "examples" / "mcp_servers" / "weather_server.py"
 
     @pytest.fixture
     def temp_config_with_servers(self, math_server_path):
@@ -48,14 +46,7 @@ class TestMCPEndToEndFlow:
         config_data = {
             "mcp": {
                 "enabled": True,
-                "servers": {
-                    "math": {
-                        "command": "python",
-                        "args": [str(math_server_path)],
-                        "transport": "stdio",
-                        "enabled": True,
-                    }
-                },
+                "servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
             }
         }
 
@@ -81,20 +72,11 @@ class TestMCPEndToEndFlow:
             with patch("app.langgraph.mcp_client.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 # Mock the MultiServerMCPClient to simulate realistic server responses
-                with patch(
-                    "langchain_mcp_adapters.client.MultiServerMCPClient"
-                ) as mock_client_class:
+                with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
                     # Create realistic mock tools similar to what math server would provide
                     mock_tools = []
 
@@ -158,19 +140,10 @@ class TestMCPEndToEndFlow:
 
                     # Verify expected math tools are loaded
                     tool_names = [tool.name for tool in tools]
-                    expected_tools = [
-                        "add",
-                        "subtract",
-                        "multiply",
-                        "divide",
-                        "power",
-                        "square_root",
-                    ]
+                    expected_tools = ["add", "subtract", "multiply", "divide", "power", "square_root"]
 
                     for expected_tool in expected_tools:
-                        assert (
-                            expected_tool in tool_names
-                        ), f"Expected tool '{expected_tool}' not found"
+                        assert expected_tool in tool_names, f"Expected tool '{expected_tool}' not found"
 
                 # Test tool execution
                 add_tool = next((t for t in tools if t.name == "add"), None)
@@ -204,24 +177,14 @@ class TestMCPEndToEndFlow:
                 patch("app.langgraph.mcp_client.config_manager") as mock_mcp_config,
                 patch("app.tooling.tools.tools.config_manager") as mock_tools_config,
             ):
+
                 config_data = {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }
 
-                mock_mcp_config.get.side_effect = lambda key, default=None: config_data.get(
-                    key, default
-                )
-                mock_tools_config.get.side_effect = lambda key, default=None: config_data.get(
-                    key, default
-                )
+                mock_mcp_config.get.side_effect = lambda key, default=None: config_data.get(key, default)
+                mock_tools_config.get.side_effect = lambda key, default=None: config_data.get(key, default)
 
                 # Reset MCP tools loaded flag for this test
                 import app.tooling.tools.tools as tools_module
@@ -263,14 +226,7 @@ class TestMCPEndToEndFlow:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "invalid": {
-                            "command": "nonexistent_command",
-                            "args": ["invalid.py"],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"invalid": {"command": "nonexistent_command", "args": ["invalid.py"], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 # Should handle gracefully
@@ -284,14 +240,7 @@ class TestMCPEndToEndFlow:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 await manager.initialize()
@@ -316,14 +265,7 @@ class TestMCPEndToEndFlow:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 await manager.initialize()
@@ -375,14 +317,7 @@ class TestMCPEndToEndFlow:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 await manager.initialize()
@@ -431,14 +366,7 @@ class TestMCPPerformanceE2E:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 # Measure initialization time
@@ -468,14 +396,7 @@ class TestMCPPerformanceE2E:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 await manager.initialize()
@@ -534,14 +455,7 @@ class TestMCPReliabilityE2E:
             with patch("app.config.config_manager.config_manager") as mock_config:
                 mock_config.get.side_effect = lambda key, default=None: {
                     "mcp.enabled": True,
-                    "mcp.servers": {
-                        "math": {
-                            "command": "python",
-                            "args": [str(math_server_path)],
-                            "transport": "stdio",
-                            "enabled": True,
-                        }
-                    },
+                    "mcp.servers": {"math": {"command": "python", "args": [str(math_server_path)], "transport": "stdio", "enabled": True}},
                 }.get(key, default)
 
                 await manager.initialize()

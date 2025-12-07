@@ -11,11 +11,9 @@ import sys
 
 from dotenv import load_dotenv
 
+from app.config.config_manager import config_manager
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.supervisor import Supervisor
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
 
 # CRITICAL: Force unbuffered output FIRST before any logging
 if hasattr(sys.stdout, "reconfigure"):
@@ -29,7 +27,7 @@ logging.getLogger("alsa").setLevel(logging.ERROR)
 
 # Load environment variables
 load_dotenv()
-config_api.migrate_from_env()
+config_manager.migrate_from_env()
 
 
 async def main_async():
@@ -51,7 +49,7 @@ async def main_async():
         log_info("✓ All services started!")
 
         # Start OpenRecall if enabled
-        if config_api.get("plugins.openrecall.activate"):
+        if config_manager.get("plugins.openrecall.activate"):
             log_info("Starting OpenRecall integration...")
             from threading import Thread
 
@@ -63,7 +61,7 @@ async def main_async():
 
         # Initial greeting via bus
         from app.messaging.priority_helpers import get_interactive_priority
-        from app.shared.messaging.models.tts_models import TTSRequest
+        from app.tts import TTSRequest
 
         await supervisor.bus.publish(
             "TTS.Request",
@@ -181,7 +179,7 @@ def main_with_ui():
 
     # Send initial greeting
     from app.messaging.priority_helpers import get_interactive_priority
-    from app.shared.messaging.models.tts_models import TTSRequest
+    from app.tts import TTSRequest
 
     greeting_future = asyncio.run_coroutine_threadsafe(
         supervisor.bus.publish(
@@ -231,7 +229,7 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        if config_api.get("ui.activate"):
+        if config_manager.get("ui.activate"):
             # UI mode - run supervisor in background thread
             main_with_ui()
         else:

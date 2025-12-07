@@ -1,7 +1,6 @@
 """Unit tests for the STTCoordinatorService."""
 
 import asyncio
-import contextlib
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -108,8 +107,10 @@ async def test_stop_service(service):
     assert service._timeout_task.cancelled()
 
     # Cleanup
-    with contextlib.suppress(asyncio.CancelledError):
+    try:
         await service._timeout_task
+    except asyncio.CancelledError:
+        pass
 
 
 @pytest.mark.asyncio
@@ -138,15 +139,15 @@ async def test_on_wake_word_detected_starts_session(service, mock_bus):
     )
 
     # Check that transcription is resumed
-    mock_bus.publish.assert_any_call(
-        TranscriptionTopics.CONTROL, TranscriptionControl(action="resume"), event=False
-    )
+    mock_bus.publish.assert_any_call(TranscriptionTopics.CONTROL, TranscriptionControl(action="resume"), event=False)
 
     # Cleanup timeout task
     if service._timeout_task and not service._timeout_task.done():
         service._timeout_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        try:
             await service._timeout_task
+        except asyncio.CancelledError:
+            pass
 
 
 @pytest.mark.asyncio
@@ -214,14 +215,10 @@ async def test_transcription_result_ends_session(service, mock_bus):
     )
 
     # Check that transcription is paused
-    mock_bus.publish.assert_any_call(
-        TranscriptionTopics.CONTROL, TranscriptionControl(action="pause"), event=False
-    )
+    mock_bus.publish.assert_any_call(TranscriptionTopics.CONTROL, TranscriptionControl(action="pause"), event=False)
 
 
-@pytest.mark.skip(
-    reason="Timeout handler has deadlock bug - _transition_to called while holding lock"
-)
+@pytest.mark.skip(reason="Timeout handler has deadlock bug - _transition_to called while holding lock")
 @pytest.mark.asyncio
 async def test_session_timeout(service, mock_bus):
     """Test the session timeout functionality.
@@ -256,11 +253,7 @@ async def test_session_timeout(service, mock_bus):
     assert service._state == STTState.IDLE
 
     # Check that session ended event was published with timeout reason
-    session_ended_calls = [
-        call
-        for call in mock_bus.publish.call_args_list
-        if call.args[0] == STTCoordinatorTopics.SESSION_ENDED
-    ]
+    session_ended_calls = [call for call in mock_bus.publish.call_args_list if call.args[0] == STTCoordinatorTopics.SESSION_ENDED]
     assert len(session_ended_calls) > 0, "Session ended event should be published"
 
 
@@ -270,11 +263,7 @@ async def test_control_commands(service, mock_bus):
     await service.start()
 
     # Test start_session
-    await service._on_control(
-        Envelope(
-            payload=STTCoordinatorControl(action="start_session"), type=STTCoordinatorTopics.CONTROL
-        )
-    )
+    await service._on_control(Envelope(payload=STTCoordinatorControl(action="start_session"), type=STTCoordinatorTopics.CONTROL))
     assert service._state == STTState.LISTENING
     session_id = service._current_session_id
     assert session_id is not None
@@ -282,15 +271,13 @@ async def test_control_commands(service, mock_bus):
     # Cancel the timeout task to prevent hanging
     if service._timeout_task and not service._timeout_task.done():
         service._timeout_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        try:
             await service._timeout_task
+        except asyncio.CancelledError:
+            pass
 
     # Test end_session
-    await service._on_control(
-        Envelope(
-            payload=STTCoordinatorControl(action="end_session"), type=STTCoordinatorTopics.CONTROL
-        )
-    )
+    await service._on_control(Envelope(payload=STTCoordinatorControl(action="end_session"), type=STTCoordinatorTopics.CONTROL))
     assert service._state == STTState.IDLE
     mock_bus.publish.assert_any_call(
         STTCoordinatorTopics.SESSION_ENDED,
@@ -299,7 +286,5 @@ async def test_control_commands(service, mock_bus):
 
     # Test reset
     await service._transition_to(STTState.LISTENING)  # force a state change
-    await service._on_control(
-        Envelope(payload=STTCoordinatorControl(action="reset"), type=STTCoordinatorTopics.CONTROL)
-    )
+    await service._on_control(Envelope(payload=STTCoordinatorControl(action="reset"), type=STTCoordinatorTopics.CONTROL))
     assert service._state == STTState.IDLE

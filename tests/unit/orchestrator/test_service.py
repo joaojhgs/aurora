@@ -101,9 +101,7 @@ class TestOrchestratorServiceTranscriptionHandling:
 
         envelope = Envelope(type="event", payload=event)  # Pass the BaseModel directly, not dict
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock) as mock_process:
             await orchestrator_service._on_transcription(envelope)
 
             # Verify process_input was called with correct arguments
@@ -118,9 +116,7 @@ class TestOrchestratorServiceTranscriptionHandling:
 
         envelope = Envelope(type="event", payload=event)
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock) as mock_process:
             await orchestrator_service._on_transcription(envelope)
 
             # Verify process_input was NOT called for non-final transcription
@@ -148,9 +144,7 @@ class TestOrchestratorServiceTranscriptionHandling:
 
         envelope = Envelope(type="event", payload=event)
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock) as mock_process:
             mock_process.side_effect = Exception("Processing error")
 
             # Should not raise exception, but log error
@@ -167,14 +161,10 @@ class TestOrchestratorServiceUserInputHandling:
 
         envelope = Envelope(type="command", payload=cmd)
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock) as mock_process:
             await orchestrator_service._on_user_input(envelope)
 
-            mock_process.assert_called_once_with(
-                "Test command", source="ui", session_id="ui-session"
-            )
+            mock_process.assert_called_once_with("Test command", source="ui", session_id="ui-session")
 
     @pytest.mark.asyncio
     async def test_on_user_input_with_invalid_payload(self, orchestrator_service):
@@ -195,14 +185,10 @@ class TestOrchestratorServiceUserInputHandling:
 
         envelope = Envelope(type="command", payload=cmd)
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock) as mock_process:
             await orchestrator_service._on_external_input(envelope)
 
-            mock_process.assert_called_once_with(
-                "External command", source="external", session_id="external-session"
-            )
+            mock_process.assert_called_once_with("External command", source="external", session_id="external-session")
 
     @pytest.mark.asyncio
     async def test_on_external_input_with_error(self, orchestrator_service):
@@ -233,9 +219,7 @@ class TestOrchestratorServiceToolHandling:
     @pytest.mark.asyncio
     async def test_on_tool_result_failure(self, orchestrator_service):
         """Test handling failed tool result."""
-        result = ToolResult(
-            request_id="test-456", result=None, success=False, error="Tool execution failed"
-        )
+        result = ToolResult(request_id="test-456", result=None, success=False, error="Tool execution failed")
 
         envelope = Envelope(type="event", payload=result)
 
@@ -269,13 +253,9 @@ class TestOrchestratorServiceInputProcessing:
         with patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}):
             # Patch orchestrator method
             orchestrator_service.orchestrator = MagicMock()
-            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(
-                return_value="This is a response"
-            )
+            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="This is a response")
 
-            await orchestrator_service._process_input(
-                text="Test input", source="ui", session_id="test-session"
-            )
+            await orchestrator_service._process_input(text="Test input", source="ui", session_id="test-session")
 
             # Verify LLM response was published (at minimum)
             assert mock_bus.publish.call_count >= 1
@@ -312,9 +292,7 @@ class TestOrchestratorServiceInputProcessing:
     async def test_process_input_with_exception(self, orchestrator_service, mock_bus):
         """Test input processing with exception."""
         orchestrator_service.orchestrator = MagicMock()
-        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(
-            side_effect=Exception("Graph processing error")
-        )
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(side_effect=Exception("Graph processing error"))
 
         # Should not raise exception
         await orchestrator_service._process_input(text="Test input", source="stt")
@@ -332,9 +310,7 @@ class TestOrchestratorServiceInputProcessing:
 
         with patch.dict("sys.modules", {"RealtimeTTS": MagicMock(), "app.tts": mock_tts_module}):
             orchestrator_service.orchestrator = MagicMock()
-            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(
-                return_value="Response"
-            )
+            orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(return_value="Response")
 
             # Test STT source
             await orchestrator_service._process_input("Input", source="stt")
@@ -377,11 +353,7 @@ class TestOrchestratorServiceMessageTypes:
 
     def test_llm_response_ready_with_metadata(self):
         """Test LLMResponseReady with metadata."""
-        msg = LLMResponseReady(
-            text="Response",
-            session_id="session-123",
-            metadata={"source": "ui", "timestamp": 123456},
-        )
+        msg = LLMResponseReady(text="Response", session_id="session-123", metadata={"source": "ui", "timestamp": 123456})
         assert msg.metadata["source"] == "ui"
         assert msg.metadata["timestamp"] == 123456
 
