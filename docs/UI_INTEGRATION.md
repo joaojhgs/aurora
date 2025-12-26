@@ -246,14 +246,14 @@ print(f"Signals connected: {hasattr(self.ui_window, 'signals')}")
 **Symptoms**: Button click doesn't stop TTS
 
 **Causes**:
-1. `TTSStop` not exported from `app/tts/__init__.py`
+1. `TTSStop` not exported from `app/services/tts/__init__.py`
 2. Callback not registered
 3. TTS service not subscribed to STOP topic
 
 **Fix**:
 ```python
 # Verify exports
-from app.tts import TTSStop, TTSPause, TTSResume
+from app.services.tts import TTSStop, TTSPause, TTSResume
 
 # Verify callback
 self.ui_window._stop_tts_callback = self._on_stop_tts_request

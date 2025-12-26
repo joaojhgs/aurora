@@ -23,6 +23,7 @@ class TTSMethods:
     PAUSED = f"{TTSModule.NAME}.Paused"
     RESUMED = f"{TTSModule.NAME}.Resumed"
     ERROR = f"{TTSModule.NAME}.Error"
+    HEALTH_CHECK = f"{TTSModule.NAME}.HealthCheck"
 
 
 class TTSRequest(IOModel):

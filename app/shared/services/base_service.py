@@ -368,3 +368,50 @@ class BaseService(ABC):
 
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    async def health_check(self) -> dict[str, Any]:
+        """Perform health check for the service.
+
+        Returns:
+            Dictionary with health status:
+            {
+                "status": "healthy" | "degraded" | "unhealthy",
+                "checks": {
+                    "bus": "ok" | "error",
+                    "config": "ok" | "error",
+                    ...
+                },
+                "timestamp": "2025-01-XX...",
+                "service": "ServiceName"
+            }
+        """
+        from datetime import datetime
+
+        checks = {}
+        status = "healthy"
+
+        # Check bus connectivity
+        try:
+            _ = self.bus
+            checks["bus"] = "ok"
+        except Exception as e:
+            checks["bus"] = f"error: {str(e)}"
+            status = "unhealthy"
+
+        # Check config access
+        try:
+            from app.shared.config.interface import ConfigAPI
+
+            config_api = ConfigAPI()
+            _ = config_api.get_config()
+            checks["config"] = "ok"
+        except Exception as e:
+            checks["config"] = f"error: {str(e)}"
+            status = "degraded"
+
+        return {
+            "status": status,
+            "checks": checks,
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": self.module,
+        }

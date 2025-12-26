@@ -79,7 +79,7 @@ Enable ambient transcription in `config.json`:
 
 ### STT Coordinator Changes
 
-The STT Coordinator service (`app/stt_coordinator/service.py`) checks if ambient transcription is enabled:
+The STT Coordinator service (`app/services/stt_coordinator/service.py`) checks if ambient transcription is enabled:
 
 ```python
 # Load configuration
@@ -132,5 +132,5 @@ Ambient transcription records **all audio** in the environment:
 ## See Also
 
 - [Message Bus Architecture](MESSAGING_ARCHITECTURE.md)
-- [STT Coordinator Service](../app/stt_coordinator/service.py)
-- [Transcription Service](../app/stt_transcription/service.py)
+- [STT Coordinator Service](../app/services/stt_coordinator/service.py)
+- [Transcription Service](../app/services/stt_transcription/service.py)

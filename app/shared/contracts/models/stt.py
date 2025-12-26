@@ -39,6 +39,7 @@ class STTMethods:
     FINAL = f"{STTModule.NAME}.Final"
     ERROR = f"{STTModule.NAME}.Error"
     TIMEOUT = f"{STTModule.NAME}.Timeout"
+    HEALTH_CHECK = f"{STTModule.NAME}.HealthCheck"
 
 
 class WakeWordMethods:
@@ -47,6 +48,7 @@ class WakeWordMethods:
     DETECTED = f"{WakeWordModule.NAME}.Detected"
     CONTROL = f"{WakeWordModule.NAME}.Control"
     PROCESS_AUDIO = f"{WakeWordModule.NAME}.ProcessAudio"
+    HEALTH_CHECK = f"{WakeWordModule.NAME}.HealthCheck"
 
 
 class TranscriptionMethods:
@@ -55,6 +57,7 @@ class TranscriptionMethods:
     RESULT = f"{TranscriptionModule.NAME}.Result"
     CONTROL = f"{TranscriptionModule.NAME}.Control"
     PROCESS_AUDIO = f"{TranscriptionModule.NAME}.ProcessAudio"
+    HEALTH_CHECK = f"{TranscriptionModule.NAME}.HealthCheck"
     ERROR = f"{TranscriptionModule.NAME}.Error"
 
 

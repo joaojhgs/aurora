@@ -20,3 +20,12 @@ class ErrorOutput(IOModel):
 
     error: str
     code: str | None = None
+
+
+class HealthCheckResponse(IOModel):
+    """Health check response model."""
+
+    status: str  # "healthy" | "degraded" | "unhealthy"
+    checks: dict[str, str]
+    timestamp: str
+    service: str
