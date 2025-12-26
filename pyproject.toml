@@ -621,7 +621,16 @@ dev-local-gpu = [
 "Documentation" = "https://github.com/aurora-ai/aurora/blob/main/readme.md"
 
 [project.scripts]
-aurora = "main:main"
+aurora = "app.__main__:main"
+service-config = "app.services.config.__main__:run"
+service-db = "app.services.db.__main__:run"
+service-orchestrator = "app.services.orchestrator.__main__:run"
+service-scheduler = "app.services.scheduler.__main__:run"
+service-stt-coordinator = "app.services.stt_coordinator.__main__:run"
+service-stt-transcription = "app.services.stt_transcription.__main__:run"
+service-stt-wakeword = "app.services.stt_wakeword.__main__:run"
+service-tooling = "app.services.tooling.__main__:run"
+service-tts = "app.services.tts.__main__:run"
 aurora-build = "scripts.build:main"
 aurora-setup = "scripts.setup:main"
 

@@ -1,4 +1,63 @@
-<!-- 959f6486-898e-4dec-a83f-b44f20249dac eb6845e0-6ad8-4d5f-b0c0-f0948150a459 -->
+---
+name: Config Service Migration and Codebase Reorganization Plan
+overview: ""
+todos:
+  - id: 6c0c23cc-e37d-4f49-87d0-219718ed2328
+    content: Create app/shared/ directory structure with config, messaging, and contracts folders
+    status: pending
+  - id: 0d176324-90e7-4281-ba29-a707555dd4fe
+    content: Create default config interface in app/shared/config/interface.py
+    status: pending
+  - id: b55bf36b-02ed-4238-be3e-c9041cfe0f2c
+    content: Create bus initialization utilities in app/shared/messaging/bus_init.py
+    status: pending
+  - id: 0265452e-78fa-49ba-a310-9ccea0275630
+    content: Move app/contracts/ to app/shared/contracts/
+    status: pending
+  - id: 1836317e-0da6-4840-b1fe-34eba7958f4f
+    content: Create app/services/config/ directory and move config_manager.py and JSON files
+    status: pending
+  - id: 43a2aa6e-6587-4b50-93bb-284123b1f331
+    content: Create config service message models (GetConfigQuery, UpdateConfigCommand, etc.)
+    status: pending
+  - id: 7d73fb11-fed7-4bf5-b97f-1ef69a384d9f
+    content: Create ConfigTopics class and register in service_topics.py
+    status: pending
+  - id: 8064ea43-3e6b-47a4-bdfe-c40a004f02ab
+    content: Implement config service with bus handlers for all config operations
+    status: pending
+  - id: bdb8963b-5891-49b7-be9e-5955e208fa96
+    content: Create ConfigAPI class in app/shared/config/interface.py using bus under the hood
+    status: pending
+  - id: d2bb1de5-c4e4-4461-8938-a052d228d8a3
+    content: Create all model files in app/shared/messaging/models/ for each service
+    status: pending
+  - id: e5f61a37-a39a-4967-b8b5-7c450437b46d
+    content: Move all payload validation models from service files to shared/messaging/models/
+    status: pending
+  - id: 37e736ee-bc4f-4da5-9b5c-6cfaff47b2f0
+    content: Update all service file imports to use shared models
+    status: pending
+  - id: bfc233a1-5fa6-4ca3-8afb-2aa60c68b984
+    content: Replace all app.config imports with app.shared.config.interface across codebase
+    status: pending
+  - id: a538a5b4-614e-4c6b-8e2e-4a81f8d8f2ac
+    content: Move all service folders to app/services/ directory
+    status: pending
+  - id: 08548c36-1643-45b5-9b87-e38023ea2a8f
+    content: Update all imports referencing moved services
+    status: pending
+  - id: 344cc1a3-cc80-4100-910a-2676f5a037c8
+    content: Update all service files to import models from shared and services from new locations
+    status: pending
+  - id: 9fa71640-eed3-4817-b3db-df3bffcd9fbe
+    content: Update service_topics.py to import from shared models and verify registrations
+    status: pending
+  - id: c3bfcb32-9b1e-4750-96d8-25211ca7b5b1
+    content: Delete old directories (app/config/, app/contracts/) and run full test suite
+    status: pending
+---
+
 # Config Service Migration and Codebase Reorganization Plan
 
 ## Overview
@@ -9,7 +68,7 @@ This plan details the migration of the config and config_api into a dedicated co
 
 ### Current Structure
 
-```
+```javascript
 app/
 ├── config/              # Config manager and API (to become service)
 ├── contracts/           # Contract registry
@@ -23,9 +82,11 @@ app/
 └── services/            # Supervisor only
 ```
 
+
+
 ### Target Structure
 
-```
+```javascript
 app/
 ├── shared/              # NEW: Shared interfaces and utilities
 │   ├── config/          # Default config interface for all services
@@ -44,13 +105,13 @@ app/
 └── messaging/           # Bus infrastructure (stays in app/)
 ```
 
+
+
 ## Migration Phases
 
 ### Phase 1: Create Shared Folder Structure
 
-**Goal**: Establish the shared folder structure with default interfaces
-
-**Tasks**:
+**Goal**: Establish the shared folder structure with default interfaces**Tasks**:
 
 1. Create `app/shared/` directory
 2. Create `app/shared/config/` with default config interface
@@ -84,9 +145,7 @@ app/
 
 ### Phase 2: Create Config Service
 
-**Goal**: Extract config functionality into a dedicated service
-
-**Tasks**:
+**Goal**: Extract config functionality into a dedicated service**Tasks**:
 
 1. Create `app/services/config/` directory
 2. Move `app/config/config_manager.py` → `app/services/config/config_manager.py`
@@ -130,9 +189,7 @@ app/
 
 ### Phase 3: Create Config Interface in Shared
 
-**Goal**: Create a config API interface that uses the bus under the hood
-
-**Tasks**:
+**Goal**: Create a config API interface that uses the bus under the hood**Tasks**:
 
 1. Create `app/shared/config/interface.py` with ConfigAPI class
 2. Implement all existing ConfigAPI methods using bus requests
@@ -170,83 +227,59 @@ app/
 
 ### Phase 4: Move Payload Models to Shared/Messaging/Models
 
-**Goal**: Centralize all payload validation models
-
-**Tasks**:
+**Goal**: Centralize all payload validation models**Tasks**:
 
 1. Create service-specific model files in `app/shared/messaging/models/`
 2. Move models from service files to shared models
 3. Update imports across codebase
 
-**Models to Move**:
-
-**From `app/db/service.py`**:
+**Models to Move**:**From `app/db/service.py`**:
 
 - StoreMessage, GetRecentMessages, GetMessagesForDate, MessagesResponse
 - StoreCronJob, GetCronJobs, DeleteCronJob
 - RAGStoreCommand, RAGDeleteCommand, RAGSearchQuery, RAGGetQuery, RAGListQuery, RAGItemResponse
 
-→ Move to: `app/shared/messaging/models/db_models.py`
-
-**From `app/tts/service.py`**:
+→ Move to: `app/shared/messaging/models/db_models.py`**From `app/tts/service.py`**:
 
 - TTSRequest, TTSStop, TTSPause, TTSResume
 - TTSEvent, TTSStarted, TTSStopped, TTSPaused, TTSResumed, TTSError
 
-→ Move to: `app/shared/messaging/models/tts_models.py`
-
-**From `app/tooling/service.py`**:
+→ Move to: `app/shared/messaging/models/tts_models.py`**From `app/tooling/service.py`**:
 
 - ToolsInitialized, ToolsReloaded, GetToolsQuery, GetToolsResponse
 - GetToolByNameQuery, ReloadMCPToolsCommand, GetToolStatsQuery
 - GetMCPStatusQuery, GetMCPStatusResponse, ExecuteToolCommand, ExecuteToolResponse
 
-→ Move to: `app/shared/messaging/models/tooling_models.py`
-
-**From `app/orchestrator/service.py`**:
+→ Move to: `app/shared/messaging/models/tooling_models.py`**From `app/orchestrator/service.py`**:
 
 - UserInput, LLMResponseReady, ToolRequest, ToolResult
 
-→ Move to: `app/shared/messaging/models/orchestrator_models.py`
-
-**From `app/orchestrator/message_types.py`**:
+→ Move to: `app/shared/messaging/models/orchestrator_models.py`**From `app/orchestrator/message_types.py`**:
 
 - MessageSource, AuroraMessage (if still used)
 
-→ Move to: `app/shared/messaging/models/orchestrator_models.py`
-
-**From `app/stt_wakeword/messages.py`**:
+→ Move to: `app/shared/messaging/models/orchestrator_models.py`**From `app/stt_wakeword/messages.py`**:
 
 - WakeWordBackendType, WakeWordDetected, WakeWordTimeout, WakeWordControl
 
-→ Move to: `app/shared/messaging/models/stt_wakeword_models.py`
-
-**From `app/stt_coordinator/service.py`**:
+→ Move to: `app/shared/messaging/models/stt_wakeword_models.py`**From `app/stt_coordinator/service.py`**:
 
 - STTState, STTSessionStarted, STTSessionEnded, STTUserSpeechCaptured, STTCoordinatorControl
 
-→ Move to: `app/shared/messaging/models/stt_coordinator_models.py`
-
-**From `app/scheduler/models.py`**:
+→ Move to: `app/shared/messaging/models/stt_coordinator_models.py`**From `app/scheduler/models.py`**:
 
 - ScheduleType, JobStatus, CronJob (if used for messaging)
 
-→ Keep in scheduler for now, create `app/shared/messaging/models/scheduler_models.py` for message models only
-
-**From `app/messaging/audio_messages.py`**:
+→ Keep in scheduler for now, create `app/shared/messaging/models/scheduler_models.py` for message models only**From `app/messaging/audio_messages.py`**:
 
 - AudioEncoding, AudioFormat, AudioChunk, AudioStreamState, AudioStreamControl
 - AudioStreamStarted, AudioStreamStopped, AudioTopics
 
-→ Keep in `app/messaging/audio_messages.py` (generic protocol)
-
-**From `app/messaging/transcription_messages.py`**:
+→ Keep in `app/messaging/audio_messages.py` (generic protocol)**From `app/messaging/transcription_messages.py`**:
 
 - TranscriptionType, TranscriptionResult, TranscriptionControl, TranscriptionError
 
-→ Keep in `app/messaging/transcription_messages.py` (generic protocol)
-
-**Files to Create**:
+→ Keep in `app/messaging/transcription_messages.py` (generic protocol)**Files to Create**:
 
 - `app/shared/messaging/models/db_models.py`
 - `app/shared/messaging/models/tts_models.py`
@@ -272,9 +305,7 @@ app/
 
 ### Phase 5: Update All Imports to Use Shared Config Interface
 
-**Goal**: Replace all config imports with shared interface
-
-**Tasks**:
+**Goal**: Replace all config imports with shared interface**Tasks**:
 
 1. Find all files importing from `app.config.config_api` or `app.config.config_manager`
 2. Replace with imports from `app.shared.config.interface`
@@ -328,9 +359,7 @@ app/
 
 ### Phase 6: Move Services to Services Directory
 
-**Goal**: Consolidate all services in app/services/
-
-**Tasks**:
+**Goal**: Consolidate all services in app/services/**Tasks**:
 
 1. Move each service folder to app/services/
 2. Update all imports across codebase
@@ -374,9 +403,7 @@ app/
 
 ### Phase 7: Update Service Imports and Model References
 
-**Goal**: Update all service files to import from shared models
-
-**Tasks**:
+**Goal**: Update all service files to import from shared models**Tasks**:
 
 1. Update each service file to import models from shared
 2. Update service files to import from new service locations
@@ -407,9 +434,7 @@ app/
 
 ### Phase 8: Update Messaging Topic Registrations
 
-**Goal**: Ensure all topics are properly registered with new structure
-
-**Tasks**:
+**Goal**: Ensure all topics are properly registered with new structure**Tasks**:
 
 1. Update `app/messaging/service_topics.py` to import from shared models
 2. Verify all topic definitions reference correct payload classes
@@ -425,9 +450,7 @@ app/
 
 ### Phase 9: Cleanup and Final Verification
 
-**Goal**: Remove old files and verify everything works
-
-**Tasks**:
+**Goal**: Remove old files and verify everything works**Tasks**:
 
 1. Delete old `app/config/` directory (if empty)
 2. Delete old `app/contracts/` directory (if exists)
@@ -509,25 +532,3 @@ Create the following topics:
 - Verify all services can access config via interface
 - Verify config changes propagate correctly
 - Verify observers still work
-- Verify MCP integration still works
-
-### To-dos
-
-- [ ] Create app/shared/ directory structure with config, messaging, and contracts folders
-- [ ] Create default config interface in app/shared/config/interface.py
-- [ ] Create bus initialization utilities in app/shared/messaging/bus_init.py
-- [ ] Move app/contracts/ to app/shared/contracts/
-- [ ] Create app/services/config/ directory and move config_manager.py and JSON files
-- [ ] Create config service message models (GetConfigQuery, UpdateConfigCommand, etc.)
-- [ ] Create ConfigTopics class and register in service_topics.py
-- [ ] Implement config service with bus handlers for all config operations
-- [ ] Create ConfigAPI class in app/shared/config/interface.py using bus under the hood
-- [ ] Create all model files in app/shared/messaging/models/ for each service
-- [ ] Move all payload validation models from service files to shared/messaging/models/
-- [ ] Update all service file imports to use shared models
-- [ ] Replace all app.config imports with app.shared.config.interface across codebase
-- [ ] Move all service folders to app/services/ directory
-- [ ] Update all imports referencing moved services
-- [ ] Update all service files to import models from shared and services from new locations
-- [ ] Update service_topics.py to import from shared models and verify registrations
-- [ ] Delete old directories (app/config/, app/contracts/) and run full test suite

@@ -96,7 +96,31 @@ docker-compose -f docker-compose.process.yml up -d
 
 **See [Docker Hub Usage Guide](docs/docker/DOCKER-HUB-USAGE.md) for complete instructions.**
 
-#### Option 2: Source Installation (Recommended for Development)
+#### Option 2: UV Installation (Fastest - Recommended)
+
+**Best for:** Developers who want fastest dependency resolution
+
+```bash
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone https://github.com/joaojhgs/aurora.git
+cd aurora
+
+# Install all dependencies (development setup)
+uv sync --extra dev-local-gpu
+
+# Or for third-party API setup (easiest)
+uv sync --extra third-party
+
+# Run Aurora
+uv run python main.py
+```
+
+**See [UV Usage Guide](docs/UV_USAGE.md) for complete instructions.**
+
+#### Option 3: Source Installation (Guided Setup)
 
 1. **Clone the repository:**
    ```bash

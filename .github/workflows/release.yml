@@ -55,10 +55,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Install UV
+        run: pip install uv
+
       - name: 📦 Install release dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -e .[build,dev]
+        run: uv pip install --system -e .[build,dev]
 
       - name: 🔍 Check if release is needed
         id: check
@@ -168,11 +169,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y portaudio19-dev python3-dev gcc build-essential
 
+      - name: Install UV
+        run: pip install uv
+
       - name: 📦 Install build dependencies
         run: |
-          pip install --upgrade pip
           # Install runtime dependencies needed for Piper TTS and other components
-          pip install -e .[runtime,build,torch-cpu]
+          uv pip install --system -e .[runtime,build,torch-cpu]
 
       - name: 🏗️ Build executable
         run: |
@@ -254,10 +257,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install UV
+        run: pip install uv
+
       - name: 📦 Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install python-semantic-release[changelog] requests
+        run: uv pip install --system python-semantic-release[changelog] requests
 
       - name: 📋 Generate changelog preview
         id: changelog
