@@ -29,6 +29,7 @@ class DBMethods:
     SAVE_CRON_JOB = f"{DBModule.NAME}.SaveCronJob"
     GET_CRON_JOBS = f"{DBModule.NAME}.GetCronJobs"
     DELETE_CRON_JOB = f"{DBModule.NAME}.DeleteCronJob"
+    HEALTH_CHECK = f"{DBModule.NAME}.HealthCheck"
 
 
 class DBSaveMessageRequest(IOModel):

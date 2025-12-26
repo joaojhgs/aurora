@@ -23,6 +23,7 @@ class SupervisorMethods:
     STOP_SERVICE = f"{SupervisorModule.NAME}.StopService"
     START_SERVICE = f"{SupervisorModule.NAME}.StartService"
     HEALTH = f"{SupervisorModule.NAME}.Health"
+    HEALTH_CHECK = f"{SupervisorModule.NAME}.HealthCheck"
 
 
 class ServiceStatus(BaseModel):

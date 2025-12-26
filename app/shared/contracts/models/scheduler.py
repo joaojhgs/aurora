@@ -20,6 +20,7 @@ class SchedulerMethods:
     RESUME = f"{SchedulerModule.NAME}.Resume"
     JOB_FIRED = f"{SchedulerModule.NAME}.JobFired"
     JOB_COMPLETED = f"{SchedulerModule.NAME}.JobCompleted"
+    HEALTH_CHECK = f"{SchedulerModule.NAME}.HealthCheck"
 
 
 class SchedulerScheduleJobRequest(IOModel):

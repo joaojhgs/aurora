@@ -20,6 +20,7 @@ class OrchestratorMethods:
     EXTERNAL_USER_INPUT = f"{OrchestratorModule.NAME}.ExternalUserInput"
     TOOL_RESULT = f"{OrchestratorModule.NAME}.ToolResult"
     RESPONSE = f"{OrchestratorModule.NAME}.Response"
+    HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
 
 
 class OrchestratorProcessRequest(IOModel):

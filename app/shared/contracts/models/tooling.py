@@ -22,6 +22,7 @@ class ToolingMethods:
     GET_MCP_STATUS = f"{ToolingModule.NAME}.GetMCPStatus"
     EXECUTE_TOOL = f"{ToolingModule.NAME}.ExecuteTool"
     RELOAD_MCP_TOOLS = f"{ToolingModule.NAME}.ReloadMCPTools"
+    HEALTH_CHECK = f"{ToolingModule.NAME}.HealthCheck"
     TOOLS_INITIALIZED = f"{ToolingModule.NAME}.ToolsInitialized"
     TOOLS_RELOADED = f"{ToolingModule.NAME}.ToolsReloaded"
 

@@ -25,6 +25,7 @@ class ConfigMethods:
     GET_PLUGIN = f"{ConfigModule.NAME}.GetPlugin"
     VALIDATE = f"{ConfigModule.NAME}.Validate"
     RELOAD_SERVICE = f"{ConfigModule.NAME}.ReloadService"
+    HEALTH_CHECK = f"{ConfigModule.NAME}.HealthCheck"
 
 
 class ConfigGetRequest(IOModel):
