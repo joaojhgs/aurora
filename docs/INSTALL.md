@@ -107,23 +107,41 @@ brew link portaudio
 
 **Third-party API providers (easiest setup):**
 ```bash
+# Using UV (recommended - faster dependency resolution)
+uv sync --extra third-party
+
+# Or using pip
 pip install -e .[third-party]
 ```
 
 **Local models with CPU:**
 ```bash
+# Using UV (recommended)
+uv sync --extra local-huggingface
+
+# Or using pip
 pip install -e .[local-huggingface]
 ```
 
 **Local models with GPU:**
 ```bash
+# Using UV (recommended)
+uv sync --extra local-huggingface-gpu
+
+# Or using pip
 pip install -e .[local-huggingface-gpu]
 ```
 
 **Development environment:**
 ```bash
+# Using UV (recommended)
+uv sync --extra dev-local-gpu
+
+# Or using pip
 pip install -e .[dev-local-gpu]
 ```
+
+**See [UV Usage Guide](UV_USAGE.md) for complete UV documentation.**
 
 ### Method 3: Docker Hub (Pre-built Images)
 

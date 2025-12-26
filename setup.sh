@@ -77,12 +77,17 @@ else
     echo "📁 Virtual environment already exists"
 fi
 
+# Check if UV is installed, install if not
+echo "📦 Checking for UV..."
+if ! command -v uv &> /dev/null; then
+    echo "📥 Installing UV (fast Python package manager)..."
+    pip install uv
+else
+    echo "✅ UV is already installed"
+fi
+
 # Activate virtual environment
 source venv/bin/activate
-
-# Upgrade pip
-echo "📦 Upgrading pip..."
-pip install --upgrade pip
 
 echo ""
 echo "=================================================================="
@@ -171,13 +176,13 @@ if [[ "$PROVIDER_TYPE" == "third-party" ]]; then
     # Install dependencies
     if [[ "$FEATURE_LEVEL" == "core" ]]; then
         echo "📦 Installing core third-party dependencies..."
-        pip install -e .[third-party]
+        uv pip install -e .[third-party]
     elif [[ "$FEATURE_LEVEL" == "full" ]]; then
         echo "📦 Installing full third-party dependencies..."
-        pip install -e .[third-party-full]
+        uv pip install -e .[third-party-full]
     else
         echo "📦 Installing development third-party dependencies..."
-        pip install -e .[dev-third-party]
+        uv pip install -e .[dev-third-party]
     fi
     
     echo ""
@@ -325,20 +330,20 @@ else
             
             echo "📦 Installing HuggingFace dependencies..."
             if [[ "$FEATURE_LEVEL" == "core" ]]; then
-                pip install -e .[local-huggingface-gpu]
+                uv pip install -e .[local-huggingface-gpu]
             elif [[ "$FEATURE_LEVEL" == "full" ]]; then
-                pip install -e .[full-local-huggingface-gpu]
+                uv pip install -e .[full-local-huggingface-gpu]
             else
-                pip install -e .[dev-local-gpu]
+                uv pip install -e .[dev-local-gpu]
             fi
         else
             echo "📦 Installing HuggingFace dependencies (CPU)..."
             if [[ "$FEATURE_LEVEL" == "core" ]]; then
-                pip install -e .[local-huggingface]
+                uv pip install -e .[local-huggingface]
             elif [[ "$FEATURE_LEVEL" == "full" ]]; then
-                pip install -e .[full-local-huggingface]
+                uv pip install -e .[full-local-huggingface]
             else
-                pip install -e .[dev-local-cpu]
+                uv pip install -e .[dev-local-cpu]
             fi
         fi
     else
@@ -372,19 +377,19 @@ else
         echo "📦 Installing main dependencies..."
         if [[ "$USE_GPU" == "yes" ]]; then
             if [[ "$FEATURE_LEVEL" == "core" ]]; then
-                pip install -e .[local-llama-gpu]
+                uv pip install -e .[local-llama-gpu]
             elif [[ "$FEATURE_LEVEL" == "full" ]]; then
-                pip install -e .[full-local-llama-gpu]
+                uv pip install -e .[full-local-llama-gpu]
             else
-                pip install -e .[dev-local-gpu]
+                uv pip install -e .[dev-local-gpu]
             fi
         else
             if [[ "$FEATURE_LEVEL" == "core" ]]; then
-                pip install -e .[local-llama-cpu]
+                uv pip install -e .[local-llama-cpu]
             elif [[ "$FEATURE_LEVEL" == "full" ]]; then
-                pip install -e .[full-local-llama-cpu]
+                uv pip install -e .[full-local-llama-cpu]
             else
-                pip install -e .[dev-local-cpu]
+                uv pip install -e .[dev-local-cpu]
             fi
         fi
     fi
@@ -530,7 +535,7 @@ if [[ "$FEATURE_LEVEL" == "dev" ]]; then
     
     # Install pre-commit and commitizen (needed for commit validation)
     echo "📦 Installing pre-commit and commitizen..."
-    pip install pre-commit commitizen
+    uv pip install pre-commit commitizen
     
     # Install all necessary pre-commit hook types
     echo "🔧 Installing pre-commit hook types..."

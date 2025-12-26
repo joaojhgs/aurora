@@ -1,0 +1,15 @@
+{
+  "setup-worktree": [
+    "uv sync --extra dev-third-party --extra all-services"
+  ],
+  "worktrees": {
+    "main": {
+      "branch": "main",
+      "path": "../aurora-main"
+    },
+    "feat/migration-to-modular-services-architecture": {
+      "branch": "feat/migration-to-modular-services-architecture",
+      "path": "../aurora-feat-migration"
+    }
+  }
+}

@@ -1,4 +1,63 @@
-<!-- 959f6486-898e-4dec-a83f-b44f20249dac eb6845e0-6ad8-4d5f-b0c0-f0948150a459 -->
+---
+name: Config Service Migration and Codebase Reorganization Plan
+overview: ""
+todos:
+  - id: f52fa603-8d6b-4108-aec7-8a1ece3b689d
+    content: Create app/shared/ directory structure with config, messaging, and contracts folders
+    status: pending
+  - id: 467561bc-dabb-43e7-89fc-8a9921f9bec7
+    content: Create default config interface in app/shared/config/interface.py
+    status: pending
+  - id: d5d39bc1-849c-4574-9bd3-b44d577991df
+    content: Create bus initialization utilities in app/shared/messaging/bus_init.py
+    status: pending
+  - id: ff9fe5b0-90fd-4268-89e1-3e0aa2ff2de1
+    content: Move app/contracts/ to app/shared/contracts/
+    status: pending
+  - id: 9c2a4b7b-8f7d-4470-a2b2-34f2afed0f2e
+    content: Create app/services/config/ directory and move config_manager.py and JSON files
+    status: pending
+  - id: 80896691-a989-4994-824a-d7aae743abc2
+    content: Create config service message models (GetConfigQuery, UpdateConfigCommand, etc.)
+    status: pending
+  - id: 3fa90f98-d7bf-41bb-a306-3ab1f1d934b3
+    content: Create ConfigTopics class and register in service_topics.py
+    status: pending
+  - id: 27e1b706-689b-489d-9e8f-4a4091176b34
+    content: Implement config service with bus handlers for all config operations
+    status: pending
+  - id: a5cb4055-1a5e-4b47-8f5b-f9a3bf28fb23
+    content: Create ConfigAPI class in app/shared/config/interface.py using bus under the hood
+    status: pending
+  - id: d35c9672-1476-4474-a378-65e7b0323978
+    content: Create all model files in app/shared/messaging/models/ for each service
+    status: pending
+  - id: e59b8de6-344c-4ae3-880a-e91089048c03
+    content: Move all payload validation models from service files to shared/messaging/models/
+    status: pending
+  - id: db221a76-a74a-4d23-a992-86e4f045473f
+    content: Update all service file imports to use shared models
+    status: pending
+  - id: 31b8a3f8-1da3-44dc-a609-3c5fc40de477
+    content: Replace all app.config imports with app.shared.config.interface across codebase
+    status: pending
+  - id: e465c207-2b97-44c7-ac91-026e7174bb23
+    content: Move all service folders to app/services/ directory
+    status: pending
+  - id: 884a3cda-38ee-4933-9a6a-f3f0044beff0
+    content: Update all imports referencing moved services
+    status: pending
+  - id: e49ea85f-e5ad-4fe2-aa60-d2888acba284
+    content: Update all service files to import models from shared and services from new locations
+    status: pending
+  - id: 7284a57d-4cbd-41db-97be-e2e6541cdb46
+    content: Update service_topics.py to import from shared models and verify registrations
+    status: pending
+  - id: 6b497386-22ad-4755-a7be-205156015d98
+    content: Delete old directories (app/config/, app/contracts/) and run full test suite
+    status: pending
+---
+
 # Config Service Migration and Codebase Reorganization Plan
 
 ## Overview
@@ -9,7 +68,7 @@ This plan details the migration of the config and config_api into a dedicated co
 
 ### Current Structure
 
-```
+```javascript
 app/
 ├── config/              # Config manager and API (to become service)
 ├── contracts/           # Contract registry
@@ -23,9 +82,11 @@ app/
 └── services/            # Supervisor only
 ```
 
+
+
 ### Target Structure
 
-```
+```javascript
 app/
 ├── shared/              # NEW: Shared interfaces and utilities
 │   ├── config/          # Default config interface for all services
@@ -45,13 +106,13 @@ app/
 └── messaging/           # Bus infrastructure (stays in app/)
 ```
 
+
+
 ## Migration Phases
 
 ### Phase 1: Create Shared Folder Structure and Service Abstraction
 
-**Goal**: Establish the shared folder structure with default interfaces and create base service abstraction
-
-**Tasks**:
+**Goal**: Establish the shared folder structure with default interfaces and create base service abstraction**Tasks**:
 
 1. Create `app/shared/` directory
 2. Create `app/shared/config/` with default config interface
@@ -80,16 +141,16 @@ app/
 **Service Abstraction Design**:
 
 - Base class `BaseService` with:
-  - Standardized bus access via singleton pattern
-  - Config reload capability via abstract method
-  - Lifecycle methods (start, stop)
-  - Config observer registration
+- Standardized bus access via singleton pattern
+- Config reload capability via abstract method
+- Lifecycle methods (start, stop)
+- Config observer registration
 - Singleton pattern for bus access:
-  - Threads mode: Global singleton (shared across all services in same process)
-  - Processes mode: Per-service singleton (each service process has its own instance)
+- Threads mode: Global singleton (shared across all services in same process)
+- Processes mode: Per-service singleton (each service process has its own instance)
 - Config reload mechanism:
-  - Threads mode: Config service notifies supervisor, supervisor reloads services
-  - Processes mode: Config service publishes reload events, services subscribe and reload themselves
+- Threads mode: Config service notifies supervisor, supervisor reloads services
+- Processes mode: Config service publishes reload events, services subscribe and reload themselves
 
 **Checklist**:
 
@@ -103,9 +164,7 @@ app/
 
 ### Phase 2: Create Config Service
 
-**Goal**: Extract config functionality into a dedicated service
-
-**Tasks**:
+**Goal**: Extract config functionality into a dedicated service**Tasks**:
 
 1. Create `app/services/config/` directory
 2. Move `app/config/config_manager.py` → `app/services/config/config_manager.py`
@@ -149,9 +208,7 @@ app/
 
 ### Phase 3: Create Config Interface and Reload Mechanism
 
-**Goal**: Create a config API interface that uses the bus under the hood and implement config reload mechanism
-
-**Tasks**:
+**Goal**: Create a config API interface that uses the bus under the hood and implement config reload mechanism**Tasks**:
 
 1. Create `app/shared/config/interface.py` with ConfigAPI class
 2. Implement all existing ConfigAPI methods using bus requests
@@ -211,83 +268,59 @@ app/
 
 ### Phase 4: Move Payload Models to Shared/Messaging/Models
 
-**Goal**: Centralize all payload validation models
-
-**Tasks**:
+**Goal**: Centralize all payload validation models**Tasks**:
 
 1. Create service-specific model files in `app/shared/messaging/models/`
 2. Move models from service files to shared models
 3. Update imports across codebase
 
-**Models to Move**:
-
-**From `app/db/service.py`**:
+**Models to Move**:**From `app/db/service.py`**:
 
 - StoreMessage, GetRecentMessages, GetMessagesForDate, MessagesResponse
 - StoreCronJob, GetCronJobs, DeleteCronJob
 - RAGStoreCommand, RAGDeleteCommand, RAGSearchQuery, RAGGetQuery, RAGListQuery, RAGItemResponse
 
-→ Move to: `app/shared/messaging/models/db_models.py`
-
-**From `app/tts/service.py`**:
+→ Move to: `app/shared/messaging/models/db_models.py`**From `app/tts/service.py`**:
 
 - TTSRequest, TTSStop, TTSPause, TTSResume
 - TTSEvent, TTSStarted, TTSStopped, TTSPaused, TTSResumed, TTSError
 
-→ Move to: `app/shared/messaging/models/tts_models.py`
-
-**From `app/tooling/service.py`**:
+→ Move to: `app/shared/messaging/models/tts_models.py`**From `app/tooling/service.py`**:
 
 - ToolsInitialized, ToolsReloaded, GetToolsQuery, GetToolsResponse
 - GetToolByNameQuery, ReloadMCPToolsCommand, GetToolStatsQuery
 - GetMCPStatusQuery, GetMCPStatusResponse, ExecuteToolCommand, ExecuteToolResponse
 
-→ Move to: `app/shared/messaging/models/tooling_models.py`
-
-**From `app/orchestrator/service.py`**:
+→ Move to: `app/shared/messaging/models/tooling_models.py`**From `app/orchestrator/service.py`**:
 
 - UserInput, LLMResponseReady, ToolRequest, ToolResult
 
-→ Move to: `app/shared/messaging/models/orchestrator_models.py`
-
-**From `app/orchestrator/message_types.py`**:
+→ Move to: `app/shared/messaging/models/orchestrator_models.py`**From `app/orchestrator/message_types.py`**:
 
 - MessageSource, AuroraMessage (if still used)
 
-→ Move to: `app/shared/messaging/models/orchestrator_models.py`
-
-**From `app/stt_wakeword/messages.py`**:
+→ Move to: `app/shared/messaging/models/orchestrator_models.py`**From `app/stt_wakeword/messages.py`**:
 
 - WakeWordBackendType, WakeWordDetected, WakeWordTimeout, WakeWordControl
 
-→ Move to: `app/shared/messaging/models/stt_wakeword_models.py`
-
-**From `app/stt_coordinator/service.py`**:
+→ Move to: `app/shared/messaging/models/stt_wakeword_models.py`**From `app/stt_coordinator/service.py`**:
 
 - STTState, STTSessionStarted, STTSessionEnded, STTUserSpeechCaptured, STTCoordinatorControl
 
-→ Move to: `app/shared/messaging/models/stt_coordinator_models.py`
-
-**From `app/scheduler/models.py`**:
+→ Move to: `app/shared/messaging/models/stt_coordinator_models.py`**From `app/scheduler/models.py`**:
 
 - ScheduleType, JobStatus, CronJob (if used for messaging)
 
-→ Keep in scheduler for now, create `app/shared/messaging/models/scheduler_models.py` for message models only
-
-**From `app/messaging/audio_messages.py`**:
+→ Keep in scheduler for now, create `app/shared/messaging/models/scheduler_models.py` for message models only**From `app/messaging/audio_messages.py`**:
 
 - AudioEncoding, AudioFormat, AudioChunk, AudioStreamState, AudioStreamControl
 - AudioStreamStarted, AudioStreamStopped, AudioTopics
 
-→ Keep in `app/messaging/audio_messages.py` (generic protocol)
-
-**From `app/messaging/transcription_messages.py`**:
+→ Keep in `app/messaging/audio_messages.py` (generic protocol)**From `app/messaging/transcription_messages.py`**:
 
 - TranscriptionType, TranscriptionResult, TranscriptionControl, TranscriptionError
 
-→ Keep in `app/messaging/transcription_messages.py` (generic protocol)
-
-**Files to Create**:
+→ Keep in `app/messaging/transcription_messages.py` (generic protocol)**Files to Create**:
 
 - `app/shared/messaging/models/db_models.py`
 - `app/shared/messaging/models/tts_models.py`
@@ -313,9 +346,7 @@ app/
 
 ### Phase 5: Update All Imports to Use Shared Config Interface
 
-**Goal**: Replace all config imports with shared interface
-
-**Tasks**:
+**Goal**: Replace all config imports with shared interface**Tasks**:
 
 1. Find all files importing from `app.config.config_api` or `app.config.config_manager`
 2. Replace with imports from `app.shared.config.interface`
@@ -369,9 +400,7 @@ app/
 
 ### Phase 6: Move Services to Services Directory
 
-**Goal**: Consolidate all services in app/services/
-
-**Tasks**:
+**Goal**: Consolidate all services in app/services/**Tasks**:
 
 1. Move each service folder to app/services/
 2. Update all imports across codebase
@@ -415,9 +444,7 @@ app/
 
 ### Phase 7: Update Service Imports and Model References
 
-**Goal**: Update all service files to import from shared models
-
-**Tasks**:
+**Goal**: Update all service files to import from shared models**Tasks**:
 
 1. Update each service file to import models from shared
 2. Update service files to import from new service locations
@@ -448,9 +475,7 @@ app/
 
 ### Phase 8: Update Messaging Topic Registrations
 
-**Goal**: Ensure all topics are properly registered with new structure
-
-**Tasks**:
+**Goal**: Ensure all topics are properly registered with new structure**Tasks**:
 
 1. Update `app/messaging/service_topics.py` to import from shared models
 2. Verify all topic definitions reference correct payload classes
@@ -466,9 +491,7 @@ app/
 
 ### Phase 9: Standardize Bus Access with Singleton Pattern
 
-**Goal**: Implement standardized bus access using singleton pattern for both threads and processes modes
-
-**Tasks**:
+**Goal**: Implement standardized bus access using singleton pattern for both threads and processes modes**Tasks**:
 
 1. Update `app/shared/messaging/bus_init.py` with enhanced singleton pattern
 2. Support threads mode (global singleton) and processes mode (per-service singleton)
@@ -483,14 +506,14 @@ app/
 **Singleton Pattern Implementation**:
 
 - **Threads mode**:
-  - Global singleton shared across all services
-  - Supervisor initializes once via `set_bus()`
-  - Services access via `get_bus()` singleton
+- Global singleton shared across all services
+- Supervisor initializes once via `set_bus()`
+- Services access via `get_bus()` singleton
 - **Processes mode**:
-  - Per-service singleton (each process has its own instance)
-  - Each service entry point initializes its own bus instance
-  - Service entry points call `initialize_bus_for_service(service_name)` to set up per-service singleton
-  - Bus instance is isolated per process
+- Per-service singleton (each process has its own instance)
+- Each service entry point initializes its own bus instance
+- Service entry points call `initialize_bus_for_service(service_name)` to set up per-service singleton
+- Bus instance is isolated per process
 
 **Files to Update**:
 
@@ -514,9 +537,7 @@ app/
 
 ### Phase 10: Implement Process Mode Support
 
-**Goal**: Fully support process mode with per-service entry points and process launcher
-
-**Tasks**:
+**Goal**: Fully support process mode with per-service entry points and process launcher**Tasks**:
 
 1. Create per-service entry points (`__main__.py` for each service)
 2. Create process launcher script
@@ -544,13 +565,13 @@ app/
 **Service Entry Point Behavior**:
 
 - Each entry point:
-  - Reads config/env for Redis URL and mode
-  - Determines service name from entry point location
-  - Initializes per-service bus singleton via `initialize_bus_for_service(service_name)`
-  - Registers service topics
-  - Starts the service
-  - Subscribes to config changes for reload
-  - Handles graceful shutdown
+- Reads config/env for Redis URL and mode
+- Determines service name from entry point location
+- Initializes per-service bus singleton via `initialize_bus_for_service(service_name)`
+- Registers service topics
+- Starts the service
+- Subscribes to config changes for reload
+- Handles graceful shutdown
 
 **Process Launcher**:
 
@@ -582,9 +603,7 @@ app/
 
 ### Phase 11: Update Services to Use Base Service Abstraction
 
-**Goal**: Migrate all services to use BaseService and implement config reload
-
-**Tasks**:
+**Goal**: Migrate all services to use BaseService and implement config reload**Tasks**:
 
 1. Update all services to inherit from BaseService
 2. Implement `reload()` method in each service
@@ -630,9 +649,7 @@ app/
 
 ### Phase 12: Cleanup and Final Verification
 
-**Goal**: Remove old files and verify everything works
-
-**Tasks**:
+**Goal**: Remove old files and verify everything works**Tasks**:
 
 1. Delete old `app/config/` directory (if empty)
 2. Delete old `app/contracts/` directory (if exists)
@@ -699,17 +716,16 @@ Create the following topics:
 ### Service Abstraction Design
 
 - **BaseService** abstract class:
-  - Abstract methods: `async def start()`, `async def stop()`, `async def reload(config_section: str | None = None)`
-  - Bus access via `get_bus()` singleton
-  - Config observer registration via `_register_config_observer()`
-  - Automatic subscription to `Config.Changed` events
-  - Helper methods for common patterns
-
+- Abstract methods: `async def start()`, `async def stop()`, `async def reload(config_section: str | None = None)`
+- Bus access via `get_bus()` singleton
+- Config observer registration via `_register_config_observer()`
+- Automatic subscription to `Config.Changed` events
+- Helper methods for common patterns
 - **Bus Singleton Pattern**:
-  - Threads mode: Global singleton initialized by supervisor
-  - Processes mode: Per-service singleton initialized by service entry point
-  - Service-aware initialization via `initialize_bus_for_service(service_name)`
-  - Mode detection via environment variable or config
+- Threads mode: Global singleton initialized by supervisor
+- Processes mode: Per-service singleton initialized by service entry point
+- Service-aware initialization via `initialize_bus_for_service(service_name)`
+- Mode detection via environment variable or config
 
 ### Process Mode Architecture
 
@@ -737,7 +753,6 @@ Create the following topics:
 The **Service Abstraction** (BaseService) and **Module Contract Registry** serve different but complementary purposes:
 
 - **Service Abstraction**: Provides lifecycle management, bus access, and config reload capability. This is infrastructure-level functionality that all services need.
-
 - **Module Contract Registry**: Provides API contracts, versioning, and exposure policies. This is API-level functionality for defining and exposing service methods.
 
 **Recommendation**: Keep them separate but ensure they work together:
@@ -778,27 +793,3 @@ This separation allows:
 - Verify config changes propagate correctly
 - Verify observers still work
 - Verify MCP integration still works
-- Verify bus singleton works in both modes
-- Verify all services can reload on config changes
-- Verify process mode works end-to-end
-
-### To-dos
-
-- [ ] Create app/shared/ directory structure with config, messaging, and contracts folders
-- [ ] Create default config interface in app/shared/config/interface.py
-- [ ] Create bus initialization utilities in app/shared/messaging/bus_init.py
-- [ ] Move app/contracts/ to app/shared/contracts/
-- [ ] Create app/services/config/ directory and move config_manager.py and JSON files
-- [ ] Create config service message models (GetConfigQuery, UpdateConfigCommand, etc.)
-- [ ] Create ConfigTopics class and register in service_topics.py
-- [ ] Implement config service with bus handlers for all config operations
-- [ ] Create ConfigAPI class in app/shared/config/interface.py using bus under the hood
-- [ ] Create all model files in app/shared/messaging/models/ for each service
-- [ ] Move all payload validation models from service files to shared/messaging/models/
-- [ ] Update all service file imports to use shared models
-- [ ] Replace all app.config imports with app.shared.config.interface across codebase
-- [ ] Move all service folders to app/services/ directory
-- [ ] Update all imports referencing moved services
-- [ ] Update all service files to import models from shared and services from new locations
-- [ ] Update service_topics.py to import from shared models and verify registrations
-- [ ] Delete old directories (app/config/, app/contracts/) and run full test suite
