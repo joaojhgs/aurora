@@ -581,6 +581,10 @@ class TranscriptionService(BaseService):
         if self._paused:
             return
 
+        # Track current stream info
+        self._current_stream_id = stream_id
+        self._current_source = source
+
         # Store audio format if provided and not yet set
         if audio_format and self._audio_format is None:
             self._audio_format = audio_format

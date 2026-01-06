@@ -1,4 +1,0 @@
----
-alwaysApply: true
----
-Always run "conda activate aurora" before running any commands related to tests or the system, to make sure the environment dependencies are properly loaded up.

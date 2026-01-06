@@ -124,10 +124,10 @@ class OrchestratorService(BaseService):
     async def process_user_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
         """Handle UI user input command."""
         try:
-            log_info(f"Processing UI input: {cmd.message}")
+            log_info(f"Processing UI input: {cmd.text}")
             await self._process_input(
-                cmd.message, source="ui", session_id=None
-            )  # cmd doesn't have session_id in current model?
+                cmd.text, source="ui", session_id=cmd.session_id
+            )
             # Wait, OrchestratorProcessRequest has session_id?
             # Let's check the model definition I created.
             # It has 'message', 'context', 'stream', 'max_tokens'.
@@ -159,11 +159,11 @@ class OrchestratorService(BaseService):
     async def process_external_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
         """Handle external user input command."""
         try:
-            log_info(f"Processing external input: {cmd.message}")
+            log_info(f"Processing external input: {cmd.text}")
             await self._process_input(
-                cmd.message,
+                cmd.text,
                 source="external",
-                session_id=None,
+                session_id=cmd.session_id,
             )
             return EmptyOutput()
 

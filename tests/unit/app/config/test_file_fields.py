@@ -34,9 +34,9 @@ class TestFileFieldMetadata:
         for field_path in expected_file_fields:
             assert field_path in file_fields, f"File field {field_path} not found"
 
-        assert len(file_fields) == len(
-            expected_file_fields
-        ), f"Expected {len(expected_file_fields)} file fields, got {len(file_fields)}"
+        assert len(file_fields) == len(expected_file_fields), (
+            f"Expected {len(expected_file_fields)} file fields, got {len(file_fields)}"
+        )
 
     def test_tts_model_file_metadata(self, config_manager):
         """Test TTS model file field has correct metadata."""
@@ -113,18 +113,18 @@ class TestFileFieldMetadata:
 
             parts = file_filter.split("|")
             assert len(parts) >= 2, f"File filter for {field_path} should have at least 2 parts"
-            assert (
-                len(parts) % 2 == 0
-            ), f"File filter for {field_path} should have even number of parts"
+            assert len(parts) % 2 == 0, (
+                f"File filter for {field_path} should have even number of parts"
+            )
 
             # Check that we have description and pattern pairs
             for i in range(0, len(parts), 2):
                 description = parts[i]
                 pattern = parts[i + 1] if i + 1 < len(parts) else ""
 
-                assert (
-                    "(" in description and ")" in description
-                ), f"Description '{description}' should contain parentheses"
-                assert (
-                    "*." in pattern or pattern == "*"
-                ), f"Pattern '{pattern}' should contain file extension pattern"
+                assert "(" in description and ")" in description, (
+                    f"Description '{description}' should contain parentheses"
+                )
+                assert "*." in pattern or pattern == "*", (
+                    f"Pattern '{pattern}' should contain file extension pattern"
+                )

@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from app.db.models import (
+from app.services.db.models import (
     CronJob as Job,
     JobStatus,
     ScheduleType,
 )
-from app.scheduler.scheduler_manager import SchedulerManager
+from app.services.scheduler.scheduler_manager import SchedulerManager
 
 
 class TestSchedulerManager:
@@ -177,7 +177,7 @@ class TestSchedulerManager:
 
         # Create the scheduler manager
         with patch(
-            "app.scheduler.scheduler_manager.asyncio.create_subprocess_shell"
+            "app.services.scheduler.scheduler_manager.asyncio.create_subprocess_shell"
         ) as mock_subprocess:
             # Mock the subprocess creation
             mock_process = MagicMock()
@@ -272,9 +272,9 @@ class TestSchedulerManager:
 
             # For jobs with retries available, the status is set back to PENDING for retry
             # When retry_count < max_retries
-            assert (
-                failing_job.status == JobStatus.PENDING
-            ), "Job status was not set to PENDING for retry"
+            assert failing_job.status == JobStatus.PENDING, (
+                "Job status was not set to PENDING for retry"
+            )
 
             # Verify the job was passed to update_job method at least once
             assert mock_db_manager.update_job.called, "update_job was not called"

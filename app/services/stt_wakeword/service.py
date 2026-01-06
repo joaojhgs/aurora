@@ -262,6 +262,13 @@ class WakeWordService(BaseService):
             env: Message envelope containing AudioChunk
         """
         chunk: AudioChunk = env.payload
+        
+        # Track current stream info
+        self._current_stream_id = chunk.stream_id
+        self._current_source = chunk.source
+        if chunk.format:
+            self._audio_format = chunk.format
+        
         await self._process_audio_data(
             chunk.data, stream_id=chunk.stream_id, source=chunk.source, timestamp=chunk.timestamp
         )

@@ -149,7 +149,9 @@ def main_with_ui():
             log_info("Supervisor thread finished")
 
     # Start supervisor in background thread
-    supervisor_thread = threading.Thread(target=run_supervisor_thread, daemon=False, name="SupervisorLoop")
+    supervisor_thread = threading.Thread(
+        target=run_supervisor_thread, daemon=False, name="SupervisorLoop"
+    )
     supervisor_thread.start()
 
     # Wait for supervisor to be ready

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.scheduler.models import CronJob, JobStatus, ScheduleType
+from app.services.scheduler.models import CronJob, JobStatus, ScheduleType
 
 
 @pytest.mark.unit

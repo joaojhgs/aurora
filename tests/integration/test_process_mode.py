@@ -11,10 +11,18 @@ import time
 from typing import Any
 
 import pytest
-import redis
+
+try:
+    import redis
+except ImportError:
+    redis = None  # type: ignore
 
 from app.shared.config.interface import ConfigAPI
 from app.shared.messaging.bus_init import initialize_bus_for_service
+
+
+# Skip all tests in this module if redis is not installed
+pytestmark = pytest.mark.skipif(redis is None, reason="redis package not installed")
 
 
 @pytest.fixture(scope="module")

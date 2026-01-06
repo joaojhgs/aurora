@@ -13,8 +13,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from app.db.manager import DatabaseManager
-from app.db.models import Message, MessageType
+from app.services.db.manager import DatabaseManager
+from app.services.db.models import Message, MessageType
 
 
 @pytest.mark.asyncio

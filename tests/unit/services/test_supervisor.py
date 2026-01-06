@@ -31,28 +31,27 @@ class TestSupervisorInitialization:
     def test_init(self):
         """Test supervisor initialization."""
         supervisor = Supervisor()
-        assert supervisor.bus is None
+        # Bus is lazy-loaded via property, so it may not be None after initialization
         assert supervisor.services == []
         assert supervisor._mode == "threads"
 
     @pytest.mark.asyncio
     async def test_initialize_local_bus(self, supervisor):
         """Test initializing LocalBus."""
+        # Patch LocalBus where it's imported (in supervisor module), not where it's defined
         with patch("app.services.supervisor.LocalBus") as mock_local_bus_class:
             mock_bus = Mock()
             mock_bus.start = AsyncMock()
             mock_local_bus_class.return_value = mock_bus
 
             with (
-                patch("app.services.supervisor.register_all_service_topics"),
                 patch("app.services.supervisor.set_bus"),
-                patch("app.services.supervisor.config_manager") as mock_config,
+                patch("app.shared.messaging.bus_init.set_bus"),
+                patch.dict("os.environ", {"AURORA_ARCHITECTURE_MODE": "threads"}),
             ):
-                mock_config.get.return_value = "threads"
-
                 await supervisor.initialize()
 
-                assert supervisor.bus is not None
+                assert supervisor._bus is not None
                 mock_bus.start.assert_called_once()
 
     @pytest.mark.asyncio
@@ -64,20 +63,13 @@ class TestSupervisorInitialization:
             mock_bullmq_class.return_value = mock_bus
 
             with (
-                patch("app.services.supervisor.register_all_service_topics"),
                 patch("app.services.supervisor.set_bus"),
-                patch("app.services.supervisor.config_manager") as mock_config,
+                patch("app.shared.messaging.bus_init.set_bus"),
+                patch.dict("os.environ", {"AURORA_ARCHITECTURE_MODE": "processes", "REDIS_URL": "redis://localhost:6379"}),
             ):
-                mock_config.get.return_value = "processes"
-                mock_config.get.side_effect = (
-                    lambda key, default=None: "redis://localhost:6379"
-                    if "redis" in key
-                    else "processes"
-                )
-
                 await supervisor.initialize()
 
-                assert supervisor.bus is not None
+                assert supervisor._bus is not None
                 mock_bus.start.assert_called_once()
 
 
@@ -87,61 +79,70 @@ class TestSupervisorServiceLifecycle:
     @pytest.mark.asyncio
     async def test_start_services_foundation(self, supervisor, mock_bus):
         """Test starting foundation services."""
-        supervisor.bus = mock_bus
+        # Set bus via internal attribute (bus property is read-only)
+        supervisor._bus = mock_bus
 
+        # Services are imported inside _start_services_threads, so patch at those paths
         with (
-            patch("app.db.DBService") as mock_db_service,
-            patch("app.tooling.ToolingService") as mock_tooling_service,
+            patch("app.services.db.DBService") as mock_db_service,
+            patch("app.services.tooling.ToolingService") as mock_tooling_service,
+            patch("app.services.scheduler.SchedulerService") as mock_scheduler_service,
+            patch("app.services.tts.TTSService") as mock_tts_service,
+            patch("app.services.orchestrator.OrchestratorService") as mock_orchestrator_service,
+            patch("app.services.config.ConfigService") as mock_config_service,
+            patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
+            patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
+            patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
         ):
-            mock_db = Mock()
-            mock_db.start = AsyncMock()
-            mock_tooling = Mock()
-            mock_tooling.start = AsyncMock()
-
-            mock_db_service.return_value = mock_db
-            mock_tooling_service.return_value = mock_tooling
+            # Configure all mocks
+            for mock_service in [mock_db_service, mock_tooling_service, mock_scheduler_service,
+                                 mock_tts_service, mock_orchestrator_service, mock_config_service,
+                                 mock_coordinator, mock_transcription, mock_wakeword]:
+                mock_instance = Mock()
+                mock_instance.start = AsyncMock()
+                mock_service.return_value = mock_instance
 
             await supervisor.start_services()
 
+            # Verify at least DB and Tooling were started (foundation services)
             assert len(supervisor.services) >= 2
-            mock_db.start.assert_called_once()
-            mock_tooling.start.assert_called_once()
+            mock_db_service.return_value.start.assert_called_once()
+            mock_tooling_service.return_value.start.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_start_services_complete(self, supervisor, mock_bus):
         """Test starting all services."""
-        supervisor.bus = mock_bus
+        supervisor._bus = mock_bus
 
-        # Mock all services
-        services_to_mock = [
-            "app.db.DBService",
-            "app.tooling.ToolingService",
-            "app.scheduler.SchedulerService",
-            "app.tts.TTSService",
-            "app.orchestrator.OrchestratorService",
-            "app.stt_audio_input.AudioInputService",
-            "app.stt_wakeword.WakeWordService",
-            "app.stt_transcription.TranscriptionService",
-            "app.stt_coordinator.STTCoordinatorService",
-        ]
-
-        service_mocks = {}
-        for service_path in services_to_mock:
-            with patch(service_path) as mock_service:
+        # Mock all services at the import paths used by supervisor
+        with (
+            patch("app.services.db.DBService") as mock_db,
+            patch("app.services.tooling.ToolingService") as mock_tooling,
+            patch("app.services.scheduler.SchedulerService") as mock_scheduler,
+            patch("app.services.tts.TTSService") as mock_tts,
+            patch("app.services.orchestrator.OrchestratorService") as mock_orchestrator,
+            patch("app.services.config.ConfigService") as mock_config,
+            patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
+            patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
+            patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
+        ):
+            # Configure all mocks
+            for mock_service in [mock_db, mock_tooling, mock_scheduler, mock_tts,
+                                 mock_orchestrator, mock_config, mock_wakeword, 
+                                 mock_transcription, mock_coordinator]:
                 mock_instance = Mock()
                 mock_instance.start = AsyncMock()
                 mock_service.return_value = mock_instance
-                service_mocks[service_path] = mock_instance
 
-        await supervisor.start_services()
+            await supervisor.start_services()
 
-        # Verify services were started
-        assert len(supervisor.services) > 0
+            # Verify services were started
+            assert len(supervisor.services) > 0
 
     @pytest.mark.asyncio
     async def test_shutdown(self, supervisor, mock_bus):
         """Test supervisor shutdown."""
-        supervisor.bus = mock_bus
+        supervisor._bus = mock_bus
         supervisor.services = [Mock() for _ in range(3)]
 
         await supervisor.shutdown()
@@ -151,7 +152,7 @@ class TestSupervisorServiceLifecycle:
     @pytest.mark.asyncio
     async def test_run(self, supervisor, mock_bus):
         """Test supervisor run loop."""
-        supervisor.bus = mock_bus
+        supervisor._bus = mock_bus
         supervisor.shutdown_event = Mock()
         supervisor.shutdown_event.wait = AsyncMock(side_effect=KeyboardInterrupt())
 
@@ -165,24 +166,45 @@ class TestSupervisorErrorHandling:
     @pytest.mark.asyncio
     async def test_initialize_with_invalid_mode(self, supervisor):
         """Test initialization with invalid mode."""
-        with patch("app.services.supervisor.config_manager") as mock_config:
-            mock_config.get.return_value = "invalid_mode"
-
-            with (
-                patch("app.services.supervisor.register_all_service_topics"),
-                pytest.raises(ValueError, match="Unknown architecture mode"),
-            ):
+        # Mode is read from environment variable, not config_api
+        with patch.dict("os.environ", {"AURORA_ARCHITECTURE_MODE": "invalid_mode"}):
+            with pytest.raises(ValueError, match="Unknown architecture mode"):
                 await supervisor.initialize()
 
     @pytest.mark.asyncio
     async def test_start_services_failure(self, supervisor, mock_bus):
         """Test service startup failure."""
-        supervisor.bus = mock_bus
+        supervisor._bus = mock_bus
 
-        with patch("app.db.DBService") as mock_db_service:
+        # Services are imported inside _start_services_threads, so patch at those paths
+        with (
+            patch("app.services.db.DBService") as mock_db_service,
+            patch("app.services.tooling.ToolingService") as mock_tooling_service,
+            patch("app.services.scheduler.SchedulerService") as mock_scheduler_service,
+            patch("app.services.tts.TTSService") as mock_tts_service,
+            patch("app.services.orchestrator.OrchestratorService") as mock_orchestrator_service,
+            patch("app.services.config.ConfigService") as mock_config_service,
+            patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
+            patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
+            patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
+        ):
+            # Configure config service to succeed (it starts first)
+            mock_config_instance = Mock()
+            mock_config_instance.start = AsyncMock()
+            mock_config_service.return_value = mock_config_instance
+
+            # Configure DB service to fail
             mock_db = Mock()
             mock_db.start = AsyncMock(side_effect=Exception("Service failure"))
             mock_db_service.return_value = mock_db
+
+            # Configure other services normally
+            for mock_service in [mock_tooling_service, mock_scheduler_service, mock_tts_service,
+                                 mock_orchestrator_service, mock_coordinator,
+                                 mock_transcription, mock_wakeword]:
+                mock_instance = Mock()
+                mock_instance.start = AsyncMock()
+                mock_service.return_value = mock_instance
 
             with pytest.raises(Exception, match="Service failure"):
                 await supervisor.start_services()
