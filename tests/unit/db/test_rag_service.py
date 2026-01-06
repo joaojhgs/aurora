@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from app.db.rag_service import (
+from app.services.db.rag_service import (
     CombinedSQLiteVecStore,
     RAGService,
     SQLiteVecStore,
@@ -54,7 +54,7 @@ class TestRAGServiceCore:
         signature = get_embedding_model_signature(model_info)
         assert signature == "openai:text-embedding-3-small:openai"
 
-    @patch("app.db.rag_service.config_manager")
+    @patch("app.services.db.rag_service.config_api")
     def test_get_embeddings_local(self, mock_config):
         """Test getting local embeddings."""
         mock_config.get.return_value = True  # use_local = True
@@ -69,7 +69,7 @@ class TestRAGServiceCore:
             assert model_info["model_name"] == "all-MiniLM-L6-v2"
             mock_hf.assert_called_once_with(model_name="all-MiniLM-L6-v2")
 
-    @patch("app.db.rag_service.config_manager")
+    @patch("app.services.db.rag_service.config_api")
     def test_get_embeddings_openai(self, mock_config):
         """Test getting OpenAI embeddings."""
         mock_config.get.return_value = False  # use_local = False
@@ -88,9 +88,9 @@ class TestRAGServiceCore:
 class TestRAGServiceStores:
     """Test RAGService store initialization."""
 
-    @patch("app.db.rag_service.get_embeddings")
-    @patch("app.db.rag_service.SQLiteVec")
-    @patch("app.db.rag_service.Path")
+    @patch("app.services.db.rag_service.get_embeddings")
+    @patch("app.services.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.Path")
     def test_initialize_stores(self, mock_path, mock_sqlite, mock_get_emb):
         """Test store initialization."""
         # Setup mocks
@@ -109,7 +109,9 @@ class TestRAGServiceStores:
         mock_conn.commit = Mock()
 
         # Mock check_and_update_embedding_model
-        with patch("app.db.rag_service.check_and_update_embedding_model", return_value=False):
+        with patch(
+            "app.services.db.rag_service.check_and_update_embedding_model", return_value=False
+        ):
             service = RAGService()
             store = service.memories_store
 
@@ -168,8 +170,8 @@ class TestRAGServiceStores:
 class TestSQLiteVecStore:
     """Test SQLiteVecStore implementation."""
 
-    @patch("app.db.rag_service.SQLiteVec")
-    @patch("app.db.rag_service.Path")
+    @patch("app.services.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.Path")
     def test_sqlite_vec_store_init(self, mock_path, mock_sqlite):
         """Test SQLiteVecStore initialization."""
         mock_path.return_value.parent.mkdir = Mock()
@@ -184,7 +186,7 @@ class TestSQLiteVecStore:
         assert store.table == "test"
         assert store.embeddings is mock_embeddings
 
-    @patch("app.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.SQLiteVec")
     def test_sqlite_vec_store_put(self, mock_sqlite):
         """Test SQLiteVecStore put operation."""
         mock_conn = MagicMock()
@@ -196,7 +198,7 @@ class TestSQLiteVecStore:
         # Vector store mock for add_texts will be created inside store
         store.put(("main", "memories"), "key1", {"text": "Test memory"})
 
-    @patch("app.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.SQLiteVec")
     def test_sqlite_vec_store_get(self, mock_sqlite):
         """Test SQLiteVecStore get operation."""
         mock_conn = MagicMock()
@@ -221,7 +223,7 @@ class TestSQLiteVecStore:
         assert result is not None
         assert result.key == "key1"
 
-    @patch("app.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.SQLiteVec")
     def test_sqlite_vec_store_search(self, mock_sqlite):
         """Test SQLiteVecStore search operation."""
         mock_conn = MagicMock()
@@ -260,7 +262,7 @@ class TestSQLiteVecStore:
 class TestEmbeddingModelManagement:
     """Test embedding model change detection."""
 
-    @patch("app.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.SQLiteVec")
     def test_check_and_update_embedding_model_no_change(self, mock_sqlite):
         """Test when embedding model hasn't changed."""
         mock_conn = MagicMock()
@@ -279,8 +281,8 @@ class TestEmbeddingModelManagement:
 
         assert result is False  # No re-embedding needed
 
-    @patch("app.db.rag_service.SQLiteVec")
-    @patch("app.db.rag_service.os.path.exists")
+    @patch("app.services.db.rag_service.SQLiteVec")
+    @patch("app.services.db.rag_service.os.path.exists")
     def test_check_and_update_embedding_model_change(self, mock_exists, mock_sqlite):
         """Test when embedding model has changed."""
         mock_conn = MagicMock()
@@ -302,9 +304,9 @@ class TestEmbeddingModelManagement:
         mock_exists.return_value = True
 
         with (
-            patch("app.db.rag_service.get_embeddings") as mock_get_emb,
-            patch("app.db.rag_service.os.remove"),
-            patch("app.db.rag_service.SQLiteVec.from_texts"),
+            patch("app.services.db.rag_service.get_embeddings") as mock_get_emb,
+            patch("app.services.db.rag_service.os.remove"),
+            patch("app.services.db.rag_service.SQLiteVec.from_texts"),
         ):
             mock_emb = MagicMock()
             mock_get_emb.return_value = (

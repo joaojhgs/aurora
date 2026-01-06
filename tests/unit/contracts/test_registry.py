@@ -49,13 +49,14 @@ def test_register_module():
 
 def test_method_contract_decorator():
     """Test that @method_contract registers methods and auto-creates modules."""
+    from app.shared.contracts.registry import register_method
+    
+    # Register module first
+    register_module("TestModule", "1.0.0", summary="Test module", capabilities=["test"])
 
     @method_contract(
-        module="TestModule",
-        module_version="1.0.0",
-        name="test.method",
+        method_id="TestModule.TestMethod",
         summary="Test method",
-        bus_topic="Test.Method",
         input_model=TestInput,
         output_model=TestOutput,
         exposure="both",
@@ -63,38 +64,42 @@ def test_method_contract_decorator():
     async def test_method(req: TestInput) -> TestOutput:
         return TestOutput(result=f"Processed: {req.text}")
 
-    # Check method is registered
-    contract = get_contract("test.method")
+    # Manually register the method (normally done by BaseService)
+    register_method("TestModule", "TestMethod", test_method, test_method._contract_metadata)
+
+    # Check method is registered (by method name, not full method_id)
+    contract = get_contract("TestMethod")
     assert contract is not None
     assert contract.module == "TestModule"
-    assert contract.name == "test.method"
+    assert contract.name == "TestMethod"
     assert contract.exposure == "both"
 
-    # Check module was auto-created
+    # Check module exists
     modules = list_modules()
     assert "TestModule" in modules
     assert len(modules["TestModule"].methods) == 1
-    assert modules["TestModule"].methods[0].name == "test.method"
+    assert modules["TestModule"].methods[0].name == "TestMethod"
 
 
 def test_export_import_roundtrip():
     """Test that export() and import_registry() work correctly."""
+    from app.shared.contracts.registry import register_method
+    
     # Register a module and method
     register_module("TTS", "1.0.0", summary="Text-to-Speech", capabilities=["streaming"])
 
     @method_contract(
-        module="TTS",
-        module_version="1.0.0",
-        name="TTS.Request",
+        method_id="TTS.Request",
         summary="Synthesize speech",
-        bus_topic="TTS.Request",
-        default_priority=10,
         input_model=TestInput,
+        output_model=None,
         exposure="both",
-        required_perms=["tts:request"],
     )
     async def tts_request(req: TestInput) -> None:
         pass
+
+    # Manually register the method
+    register_method("TTS", "Request", tts_request, tts_request._contract_metadata)
 
     # Export registry
     exported = export()
@@ -117,9 +122,8 @@ def test_export_import_roundtrip():
     # Check method data
     assert len(module_data["methods"]) == 1
     method_data = module_data["methods"][0]
-    assert method_data["name"] == "TTS.Request"
+    assert method_data["name"] == "Request"
     assert method_data["exposure"] == "both"
-    assert method_data["required_perms"] == ["tts:request"]
 
     # Test import
     imported_data = import_registry(exported)
@@ -128,16 +132,18 @@ def test_export_import_roundtrip():
 
 def test_digest_changes_on_modification():
     """Test that digest changes when registry content changes."""
+    from app.shared.contracts.registry import register_method
+    
     register_module("Module1", "1.0.0")
 
     @method_contract(
-        module="Module1",
-        module_version="1.0.0",
-        name="method1",
+        method_id="Module1.Method1",
         input_model=TestInput,
     )
     async def method1(req: TestInput) -> None:
         pass
+
+    register_method("Module1", "Method1", method1, method1._contract_metadata)
 
     export1 = export()
     data1 = json.loads(export1)
@@ -145,13 +151,13 @@ def test_digest_changes_on_modification():
 
     # Add another method
     @method_contract(
-        module="Module1",
-        module_version="1.0.0",
-        name="method2",
+        method_id="Module1.Method2",
         input_model=TestInput,
     )
     async def method2(req: TestInput) -> None:
         pass
+
+    register_method("Module1", "Method2", method2, method2._contract_metadata)
 
     export2 = export()
     data2 = json.loads(export2)
@@ -163,51 +169,59 @@ def test_digest_changes_on_modification():
 
 def test_all_contracts():
     """Test retrieving all contracts."""
+    from app.shared.contracts.registry import register_method
+    
+    register_module("Mod1", "1.0.0")
 
     @method_contract(
-        module="Mod1",
-        module_version="1.0.0",
-        name="method1",
+        method_id="Mod1.Method1",
         input_model=TestInput,
     )
     async def m1(req: TestInput) -> None:
         pass
 
     @method_contract(
-        module="Mod1",
-        module_version="1.0.0",
-        name="method2",
+        method_id="Mod1.Method2",
         input_model=TestInput,
     )
     async def m2(req: TestInput) -> None:
         pass
 
+    register_method("Mod1", "Method1", m1, m1._contract_metadata)
+    register_method("Mod1", "Method2", m2, m2._contract_metadata)
+
     contracts = all_contracts()
     assert len(contracts) == 2
-    assert "method1" in contracts
-    assert "method2" in contracts
+    assert "Method1" in contracts
+    assert "Method2" in contracts
 
 
 def test_module_auto_creation():
     """Test that modules are automatically created when using @method_contract."""
-
+    from app.shared.contracts.registry import register_method
+    
+    # Note: With new API, modules can be auto-created if not registered
+    # when register_method is called
     @method_contract(
-        module="AutoModule",
-        module_version="2.0.0",
-        name="auto.method",
+        method_id="AutoModule.AutoMethod",
         input_model=TestInput,
     )
     async def auto_method(req: TestInput) -> None:
         pass
 
+    # Register method - this will auto-create module if it doesn't exist
+    register_method("AutoModule", "AutoMethod", auto_method, auto_method._contract_metadata)
+
     modules = list_modules()
     assert "AutoModule" in modules
-    assert modules["AutoModule"].version == "2.0.0"
+    assert modules["AutoModule"].version is not None  # Auto-detected
     assert len(modules["AutoModule"].methods) == 1
 
 
 def test_explicit_module_registration_preserves_metadata():
     """Test that explicitly registering a module preserves its metadata."""
+    from app.shared.contracts.registry import register_method
+    
     register_module(
         "ExplicitModule",
         "3.0.0",
@@ -217,13 +231,13 @@ def test_explicit_module_registration_preserves_metadata():
     )
 
     @method_contract(
-        module="ExplicitModule",
-        module_version="3.0.0",
-        name="explicit.method",
+        method_id="ExplicitModule.ExplicitMethod",
         input_model=TestInput,
     )
     async def explicit_method(req: TestInput) -> None:
         pass
+
+    register_method("ExplicitModule", "ExplicitMethod", explicit_method, explicit_method._contract_metadata)
 
     modules = list_modules()
     module = modules["ExplicitModule"]

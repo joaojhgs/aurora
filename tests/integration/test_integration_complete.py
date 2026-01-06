@@ -55,7 +55,7 @@ class TestConfigIntegration:
         try:
             # Initialize with the test config file
             with (
-                patch("app.config.config_manager.os.path.exists", return_value=True),
+                patch("app.services.config.config_manager.os.path.exists", return_value=True),
                 patch("builtins.open", mock_open(read_data=json.dumps(expected_config))),
                 patch.object(ConfigManager, "_validate_config"),
             ):

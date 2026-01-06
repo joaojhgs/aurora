@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from app.messaging import MessageBus
-from app.orchestrator.graph import GraphOrchestrator
-from app.orchestrator.state import State
+from app.services.orchestrator.graph import GraphOrchestrator
+from app.services.orchestrator.state import State
 
 # Mock problematic imports
-sys.modules["app.orchestrator.agents.chatbot"] = MagicMock()
-sys.modules["app.orchestrator.graph"] = MagicMock()
+sys.modules["app.services.orchestrator.agents.chatbot"] = MagicMock()
+sys.modules["app.services.orchestrator.graph"] = MagicMock()
 
 
 @pytest.fixture
@@ -27,9 +27,9 @@ def mock_bus():
 def graph_orchestrator(mock_bus):
     """Create a GraphOrchestrator instance."""
     with (
-        patch("app.orchestrator.graph.chatbot") as mock_chatbot,
-        patch("app.orchestrator.graph.StateGraph"),
-        patch("app.orchestrator.graph.MemorySaver"),
+        patch("app.services.orchestrator.graph.chatbot") as mock_chatbot,
+        patch("app.services.orchestrator.graph.StateGraph"),
+        patch("app.services.orchestrator.graph.MemorySaver"),
     ):
         mock_chatbot.return_value = {"messages": []}
 
@@ -43,10 +43,10 @@ class TestGraphOrchestratorInitialization:
     def test_init(self, mock_bus):
         """Test orchestrator initialization."""
         with (
-            patch("app.orchestrator.graph.chatbot"),
-            patch("app.orchestrator.graph.StateGraph"),
-            patch("app.orchestrator.graph.MemorySaver"),
-            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+            patch("app.services.orchestrator.graph.chatbot"),
+            patch("app.services.orchestrator.graph.StateGraph"),
+            patch("app.services.orchestrator.graph.MemorySaver"),
+            patch("app.services.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
         ):
             orchestrator = GraphOrchestrator(bus=mock_bus)
             assert orchestrator.bus == mock_bus
@@ -54,10 +54,10 @@ class TestGraphOrchestratorInitialization:
     def test_graph_compilation(self, mock_bus):
         """Test graph compilation."""
         with (
-            patch("app.orchestrator.graph.chatbot"),
-            patch("app.orchestrator.graph.StateGraph") as mock_graph_builder,
-            patch("app.orchestrator.graph.MemorySaver"),
-            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+            patch("app.services.orchestrator.graph.chatbot"),
+            patch("app.services.orchestrator.graph.StateGraph") as mock_graph_builder,
+            patch("app.services.orchestrator.graph.MemorySaver"),
+            patch("app.services.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
         ):
             mock_graph = MagicMock()
             mock_graph_builder_instance = MagicMock()
@@ -75,10 +75,10 @@ class TestGraphOrchestratorInitialization:
     def test_graph_compiles_without_store(self, mock_bus):
         """Test graph compiles without store parameter."""
         with (
-            patch("app.orchestrator.graph.chatbot"),
-            patch("app.orchestrator.graph.StateGraph") as mock_graph_builder,
-            patch("app.orchestrator.graph.MemorySaver"),
-            patch("app.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
+            patch("app.services.orchestrator.graph.chatbot"),
+            patch("app.services.orchestrator.graph.StateGraph") as mock_graph_builder,
+            patch("app.services.orchestrator.graph.MemorySaver"),
+            patch("app.services.orchestrator.graph.GraphOrchestrator._save_graph_visualization"),
         ):
             mock_graph = MagicMock()
             mock_graph_builder_instance = MagicMock()

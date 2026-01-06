@@ -10,7 +10,7 @@ import pytest_asyncio
 
 from app.messaging.bus_runtime import set_bus
 from app.messaging.local_bus import LocalBus
-from app.tts.service import TTSRequest
+from app.shared.messaging.models.tts_models import TTSRequest
 
 
 @pytest_asyncio.fixture

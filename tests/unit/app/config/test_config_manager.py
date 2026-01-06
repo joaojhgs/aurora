@@ -65,7 +65,7 @@ class TestConfigManager:
         # Use a non-existent file path
         non_existent_path = "/tmp/nonexistent_config.json"
 
-        with patch("app.config.config_manager.os.path.exists", return_value=False):
+        with patch("app.services.config.config_manager.os.path.exists", return_value=False):
             # First create the instance
             cm = ConfigManager()
             # Then patch the instance attribute

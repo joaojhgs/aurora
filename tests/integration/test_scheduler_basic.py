@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 import pytest_asyncio
 
-from app.scheduler.models import CronJob, JobStatus, ScheduleType
+from app.services.scheduler.models import CronJob, JobStatus, ScheduleType
 
 
 class MockDatabase:

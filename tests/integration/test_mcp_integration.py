@@ -11,6 +11,7 @@ These tests verify the integration between MCP client and Aurora's systems:
 import asyncio
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -57,53 +58,55 @@ class TestMCPToolIntegration:
         """Test MCP integration with configuration management."""
         manager = MCPClientManager()
 
-        # Patch the config_manager inside the initialize method
-        with patch("app.tooling.mcp.mcp_client.config_manager") as mock_config:
-            mock_config.get.side_effect = lambda key, default=None: {
-                "mcp.enabled": True,
-                "mcp.servers": {
-                    "math": {
-                        "command": "python",
-                        "args": ["/tmp/math_server.py"],
-                        "transport": "stdio",
-                        "enabled": True,
-                    }
-                },
-            }.get(key, default)
+        servers_config = {
+            "math": {
+                "command": "python",
+                "args": ["/tmp/math_server.py"],
+                "transport": "stdio",
+                "enabled": True,
+            }
+        }
 
-            with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client.get_tools.return_value = []
-                mock_client_class.return_value = mock_client
+        # Mock the langchain_mcp_adapters.client module before import
+        mock_client = AsyncMock()
+        mock_client.get_tools.return_value = []
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
 
+        # Patch the config_api inside the initialize method
+        with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget_config = AsyncMock(return_value=servers_config)
+
+            with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
                 await manager.initialize()
 
                 assert manager.is_initialized
-                mock_client_class.assert_called_once()
+                mock_mcp_module.MultiServerMCPClient.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mcp_client_lifecycle_integration(self):
         """Test complete MCP client lifecycle in integration context."""
         manager = MCPClientManager()
 
+        servers_config = {"test": {"enabled": True, "transport": "stdio", "command": "python"}}
+
+        # Mock the langchain_mcp_adapters.client module before import
+        mock_client = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.name = "test_tool"
+        mock_tool.description = "Test tool"
+        mock_tools = [mock_tool]
+        mock_client.get_tools.return_value = mock_tools
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
         # Test initialization
-        with patch("app.tooling.mcp.mcp_client.config_manager") as mock_config:
-            mock_config.get.side_effect = lambda key, default=None: {
-                "mcp.enabled": True,
-                "mcp.servers": {
-                    "test": {"enabled": True, "transport": "stdio", "command": "python"}
-                },
-            }.get(key, default)
+        with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget_config = AsyncMock(return_value=servers_config)
 
-            with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_tool = Mock()
-                mock_tool.name = "test_tool"
-                mock_tool.description = "Test tool"
-                mock_tools = [mock_tool]
-                mock_client.get_tools.return_value = mock_tools
-                mock_client_class.return_value = mock_client
-
+            with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
                 # Initialize
                 await manager.initialize()
                 assert manager.is_initialized
@@ -143,50 +146,48 @@ class TestMCPConfigurationIntegration:
             elif server_config["transport"] in ["streamable_http", "sse"]:
                 assert "url" in server_config
 
-    def test_multiple_server_configuration(self):
+    @pytest.mark.asyncio
+    async def test_multiple_server_configuration(self):
         """Test configuration with multiple MCP servers."""
-        test_config = {
-            "enabled": True,
-            "servers": {
-                "math": {
-                    "command": "python",
-                    "args": ["/path/to/math_server.py"],
-                    "transport": "stdio",
-                    "enabled": True,
-                },
-                "weather": {
-                    "url": "http://localhost:8000/mcp/",
-                    "transport": "streamable_http",
-                    "enabled": True,
-                },
-                "disabled_server": {
-                    "command": "python",
-                    "args": ["/path/to/disabled.py"],
-                    "transport": "stdio",
-                    "enabled": False,
-                },
+        servers_config = {
+            "math": {
+                "command": "python",
+                "args": ["/path/to/math_server.py"],
+                "transport": "stdio",
+                "enabled": True,
+            },
+            "weather": {
+                "url": "http://localhost:8000/mcp/",
+                "transport": "streamable_http",
+                "enabled": True,
+            },
+            "disabled_server": {
+                "command": "python",
+                "args": ["/path/to/disabled.py"],
+                "transport": "stdio",
+                "enabled": False,
             },
         }
 
-        with patch("app.tooling.mcp.mcp_client.config_manager") as mock_config:
-            mock_config.get.side_effect = lambda key, default=None: {
-                "mcp.enabled": test_config["enabled"],
-                "mcp.servers": test_config["servers"],
-            }.get(key, default)
+        # Mock the langchain_mcp_adapters.client module before import
+        mock_client = AsyncMock()
+        mock_client.get_tools.return_value = []
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
+        with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget_config = AsyncMock(return_value=servers_config)
 
             manager = MCPClientManager()
 
             # Should filter enabled servers
-            with patch("langchain_mcp_adapters.client.MultiServerMCPClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client.get_tools.return_value = []
-                mock_client_class.return_value = mock_client
-
-                asyncio.run(manager.initialize())
+            with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
+                await manager.initialize()
 
                 # Verify MultiServerMCPClient was called with enabled servers only
-                assert mock_client_class.called
-                call_args = mock_client_class.call_args[0][0]
+                assert mock_mcp_module.MultiServerMCPClient.called
+                call_args = mock_mcp_module.MultiServerMCPClient.call_args[0][0]
                 assert "math" in call_args
                 assert "weather" in call_args
                 assert "disabled_server" not in call_args

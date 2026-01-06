@@ -10,8 +10,8 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
-from app.db.models import Message, MessageType
-from app.scheduler.models import CronJob, JobStatus, ScheduleType
+from app.services.db.models import Message, MessageType
+from app.services.scheduler.models import CronJob, JobStatus, ScheduleType
 
 # Job class is no longer available in the scheduler models
 

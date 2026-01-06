@@ -25,6 +25,9 @@ class TestMCPClientManager:
         """Mock configuration manager."""
         config = Mock(spec=ConfigManager)
         config.get.return_value = True  # MCP enabled by default
+        # Also mock async methods used by the service
+        config.aget = AsyncMock(return_value=True)
+        config.aget_config = AsyncMock(return_value={})
         return config
 
     @pytest.fixture
@@ -51,11 +54,13 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_disabled_mcp(self, mcp_manager, config_manager):
         """Test initialization when MCP is disabled."""
-        config_manager.get.side_effect = (
-            lambda key, default=None: False if key == "mcp.enabled" else default
+        # Service uses aget (async) for config access
+        config_manager.aget = AsyncMock(
+            side_effect=lambda key, default=None: False if key == "mcp.enabled" else default
         )
+        config_manager.aget_config = AsyncMock(return_value={})
 
-        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
+        with patch("app.services.tooling.mcp.mcp_client.config_api", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -64,12 +69,13 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_no_servers(self, mcp_manager, config_manager):
         """Test initialization when no servers are configured."""
-        config_manager.get.side_effect = lambda key, default=None: {
-            "mcp.enabled": True,
-            "mcp.servers": {},
-        }.get(key, default)
+        # Service uses aget (async) for config access
+        config_manager.aget = AsyncMock(
+            side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+        )
+        config_manager.aget_config = AsyncMock(return_value={})  # Empty servers
 
-        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
+        with patch("app.services.tooling.mcp.mcp_client.config_api", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -78,6 +84,8 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_server(self, mcp_manager, config_manager):
         """Test initialization with a stdio server configuration."""
+        import sys
+        
         servers_config = {
             "math": {
                 "command": "python",
@@ -87,10 +95,11 @@ class TestMCPClientManager:
             }
         }
 
-        config_manager.get.side_effect = lambda key, default=None: {
-            "mcp.enabled": True,
-            "mcp.servers": servers_config,
-        }.get(key, default)
+        # Service uses aget (async) for config access
+        config_manager.aget = AsyncMock(
+            side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+        )
+        config_manager.aget_config = AsyncMock(return_value=servers_config)
 
         mock_client = AsyncMock()
         mock_tool = Mock()
@@ -99,9 +108,13 @@ class TestMCPClientManager:
         mock_tools = [mock_tool]
         mock_client.get_tools.return_value = mock_tools
 
+        # Mock the langchain_mcp_adapters.client module before import
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
         with (
-            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
-            patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
+            patch("app.services.tooling.mcp.mcp_client.config_api", config_manager),
+            patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}),
         ):
             await mcp_manager.initialize()
 
@@ -112,6 +125,8 @@ class TestMCPClientManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_server(self, mcp_manager, config_manager):
         """Test initialization with an HTTP server configuration."""
+        import sys
+        
         servers_config = {
             "weather": {
                 "url": "http://localhost:8000/mcp/",
@@ -121,10 +136,11 @@ class TestMCPClientManager:
             }
         }
 
-        config_manager.get.side_effect = lambda key, default=None: {
-            "mcp.enabled": True,
-            "mcp.servers": servers_config,
-        }.get(key, default)
+        # Service uses aget (async) for config access
+        config_manager.aget = AsyncMock(
+            side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+        )
+        config_manager.aget_config = AsyncMock(return_value=servers_config)
 
         mock_client = AsyncMock()
         mock_tool = Mock()
@@ -133,9 +149,13 @@ class TestMCPClientManager:
         mock_tools = [mock_tool]
         mock_client.get_tools.return_value = mock_tools
 
+        # Mock the langchain_mcp_adapters.client module before import
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
         with (
-            patch("app.tooling.mcp.mcp_client.config_manager", config_manager),
-            patch("langchain_mcp_adapters.client.MultiServerMCPClient", return_value=mock_client),
+            patch("app.services.tooling.mcp.mcp_client.config_api", config_manager),
+            patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}),
         ):
             await mcp_manager.initialize()
 
@@ -155,12 +175,13 @@ class TestMCPClientManager:
             }
         }  # Disabled
 
-        config_manager.get.side_effect = lambda key, default=None: {
-            "mcp.enabled": True,
-            "mcp.servers": servers_config,
-        }.get(key, default)
+        # Service uses aget (async) for config access
+        config_manager.aget = AsyncMock(
+            side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+        )
+        config_manager.aget_config = AsyncMock(return_value=servers_config)
 
-        with patch("app.tooling.mcp.mcp_client.config_manager", config_manager):
+        with patch("app.services.tooling.mcp.mcp_client.config_api", config_manager):
             await mcp_manager.initialize()
 
         assert not mcp_manager.is_initialized
@@ -220,7 +241,7 @@ class TestMCPUtilityFunctions:
     @pytest.mark.asyncio
     async def test_get_mcp_tools_with_uninitialized_client(self):
         """Test get_mcp_tools when client is not initialized."""
-        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = False
             mock_manager.initialize = AsyncMock()
             mock_manager.get_tools.return_value = []
@@ -235,7 +256,7 @@ class TestMCPUtilityFunctions:
         """Test get_mcp_tools when client is already initialized."""
         mock_tools = [Mock(name="test_tool")]
 
-        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.is_initialized = True
             mock_manager.initialize = AsyncMock()
             mock_manager.get_tools.return_value = mock_tools
@@ -248,7 +269,7 @@ class TestMCPUtilityFunctions:
     @pytest.mark.asyncio
     async def test_initialize_mcp(self):
         """Test initialize_mcp function."""
-        with patch("app.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
             mock_manager.initialize = AsyncMock()
 
             await initialize_mcp()
