@@ -1,8 +1,6 @@
 # Docker Hub Release Integration Plan
 
-**Date**: 2025-11-07
-
-**Status**: Planning Phase
+**Date**: 2025-11-07**Status**: Planning Phase
 
 ## Overview
 
@@ -36,42 +34,42 @@ This plan outlines the integration of Docker Hub image building and publishing i
 #### 2. **Orchestrator Service** (Partially implemented)
 
 - **Variants**: 
-                                - `openai` (cloud API)
-                                - `huggingface-endpoint` (cloud API)
-                                - `huggingface-local` (local pipeline)
-                                - `llama-cpp-cpu` (CPU inference)
-                                - `llama-cpp-cuda` (CUDA inference)
-                                - `llama-cpp-rocm` (ROCm inference)
-                                - `llama-cpp-metal` (Metal inference - macOS)
-                                - `llama-cpp-vulkan` (Vulkan inference)
-                                - `llama-cpp-sycl` (SYCL inference - Intel)
-                                - `llama-cpp-rpc` (RPC inference)
+                                                                - `openai` (cloud API)
+                                                                - `huggingface-endpoint` (cloud API)
+                                                                - `huggingface-local` (local pipeline)
+                                                                - `llama-cpp-cpu` (CPU inference)
+                                                                - `llama-cpp-cuda` (CUDA inference)
+                                                                - `llama-cpp-rocm` (ROCm inference)
+                                                                - `llama-cpp-metal` (Metal inference - macOS)
+                                                                - `llama-cpp-vulkan` (Vulkan inference)
+                                                                - `llama-cpp-sycl` (SYCL inference - Intel)
+                                                                - `llama-cpp-rpc` (RPC inference)
 - **Build Arg**: `ORCHESTRATOR_LLM_MODE`
 - **Hardware Build Args**: `ORCHESTRATOR_HARDWARE` (for llama-cpp variants)
 
 #### 3. **TTS Service**
 
 - **Variants**:
-                                - `cpu` (CPU-only torch)
-                                - `cuda` (CUDA torch)
-                                - `rocm` (ROCm torch)
-                                - `metal` (Metal torch - macOS)
+                                                                - `cpu` (CPU-only torch)
+                                                                - `cuda` (CUDA torch)
+                                                                - `rocm` (ROCm torch)
+                                                                - `metal` (Metal torch - macOS)
 - **Build Arg**: `TTS_HARDWARE`
 - **Size**: ~2GB (CPU) vs ~3GB (GPU variants)
 
 #### 4. **STT Transcription Service**
 
 - **Variants**:
-                                - `cpu` (CPU-only faster-whisper)
-                                - `cuda` (CUDA faster-whisper)
+                                                                - `cpu` (CPU-only faster-whisper)
+                                                                - `cuda` (CUDA faster-whisper)
 - **Build Arg**: `STT_TRANSCRIPTION_HARDWARE`
 - **Size**: ~1GB (CPU) vs ~2GB (CUDA)
 
 #### 5. **STT Wakeword Service**
 
 - **Variants**:
-                                - `cpu` (CPU-only onnxruntime)
-                                - `cuda` (CUDA onnxruntime)
+                                                                - `cpu` (CPU-only onnxruntime)
+                                                                - `cuda` (CUDA onnxruntime)
 - **Build Arg**: `STT_WAKEWORD_HARDWARE`
 - **Size**: ~500MB (CPU) vs ~1GB (CUDA)
 
@@ -121,7 +119,7 @@ Model paths are currently read from `config.json` via ConfigAPI:
 
 ### Image Tag Structure
 
-```
+```javascript
 {registry}/{namespace}/{service}:{variant}-{hardware}-{version}
 ```
 
@@ -175,6 +173,8 @@ def _get_model_paths(self):
     return model_file, config_file
 ```
 
+
+
 #### 1.2 Update Config Manager
 
 Add environment variable mappings:
@@ -190,6 +190,8 @@ ENV_VAR_MAPPINGS = {
     "AURORA_MODELS_DIR": ("general.models_dir", str),
 }
 ```
+
+
 
 ### Phase 2: Dockerfile Updates
 
@@ -233,6 +235,8 @@ RUN if [[ "$ORCHESTRATOR_LLM_MODE" == llama-cpp-* ]]; then \
 fi
 ```
 
+
+
 #### 2.2 Create TTS Service Dockerfile Variants
 
 **Add Hardware Build Arg**:
@@ -259,6 +263,8 @@ RUN case "$TTS_HARDWARE" in \
 esac
 ```
 
+
+
 #### 2.3 Create STT Transcription Service Dockerfile Variants
 
 **Add Hardware Build Arg**:
@@ -274,6 +280,8 @@ RUN if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
 fi
 ```
 
+
+
 #### 2.4 Create STT Wakeword Service Dockerfile Variants
 
 **Add Hardware Build Arg**:
@@ -288,6 +296,8 @@ else \
     pip install onnxruntime==1.20.1; \
 fi
 ```
+
+
 
 ### Phase 3: Docker Compose Updates
 
@@ -310,10 +320,10 @@ services:
         ORCHESTRATOR_LLM_MODE: ${ORCHESTRATOR_LLM_MODE:-openai}
         ORCHESTRATOR_HARDWARE: ${ORCHESTRATOR_HARDWARE:-cpu}
     environment:
-      - AURORA_LLAMA_CPP_MODEL_PATH=${AURORA_LLAMA_CPP_MODEL_PATH:-/app/models/llama/model.gguf}
-      - AURORA_HUGGINGFACE_MODEL_ID=${AURORA_HUGGINGFACE_MODEL_ID:-}
+            - AURORA_LLAMA_CPP_MODEL_PATH=${AURORA_LLAMA_CPP_MODEL_PATH:-/app/models/llama/model.gguf}
+            - AURORA_HUGGINGFACE_MODEL_ID=${AURORA_HUGGINGFACE_MODEL_ID:-}
     volumes:
-      - ./models:/app/models  # Mount models directory
+            - ./models:/app/models  # Mount models directory
     
   tts-service:
     build:
@@ -322,10 +332,10 @@ services:
       args:
         TTS_HARDWARE: ${TTS_HARDWARE:-cpu}
     environment:
-      - AURORA_TTS_MODEL_FILE_PATH=${AURORA_TTS_MODEL_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx}
-      - AURORA_TTS_MODEL_CONFIG_FILE_PATH=${AURORA_TTS_MODEL_CONFIG_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx.txt}
+            - AURORA_TTS_MODEL_FILE_PATH=${AURORA_TTS_MODEL_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx}
+            - AURORA_TTS_MODEL_CONFIG_FILE_PATH=${AURORA_TTS_MODEL_CONFIG_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx.txt}
     volumes:
-      - ./models:/app/models
+            - ./models:/app/models
     
   stt-transcription-service:
     build:
@@ -341,10 +351,12 @@ services:
       args:
         STT_WAKEWORD_HARDWARE: ${STT_WAKEWORD_HARDWARE:-cpu}
     environment:
-      - AURORA_WAKE_WORD_MODEL_PATH=${AURORA_WAKE_WORD_MODEL_PATH:-/app/models/wakeword/jarvis.onnx}
+            - AURORA_WAKE_WORD_MODEL_PATH=${AURORA_WAKE_WORD_MODEL_PATH:-/app/models/wakeword/jarvis.onnx}
     volumes:
-      - ./models:/app/models
+            - ./models:/app/models
 ```
+
+
 
 ### Phase 4: Make Commands
 
@@ -439,6 +451,8 @@ docker-login:
 	@docker login $(DOCKER_REGISTRY) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 ```
 
+
+
 ### Phase 5: GitHub Actions Workflow Integration
 
 #### 5.1 Add Docker Build Job to release.yml
@@ -453,40 +467,40 @@ docker-login:
     strategy:
       matrix:
         service:
-          - name: config
+                    - name: config
             variants: [default]
-          - name: db
+                    - name: db
             variants: [openai, local]
-          - name: orchestrator
+                    - name: orchestrator
             variants: [openai, huggingface-endpoint, huggingface-local, llama-cpp-cpu, llama-cpp-cuda, llama-cpp-rocm, llama-cpp-metal]
-          - name: tts
+                    - name: tts
             variants: [cpu, cuda, rocm, metal]
-          - name: stt-transcription
+                    - name: stt-transcription
             variants: [cpu, cuda]
-          - name: stt-wakeword
+                    - name: stt-wakeword
             variants: [cpu, cuda]
-          - name: scheduler
+                    - name: scheduler
             variants: [default]
-          - name: tooling
+                    - name: tooling
             variants: [default]
-          - name: stt-audio-input
+                    - name: stt-audio-input
             variants: [default]
-          - name: stt-coordinator
+                    - name: stt-coordinator
             variants: [default]
     steps:
-      - name: 📥 Checkout repository
+            - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🐳 Set up Docker Buildx
+            - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: 🔐 Login to Docker Hub
+            - name: 🔐 Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: 🏗️ Build and push Docker image
+            - name: 🏗️ Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -512,9 +526,7 @@ docker-login:
 
 #### 6.1 Create Docker Hub Usage Guide
 
-**File**: `docs/docker/DOCKER-HUB-USAGE.md`
-
-**Content**:
+**File**: `docs/docker/DOCKER-HUB-USAGE.md`**Content**:
 
 - How to pull pre-built images
 - Image naming conventions
@@ -608,10 +620,3 @@ docker-login:
 
 - [Docker Service Optimization](./DB-SERVICE-OPTIMIZATION.md)
 - [Orchestrator Service Optimization](./ORCHESTRATOR-SERVICE-SIZE-ANALYSIS.md)
-- [Dependency Restructuring Plan](./dependency-restructure.plan.md)
-
-
-
-
-
-
