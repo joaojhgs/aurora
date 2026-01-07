@@ -151,5 +151,19 @@
     "mcp": {
         "enabled": true,
         "servers": {}
+    },
+    "gateway": {
+        "enabled": false,
+        "host": "0.0.0.0",
+        "port": 8000,
+        "request_timeout_s": 30.0,
+        "cors": {
+            "origins": ["*"],
+            "allow_credentials": true
+        },
+        "auth": {
+            "enabled": false,
+            "api_keys": []
+        }
     }
 }

@@ -274,6 +274,13 @@ mode-processes = [
     # Note: Redis is required as external service (not Python package)
 ]
 
+# Gateway dependencies (FastAPI HTTP API)
+gateway = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.9",  # For form data handling
+]
+
 # ============================================================================
 # APPROACH 2: Executable Building - PyInstaller Support
 # ============================================================================

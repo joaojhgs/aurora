@@ -365,7 +365,7 @@ class ToolingService(BaseService):
         summary="Get tooling statistics",
         input_model=ToolingGetStatsRequest,
         output_model=ToolingGetStatsResponse,
-        exposure="internal",
+        exposure="both",
     )
     async def _on_get_stats(self, request: ToolingGetStatsRequest) -> ToolingGetStatsResponse:
         """Handle get stats query.
@@ -394,7 +394,7 @@ class ToolingService(BaseService):
         summary="Get MCP server status",
         input_model=ToolingGetMCPStatusRequest,
         output_model=ToolingGetMCPStatusResponse,
-        exposure="internal",
+        exposure="both",
     )
     async def _on_get_mcp_status(
         self, request: ToolingGetMCPStatusRequest

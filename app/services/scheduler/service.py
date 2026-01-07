@@ -18,6 +18,9 @@ from app.shared.contracts.models.scheduler import (
     SchedulerCancelJobRequest,
     SchedulerJobCompletedEvent,
     SchedulerJobFiredEvent,
+    SchedulerJobInfo,
+    SchedulerListJobsRequest,
+    SchedulerListJobsResponse,
     SchedulerMethods,
     SchedulerModule,
     SchedulerPauseJobRequest,
@@ -90,7 +93,7 @@ class SchedulerService(BaseService):
         summary="Schedule a new job",
         input_model=SchedulerScheduleJobRequest,
         output_model=EmptyOutput,
-        exposure="internal",
+        exposure="both",
     )
     async def schedule_job(self, cmd: SchedulerScheduleJobRequest) -> EmptyOutput:
         """Handle schedule job command."""
@@ -140,7 +143,7 @@ class SchedulerService(BaseService):
         summary="Cancel a scheduled job",
         input_model=SchedulerCancelJobRequest,
         output_model=EmptyOutput,
-        exposure="internal",
+        exposure="both",
     )
     async def cancel_job(self, cmd: SchedulerCancelJobRequest) -> EmptyOutput:
         """Handle cancel job command."""
@@ -252,6 +255,61 @@ class SchedulerService(BaseService):
         except Exception as e:
             log_error(f"Error resuming job: {e}", exc_info=True)
             return EmptyOutput()
+
+    @method_contract(
+        method_id=SchedulerMethods.LIST_JOBS,
+        summary="List scheduled jobs",
+        input_model=SchedulerListJobsRequest,
+        output_model=SchedulerListJobsResponse,
+        exposure="both",
+    )
+    async def list_jobs(self, query: SchedulerListJobsRequest) -> SchedulerListJobsResponse:
+        """List all scheduled jobs.
+
+        Args:
+            query: Request with optional filters (enabled_only, limit, offset)
+
+        Returns:
+            Response with list of scheduled jobs
+        """
+        try:
+            log_debug(
+                f"Listing scheduled jobs (enabled_only={query.enabled_only}, "
+                f"limit={query.limit}, offset={query.offset})"
+            )
+
+            # Get jobs from cron service
+            all_jobs = await self.cron_service.get_all_jobs()
+
+            # Filter by enabled if requested
+            if query.enabled_only:
+                all_jobs = [j for j in all_jobs if j.is_active]
+
+            # Apply offset and limit
+            total = len(all_jobs)
+            paginated_jobs = all_jobs[query.offset : query.offset + query.limit]
+
+            # Convert CronJob objects to response format
+            job_infos = []
+            for job in paginated_jobs:
+                job_info = SchedulerJobInfo(
+                    job_id=str(job.id),
+                    name=job.name,
+                    schedule=job.schedule_value,
+                    action=job.callback_function,
+                    enabled=job.is_active,
+                    next_run=job.next_run_time.isoformat() if job.next_run_time else None,
+                    last_run=job.last_run_time.isoformat() if job.last_run_time else None,
+                    status=job.status.value if hasattr(job.status, "value") else str(job.status),
+                )
+                job_infos.append(job_info)
+
+            log_debug(f"Found {total} scheduled jobs, returning {len(job_infos)}")
+            return SchedulerListJobsResponse(jobs=job_infos, total=total)
+
+        except Exception as e:
+            log_error(f"Error listing jobs: {e}", exc_info=True)
+            return SchedulerListJobsResponse(jobs=[], total=0)
 
     async def fire_job(self, job_id: str, job_name: str, action: str) -> None:
         """Fire a scheduled job.

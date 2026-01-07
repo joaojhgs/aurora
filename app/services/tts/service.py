@@ -10,7 +10,12 @@ This service:
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import os
+import subprocess
+import tempfile
+import wave
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
@@ -26,6 +31,8 @@ from app.shared.contracts.models.tts import (
     TTSModule,
     TTSRequest,
     TTSStatus,
+    TTSSynthesizeRequest,
+    TTSSynthesizeResponse,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.tts_models import (
@@ -223,16 +230,19 @@ class TTSService(BaseService):
 
     @method_contract(
         method_id=TTSMethods.REQUEST,
-        summary="Process text-to-speech request",
+        summary="Process text-to-speech request (plays on server)",
         input_model=TTSRequest,
         output_model=EmptyOutput,
-        exposure="both",
+        exposure="internal",
     )
-    async def _on_tts_request(self, request: TTSRequest) -> None:
+    async def _on_tts_request(self, request: TTSRequest) -> EmptyOutput:
         """Handle TTS request command.
 
         Args:
             request: TTSRequest command (payload already extracted by base_service wrapper)
+
+        Returns:
+            EmptyOutput on success
         """
         try:
             log_info(f"TTS request: '{request.text}' (interrupt={request.interrupt})")
@@ -250,9 +260,12 @@ class TTSService(BaseService):
             # Start playback
             await self._play_text(request.text, request_id)
 
+            return EmptyOutput()
+
         except Exception as e:
             log_error(f"Error handling TTS request: {e}", exc_info=True)
             import uuid
+            return EmptyOutput()
 
             request_id = str(uuid.uuid4())
             await self.bus.publish(
@@ -264,10 +277,10 @@ class TTSService(BaseService):
 
     @method_contract(
         method_id=TTSMethods.STOP,
-        summary="Stop current TTS playback",
+        summary="Stop current TTS playback (server audio)",
         input_model=EmptyInput,
         output_model=EmptyOutput,
-        exposure="both",
+        exposure="internal",
     )
     async def _on_stop(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS stop command.
@@ -407,3 +420,134 @@ class TTSService(BaseService):
                 origin="internal",
             )
             log_info(f"TTS playback stopped: {reason}")
+
+    async def _synthesize_to_bytes(self, text: str) -> tuple[bytes, int]:
+        """Synthesize text to audio bytes without playing.
+
+        Args:
+            text: Text to synthesize
+
+        Returns:
+            Tuple of (audio_bytes, sample_rate)
+        """
+        if not hasattr(self, "engine") or self.engine is None:
+            raise RuntimeError("TTS engine not initialized")
+
+        # Get voice model paths
+        model_file, config_file = await self._get_model_paths()
+
+        # Build the piper command
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav_file:
+            output_wav_path = tmp_wav_file.name
+
+        try:
+            # Use absolute paths
+            model_file_abs = (
+                os.path.abspath(model_file)
+                if not os.path.isabs(model_file)
+                else model_file
+            )
+
+            cmd_list = [self.engine.piper_path, "-m", model_file_abs, "-f", output_wav_path]
+
+            # Add config file if available
+            if config_file:
+                config_file_abs = (
+                    os.path.abspath(config_file)
+                    if not os.path.isabs(config_file)
+                    else config_file
+                )
+                if os.path.exists(config_file_abs):
+                    cmd_list.extend(["-c", config_file_abs])
+
+            # Add CUDA if configured
+            if hasattr(self.engine, "_use_cuda") and self.engine._use_cuda == "cuda":
+                cmd_list.extend(["--cuda"])
+
+            log_debug(f"Synthesizing with piper: {cmd_list}")
+
+            # Run piper
+            subprocess.run(
+                cmd_list,
+                input=text.encode("utf-8"),
+                capture_output=True,
+                check=True,
+                shell=False,
+            )
+
+            # Read the synthesized WAV file
+            with wave.open(output_wav_path, "rb") as wf:
+                sample_rate = wf.getframerate()
+                audio_data = wf.readframes(wf.getnframes())
+
+            return audio_data, sample_rate
+
+        finally:
+            # Clean up temp file
+            if os.path.isfile(output_wav_path):
+                os.remove(output_wav_path)
+
+    @method_contract(
+        method_id=TTSMethods.SYNTHESIZE,
+        summary="Synthesize text to audio and return audio data",
+        input_model=TTSSynthesizeRequest,
+        output_model=TTSSynthesizeResponse,
+        exposure="both",
+    )
+    async def synthesize(self, request: TTSSynthesizeRequest) -> TTSSynthesizeResponse:
+        """Synthesize text to audio and return as base64-encoded data.
+
+        This endpoint is for external API consumers who want to receive
+        the audio data rather than have it played on the server.
+
+        Args:
+            request: TTSSynthesizeRequest with text and format options
+
+        Returns:
+            TTSSynthesizeResponse with base64-encoded audio data
+        """
+        try:
+            log_info(f"TTS synthesize request: '{request.text[:50]}...' format={request.format}")
+
+            # Synthesize audio
+            audio_bytes, sample_rate = await self._synthesize_to_bytes(request.text)
+
+            # Calculate duration
+            # PCM 16-bit mono: duration = num_bytes / (sample_rate * 2)
+            duration_ms = (len(audio_bytes) / (sample_rate * 2)) * 1000
+
+            # Format output based on request
+            if request.format == "wav":
+                # Wrap raw PCM in WAV container
+                wav_buffer = io.BytesIO()
+                with wave.open(wav_buffer, "wb") as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(sample_rate)
+                    wav_file.writeframes(audio_bytes)
+                output_bytes = wav_buffer.getvalue()
+            else:
+                # Return raw PCM
+                output_bytes = audio_bytes
+
+            # Encode as base64
+            audio_b64 = base64.b64encode(output_bytes).decode("utf-8")
+
+            log_info(f"TTS synthesis complete: {len(output_bytes)} bytes, {duration_ms:.0f}ms")
+
+            return TTSSynthesizeResponse(
+                audio_data=audio_b64,
+                format=request.format,
+                sample_rate=sample_rate,
+                channels=1,
+                duration_ms=duration_ms,
+                text=request.text,
+            )
+
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Piper synthesis failed: {e.stderr.decode('utf-8', errors='replace')}"
+            log_error(error_msg)
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            log_error(f"Error in TTS synthesis: {e}", exc_info=True)
+            raise
