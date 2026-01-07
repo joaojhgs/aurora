@@ -45,6 +45,10 @@ async def main_async():
         await supervisor.initialize()
         log_info("✓ Supervisor initialized")
 
+        # Subscribe Supervisor's own contracts to the bus
+        log_info(">>> Subscribing Supervisor contracts...")
+        await supervisor._subscribe_registered_contracts()
+
         # Start all services
         log_info(">>> Calling supervisor.start_services()...")
         await supervisor.start_services()

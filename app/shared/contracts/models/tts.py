@@ -15,6 +15,7 @@ class TTSMethods:
     """Full method identifiers for TTS service."""
 
     REQUEST = f"{TTSModule.NAME}.Request"
+    SYNTHESIZE = f"{TTSModule.NAME}.Synthesize"  # External: returns audio data
     STOP = f"{TTSModule.NAME}.Stop"
     PAUSE = f"{TTSModule.NAME}.Pause"
     RESUME = f"{TTSModule.NAME}.Resume"
@@ -33,6 +34,27 @@ class TTSRequest(IOModel):
     voice: str | None = None
     speed: float = 1.0
     interrupt: bool = True  # Interrupt current playback
+
+
+class TTSSynthesizeRequest(IOModel):
+    """Request to synthesize speech and return audio data (for external API)."""
+
+    text: str
+    voice: str | None = None
+    speed: float = 1.0
+    format: str = "wav"  # "wav" | "raw"
+    sample_rate: int | None = None  # None = use model default
+
+
+class TTSSynthesizeResponse(IOModel):
+    """Synthesized audio response."""
+
+    audio_data: str  # Base64-encoded audio
+    format: str
+    sample_rate: int
+    channels: int
+    duration_ms: float
+    text: str
 
 
 class TTSControl(IOModel):

@@ -136,26 +136,17 @@ class ConfigService(BaseService):
         output_model=UpdateConfigResponse,
         exposure="both",
     )
-    async def _handle_update_config(self, envelope: Envelope) -> None:
+    async def _handle_update_config(
+        self, cmd: UpdateConfigCommand
+    ) -> UpdateConfigResponse:
         """Handle UpdateConfig command."""
         try:
-            command = envelope.payload
-            if not isinstance(command, UpdateConfigCommand):
-                log_error(f"Invalid payload type for UpdateConfig: {type(command)}")
-                return
-
-            try:
-                self.config_manager.set(command.key_path, command.value)
-                response = UpdateConfigResponse(success=True)
-                log_info(f"Updated config: {command.key_path}")
-            except Exception as e:
-                response = UpdateConfigResponse(success=False, error=str(e))
-                log_error(f"Error updating config: {e}")
-
-            if envelope.reply_to:
-                await self.bus.publish(envelope.reply_to, response, event=False)
+            self.config_manager.set(cmd.key_path, cmd.value)
+            log_info(f"Updated config: {cmd.key_path}")
+            return UpdateConfigResponse(success=True)
         except Exception as e:
-            log_error(f"Error handling UpdateConfig command: {e}")
+            log_error(f"Error updating config: {e}")
+            return UpdateConfigResponse(success=False, error=str(e))
 
     @method_contract(
         method_id=ConfigMethods.VALIDATE,
@@ -164,15 +155,13 @@ class ConfigService(BaseService):
         output_model=ValidateConfigResponse,
         exposure="both",
     )
-    async def _handle_validate_config(self, envelope: Envelope) -> None:
+    async def _handle_validate_config(
+        self, query: ValidateConfigQuery
+    ) -> ValidateConfigResponse:
         """Handle ValidateConfig query."""
-        try:
-            errors = self.config_manager.validate_current_config()
-            response = ValidateConfigResponse(errors=errors)
-            await self.bus.publish(envelope.reply_to, response, event=False)
-            log_debug(f"Handled ValidateConfig query: {len(errors)} errors")
-        except Exception as e:
-            log_error(f"Error handling ValidateConfig query: {e}")
+        errors = self.config_manager.validate_current_config()
+        log_debug(f"Handled ValidateConfig query: {len(errors)} errors")
+        return ValidateConfigResponse(errors=errors)
 
     @method_contract(
         method_id=ConfigMethods.GET_PLUGIN,
@@ -181,20 +170,13 @@ class ConfigService(BaseService):
         output_model=GetPluginStatusResponse,
         exposure="both",
     )
-    async def _handle_get_plugin_status(self, envelope: Envelope) -> None:
+    async def _handle_get_plugin_status(
+        self, query: GetPluginStatusQuery
+    ) -> GetPluginStatusResponse:
         """Handle GetPluginStatus query."""
-        try:
-            query = envelope.payload
-            if not isinstance(query, GetPluginStatusQuery):
-                log_error(f"Invalid payload type for GetPluginStatus: {type(query)}")
-                return
-
-            active = self.config_manager.get(f"plugins.{query.plugin_name}.activate", False)
-            response = GetPluginStatusResponse(active=active)
-            await self.bus.publish(envelope.reply_to, response, event=False)
-            log_debug(f"Handled GetPluginStatus query: {query.plugin_name}={active}")
-        except Exception as e:
-            log_error(f"Error handling GetPluginStatus query: {e}")
+        active = self.config_manager.get(f"plugins.{query.plugin_name}.activate", False)
+        log_debug(f"Handled GetPluginStatus query: {query.plugin_name}={active}")
+        return GetPluginStatusResponse(active=active)
 
     @method_contract(
         method_id=ConfigMethods.SET_PLUGIN,
@@ -203,26 +185,17 @@ class ConfigService(BaseService):
         output_model=UpdateConfigResponse,
         exposure="both",
     )
-    async def _handle_update_plugin_status(self, envelope: Envelope) -> None:
+    async def _handle_update_plugin_status(
+        self, cmd: UpdatePluginStatusCommand
+    ) -> UpdateConfigResponse:
         """Handle UpdatePluginStatus command."""
         try:
-            command = envelope.payload
-            if not isinstance(command, UpdatePluginStatusCommand):
-                log_error(f"Invalid payload type for UpdatePluginStatus: {type(command)}")
-                return
-
-            try:
-                self.config_manager.set(f"plugins.{command.plugin_name}.activate", command.active)
-                response = UpdateConfigResponse(success=True)
-                log_info(f"Updated plugin status: {command.plugin_name}={command.active}")
-            except Exception as e:
-                response = UpdateConfigResponse(success=False, error=str(e))
-                log_error(f"Error updating plugin status: {e}")
-
-            if envelope.reply_to:
-                await self.bus.publish(envelope.reply_to, response, event=False)
+            self.config_manager.set(f"plugins.{cmd.plugin_name}.activate", cmd.active)
+            log_info(f"Updated plugin status: {cmd.plugin_name}={cmd.active}")
+            return UpdateConfigResponse(success=True)
         except Exception as e:
-            log_error(f"Error handling UpdatePluginStatus command: {e}")
+            log_error(f"Error updating plugin status: {e}")
+            return UpdateConfigResponse(success=False, error=str(e))
 
     @method_contract(
         method_id=ConfigMethods.RELOAD_SERVICE,
@@ -231,21 +204,14 @@ class ConfigService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
     )
-    async def _handle_reload_service(self, envelope: Envelope) -> None:
+    async def _handle_reload_service(self, cmd: ReloadServiceCommand) -> EmptyOutput:
         """Handle ReloadService command."""
-        try:
-            command = envelope.payload
-            if not isinstance(command, ReloadServiceCommand):
-                log_error(f"Invalid payload type for ReloadService: {type(command)}")
-                return
-
-            # Publish reload event for the service
-            # In threads mode, supervisor will handle reload
-            # In processes mode, service will handle its own reload
-            log_info(f"Reload service requested: {command.service_name} (reason: {command.reason})")
-            # The service will subscribe to Config.Changed events and reload itself
-        except Exception as e:
-            log_error(f"Error handling ReloadService command: {e}")
+        # Publish reload event for the service
+        # In threads mode, supervisor will handle reload
+        # In processes mode, service will handle its own reload
+        log_info(f"Reload service requested: {cmd.service_name} (reason: {cmd.reason})")
+        # The service will subscribe to Config.Changed events and reload itself
+        return EmptyOutput()
 
     async def on_start(self) -> None:
         """Start the config service."""

@@ -10,11 +10,13 @@ Organization:
 - config.py: Configuration service models
 - db.py: Database service models
 - orchestrator.py: Orchestrator/LLM service models
+- gateway.py: Gateway/API service models
 """
 
 from .common import *
 from .config import *
 from .db import *
+from .gateway import *
 from .orchestrator import *
 from .stt import *
 from .tts import *
@@ -48,4 +50,16 @@ __all__ = [
     # Orchestrator
     "OrchestratorProcessRequest",
     "OrchestratorResponse",
+    # Gateway
+    "GatewayModule",
+    "GatewayMethods",
+    "MethodInfo",
+    "ServiceAnnouncement",
+    "ServiceDeparture",
+    "ServiceHeartbeat",
+    "GetRegistryResponse",
+    "ServiceInfo",
+    "GetServicesResponse",
+    "GetServiceHealthRequest",
+    "GetServiceHealthResponse",
 ]

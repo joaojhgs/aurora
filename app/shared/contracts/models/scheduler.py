@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.shared.contracts.registry import IOModel
 
 
@@ -18,6 +20,7 @@ class SchedulerMethods:
     CANCEL = f"{SchedulerModule.NAME}.Cancel"
     PAUSE = f"{SchedulerModule.NAME}.Pause"
     RESUME = f"{SchedulerModule.NAME}.Resume"
+    LIST_JOBS = f"{SchedulerModule.NAME}.ListJobs"  # List scheduled jobs
     JOB_FIRED = f"{SchedulerModule.NAME}.JobFired"
     JOB_COMPLETED = f"{SchedulerModule.NAME}.JobCompleted"
     HEALTH_CHECK = f"{SchedulerModule.NAME}.HealthCheck"
@@ -48,6 +51,34 @@ class SchedulerResumeJobRequest(IOModel):
     """Request to resume a paused job."""
 
     job_id: int | str
+
+
+class SchedulerListJobsRequest(IOModel):
+    """Request to list scheduled jobs."""
+
+    enabled_only: bool = False
+    limit: int = 100
+    offset: int = 0
+
+
+class SchedulerJobInfo(IOModel):
+    """Information about a scheduled job."""
+
+    job_id: str
+    name: str
+    schedule: str
+    action: str
+    enabled: bool
+    next_run: str | None = None
+    last_run: str | None = None
+    status: str | None = None  # "pending" | "running" | "completed" | "failed"
+
+
+class SchedulerListJobsResponse(IOModel):
+    """Response with list of scheduled jobs."""
+
+    jobs: list[SchedulerJobInfo]
+    total: int
 
 
 class SchedulerJobFiredEvent(IOModel):

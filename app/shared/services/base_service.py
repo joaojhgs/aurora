@@ -6,11 +6,16 @@ It provides:
 - Config reload capability via abstract method
 - Lifecycle methods (start, stop)
 - Config observer registration
+- Gateway announcement protocol (for service discovery)
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
+import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -33,11 +38,19 @@ class BaseService(ABC):
             capabilities: List of capabilities provided by the service
         """
         self.module = module
+        self._summary = summary
+        self._capabilities = capabilities or []
         # self.service_name is deprecated, use self.module instead
         # For backward compatibility with logging/bus_init, we can use self.module
         self._bus = None
         self._config_observers: list[Any] = []
         self._started = False
+
+        # Unique instance ID for this service instance (for multiple instances)
+        self._instance_id = str(uuid.uuid4())[:8]
+
+        # Gateway announcement settings
+        self._announce_to_gateway = True  # Can be disabled for internal services
 
         # Register module
         from app.shared.contracts.registry import register_method, register_module
@@ -124,15 +137,22 @@ class BaseService(ABC):
         self._set_started(True)
         log_info(f"{self.module} started")
 
+        # Announce to gateway (for service discovery)
+        await self._publish_service_announcement()
+
     async def stop(self) -> None:
         """Stop the service.
 
         This method:
-        1. Calls the service-specific on_stop() hook
-        2. Sets started state to False
+        1. Announces departure to gateway
+        2. Calls the service-specific on_stop() hook
+        3. Sets started state to False
         """
         if not self._started:
             return
+
+        # Announce departure to gateway
+        await self._publish_service_departure()
 
         # Call service-specific shutdown logic
         await self.on_stop()
@@ -282,7 +302,8 @@ class BaseService(ABC):
                 attr = getattr(self, attr_name)
                 if hasattr(attr, "_contract_metadata"):
                     metadata = attr._contract_metadata
-                    topic = metadata.get("bus_topic")
+                    # Use method_id as topic (e.g., "TTS.Request", "Config.Get")
+                    topic = metadata.get("bus_topic") or metadata.get("method_id")
                     input_model = metadata.get("input_model")
 
                     if topic:
@@ -311,6 +332,22 @@ class BaseService(ABC):
                                             log_error(
                                                 f"Input validation failed for {method_name}: {e}"
                                             )
+                                            # Send error response if reply_to is set
+                                            if envelope.reply_to:
+                                                from app.shared.contracts.models.common import (
+                                                    ErrorOutput,
+                                                )
+
+                                                error_response = ErrorOutput(
+                                                    error=f"Validation error: {e}",
+                                                    code="VALIDATION_ERROR",
+                                                )
+                                                await self.bus.publish(
+                                                    envelope.reply_to,
+                                                    error_response,
+                                                    event=False,
+                                                    origin=self.module,
+                                                )
                                             return
 
                                         # 2. Execute method
@@ -385,7 +422,6 @@ class BaseService(ABC):
                 "service": "ServiceName"
             }
         """
-        from datetime import datetime
 
         checks = {}
         status = "healthy"
@@ -415,3 +451,159 @@ class BaseService(ABC):
             "timestamp": datetime.utcnow().isoformat(),
             "service": self.module,
         }
+
+    # =========================================================================
+    # Gateway Announcement Protocol
+    # =========================================================================
+
+    async def _publish_service_announcement(self) -> None:
+        """Announce this service to the gateway for discovery.
+
+        Called automatically after on_start() completes.
+        Publishes service metadata including all exposed methods.
+        """
+        if not self._announce_to_gateway:
+            return
+
+        # Skip announcement for Gateway itself
+        if self.module == "Gateway":
+            return
+
+        try:
+            from app.shared.contracts.models.gateway import (
+                GatewayMethods,
+                MethodInfo,
+                ServiceAnnouncement,
+            )
+            from app.shared.contracts.registry import list_modules
+
+            # Get module information from registry
+            modules = list_modules()
+            module_contract = modules.get(self.module)
+
+            if module_contract is None:
+                log_debug(f"No module contract found for {self.module}, skipping announcement")
+                return
+
+            # Build method info list with schemas
+            methods = []
+            for method in module_contract.methods:
+                # Extract JSON schemas from Pydantic models
+                input_schema = None
+                output_schema = None
+
+                if method.input_model is not None:
+                    with contextlib.suppress(Exception):
+                        input_schema = method.input_model.model_json_schema()
+
+                if method.output_model is not None:
+                    with contextlib.suppress(Exception):
+                        output_schema = method.output_model.model_json_schema()
+
+                methods.append(
+                    MethodInfo(
+                        name=method.name,
+                        summary=method.summary,
+                        bus_topic=method.bus_topic,
+                        exposure=method.exposure,
+                        input_model=method.input_model.__name__ if method.input_model else None,
+                        output_model=method.output_model.__name__ if method.output_model else None,
+                        required_perms=method.required_perms,
+                        input_schema=input_schema,
+                        output_schema=output_schema,
+                    )
+                )
+
+            # Create announcement
+            announcement = ServiceAnnouncement(
+                module=self.module,
+                version=module_contract.version,
+                summary=self._summary or module_contract.summary,
+                capabilities=self._capabilities or module_contract.capabilities,
+                methods=methods,
+                instance_id=self._instance_id,
+            )
+
+            # Publish announcement as event
+            await self.bus.publish(
+                GatewayMethods.SERVICE_ANNOUNCE,
+                announcement,
+                event=True,
+                origin=self.module,
+            )
+
+            log_debug(
+                f"Announced {self.module} to gateway "
+                f"({len(methods)} methods, instance: {self._instance_id})"
+            )
+
+        except Exception as e:
+            # Don't fail service startup if announcement fails
+            log_error(f"Failed to announce {self.module} to gateway: {e}")
+
+    async def _publish_service_departure(self) -> None:
+        """Announce service departure to the gateway.
+
+        Called automatically before on_stop().
+        """
+        if not self._announce_to_gateway:
+            return
+
+        # Skip announcement for Gateway itself
+        if self.module == "Gateway":
+            return
+
+        try:
+            from app.shared.contracts.models.gateway import (
+                GatewayMethods,
+                ServiceDeparture,
+            )
+
+            departure = ServiceDeparture(
+                module=self.module,
+                instance_id=self._instance_id,
+                reason="shutdown",
+            )
+
+            await self.bus.publish(
+                GatewayMethods.SERVICE_DEPART,
+                departure,
+                event=True,
+                origin=self.module,
+            )
+
+            log_debug(f"Announced departure of {self.module} (instance: {self._instance_id})")
+
+        except Exception as e:
+            # Don't fail service shutdown if departure fails
+            log_error(f"Failed to announce departure of {self.module}: {e}")
+
+    async def _publish_heartbeat(self) -> None:
+        """Publish a heartbeat to the gateway.
+
+        Services can call this periodically to indicate they're still alive.
+        Not called automatically - services must implement their own heartbeat logic if needed.
+        """
+        if not self._announce_to_gateway or not self._started:
+            return
+
+        try:
+            from app.shared.contracts.models.gateway import (
+                GatewayMethods,
+                ServiceHeartbeat,
+            )
+
+            heartbeat = ServiceHeartbeat(
+                module=self.module,
+                instance_id=self._instance_id,
+            )
+
+            await self.bus.publish(
+                GatewayMethods.SERVICE_HEARTBEAT,
+                heartbeat,
+                event=True,
+                origin=self.module,
+            )
+
+        except Exception as e:
+            log_error(f"Failed to send heartbeat for {self.module}: {e}")
