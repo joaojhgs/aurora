@@ -48,6 +48,7 @@ class WakeWordMethods:
     DETECTED = f"{WakeWordModule.NAME}.Detected"
     CONTROL = f"{WakeWordModule.NAME}.Control"
     PROCESS_AUDIO = f"{WakeWordModule.NAME}.ProcessAudio"
+    DETECT = f"{WakeWordModule.NAME}.Detect"  # External: returns detection result
     HEALTH_CHECK = f"{WakeWordModule.NAME}.HealthCheck"
 
 
@@ -57,6 +58,7 @@ class TranscriptionMethods:
     RESULT = f"{TranscriptionModule.NAME}.Result"
     CONTROL = f"{TranscriptionModule.NAME}.Control"
     PROCESS_AUDIO = f"{TranscriptionModule.NAME}.ProcessAudio"
+    TRANSCRIBE = f"{TranscriptionModule.NAME}.Transcribe"  # External: synchronous transcription
     HEALTH_CHECK = f"{TranscriptionModule.NAME}.HealthCheck"
     ERROR = f"{TranscriptionModule.NAME}.Error"
 
@@ -122,3 +124,52 @@ class STTAudioChunk(IOModel):
     sample_rate: int
     channels: int
     format: str = "pcm_s16le"
+
+
+# ============================================================================
+# External API Models (for Gateway exposure)
+# ============================================================================
+
+
+class TranscribeAudioRequest(IOModel):
+    """Request to transcribe complete audio (for external API).
+    
+    Audio should be provided as base64-encoded data.
+    """
+
+    audio_data: str  # Base64-encoded audio
+    format: str = "wav"  # "wav" | "raw" | "mp3"
+    sample_rate: int = 16000
+    channels: int = 1
+    language: str | None = None  # ISO language code or None for auto-detect
+    model: str = "realtime"  # "realtime" | "accurate"
+
+
+class TranscribeAudioResponse(IOModel):
+    """Transcription result (for external API)."""
+
+    text: str
+    confidence: float | None = None
+    language: str | None = None
+    duration_ms: float
+    model_used: str
+
+
+class WakeWordDetectRequest(IOModel):
+    """Request to check audio for wake word (for external API).
+    
+    Audio should be provided as base64-encoded data.
+    """
+
+    audio_data: str  # Base64-encoded audio chunk
+    sample_rate: int = 16000
+    channels: int = 1
+    format: str = "raw"  # "raw" (PCM 16-bit) | "wav"
+
+
+class WakeWordDetectResponse(IOModel):
+    """Wake word detection result (for external API)."""
+
+    detected: bool
+    wake_word: str | None = None
+    confidence: float | None = None

@@ -2,7 +2,8 @@
 
 The supervisor:
 - Initializes the message bus (LocalBus or BullMQBus)
-- Starts all services
+- Starts all services (thread mode) or connects to them (process mode)
+- Optionally runs HTTP Gateway for external API access
 - Manages service lifecycle
 - Handles graceful shutdown
 """
@@ -10,11 +11,12 @@ The supervisor:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.helpers.aurora_logger import log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope
 from app.messaging.bus import MessageBus
 from app.messaging.bus_runtime import set_bus
@@ -30,6 +32,9 @@ from app.shared.contracts.models.supervisor import (
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
+
+if TYPE_CHECKING:
+    from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
 class Supervisor(BaseService):
@@ -47,12 +52,19 @@ class Supervisor(BaseService):
         super().__init__(
             module=SupervisorModule.NAME,
             summary="Service supervisor and manager",
-            capabilities=["service_management", "health_monitoring"],
+            capabilities=["service_management", "health_monitoring", "gateway"],
         )
         self.services: list[Any] = []
         self.shutdown_event = asyncio.Event()
         self._mode = "threads"  # "threads" or "processes"
         self.process_launcher = None  # ProcessLauncher instance for processes mode
+
+        # Gateway components
+        self._gateway_enabled = False
+        self._gateway_app = None
+        self._gateway_server = None
+        self._gateway_task = None
+        self._registry_aggregator: RegistryAggregator | None = None
 
     async def initialize(self) -> None:
         """Initialize the supervisor and message bus."""
@@ -125,6 +137,9 @@ class Supervisor(BaseService):
             await self._start_services_processes()
         else:
             await self._start_services_threads()
+
+        # Start gateway after all services are up
+        await self._start_gateway()
 
     async def _start_services_threads(self) -> None:
         """Start all services in threads mode (same process)."""
@@ -314,6 +329,9 @@ class Supervisor(BaseService):
         """Shutdown all services gracefully."""
         log_info("Stopping Aurora services...")
 
+        # Stop gateway first (before services)
+        await self._stop_gateway()
+
         if self._mode == "processes":
             # Stop all service processes
             if self.process_launcher:
@@ -354,15 +372,190 @@ class Supervisor(BaseService):
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
+        # Start services (thread mode) or wait for them (process mode)
         await self.start_services()
+
+        # Start gateway if enabled
+        await self._start_gateway()
+
+        # Subscribe to config changes for dynamic gateway control
+        self._subscribe_to_config_changes()
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
-        pass
+        # Stop gateway if running
+        await self._stop_gateway()
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration."""
-        pass
+        # Reload gateway config if needed
+        if config_section is None or config_section == "gateway":
+            await self._reload_gateway_config()
+
+    # =========================================================================
+    # Gateway Management
+    # =========================================================================
+
+    async def _get_gateway_config(self) -> dict[str, Any]:
+        """Get gateway configuration from ConfigService.
+
+        Returns:
+            Gateway configuration dictionary
+        """
+        try:
+            from app.shared.config.interface import ConfigAPI
+
+            config_api = ConfigAPI()
+            gateway_config = await config_api.aget_config(section="gateway")
+
+            if not gateway_config:
+                # Return defaults if no config
+                return {
+                    "enabled": False,
+                    "host": "0.0.0.0",
+                    "port": 8000,
+                    "request_timeout_s": 30.0,
+                    "cors": {"origins": ["*"], "allow_credentials": True},
+                    "auth": {"enabled": False, "api_keys": []},
+                }
+
+            return gateway_config
+
+        except Exception as e:
+            log_warning(f"Failed to get gateway config, using defaults: {e}")
+            return {
+                "enabled": False,
+                "host": "0.0.0.0",
+                "port": 8000,
+                "request_timeout_s": 30.0,
+            }
+
+    async def _start_gateway(self) -> None:
+        """Start the FastAPI gateway if enabled."""
+        config = await self._get_gateway_config()
+
+        if not config.get("enabled", False):
+            log_info("Gateway disabled in configuration")
+            return
+
+        try:
+            # Import gateway components
+            from app.services.gateway.fastapi_app import create_gateway_app
+            from app.services.gateway.registry_aggregator import RegistryAggregator
+
+            # Create registry aggregator
+            self._registry_aggregator = RegistryAggregator(
+                bus=self._bus,
+                mode=self._mode,
+            )
+
+            # Get gateway settings
+            host = config.get("host", "0.0.0.0")
+            port = config.get("port", 8000)
+            request_timeout = config.get("request_timeout_s", 30.0)
+            cors_config = config.get("cors", {})
+            cors_origins = cors_config.get("origins", ["*"])
+
+            # Create FastAPI app
+            self._gateway_app = create_gateway_app(
+                bus=self._bus,
+                registry=self._registry_aggregator,
+                cors_origins=cors_origins,
+                request_timeout=request_timeout,
+            )
+
+            # Start uvicorn server in background
+            import uvicorn
+
+            uvicorn_config = uvicorn.Config(
+                self._gateway_app,
+                host=host,
+                port=port,
+                log_level="info",
+                access_log=True,
+            )
+            self._gateway_server = uvicorn.Server(uvicorn_config)
+
+            # Run in background task
+            self._gateway_task = asyncio.create_task(self._run_gateway_server())
+
+            self._gateway_enabled = True
+            log_info(f"Gateway started at http://{host}:{port}")
+            log_info(f"  API docs: http://{host}:{port}/api/docs")
+
+        except ImportError as e:
+            log_warning(
+                f"Gateway dependencies not installed. Install with: pip install 'aurora[gateway]'. Error: {e}"
+            )
+        except Exception as e:
+            log_error(f"Failed to start gateway: {e}", exc_info=True)
+
+    async def _run_gateway_server(self) -> None:
+        """Run the uvicorn server (background task)."""
+        try:
+            await self._gateway_server.serve()
+        except asyncio.CancelledError:
+            log_debug("Gateway server task cancelled")
+        except Exception as e:
+            log_error(f"Gateway server error: {e}", exc_info=True)
+
+    async def _stop_gateway(self) -> None:
+        """Stop the FastAPI gateway."""
+        if not self._gateway_enabled:
+            return
+
+        log_info("Stopping gateway...")
+
+        try:
+            # Signal uvicorn to shutdown
+            if self._gateway_server:
+                self._gateway_server.should_exit = True
+
+            # Cancel the background task
+            if self._gateway_task and not self._gateway_task.done():
+                self._gateway_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(self._gateway_task, timeout=5.0)
+
+            # Stop registry aggregator
+            if self._registry_aggregator:
+                await self._registry_aggregator.stop()
+
+            self._gateway_enabled = False
+            log_info("Gateway stopped")
+
+        except Exception as e:
+            log_error(f"Error stopping gateway: {e}")
+
+    async def _reload_gateway_config(self) -> None:
+        """Reload gateway configuration dynamically.
+
+        Handles:
+        - Starting gateway if enabled and not running
+        - Stopping gateway if disabled and running
+        - Note: host/port changes require full restart
+        """
+        try:
+            config = await self._get_gateway_config()
+            should_be_enabled = config.get("enabled", False)
+
+            if should_be_enabled and not self._gateway_enabled:
+                # Gateway should be running but isn't - start it
+                log_info("Gateway enabled via config - starting gateway")
+                await self._start_gateway()
+
+            elif not should_be_enabled and self._gateway_enabled:
+                # Gateway is running but should be disabled - stop it
+                log_info("Gateway disabled via config - stopping gateway")
+                await self._stop_gateway()
+
+            elif self._gateway_enabled:
+                # Gateway is running and should stay running
+                # TODO: Update CORS, auth settings dynamically if possible
+                log_info("Gateway config reloaded (host/port changes require restart)")
+
+        except Exception as e:
+            log_error(f"Error reloading gateway config: {e}")
 
     @method_contract(
         method_id=SupervisorMethods.GET_STATUS,
@@ -371,26 +564,19 @@ class Supervisor(BaseService):
         output_model=GetStatusResponse,
         exposure="both",
     )
-    async def _handle_get_status(self, envelope: Envelope) -> None:
+    async def _handle_get_status(self, request: EmptyInput) -> GetStatusResponse:
         """Handle GetStatus query."""
-        try:
-            statuses = []
-            for service in self.services:
-                # Basic status check
-                is_running = getattr(service, "_started", False)
-                name = getattr(
-                    service, "module", getattr(service, "service_name", str(type(service).__name__))
-                )
+        statuses = []
+        for service in self.services:
+            # Basic status check
+            is_running = getattr(service, "_started", False)
+            name = getattr(
+                service, "module", getattr(service, "service_name", str(type(service).__name__))
+            )
 
-                statuses.append(ServiceStatus(name=name, running=is_running, details={}))
+            statuses.append(ServiceStatus(name=name, running=is_running, details={}))
 
-            response = GetStatusResponse(services=statuses, mode=self._mode)
-
-            if envelope.reply_to:
-                await self.bus.publish(envelope.reply_to, response, event=False)
-
-        except Exception as e:
-            log_error(f"Error handling GetStatus: {e}")
+        return GetStatusResponse(services=statuses, mode=self._mode)
 
     @method_contract(
         method_id=SupervisorMethods.RESTART_SERVICE,

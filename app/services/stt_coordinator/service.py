@@ -682,46 +682,40 @@ class STTCoordinatorService(BaseService):
 
     @method_contract(
         method_id=STTMethods.LISTEN,
-        summary="Start listening for speech",
+        summary="Start listening for speech (server microphone)",
         input_model=STTListenRequest,
         output_model=EmptyOutput,
-        exposure="both",
+        exposure="internal",
     )
-    async def _on_listen(self, env: Envelope) -> None:
+    async def _on_listen(self, request: STTListenRequest) -> EmptyOutput:
         """Handle listen command."""
-        try:
-            req = STTListenRequest.model_validate(env.payload)
-            log_info(f"Received listen request (session_id={req.session_id})")
+        log_info(f"Received listen request (session_id={request.session_id})")
 
-            # Start listening logic...
-            # For now, just acknowledge
-            await self.bus.publish(
-                STTMethods.SESSION_STARTED,
-                STTSessionStarted(session_id=req.session_id or "manual", wake_word="manual"),
-                event=True,
-                origin="internal",
-            )
+        # Start listening logic...
+        # For now, just acknowledge
+        await self.bus.publish(
+            STTMethods.SESSION_STARTED,
+            STTSessionStarted(session_id=request.session_id or "manual", wake_word="manual"),
+            event=True,
+            origin="internal",
+        )
 
-        except Exception as e:
-            log_error(f"Error handling listen request: {e}", exc_info=True)
+        return EmptyOutput()
 
     @method_contract(
         method_id=STTMethods.STOP_LISTENING,
-        summary="Stop listening for speech",
+        summary="Stop listening for speech (server microphone)",
         input_model=STTStopListeningRequest,
         output_model=EmptyOutput,
-        exposure="both",
+        exposure="internal",
     )
-    async def _on_stop_listening(self, env: Envelope) -> None:
+    async def _on_stop_listening(self, request: STTStopListeningRequest) -> EmptyOutput:
         """Handle stop listening command."""
-        try:
-            STTStopListeningRequest.model_validate(env.payload)
-            log_info("Received stop listening request")
+        log_info("Received stop listening request")
 
-            # Stop listening logic...
+        # Stop listening logic...
 
-        except Exception as e:
-            log_error(f"Error handling stop listening request: {e}", exc_info=True)
+        return EmptyOutput()
 
     @method_contract(
         method_id=STTMethods.AUDIO,

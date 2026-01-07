@@ -14,6 +14,8 @@ Features:
 
 from __future__ import annotations
 
+import base64
+
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
     AudioChunk,
@@ -33,6 +35,8 @@ from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
     WakewordControl,
+    WakeWordDetectRequest,
+    WakeWordDetectResponse,
     WakeWordMethods,
     WakeWordModule,
 )
@@ -275,26 +279,30 @@ class WakeWordService(BaseService):
 
     @method_contract(
         method_id=WakeWordMethods.PROCESS_AUDIO,
-        summary="Process external audio chunk for wake word detection",
+        summary="Process audio chunk for wake word detection",
         input_model=STTAudioChunk,
         output_model=EmptyOutput,
-        exposure="external",
+        exposure="both",
     )
-    async def _on_external_audio(self, envelope: Envelope) -> None:
+    async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
 
         Args:
-            envelope: Message envelope containing STTAudioChunk
+            chunk: STTAudioChunk containing audio data
+
+        Returns:
+            EmptyOutput on success
         """
-        chunk: STTAudioChunk = envelope.payload
         import time
 
         await self._process_audio_data(
             chunk.data,
             stream_id="external",
             source="external",
-            timestamp=time.time(),  # TODO: Should come from envelope or chunk?
+            timestamp=time.time(),
         )
+
+        return EmptyOutput()
 
     async def _process_audio_chunk(self, chunk: AudioChunk) -> None:
         """Process an audio chunk for wake word detection.
@@ -364,3 +372,63 @@ class WakeWordService(BaseService):
 
         except Exception as e:
             log_error(f"Error handling control command: {e}", exc_info=True)
+
+    @method_contract(
+        method_id=WakeWordMethods.DETECT,
+        summary="Check audio for wake word and return result",
+        input_model=WakeWordDetectRequest,
+        output_model=WakeWordDetectResponse,
+        exposure="both",
+    )
+    async def detect_wake_word(self, request: WakeWordDetectRequest) -> WakeWordDetectResponse:
+        """Check audio chunk for wake word and return detection result.
+
+        This endpoint is for external API consumers who want to check
+        audio for wake words without triggering the internal workflow.
+
+        Args:
+            request: WakeWordDetectRequest with base64-encoded audio data
+
+        Returns:
+            WakeWordDetectResponse with detection result
+        """
+        try:
+            if not self._backend:
+                raise RuntimeError("Wake word backend not initialized")
+
+            # Decode base64 audio
+            try:
+                audio_bytes = base64.b64decode(request.audio_data)
+            except Exception as e:
+                raise ValueError(f"Invalid base64 audio data: {e}") from e
+
+            log_debug(f"Wake word detection request: {len(audio_bytes)} bytes")
+
+            # Run detection
+            result = await self._backend.detect(audio_bytes)
+
+            if result.detected:
+                wake_word = (
+                    self._wake_words[result.wake_word_index]
+                    if 0 <= result.wake_word_index < len(self._wake_words)
+                    else "unknown"
+                )
+                log_info(
+                    f"Wake word detected via API: '{wake_word}' "
+                    f"(confidence: {result.confidence:.2f})"
+                )
+                return WakeWordDetectResponse(
+                    detected=True,
+                    wake_word=wake_word,
+                    confidence=result.confidence,
+                )
+            else:
+                return WakeWordDetectResponse(
+                    detected=False,
+                    wake_word=None,
+                    confidence=None,
+                )
+
+        except Exception as e:
+            log_error(f"Wake word detection error: {e}", exc_info=True)
+            raise

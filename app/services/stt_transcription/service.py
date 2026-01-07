@@ -14,8 +14,11 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import threading
 import time
+import wave
 from collections import deque
 from datetime import datetime
 from enum import Enum
@@ -42,6 +45,8 @@ from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
     STTControl,
+    TranscribeAudioRequest,
+    TranscribeAudioResponse,
     TranscriptionMethods,
     TranscriptionModule,
 )
@@ -612,19 +617,20 @@ class TranscriptionService(BaseService):
 
     @method_contract(
         method_id=TranscriptionMethods.PROCESS_AUDIO,
-        summary="Process external audio chunk for transcription",
+        summary="Process audio chunk for transcription",
         input_model=STTAudioChunk,
         output_model=EmptyOutput,
-        exposure="external",
+        exposure="both",
     )
-    async def _on_external_audio(self, envelope: Envelope) -> None:
+    async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
 
         Args:
-            envelope: Message envelope containing STTAudioChunk
-        """
-        chunk: STTAudioChunk = envelope.payload
+            chunk: STTAudioChunk containing audio data
 
+        Returns:
+            EmptyOutput on success
+        """
         # Convert STT format to internal AudioFormat
         audio_format = AudioFormat(
             sample_rate=chunk.sample_rate,
@@ -633,11 +639,11 @@ class TranscriptionService(BaseService):
             codec=chunk.format,
         )
 
-        import time
-
         await self._process_audio_data(
             chunk.data, audio_format, stream_id="external", source="external"
-        )  # TODO: Should come from envelope or chunk?
+        )
+
+        return EmptyOutput()
 
     @method_contract(
         method_id=TranscriptionMethods.CONTROL,
@@ -678,6 +684,160 @@ class TranscriptionService(BaseService):
         elif action == "enable_accurate" and control.enabled is not None:
             self._accurate_enabled = control.enabled
             log_info(f"Accurate transcription: {'enabled' if control.enabled else 'disabled'}")
+
+    def _decode_audio_to_numpy(
+        self,
+        audio_data: bytes,
+        format: str,
+        sample_rate: int,
+        channels: int,
+    ) -> np.ndarray:
+        """Decode audio bytes to numpy array.
+
+        Args:
+            audio_data: Raw or encoded audio bytes
+            format: Audio format ("raw", "wav", "mp3")
+            sample_rate: Expected sample rate
+            channels: Expected number of channels
+
+        Returns:
+            Float32 numpy array normalized to [-1.0, 1.0]
+        """
+        if format == "wav":
+            # Parse WAV container
+            wav_buffer = io.BytesIO(audio_data)
+            with wave.open(wav_buffer, "rb") as wf:
+                # Verify format
+                if wf.getsampwidth() != 2:
+                    raise ValueError(f"Expected 16-bit audio, got {wf.getsampwidth() * 8}-bit")
+                # Read PCM data
+                pcm_data = wf.readframes(wf.getnframes())
+                actual_rate = wf.getframerate()
+                actual_channels = wf.getnchannels()
+
+                # Convert to numpy
+                audio_int16 = np.frombuffer(pcm_data, dtype=np.int16)
+
+                # Convert stereo to mono if needed
+                if actual_channels == 2:
+                    audio_int16 = audio_int16.reshape(-1, 2).mean(axis=1).astype(np.int16)
+
+                # Resample if needed (simple linear interpolation)
+                if actual_rate != sample_rate:
+                    # Calculate new length
+                    new_length = int(len(audio_int16) * sample_rate / actual_rate)
+                    indices = np.linspace(0, len(audio_int16) - 1, new_length)
+                    audio_int16 = np.interp(indices, np.arange(len(audio_int16)), audio_int16).astype(np.int16)
+
+                audio_float32 = audio_int16.astype(np.float32) / 32768.0
+                return audio_float32
+
+        elif format == "raw":
+            # Assume PCM 16-bit signed little-endian
+            audio_int16 = np.frombuffer(audio_data, dtype=np.int16)
+
+            # Convert stereo to mono if needed
+            if channels == 2:
+                audio_int16 = audio_int16.reshape(-1, 2).mean(axis=1).astype(np.int16)
+
+            audio_float32 = audio_int16.astype(np.float32) / 32768.0
+            return audio_float32
+
+        else:
+            raise ValueError(f"Unsupported audio format: {format}")
+
+    @method_contract(
+        method_id=TranscriptionMethods.TRANSCRIBE,
+        summary="Transcribe complete audio file and return result",
+        input_model=TranscribeAudioRequest,
+        output_model=TranscribeAudioResponse,
+        exposure="both",
+    )
+    async def transcribe_audio(self, request: TranscribeAudioRequest) -> TranscribeAudioResponse:
+        """Transcribe complete audio and return result immediately.
+
+        This endpoint is for external API consumers who want synchronous
+        transcription of a complete audio file.
+
+        Args:
+            request: TranscribeAudioRequest with base64-encoded audio data
+
+        Returns:
+            TranscribeAudioResponse with transcription text
+        """
+        try:
+            log_info(
+                f"Transcription request: format={request.format}, "
+                f"sample_rate={request.sample_rate}, model={request.model}"
+            )
+
+            # Decode base64 audio
+            try:
+                audio_bytes = base64.b64decode(request.audio_data)
+            except Exception as e:
+                raise ValueError(f"Invalid base64 audio data: {e}") from e
+
+            log_debug(f"Decoded {len(audio_bytes)} bytes of audio")
+
+            # Convert to numpy array
+            audio_np = self._decode_audio_to_numpy(
+                audio_bytes,
+                request.format,
+                request.sample_rate,
+                request.channels,
+            )
+
+            # Calculate duration
+            duration_ms = (len(audio_np) / request.sample_rate) * 1000
+            log_debug(f"Audio duration: {duration_ms:.0f}ms")
+
+            # Select model
+            if request.model == "accurate":
+                if self._accurate_model is None:
+                    raise RuntimeError("Accurate model not loaded")
+                model = self._accurate_model
+                beam_size = 5
+            else:
+                if self._realtime_model is None:
+                    raise RuntimeError("Realtime model not loaded")
+                model = self._realtime_model
+                beam_size = 1
+
+            # Transcribe
+            start_time = time.time()
+
+            with self._model_lock:
+                segments, info = model.transcribe(
+                    audio_np,
+                    language=request.language if request.language else None,
+                    beam_size=beam_size,
+                    vad_filter=True,  # Let Whisper do VAD for complete files
+                )
+
+                # Combine segments into full text
+                text_parts = []
+                for segment in segments:
+                    text_parts.append(segment.text.strip())
+
+            text = " ".join(text_parts).strip()
+            elapsed_ms = (time.time() - start_time) * 1000
+
+            log_info(
+                f"Transcription complete: '{text[:50]}...' "
+                f"({elapsed_ms:.0f}ms, model={request.model})"
+            )
+
+            return TranscribeAudioResponse(
+                text=text,
+                confidence=None,  # Whisper doesn't provide overall confidence
+                language=info.language if hasattr(info, "language") else request.language,
+                duration_ms=duration_ms,
+                model_used=request.model,
+            )
+
+        except Exception as e:
+            log_error(f"Transcription error: {e}", exc_info=True)
+            raise
 
 
 # Export service

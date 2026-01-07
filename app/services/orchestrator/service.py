@@ -151,25 +151,36 @@ class OrchestratorService(BaseService):
 
     @method_contract(
         method_id=OrchestratorMethods.EXTERNAL_USER_INPUT,
-        summary="Process external user input",
+        summary="Process external user input and return the LLM response",
         input_model=OrchestratorProcessRequest,
-        output_model=EmptyOutput,
+        output_model=OrchestratorResponse,
         exposure="external",
     )
-    async def process_external_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
-        """Handle external user input command."""
+    async def process_external_input(
+        self, cmd: OrchestratorProcessRequest
+    ) -> OrchestratorResponse:
+        """Handle external user input command and return the response."""
         try:
             log_info(f"Processing external input: {cmd.text}")
-            await self._process_input(
+            response_text = await self._process_input(
                 cmd.text,
                 source="external",
                 session_id=cmd.session_id,
+                return_response=True,  # Return the response for external API
             )
-            return EmptyOutput()
+            return OrchestratorResponse(
+                text=response_text or "",
+                session_id=cmd.session_id,
+                metadata={"source": "external"},
+            )
 
         except Exception as e:
             log_error(f"Error processing external input: {e}", exc_info=True)
-            return EmptyOutput()
+            return OrchestratorResponse(
+                text=f"Error: {e!s}",
+                session_id=cmd.session_id,
+                metadata={"source": "external", "error": True},
+            )
 
     @method_contract(
         method_id=OrchestratorMethods.TOOL_RESULT,
@@ -199,13 +210,18 @@ class OrchestratorService(BaseService):
         text: str,
         source: str,
         session_id: str | None = None,
-    ) -> None:
+        return_response: bool = False,
+    ) -> str | None:
         """Process user input through LangGraph agent.
 
         Args:
             text: User input text
             source: Input source ("stt", "ui", "external")
             session_id: Optional session identifier
+            return_response: If True, return the response text instead of just publishing
+
+        Returns:
+            Response text if return_response is True, else None
         """
         try:
             log_debug(f"Processing input from {source}: {text}")
@@ -250,5 +266,13 @@ class OrchestratorService(BaseService):
                     origin="internal",
                 )
 
+            # Return response if requested (for external API calls)
+            if return_response:
+                return response_text
+
         except Exception as e:
             log_error(f"Error processing input: {e}", exc_info=True)
+            if return_response:
+                return f"Error: {e!s}"
+
+        return None

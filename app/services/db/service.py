@@ -164,7 +164,7 @@ class DBService(BaseService):
         input_model=DBGetMessagesRequest,
         output_model=DBGetMessagesResponse,
         summary="Get recent chat messages",
-        exposure="internal",
+        exposure="both",
     )
     async def get_messages(self, query: DBGetMessagesRequest) -> DBGetMessagesResponse:
         """Handle get recent messages query."""
@@ -198,7 +198,7 @@ class DBService(BaseService):
         input_model=DBGetMessagesForDateRequest,
         output_model=DBGetMessagesResponse,
         summary="Get messages for a specific date",
-        exposure="internal",
+        exposure="both",
     )
     async def get_messages_for_date(
         self, query: DBGetMessagesForDateRequest
@@ -400,7 +400,7 @@ class DBService(BaseService):
         input_model=DBRAGSearchRequest,
         output_model=DBRAGListResponse,
         summary="Search RAG store",
-        exposure="internal",
+        exposure="both",
     )
     async def rag_search(self, query: DBRAGSearchRequest) -> DBRAGListResponse:
         """Handle RAG search query."""

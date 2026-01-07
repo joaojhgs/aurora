@@ -958,6 +958,77 @@
             },
             "additionalProperties": false
         },
+        "gateway": {
+            "type": "object",
+            "description": "HTTP Gateway configuration for REST API access",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Enable HTTP Gateway for REST API access",
+                    "default": false
+                },
+                "host": {
+                    "type": "string",
+                    "description": "Host address to bind the gateway",
+                    "default": "0.0.0.0"
+                },
+                "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port number for the gateway",
+                    "default": 8000
+                },
+                "request_timeout_s": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 300,
+                    "description": "Request timeout in seconds",
+                    "default": 30.0
+                },
+                "cors": {
+                    "type": "object",
+                    "description": "CORS configuration",
+                    "properties": {
+                        "origins": {
+                            "type": "array",
+                            "description": "Allowed CORS origins",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": ["*"]
+                        },
+                        "allow_credentials": {
+                            "type": "boolean",
+                            "description": "Allow credentials in CORS requests",
+                            "default": true
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "auth": {
+                    "type": "object",
+                    "description": "Authentication configuration",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Enable API key authentication",
+                            "default": false
+                        },
+                        "api_keys": {
+                            "type": "array",
+                            "description": "List of valid API keys",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": []
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
         "ui": {
             "type": "object",
             "required": [
