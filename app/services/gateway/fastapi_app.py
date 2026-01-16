@@ -23,6 +23,7 @@ def create_gateway_app(
     bus: MessageBus,
     registry: RegistryAggregator,
     cors_origins: list[str] | None = None,
+    cors_allow_credentials: bool = True,
     title: str = "Aurora Gateway API",
     version: str = "1.0.0",
     request_timeout: float = 30.0,
@@ -33,6 +34,7 @@ def create_gateway_app(
         bus: Message bus instance
         registry: Registry aggregator instance
         cors_origins: List of allowed CORS origins (default: ["*"])
+        cors_allow_credentials: Whether to allow credentials in CORS (default: True)
         title: API title for OpenAPI docs
         version: API version
         request_timeout: Default timeout for service requests
@@ -84,7 +86,7 @@ def create_gateway_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
+        allow_credentials=cors_allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

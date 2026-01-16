@@ -159,7 +159,7 @@ class GetServiceHealthResponse(IOModel):
 
     module: str
     status: str  # "healthy", "degraded", "unhealthy", "unknown"
-    checks: list[str] = Field(default_factory=list)  # Changed from dict to avoid additionalProperties
+    checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
 

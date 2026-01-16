@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -64,7 +65,7 @@ class RegistryAggregator:
         self._subscribed = False
 
         # Callback for registry changes (used by route generator)
-        self._on_change_callbacks: list[callable] = []
+        self._on_change_callbacks: list[Callable] = []
 
     async def start(self) -> None:
         """Start the registry aggregator.
@@ -91,7 +92,7 @@ class RegistryAggregator:
         self._subscribed = False
         log_info("RegistryAggregator stopped")
 
-    def on_registry_change(self, callback: callable) -> None:
+    def on_registry_change(self, callback: Callable) -> None:
         """Register a callback for registry changes.
 
         Args:

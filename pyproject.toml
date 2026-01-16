@@ -67,6 +67,7 @@ runtime = [
     "PyAudio==0.2.14",
     "openwakeword==0.6.0",
     "webrtcvad-wheels==2.0.14",
+    "pydub>=0.25.1",  # For MP3 audio format support
     
     # Text-to-Speech
     "piper-tts==1.2.0",
@@ -568,29 +569,29 @@ local-llama-gpu = [
 # ============================================================================
 # All features with third-party providers (easiest setup)
 full-third-party = [
-    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
 ]
 
 # All features with local HuggingFace models
 full-local-huggingface = [
-    "aurora[runtime,torch-cpu,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    "aurora[runtime,torch-cpu,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
 ]
 
 # All features with local HuggingFace models + GPU acceleration
 # Note: PyTorch GPU packages installed separately by setup script
 full-local-huggingface-gpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",  # No torch - PyTorch installed separately
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",  # No torch - PyTorch installed separately
 ]
 
 # All features with optimized llama-cpp backend (CPU)
 full-local-llama-cpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
     # Note: llama-cpp-python[cpu] installed separately by setup script
 ]
 
 # All features with optimized llama-cpp backend + GPU acceleration
 full-local-llama-gpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
     # Note: llama-cpp-python with specific GPU backend installed by setup script
 ]
 
