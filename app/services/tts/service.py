@@ -443,9 +443,7 @@ class TTSService(BaseService):
         try:
             # Use absolute paths
             model_file_abs = (
-                os.path.abspath(model_file)
-                if not os.path.isabs(model_file)
-                else model_file
+                os.path.abspath(model_file) if not os.path.isabs(model_file) else model_file
             )
 
             cmd_list = [self.engine.piper_path, "-m", model_file_abs, "-f", output_wav_path]
@@ -453,9 +451,7 @@ class TTSService(BaseService):
             # Add config file if available
             if config_file:
                 config_file_abs = (
-                    os.path.abspath(config_file)
-                    if not os.path.isabs(config_file)
-                    else config_file
+                    os.path.abspath(config_file) if not os.path.isabs(config_file) else config_file
                 )
                 if os.path.exists(config_file_abs):
                     cmd_list.extend(["-c", config_file_abs])

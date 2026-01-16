@@ -392,4 +392,3 @@ class RegistryAggregator:
 
         age = datetime.utcnow() - last_seen
         return age < self._heartbeat_timeout * 2
-

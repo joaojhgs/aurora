@@ -727,7 +727,9 @@ class TranscriptionService(BaseService):
                     # Calculate new length
                     new_length = int(len(audio_int16) * sample_rate / actual_rate)
                     indices = np.linspace(0, len(audio_int16) - 1, new_length)
-                    audio_int16 = np.interp(indices, np.arange(len(audio_int16)), audio_int16).astype(np.int16)
+                    audio_int16 = np.interp(
+                        indices, np.arange(len(audio_int16)), audio_int16
+                    ).astype(np.int16)
 
                 audio_float32 = audio_int16.astype(np.float32) / 32768.0
                 return audio_float32

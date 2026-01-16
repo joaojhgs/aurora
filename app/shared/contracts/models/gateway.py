@@ -204,4 +204,3 @@ class ServiceDetailsResponse(IOModel):
     capabilities: list[str] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
     timestamp: str = ""
-
