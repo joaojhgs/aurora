@@ -455,12 +455,19 @@ class Supervisor(BaseService):
             cors_origins = cors_config.get("origins", ["*"])
             cors_allow_credentials = cors_config.get("allow_credentials", True)
 
+            # Get auth config
+            auth_config = config.get("auth", {})
+            auth_enabled = auth_config.get("enabled", False)
+            auth_api_keys = auth_config.get("api_keys", [])
+
             # Create FastAPI app
             self._gateway_app = create_gateway_app(
                 bus=self._bus,
                 registry=self._registry_aggregator,
                 cors_origins=cors_origins,
                 cors_allow_credentials=cors_allow_credentials,
+                auth_enabled=auth_enabled,
+                auth_api_keys=auth_api_keys,
                 request_timeout=request_timeout,
             )
 

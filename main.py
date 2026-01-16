@@ -54,6 +54,12 @@ async def main_async():
         await supervisor.start_services()
         log_info("✓ All services started!")
 
+        # Subscribe to config changes for dynamic gateway control
+        # Note: This is normally called in on_start(), but main.py calls start_services() directly
+        log_info(">>> Subscribing to config changes...")
+        supervisor._subscribe_to_config_changes()
+        log_info("✓ Config change subscription active")
+
         # Start OpenRecall if enabled
         if config_api.get("plugins.openrecall.activate"):
             log_info("Starting OpenRecall integration...")
@@ -96,10 +102,10 @@ def main_with_ui():
     """Main entry point for UI mode - runs supervisor in background thread."""
     import threading
 
+    from modules.ui.aurora_ui import AuroraUI
     from PyQt6.QtWidgets import QApplication
 
     from app.ui.bridge_service import UIBridge
-    from modules.ui.aurora_ui import AuroraUI
 
     log_info("Starting Aurora with UI...")
 
@@ -131,6 +137,11 @@ def main_with_ui():
 
             log_info("✓ All services started in supervisor thread")
 
+            # Subscribe to config changes for dynamic gateway control
+            # Note: This is normally called in on_start(), but main.py calls start_services() directly
+            supervisor._subscribe_to_config_changes()
+            log_info("✓ Config change subscription active")
+
             # Signal that we're ready
             supervisor_ready.set()
 
@@ -145,10 +156,10 @@ def main_with_ui():
         finally:
             # Cleanup
             if supervisor_loop:
-                try:
+                import contextlib
+
+                with contextlib.suppress(BaseException):
                     supervisor_loop.run_until_complete(supervisor.shutdown())
-                except BaseException:
-                    pass
                 supervisor_loop.close()
             log_info("Supervisor thread finished")
 

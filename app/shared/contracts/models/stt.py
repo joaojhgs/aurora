@@ -133,7 +133,7 @@ class STTAudioChunk(IOModel):
 
 class TranscribeAudioRequest(IOModel):
     """Request to transcribe complete audio (for external API).
-    
+
     Audio should be provided as base64-encoded data.
     """
 
@@ -157,7 +157,7 @@ class TranscribeAudioResponse(IOModel):
 
 class WakeWordDetectRequest(IOModel):
     """Request to check audio for wake word (for external API).
-    
+
     Audio should be provided as base64-encoded data.
     """
 
