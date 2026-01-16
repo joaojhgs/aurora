@@ -265,7 +265,6 @@ class TTSService(BaseService):
         except Exception as e:
             log_error(f"Error handling TTS request: {e}", exc_info=True)
             import uuid
-            return EmptyOutput()
 
             request_id = str(uuid.uuid4())
             await self.bus.publish(
@@ -274,6 +273,7 @@ class TTSService(BaseService):
                 event=True,
                 origin="internal",
             )
+            return EmptyOutput()
 
     @method_contract(
         method_id=TTSMethods.STOP,

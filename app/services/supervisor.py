@@ -373,10 +373,8 @@ class Supervisor(BaseService):
     async def on_start(self) -> None:
         """Service-specific startup logic."""
         # Start services (thread mode) or wait for them (process mode)
+        # Note: start_services() already calls _start_gateway() if enabled
         await self.start_services()
-
-        # Start gateway if enabled
-        await self._start_gateway()
 
         # Subscribe to config changes for dynamic gateway control
         self._subscribe_to_config_changes()
@@ -455,12 +453,14 @@ class Supervisor(BaseService):
             request_timeout = config.get("request_timeout_s", 30.0)
             cors_config = config.get("cors", {})
             cors_origins = cors_config.get("origins", ["*"])
+            cors_allow_credentials = cors_config.get("allow_credentials", True)
 
             # Create FastAPI app
             self._gateway_app = create_gateway_app(
                 bus=self._bus,
                 registry=self._registry_aggregator,
                 cors_origins=cors_origins,
+                cors_allow_credentials=cors_allow_credentials,
                 request_timeout=request_timeout,
             )
 

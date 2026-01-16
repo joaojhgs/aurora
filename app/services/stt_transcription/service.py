@@ -696,7 +696,7 @@ class TranscriptionService(BaseService):
 
         Args:
             audio_data: Raw or encoded audio bytes
-            format: Audio format ("raw", "wav", "mp3")
+            format: Audio format ("raw", "wav", or "mp3")
             sample_rate: Expected sample rate
             channels: Expected number of channels
 
@@ -740,6 +740,36 @@ class TranscriptionService(BaseService):
             if channels == 2:
                 audio_int16 = audio_int16.reshape(-1, 2).mean(axis=1).astype(np.int16)
 
+            audio_float32 = audio_int16.astype(np.float32) / 32768.0
+            return audio_float32
+
+        elif format == "mp3":
+            # Decode MP3 using pydub (requires ffmpeg)
+            try:
+                from pydub import AudioSegment
+            except ImportError:
+                raise ImportError(
+                    "pydub is required for MP3 support. Install with: pip install pydub"
+                ) from None
+
+            # Load MP3 from bytes
+            audio_segment = AudioSegment.from_mp3(io.BytesIO(audio_data))
+
+            # Convert to mono if stereo (transcription typically works better with mono)
+            if audio_segment.channels == 2:
+                audio_segment = audio_segment.set_channels(1)
+
+            # Resample to target sample rate if needed
+            if audio_segment.frame_rate != sample_rate:
+                audio_segment = audio_segment.set_frame_rate(sample_rate)
+
+            # Convert to raw PCM 16-bit
+            raw_audio = audio_segment.raw_data
+
+            # Convert to numpy array
+            audio_int16 = np.frombuffer(raw_audio, dtype=np.int16)
+
+            # Convert to float32 normalized to [-1.0, 1.0]
             audio_float32 = audio_int16.astype(np.float32) / 32768.0
             return audio_float32
 
