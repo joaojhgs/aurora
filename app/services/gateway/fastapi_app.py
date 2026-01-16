@@ -24,6 +24,8 @@ def create_gateway_app(
     registry: RegistryAggregator,
     cors_origins: list[str] | None = None,
     cors_allow_credentials: bool = True,
+    auth_enabled: bool = False,
+    auth_api_keys: list[str] | None = None,
     title: str = "Aurora Gateway API",
     version: str = "1.0.0",
     request_timeout: float = 30.0,
@@ -35,6 +37,8 @@ def create_gateway_app(
         registry: Registry aggregator instance
         cors_origins: List of allowed CORS origins (default: ["*"])
         cors_allow_credentials: Whether to allow credentials in CORS (default: True)
+        auth_enabled: Whether to enable API key authentication (default: False)
+        auth_api_keys: List of valid API keys (default: [])
         title: API title for OpenAPI docs
         version: API version
         request_timeout: Default timeout for service requests
@@ -47,9 +51,7 @@ def create_gateway_app(
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.responses import JSONResponse
     except ImportError as e:
-        log_error(
-            f"FastAPI not installed. Install with: pip install 'aurora[gateway]'. Error: {e}"
-        )
+        log_error(f"FastAPI not installed. Install with: pip install 'aurora[gateway]'. Error: {e}")
         raise
 
     from app.services.gateway.route_generator import RouteGenerator
@@ -90,6 +92,18 @@ def create_gateway_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add authentication middleware if enabled
+    if auth_enabled:
+        from app.services.gateway.auth import GatewayAuth, create_auth_middleware
+
+        gateway_auth = GatewayAuth(
+            enabled=True,
+            api_keys=auth_api_keys or [],
+        )
+        auth_middleware = create_auth_middleware(gateway_auth)
+        app.middleware("http")(auth_middleware)
+        log_info("API key authentication enabled")
 
     # Create route generator
     route_generator = RouteGenerator(
@@ -295,4 +309,3 @@ def create_gateway_app(
         )
 
     return app
-

@@ -17,13 +17,9 @@ from app.messaging.local_bus import LocalBus
 from app.shared.contracts.models.gateway import (
     GatewayMethods,
     GatewayModule,
-    GetRegistryResponse,
-    GetServicesResponse,
     MethodInfo,
     ServiceAnnouncement,
     ServiceDeparture,
-    ServiceHeartbeat,
-    ServiceInfo,
 )
 from app.shared.messaging.bus_init import set_bus as set_shared_bus
 
@@ -288,4 +284,3 @@ class TestFastAPIApp:
             assert response.status_code == 200
             data = response.json()
             assert "services" in data
-

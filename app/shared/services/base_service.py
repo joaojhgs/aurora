@@ -12,7 +12,6 @@ It provides:
 from __future__ import annotations
 
 import contextlib
-import os
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
