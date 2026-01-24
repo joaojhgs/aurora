@@ -41,18 +41,32 @@ class MQTTSignaling:
         return f"{base}/{to_peer}" if to_peer else base
 
     async def connect(self) -> None:
-        if self._username:
-            self._client.username_pw_set(self._username, self._password or "")
-
         def on_connect(client, userdata, flags, rc, props=None):
-            self._loop.call_soon_threadsafe(self._connected.set)
-
-        self._client.on_connect = on_connect
-        self._client.on_message = self._on_message
+            if rc == 0:
+                self._loop.call_soon_threadsafe(self._connected.set)
 
         for url in self._brokers:
             try:
-                if url.startswith("wss://") or url.startswith("ws://"):
+                # Determine transport based on URL scheme
+                transport = "websockets" if url.startswith(("wss://", "ws://")) else "tcp"
+
+                # Re-initialize client with correct transport
+                try:
+                    from paho.mqtt.enums import CallbackAPIVersion
+
+                    self._client = mqtt.Client(
+                        CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5, transport=transport
+                    )
+                except (ImportError, AttributeError):
+                    self._client = mqtt.Client(protocol=mqtt.MQTTv5, transport=transport)
+
+                if self._username:
+                    self._client.username_pw_set(self._username, self._password or "")
+
+                self._client.on_connect = on_connect
+                self._client.on_message = self._on_message
+
+                if transport == "websockets":
                     self._client.connect_uri(url)
                 else:
                     clean_url = url.replace("mqtt://", "")
