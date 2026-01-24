@@ -1,9 +1,11 @@
 import json
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+
+from app.messaging.bus import QueryResult
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
-from app.messaging.bus import QueryResult
 
 
 @pytest.fixture
