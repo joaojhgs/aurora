@@ -67,7 +67,17 @@ class MQTTSignaling:
                 self._client.on_message = self._on_message
 
                 if transport == "websockets":
-                    self._client.connect(host=url, port=0)  # Paho will parse URL for WSS
+                    # Paho 2.0+ requires valid port for connect() even with URL, or use connect_uri if available
+                    # Since connect_uri is missing, we must parse manually or use default ports
+                    parsed_url = url.replace("wss://", "").replace("ws://", "")
+                    if ":" in parsed_url:
+                        host, port_str = parsed_url.split(":")
+                        port = int(port_str.split("/")[0])  # Remove path if any
+                    else:
+                        host = parsed_url.split("/")[0]
+                        port = 443 if url.startswith("wss://") else 80
+
+                    self._client.connect(host=host, port=port, keepalive=30)
                 else:
                     clean_url = url.replace("mqtt://", "")
                     if ":" in clean_url:
