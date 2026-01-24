@@ -32,60 +32,55 @@ class GatewayService(BaseService):
         self._gateway_server = None
         self._gateway_task = None
         self._registry_aggregator = None
+        self._rtc_client = None
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
         self._subscribe_to_config_changes()
         await self._start_gateway()
+        await self._start_webrtc()
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
+        await self._stop_webrtc()
         await self._stop_gateway()
+        # Ensure registry aggregator is stopped if it was created
+        if self._registry_aggregator:
+            await self._registry_aggregator.stop()
+            self._registry_aggregator = None
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration."""
         if config_section is None or config_section == "gateway":
             await self._reload_gateway_config()
 
-    async def _get_gateway_config(self) -> dict[str, Any]:
+    async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
 
         Returns:
-            Gateway configuration dictionary
+            Gateway configuration object
         """
         try:
+            from app.services.gateway.config import Settings
             from app.shared.config.interface import ConfigAPI
 
             config_api = ConfigAPI()
-            gateway_config = await config_api.aget_config(section="gateway")
-
-            if not gateway_config:
-                return {
-                    "enabled": False,
-                    "host": "0.0.0.0",
-                    "port": 8000,
-                    "request_timeout_s": 30.0,
-                    "cors": {"origins": ["*"], "allow_credentials": True},
-                    "auth": {"enabled": False, "api_keys": []},
-                }
-
-            return gateway_config
+            all_config = await config_api.aget_config()
+            return Settings.model_validate(all_config)
 
         except Exception as e:
             log_warning(f"Failed to get gateway config, using defaults: {e}")
-            return {
-                "enabled": False,
-                "host": "0.0.0.0",
-                "port": 8000,
-                "request_timeout_s": 30.0,
-            }
+            from app.services.gateway.config import Settings
+
+            return Settings()
 
     async def _start_gateway(self) -> None:
         """Start the FastAPI gateway if enabled."""
-        config = await self._get_gateway_config()
+        settings = await self._get_gateway_config()
+        config = settings.api
 
-        if not config.get("enabled", False):
+        if not config.enabled:
             log_info("Gateway disabled in configuration")
             return
 
@@ -93,21 +88,20 @@ class GatewayService(BaseService):
             from app.services.gateway.fastapi_app import create_gateway_app
             from app.services.gateway.registry_aggregator import RegistryAggregator
 
-            self._registry_aggregator = RegistryAggregator(
-                bus=self.bus,
-                mode=self._mode,
-            )
+            if not self._registry_aggregator:
+                self._registry_aggregator = RegistryAggregator(
+                    bus=self.bus,
+                    mode=self._mode,
+                )
 
-            host = config.get("host", "0.0.0.0")
-            port = config.get("port", 8000)
-            request_timeout = config.get("request_timeout_s", 30.0)
-            cors_config = config.get("cors", {})
-            cors_origins = cors_config.get("origins", ["*"])
-            cors_allow_credentials = cors_config.get("allow_credentials", True)
+            host = config.host
+            port = config.port
+            request_timeout = 30.0
+            cors_origins = config.cors_origins
+            cors_allow_credentials = True
 
-            auth_config = config.get("auth", {})
-            auth_enabled = auth_config.get("enabled", False)
-            auth_api_keys = auth_config.get("api_keys", [])
+            auth_enabled = False
+            auth_api_keys = []
 
             self._gateway_app = create_gateway_app(
                 bus=self.bus,
@@ -144,12 +138,57 @@ class GatewayService(BaseService):
 
     async def _run_gateway_server(self) -> None:
         """Run the uvicorn server (background task)."""
+        server = self._gateway_server
+        if not server:
+            return
         try:
-            await self._gateway_server.serve()
+            await server.serve()
         except asyncio.CancelledError:
             log_debug("Gateway server task cancelled")
         except Exception as e:
             log_error(f"Gateway server error: {e}", exc_info=True)
+
+    async def _start_webrtc(self) -> None:
+        """Start the WebRTC client if enabled."""
+        try:
+            settings = await self._get_gateway_config()
+
+            if not settings.webrtc.enabled:
+                log_info("WebRTC disabled in configuration")
+                return
+
+            if not self._registry_aggregator:
+                from app.services.gateway.registry_aggregator import RegistryAggregator
+
+                self._registry_aggregator = RegistryAggregator(
+                    bus=self.bus,
+                    mode=self._mode,
+                )
+
+            await self._registry_aggregator.start()
+
+            from app.services.gateway.webrtc.rtc_client import RTCClient
+
+            self._rtc_client = RTCClient(
+                settings=settings,
+                bus=self.bus,
+                registry=self._registry_aggregator,
+            )
+            await self._rtc_client.start()
+            log_info("WebRTC client started")
+
+        except ImportError as e:
+            log_warning(f"WebRTC dependencies not installed: {e}")
+        except Exception as e:
+            log_error(f"Failed to start WebRTC client: {e}", exc_info=True)
+
+    async def _stop_webrtc(self) -> None:
+        """Stop the WebRTC client."""
+        if self._rtc_client:
+            log_info("Stopping WebRTC client...")
+            await self._rtc_client.close()
+            self._rtc_client = None
+            log_info("WebRTC client stopped")
 
     async def _stop_gateway(self) -> None:
         """Stop the FastAPI gateway."""
@@ -179,19 +218,23 @@ class GatewayService(BaseService):
     async def _reload_gateway_config(self) -> None:
         """Reload gateway configuration dynamically."""
         try:
-            config = await self._get_gateway_config()
-            should_be_enabled = config.get("enabled", False)
+            settings = await self._get_gateway_config()
 
-            if should_be_enabled and not self._gateway_enabled:
+            if settings.api.enabled and not self._gateway_enabled:
                 log_info("Gateway enabled via config - starting gateway")
                 await self._start_gateway()
-
-            elif not should_be_enabled and self._gateway_enabled:
+            elif not settings.api.enabled and self._gateway_enabled:
                 log_info("Gateway disabled via config - stopping gateway")
                 await self._stop_gateway()
 
-            elif self._gateway_enabled:
-                log_info("Gateway config reloaded (host/port changes require restart)")
+            if settings.webrtc.enabled and not self._rtc_client:
+                log_info("WebRTC enabled via config - starting WebRTC client")
+                await self._start_webrtc()
+            elif not settings.webrtc.enabled and self._rtc_client:
+                log_info("WebRTC disabled via config - stopping WebRTC client")
+                await self._stop_webrtc()
+
+            log_info("Gateway config reloaded")
 
         except Exception as e:
             log_error(f"Error reloading gateway config: {e}")
