@@ -9,6 +9,7 @@ from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSession
 from aiortc.sdp import candidate_from_sdp
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
+
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
 from .rpc import RPCHandler
 from .signaling.mqtt_client import MQTTSignaling
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
     from app.services.gateway.config import Settings
     from app.services.gateway.registry_aggregator import RegistryAggregator
+
     from .signaling.base import SignalingAdapter
 
 
