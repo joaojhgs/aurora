@@ -82,11 +82,9 @@ class MQTTSignaling:
                 await asyncio.wait_for(self._connected.wait(), timeout=10)
                 return
             except Exception as e:
-                import logging
+                from app.helpers.aurora_logger import log_warning
 
-                logging.getLogger("aurora.gateway.webrtc").warning(
-                    f"Failed to connect to {url}: {e}"
-                )
+                log_warning(f"Failed to connect to {url}: {e}", logger_name="aurora.gateway.webrtc")
                 with contextlib.suppress(Exception):
                     self._client.loop_stop()
                 continue
