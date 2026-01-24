@@ -71,8 +71,7 @@ def _resolve_refs(schema: dict[str, Any], defs: dict[str, Any] | None = None) ->
             result[key] = _resolve_refs(value, defs)
         elif isinstance(value, list):
             result[key] = [
-                _resolve_refs(item, defs) if isinstance(item, dict) else item
-                for item in value
+                _resolve_refs(item, defs) if isinstance(item, dict) else item for item in value
             ]
         else:
             result[key] = value
@@ -158,10 +157,7 @@ def _create_model_from_schema(
         prop_type = prop_schema.get("type")
 
         # If no type specified (e.g., `Any` in Pydantic), use Any
-        if prop_type is None:
-            python_type = Any
-        else:
-            python_type = type_mapping.get(prop_type, Any)
+        python_type = Any if prop_type is None else type_mapping.get(prop_type, Any)
 
         # Handle optional fields
         if prop_name in required:
@@ -312,9 +308,7 @@ class RouteGenerator:
         method_name = method_info.name
         return f"/api/{module_name}/{method_name}"
 
-    def _create_handler(
-        self, module_name: str, method_info: MethodInfo
-    ) -> Callable:
+    def _create_handler(self, module_name: str, method_info: MethodInfo) -> Callable:
         """Create a route handler for a method.
 
         Args:
@@ -447,8 +441,24 @@ class RouteGenerator:
         def create_typed_handler(
             inner_handler: Callable,
             req_model: type[BaseModel],
+            scopes: list[str],
         ) -> Callable:
-            async def typed_handler(request_body: req_model) -> dict[str, Any]:  # type: ignore[valid-type]
+            from fastapi import Security
+
+            from app.services.gateway.auth import check_auth_enabled
+
+            # Use closure default value to bind scopes
+            # This avoids the "Do not perform function call `Security` in argument defaults" warning
+            # by creating a new dependency per route
+            def auth_dependency(
+                _auth: Any = Security(check_auth_enabled, scopes=scopes),
+            ) -> Any:
+                return _auth
+
+            async def typed_handler(
+                request_body: req_model,
+                _auth: Any = Security(auth_dependency),
+            ) -> dict[str, Any]:  # type: ignore[valid-type]
                 from fastapi.responses import JSONResponse
 
                 # Use exclude_unset=True to only send fields that were explicitly
@@ -478,7 +488,12 @@ class RouteGenerator:
             }
             return typed_handler
 
-        wrapped_handler = create_typed_handler(handler, request_model_cls)
+        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
+        scopes = [method_id]
+        if method_info.required_perms:
+            scopes.extend(method_info.required_perms)
+
+        wrapped_handler = create_typed_handler(handler, request_model_cls, scopes)
 
         # Copy metadata to wrapper
         wrapped_handler.__name__ = handler.__name__
@@ -498,9 +513,9 @@ class RouteGenerator:
 
         # Build OpenAPI response schema from the output schema
         # Strip additionalProperties to avoid "additionalProp1" in Swagger UI
-        response_schema = _strip_additional_properties(
-            method_info.output_schema
-        ) or {"type": "object"}
+        response_schema = _strip_additional_properties(method_info.output_schema) or {
+            "type": "object"
+        }
         responses = {
             200: {
                 "description": "Successful response",
@@ -554,4 +569,3 @@ class RouteGenerator:
             Dictionary mapping service names to their routes
         """
         return dict(self._service_routes)
-
