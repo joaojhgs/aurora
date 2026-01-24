@@ -10,6 +10,8 @@ class APISettings(BaseModel):
     cors_origins: list[str] = ["*"]
     docs: bool = True
     token_secret: str = "change-me"
+    auth_enabled: bool = False
+    api_keys: list[str] = []
 
 
 class WebRTCSettings(BaseModel):
