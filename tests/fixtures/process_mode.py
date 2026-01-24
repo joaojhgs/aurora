@@ -5,7 +5,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 import redis

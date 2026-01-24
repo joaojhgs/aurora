@@ -1,5 +1,4 @@
 from langchain_core.tools import tool
-
 from modules.openrecall.openrecall.database import search_entries
 
 

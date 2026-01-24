@@ -61,7 +61,7 @@ async def main_async():
         log_info("✓ Config change subscription active")
 
         # Start OpenRecall if enabled
-        if config_api.get("plugins.openrecall.activate"):
+        if await config_api.aget("plugins.openrecall.activate", False):
             log_info("Starting OpenRecall integration...")
             from threading import Thread
 

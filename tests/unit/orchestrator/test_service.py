@@ -158,8 +158,8 @@ class TestOrchestratorServiceUserInputHandling:
     @pytest.mark.asyncio
     async def test_on_user_input(self, orchestrator_service):
         """Test handling UI user input."""
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
 
         # OrchestratorProcessRequest uses 'text' field, not 'message', and 'session_id' directly
         request = OrchestratorProcessRequest(text="Test command", session_id="ui-session")
@@ -176,8 +176,9 @@ class TestOrchestratorServiceUserInputHandling:
     @pytest.mark.asyncio
     async def test_on_user_input_with_invalid_payload(self, orchestrator_service):
         """Test handling user input with invalid payload."""
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
         from pydantic import ValidationError
+
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
 
         # Invalid request (missing required field) - should be caught by Pydantic validation
         with pytest.raises(ValidationError):
@@ -187,8 +188,8 @@ class TestOrchestratorServiceUserInputHandling:
     @pytest.mark.asyncio
     async def test_on_external_input(self, orchestrator_service):
         """Test handling external user input."""
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
 
         request = OrchestratorProcessRequest(text="External command", session_id="external-session")
 
@@ -204,8 +205,8 @@ class TestOrchestratorServiceUserInputHandling:
     @pytest.mark.asyncio
     async def test_on_external_input_with_error(self, orchestrator_service):
         """Test external input handling with processing error."""
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
 
         request = OrchestratorProcessRequest(text="External command", session_id="external-session")
 
@@ -227,8 +228,8 @@ class TestOrchestratorServiceToolHandling:
     @pytest.mark.asyncio
     async def test_on_tool_result_success(self, orchestrator_service):
         """Test handling successful tool result."""
-        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
 
         request = OrchestratorToolResultRequest(request_id="test-123", result={"data": "success"}, success=True)
 
@@ -240,8 +241,8 @@ class TestOrchestratorServiceToolHandling:
     @pytest.mark.asyncio
     async def test_on_tool_result_failure(self, orchestrator_service):
         """Test handling failed tool result."""
-        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
 
         # Create a failed tool result request
         request = OrchestratorToolResultRequest(
@@ -256,8 +257,9 @@ class TestOrchestratorServiceToolHandling:
     @pytest.mark.asyncio
     async def test_on_tool_result_with_invalid_payload(self, orchestrator_service):
         """Test tool result handling with invalid payload."""
-        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
         from pydantic import ValidationError
+
+        from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
 
         # Invalid request - should be caught by Pydantic validation
         with pytest.raises(ValidationError):

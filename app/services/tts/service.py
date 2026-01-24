@@ -43,6 +43,7 @@ from app.shared.messaging.models.tts_models import (
     TTSStarted,
     TTSStopped,
 )
+from app.shared.path_utils import resolve_path
 from app.shared.services.base_service import BaseService
 
 config_api = ConfigAPI()
@@ -57,12 +58,6 @@ def reduce_volume_except_current():
 def restore_volume_except_current():
     """Placeholder for restoring system volume after TTS."""
     pass
-
-
-# Calculate project root: go up from app/services/tts/service.py -> app/services/tts -> app/services -> app -> project root
-file_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
 
 
 # Service implementation
@@ -93,36 +88,28 @@ class TTSService(BaseService):
     async def _get_model_paths(self):
         """Get model paths from env vars or config."""
         # Check environment variables first
-        model_file = os.getenv("AURORA_TTS_MODEL_FILE_PATH")
-        config_file = os.getenv("AURORA_TTS_MODEL_CONFIG_FILE_PATH")
+        model_file_env = os.getenv("AURORA_TTS_MODEL_FILE_PATH")
+        config_file_env = os.getenv("AURORA_TTS_MODEL_CONFIG_FILE_PATH")
 
         # Fall back to config if env vars not set
-        if model_file is None:
+        if model_file_env is None:
             config_path = await config_api.aget(
-                "general.text_to_speech.model_file_path", "/voice_models/en_US-lessac-medium.onnx"
+                "general.text_to_speech.model_file_path", "voice_models/en_US-lessac-medium.onnx"
             )
-            # Ensure absolute path
-            if os.path.isabs(config_path):
-                model_file = config_path
-            else:
-                model_file = os.path.join(file_root, config_path.lstrip("/"))
-        if config_file is None:
+            model_file = resolve_path(config_path)
+        else:
+            model_file = resolve_path(model_file_env)
+
+        if config_file_env is None:
             config_path = await config_api.aget(
                 "general.text_to_speech.model_config_file_path",
-                "/voice_models/en_US-lessac-medium.onnx.txt",
+                "voice_models/en_US-lessac-medium.onnx.txt",
             )
-            # Ensure absolute path
-            if os.path.isabs(config_path):
-                config_file = config_path
-            else:
-                config_file = os.path.join(file_root, config_path.lstrip("/"))
+            config_file = resolve_path(config_path) if config_path else None
+        else:
+            config_file = resolve_path(config_file_env) if config_file_env else None
 
-        # Normalize paths to absolute
-        model_file = os.path.abspath(model_file)
-        if config_file:
-            config_file = os.path.abspath(config_file)
-
-        return model_file, config_file
+        return str(model_file), str(config_file) if config_file else None
 
     async def _initialize_engine(self) -> None:
         """Initialize the RealtimeTTS engine with Piper voice."""

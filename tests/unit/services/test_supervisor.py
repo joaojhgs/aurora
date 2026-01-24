@@ -128,7 +128,7 @@ class TestSupervisorServiceLifecycle:
         ):
             # Configure all mocks
             for mock_service in [mock_db, mock_tooling, mock_scheduler, mock_tts,
-                                 mock_orchestrator, mock_config, mock_wakeword, 
+                                 mock_orchestrator, mock_config, mock_wakeword,
                                  mock_transcription, mock_coordinator]:
                 mock_instance = Mock()
                 mock_instance.start = AsyncMock()

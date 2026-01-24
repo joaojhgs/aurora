@@ -50,7 +50,6 @@ from .orchestrator import (
 from .stt import (
     STTControl,
     STTError,
-    STTPartialResult,
     STTTranscriptionRequest,
     STTTranscriptionResult,
 )
@@ -74,7 +73,6 @@ __all__ = [
     # STT
     "STTTranscriptionRequest",
     "STTTranscriptionResult",
-    "STTPartialResult",
     "STTControl",
     "STTError",
     # Config
