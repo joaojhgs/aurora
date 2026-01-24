@@ -84,7 +84,7 @@ class MQTTSignaling:
             except Exception as e:
                 from app.helpers.aurora_logger import log_warning
 
-                log_warning(f"Failed to connect to {url}: {e}", logger_name="aurora.gateway.webrtc")
+                log_warning(f"Failed to connect to {url}: {e}")
                 with contextlib.suppress(Exception):
                     self._client.loop_stop()
                 continue
