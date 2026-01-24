@@ -33,10 +33,12 @@ class GatewayService(BaseService):
         self._gateway_task = None
         self._registry_aggregator = None
         self._rtc_client = None
+        self._auth_service = None
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
+        await self._init_auth_service()
         self._subscribe_to_config_changes()
         await self._start_gateway()
         await self._start_webrtc()
@@ -54,6 +56,19 @@ class GatewayService(BaseService):
         """Reload service configuration."""
         if config_section is None or config_section == "gateway":
             await self._reload_gateway_config()
+
+    async def _init_auth_service(self) -> None:
+        """Initialize authentication service."""
+        try:
+            from app.services.gateway.auth_service import AuthService
+            from app.services.gateway.dependencies import set_auth_service
+
+            self._auth_service = AuthService()
+            await self._auth_service.initialize()
+            set_auth_service(self._auth_service)
+            log_info("Gateway Auth Service initialized")
+        except Exception as e:
+            log_error(f"Failed to initialize Auth Service: {e}")
 
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
@@ -100,8 +115,8 @@ class GatewayService(BaseService):
             cors_origins = config.cors_origins
             cors_allow_credentials = True
 
-            auth_enabled = False
-            auth_api_keys = []
+            auth_enabled = config.auth_enabled
+            auth_api_keys = config.api_keys
 
             self._gateway_app = create_gateway_app(
                 bus=self.bus,
@@ -110,6 +125,7 @@ class GatewayService(BaseService):
                 cors_allow_credentials=cors_allow_credentials,
                 auth_enabled=auth_enabled,
                 auth_api_keys=auth_api_keys,
+                auth_service=self._auth_service,
                 request_timeout=request_timeout,
             )
 
