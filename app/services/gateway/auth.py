@@ -11,7 +11,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.helpers.aurora_logger import log_debug, log_warning
+from app.helpers.aurora_logger import log_debug, log_info, log_warning
+from app.services.gateway.auth_service import AuthService
+from app.services.gateway.dependencies import get_gateway_auth
 
 
 class GatewayAuth:
@@ -19,11 +21,14 @@ class GatewayAuth:
 
     Supports:
     - API key authentication via X-API-Key header
+    - JWT token authentication via Authorization header
+    - Permission checking against method contracts
     - Bypass for health endpoints
     """
 
     def __init__(
         self,
+        auth_service: AuthService | None = None,
         enabled: bool = False,
         api_keys: list[str] | None = None,
         bypass_paths: list[str] | None = None,
@@ -31,13 +36,17 @@ class GatewayAuth:
         """Initialize authentication handler.
 
         Args:
+            auth_service: AuthService instance for token validation
             enabled: Whether authentication is enabled
             api_keys: List of valid API keys
             bypass_paths: Paths that don't require authentication
         """
+        self._auth_service = auth_service
         self._enabled = enabled
         self._api_keys = set(api_keys or [])
-        self._bypass_paths = set(bypass_paths or ["/api/health", "/api/docs", "/api/redoc", "/api/openapi.json"])
+        self._bypass_paths = set(
+            bypass_paths or ["/api/health", "/api/docs", "/api/redoc", "/api/openapi.json"]
+        )
 
     def is_enabled(self) -> bool:
         """Check if authentication is enabled."""
@@ -59,6 +68,35 @@ class GatewayAuth:
             return False
 
         return api_key in self._api_keys
+
+    async def authenticate_token(self, token_str: str) -> Any | None:
+        """Authenticate a token using AuthService.
+
+        Args:
+            token_str: The token string to validate
+
+        Returns:
+            Token object if valid, None otherwise
+        """
+        if not self._auth_service:
+            return None
+        return await self._auth_service.authenticate_token(token_str)
+
+    def verify_permissions(self, token: Any, required_scopes: list[str]) -> bool:
+        """Verify that a token has the required permissions."""
+        if not token:
+            return False
+
+        user_role = getattr(token, "role", None)
+        token_scopes = getattr(token, "scopes", [])
+
+        is_admin = user_role == "admin"
+        has_root_scope = "*" in token_scopes or "all" in token_scopes
+
+        if is_admin or has_root_scope:
+            return True
+
+        return any(scope in token_scopes for scope in required_scopes)
 
     def should_bypass(self, path: str) -> bool:
         """Check if a path should bypass authentication.
@@ -99,43 +137,71 @@ class GatewayAuth:
 
 
 def create_auth_middleware(auth: GatewayAuth) -> Callable:
-    """Create FastAPI middleware for authentication.
-
-    Args:
-        auth: GatewayAuth instance
-
-    Returns:
-        Middleware function
-    """
+    """Create FastAPI middleware for authentication."""
 
     async def auth_middleware(request: Any, call_next: Callable) -> Any:
         """Authentication middleware."""
-        from fastapi import HTTPException
         from fastapi.responses import JSONResponse
 
-        # Skip if auth disabled
-        if not auth.is_enabled():
+        if not auth.is_enabled() or auth.should_bypass(request.url.path):
             return await call_next(request)
 
-        # Skip bypass paths
-        if auth.should_bypass(request.url.path):
-            return await call_next(request)
-
-        # Check for API key
         api_key = request.headers.get("X-API-Key")
+        if auth.validate_api_key(api_key):
+            return await call_next(request)
 
-        if not auth.validate_api_key(api_key):
-            log_warning(f"Authentication failed for path: {request.url.path}")
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": "Invalid or missing API key",
-                    "status_code": 401,
-                },
-                headers={"WWW-Authenticate": "ApiKey"},
-            )
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token_str = auth_header.split(" ")[1]
+            token = await auth.authenticate_token(token_str)
+            if token:
+                request.state.token = token
+                return await call_next(request)
 
-        return await call_next(request)
+        log_warning(f"Authentication failed for path: {request.url.path}")
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "Invalid or missing authentication",
+                "status_code": 401,
+            },
+            headers={"WWW-Authenticate": "Bearer, ApiKey"},
+        )
 
     return auth_middleware
 
+
+async def check_auth_enabled(
+    request: Any,
+    auth: GatewayAuth = None,  # type: ignore
+) -> Any:
+    """Dependency to check if auth is enabled and valid."""
+    from fastapi import Depends, HTTPException
+
+    if auth is None:
+        auth = get_gateway_auth()
+
+    if not auth.is_enabled():
+        return None
+
+    if auth.should_bypass(request.url.path):
+        return None
+
+    # Check if token already in state from middleware
+    if hasattr(request.state, "token"):
+        return request.state.token
+
+    # Re-verify if needed (though middleware should have handled it)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token_str = auth_header.split(" ")[1]
+        token = await auth.authenticate_token(token_str)
+        if token:
+            return token
+
+    # API key check as fallback
+    api_key = request.headers.get("X-API-Key")
+    if auth.validate_api_key(api_key):
+        return "api_key"
+
+    raise HTTPException(status_code=401, detail="Authentication required")
