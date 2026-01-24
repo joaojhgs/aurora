@@ -84,6 +84,9 @@ class MQTTSignaling:
                         if len(parts) > 1:
                             path = "/" + parts[1]
 
+                    if url.startswith("wss://"):
+                        self._client.tls_set()
+
                     self._client.ws_set_options(path=path)
                     self._client.connect(host=host, port=port, keepalive=30)
                 else:
