@@ -81,11 +81,18 @@ class MQTTSignaling:
                 self._client.loop_start()
                 await asyncio.wait_for(self._connected.wait(), timeout=10)
                 return
-            except Exception:
+            except Exception as e:
+                import logging
+
+                logging.getLogger("aurora.gateway.webrtc").warning(
+                    f"Failed to connect to {url}: {e}"
+                )
                 with contextlib.suppress(Exception):
                     self._client.loop_stop()
                 continue
-        raise RuntimeError("MQTTSignaling: failed to connect to any broker")
+        raise RuntimeError(
+            f"MQTTSignaling: failed to connect to any of the {len(self._brokers)} brokers: {self._brokers}"
+        )
 
     async def join_room(self, app_id: str, room: str, peer_id: str) -> None:
         self._app_id = app_id
