@@ -67,7 +67,7 @@ class MQTTSignaling:
                 self._client.on_message = self._on_message
 
                 if transport == "websockets":
-                    self._client.connect_uri(url)
+                    self._client.connect(host=url, port=0)  # Paho will parse URL for WSS
                 else:
                     clean_url = url.replace("mqtt://", "")
                     if ":" in clean_url:
