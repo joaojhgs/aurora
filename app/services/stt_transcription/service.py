@@ -31,6 +31,7 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import (
     AudioChunk,
+    AudioEncoding,
     AudioFormat,
     AudioTopics,
     Envelope,
@@ -632,11 +633,30 @@ class TranscriptionService(BaseService):
             EmptyOutput on success
         """
         # Convert STT format to internal AudioFormat
+        # Derive bits_per_sample and encoding from format string
+        format_lower = chunk.format.lower()
+        if "16" in format_lower or format_lower == "pcm_s16le":
+            bits_per_sample = 16
+            encoding = AudioEncoding.PCM_S16LE
+        elif "24" in format_lower or format_lower == "pcm_s24le":
+            bits_per_sample = 24
+            encoding = AudioEncoding.PCM_S24LE
+        elif "32" in format_lower or format_lower == "pcm_s32le":
+            bits_per_sample = 32
+            encoding = AudioEncoding.PCM_S32LE
+        elif format_lower == "pcm_f32le":
+            bits_per_sample = 32
+            encoding = AudioEncoding.PCM_F32LE
+        else:
+            # Default to 16-bit PCM
+            bits_per_sample = 16
+            encoding = AudioEncoding.PCM_S16LE
+
         audio_format = AudioFormat(
             sample_rate=chunk.sample_rate,
             channels=chunk.channels,
-            sample_width=chunk.sample_width,
-            codec=chunk.format,
+            encoding=encoding,
+            bits_per_sample=bits_per_sample,
         )
 
         await self._process_audio_data(

@@ -329,6 +329,11 @@ async def _initialize_llm() -> None:
                     model_path = None
 
             if model_path:
+                # Resolve model path relative to project root
+                from app.shared.path_utils import resolve_path
+
+                resolved_model_path = resolve_path(model_path)
+
                 # Prepare options for ChatLlamaCpp (ensure disable_streaming is set)
                 try:
                     llm_config = await config_api.aget_config("llm")
@@ -336,16 +341,16 @@ async def _initialize_llm() -> None:
                     llama_config = local_config.get("llama_cpp", {})
                     llama_options = llama_config.get("options", {}) if llama_config else {}
                     llama_init_options = llama_options.copy()
-                    llama_init_options["model_path"] = model_path  # Use env var or config value
+                    llama_init_options["model_path"] = str(resolved_model_path)  # Use resolved path
                     llama_init_options["disable_streaming"] = True
 
-                    log_info(f"Attempting to initialize Llama.cpp LLM with model: {model_path}")
+                    log_info(f"Attempting to initialize Llama.cpp LLM with model: {resolved_model_path}")
                     log_debug(
                         f"Llama.cpp initialization options: {list(llama_init_options.keys())}"
                     )
 
                     llm = ChatLlamaCpp(**llama_init_options)
-                    log_info(f"Successfully initialized Llama.cpp LLM with model: {model_path}")
+                    log_info(f"Successfully initialized Llama.cpp LLM with model: {resolved_model_path}")
                 except Exception as e:
                     log_error(f"Failed to initialize Llama.cpp LLM: {e}", exc_info=True)
                     llm = None

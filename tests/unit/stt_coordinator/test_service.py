@@ -6,16 +6,21 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from app.messaging import TranscriptionResult, TranscriptionType, TranscriptionControl
-from app.messaging import Envelope, MessageBus
+from app.messaging import (
+    Envelope,
+    MessageBus,
+    TranscriptionControl,
+    TranscriptionResult,
+    TranscriptionType,
+)
 from app.services.stt_coordinator.service import STTCoordinatorService
+from app.services.stt_wakeword.messages import WakeWordBackendType, WakeWordDetected
 from app.shared.contracts.models.stt import (
     STTCoordinatorControl,
     STTMethods,
     TranscriptionMethods,
     WakeWordMethods,
 )
-from app.services.stt_wakeword.messages import WakeWordBackendType, WakeWordDetected
 from app.shared.messaging.models.stt_coordinator_models import STTState
 
 # Topic aliases for backwards compatibility
@@ -80,7 +85,7 @@ def service(mock_bus):
         mock_stream.is_stopped.return_value = True
         mock_pa.open.return_value = mock_stream
         mock_pa.get_default_input_device_info.return_value = {"index": 0, "name": "Mock Mic"}
-        
+
         svc = STTCoordinatorService()
         yield svc
 

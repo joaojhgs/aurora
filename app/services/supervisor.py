@@ -178,14 +178,24 @@ class Supervisor(BaseService):
             log_error(f"Failed to start ConfigService: {e}", exc_info=True)
             raise
 
-        # Start foundation services first (DB, Tooling)
+        # Start DB service first (Tooling depends on DB for RAG sync)
         try:
-            log_info("Starting foundation services (DB, Tooling)...")
-            await asyncio.gather(db_service.start(), tooling_service.start())
-            self.services.extend([db_service, tooling_service])
-            log_info("Foundation services started")
+            log_info("Starting DB service...")
+            await db_service.start()
+            self.services.append(db_service)
+            log_info("✓ DB service started")
         except Exception as e:
-            log_error(f"Failed to start foundation services: {e}", exc_info=True)
+            log_error(f"Failed to start DB service: {e}", exc_info=True)
+            raise
+
+        # Start Tooling service (needs DB to be ready for tool sync)
+        try:
+            log_info("Starting Tooling service...")
+            await tooling_service.start()
+            self.services.append(tooling_service)
+            log_info("✓ Tooling service started")
+        except Exception as e:
+            log_error(f"Failed to start Tooling service: {e}", exc_info=True)
             raise
 
         # Start scheduler service

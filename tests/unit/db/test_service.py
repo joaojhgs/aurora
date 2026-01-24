@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from app.services.db.service import DBService
 from app.messaging import Envelope, MessageBus, QueryResult
+from app.services.db.service import DBService
 from app.shared.contracts.models.db import DBMethods
 
 
@@ -114,7 +114,10 @@ class TestDBServiceMessageHandling:
     @pytest.mark.asyncio
     async def test_get_messages_for_date(self, db_service, mock_bus):
         """Test get messages for date query."""
-        from app.shared.contracts.models.db import DBGetMessagesForDateRequest, DBGetMessagesResponse
+        from app.shared.contracts.models.db import (
+            DBGetMessagesForDateRequest,
+            DBGetMessagesResponse,
+        )
 
         request = DBGetMessagesForDateRequest(date="2024-01-01")
 
@@ -135,8 +138,8 @@ class TestDBServiceRAGOperations:
     @pytest.mark.asyncio
     async def test_rag_store(self, db_service):
         """Test RAG store command."""
-        from app.shared.contracts.models.db import DBRAGStoreRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.db import DBRAGStoreRequest
 
         # Namespace is now a string, not a tuple
         request = DBRAGStoreRequest(
@@ -158,8 +161,8 @@ class TestDBServiceRAGOperations:
     @pytest.mark.asyncio
     async def test_rag_delete(self, db_service):
         """Test RAG delete command."""
-        from app.shared.contracts.models.db import DBRAGDeleteRequest
         from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.db import DBRAGDeleteRequest
 
         request = DBRAGDeleteRequest(namespace="main|memories", key="test-key")
 
@@ -178,7 +181,7 @@ class TestDBServiceRAGOperations:
     @pytest.mark.asyncio
     async def test_rag_search(self, db_service, mock_bus):
         """Test RAG search query."""
-        from app.shared.contracts.models.db import DBRAGSearchRequest, DBRAGListResponse
+        from app.shared.contracts.models.db import DBRAGListResponse, DBRAGSearchRequest
 
         request = DBRAGSearchRequest(namespace="main|memories", query="test query", limit=5)
 

@@ -29,8 +29,8 @@ from app.messaging import (
     TranscriptionControl,
     TranscriptionType,
 )
-from app.shared.contracts.models.stt import TranscriptionMethods
 from app.services.stt_transcription.service import TranscriptionService, VADMode
+from app.shared.contracts.models.stt import TranscriptionMethods
 
 # Mock hardware dependencies before imports
 sys.modules["faster_whisper"] = MagicMock()
@@ -151,7 +151,7 @@ class TestInitialization:
             "general.speech_to_text.transcription.realtime_model.enabled": True,
             "general.speech_to_text.transcription.accurate_model.enabled": True,
         }.get(key, default))
-        
+
         with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
             service = TranscriptionService()
             # Configuration is loaded in on_start, not __init__

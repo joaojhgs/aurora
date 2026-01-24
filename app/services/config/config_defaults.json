@@ -96,8 +96,8 @@
             }
         },
         "text_to_speech": {
-            "model_file_path": "/voice_models/en_US-lessac-medium.onnx",
-            "model_config_file_path": "/voice_models/en_US-lessac-medium.onnx.txt",
+            "model_file_path": "voice_models/en_US-lessac-medium.onnx",
+            "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
             "model_sample_rate": 22050,
             "piper_path": ""
         },

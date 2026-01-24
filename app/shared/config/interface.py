@@ -6,9 +6,10 @@ It uses the message bus under the hood to communicate with the ConfigService.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
-from app.helpers.aurora_logger import log_debug, log_error
+from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.services.config.messages import (
     GetConfigQuery,
     GetPluginStatusQuery,
@@ -199,11 +200,13 @@ class ConfigAPI:
             try:
                 asyncio.get_running_loop()
                 # We're in an async context - can't use sync get_config()
-                # Return default value and log debug message
-                log_debug(
+                # Log warning and emit RuntimeWarning for developers
+                warning_msg = (
                     f"ConfigAPI.get('{key_path}') called from async context. "
-                    "Use aget() or await config_api.aget() instead. Returning default."
+                    "Use 'await config_api.aget()' instead. Returning default value."
                 )
+                log_warning(warning_msg)
+                warnings.warn(warning_msg, RuntimeWarning, stacklevel=3)
                 return default
             except RuntimeError:
                 # No running loop, safe to proceed
