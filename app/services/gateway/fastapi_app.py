@@ -16,6 +16,7 @@ from app.helpers.aurora_logger import log_error, log_info
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+    from app.services.gateway.auth_service import AuthService
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
@@ -26,6 +27,7 @@ def create_gateway_app(
     cors_allow_credentials: bool = True,
     auth_enabled: bool = False,
     auth_api_keys: list[str] | None = None,
+    auth_service: AuthService | None = None,
     title: str = "Aurora Gateway API",
     version: str = "1.0.0",
     request_timeout: float = 30.0,
@@ -39,6 +41,7 @@ def create_gateway_app(
         cors_allow_credentials: Whether to allow credentials in CORS (default: True)
         auth_enabled: Whether to enable API key authentication (default: False)
         auth_api_keys: List of valid API keys (default: [])
+        auth_service: Auth service instance
         title: API title for OpenAPI docs
         version: API version
         request_timeout: Default timeout for service requests
@@ -96,14 +99,17 @@ def create_gateway_app(
     # Add authentication middleware if enabled
     if auth_enabled:
         from app.services.gateway.auth import GatewayAuth, create_auth_middleware
+        from app.services.gateway.dependencies import set_gateway_auth
 
         gateway_auth = GatewayAuth(
+            auth_service=auth_service,
             enabled=True,
             api_keys=auth_api_keys or [],
         )
+        set_gateway_auth(gateway_auth)
         auth_middleware = create_auth_middleware(gateway_auth)
         app.middleware("http")(auth_middleware)
-        log_info("API key authentication enabled")
+        log_info("Gateway authentication enabled")
 
     # Create route generator
     route_generator = RouteGenerator(
