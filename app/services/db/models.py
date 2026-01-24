@@ -2,17 +2,17 @@
 Database models for Aurora message storage and other entities.
 """
 
+from __future__ import annotations
+
 import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class MessageType(Enum):
-    """Message types supported by the system"""
-
     USER_TEXT = "user_text"
     USER_VOICE = "user_voice"
     ASSISTANT = "assistant"
@@ -20,16 +20,12 @@ class MessageType(Enum):
 
 
 class ScheduleType(Enum):
-    """Types of scheduling supported"""
-
-    RELATIVE = "relative"  # e.g., "in 5 minutes", "every 1 hour"
-    ABSOLUTE = "absolute"  # e.g., "2025-05-28 15:00", cron expressions
-    CRON = "cron"  # Standard cron expressions like "0 9 * * 1-5"
+    RELATIVE = "relative"
+    ABSOLUTE = "absolute"
+    CRON = "cron"
 
 
 class JobStatus(Enum):
-    """Job execution status"""
-
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -39,19 +35,16 @@ class JobStatus(Enum):
 
 @dataclass
 class Message:
-    """Message model for database storage"""
-
     id: str
     content: str
     message_type: MessageType
     timestamp: datetime
     session_id: str | None = None
     metadata: dict[str, Any] | None = None
-    source_type: str | None = None  # "Text", "STT", etc.
+    source_type: str | None = None
 
     @classmethod
-    def create_user_text_message(cls, content: str, session_id: str | None = None) -> "Message":
-        """Create a new user text message"""
+    def create_user_text_message(cls, content: str, session_id: str | None = None) -> Message:
         return cls(
             id=str(uuid.uuid4()),
             content=content,
@@ -62,8 +55,7 @@ class Message:
         )
 
     @classmethod
-    def create_user_voice_message(cls, content: str, session_id: str | None = None) -> "Message":
-        """Create a new user voice message"""
+    def create_user_voice_message(cls, content: str, session_id: str | None = None) -> Message:
         return cls(
             id=str(uuid.uuid4()),
             content=content,
@@ -74,8 +66,7 @@ class Message:
         )
 
     @classmethod
-    def create_assistant_message(cls, content: str, session_id: str | None = None) -> "Message":
-        """Create a new assistant message"""
+    def create_assistant_message(cls, content: str, session_id: str | None = None) -> Message:
         return cls(
             id=str(uuid.uuid4()),
             content=content,
@@ -85,7 +76,6 @@ class Message:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert message to dictionary for database storage"""
         return {
             "id": self.id,
             "content": self.content,
@@ -97,8 +87,7 @@ class Message:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Message":
-        """Create message from dictionary (database row)"""
+    def from_dict(cls, data: dict[str, Any]) -> Message:
         return cls(
             id=data["id"],
             content=data["content"],
@@ -110,11 +99,9 @@ class Message:
         )
 
     def is_user_message(self) -> bool:
-        """Check if this is a user message"""
         return self.message_type in [MessageType.USER_TEXT, MessageType.USER_VOICE]
 
     def get_ui_source_type(self) -> str | None:
-        """Get the source type for UI display"""
         if self.message_type == MessageType.USER_TEXT:
             return "Text"
         elif self.message_type == MessageType.USER_VOICE:
@@ -123,29 +110,150 @@ class Message:
 
 
 @dataclass
-class CronJob:
-    """Model for cron job storage and execution"""
+class User:
+    id: str
+    username: str
+    password_hash: str
+    role: str = "admin"
+    created_at: datetime | None = None
 
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "username": self.username,
+            "password_hash": self.password_hash,
+            "role": self.role,
+            "created_at": self.created_at.isoformat()
+            if self.created_at
+            else datetime.now().isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> User:
+        return cls(
+            id=data["id"],
+            username=data["username"],
+            password_hash=data["password_hash"],
+            role=data["role"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class Device:
+    id: str
+    user_id: str
+    name: str
+    public_key: str | None = None
+    is_trusted: bool = False
+    last_seen: datetime | None = None
+    created_at: datetime | None = None
+
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
+        if self.last_seen is None:
+            self.last_seen = datetime.now()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "public_key": self.public_key,
+            "is_trusted": self.is_trusted,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
+            "created_at": self.created_at.isoformat()
+            if self.created_at
+            else datetime.now().isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Device:
+        return cls(
+            id=data["id"],
+            user_id=data["user_id"],
+            name=data["name"],
+            public_key=data["public_key"],
+            is_trusted=bool(data["is_trusted"]),
+            last_seen=datetime.fromisoformat(data["last_seen"]) if data["last_seen"] else None,
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class Token:
+    id: str
+    token_hash: str
+    prefix: str
+    device_id: str | None = None
+    user_id: str | None = None
+    scopes: list[str] | None = None
+    expires_at: datetime | None = None
+    created_at: datetime | None = None
+
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
+        if self.scopes is None:
+            self.scopes = []
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "user_id": self.user_id,
+            "token_hash": self.token_hash,
+            "prefix": self.prefix,
+            "scopes": json.dumps(self.scopes),
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "created_at": self.created_at.isoformat()
+            if self.created_at
+            else datetime.now().isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Token:
+        scopes_data = data["scopes"]
+        scopes = json.loads(scopes_data) if isinstance(scopes_data, str) else scopes_data or []
+
+        return cls(
+            id=data["id"],
+            device_id=data["device_id"],
+            user_id=data["user_id"],
+            token_hash=data["token_hash"],
+            prefix=data["prefix"],
+            scopes=scopes,
+            expires_at=datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None,
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class CronJob:
     id: str
     name: str
     schedule_type: ScheduleType
-    schedule_value: str  # The actual schedule (absolute time or cron expression)
+    schedule_value: str
     next_run_time: datetime | None
-    callback_module: str  # Module path for the callback function
-    callback_function: str  # Function name to call
-    callback_args: dict[str, Any] | None = None  # Arguments to pass to callback
+    callback_module: str
+    callback_function: str
+    callback_args: dict[str, Any] | None = None
     is_active: bool = True
     status: JobStatus = JobStatus.PENDING
     last_run_time: datetime | None = None
     last_run_result: str | None = None
     retry_count: int = 0
     max_retries: int = 3
-    created_at: datetime = None
-    updated_at: datetime = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
-        """Initialize timestamps if not provided"""
         if self.created_at is None:
             self.created_at = datetime.now()
         if self.updated_at is None:
@@ -160,14 +268,13 @@ class CronJob:
         callback_function: str,
         callback_args: dict[str, Any] | None = None,
         **kwargs,
-    ) -> "CronJob":
-        """Create an absolute time job (e.g., '2025-05-28 15:00')"""
+    ) -> CronJob:
         return cls(
             id=str(uuid.uuid4()),
             name=name,
             schedule_type=ScheduleType.ABSOLUTE,
             schedule_value=absolute_time,
-            next_run_time=None,  # Will be parsed by scheduler
+            next_run_time=None,
             callback_module=callback_module,
             callback_function=callback_function,
             callback_args=callback_args,
@@ -183,14 +290,13 @@ class CronJob:
         callback_function: str,
         callback_args: dict[str, Any] | None = None,
         **kwargs,
-    ) -> "CronJob":
-        """Create a cron expression job (e.g., '0 9 * * 1-5')"""
+    ) -> CronJob:
         return cls(
             id=str(uuid.uuid4()),
             name=name,
             schedule_type=ScheduleType.CRON,
             schedule_value=cron_expression,
-            next_run_time=None,  # Will be calculated by scheduler
+            next_run_time=None,
             callback_module=callback_module,
             callback_function=callback_function,
             callback_args=callback_args,
@@ -198,33 +304,19 @@ class CronJob:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert job to dictionary for database storage"""
-        # Safely serialize callback_args, filtering out non-serializable objects (like bus)
         callback_args_safe = None
         if self.callback_args:
             try:
-                # First, try to serialize as-is
-                json.dumps(self.callback_args)
                 callback_args_safe = json.dumps(self.callback_args)
             except (TypeError, ValueError):
-                # If serialization fails, filter out non-serializable objects
-                # Common non-serializable objects: bus, store, etc.
                 safe_args = {}
                 for k, v in self.callback_args.items():
-                    # Skip known non-serializable objects
                     if k in ["bus", "store"]:
                         continue
-                    # Try to serialize the value
                     try:
                         json.dumps(v)
                         safe_args[k] = v
                     except (TypeError, ValueError):
-                        # Skip non-serializable values
-                        from app.helpers.aurora_logger import log_debug
-
-                        log_debug(
-                            f"Skipping non-serializable callback_arg '{k}' for job {self.name}"
-                        )
                         continue
                 callback_args_safe = json.dumps(safe_args) if safe_args else None
 
@@ -243,14 +335,13 @@ class CronJob:
             "last_run_result": self.last_run_result,
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "metadata": json.dumps(self.metadata) if self.metadata else None,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CronJob":
-        """Create job from dictionary (database row)"""
+    def from_dict(cls, data: dict[str, Any]) -> CronJob:
         return cls(
             id=data["id"],
             name=data["name"],
@@ -276,7 +367,6 @@ class CronJob:
         )
 
     def update_status(self, status: JobStatus, result: str | None = None):
-        """Update job status and last run information"""
         self.status = status
         self.last_run_time = datetime.now()
         self.last_run_result = result
@@ -286,11 +376,9 @@ class CronJob:
             self.retry_count += 1
 
     def can_retry(self) -> bool:
-        """Check if job can be retried"""
         return self.retry_count < self.max_retries and self.status == JobStatus.FAILED
 
     def is_ready_to_run(self) -> bool:
-        """Check if job is ready to run"""
         if not self.is_active or not self.next_run_time:
             return False
 
