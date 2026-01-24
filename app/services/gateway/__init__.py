@@ -10,10 +10,11 @@ The Gateway provides:
 from app.services.gateway.fastapi_app import create_gateway_app
 from app.services.gateway.registry_aggregator import RegistryAggregator
 from app.services.gateway.route_generator import RouteGenerator
+from app.services.gateway.service import GatewayService
 
 __all__ = [
     "create_gateway_app",
     "RegistryAggregator",
     "RouteGenerator",
+    "GatewayService",
 ]
-
