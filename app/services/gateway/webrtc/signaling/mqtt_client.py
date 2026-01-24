@@ -72,11 +72,19 @@ class MQTTSignaling:
                     parsed_url = url.replace("wss://", "").replace("ws://", "")
                     if ":" in parsed_url:
                         host, port_str = parsed_url.split(":")
-                        port = int(port_str.split("/")[0])  # Remove path if any
+                        port = int(port_str.split("/")[0])
                     else:
                         host = parsed_url.split("/")[0]
                         port = 443 if url.startswith("wss://") else 80
 
+                    # For WSS, we need to set the path if it exists
+                    path = "/"
+                    if "/" in parsed_url:
+                        parts = parsed_url.split("/", 1)
+                        if len(parts) > 1:
+                            path = "/" + parts[1]
+
+                    self._client.ws_set_options(path=path)
                     self._client.connect(host=host, port=port, keepalive=30)
                 else:
                     clean_url = url.replace("mqtt://", "")
