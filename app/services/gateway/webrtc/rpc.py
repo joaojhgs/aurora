@@ -1,0 +1,133 @@
+"""RPC Handler for WebRTC DataChannels.
+
+Handles JSON-RPC calls over DataChannels by forwarding them to the message bus
+after validating permissions against the aggregated registry.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
+from app.helpers.aurora_logger import log_debug, log_error
+
+if TYPE_CHECKING:
+    from app.messaging.bus import MessageBus
+    from app.services.gateway.registry_aggregator import RegistryAggregator
+    from app.shared.contracts.models.gateway import MethodInfo
+
+
+class RPCHandler:
+    def __init__(
+        self,
+        bus: MessageBus,
+        registry: RegistryAggregator,
+        send_fn: Callable[[str], None],
+        acl_provider: Callable[[], dict[str, Any]],
+    ):
+        self._bus = bus
+        self._registry = registry
+        self._send = send_fn
+        self._acl_provider = acl_provider
+
+    async def on_message(self, text: str) -> None:
+        try:
+            msg = json.loads(text)
+        except json.JSONDecodeError:
+            log_error("RPCHandler: Received invalid JSON")
+            return
+
+        msg_type = msg.get("type")
+        if msg_type == "call":
+            await self._handle_call(msg)
+        else:
+            log_debug(f"RPCHandler: Ignoring message type: {msg_type}")
+
+    async def _handle_call(self, msg: dict[str, Any]) -> None:
+        method_name = msg.get("method")
+        params = msg.get("params") or {}
+        req_id = msg.get("id")
+
+        if not method_name:
+            self._send_error(req_id, 400, "Missing method")
+            return
+
+        result = await self._find_method(method_name)
+        if not result:
+            self._send_error(req_id, 404, "Method not found")
+            return
+
+        svc_name, meta = result
+
+        perms_needed = set(meta.required_perms or [])
+        identity = self._acl_provider()
+        user_perms = set(identity.get("perms", [])) | set(identity.get("roles", []))
+
+        if not perms_needed.issubset(user_perms):
+            log_debug(f"RPCHandler: Forbidden call to {method_name} from peer")
+            self._send_error(req_id, 403, "Forbidden")
+            return
+
+        topic = meta.bus_topic or f"{svc_name}.{meta.name}"
+        try:
+            log_debug(f"RPCHandler: Executing {topic} via bus")
+            res = await self._bus.request(
+                topic,
+                params,  # type: ignore[arg-type]
+                timeout=30.0,
+                origin="external",
+            )
+
+            if res.ok:
+                if hasattr(res.data, "__aiter__"):
+                    try:
+                        async for chunk in res.data:
+                            data = chunk
+                            if isinstance(chunk, bytes):
+                                data = chunk.decode(errors="ignore")
+
+                            self._send(json.dumps({"type": "chunk", "id": req_id, "data": data}))
+                        self._send(json.dumps({"type": "eof", "id": req_id}))
+                    except Exception as e:
+                        log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
+                        self._send_error(req_id, 500, f"Stream error: {e}")
+                else:
+                    result_data = res.data
+                    if hasattr(res.data, "model_dump"):
+                        result_data = res.data.model_dump()
+
+                    self._send(json.dumps({"type": "result", "id": req_id, "result": result_data}))
+            else:
+                self._send_error(req_id, 500, res.error or "Service request failed")
+
+        except TimeoutError:
+            self._send_error(req_id, 504, "Service request timed out")
+        except Exception as e:
+            log_error(f"RPCHandler: Error executing RPC {method_name}: {e}")
+            self._send_error(req_id, 500, str(e))
+
+    async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
+        delimiter = "." if "." in method_name else "/" if "/" in method_name else None
+        if delimiter:
+            parts = method_name.split(delimiter, 1)
+            if len(parts) == 2:
+                svc, cmd = parts
+                announcement = await self._registry.get_service(svc)
+                if announcement:
+                    for m in announcement.methods:
+                        if m.name == cmd:
+                            return svc, m
+
+        external_methods = await self._registry.get_external_methods()
+        for svc, m in external_methods:
+            if m.name == method_name:
+                return svc, m
+
+        return None
+
+    def _send_error(self, req_id: Any, code: int, message: str) -> None:
+        self._send(
+            json.dumps({"type": "error", "id": req_id, "error": {"code": code, "message": message}})
+        )
