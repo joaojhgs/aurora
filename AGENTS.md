@@ -173,6 +173,12 @@ export REDIS_URL=redis://localhost:6379
 - Exposure level (`"internal"`, `"external"`, `"both"`)
 - Default priority and allowed origins
 
+**Shared Code Rules (CRITICAL)**:
+- **ONLY** share Pydantic models (Contracts) and abstract interfaces between services.
+- **NEVER** share service logic, utility classes with state, or complex dependencies.
+- This ensures services remain decoupled and compatible with **Process Mode** (distributed architecture).
+- If you need shared logic, put it in a separate library or `app/shared/` but ensure it is stateless and pure.
+
 **Example**:
 ```python
 @method_contract(
@@ -315,13 +321,18 @@ async def synthesize(self, request: TTSRequest) -> TTSResponse:
 - **Threading**: Runs in background thread, UI in main thread
 - **Topics**: Subscribes to all user-facing events
 
-#### **Gateway Service** (Planned)
-- **Purpose**: HTTP/WebSocket API for external clients
+#### **Gateway Service** (`app/services/gateway/`)
+- **Purpose**: HTTP/WebSocket/WebRTC API for external clients
 - **Responsibilities**:
   - REST API for service control
-  - WebSocket for real-time events
+  - WebSocket/WebRTC for real-time events and streaming
   - Authentication and authorization
-  - CORS handling
+  - **Registry Aggregator**: Dynamically collects contracts from all running services to build the external API schema.
+- **Registry Aggregator**:
+  - Listens for service announcements on the bus.
+  - Validates contracts and permissions.
+  - Maps external requests (HTTP/RPC) to internal bus messages.
+  - Ensures clients only access methods marked as `external` or `both`.
 - **Configuration**: `config.json` → `gateway.*`
 
 ---
@@ -462,13 +473,17 @@ class Envelope:
 
 ### Environment Setup
 
-**CRITICAL**: Always activate the conda environment before running any commands:
+**CRITICAL**: Use `uv` for environment management. Do NOT use Conda.
 
 ```bash
-conda activate aurora
+# Install dependencies
+uv sync
+
+# Activate environment
+source .venv/bin/activate
 ```
 
-**Python Version**: 3.10-3.11 only (3.12+ causes dependency conflicts)
+**Python Version**: 3.10-3.11 only (managed by `uv` in `.python-version`)
 
 **Verify Python version**:
 ```bash
@@ -1145,12 +1160,13 @@ await bus.publish(
 )
 ```
 
-### 2. **ALWAYS Activate Conda Environment**
+### 2. **ALWAYS Use `uv` Environment**
 
 **BEFORE** running any commands:
 ```bash
-conda activate aurora
+source .venv/bin/activate
 ```
+Or use `uv run <command>` to execute in the environment.
 
 ### 3. **ALWAYS Use Python 3.10-3.11**
 
