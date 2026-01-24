@@ -1051,6 +1051,57 @@
                 }
             },
             "additionalProperties": false
+        },
+        "webrtc": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "strategy": {
+                    "type": "string"
+                },
+                "app_id": {
+                    "type": "string"
+                },
+                "room": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "encrypt_signaling": {
+                    "type": "boolean"
+                },
+                "enable_app_layer_e2ee": {
+                    "type": "boolean"
+                },
+                "stun_servers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "turn_servers": {
+                    "type": "array"
+                }
+            },
+            "additionalProperties": false
+        },
+        "signaling_mqtt": {
+            "type": "object",
+            "properties": {
+                "brokers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "topic_root": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
         }
     },
     "additionalProperties": false
