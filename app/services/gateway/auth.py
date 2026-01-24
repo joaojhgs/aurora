@@ -9,7 +9,10 @@ This module provides optional authentication for the HTTP API:
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi.security import SecurityScopes
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 from app.services.gateway.auth_service import AuthService
@@ -173,10 +176,11 @@ def create_auth_middleware(auth: GatewayAuth) -> Callable:
 
 async def check_auth_enabled(
     request: Any,
+    security_scopes: SecurityScopes,
     auth: GatewayAuth = None,  # type: ignore
 ) -> Any:
     """Dependency to check if auth is enabled and valid."""
-    from fastapi import Depends, HTTPException
+    from fastapi import HTTPException
 
     if auth is None:
         auth = get_gateway_auth()
@@ -187,21 +191,35 @@ async def check_auth_enabled(
     if auth.should_bypass(request.url.path):
         return None
 
+    token = None
     # Check if token already in state from middleware
     if hasattr(request.state, "token"):
-        return request.state.token
-
-    # Re-verify if needed (though middleware should have handled it)
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token_str = auth_header.split(" ")[1]
-        token = await auth.authenticate_token(token_str)
-        if token:
-            return token
+        token = request.state.token
+    else:
+        # Re-verify if needed (though middleware should have handled it)
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token_str = auth_header.split(" ")[1]
+            token = await auth.authenticate_token(token_str)
 
     # API key check as fallback
-    api_key = request.headers.get("X-API-Key")
-    if auth.validate_api_key(api_key):
-        return "api_key"
+    if token is None:
+        api_key = request.headers.get("X-API-Key")
+        if auth.validate_api_key(api_key):
+            token = "api_key"
 
-    raise HTTPException(status_code=401, detail="Authentication required")
+    if token is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if security_scopes.scopes and token != "api_key":
+        if not auth.verify_permissions(token, security_scopes.scopes):
+            log_warning(
+                f"Permission denied for {request.url.path}. "
+                f"Required scopes: {security_scopes.scopes}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Insufficient permissions. Required scopes: {security_scopes.scopes}",
+            )
+
+    return token
