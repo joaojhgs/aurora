@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.messaging import Envelope, MessageBus
-from app.shared.contracts.models.tooling import ToolingMethods
 from app.services.tooling.service import ToolingService
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.messaging.models.tooling_models import (
     ExecuteToolCommand,
     GetToolByNameQuery,
@@ -156,6 +156,7 @@ class TestToolingServiceQueries:
     async def test_get_tool_by_name(self, tooling_service, mock_bus):
         """Test get tool by name query."""
         from langchain_core.tools import tool
+
         from app.shared.contracts.models.tooling import ToolingGetToolByNameRequest
 
         @tool
@@ -216,12 +217,15 @@ class TestToolingServiceToolExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_success(self, tooling_service, mock_bus):
         """Test successful tool execution."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingExecuteToolResponse
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingExecuteToolResponse,
+        )
 
         # Create a mock tool that can accept ainvoke
         mock_tool = Mock()
         mock_tool.ainvoke = AsyncMock(return_value="Result: test")
-        
+
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
 
         # Contract methods receive the request model directly
@@ -237,7 +241,10 @@ class TestToolingServiceToolExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_not_found(self, tooling_service, mock_bus):
         """Test tool execution when tool not found."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingExecuteToolResponse
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingExecuteToolResponse,
+        )
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=None)
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["tool1", "tool2"])
@@ -255,12 +262,15 @@ class TestToolingServiceToolExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_with_error(self, tooling_service, mock_bus):
         """Test tool execution with error."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingExecuteToolResponse
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingExecuteToolResponse,
+        )
 
         # Create a mock tool that raises an error on ainvoke
         mock_tool = Mock()
         mock_tool.ainvoke = AsyncMock(side_effect=ValueError("Tool execution error"))
-        
+
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
 
         # Contract methods receive the request model directly

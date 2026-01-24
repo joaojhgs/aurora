@@ -18,7 +18,7 @@ sys.modules["app.services.orchestrator.agents.chatbot"].llm = MagicMock()
 def _patch_llm_for_chatbot():
     """Helper context manager to patch LLM for chatbot tests."""
     import app.services.orchestrator.agents.chatbot as chatbot_module
-    
+
     # Create a mock LLM instance
     mock_llm_instance = MagicMock()
     mock_llm_response = MagicMock()
@@ -27,7 +27,7 @@ def _patch_llm_for_chatbot():
     mock_bind_tools.invoke.return_value = mock_llm_response
     mock_llm_instance.bind_tools.return_value = mock_bind_tools
     mock_llm_instance.invoke.return_value = mock_llm_response
-    
+
     with (
         patch.object(chatbot_module, "_initialize_llm", new_callable=AsyncMock),
         patch.object(chatbot_module, "llm", mock_llm_instance),
@@ -62,8 +62,8 @@ class TestChatbotMemorySearch:
     @pytest.mark.asyncio
     async def test_chatbot_memory_search_success(self, mock_bus, mock_state):
         """Test successful memory search via bus."""
-        from app.shared.contracts.models.db import DBMethods
         from app.messaging import QueryResult
+        from app.shared.contracts.models.db import DBMethods
 
         # Mock successful memory search response
         mock_bus.request.return_value = QueryResult(
@@ -95,7 +95,7 @@ class TestChatbotMemorySearch:
             # Update the mock response for this specific test
             import app.services.orchestrator.agents.chatbot as chatbot_module
             chatbot_module.llm.bind_tools.return_value.invoke.return_value.content = "Paris is the capital of France."
-            
+
             result = await chatbot(mock_state, bus=mock_bus)
 
             # Verify memory search was called via bus

@@ -50,7 +50,7 @@ def test_register_module():
 def test_method_contract_decorator():
     """Test that @method_contract registers methods and auto-creates modules."""
     from app.shared.contracts.registry import register_method
-    
+
     # Register module first
     register_module("TestModule", "1.0.0", summary="Test module", capabilities=["test"])
 
@@ -84,7 +84,7 @@ def test_method_contract_decorator():
 def test_export_import_roundtrip():
     """Test that export() and import_registry() work correctly."""
     from app.shared.contracts.registry import register_method
-    
+
     # Register a module and method
     register_module("TTS", "1.0.0", summary="Text-to-Speech", capabilities=["streaming"])
 
@@ -133,7 +133,7 @@ def test_export_import_roundtrip():
 def test_digest_changes_on_modification():
     """Test that digest changes when registry content changes."""
     from app.shared.contracts.registry import register_method
-    
+
     register_module("Module1", "1.0.0")
 
     @method_contract(
@@ -170,7 +170,7 @@ def test_digest_changes_on_modification():
 def test_all_contracts():
     """Test retrieving all contracts."""
     from app.shared.contracts.registry import register_method
-    
+
     register_module("Mod1", "1.0.0")
 
     @method_contract(
@@ -199,7 +199,7 @@ def test_all_contracts():
 def test_module_auto_creation():
     """Test that modules are automatically created when using @method_contract."""
     from app.shared.contracts.registry import register_method
-    
+
     # Note: With new API, modules can be auto-created if not registered
     # when register_method is called
     @method_contract(
@@ -221,7 +221,7 @@ def test_module_auto_creation():
 def test_explicit_module_registration_preserves_metadata():
     """Test that explicitly registering a module preserves its metadata."""
     from app.shared.contracts.registry import register_method
-    
+
     register_module(
         "ExplicitModule",
         "3.0.0",

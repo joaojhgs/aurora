@@ -76,6 +76,9 @@ class DBService(BaseService):
         await self.db_manager.initialize()
         await self.scheduler_db.initialize()
 
+        # Initialize RAG stores (requires config service to be ready)
+        await self.rag_service.async_initialize()
+
         self._set_started(True)
         log_info("DB service started")
 

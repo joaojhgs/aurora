@@ -19,9 +19,66 @@ from app.shared.config.interface import ConfigAPI
 config_api = ConfigAPI()
 
 
-def get_embeddings():
-    """Get embeddings based on USE_LOCAL_EMBEDDINGS environment variable"""
-    use_local = config_api.get("general.embeddings.use_local", False)
+async def _async_wait_for_config_service(
+    max_retries: int = 30, retry_delay: float = 1.0
+) -> bool:
+    """Async version: Wait for the config service to be ready.
+
+    Args:
+        max_retries: Maximum number of retries before giving up
+        retry_delay: Delay in seconds between retries
+
+    Returns:
+        bool: True if config service is ready, False otherwise
+    """
+    import asyncio
+
+    for attempt in range(max_retries):
+        # First check if ConfigService contracts are registered
+        if not config_api._is_config_service_ready():
+            if attempt < max_retries - 1:
+                log_debug(
+                    f"ConfigService contracts not registered, retrying in {retry_delay}s "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+                await asyncio.sleep(retry_delay)
+            continue
+
+        # Contracts registered, try to get config value using async API
+        result = await config_api.aget("general.embeddings.use_local", None)
+        if result is not None:
+            log_debug(f"Config service ready after {attempt + 1} attempt(s)")
+            return True
+
+        if attempt < max_retries - 1:
+            log_debug(
+                f"Config service not responding, retrying in {retry_delay}s "
+                f"(attempt {attempt + 1}/{max_retries})"
+            )
+            await asyncio.sleep(retry_delay)
+
+    log_error(
+        f"Config service not ready after {max_retries} attempts. "
+        "Ensure ConfigService is running and accessible via the message bus."
+    )
+    return False
+
+
+async def async_get_embeddings():
+    """Async version: Get embeddings based on use_local configuration setting.
+
+    Waits for config service to be ready in distributed mode.
+    Should be called during service initialization (on_start).
+    """
+    # Wait for config service to be available
+    if not await _async_wait_for_config_service():
+        raise RuntimeError(
+            "Cannot initialize embeddings: Config service is not available. "
+            "Ensure ConfigService is running before starting DBService."
+        )
+
+    # Get config value using async API
+    use_local = await config_api.aget("general.embeddings.use_local", False)
 
     if use_local:
         try:
@@ -666,24 +723,40 @@ class RAGService:
         self._tools_store = None
         self._combined_store = None
         self._initialized = False
+        self._initializing = False
         import threading
 
         self._lock = threading.Lock()
 
-    def _initialize_stores(self):
-        """Initialize the memory and tools stores with embeddings."""
-        if self._memories_store is not None and self._tools_store is not None:
-            return  # Already initialized
+    @property
+    def is_initialized(self) -> bool:
+        """Check if RAG stores are initialized."""
+        return self._initialized
+
+    async def async_initialize(self):
+        """Async initialization of RAG stores. Call this during service on_start().
+
+        This properly waits for the config service using async/await,
+        avoiding event loop blocking issues.
+        """
+        if self._initialized:
+            return
 
         with self._lock:
-            # Double-check after acquiring lock
-            if self._memories_store is not None and self._tools_store is not None:
+            if self._initialized:
                 return
 
-            log_info("Initializing RAG stores for memories and tools...")
+            if self._initializing:
+                # Another coroutine is already initializing
+                return
 
-            # Create embeddings instance
-            embeddings, model_info = get_embeddings()
+            self._initializing = True
+
+        try:
+            log_info("Initializing RAG stores for memories and tools (async)...")
+
+            # Create embeddings instance using async version
+            embeddings, model_info = await async_get_embeddings()
 
             # Create separate SQLite vector stores for memories and tools in the data folder
             self._memories_store = SQLiteVecStore(
@@ -710,25 +783,32 @@ class RAGService:
             # Create combined store
             self._combined_store = CombinedSQLiteVecStore(self._memories_store, self._tools_store)
 
+            self._initialized = True
             log_info("RAG stores initialized successfully")
+        finally:
+            self._initializing = False
+
+    def _ensure_initialized(self):
+        """Check if stores are initialized, raise if not."""
+        if not self._initialized:
+            raise RuntimeError(
+                "RAG stores not yet initialized. Service is still starting up, please retry."
+            )
 
     @property
     def memories_store(self):
-        """Get the memories store, initializing if necessary."""
-        if self._memories_store is None:
-            self._initialize_stores()
+        """Get the memories store."""
+        self._ensure_initialized()
         return self._memories_store
 
     @property
     def tools_store(self):
-        """Get the tools store, initializing if necessary."""
-        if self._tools_store is None:
-            self._initialize_stores()
+        """Get the tools store."""
+        self._ensure_initialized()
         return self._tools_store
 
     @property
     def combined_store(self):
-        """Get the combined store, initializing if necessary."""
-        if self._combined_store is None:
-            self._initialize_stores()
+        """Get the combined store."""
+        self._ensure_initialized()
         return self._combined_store

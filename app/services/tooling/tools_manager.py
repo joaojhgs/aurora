@@ -425,7 +425,7 @@ class ToolsManager:
 
         log_info("MCP tools reloaded")
 
-    def get_mcp_status(self) -> dict:
+    async def get_mcp_status(self) -> dict:
         """Get the current status of MCP integration.
 
         Returns:
@@ -442,18 +442,23 @@ class ToolsManager:
                 mcp_tool_count = len(current_mcp_tools)
                 mcp_tool_names = [tool.name for tool in current_mcp_tools]
 
+            # Use async config access to avoid sync/async context issues
+            mcp_enabled = await config_api.aget("mcp.enabled", True)
+            mcp_servers = await config_api.aget("mcp.servers", {})
+
             return {
-                "enabled": config_api.get("mcp.enabled", True),
+                "enabled": mcp_enabled,
                 "initialized": mcp_client_manager.is_initialized,
                 "tools_loaded": self._mcp_tools_loaded,
                 "tool_count": mcp_tool_count,
                 "tool_names": mcp_tool_names,
-                "servers_configured": list(config_api.get("mcp.servers", {}).keys()),
+                "servers_configured": list(mcp_servers.keys()),
             }
         except Exception as e:
             log_error(f"Failed to get MCP status: {e}")
+            # Fallback with defaults when async access fails
             return {
-                "enabled": config_api.get("mcp.enabled", True),
+                "enabled": True,
                 "initialized": False,
                 "tools_loaded": False,
                 "tool_count": 0,
@@ -509,8 +514,8 @@ async def sync_tools_with_database(bus: MessageBus) -> None:
     await manager._sync_tools_with_database()
 
 
-def get_mcp_status() -> dict:
-    """Standalone function for getting MCP status.
+async def get_mcp_status() -> dict:
+    """Standalone async function for getting MCP status.
 
     This is a convenience function that uses the global ToolsManager instance.
     For backward compatibility with existing code.
@@ -520,34 +525,46 @@ def get_mcp_status() -> dict:
     """
     try:
         manager = get_tools_manager()
-        return manager.get_mcp_status()
+        return await manager.get_mcp_status()
     except RuntimeError:
-        # ToolsManager not initialized, return minimal status
+        # ToolsManager not initialized, return minimal status with defaults
         return {
-            "enabled": config_api.get("mcp.enabled", True),
+            "enabled": True,
             "initialized": False,
             "tools_loaded": False,
             "tool_count": 0,
             "tool_names": [],
-            "servers_configured": list(config_api.get("mcp.servers", {}).keys()),
+            "servers_configured": [],
         }
 
 
 def reload_mcp_servers_sync() -> None:
-    """Synchronously reload MCP servers and tools.
+    """Reload MCP servers and tools, handling both sync and async contexts.
 
     This is a convenience function that wraps the async reload_mcp_tools method.
     For backward compatibility with existing code that expects a sync function.
 
-    Note: This function uses asyncio.run() and should not be called from within
-    an async context. For async contexts, use ToolsManager.reload_mcp_tools() directly.
+    - If called from async context: schedules as a task in the running loop
+    - If called from sync context: uses asyncio.run()
     """
     try:
-        import asyncio
-
         manager = get_tools_manager()
-        asyncio.run(manager.reload_mcp_tools())
     except RuntimeError:
         log_error("ToolsManager not initialized, cannot reload MCP servers")
+        return
+
+    try:
+        # Check if we're already in an async context
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    try:
+        if loop is not None and loop.is_running():
+            # Already in async context - schedule as task
+            asyncio.create_task(manager.reload_mcp_tools())
+        else:
+            # Sync context - safe to use asyncio.run()
+            asyncio.run(manager.reload_mcp_tools())
     except Exception as e:
         log_error(f"Failed to reload MCP servers: {e}", exc_info=True)

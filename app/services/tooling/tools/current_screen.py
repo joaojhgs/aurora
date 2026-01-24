@@ -1,5 +1,4 @@
 from langchain_core.tools import tool
-
 from modules.openrecall.openrecall.screenshot import record_current_screenshot
 
 

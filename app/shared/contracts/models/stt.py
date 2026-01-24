@@ -1,5 +1,7 @@
 """STT (Speech-to-Text) service contract models."""
 
+from pydantic import Field
+
 from app.shared.contracts.registry import IOModel
 
 
@@ -124,6 +126,7 @@ class STTAudioChunk(IOModel):
     sample_rate: int
     channels: int
     format: str = "pcm_s16le"
+    sample_width: int | None = None  # Bytes per sample (derived from format if not provided)
 
 
 # ============================================================================
@@ -139,7 +142,7 @@ class TranscribeAudioRequest(IOModel):
 
     audio_data: str  # Base64-encoded audio
     format: str = "wav"  # "wav" | "raw" | "mp3"
-    sample_rate: int = 16000
+    sample_rate: int = Field(default=16000, gt=0, description="Sample rate in Hz (must be > 0)")
     channels: int = 1
     language: str | None = None  # ISO language code or None for auto-detect
     model: str = "realtime"  # "realtime" | "accurate"

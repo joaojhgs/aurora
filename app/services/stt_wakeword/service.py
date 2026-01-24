@@ -141,6 +141,8 @@ class WakeWordService(BaseService):
         """Load configuration from config manager."""
         import os
 
+        from app.shared.path_utils import resolve_path
+
         # Backend configuration
         backend_str = await config_api.aget("general.speech_to_text.wake_word.backend", "oww")
         self._backend_type = WakeWordBackendType(backend_str)
@@ -160,19 +162,22 @@ class WakeWordService(BaseService):
         # Convert model path to list if it's a string or None
         # Support comma-separated paths from env var
         if model_path is None:
-            self._model_paths = ["voice_models/jarvis.onnx"]
+            raw_paths = ["voice_models/jarvis.onnx"]
         elif isinstance(model_path, str):
             # Split by comma if multiple paths provided
             if "," in model_path:
-                self._model_paths = [p.strip() for p in model_path.split(",")]
+                raw_paths = [p.strip() for p in model_path.split(",")]
             else:
-                self._model_paths = [model_path]
+                raw_paths = [model_path]
         else:
-            self._model_paths = model_path
+            raw_paths = model_path
 
-        # Extract wake word names from model paths
+        # Resolve all paths relative to project root
+        self._model_paths = [str(resolve_path(path)) for path in raw_paths]
+
+        # Extract wake word names from model paths (use original path for name extraction)
         self._wake_words = []
-        for path in self._model_paths:
+        for path in raw_paths:
             # Extract filename without extension as wake word name
             name = path.split("/")[-1].replace(".onnx", "").replace(".ppn", "")
             self._wake_words.append(name)
@@ -266,13 +271,13 @@ class WakeWordService(BaseService):
             env: Message envelope containing AudioChunk
         """
         chunk: AudioChunk = env.payload
-        
+
         # Track current stream info
         self._current_stream_id = chunk.stream_id
         self._current_source = chunk.source
         if chunk.format:
             self._audio_format = chunk.format
-        
+
         await self._process_audio_data(
             chunk.data, stream_id=chunk.stream_id, source=chunk.source, timestamp=chunk.timestamp
         )

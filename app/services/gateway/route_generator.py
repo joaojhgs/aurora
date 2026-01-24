@@ -46,9 +46,9 @@ def _resolve_refs(schema: dict[str, Any], defs: dict[str, Any] | None = None) ->
     """
     if defs is None:
         defs = schema.get("$defs", {})
-    
+
     result = {}
-    
+
     for key, value in schema.items():
         if key == "$defs":
             # Skip $defs - we'll inline them instead
@@ -76,7 +76,7 @@ def _resolve_refs(schema: dict[str, Any], defs: dict[str, Any] | None = None) ->
             ]
         else:
             result[key] = value
-    
+
     return result
 
 
@@ -156,7 +156,7 @@ def _create_model_from_schema(
 
     for prop_name, prop_schema in properties.items():
         prop_type = prop_schema.get("type")
-        
+
         # If no type specified (e.g., `Any` in Pydantic), use Any
         if prop_type is None:
             python_type = Any

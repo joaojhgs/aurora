@@ -85,7 +85,7 @@ class TestMCPClientManager:
     async def test_initialize_with_stdio_server(self, mcp_manager, config_manager):
         """Test initialization with a stdio server configuration."""
         import sys
-        
+
         servers_config = {
             "math": {
                 "command": "python",
@@ -126,7 +126,7 @@ class TestMCPClientManager:
     async def test_initialize_with_http_server(self, mcp_manager, config_manager):
         """Test initialization with an HTTP server configuration."""
         import sys
-        
+
         servers_config = {
             "weather": {
                 "url": "http://localhost:8000/mcp/",
