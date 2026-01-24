@@ -1280,6 +1280,7 @@ make unit    # Run tests
 ```python
 from app.helpers.aurora_logger import log_info, log_error, log_debug
 
+# Use the project logger functions, NOT logging.getLogger()
 log_info("Service started")
 log_error("Failed to connect", exc_info=True)
 log_debug(f"Processing message: {message}")
