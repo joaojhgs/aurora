@@ -12,13 +12,13 @@ import aiosqlite
 
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.db.migration_manager import MigrationManager
-from app.services.db.models import Message
+from app.services.db.models import Device, Message, Token, User
 
 
 class DatabaseManager:
     """Main database manager for Aurora"""
 
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             # Default to data directory in project root
             project_root = Path(__file__).parent.parent.parent
@@ -71,7 +71,7 @@ class DatabaseManager:
             log_error(f"Error storing message: {e}")
             return False
 
-    async def get_messages_for_date(self, target_date: date = None) -> list[Message]:
+    async def get_messages_for_date(self, target_date: Optional[date] = None) -> list[Message]:
         """Get all messages for a specific date (defaults to today)"""
         if target_date is None:
             target_date = date.today()
@@ -169,7 +169,7 @@ class DatabaseManager:
             log_error(f"Error deleting message {message_id}: {e}")
             return False
 
-    async def get_message_count_for_date(self, target_date: date = None) -> int:
+    async def get_message_count_for_date(self, target_date: Optional[date] = None) -> int:
         """Get the count of messages for a specific date"""
         if target_date is None:
             target_date = date.today()
@@ -267,6 +267,196 @@ class DatabaseManager:
         except Exception as e:
             log_error(f"Error updating message {message.id}: {e}")
             return False
+
+    async def create_user(self, user: User) -> bool:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO users (id, username, password_hash, role, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        user.id,
+                        user.username,
+                        user.password_hash,
+                        user.role,
+                        user.created_at.isoformat() if user.created_at else None,
+                    ),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error creating user {user.username}: {e}")
+            return False
+
+    async def get_user_by_username(self, username: str) -> User | None:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
+                row = await cursor.fetchone()
+                return User.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving user {username}: {e}")
+            return None
+
+    async def get_user_by_id(self, user_id: str) -> User | None:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+                row = await cursor.fetchone()
+                return User.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving user {user_id}: {e}")
+            return None
+
+    async def count_users(self) -> int:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute("SELECT COUNT(*) FROM users")
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            log_error(f"Error counting users: {e}")
+            return 0
+
+    async def create_device(self, device: Device) -> bool:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO devices (id, user_id, name, public_key, is_trusted, last_seen, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        device.id,
+                        device.user_id,
+                        device.name,
+                        device.public_key,
+                        1 if device.is_trusted else 0,
+                        device.last_seen.isoformat() if device.last_seen else None,
+                        device.created_at.isoformat() if device.created_at else None,
+                    ),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error creating device {device.name}: {e}")
+            return False
+
+    async def get_device_by_id(self, device_id: str) -> Device | None:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM devices WHERE id = ?", (device_id,))
+                row = await cursor.fetchone()
+                return Device.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving device {device_id}: {e}")
+            return None
+
+    async def get_device_by_token(self, token_hash: str) -> Device | None:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    """
+                    SELECT d.* FROM devices d
+                    JOIN tokens t ON d.id = t.device_id
+                    WHERE t.token_hash = ?
+                """,
+                    (token_hash,),
+                )
+                row = await cursor.fetchone()
+                return Device.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving device by token: {e}")
+            return None
+
+    async def get_devices_by_user(self, user_id: str) -> list[Device]:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM devices WHERE user_id = ?", (user_id,))
+                rows = await cursor.fetchall()
+                return [Device.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error retrieving devices for user {user_id}: {e}")
+            return []
+
+    async def create_token(self, token: Token) -> bool:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO tokens (id, device_id, user_id, token_hash, prefix, scopes, expires_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        token.id,
+                        token.device_id,
+                        token.user_id,
+                        token.token_hash,
+                        token.prefix,
+                        json.dumps(token.scopes),
+                        token.expires_at.isoformat() if token.expires_at else None,
+                        token.created_at.isoformat() if token.created_at else None,
+                    ),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error creating token: {e}")
+            return False
+
+    async def get_token_by_hash(self, token_hash: str) -> Token | None:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    "SELECT * FROM tokens WHERE token_hash = ?", (token_hash,)
+                )
+                row = await cursor.fetchone()
+                return Token.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving token: {e}")
+            return None
+
+    async def revoke_token(self, token_id: str) -> bool:
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("DELETE FROM tokens WHERE id = ?", (token_id,))
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error revoking token {token_id}: {e}")
+            return False
+
+    async def get_tokens_by_user(self, user_id: str) -> list[Token]:
+        """Get all tokens for a user."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM tokens WHERE user_id = ?", (user_id,))
+                rows = await cursor.fetchall()
+                return [Token.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error retrieving tokens for user {user_id}: {e}")
+            return []
+
+    async def get_tokens_by_device(self, device_id: str) -> list[Token]:
+        """Get all tokens for a device."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM tokens WHERE device_id = ?", (device_id,))
+                rows = await cursor.fetchall()
+                return [Token.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error retrieving tokens for device {device_id}: {e}")
+            return []
 
     async def close(self):
         """Close any open connections and resources"""
