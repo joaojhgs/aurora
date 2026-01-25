@@ -42,8 +42,10 @@ class RTCClient:
         self._adapter: SignalingAdapter | None = None
         self._pcs: dict[str, RTCPeerConnection] = {}
         self._peer_acl: dict[str, dict[str, Any]] = {}
+        self._system_token: str | None = None
 
     async def start(self) -> None:
+        self._system_token = await self._auth_service.get_system_token()
         s = self._settings
         if s.webrtc.strategy == "mqtt":
             self._adapter = MQTTSignaling(
@@ -113,12 +115,13 @@ class RTCClient:
             @chan.on("open")
             def on_open() -> None:
                 log_info(f"DataChannel '{chan.label}' open with peer {peer}")
-                auth_msg = {
-                    "type": "auth",
-                    "peer_name": self._peer_id,
-                    "token": "GATEWAY_INTERNAL_TOKEN",
-                }
-                chan.send(json.dumps(auth_msg))
+                if self._system_token:
+                    auth_msg = {
+                        "type": "auth",
+                        "peer_name": self._peer_id,
+                        "token": self._system_token,
+                    }
+                    chan.send(json.dumps(auth_msg))
 
             @chan.on("message")
             def on_message(message: str | bytes) -> None:
@@ -163,6 +166,8 @@ class RTCClient:
                                     "roles": [],
                                     "perms": [],
                                 }
+                                # Optionally close channel on auth failure
+                                chan.close()
 
                         asyncio.create_task(validate_peer())
                     else:
