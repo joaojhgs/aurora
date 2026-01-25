@@ -18,7 +18,7 @@ from app.services.db.models import Device, Message, Token, User
 class DatabaseManager:
     """Main database manager for Aurora"""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             # Default to data directory in project root
             project_root = Path(__file__).parent.parent.parent
@@ -71,7 +71,7 @@ class DatabaseManager:
             log_error(f"Error storing message: {e}")
             return False
 
-    async def get_messages_for_date(self, target_date: Optional[date] = None) -> list[Message]:
+    async def get_messages_for_date(self, target_date: date | None = None) -> list[Message]:
         """Get all messages for a specific date (defaults to today)"""
         if target_date is None:
             target_date = date.today()
@@ -169,7 +169,7 @@ class DatabaseManager:
             log_error(f"Error deleting message {message_id}: {e}")
             return False
 
-    async def get_message_count_for_date(self, target_date: Optional[date] = None) -> int:
+    async def get_message_count_for_date(self, target_date: date | None = None) -> int:
         """Get the count of messages for a specific date"""
         if target_date is None:
             target_date = date.today()
