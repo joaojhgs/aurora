@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.services.gateway.auth_service import AuthService
     from app.services.gateway.auth import GatewayAuth
+    from app.services.gateway.auth_service import AuthService
 
 # Singleton instance of AuthService
 _auth_service: AuthService | None = None
