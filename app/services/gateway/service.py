@@ -185,10 +185,15 @@ class GatewayService(BaseService):
 
             from app.services.gateway.webrtc.rtc_client import RTCClient
 
+            if not self._auth_service:
+                log_error("AuthService not initialized, cannot start WebRTC client")
+                return
+
             self._rtc_client = RTCClient(
                 settings=settings,
                 bus=self.bus,
                 registry=self._registry_aggregator,
+                auth_service=self._auth_service,
             )
             await self._rtc_client.start()
             log_info("WebRTC client started")
