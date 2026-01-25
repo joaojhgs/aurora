@@ -169,7 +169,7 @@
     }
   },
   "webrtc": {
-    "enabled": false,
+    "enabled": true,
     "strategy": "mqtt",
     "app_id": "aurora",
     "room": "default",
