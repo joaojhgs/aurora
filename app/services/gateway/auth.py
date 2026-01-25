@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from fastapi.security import SecurityScopes
+from fastapi import HTTPException, Request
+from fastapi.security import SecurityScopes
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 from app.services.gateway.auth_service import AuthService
@@ -48,7 +48,16 @@ class GatewayAuth:
         self._enabled = enabled
         self._api_keys = set(api_keys or [])
         self._bypass_paths = set(
-            bypass_paths or ["/api/health", "/api/docs", "/api/redoc", "/api/openapi.json"]
+            bypass_paths
+            or [
+                "/api/health",
+                "/api/docs",
+                "/api/redoc",
+                "/api/openapi.json",
+                "/api/auth/pairing/start",
+                "/api/auth/pairing/connect",
+                "/api/auth/pairing/exchange",
+            ]
         )
 
     def is_enabled(self) -> bool:
@@ -175,12 +184,11 @@ def create_auth_middleware(auth: GatewayAuth) -> Callable:
 
 
 async def check_auth_enabled(
-    request: Any,
+    request: Request,
     security_scopes: SecurityScopes,
-    auth: GatewayAuth = None,  # type: ignore
+    auth: Any = None,
 ) -> Any:
     """Dependency to check if auth is enabled and valid."""
-    from fastapi import HTTPException
 
     if auth is None:
         auth = get_gateway_auth()
@@ -211,15 +219,17 @@ async def check_auth_enabled(
     if token is None:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    if security_scopes.scopes and token != "api_key":
-        if not auth.verify_permissions(token, security_scopes.scopes):
-            log_warning(
-                f"Permission denied for {request.url.path}. "
-                f"Required scopes: {security_scopes.scopes}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail=f"Insufficient permissions. Required scopes: {security_scopes.scopes}",
-            )
+    if (
+        security_scopes.scopes
+        and token != "api_key"
+        and not auth.verify_permissions(token, security_scopes.scopes)
+    ):
+        log_warning(
+            f"Permission denied for {request.url.path}. Required scopes: {security_scopes.scopes}"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient permissions. Required scopes: {security_scopes.scopes}",
+        )
 
     return token

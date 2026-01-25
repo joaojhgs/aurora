@@ -10,13 +10,28 @@ Creates and configures the FastAPI application with:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
+
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Security
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.helpers.aurora_logger import log_error, log_info
+from app.services.gateway.auth import check_auth_enabled
+from app.services.gateway.auth_service import AuthService
+from app.services.gateway.dependencies import get_auth_service
+from app.services.gateway.schemas.auth import (
+    PairingApproveRequest,
+    PairingApproveResponse,
+    PairingConnectResponse,
+    PairingExchangeRequest,
+    PairingExchangeResponse,
+    PairingStartRequest,
+    PairingStartResponse,
+)
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
-    from app.services.gateway.auth_service import AuthService
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
@@ -49,14 +64,6 @@ def create_gateway_app(
     Returns:
         FastAPI application instance
     """
-    try:
-        from fastapi import FastAPI, HTTPException, Request
-        from fastapi.middleware.cors import CORSMiddleware
-        from fastapi.responses import JSONResponse
-    except ImportError as e:
-        log_error(f"FastAPI not installed. Install with: pip install 'aurora[gateway]'. Error: {e}")
-        raise
-
     from app.services.gateway.route_generator import RouteGenerator
     from app.shared.contracts.models.common import EmptyInput
     from app.shared.contracts.models.gateway import (
@@ -313,5 +320,100 @@ def create_gateway_app(
                 "path": str(request.url.path),
             },
         )
+
+    # ==========================================================================
+    # Auth Pairing Endpoints
+    # ==========================================================================
+
+    @app.post(
+        "/api/auth/pairing/start",
+        tags=["Auth"],
+        summary="Start pairing process",
+        response_model=PairingStartResponse,
+    )
+    async def start_pairing(
+        request: Request,
+        payload: Annotated[PairingStartRequest, Body(...)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PairingStartResponse:
+        client_ip = request.client.host if request.client else "unknown"
+        code = await auth_service.start_pairing(payload.device_name, client_ip)
+        if not code:
+            raise HTTPException(status_code=429, detail="Too many pairing attempts")
+        return PairingStartResponse(code=code, expires_in_seconds=300)
+
+    @app.get(
+        "/api/auth/pairing/connect/{pairing_code}",
+        tags=["Auth"],
+        summary="Check pairing status",
+        response_model=PairingConnectResponse,
+    )
+    async def connect_pairing(
+        pairing_code: str,
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PairingConnectResponse:
+        request_data = await auth_service.connect_pairing(pairing_code)
+        if not request_data:
+            raise HTTPException(status_code=404, detail="Pairing code not found or expired")
+        return PairingConnectResponse(
+            request_id=request_data["id"],
+            device_name=request_data["device_name"],
+            status=request_data["status"],
+        )
+
+    @app.post(
+        "/api/auth/pairing/approve",
+        tags=["Auth"],
+        summary="Approve pairing request",
+        response_model=PairingApproveResponse,
+    )
+    async def approve_pairing(
+        payload: Annotated[PairingApproveRequest, Body(...)],
+        token_data: Annotated[Any, Security(check_auth_enabled, scopes=["admin"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PairingApproveResponse:
+        user_id = token_data.user_id if hasattr(token_data, "user_id") else "system"
+        success = await auth_service.approve_pairing(payload.code, user_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Pairing code not found or expired")
+        return PairingApproveResponse(success=True)
+
+    @app.post(
+        "/api/auth/pairing/exchange",
+        tags=["Auth"],
+        summary="Exchange pairing code for token",
+        response_model=PairingExchangeResponse,
+    )
+    async def exchange_pairing(
+        payload: Annotated[PairingExchangeRequest, Body(...)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PairingExchangeResponse:
+        result = await auth_service.exchange_pairing(payload.code)
+        if not result:
+            raise HTTPException(status_code=400, detail="Pairing not approved or expired")
+        return PairingExchangeResponse(
+            token=result["token"],
+            device_id=result["device_id"],
+            user_id=result["user_id"],
+        )
+
+    @app.get(
+        "/api/auth/verify",
+        tags=["Auth"],
+        summary="Verify token and get user info",
+    )
+    async def verify_token(
+        token_data: Annotated[Any, Security(check_auth_enabled)],
+    ) -> dict[str, Any]:
+        if token_data == "api_key":
+            return {"status": "valid", "type": "api_key"}
+
+        return {
+            "status": "valid",
+            "type": "token",
+            "user_id": token_data.user_id,
+            "device_id": token_data.device_id,
+            "scopes": token_data.scopes,
+        }
 
     return app
