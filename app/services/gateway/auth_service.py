@@ -11,7 +11,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-
 from passlib.context import CryptContext
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
@@ -39,6 +38,56 @@ class AuthService:
         """Initialize the auth service and bootstrap if needed."""
         await self.db_manager.initialize()
         await self._bootstrap_admin()
+        await self._bootstrap_system_token()
+
+    async def _bootstrap_system_token(self) -> None:
+        """Create a system token for internal service use if it doesn't exist."""
+        try:
+            # Check if system user exists
+            system_user = await self.db_manager.get_user_by_username("system")
+            if not system_user:
+                system_user = User(
+                    id="system-user-id",
+                    username="system",
+                    password_hash="SYSTEM_NO_PASSWORD",
+                    role="admin",
+                )
+                await self.db_manager.create_user(system_user)
+
+            # Check if system device exists
+            system_device = await self.db_manager.get_device_by_id("system-device-id")
+            if not system_device:
+                system_device = Device(
+                    id="system-device-id",
+                    user_id=system_user.id,
+                    name="System Gateway",
+                    is_trusted=True,
+                )
+                await self.db_manager.create_device(system_device)
+
+            # Check if we have a system token
+            token_str = "GATEWAY_INTERNAL_TOKEN"
+            token_hash = hashlib.sha256(token_str.encode()).hexdigest()
+            existing_token = await self.db_manager.get_token_by_hash(token_hash)
+
+            if not existing_token:
+                token = Token(
+                    id="system-token-id",
+                    token_hash=token_hash,
+                    prefix=token_str[:8],
+                    device_id=system_device.id,
+                    user_id=system_user.id,
+                    scopes=["all"],
+                    expires_at=datetime.now() + timedelta(days=3650),  # 10 years
+                )
+                await self.db_manager.create_token(token)
+                log_info("System token bootstrapped")
+        except Exception as e:
+            log_error(f"Error bootstrapping system token: {e}")
+
+    async def get_system_token(self) -> str:
+        """Get the system token string."""
+        return "GATEWAY_INTERNAL_TOKEN"
 
     async def _bootstrap_admin(self) -> None:
         """Create initial admin user if no users exist."""
