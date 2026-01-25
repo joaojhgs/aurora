@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
 from aiortc.sdp import candidate_from_sdp
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
 from .rpc import RPCHandler
@@ -16,6 +16,7 @@ from .signaling.mqtt_client import MQTTSignaling
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+    from app.services.gateway.auth_service import AuthService
     from app.services.gateway.config import Settings
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
@@ -23,10 +24,17 @@ if TYPE_CHECKING:
 
 
 class RTCClient:
-    def __init__(self, settings: Settings, bus: MessageBus, registry: RegistryAggregator):
+    def __init__(
+        self,
+        settings: Settings,
+        bus: MessageBus,
+        registry: RegistryAggregator,
+        auth_service: AuthService,
+    ):
         self._settings = settings
         self._bus = bus
         self._registry = registry
+        self._auth_service = auth_service
         self._peer_id = str(uuid.uuid4())
         self._keys = derive_room_keys(
             settings.webrtc.password, settings.webrtc.app_id, settings.webrtc.room
@@ -105,6 +113,12 @@ class RTCClient:
             @chan.on("open")
             def on_open() -> None:
                 log_info(f"DataChannel '{chan.label}' open with peer {peer}")
+                auth_msg = {
+                    "type": "auth",
+                    "peer_name": self._peer_id,
+                    "token": "GATEWAY_INTERNAL_TOKEN",
+                }
+                chan.send(json.dumps(auth_msg))
 
             @chan.on("message")
             def on_message(message: str | bytes) -> None:
@@ -124,12 +138,33 @@ class RTCClient:
                 try:
                     obj = json.loads(text)
                     if obj.get("type") == "auth":
-                        log_debug(f"Updating ACL for peer {peer}: {obj}")
-                        self._peer_acl[peer] = {
-                            "peer_name": obj.get("peer_name"),
-                            "roles": obj.get("roles", []),
-                            "perms": obj.get("perms", []),
-                        }
+                        token_str = obj.get("token")
+                        if not token_str:
+                            log_warning(f"Peer {peer} sent auth without token")
+                            return
+
+                        async def validate_peer():
+                            token = await self._auth_service.authenticate_token(token_str)
+                            if token:
+                                log_info(
+                                    f"Peer {peer} authenticated via token (scopes={token.scopes})"
+                                )
+                                self._peer_acl[peer] = {
+                                    "peer_name": obj.get("peer_name") or peer,
+                                    "roles": ["authenticated"],
+                                    "perms": token.scopes or [],
+                                }
+                            else:
+                                log_warning(
+                                    f"Peer {peer} failed authentication with token: {token_str[:8]}..."
+                                )
+                                self._peer_acl[peer] = {
+                                    "peer_name": peer,
+                                    "roles": [],
+                                    "perms": [],
+                                }
+
+                        asyncio.create_task(validate_peer())
                     else:
                         asyncio.create_task(handler.on_message(text))
                 except Exception as e:
