@@ -1,0 +1,2 @@
+- pytest was not in the system path, had to use .venv/bin/python -m pytest.
+- Initial attempt to set service.bus failed due to property being read-only.
