@@ -173,15 +173,15 @@ class RTCClient:
         details: dict | None = None,
     ) -> None:
         """Fire-and-forget audit event."""
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             await audit_event(
                 self._auth_service.db_manager,
                 event,
                 principal_id=principal_id,
                 details=details,
             )
-        except Exception:
-            pass  # Audit must not break peer flow
 
     async def _on_presence(self, payload: bytes) -> None:
         pass

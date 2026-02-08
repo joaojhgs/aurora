@@ -448,16 +448,15 @@ class RouteGenerator:
             from app.services.gateway.auth import check_auth_enabled
 
             # Use closure default value to bind scopes
-            # This avoids the "Do not perform function call `Security` in argument defaults" warning
-            # by creating a new dependency per route
+            # FastAPI requires Security() in defaults for dependency injection
             def auth_dependency(
-                _auth: Any = Security(check_auth_enabled, scopes=scopes),
+                _auth: Any = Security(check_auth_enabled, scopes=scopes),  # noqa: B008
             ) -> Any:
                 return _auth
 
             async def typed_handler(
                 request_body: req_model,
-                _auth: Any = Security(auth_dependency),
+                _auth: Any = Security(auth_dependency),  # noqa: B008
             ) -> dict[str, Any]:  # type: ignore[valid-type]
                 from fastapi.responses import JSONResponse
 

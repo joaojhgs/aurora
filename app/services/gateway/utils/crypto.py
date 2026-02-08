@@ -13,12 +13,12 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 
-def B64(b: bytes) -> str:
+def b64(b: bytes) -> str:
     """Base64url encode without padding."""
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 
 
-def B64D(s: str) -> bytes:
+def b64d(s: str) -> bytes:
     """Base64url decode with padding restoration."""
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
@@ -100,12 +100,12 @@ def issue_token(
     if peer_name:
         payload["peer_name"] = peer_name
 
-    h = B64(json.dumps(header, separators=(",", ":")).encode())
-    p = B64(json.dumps(payload, separators=(",", ":")).encode())
+    h = b64(json.dumps(header, separators=(",", ":")).encode())
+    p = b64(json.dumps(payload, separators=(",", ":")).encode())
 
     msg = f"{h}.{p}".encode()
     sig = hmac.new(secret.encode(), msg=msg, digestmod=hashlib.sha256).digest()
-    s = B64(sig)
+    s = b64(sig)
 
     return f"{h}.{p}.{s}"
 
@@ -121,10 +121,10 @@ def verify_token(secret: str, token: str) -> dict[str, Any]:
         msg = f"{h}.{p}".encode()
         expected_sig = hmac.new(secret.encode(), msg=msg, digestmod=hashlib.sha256).digest()
 
-        if not hmac.compare_digest(expected_sig, B64D(s)):
+        if not hmac.compare_digest(expected_sig, b64d(s)):
             raise TokenError("bad signature")
 
-        payload = json.loads(B64D(p))
+        payload = json.loads(b64d(p))
         if int(payload.get("exp", 0)) < int(time.time()):
             raise TokenError("expired")
 
