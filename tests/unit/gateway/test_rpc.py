@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.messaging.bus import QueryResult
+from app.services.gateway.acl.identity import Identity
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 
@@ -25,7 +26,15 @@ def mock_send_fn():
 
 @pytest.fixture
 def mock_acl_provider():
-    return MagicMock(return_value={"perms": ["user"], "roles": []})
+    """Returns an Identity with limited permissions."""
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset(["user"]),
+        source="webrtc_peer",
+    )
+    return MagicMock(return_value=identity)
 
 
 @pytest.fixture
@@ -72,7 +81,7 @@ async def test_handle_call_forbidden(rpc_handler, mock_registry, mock_acl_provid
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
-    mock_acl_provider.return_value = {"perms": ["user"]}
+    # The default mock_acl_provider only has "user" permission, not "admin"
 
     await rpc_handler.on_message(json.dumps({"type": "call", "id": 1, "method": "Svc.Secret"}))
 
