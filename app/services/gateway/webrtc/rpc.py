@@ -80,7 +80,9 @@ class RPCHandler:
 
             # Audit: WebRTC RPC access denied
             if self._audit_fn:
-                try:
+                import contextlib
+
+                with contextlib.suppress(Exception):
                     asyncio.create_task(
                         self._audit_fn(
                             "access.denied.rpc",
@@ -92,8 +94,6 @@ class RPCHandler:
                             },
                         )
                     )
-                except Exception:
-                    pass
 
             self._send_error(req_id, 403, "Forbidden")
             return
