@@ -28,7 +28,7 @@ class MQTTSignaling:
         except (ImportError, AttributeError):
             self._client = mqtt.Client(protocol=mqtt.MQTTv5)
 
-        self._loop = asyncio.get_event_loop()
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._handlers: dict[str, OnMessage] = {}
         self._app_id = ""
         self._room = ""
@@ -41,8 +41,11 @@ class MQTTSignaling:
         return f"{base}/{to_peer}" if to_peer else base
 
     async def connect(self) -> None:
+        # Store the running event loop for thread-safe callbacks
+        self._loop = asyncio.get_running_loop()
+
         def on_connect(client, userdata, flags, rc, props=None):
-            if rc == 0:
+            if rc == 0 and self._loop:
                 self._loop.call_soon_threadsafe(self._connected.set)
 
         for url in self._brokers:
@@ -145,7 +148,7 @@ class MQTTSignaling:
         if len(parts) >= 4:
             channel = parts[3]
             handler = self._handlers.get(channel)
-            if handler:
+            if handler and self._loop:
                 asyncio.run_coroutine_threadsafe(handler(msg.payload), self._loop)
 
     async def send(self, channel: str, payload: bytes, to_peer: str | None = None) -> None:
