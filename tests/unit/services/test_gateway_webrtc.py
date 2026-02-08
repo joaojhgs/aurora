@@ -14,6 +14,11 @@ def mock_bus():
 
 
 @pytest.fixture
+def mock_auth_service():
+    return AsyncMock()
+
+
+@pytest.fixture
 def mock_settings():
     settings = Settings()
     settings.api.enabled = False
@@ -62,7 +67,8 @@ async def test_rtc_client_initialization_and_signaling_config(mock_bus, mock_set
         mock_mqtt_signaling.join_room = AsyncMock()
         mock_mqtt_signaling.on_message = MagicMock()
 
-        client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry)
+        mock_auth_service = AsyncMock()
+        client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry, auth_service=mock_auth_service)
         await client.start()
 
         mock_mqtt_signaling_cls.assert_called_once_with(
@@ -86,7 +92,8 @@ async def test_rtc_client_respects_ice_servers_config(mock_bus, mock_settings):
     mock_settings.webrtc.turn_password = "pass"
 
     mock_registry = AsyncMock()
-    client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry)
+    mock_auth_service = AsyncMock()
+    client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry, auth_service=mock_auth_service)
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection") as mock_pc_cls:
         mock_pc = mock_pc_cls.return_value
