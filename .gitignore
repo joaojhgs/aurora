@@ -217,4 +217,4 @@ config.json*
 
 instructions
 
-/ambient_logs/
+/ambient_logs/tests/test_scheduler.db
