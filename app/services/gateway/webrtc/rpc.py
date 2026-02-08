@@ -1,7 +1,8 @@
 """RPC Handler for WebRTC DataChannels.
 
 Handles JSON-RPC calls over DataChannels by forwarding them to the message bus
-after validating permissions against the aggregated registry.
+after validating permissions against the aggregated registry and the peer's
+:class:`Identity`.
 """
 
 from __future__ import annotations
@@ -11,12 +12,15 @@ import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.helpers.aurora_logger import log_debug, log_error
+from app.helpers.aurora_logger import log_debug, log_error, log_warning
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+    from app.services.gateway.acl.identity import Identity
     from app.services.gateway.registry_aggregator import RegistryAggregator
     from app.shared.contracts.models.gateway import MethodInfo
+
+    from .rtc_client import RTCClient
 
 
 class RPCHandler:
@@ -25,12 +29,14 @@ class RPCHandler:
         bus: MessageBus,
         registry: RegistryAggregator,
         send_fn: Callable[[str], None],
-        acl_provider: Callable[[], dict[str, Any]],
+        acl_provider: Callable[[], Identity],
+        audit_fn: Callable[..., Any] | None = None,
     ):
         self._bus = bus
         self._registry = registry
         self._send = send_fn
         self._acl_provider = acl_provider
+        self._audit_fn = audit_fn
 
     async def on_message(self, text: str) -> None:
         try:
@@ -61,12 +67,34 @@ class RPCHandler:
 
         svc_name, meta = result
 
-        perms_needed = set(meta.required_perms or [])
-        identity = self._acl_provider()
-        user_perms = set(identity.get("perms", [])) | set(identity.get("roles", []))
+        # Permission check via Identity
+        perms_needed = meta.required_perms or []
+        identity: Identity = self._acl_provider()
 
-        if not perms_needed.issubset(user_perms):
-            log_debug(f"RPCHandler: Forbidden call to {method_name} from peer")
+        if perms_needed and not identity.can(*perms_needed):
+            log_warning(
+                f"RPCHandler: Forbidden call to {method_name} from "
+                f"{identity.principal_name} (need {perms_needed}, "
+                f"have {list(identity.effective_perms)})"
+            )
+
+            # Audit: WebRTC RPC access denied
+            if self._audit_fn:
+                try:
+                    asyncio.create_task(
+                        self._audit_fn(
+                            "access.denied.rpc",
+                            identity.principal_id,
+                            {
+                                "method": method_name,
+                                "required": perms_needed,
+                                "effective": list(identity.effective_perms),
+                            },
+                        )
+                    )
+                except Exception:
+                    pass
+
             self._send_error(req_id, 403, "Forbidden")
             return
 
@@ -120,10 +148,11 @@ class RPCHandler:
                         if m.name == cmd:
                             return svc, m
 
+        # Fallback: search external methods
         external_methods = await self._registry.get_external_methods()
-        for svc, m in external_methods:
-            if m.name == method_name:
-                return svc, m
+        for svc_name, method_info in external_methods:
+            if method_info.name == method_name:
+                return svc_name, method_info
 
         return None
 
