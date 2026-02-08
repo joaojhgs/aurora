@@ -1008,7 +1008,7 @@
                 },
                 "auth": {
                     "type": "object",
-                    "description": "Authentication configuration",
+                    "description": "Authentication and authorization configuration",
                     "properties": {
                         "enabled": {
                             "type": "boolean",
@@ -1022,6 +1022,55 @@
                                 "type": "string"
                             },
                             "default": []
+                        },
+                        "token_expiry_days": {
+                            "type": "integer",
+                            "description": "Default token expiry in days",
+                            "minimum": 1,
+                            "default": 365
+                        },
+                        "session_token_expiry_hours": {
+                            "type": "integer",
+                            "description": "Session token expiry in hours (for login)",
+                            "minimum": 1,
+                            "default": 24
+                        },
+                        "pairing_code_expiry_minutes": {
+                            "type": "integer",
+                            "description": "Pairing code expiry in minutes",
+                            "minimum": 1,
+                            "default": 5
+                        },
+                        "pairing_max_attempts_per_ip": {
+                            "type": "integer",
+                            "description": "Max pairing attempts per IP before rate limiting",
+                            "minimum": 1,
+                            "default": 5
+                        },
+                        "default_pairing_permissions": {
+                            "type": "array",
+                            "description": "Default permissions assigned to new devices during pairing",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": []
+                        },
+                        "webrtc_auth_timeout_seconds": {
+                            "type": "number",
+                            "description": "Timeout in seconds for WebRTC peer authentication",
+                            "minimum": 1,
+                            "default": 10.0
+                        },
+                        "audit_enabled": {
+                            "type": "boolean",
+                            "description": "Enable audit logging of security events",
+                            "default": true
+                        },
+                        "audit_retention_days": {
+                            "type": "integer",
+                            "description": "Audit log retention period in days",
+                            "minimum": 1,
+                            "default": 90
                         }
                     },
                     "additionalProperties": false

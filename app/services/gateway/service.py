@@ -56,6 +56,7 @@ class GatewayService(BaseService):
         """Reload service configuration."""
         if config_section is None or config_section == "gateway":
             await self._reload_gateway_config()
+            await self._reload_auth_config()
 
     async def _init_auth_service(self) -> None:
         """Initialize authentication service."""
@@ -66,6 +67,16 @@ class GatewayService(BaseService):
             self._auth_service = AuthService()
             await self._auth_service.initialize()
             set_auth_service(self._auth_service)
+
+            # Set initial default device permissions from config
+            try:
+                settings = await self._get_gateway_config()
+                self._auth_service.update_permission_defaults(
+                    settings.permissions.default_device_permissions
+                )
+            except Exception as e:
+                log_warning(f"Could not load initial permission defaults: {e}")
+
             log_info("Gateway Auth Service initialized")
         except Exception as e:
             log_error(f"Failed to initialize Auth Service: {e}")
@@ -189,6 +200,8 @@ class GatewayService(BaseService):
                 log_error("AuthService not initialized, cannot start WebRTC client")
                 return
 
+            from app.services.gateway.dependencies import set_rtc_client
+
             self._rtc_client = RTCClient(
                 settings=settings,
                 bus=self.bus,
@@ -196,6 +209,7 @@ class GatewayService(BaseService):
                 auth_service=self._auth_service,
             )
             await self._rtc_client.start()
+            set_rtc_client(self._rtc_client)
             log_info("WebRTC client started")
 
         except ImportError as e:
@@ -206,9 +220,12 @@ class GatewayService(BaseService):
     async def _stop_webrtc(self) -> None:
         """Stop the WebRTC client."""
         if self._rtc_client:
+            from app.services.gateway.dependencies import set_rtc_client
+
             log_info("Stopping WebRTC client...")
             await self._rtc_client.close()
             self._rtc_client = None
+            set_rtc_client(None)
             log_info("WebRTC client stopped")
 
     async def _stop_gateway(self) -> None:
@@ -235,6 +252,27 @@ class GatewayService(BaseService):
 
         except Exception as e:
             log_error(f"Error stopping gateway: {e}")
+
+    async def _reload_auth_config(self) -> None:
+        """Reload auth/permission settings from config."""
+        try:
+            settings = await self._get_gateway_config()
+            perm_settings = settings.permissions
+
+            if self._rtc_client:
+                self._rtc_client._auth_timeout = perm_settings.webrtc_auth_timeout_seconds
+
+            if self._auth_service:
+                self._auth_service.update_permission_defaults(
+                    perm_settings.default_device_permissions
+                )
+
+            log_debug(
+                f"Auth config reloaded: webrtc_auth_timeout={perm_settings.webrtc_auth_timeout_seconds}s, "
+                f"default_perms={perm_settings.default_device_permissions}"
+            )
+        except Exception as e:
+            log_error(f"Error reloading auth config: {e}")
 
     async def _reload_gateway_config(self) -> None:
         """Reload gateway configuration dynamically."""
