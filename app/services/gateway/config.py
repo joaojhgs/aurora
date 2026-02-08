@@ -38,7 +38,15 @@ class MQTTSettings(BaseModel):
     topic_root: str = "aurora"
 
 
+class PermissionSettings(BaseModel):
+    """Default permission settings for new principals."""
+
+    default_device_permissions: list[str] = []
+    webrtc_auth_timeout_seconds: float = 10.0
+
+
 class Settings(BaseModel):
     api: APISettings = Field(default_factory=APISettings)
     webrtc: WebRTCSettings = Field(default_factory=WebRTCSettings)
     signaling_mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
+    permissions: PermissionSettings = Field(default_factory=PermissionSettings)
