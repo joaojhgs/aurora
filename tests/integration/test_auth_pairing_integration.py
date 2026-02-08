@@ -87,8 +87,8 @@ async def test_full_pairing_flow(test_app_and_client):
     assert response.status_code == 200
     verify_data = response.json()
     assert verify_data["status"] == "valid"
-    assert verify_data["type"] == "token"
-    assert verify_data["user_id"] is not None
+    assert verify_data["principal_id"] is not None
+    assert verify_data["source"] == "http_bearer"
 
 
 @pytest.mark.asyncio
