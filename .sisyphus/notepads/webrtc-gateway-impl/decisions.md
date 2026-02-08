@@ -1,0 +1,2 @@
+- Mocked MQTTSignaling instead of paho-mqtt directly as it's the immediate dependency of RTCClient and handles the signaling logic.
+- Patched app.services.gateway.webrtc.rtc_client.RTCClient and app.services.gateway.registry_aggregator.RegistryAggregator to handle local imports in GatewayService.
