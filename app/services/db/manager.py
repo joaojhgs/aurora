@@ -32,6 +32,16 @@ class DatabaseManager:
         migrations_dir = Path(__file__).parent / "migrations"
         self.migration_manager = MigrationManager(db_path, str(migrations_dir))
 
+    async def _connect(self) -> aiosqlite.Connection:
+        """Return a connection with ``PRAGMA foreign_keys = ON``.
+
+        All write operations that depend on FK cascading should use this
+        helper instead of calling ``aiosqlite.connect()`` directly.
+        """
+        db = await aiosqlite.connect(self.db_path)
+        await db.execute("PRAGMA foreign_keys = ON")
+        return db
+
     async def initialize(self):
         """Initialize the database and run migrations"""
         log_info(f"Initializing database at: {self.db_path}")
@@ -273,14 +283,16 @@ class DatabaseManager:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
-                    INSERT INTO users (id, username, password_hash, role, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO users (id, username, password_hash, role, permissions, is_admin, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         user.id,
                         user.username,
                         user.password_hash,
                         user.role,
+                        json.dumps(user.permissions or []),
+                        1 if user.is_admin else 0,
                         user.created_at.isoformat() if user.created_at else None,
                     ),
                 )
@@ -425,14 +437,18 @@ class DatabaseManager:
             return None
 
     async def revoke_token(self, token_id: str) -> bool:
+        db = None
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("DELETE FROM tokens WHERE id = ?", (token_id,))
-                await db.commit()
-                return True
+            db = await self._connect()
+            cursor = await db.execute("DELETE FROM tokens WHERE id = ?", (token_id,))
+            await db.commit()
+            return cursor.rowcount > 0
         except Exception as e:
             log_error(f"Error revoking token {token_id}: {e}")
             return False
+        finally:
+            if db:
+                await db.close()
 
     async def get_tokens_by_user(self, user_id: str) -> list[Token]:
         """Get all tokens for a user."""
@@ -456,6 +472,234 @@ class DatabaseManager:
                 return [Token.from_dict(dict(row)) for row in rows]
         except Exception as e:
             log_error(f"Error retrieving tokens for device {device_id}: {e}")
+            return []
+
+    # ── Extended CRUD (Phase 2 — granular permissions) ────────────────────
+
+    async def list_users(self) -> list[User]:
+        """List all users."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM users ORDER BY created_at ASC")
+                rows = await cursor.fetchall()
+                return [User.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error listing users: {e}")
+            return []
+
+    async def update_user(self, user_id: str, **fields: object) -> bool:
+        """Update user fields dynamically.
+
+        Supported fields: username, password_hash, role, permissions, is_admin.
+        """
+        if not fields:
+            return True
+
+        allowed = {"username", "password_hash", "role", "permissions", "is_admin"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return True
+
+        # Serialise special fields
+        if "permissions" in updates:
+            updates["permissions"] = json.dumps(updates["permissions"])
+        if "is_admin" in updates:
+            updates["is_admin"] = 1 if updates["is_admin"] else 0
+
+        set_clause = ", ".join(f"{col} = ?" for col in updates)
+        values = list(updates.values()) + [user_id]
+
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(f"UPDATE users SET {set_clause} WHERE id = ?", values)
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error updating user {user_id}: {e}")
+            return False
+
+    async def delete_user(self, user_id: str) -> bool:
+        """Delete a user and cascade to devices/tokens via FK."""
+        db = None
+        try:
+            db = await self._connect()
+            cursor = await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            log_error(f"Error deleting user {user_id}: {e}")
+            return False
+        finally:
+            if db:
+                await db.close()
+
+    async def update_device(self, device_id: str, **fields: object) -> bool:
+        """Update device fields dynamically.
+
+        Supported fields: name, public_key, is_trusted, last_seen.
+        """
+        if not fields:
+            return True
+
+        allowed = {"name", "public_key", "is_trusted", "last_seen"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return True
+
+        if "is_trusted" in updates:
+            updates["is_trusted"] = 1 if updates["is_trusted"] else 0
+        if "last_seen" in updates and hasattr(updates["last_seen"], "isoformat"):
+            updates["last_seen"] = updates["last_seen"].isoformat()
+
+        set_clause = ", ".join(f"{col} = ?" for col in updates)
+        values = list(updates.values()) + [device_id]
+
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(f"UPDATE devices SET {set_clause} WHERE id = ?", values)
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error updating device {device_id}: {e}")
+            return False
+
+    async def delete_device(self, device_id: str) -> bool:
+        """Delete a device and cascade to tokens via FK."""
+        db = None
+        try:
+            db = await self._connect()
+            cursor = await db.execute("DELETE FROM devices WHERE id = ?", (device_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            log_error(f"Error deleting device {device_id}: {e}")
+            return False
+        finally:
+            if db:
+                await db.close()
+
+    async def list_devices(self) -> list[Device]:
+        """List all devices."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM devices ORDER BY created_at ASC")
+                rows = await cursor.fetchall()
+                return [Device.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error listing devices: {e}")
+            return []
+
+    async def list_tokens(
+        self, user_id: str | None = None, device_id: str | None = None
+    ) -> list[Token]:
+        """List tokens, optionally filtered by user and/or device."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                query = "SELECT * FROM tokens WHERE 1=1"
+                params: list[str] = []
+                if user_id is not None:
+                    query += " AND user_id = ?"
+                    params.append(user_id)
+                if device_id is not None:
+                    query += " AND device_id = ?"
+                    params.append(device_id)
+                query += " ORDER BY created_at ASC"
+                cursor = await db.execute(query, params)
+                rows = await cursor.fetchall()
+                return [Token.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            log_error(f"Error listing tokens: {e}")
+            return []
+
+    async def update_token_scopes(self, token_id: str, scopes: list[str]) -> bool:
+        """Update the scopes of a token."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE tokens SET scopes = ? WHERE id = ?",
+                    (json.dumps(scopes), token_id),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error updating token scopes {token_id}: {e}")
+            return False
+
+    async def get_token_by_id(self, token_id: str) -> Token | None:
+        """Get a token by its ID."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("SELECT * FROM tokens WHERE id = ?", (token_id,))
+                row = await cursor.fetchone()
+                return Token.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving token {token_id}: {e}")
+            return None
+
+    # ── Audit log (Phase 7) ──────────────────────────────────────────────
+
+    async def store_audit_event(
+        self,
+        event_id: str,
+        event: str,
+        principal_id: str | None,
+        details: str | None,
+        ip_address: str | None,
+    ) -> bool:
+        """Store an audit event."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO audit_log (id, event, principal_id, details, ip_address)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (event_id, event, principal_id, details, ip_address),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error storing audit event: {e}")
+            return False
+
+    async def get_audit_log(
+        self,
+        event: str | None = None,
+        principal_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Query the audit log with optional filters."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                query = "SELECT * FROM audit_log WHERE 1=1"
+                params: list[object] = []
+                if event:
+                    query += " AND event = ?"
+                    params.append(event)
+                if principal_id:
+                    query += " AND principal_id = ?"
+                    params.append(principal_id)
+                if since:
+                    query += " AND timestamp >= ?"
+                    params.append(since)
+                if until:
+                    query += " AND timestamp <= ?"
+                    params.append(until)
+                query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
+                cursor = await db.execute(query, params)
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            log_error(f"Error querying audit log: {e}")
             return []
 
     async def close(self):
