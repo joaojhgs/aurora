@@ -88,12 +88,30 @@ class GatewayService(BaseService):
             Gateway configuration object
         """
         try:
-            from app.services.gateway.config import Settings
+            from app.services.gateway.config import (
+                APISettings,
+                MQTTSettings,
+                PermissionSettings,
+                Settings,
+                WebRTCSettings,
+            )
             from app.shared.config.interface import ConfigAPI
 
             config_api = ConfigAPI()
             all_config = await config_api.aget_config()
-            return Settings.model_validate(all_config)
+
+            # Extract gateway section and map to Settings structure
+            gateway = all_config.get("gateway", {})
+            webrtc = all_config.get("webrtc", {})
+            signaling_mqtt = all_config.get("signaling_mqtt", {})
+            permissions = gateway.get("permissions", {}) if gateway else {}
+
+            return Settings(
+                api=APISettings.from_gateway_dict(gateway),
+                webrtc=WebRTCSettings.model_validate(webrtc) if webrtc else WebRTCSettings(),
+                signaling_mqtt=MQTTSettings.model_validate(signaling_mqtt) if signaling_mqtt else MQTTSettings(),
+                permissions=PermissionSettings.model_validate(permissions) if permissions else PermissionSettings(),
+            )
 
         except Exception as e:
             log_warning(f"Failed to get gateway config, using defaults: {e}")
@@ -122,9 +140,9 @@ class GatewayService(BaseService):
 
             host = config.host
             port = config.port
-            request_timeout = 30.0
+            request_timeout = config.request_timeout
             cors_origins = config.cors_origins
-            cors_allow_credentials = True
+            cors_allow_credentials = config.cors_allow_credentials
 
             auth_enabled = config.auth_enabled
             auth_api_keys = config.api_keys
