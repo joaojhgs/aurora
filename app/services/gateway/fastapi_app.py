@@ -17,10 +17,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.helpers.aurora_logger import log_error, log_info
+from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.auth import check_auth_enabled
 from app.services.gateway.auth_service import AuthService
-from app.services.gateway.dependencies import get_auth_service
+from app.services.gateway.dependencies import get_auth_service, get_rtc_client
 from app.services.gateway.schemas.auth import (
+    DeviceResponse,
+    IdentityResponse,
+    LoginRequest,
+    LoginResponse,
     PairingApproveRequest,
     PairingApproveResponse,
     PairingConnectResponse,
@@ -28,6 +33,17 @@ from app.services.gateway.schemas.auth import (
     PairingExchangeResponse,
     PairingStartRequest,
     PairingStartResponse,
+    PasswordChangeRequest,
+    PermissionPatchRequest,
+    PermissionSetRequest,
+    PrincipalCreateRequest,
+    PrincipalResponse,
+    PrincipalUpdateRequest,
+    TokenCreateRequest,
+    TokenCreateResponse,
+    TokenRefreshResponse,
+    TokenResponse,
+    TokenScopeUpdateRequest,
 )
 
 if TYPE_CHECKING:
@@ -322,6 +338,137 @@ def create_gateway_app(
         )
 
     # ==========================================================================
+    # Auth Endpoints — Login / Logout / Me / Token Refresh
+    # ==========================================================================
+
+    @app.post(
+        "/api/auth/login",
+        tags=["Auth"],
+        summary="Authenticate and receive a session token",
+        response_model=LoginResponse,
+    )
+    async def login(
+        request: Request,
+        payload: Annotated[LoginRequest, Body(...)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> LoginResponse:
+        client_ip = request.client.host if request.client else "unknown"
+
+        # IP-based rate limiting (similar to pairing)
+        if auth_service.login_attempts.get(client_ip, 0) >= 10:
+            await audit_event(
+                auth_service.db_manager,
+                "login.rate_limited",
+                details={"ip": client_ip, "username": payload.username},
+                ip_address=client_ip,
+            )
+            raise HTTPException(status_code=429, detail="Too many login attempts")
+
+        result = await auth_service.login(payload.username, payload.password)
+
+        if not result:
+            auth_service.login_attempts[client_ip] = (
+                auth_service.login_attempts.get(client_ip, 0) + 1
+            )
+            await audit_event(
+                auth_service.db_manager,
+                "login.failure",
+                details={"username": payload.username, "ip": client_ip},
+                ip_address=client_ip,
+            )
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
+        token, token_str, user = result
+        # Reset rate limit on success
+        auth_service.login_attempts.pop(client_ip, None)
+
+        await audit_event(
+            auth_service.db_manager,
+            "login.success",
+            principal_id=user.id,
+            details={"username": user.username, "ip": client_ip},
+            ip_address=client_ip,
+        )
+        return LoginResponse(
+            token=token_str,
+            user_id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            expires_at=token.expires_at.isoformat() if token.expires_at else None,
+        )
+
+    @app.post(
+        "/api/auth/logout",
+        tags=["Auth"],
+        summary="Revoke the current session token",
+        status_code=204,
+    )
+    async def logout(
+        request: Request,
+        identity: Annotated[Any, Security(check_auth_enabled)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> None:
+        # Extract the token from the Authorization header and revoke it
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token_str = auth_header.split(" ", 1)[1]
+            token = await auth_service.authenticate_token(token_str)
+            if token:
+                await auth_service.db_manager.revoke_token(token.id)
+                await audit_event(
+                    auth_service.db_manager,
+                    "token.revoked",
+                    principal_id=identity.principal_id,
+                    details={"token_id": token.id, "reason": "logout"},
+                )
+
+    @app.get(
+        "/api/auth/me",
+        tags=["Auth"],
+        summary="Get current identity with full permissions",
+        response_model=IdentityResponse,
+    )
+    async def get_me(
+        identity: Annotated[Any, Security(check_auth_enabled)],
+    ) -> IdentityResponse:
+        return IdentityResponse(
+            principal_id=identity.principal_id,
+            principal_name=identity.principal_name,
+            device_id=identity.device_id,
+            is_admin=identity.is_admin,
+            permissions=list(identity.permissions),
+            effective_perms=list(identity.effective_perms),
+            source=identity.source,
+        )
+
+    @app.post(
+        "/api/auth/token/refresh",
+        tags=["Auth"],
+        summary="Refresh the current token (revoke old, issue new)",
+        response_model=TokenRefreshResponse,
+    )
+    async def refresh_token(
+        request: Request,
+        identity: Annotated[Any, Security(check_auth_enabled)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> TokenRefreshResponse:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Bearer token required")
+
+        token_str = auth_header.split(" ", 1)[1]
+        result = await auth_service.refresh_token(token_str)
+        if not result:
+            raise HTTPException(status_code=400, detail="Token refresh failed")
+
+        new_token, new_token_str = result
+        return TokenRefreshResponse(
+            token=new_token_str,
+            expires_at=new_token.expires_at.isoformat() if new_token.expires_at else None,
+        )
+
+    # ==========================================================================
     # Auth Pairing Endpoints
     # ==========================================================================
 
@@ -340,6 +487,12 @@ def create_gateway_app(
         code = await auth_service.start_pairing(payload.device_name, client_ip)
         if not code:
             raise HTTPException(status_code=429, detail="Too many pairing attempts")
+        await audit_event(
+            auth_service.db_manager,
+            "pairing.started",
+            details={"device_name": payload.device_name, "ip": client_ip},
+            ip_address=client_ip,
+        )
         return PairingStartResponse(code=code, expires_in_seconds=300)
 
     @app.get(
@@ -369,13 +522,24 @@ def create_gateway_app(
     )
     async def approve_pairing(
         payload: Annotated[PairingApproveRequest, Body(...)],
-        token_data: Annotated[Any, Security(check_auth_enabled, scopes=["admin"])],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.approve"])],
         auth_service: Annotated[AuthService, Depends(get_auth_service)],
     ) -> PairingApproveResponse:
-        user_id = token_data.user_id if hasattr(token_data, "user_id") else "system"
-        success = await auth_service.approve_pairing(payload.code, user_id)
+        user_id = identity.principal_id if hasattr(identity, "principal_id") else "system"
+        success = await auth_service.approve_pairing(
+            payload.code,
+            user_id,
+            permissions=payload.permissions,
+            is_admin=payload.is_admin,
+        )
         if not success:
             raise HTTPException(status_code=404, detail="Pairing code not found or expired")
+        await audit_event(
+            auth_service.db_manager,
+            "pairing.approved",
+            principal_id=user_id,
+            details={"code": payload.code, "permissions": payload.permissions, "is_admin": payload.is_admin},
+        )
         return PairingApproveResponse(success=True)
 
     @app.post(
@@ -391,10 +555,17 @@ def create_gateway_app(
         result = await auth_service.exchange_pairing(payload.code)
         if not result:
             raise HTTPException(status_code=400, detail="Pairing not approved or expired")
+        await audit_event(
+            auth_service.db_manager,
+            "pairing.exchanged",
+            principal_id=result["user_id"],
+            details={"device_id": result["device_id"], "user_id": result["user_id"]},
+        )
         return PairingExchangeResponse(
             token=result["token"],
             device_id=result["device_id"],
             user_id=result["user_id"],
+            permissions=result.get("permissions", []),
         )
 
     @app.get(
@@ -403,17 +574,465 @@ def create_gateway_app(
         summary="Verify token and get user info",
     )
     async def verify_token(
-        token_data: Annotated[Any, Security(check_auth_enabled)],
+        identity: Annotated[Any, Security(check_auth_enabled)],
     ) -> dict[str, Any]:
-        if token_data == "api_key":
-            return {"status": "valid", "type": "api_key"}
-
         return {
             "status": "valid",
-            "type": "token",
-            "user_id": token_data.user_id,
-            "device_id": token_data.device_id,
-            "scopes": token_data.scopes,
+            "principal_id": identity.principal_id,
+            "principal_name": identity.principal_name,
+            "is_admin": identity.is_admin,
+            "permissions": list(identity.permissions),
+            "effective_perms": list(identity.effective_perms),
+            "device_id": identity.device_id,
+            "source": identity.source,
         }
+
+    # ── Principal Management ────────────────────────────────────────────
+
+    @app.get(
+        "/api/admin/principals",
+        tags=["Admin"],
+        summary="List all principals",
+        response_model=list[PrincipalResponse],
+    )
+    async def list_principals(
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> list[PrincipalResponse]:
+        users = await auth_service.list_principals()
+        return [
+            PrincipalResponse(
+                id=u.id,
+                username=u.username,
+                permissions=u.permissions or [],
+                is_admin=u.is_admin,
+                created_at=u.created_at.isoformat() if u.created_at else None,
+            )
+            for u in users
+        ]
+
+    @app.post(
+        "/api/admin/principals",
+        tags=["Admin"],
+        summary="Create a new principal",
+        response_model=PrincipalResponse,
+        status_code=201,
+    )
+    async def create_principal(
+        payload: Annotated[PrincipalCreateRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PrincipalResponse:
+        user = await auth_service.create_principal(
+            username=payload.username,
+            password=payload.password,
+            permissions=payload.permissions,
+            is_admin=payload.is_admin,
+        )
+        if not user:
+            raise HTTPException(status_code=400, detail="Failed to create principal")
+        await audit_event(
+            auth_service.db_manager,
+            "principal.created",
+            principal_id=identity.principal_id,
+            details={"created_user": user.id, "username": user.username},
+        )
+        return PrincipalResponse(
+            id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+    @app.get(
+        "/api/admin/principals/{principal_id}",
+        tags=["Admin"],
+        summary="Get a principal by ID",
+        response_model=PrincipalResponse,
+    )
+    async def get_principal(
+        principal_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PrincipalResponse:
+        user = await auth_service.get_principal(principal_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        return PrincipalResponse(
+            id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+    @app.patch(
+        "/api/admin/principals/{principal_id}",
+        tags=["Admin"],
+        summary="Update a principal",
+        response_model=PrincipalResponse,
+    )
+    async def update_principal(
+        principal_id: str,
+        payload: Annotated[PrincipalUpdateRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PrincipalResponse:
+        fields = {k: v for k, v in payload.model_dump().items() if v is not None}
+        user = await auth_service.update_principal(principal_id, **fields)
+        if not user:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        return PrincipalResponse(
+            id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+    @app.delete(
+        "/api/admin/principals/{principal_id}",
+        tags=["Admin"],
+        summary="Delete a principal",
+        status_code=204,
+    )
+    async def delete_principal(
+        principal_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> None:
+        success = await auth_service.delete_principal(principal_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        await audit_event(
+            auth_service.db_manager,
+            "principal.deleted",
+            principal_id=identity.principal_id,
+            details={"deleted_user": principal_id},
+        )
+
+    # ── Permission Management ────────────────────────────────────────────
+
+    @app.put(
+        "/api/admin/principals/{principal_id}/permissions",
+        tags=["Admin"],
+        summary="Set permissions for a principal (full replace)",
+        response_model=PrincipalResponse,
+    )
+    async def set_permissions(
+        principal_id: str,
+        payload: Annotated[PermissionSetRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PrincipalResponse:
+        success = await auth_service.set_permissions(principal_id, payload.permissions)
+        if not success:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        await audit_event(
+            auth_service.db_manager,
+            "permission.set",
+            principal_id=identity.principal_id,
+            details={"target_user": principal_id, "permissions": payload.permissions},
+        )
+        user = await auth_service.get_principal(principal_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        return PrincipalResponse(
+            id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+    @app.patch(
+        "/api/admin/principals/{principal_id}/permissions",
+        tags=["Admin"],
+        summary="Grant or revoke specific permissions",
+        response_model=PrincipalResponse,
+    )
+    async def patch_permissions(
+        principal_id: str,
+        payload: Annotated[PermissionPatchRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> PrincipalResponse:
+        success = await auth_service.patch_permissions(
+            principal_id, grant=payload.grant, revoke=payload.revoke
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        await audit_event(
+            auth_service.db_manager,
+            "permission.patched",
+            principal_id=identity.principal_id,
+            details={"target_user": principal_id, "grant": payload.grant, "revoke": payload.revoke},
+        )
+        user = await auth_service.get_principal(principal_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Principal not found")
+        return PrincipalResponse(
+            id=user.id,
+            username=user.username,
+            permissions=user.permissions or [],
+            is_admin=user.is_admin,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+    # ── Password Management ──────────────────────────────────────────────
+
+    @app.post(
+        "/api/auth/change-password",
+        tags=["Auth"],
+        summary="Change the current user's password",
+    )
+    async def change_password(
+        payload: Annotated[PasswordChangeRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> dict[str, bool]:
+        success = await auth_service.change_password(
+            identity.principal_id, payload.old_password, payload.new_password
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail="Password change failed")
+        await audit_event(
+            auth_service.db_manager,
+            "password.changed",
+            principal_id=identity.principal_id,
+        )
+        return {"success": True}
+
+    # ── Token Management ─────────────────────────────────────────────────
+
+    @app.get(
+        "/api/admin/tokens",
+        tags=["Admin"],
+        summary="List tokens",
+        response_model=list[TokenResponse],
+    )
+    async def list_tokens(
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+        principal_id: str | None = None,
+        device_id: str | None = None,
+    ) -> list[TokenResponse]:
+        tokens = await auth_service.list_tokens(principal_id=principal_id, device_id=device_id)
+        return [
+            TokenResponse(
+                id=t.id,
+                prefix=t.prefix,
+                device_id=t.device_id,
+                user_id=t.user_id,
+                scopes=t.scopes or [],
+                created_at=t.created_at.isoformat() if t.created_at else None,
+                expires_at=t.expires_at.isoformat() if t.expires_at else None,
+            )
+            for t in tokens
+        ]
+
+    @app.post(
+        "/api/admin/tokens",
+        tags=["Admin"],
+        summary="Create a token for a principal",
+        response_model=TokenCreateResponse,
+        status_code=201,
+    )
+    async def create_token(
+        payload: Annotated[TokenCreateRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> TokenCreateResponse:
+        try:
+            result = await auth_service.create_token_for_principal(
+                principal_id=payload.principal_id,
+                device_id=payload.device_id,
+                scopes=payload.scopes,
+                expires_in_days=payload.expires_in_days,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if not result:
+            raise HTTPException(status_code=400, detail="Failed to create token")
+        token, token_str = result
+        await audit_event(
+            auth_service.db_manager,
+            "token.created",
+            principal_id=identity.principal_id,
+            details={
+                "token_id": token.id,
+                "for_principal": payload.principal_id,
+                "scopes": token.scopes or [],
+            },
+        )
+        return TokenCreateResponse(
+            token=token_str,
+            id=token.id,
+            prefix=token.prefix,
+            scopes=token.scopes or [],
+            expires_at=token.expires_at.isoformat() if token.expires_at else None,
+        )
+
+    @app.patch(
+        "/api/admin/tokens/{token_id}/scopes",
+        tags=["Admin"],
+        summary="Update token scopes",
+    )
+    async def update_token_scopes(
+        token_id: str,
+        payload: Annotated[TokenScopeUpdateRequest, Body(...)],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> dict[str, bool]:
+        try:
+            success = await auth_service.update_token_scopes(token_id, payload.scopes)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if not success:
+            raise HTTPException(status_code=404, detail="Token not found")
+        await audit_event(
+            auth_service.db_manager,
+            "token.scopes_updated",
+            principal_id=identity.principal_id,
+            details={"token_id": token_id, "new_scopes": payload.scopes},
+        )
+        return {"success": True}
+
+    @app.delete(
+        "/api/admin/tokens/{token_id}",
+        tags=["Admin"],
+        summary="Revoke a token",
+        status_code=204,
+    )
+    async def revoke_token(
+        token_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> None:
+        success = await auth_service.db_manager.revoke_token(token_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Token not found")
+        await audit_event(
+            auth_service.db_manager,
+            "token.revoked",
+            principal_id=identity.principal_id,
+            details={"token_id": token_id},
+        )
+
+    # ── Device Management ────────────────────────────────────────────────
+
+    @app.get(
+        "/api/admin/devices",
+        tags=["Admin"],
+        summary="List all devices",
+        response_model=list[DeviceResponse],
+    )
+    async def list_devices(
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> list[DeviceResponse]:
+        devices = await auth_service.db_manager.list_devices()
+        return [
+            DeviceResponse(
+                id=d.id,
+                user_id=d.user_id,
+                name=d.name,
+                is_trusted=d.is_trusted,
+                created_at=d.created_at.isoformat() if d.created_at else None,
+                last_seen=d.last_seen.isoformat() if d.last_seen else None,
+            )
+            for d in devices
+        ]
+
+    @app.delete(
+        "/api/admin/devices/{device_id}",
+        tags=["Admin"],
+        summary="Delete a device (cascades to tokens)",
+        status_code=204,
+    )
+    async def delete_device(
+        device_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    ) -> None:
+        success = await auth_service.db_manager.delete_device(device_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+    # ── Audit Log ─────────────────────────────────────────────────────
+
+    @app.get(
+        "/api/admin/audit",
+        tags=["Admin"],
+        summary="Query the audit log",
+    )
+    async def query_audit_log(
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.audit"])],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+        event: str | None = None,
+        principal_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await auth_service.db_manager.get_audit_log(
+            event=event,
+            principal_id=principal_id,
+            since=since,
+            until=until,
+            limit=limit,
+            offset=offset,
+        )
+
+    # ── WebRTC Peer Management ─────────────────────────────────────────
+
+    @app.get(
+        "/api/admin/peers",
+        tags=["Admin"],
+        summary="List connected WebRTC peers",
+    )
+    async def list_peers(
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+    ) -> list[dict[str, Any]]:
+        rtc = get_rtc_client()
+        if not rtc:
+            return []
+        return rtc.get_connected_peers()
+
+    @app.delete(
+        "/api/admin/peers/{peer_id}",
+        tags=["Admin"],
+        summary="Disconnect a WebRTC peer",
+        status_code=204,
+    )
+    async def disconnect_peer(
+        peer_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+    ) -> None:
+        rtc = get_rtc_client()
+        if not rtc:
+            raise HTTPException(status_code=404, detail="WebRTC not enabled")
+        success = await rtc.disconnect_peer(peer_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Peer not found")
+
+    @app.post(
+        "/api/admin/peers/{peer_id}/refresh-permissions",
+        tags=["Admin"],
+        summary="Refresh the permissions of a connected peer from DB",
+    )
+    async def refresh_peer_permissions(
+        peer_id: str,
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+    ) -> dict[str, bool]:
+        rtc = get_rtc_client()
+        if not rtc:
+            raise HTTPException(status_code=404, detail="WebRTC not enabled")
+        success = await rtc.update_peer_permissions(peer_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Peer not found or not authenticated")
+        return {"success": True}
 
     return app
