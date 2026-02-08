@@ -163,7 +163,15 @@
         },
         "auth": {
             "enabled": false,
-            "api_keys": []
+            "api_keys": [],
+            "token_expiry_days": 365,
+            "session_token_expiry_hours": 24,
+            "pairing_code_expiry_minutes": 5,
+            "pairing_max_attempts_per_ip": 5,
+            "default_pairing_permissions": [],
+            "webrtc_auth_timeout_seconds": 10.0,
+            "audit_enabled": true,
+            "audit_retention_days": 90
         }
     },
     "webrtc": {
