@@ -285,7 +285,7 @@ class TranscriptionService(BaseService):
         """Start the audio processing thread."""
         self._transcribing = True
         self._process_thread = threading.Thread(
-            target=self._processing_loop, daemon=False, name="Transcription-Processor"
+            target=self._processing_loop, daemon=True, name="Transcription-Processor"
         )
         self._process_thread.start()
         log_info("Processing thread started")
