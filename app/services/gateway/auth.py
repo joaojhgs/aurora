@@ -2,12 +2,13 @@
 
 This module provides optional authentication for the HTTP API:
 - API key authentication
-- JWT token authentication (placeholder for future)
-- Permission checking against method contracts
+- Bearer token authentication
+- Permission checking via the ACL Identity model
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -15,8 +16,20 @@ from fastapi import HTTPException, Request
 from fastapi.security import SecurityScopes
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
+from app.services.gateway.acl.audit import audit_event
+from app.services.gateway.acl.identity import ANONYMOUS, SYSTEM, Identity
 from app.services.gateway.auth_service import AuthService
 from app.services.gateway.dependencies import get_gateway_auth
+
+
+def _fire_and_forget(coro: Any) -> None:
+    """Schedule a coroutine as a fire-and-forget task.
+
+    The task reference is kept alive via the done callback to prevent
+    garbage collection before completion.
+    """
+    task = asyncio.create_task(coro)
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
 
 class GatewayAuth:
@@ -24,9 +37,9 @@ class GatewayAuth:
 
     Supports:
     - API key authentication via X-API-Key header
-    - JWT token authentication via Authorization header
-    - Permission checking against method contracts
-    - Bypass for health endpoints
+    - Bearer token authentication via Authorization header
+    - Permission checking via Identity.can()
+    - Bypass for health / public endpoints
     """
 
     def __init__(
@@ -54,6 +67,7 @@ class GatewayAuth:
                 "/api/docs",
                 "/api/redoc",
                 "/api/openapi.json",
+                "/api/auth/login",
                 "/api/auth/pairing/start",
                 "/api/auth/pairing/connect",
                 "/api/auth/pairing/exchange",
@@ -94,24 +108,48 @@ class GatewayAuth:
             return None
         return await self._auth_service.authenticate_token(token_str)
 
-    def verify_permissions(self, token: Any, required_scopes: list[str]) -> bool:
-        """Verify that a token has the required permissions."""
+    async def build_identity_from_token_str(self, token_str: str) -> Identity | None:
+        """Authenticate a token and build an Identity.
+
+        Args:
+            token_str: The raw token string.
+
+        Returns:
+            Identity on success, None on failure.
+        """
+        if not self._auth_service:
+            return None
+        token = await self._auth_service.authenticate_token(token_str)
         if not token:
-            return False
+            return None
+        return await self._auth_service.build_identity_from_token(token, source="http_bearer")
 
-        user_role = getattr(token, "role", None)
-        token_scopes = getattr(token, "scopes", [])
+    def build_identity_for_api_key(self) -> Identity:
+        """Build a SYSTEM Identity for API key auth."""
+        if self._auth_service:
+            return self._auth_service.build_identity_for_api_key()
+        return SYSTEM
 
-        is_admin = user_role == "admin"
-        has_root_scope = "*" in token_scopes or "all" in token_scopes
+    def verify_permissions(self, identity: Identity, required_scopes: list[str]) -> bool:
+        """Verify that an identity has the required permissions.
 
-        if is_admin or has_root_scope:
+        Args:
+            identity: The Identity to check.
+            required_scopes: List of required permission strings.
+
+        Returns:
+            True if all required scopes are satisfied.
+        """
+        if not required_scopes:
             return True
-
-        return any(scope in token_scopes for scope in required_scopes)
+        return identity.can(*required_scopes)
 
     def should_bypass(self, path: str) -> bool:
         """Check if a path should bypass authentication.
+
+        Uses exact match or prefix-with-delimiter check to prevent false
+        positives (e.g. ``/api/auth/login-debug`` won't match bypass
+        ``/api/auth/login``).
 
         Args:
             path: Request path
@@ -119,7 +157,10 @@ class GatewayAuth:
         Returns:
             True if path should bypass auth
         """
-        return any(path.startswith(bypass_path) for bypass_path in self._bypass_paths)
+        return any(
+            path == bp or path.startswith(bp + "/")
+            for bp in self._bypass_paths
+        )
 
     def add_api_key(self, api_key: str) -> None:
         """Add an API key.
@@ -149,28 +190,57 @@ class GatewayAuth:
 
 
 def create_auth_middleware(auth: GatewayAuth) -> Callable:
-    """Create FastAPI middleware for authentication."""
+    """Create FastAPI middleware for authentication.
+
+    The middleware:
+    1. Bypasses configured paths.
+    2. Checks API key → produces SYSTEM Identity.
+    3. Checks Bearer token → produces resolved Identity.
+    4. Attaches Identity to ``request.state.identity``.
+    """
 
     async def auth_middleware(request: Any, call_next: Callable) -> Any:
         """Authentication middleware."""
         from fastapi.responses import JSONResponse
 
         if not auth.is_enabled() or auth.should_bypass(request.url.path):
+            request.state.identity = SYSTEM  # unauthenticated paths get full access
             return await call_next(request)
 
+        # 1. API key
         api_key = request.headers.get("X-API-Key")
         if auth.validate_api_key(api_key):
+            request.state.identity = auth.build_identity_for_api_key()
             return await call_next(request)
 
+        # 2. Bearer token
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
-            token_str = auth_header.split(" ")[1]
-            token = await auth.authenticate_token(token_str)
-            if token:
-                request.state.token = token
+            token_str = auth_header.split(" ", 1)[1]
+            identity = await auth.build_identity_from_token_str(token_str)
+            if identity:
+                request.state.identity = identity
                 return await call_next(request)
 
         log_warning(f"Authentication failed for path: {request.url.path}")
+
+        # Audit: authentication failure
+        try:
+            from app.services.gateway.dependencies import get_auth_service
+
+            _auth_svc = get_auth_service()
+            _fire_and_forget(
+                audit_event(
+                    _auth_svc.db_manager,
+                    "access.denied.auth",
+                    principal_id=None,
+                    details={"path": request.url.path, "reason": "invalid_or_missing_credentials"},
+                    ip_address=request.client.host if request.client else None,
+                )
+            )
+        except Exception:
+            pass  # Audit must not break the request flow
+
         return JSONResponse(
             status_code=401,
             content={
@@ -187,49 +257,79 @@ async def check_auth_enabled(
     request: Request,
     security_scopes: SecurityScopes,
     auth: Any = None,
-) -> Any:
-    """Dependency to check if auth is enabled and valid."""
+) -> Identity:
+    """FastAPI Security dependency that returns an Identity.
+
+    When auth is disabled, returns SYSTEM. When enabled, resolves the
+    Identity from the middleware and checks required scopes.
+
+    Returns:
+        Identity for the current request.
+
+    Raises:
+        HTTPException 401 if not authenticated.
+        HTTPException 403 if insufficient permissions.
+    """
 
     if auth is None:
         auth = get_gateway_auth()
 
     if not auth.is_enabled():
-        return None
+        return SYSTEM
 
     if auth.should_bypass(request.url.path):
-        return None
+        return SYSTEM
 
-    token = None
-    # Check if token already in state from middleware
-    if hasattr(request.state, "token"):
-        token = request.state.token
-    else:
-        # Re-verify if needed (though middleware should have handled it)
+    # Retrieve identity set by middleware
+    identity: Identity | None = getattr(request.state, "identity", None)
+
+    if identity is None:
+        # Fallback: re-authenticate (shouldn't happen if middleware is wired)
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
-            token_str = auth_header.split(" ")[1]
-            token = await auth.authenticate_token(token_str)
+            token_str = auth_header.split(" ", 1)[1]
+            identity = await auth.build_identity_from_token_str(token_str)
 
-    # API key check as fallback
-    if token is None:
+    if identity is None:
         api_key = request.headers.get("X-API-Key")
         if auth.validate_api_key(api_key):
-            token = "api_key"
+            identity = auth.build_identity_for_api_key()
 
-    if token is None:
+    if identity is None:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    if (
-        security_scopes.scopes
-        and token != "api_key"
-        and not auth.verify_permissions(token, security_scopes.scopes)
-    ):
+    # Permission check
+    if security_scopes.scopes and not identity.can(*security_scopes.scopes):
         log_warning(
-            f"Permission denied for {request.url.path}. Required scopes: {security_scopes.scopes}"
+            f"Permission denied for {request.url.path}. "
+            f"Required: {security_scopes.scopes}, "
+            f"Effective: {list(identity.effective_perms)}"
         )
+
+        # Audit: access denied (permission check)
+        try:
+            from app.services.gateway.dependencies import get_auth_service
+
+            _auth_svc = get_auth_service()
+            _fire_and_forget(
+                audit_event(
+                    _auth_svc.db_manager,
+                    "access.denied.permission",
+                    principal_id=identity.principal_id,
+                    details={
+                        "path": request.url.path,
+                        "required": security_scopes.scopes,
+                        "effective": list(identity.effective_perms),
+                    },
+                    ip_address=request.client.host if request.client else None,
+                )
+            )
+        except Exception:
+            pass  # Audit must not break the request flow
+
         raise HTTPException(
             status_code=403,
             detail=f"Insufficient permissions. Required scopes: {security_scopes.scopes}",
         )
 
-    return token
+    return identity
