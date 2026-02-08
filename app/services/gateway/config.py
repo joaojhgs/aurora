@@ -7,11 +7,32 @@ class APISettings(BaseModel):
     enabled: bool = True
     host: str = "0.0.0.0"
     port: int = 8000
+    request_timeout: float = 30.0
     cors_origins: list[str] = ["*"]
+    cors_allow_credentials: bool = True
     docs: bool = True
     token_secret: str = "change-me"
     auth_enabled: bool = False
     api_keys: list[str] = []
+
+    @classmethod
+    def from_gateway_dict(cls, gateway: dict) -> APISettings:
+        """Create APISettings from gateway config dict."""
+        cors = gateway.get("cors", {})
+        auth = gateway.get("auth", {})
+        return cls(
+            enabled=gateway.get("enabled", True),
+            host=gateway.get("host", "0.0.0.0"),
+            port=gateway.get("port", 8000),
+            request_timeout=gateway.get("request_timeout_s", 30.0),
+            cors_origins=cors.get("origins", ["*"]),
+            cors_allow_credentials=cors.get("allow_credentials", True),
+            docs=gateway.get("docs", True),
+            token_secret=gateway.get("token_secret", "change-me"),
+            auth_enabled=auth.get("enabled", False),
+            api_keys=auth.get("api_keys", []),
+        )
+
 
 
 class WebRTCSettings(BaseModel):

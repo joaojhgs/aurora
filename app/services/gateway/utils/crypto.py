@@ -42,7 +42,8 @@ def derive_room_keys(
     """Derive signaling and data keys using Scrypt and HKDF for security."""
     salt = _hash_room(app_id, room)
     # Scrypt is used to prevent brute-force attacks on the password
-    kdf = Scrypt(salt=salt, length=32, n=2**14, r=8, p=1)
+    # n=2**16 provides strong security for room password protection
+    kdf = Scrypt(salt=salt, length=32, n=2**16, r=8, p=1)
     k0 = kdf.derive(password.encode())
 
     # HKDF is used to securely derive multiple keys from a single master key (k0)
