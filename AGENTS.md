@@ -1405,7 +1405,7 @@ Aurora is a **microservices-based voice assistant** with a **message bus archite
 
 **When developing**:
 - Always use the message bus
-- Always activate conda environment
+- Always activate uv environment (or the project's .venv)
 - Always use Python 3.10-3.11
 - Always test before committing
 - Always handle concurrent delivery
