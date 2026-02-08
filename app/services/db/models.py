@@ -114,12 +114,16 @@ class User:
     id: str
     username: str
     password_hash: str
-    role: str = "admin"
+    role: str = "admin"  # Deprecated — kept for backward compat; use permissions + is_admin
+    permissions: list[str] | None = None
+    is_admin: bool = False
     created_at: datetime | None = None
 
     def __post_init__(self):
         if self.created_at is None:
             self.created_at = datetime.now()
+        if self.permissions is None:
+            self.permissions = []
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -127,6 +131,8 @@ class User:
             "username": self.username,
             "password_hash": self.password_hash,
             "role": self.role,
+            "permissions": json.dumps(self.permissions),
+            "is_admin": self.is_admin,
             "created_at": self.created_at.isoformat()
             if self.created_at
             else datetime.now().isoformat(),
@@ -134,12 +140,23 @@ class User:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> User:
+        # Parse permissions from JSON string if present
+        raw_perms = data.get("permissions", "[]")
+        if isinstance(raw_perms, str):
+            permissions = json.loads(raw_perms) if raw_perms else []
+        elif isinstance(raw_perms, list):
+            permissions = raw_perms
+        else:
+            permissions = []
+
         return cls(
             id=data["id"],
             username=data["username"],
             password_hash=data["password_hash"],
-            role=data["role"],
-            created_at=datetime.fromisoformat(data["created_at"]),
+            role=data.get("role", "admin"),
+            permissions=permissions,
+            is_admin=bool(data.get("is_admin", False)),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
         )
 
 
