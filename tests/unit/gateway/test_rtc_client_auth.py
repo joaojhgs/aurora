@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.db.models import Token
+from app.services.gateway.acl.identity import ANONYMOUS, Identity
 from app.services.gateway.webrtc.rtc_client import RTCClient
 
 
@@ -98,6 +99,17 @@ async def test_rtc_client_auth_message_handling(mock_deps):
     )
     auth_service.authenticate_token.return_value = valid_token
 
+    # Mock build_identity_from_token to return an Identity
+    expected_identity = Identity(
+        principal_id="user-id",
+        principal_name="remote-peer",
+        is_admin=False,
+        effective_perms=frozenset(["read", "write"]),
+        device_id="device-id",
+        source="webrtc_peer",
+    )
+    auth_service.build_identity_from_token.return_value = expected_identity
+
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
         await client._ensure_pc("peer1")
 
@@ -112,9 +124,14 @@ async def test_rtc_client_auth_message_handling(mock_deps):
         await asyncio.sleep(0.1)
 
         assert auth_service.authenticate_token.called
-        assert client._peer_acl["peer1"]["roles"] == ["authenticated"]
-        assert client._peer_acl["peer1"]["perms"] == ["read", "write"]
-        assert client._peer_acl["peer1"]["peer_name"] == "remote-peer"
+        assert auth_service.build_identity_from_token.called
+
+        # _peer_acl now stores Identity objects
+        identity = client._peer_acl["peer1"]
+        assert isinstance(identity, Identity)
+        assert identity.principal_id == "user-id"
+        assert "read" in identity.effective_perms
+        assert "write" in identity.effective_perms
 
 
 @pytest.mark.asyncio
@@ -143,6 +160,8 @@ async def test_rtc_client_auth_failure(mock_deps):
         await asyncio.sleep(0.1)
 
         assert auth_service.authenticate_token.called
-        assert client._peer_acl["peer1"]["roles"] == []
-        assert client._peer_acl["peer1"]["perms"] == []
+
+        # Failed auth sets ANONYMOUS
+        identity = client._peer_acl["peer1"]
+        assert identity == ANONYMOUS
         assert mock_channel.readyState == "closed"
