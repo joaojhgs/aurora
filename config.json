@@ -1,7 +1,7 @@
 {
   "general": {
     "llm": {
-      "provider": "llama_cpp",
+      "provider": "openai",
       "third_party": {
         "openai": {
           "options": {
@@ -30,7 +30,7 @@
         },
         "llama_cpp": {
           "options": {
-            "model_path": "google_gemma-3-12b-it-qat-Q4_K_M.gguf",
+            "model_path": "",
             "temperature": 1.0,
             "max_tokens": 512,
             "n_ctx": 2048,
@@ -153,7 +153,7 @@
     "servers": {}
   },
   "gateway": {
-    "enabled": true,
+    "enabled": false,
     "host": "0.0.0.0",
     "port": 8000,
     "request_timeout_s": 30.0,
@@ -165,11 +165,19 @@
     },
     "auth": {
       "enabled": false,
-      "api_keys": []
+      "api_keys": [],
+      "token_expiry_days": 365,
+      "session_token_expiry_hours": 24,
+      "pairing_code_expiry_minutes": 5,
+      "pairing_max_attempts_per_ip": 5,
+      "default_pairing_permissions": [],
+      "webrtc_auth_timeout_seconds": 10.0,
+      "audit_enabled": true,
+      "audit_retention_days": 90
     }
   },
   "webrtc": {
-    "enabled": true,
+    "enabled": false,
     "strategy": "mqtt",
     "app_id": "aurora",
     "room": "default",
