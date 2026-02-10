@@ -36,15 +36,24 @@ class GatewayService(BaseService):
         self._auth_service = None
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
+        # Mesh P2P components
+        self._mesh_peer_registry = None
+        self._mesh_routing_table = None
+        self._mesh_peer_bridge = None
+        self._mesh_latency_monitor = None
+        self._mesh_bus = None
+
     async def on_start(self) -> None:
         """Service-specific startup logic."""
         await self._init_auth_service()
         self._subscribe_to_config_changes()
         await self._start_gateway()
         await self._start_webrtc()
+        await self._start_mesh()
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
+        await self._stop_mesh()
         await self._stop_webrtc()
         await self._stop_gateway()
         # Ensure registry aggregator is stopped if it was created
@@ -57,6 +66,7 @@ class GatewayService(BaseService):
         if config_section is None or config_section == "gateway":
             await self._reload_gateway_config()
             await self._reload_auth_config()
+            await self._reload_mesh_config()
 
     async def _init_auth_service(self) -> None:
         """Initialize authentication service."""
@@ -318,3 +328,140 @@ class GatewayService(BaseService):
 
         except Exception as e:
             log_error(f"Error reloading gateway config: {e}")
+
+    # ── Mesh P2P lifecycle ───────────────────────────────────────────────
+
+    async def _start_mesh(self) -> None:
+        """Initialize and start mesh P2P components if enabled.
+
+        Creates PeerRegistry, RoutingTable, PeerBridge, LatencyMonitor,
+        and MeshBus. Configures the RTCClient for mesh and replaces
+        the global bus singleton.
+        """
+        try:
+            settings = await self._get_gateway_config()
+            mesh_config = settings.mesh
+
+            if not mesh_config.enabled:
+                log_debug("Mesh P2P disabled in configuration")
+                return
+
+            if not self._rtc_client:
+                log_warning("Mesh P2P requires WebRTC — skipping mesh init")
+                return
+
+            from app.messaging.bus_runtime import get_bus, set_bus
+            from app.messaging.mesh_bus import MeshBus
+            from app.services.gateway.mesh.latency import LatencyMonitor
+            from app.services.gateway.mesh.peer_bridge import PeerBridge
+            from app.services.gateway.mesh.peer_registry import PeerRegistry
+            from app.services.gateway.mesh.routing_table import RoutingTable
+
+            # Create mesh components
+            self._mesh_peer_registry = PeerRegistry(mesh_config)
+            self._mesh_routing_table = RoutingTable(mesh_config, self._mesh_peer_registry)
+            self._mesh_peer_bridge = PeerBridge(self._rtc_client, self._mesh_peer_registry)
+
+            self._mesh_latency_monitor = LatencyMonitor(
+                self._rtc_client,
+                self._mesh_peer_registry,
+                interval_s=mesh_config.ping_interval_s,
+            )
+            self._mesh_peer_bridge.set_latency_monitor(self._mesh_latency_monitor)
+
+            # Configure RTCClient for mesh
+            self._rtc_client.configure_mesh(
+                mesh_config=mesh_config,
+                peer_registry=self._mesh_peer_registry,
+                peer_bridge=self._mesh_peer_bridge,
+            )
+
+            # Create MeshBus wrapping the current inner bus
+            inner_bus = get_bus()
+            self._mesh_bus = MeshBus(
+                inner_bus=inner_bus,
+                routing_table=self._mesh_routing_table,
+                peer_bridge=self._mesh_peer_bridge,
+                mesh_config=mesh_config,
+            )
+
+            # Replace the global bus singleton with MeshBus
+            set_bus(self._mesh_bus)
+
+            # Start background tasks
+            await self._mesh_peer_registry.start()
+            await self._mesh_latency_monitor.start()
+
+            node_name = mesh_config.node_name or "unnamed"
+            shared = [m for m, s in mesh_config.sharing.items() if s.share]
+            routed = [m for m, r in mesh_config.routing.items() if r.prefer != "local"]
+            log_info(
+                f"Mesh P2P started — node='{node_name}', "
+                f"sharing={shared}, routed={routed}"
+            )
+
+        except ImportError as e:
+            log_warning(f"Mesh dependencies not available: {e}")
+        except Exception as e:
+            log_error(f"Failed to start mesh P2P: {e}", exc_info=True)
+
+    async def _stop_mesh(self) -> None:
+        """Stop mesh P2P components and restore original bus."""
+        if not self._mesh_bus:
+            return
+
+        try:
+            log_info("Stopping mesh P2P...")
+
+            # Restore the inner bus as the global singleton
+            from app.messaging.bus_runtime import set_bus
+
+            if self._mesh_bus:
+                set_bus(self._mesh_bus._inner)
+                self._mesh_bus = None
+
+            # Stop background tasks
+            if self._mesh_latency_monitor:
+                await self._mesh_latency_monitor.stop()
+                self._mesh_latency_monitor = None
+
+            if self._mesh_peer_registry:
+                await self._mesh_peer_registry.stop()
+                self._mesh_peer_registry = None
+
+            # Cancel pending bridge calls
+            if self._mesh_peer_bridge:
+                await self._mesh_peer_bridge.cancel_all()
+                self._mesh_peer_bridge = None
+
+            self._mesh_routing_table = None
+
+            log_info("Mesh P2P stopped")
+
+        except Exception as e:
+            log_error(f"Error stopping mesh P2P: {e}")
+
+    async def _reload_mesh_config(self) -> None:
+        """Reload mesh configuration dynamically."""
+        try:
+            settings = await self._get_gateway_config()
+            mesh_config = settings.mesh
+
+            if mesh_config.enabled and not self._mesh_bus:
+                log_info("Mesh enabled via config — starting mesh P2P")
+                await self._start_mesh()
+            elif not mesh_config.enabled and self._mesh_bus:
+                log_info("Mesh disabled via config — stopping mesh P2P")
+                await self._stop_mesh()
+            elif mesh_config.enabled and self._mesh_bus:
+                # Update config on existing components
+                if self._mesh_peer_registry:
+                    self._mesh_peer_registry._config = mesh_config
+                if self._mesh_routing_table:
+                    self._mesh_routing_table._config = mesh_config
+                if self._mesh_bus:
+                    self._mesh_bus._config = mesh_config
+                log_info("Mesh config reloaded")
+
+        except Exception as e:
+            log_error(f"Error reloading mesh config: {e}")
