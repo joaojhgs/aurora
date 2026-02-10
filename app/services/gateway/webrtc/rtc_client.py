@@ -20,7 +20,9 @@ from .signaling.mqtt_client import MQTTSignaling
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
     from app.services.gateway.auth_service import AuthService
-    from app.services.gateway.config import Settings
+    from app.services.gateway.config import MeshConfig, Settings
+    from app.services.gateway.mesh.peer_bridge import PeerBridge
+    from app.services.gateway.mesh.peer_registry import PeerRegistry
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
     from .signaling.base import SignalingAdapter
@@ -49,6 +51,14 @@ class RTCClient:
         self._peer_timeout_tasks: dict[str, asyncio.Task] = {}  # Auth timeout tasks
         self._system_token: str | None = None
         self._auth_timeout: float = 10.0  # seconds
+
+        # Mesh P2P attributes (set externally by GatewayService when mesh is enabled)
+        self._mesh_enabled: bool = False
+        self._mesh_config: MeshConfig | None = None
+        self._peer_registry: PeerRegistry | None = None
+        self._peer_bridge: PeerBridge | None = None
+        # Per-peer DataChannel send functions for outbound messaging
+        self._peer_send_fns: dict[str, Any] = {}
 
     async def start(self) -> None:
         self._system_token = await self._auth_service.get_system_token()
@@ -84,6 +94,7 @@ class RTCClient:
         self._pcs.clear()
         self._peer_acl.clear()
         self._peer_tokens.clear()
+        self._peer_send_fns.clear()
 
         if self._adapter:
             await self._adapter.leave()
@@ -183,6 +194,148 @@ class RTCClient:
                 details=details,
             )
 
+    # ── Mesh P2P helpers ─────────────────────────────────────────────────
+
+    def send_to_peer(self, peer_id: str, text: str) -> bool:
+        """Send a text message to a specific peer via their DataChannel.
+
+        Args:
+            peer_id: Target peer identifier
+            text: JSON string to send
+
+        Returns:
+            True if the message was sent, False if peer not connected
+        """
+        send_fn = self._peer_send_fns.get(peer_id)
+        if send_fn:
+            send_fn(text)
+            return True
+        log_warning(f"RTCClient: No send function for peer {peer_id}")
+        return False
+
+    def configure_mesh(
+        self,
+        mesh_config: "MeshConfig",
+        peer_registry: "PeerRegistry",
+        peer_bridge: "PeerBridge",
+    ) -> None:
+        """Configure mesh components on the RTCClient.
+
+        Called by GatewayService after mesh initialization.
+
+        Args:
+            mesh_config: Mesh network configuration
+            peer_registry: Registry tracking connected peers
+            peer_bridge: Bridge for outbound RPC calls
+        """
+        self._mesh_enabled = mesh_config.enabled
+        self._mesh_config = mesh_config
+        self._peer_registry = peer_registry
+        self._peer_bridge = peer_bridge
+        log_info("RTCClient: Mesh P2P configured")
+
+    async def _send_manifest(self, peer_id: str) -> None:
+        """Send our local manifest to a peer after authentication.
+
+        Args:
+            peer_id: Target peer to send manifest to
+        """
+        if not self._mesh_config:
+            return
+
+        from app.services.gateway.mesh.negotiation import generate_manifest, manifest_to_dict
+
+        manifest = generate_manifest(
+            peer_id=self._peer_id,
+            mesh_config=self._mesh_config,
+            registry=self._registry,
+        )
+        msg = manifest_to_dict(manifest)
+        self.send_to_peer(peer_id, json.dumps(msg))
+        log_debug(f"RTCClient: Sent manifest to peer {peer_id}")
+
+    async def _on_peer_manifest(self, peer_id: str, data: dict) -> None:
+        """Process an incoming manifest from a peer.
+
+        Updates the PeerRegistry and sends back a manifest ACK.
+
+        Args:
+            peer_id: Peer that sent the manifest
+            data: Parsed manifest message
+        """
+        from app.services.gateway.mesh.negotiation import (
+            generate_manifest_ack,
+            manifest_ack_to_dict,
+            parse_manifest,
+        )
+
+        manifest = parse_manifest(data)
+        if not manifest:
+            log_warning(f"RTCClient: Invalid manifest from peer {peer_id}")
+            return
+
+        # Update peer registry
+        if self._peer_registry:
+            await self._peer_registry.update_manifest(peer_id, manifest)
+
+        # Send ACK
+        if self._mesh_config:
+            ack = generate_manifest_ack(manifest, self._mesh_config)
+            ack_msg = manifest_ack_to_dict(ack)
+            self.send_to_peer(peer_id, json.dumps(ack_msg))
+            log_debug(f"RTCClient: Sent manifest ACK to peer {peer_id}")
+
+    async def _on_manifest_ack(self, peer_id: str, data: dict) -> None:
+        """Process an incoming manifest ACK from a peer.
+
+        Logs compatibility status for diagnostics.
+
+        Args:
+            peer_id: Peer that sent the ACK
+            data: Parsed manifest ACK message
+        """
+        from app.services.gateway.mesh.negotiation import parse_manifest_ack
+
+        ack = parse_manifest_ack(data)
+        if not ack:
+            return
+
+        log_info(
+            f"RTCClient: Manifest ACK from {peer_id} — "
+            f"compatible={ack.compatible_services}, "
+            f"incompatible={ack.incompatible_services}, "
+            f"unused={ack.unused_services}"
+        )
+
+    def _send_ping(self, peer_id: str) -> None:
+        """Send a ping message to a peer for latency measurement.
+
+        Args:
+            peer_id: Target peer
+        """
+        import time
+
+        msg = {
+            "type": "ping",
+            "id": uuid.uuid4().hex[:8],
+            "ts": time.monotonic(),
+        }
+        self.send_to_peer(peer_id, json.dumps(msg))
+
+    def _send_pong(self, peer_id: str, ping_data: dict) -> None:
+        """Send a pong response to a peer's ping.
+
+        Args:
+            peer_id: Peer that sent the ping
+            ping_data: The original ping message
+        """
+        msg = {
+            "type": "pong",
+            "id": ping_data.get("id", ""),
+            "ts": ping_data.get("ts", 0),
+        }
+        self.send_to_peer(peer_id, json.dumps(msg))
+
     async def _on_presence(self, payload: bytes) -> None:
         pass
 
@@ -214,7 +367,8 @@ class RTCClient:
         def send_fn(text: str) -> None:
             if channel.readyState == "open":
                 channel.send(text)
-
+        # Store the send function for mesh P2P outbound messaging
+        self._peer_send_fns[peer] = send_fn
         async def _rpc_audit(event: str, pid: str | None = None, details: dict | None = None) -> None:
             await self._audit(event, pid, details)
 
@@ -224,6 +378,7 @@ class RTCClient:
             send_fn,
             lambda: self._peer_acl.get(peer, ANONYMOUS),
             audit_fn=_rpc_audit,
+            mesh_config=self._mesh_config,
         )
 
         def setup_channel(chan: Any) -> None:
@@ -299,6 +454,13 @@ class RTCClient:
                                     identity.principal_id,
                                     {"peer_id": peer, "principal_name": identity.principal_name},
                                 )
+
+                                # Mesh: Register peer and initiate manifest exchange
+                                if self._mesh_enabled and self._peer_registry:
+                                    node_name = obj.get("peer_name", "")
+                                    await self._peer_registry.register_peer(peer, node_name)
+                                    await self._send_manifest(peer)
+                                    self._send_ping(peer)
                             else:
                                 log_warning(
                                     f"Peer {peer} failed authentication with token: {token_str[:8]}..."
@@ -330,6 +492,28 @@ class RTCClient:
                                 log_warning(f"Peer {peer} failed re-authentication")
 
                         asyncio.create_task(reauth_peer())
+                    elif obj.get("type") == "manifest":
+                        # Mesh: Incoming manifest from peer
+                        asyncio.create_task(self._on_peer_manifest(peer, obj))
+                    elif obj.get("type") == "manifest_request":
+                        # Mesh: Peer is requesting our manifest
+                        asyncio.create_task(self._send_manifest(peer))
+                    elif obj.get("type") == "manifest_ack":
+                        # Mesh: Acknowledgment of our manifest
+                        asyncio.create_task(self._on_manifest_ack(peer, obj))
+                    elif obj.get("type") == "ping":
+                        # Mesh: Latency measurement ping
+                        self._send_pong(peer, obj)
+                    elif obj.get("type") == "pong":
+                        # Mesh: Latency measurement pong — route to latency monitor
+                        if self._peer_bridge:
+                            self._peer_bridge.on_pong(peer, obj)
+                    elif obj.get("type") in ("result", "error"):
+                        # Mesh: Response to an outbound RPC call — route to PeerBridge
+                        if self._peer_bridge:
+                            self._peer_bridge.on_response(peer, obj)
+                        else:
+                            log_debug(f"RTCClient: Received {obj.get('type')} but no PeerBridge configured")
                     else:
                         asyncio.create_task(handler.on_message(text))
                 except Exception as e:
@@ -372,6 +556,10 @@ class RTCClient:
                 self._pcs.pop(peer, None)
                 self._peer_acl.pop(peer, None)
                 self._peer_tokens.pop(peer, None)
+                self._peer_send_fns.pop(peer, None)
+                # Remove from mesh peer registry
+                if self._peer_registry:
+                    await self._peer_registry.remove_peer(peer)
                 await self._audit(
                     "peer.disconnected",
                     identity.principal_id if identity != ANONYMOUS else None,
