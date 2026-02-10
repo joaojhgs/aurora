@@ -90,6 +90,7 @@ class GatewayService(BaseService):
         try:
             from app.services.gateway.config import (
                 APISettings,
+                MeshConfig,
                 MQTTSettings,
                 PermissionSettings,
                 Settings,
@@ -105,12 +106,14 @@ class GatewayService(BaseService):
             webrtc = all_config.get("webrtc", {})
             signaling_mqtt = all_config.get("signaling_mqtt", {})
             permissions = gateway.get("permissions", {}) if gateway else {}
+            mesh = gateway.get("mesh", {}) if gateway else {}
 
             return Settings(
                 api=APISettings.from_gateway_dict(gateway),
                 webrtc=WebRTCSettings.model_validate(webrtc) if webrtc else WebRTCSettings(),
                 signaling_mqtt=MQTTSettings.model_validate(signaling_mqtt) if signaling_mqtt else MQTTSettings(),
                 permissions=PermissionSettings.model_validate(permissions) if permissions else PermissionSettings(),
+                mesh=MeshConfig.model_validate(mesh) if mesh else MeshConfig(),
             )
 
         except Exception as e:
