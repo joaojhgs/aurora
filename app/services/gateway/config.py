@@ -3,6 +3,73 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class ServiceSharingConfig(BaseModel):
+    """Per-service sharing configuration for the mesh network.
+
+    Controls whether a local service is shared with remote peers,
+    how many concurrent remote calls are allowed, and which peers
+    may use it.
+
+    Attributes:
+        share: Whether to share this service with the network
+        max_concurrent: Maximum concurrent remote calls to this service
+        allowed_peers: Specific peer IDs allowed (None = all authenticated)
+    """
+
+    share: bool = False
+    max_concurrent: int = 10
+    allowed_peers: list[str] | None = None
+
+
+class ServiceRoutingConfig(BaseModel):
+    """Per-service routing preference for the mesh network.
+
+    Controls how the MeshBus routes messages for a given service —
+    whether to prefer local execution, network execution, or a mix.
+
+    Attributes:
+        prefer: Routing preference ("local" | "network" | "network_only" | "local_only")
+        fallback: Fallback strategy ("local" | "network" | "error" | "none")
+        min_version: Minimum required version (semver) for remote service
+        required_capabilities: Capabilities the remote service must have
+    """
+
+    prefer: str = "local"
+    fallback: str = "local"
+    min_version: str | None = None
+    required_capabilities: list[str] = Field(default_factory=list)
+
+
+class MeshConfig(BaseModel):
+    """Mesh network configuration.
+
+    Controls the P2P mesh behaviour for this Aurora instance.
+    When ``enabled`` is False (the default), the mesh layer is not
+    instantiated and there is zero overhead.
+
+    Attributes:
+        enabled: Whether mesh networking is active
+        node_name: Human-readable name for this node in the mesh
+        sharing: Per-module sharing configuration
+        routing: Per-module routing preferences
+        version_policy: How strictly to enforce version matching
+        peer_selection: Strategy for choosing among multiple peers
+        ping_interval_s: How often to measure peer latency (seconds)
+        registry_announce_interval_s: How often to re-announce manifest
+        stale_peer_timeout_s: Mark peer stale after this many seconds without pong
+    """
+
+    enabled: bool = False
+    node_name: str = ""
+    sharing: dict[str, ServiceSharingConfig] = Field(default_factory=dict)
+    routing: dict[str, ServiceRoutingConfig] = Field(default_factory=dict)
+    version_policy: str = "compatible"  # "exact" | "compatible" | "any"
+    peer_selection: str = "lowest_latency"  # "lowest_latency" | "round_robin" | "random"
+    ping_interval_s: float = 30.0
+    registry_announce_interval_s: float = 60.0
+    stale_peer_timeout_s: float = 120.0
+
+
 class APISettings(BaseModel):
     enabled: bool = True
     host: str = "0.0.0.0"
@@ -71,3 +138,4 @@ class Settings(BaseModel):
     webrtc: WebRTCSettings = Field(default_factory=WebRTCSettings)
     signaling_mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
     permissions: PermissionSettings = Field(default_factory=PermissionSettings)
+    mesh: MeshConfig = Field(default_factory=MeshConfig)
