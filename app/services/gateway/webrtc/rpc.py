@@ -31,12 +31,16 @@ class RPCHandler:
         send_fn: Callable[[str], None],
         acl_provider: Callable[[], Identity],
         audit_fn: Callable[..., Any] | None = None,
+        mesh_config: Any | None = None,
     ):
         self._bus = bus
         self._registry = registry
         self._send = send_fn
         self._acl_provider = acl_provider
         self._audit_fn = audit_fn
+        self._mesh_config = mesh_config
+        # Track active remote calls per module for capacity limiting
+        self._active_remote_calls: dict[str, int] = {}
 
     async def on_message(self, text: str) -> None:
         try:
@@ -59,6 +63,26 @@ class RPCHandler:
         if not method_name:
             self._send_error(req_id, 400, "Missing method")
             return
+
+        # Mesh sharing gate: check if the called service is shared
+        if self._mesh_config and self._mesh_config.enabled:
+            delimiter = "." if "." in method_name else "/" if "/" in method_name else None
+            if delimiter:
+                module_name = method_name.split(delimiter, 1)[0]
+            else:
+                module_name = method_name
+
+            sharing = self._mesh_config.sharing.get(module_name)
+            if not sharing or not sharing.share:
+                self._send_error(req_id, 403, f"Service {module_name} is not shared")
+                return
+
+            # Capacity check
+            if sharing.max_concurrent > 0:
+                active = self._active_remote_calls.get(module_name, 0)
+                if active >= sharing.max_concurrent:
+                    self._send_error(req_id, 429, f"Service {module_name} at capacity")
+                    return
 
         result = await self._find_method(method_name)
         if not result:
@@ -99,6 +123,12 @@ class RPCHandler:
             return
 
         topic = meta.bus_topic or f"{svc_name}.{meta.name}"
+        # Track active remote calls for capacity limiting
+        module_for_capacity = svc_name
+        if self._mesh_config and self._mesh_config.enabled:
+            self._active_remote_calls[module_for_capacity] = (
+                self._active_remote_calls.get(module_for_capacity, 0) + 1
+            )
         try:
             log_debug(f"RPCHandler: Executing {topic} via bus")
             res = await self._bus.request(
@@ -135,6 +165,12 @@ class RPCHandler:
         except Exception as e:
             log_error(f"RPCHandler: Error executing RPC {method_name}: {e}")
             self._send_error(req_id, 500, str(e))
+        finally:
+            # Decrement active remote call count for capacity tracking
+            if self._mesh_config and self._mesh_config.enabled:
+                count = self._active_remote_calls.get(module_for_capacity, 0)
+                if count > 0:
+                    self._active_remote_calls[module_for_capacity] = count - 1
 
     async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
         delimiter = "." if "." in method_name else "/" if "/" in method_name else None
