@@ -105,11 +105,8 @@ async def test_start_service(service, mock_bus):
     await service.start()
     assert service._running
 
-    # Check subscriptions
-    expected_subscriptions = [
-        # Service uses auto-subscription via contracts now
-        # These tests need to be updated to test contract-based subscriptions
-    ]
+    # Service uses auto-subscription via contracts now
+    # These tests need to be updated to test contract-based subscriptions
     # Service uses auto-subscription via contracts - assertion removed
 
     # Check initial state transition
@@ -289,9 +286,9 @@ async def test_session_timeout(service, mock_bus):
 
     # Check that session ended event was published with timeout reason
     session_ended_calls = [
-        call
-        for call in mock_bus.publish.call_args_list
-        if call.args[0] == STTCoordinatorTopics.SESSION_ENDED
+        c
+        for c in mock_bus.publish.call_args_list
+        if c.args[0] == STTCoordinatorTopics.SESSION_ENDED
     ]
     assert len(session_ended_calls) > 0, "Session ended event should be published"
 

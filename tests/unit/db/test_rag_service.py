@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -10,9 +10,9 @@ from app.services.db.rag_service import (
     CombinedSQLiteVecStore,
     RAGService,
     SQLiteVecStore,
+    async_get_embeddings,
     check_and_update_embedding_model,
     get_embedding_model_signature,
-    get_embeddings,
 )
 
 
@@ -55,30 +55,38 @@ class TestRAGServiceCore:
         assert signature == "openai:text-embedding-3-small:openai"
 
     @patch("app.services.db.rag_service.config_api")
-    def test_get_embeddings_local(self, mock_config):
+    @pytest.mark.asyncio
+    async def test_get_embeddings_local(self, mock_config):
         """Test getting local embeddings."""
-        mock_config.get.return_value = True  # use_local = True
+        mock_config.aget = AsyncMock(return_value=True)  # use_local = True
 
-        with patch("langchain_huggingface.HuggingFaceEmbeddings") as mock_hf:
+        with (
+            patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
+            patch("langchain_huggingface.HuggingFaceEmbeddings") as mock_hf,
+        ):
             mock_emb = MagicMock()
             mock_hf.return_value = mock_emb
 
-            embeddings, model_info = get_embeddings()
+            embeddings, model_info = await async_get_embeddings()
 
             assert model_info["type"] == "huggingface"
             assert model_info["model_name"] == "all-MiniLM-L6-v2"
             mock_hf.assert_called_once_with(model_name="all-MiniLM-L6-v2")
 
     @patch("app.services.db.rag_service.config_api")
-    def test_get_embeddings_openai(self, mock_config):
+    @pytest.mark.asyncio
+    async def test_get_embeddings_openai(self, mock_config):
         """Test getting OpenAI embeddings."""
-        mock_config.get.return_value = False  # use_local = False
+        mock_config.aget = AsyncMock(return_value=False)  # use_local = False
 
-        with patch("langchain.embeddings.init_embeddings") as mock_init:
+        with (
+            patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
+            patch("langchain.embeddings.init_embeddings") as mock_init,
+        ):
             mock_emb = MagicMock()
             mock_init.return_value = mock_emb
 
-            embeddings, model_info = get_embeddings()
+            embeddings, model_info = await async_get_embeddings()
 
             assert model_info["type"] == "openai"
             assert model_info["model_name"] == "text-embedding-3-small"
@@ -88,10 +96,11 @@ class TestRAGServiceCore:
 class TestRAGServiceStores:
     """Test RAGService store initialization."""
 
-    @patch("app.services.db.rag_service.get_embeddings")
+    @patch("app.services.db.rag_service.async_get_embeddings", new_callable=AsyncMock)
     @patch("app.services.db.rag_service.SQLiteVec")
     @patch("app.services.db.rag_service.Path")
-    def test_initialize_stores(self, mock_path, mock_sqlite, mock_get_emb):
+    @pytest.mark.asyncio
+    async def test_initialize_stores(self, mock_path, mock_sqlite, mock_get_emb):
         """Test store initialization."""
         # Setup mocks
         mock_path.return_value.parent.mkdir = Mock()
@@ -113,6 +122,7 @@ class TestRAGServiceStores:
             "app.services.db.rag_service.check_and_update_embedding_model", return_value=False
         ):
             service = RAGService()
+            await service.async_initialize()
             store = service.memories_store
 
             assert store is not None
@@ -304,19 +314,10 @@ class TestEmbeddingModelManagement:
         mock_exists.return_value = True
 
         with (
-            patch("app.services.db.rag_service.get_embeddings") as mock_get_emb,
             patch("app.services.db.rag_service.os.remove"),
             patch("app.services.db.rag_service.SQLiteVec.from_texts"),
         ):
             mock_emb = MagicMock()
-            mock_get_emb.return_value = (
-                mock_emb,
-                {
-                    "type": "openai",
-                    "model_name": "text-embedding-3-small",
-                    "version": "openai",
-                },
-            )
 
             model_info = {
                 "type": "openai",
@@ -324,6 +325,6 @@ class TestEmbeddingModelManagement:
                 "version": "openai",
             }
 
-            result = check_and_update_embedding_model(mock_store, model_info)
+            result = check_and_update_embedding_model(mock_store, model_info, embeddings=mock_emb)
 
             assert result is True  # Re-embedding was performed
