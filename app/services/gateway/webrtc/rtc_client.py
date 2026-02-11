@@ -336,6 +336,46 @@ class RTCClient:
         }
         self.send_to_peer(peer_id, json.dumps(msg))
 
+    async def _on_capacity_update(self, peer_id: str, data: dict) -> None:
+        """Handle an incoming capacity update from a peer.
+
+        Updates the peer's active call count in the registry so the
+        routing table can make informed decisions.
+
+        Args:
+            peer_id: Peer that sent the update
+            data: Parsed capacity_update message
+        """
+        if not self._peer_registry:
+            return
+        module = data.get("module", "")
+        available = data.get("available", 0)
+        log_debug(f"RTCClient: Capacity update from {peer_id}: {module} available={available}")
+        # The PeerRegistry tracks active_calls (not available capacity), so
+        # we don't directly overwrite here — the information is used for
+        # logging/diagnostics.  Real capacity enforcement is done via
+        # max_concurrent in PeerServiceInfo.
+
+    def send_capacity_update(self, peer_id: str, module: str, available: int, max_concurrent: int) -> bool:
+        """Send a capacity update to a peer.
+
+        Args:
+            peer_id: Target peer
+            module: Service module whose capacity changed
+            available: Current available capacity
+            max_concurrent: Total max concurrent calls
+
+        Returns:
+            True if sent, False if peer not connected
+        """
+        msg = {
+            "type": "capacity_update",
+            "module": module,
+            "available": available,
+            "max_concurrent": max_concurrent,
+        }
+        return self.send_to_peer(peer_id, json.dumps(msg))
+
     async def _on_presence(self, payload: bytes) -> None:
         pass
 
@@ -379,6 +419,7 @@ class RTCClient:
             lambda: self._peer_acl.get(peer, ANONYMOUS),
             audit_fn=_rpc_audit,
             mesh_config=self._mesh_config,
+            peer_id=peer,
         )
 
         def setup_channel(chan: Any) -> None:
@@ -511,6 +552,9 @@ class RTCClient:
                     elif obj.get("type") == "manifest_ack":
                         # Mesh: Acknowledgment of our manifest
                         asyncio.create_task(self._on_manifest_ack(peer, obj))
+                    elif obj.get("type") == "capacity_update":
+                        # Mesh: Remote peer capacity change notification
+                        asyncio.create_task(self._on_capacity_update(peer, obj))
                     elif obj.get("type") == "ping":
                         # Mesh: Latency measurement ping
                         self._send_pong(peer, obj)

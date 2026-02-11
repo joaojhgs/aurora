@@ -327,12 +327,23 @@ async def synthesize(self, request: TTSRequest) -> TTSResponse:
   - REST API for service control
   - WebSocket/WebRTC for real-time events and streaming
   - Authentication and authorization
+  - **P2P Mesh Networking**: Transparent service sharing across Aurora instances
   - **Registry Aggregator**: Dynamically collects contracts from all running services to build the external API schema.
 - **Registry Aggregator**:
   - Listens for service announcements on the bus.
   - Validates contracts and permissions.
   - Maps external requests (HTTP/RPC) to internal bus messages.
   - Ensures clients only access methods marked as `external` or `both`.
+- **Mesh Networking** (`app/services/gateway/mesh/`):
+  - **PeerRegistry**: Tracks connected peers, manifests, latency, stale detection
+  - **RoutingTable**: Resolves bus topics to local/remote targets based on config
+  - **PeerBridge**: Outbound RPC calls to remote peers via WebRTC DataChannels
+  - **MeshBus** (`app/messaging/mesh_bus.py`): Transparent routing wrapper around the inner bus; replaces global bus singleton when mesh is enabled
+  - **LatencyMonitor**: Periodic ping/pong RTT measurement
+  - **Negotiation**: Manifest generation (process-mode-aware via RegistryAggregator), parsing, ACK logic
+  - **VersionCompat**: Semantic version comparison with configurable policies
+  - Enabled/disabled via `config.json` → `gateway.mesh.enabled`
+  - See `docs/PEER_PAIRING_FLOW.md` § "P2P Mesh Networking" for full protocol docs
 - **Configuration**: `config.json` → `gateway.*`
 
 ---
@@ -1339,6 +1350,7 @@ async def my_method(self, param: str) -> str:
 
 - **Architecture**: `docs/ARCHITECTURE.md`
 - **Messaging**: `docs/MESSAGING_ARCHITECTURE.md`
+- **Peer Pairing & Mesh**: `docs/PEER_PAIRING_FLOW.md`
 - **Process Mode**: `README.process-mode.md`
 - **Testing**: `docs/TESTING_PROCESS_MODE.md`
 - **UI Integration**: `docs/UI_INTEGRATION.md`
@@ -1354,7 +1366,9 @@ async def my_method(self, param: str) -> str:
 - **Contract Registry**: `app/shared/contracts/registry.py`
 - **LocalBus**: `app/messaging/local_bus.py`
 - **BullMQBus**: `app/messaging/bullmq_bus.py`
+- **MeshBus**: `app/messaging/mesh_bus.py`
 - **Config API**: `app/shared/config/interface.py`
+- **Gateway Mesh**: `app/services/gateway/mesh/` (peer_registry, routing_table, peer_bridge, negotiation, latency, version_compat)
 
 ### Development Commands
 

@@ -32,6 +32,7 @@ class RPCHandler:
         acl_provider: Callable[[], Identity],
         audit_fn: Callable[..., Any] | None = None,
         mesh_config: Any | None = None,
+        peer_id: str | None = None,
     ):
         self._bus = bus
         self._registry = registry
@@ -39,6 +40,7 @@ class RPCHandler:
         self._acl_provider = acl_provider
         self._audit_fn = audit_fn
         self._mesh_config = mesh_config
+        self._peer_id = peer_id
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
 
@@ -76,6 +78,15 @@ class RPCHandler:
             if not sharing or not sharing.share:
                 self._send_error(req_id, 403, f"Service {module_name} is not shared")
                 return
+
+            # Allowed-peers check (None = open to all authenticated peers)
+            if sharing.allowed_peers is not None:
+                if not self._peer_id or self._peer_id not in sharing.allowed_peers:
+                    self._send_error(
+                        req_id, 403,
+                        f"Peer not allowed to access service {module_name}",
+                    )
+                    return
 
             # Capacity check
             if sharing.max_concurrent > 0:
