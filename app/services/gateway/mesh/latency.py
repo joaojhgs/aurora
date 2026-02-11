@@ -59,6 +59,10 @@ class LatencyMonitor:
         while True:
             try:
                 await asyncio.sleep(self._interval)
+                # Clean up pings that never received a pong (leak prevention)
+                stale_count = self.cleanup_stale_pings(max_age_s=self._interval * 3)
+                if stale_count:
+                    log_debug(f"LatencyMonitor: Cleaned up {stale_count} stale pings")
                 await self._ping_all_peers()
             except asyncio.CancelledError:
                 break
@@ -67,8 +71,6 @@ class LatencyMonitor:
 
     async def _ping_all_peers(self) -> None:
         """Send a ping to every negotiated peer."""
-        import uuid
-
         peers = self._registry.get_negotiated_peers()
         for peer in peers:
             try:

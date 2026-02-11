@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
@@ -48,16 +47,50 @@ def generate_manifest(
 
     shared_services: list[PeerServiceInfo] = []
 
-    # Get all registered modules from the in-process registry
-    modules = list_modules()
+    # In process mode the RegistryAggregator holds announcements from all
+    # services (received via the bus).  In thread mode every service lives
+    # in the same process, so the in-memory list_modules() is authoritative.
+    if registry is not None:
+        shared_services = _build_services_from_aggregator(registry, mesh_config)
+    else:
+        modules = list_modules()
+        shared_services = _build_services_from_local(modules, mesh_config)
+
+    aurora_version = _get_package_version()
+
+    manifest = PeerManifest(
+        peer_id=peer_id,
+        node_name=mesh_config.node_name,
+        aurora_version=aurora_version,
+        shared_services=shared_services,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+    log_info(
+        f"Mesh: Generated manifest with {len(shared_services)} shared services: "
+        f"{[s.module for s in shared_services]}"
+    )
+    return manifest
+
+
+# ── Helpers for manifest generation ──────────────────────────────────────
+
+
+def _build_services_from_local(
+    modules: dict,
+    mesh_config: MeshConfig,
+) -> list[PeerServiceInfo]:
+    """Build shared service list from the in-process contract registry.
+
+    Used in **thread mode** where all services live in the same process.
+    """
+    shared: list[PeerServiceInfo] = []
 
     for module_name, module_contract in modules.items():
-        # Check if this module is configured for sharing
         sharing_config = mesh_config.sharing.get(module_name)
         if not sharing_config or not sharing_config.share:
             continue
 
-        # Build method info list (only externally-exposed methods)
         methods: list[MethodInfo] = []
         for mc in module_contract.methods:
             if mc.exposure in ("external", "both"):
@@ -73,19 +106,9 @@ def generate_manifest(
                     )
                 )
 
-        # Compute digest for this module's contract
-        digest_data = {
-            "module": module_name,
-            "version": module_contract.version,
-            "methods": [
-                {"name": m.name, "input_model": m.input_model, "output_model": m.output_model}
-                for m in methods
-            ],
-        }
-        stable_json = json.dumps(digest_data, sort_keys=True, separators=(",", ":"))
-        digest = hashlib.sha256(stable_json.encode()).hexdigest()
+        digest = _compute_digest(module_name, module_contract.version, methods)
 
-        shared_services.append(
+        shared.append(
             PeerServiceInfo(
                 module=module_name,
                 version=module_contract.version,
@@ -96,21 +119,63 @@ def generate_manifest(
             )
         )
 
-    aurora_version = _get_package_version()
+    return shared
 
-    manifest = PeerManifest(
-        peer_id=peer_id,
-        node_name=mesh_config.node_name,
-        aurora_version=aurora_version,
-        shared_services=shared_services,
-        timestamp=datetime.now(UTC).isoformat(),
-    )
 
-    log_info(
-        f"Mesh: Generated manifest with {len(shared_services)} shared services: "
-        f"{[s.module for s in shared_services]}"
-    )
-    return manifest
+def _build_services_from_aggregator(
+    registry: RegistryAggregator,
+    mesh_config: MeshConfig,
+) -> list[PeerServiceInfo]:
+    """Build shared service list from the RegistryAggregator.
+
+    Used in **process mode** where services run as separate processes and
+    announce themselves via the bus.  The aggregator holds the latest
+    ``ServiceAnnouncement`` from each service.
+    """
+    shared: list[PeerServiceInfo] = []
+
+    # Read a snapshot of the aggregator's internal service state.
+    # In process mode the aggregator is populated by bus announcements.
+    services_snapshot: dict = dict(registry._services)  # module -> ServiceAnnouncement
+
+    for module_name, announcement in services_snapshot.items():
+        sharing_config = mesh_config.sharing.get(module_name)
+        if not sharing_config or not sharing_config.share:
+            continue
+
+        methods: list[MethodInfo] = []
+        for m in announcement.methods:
+            if m.exposure in ("external", "both"):
+                methods.append(m)
+
+        digest = _compute_digest(module_name, announcement.version, methods)
+
+        shared.append(
+            PeerServiceInfo(
+                module=module_name,
+                version=announcement.version,
+                capabilities=announcement.capabilities,
+                methods=methods,
+                max_concurrent=sharing_config.max_concurrent,
+                digest=digest,
+            )
+        )
+
+    return shared
+
+
+def _compute_digest(module_name: str, version: str, methods: list[MethodInfo]) -> str:
+    """Compute a SHA-256 digest for a module's contract."""
+    digest_data = {
+        "module": module_name,
+        "version": version,
+        "methods": [
+            {"name": m.name, "input_model": m.input_model, "output_model": m.output_model}
+            for m in methods
+        ],
+    }
+    stable_json = json.dumps(digest_data, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(stable_json.encode()).hexdigest()
 
 
 def generate_manifest_ack(

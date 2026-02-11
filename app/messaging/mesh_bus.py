@@ -32,6 +32,10 @@ if TYPE_CHECKING:
     from app.services.gateway.mesh.routing_table import RoutingTable
 
 
+# Default remote call timeout in seconds (used when mesh_config has no override)
+_DEFAULT_REMOTE_TIMEOUT: float = 30.0
+
+
 class MeshBus:
     """Message bus with transparent mesh routing.
 
@@ -51,6 +55,10 @@ class MeshBus:
         self._routing_table = routing_table
         self._peer_bridge = peer_bridge
         self._config = mesh_config
+        # Configurable remote call timeout (defaults to 30s)
+        self._remote_timeout: float = getattr(
+            mesh_config, "remote_timeout_s", _DEFAULT_REMOTE_TIMEOUT
+        )
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -114,7 +122,7 @@ class MeshBus:
         if route.target == "remote" and route.peer_id and self._peer_bridge:
             try:
                 await self._peer_bridge.call(
-                    route.peer_id, topic, message, timeout=30.0,
+                    route.peer_id, topic, message, timeout=self._remote_timeout,
                 )
                 return
             except Exception as e:
@@ -133,11 +141,19 @@ class MeshBus:
                 elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
                     try:
                         await self._peer_bridge.call(
-                            fallback.peer_id, topic, message, timeout=30.0,
+                            fallback.peer_id, topic, message,
+                            timeout=self._remote_timeout,
                         )
                         return
                     except Exception as e2:
                         log_warning(f"MeshBus: Fallback remote publish failed: {e2}")
+                        # Last resort — deliver locally so the command isn't dropped
+                        await self._inner.publish(
+                            topic, message, event=False, priority=priority,
+                            origin=origin, reliable=reliable, ttl_ms=ttl_ms,
+                            max_attempts=max_attempts,
+                        )
+                        return
 
         if route.target == "error":
             raise RuntimeError(f"No remote peer available for {topic} and fallback=error")

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.shared.contracts.models.gateway import MethodInfo
 
@@ -100,8 +100,7 @@ class PeerState(BaseModel):
     active_calls: int = 0
     status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale"
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class RouteDecision(BaseModel):
