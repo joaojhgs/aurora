@@ -119,7 +119,7 @@ class PeerBridge:
             result = await asyncio.wait_for(fut, timeout)
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_calls.pop(req_id, None)
             log_warning(f"PeerBridge: Call {req_id} to {peer_id} timed out ({timeout}s)")
             return QueryResult(
@@ -200,7 +200,7 @@ class PeerBridge:
 
         Called during shutdown to prevent futures from hanging.
         """
-        for req_id, fut in list(self._pending_calls.items()):
+        for _req_id, fut in list(self._pending_calls.items()):
             if not fut.done():
                 fut.set_result(
                     QueryResult(ok=False, error="PeerBridge shutting down")

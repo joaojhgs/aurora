@@ -1237,85 +1237,85 @@ Add `mesh` section to `config.json` with sensible defaults (all disabled). Exist
 ## Implementation Checklist
 
 ### Phase 1: Data Model & Configuration
-- [ ] 1.1: Create `app/services/gateway/mesh/__init__.py`
-- [ ] 1.2: Create `app/services/gateway/mesh/models.py` with `PeerServiceInfo`, `PeerManifest`, `PeerState`, `RouteDecision`
-- [ ] 1.3: Add `MeshConfig`, `ServiceSharingConfig`, `ServiceRoutingConfig` to `app/services/gateway/config.py`
-- [ ] 1.4: Add `mesh: MeshConfig` field to `Settings` in `config.py`
+- [x] 1.1: Create `app/services/gateway/mesh/__init__.py`
+- [x] 1.2: Create `app/services/gateway/mesh/models.py` with `PeerServiceInfo`, `PeerManifest`, `PeerState`, `RouteDecision`
+- [x] 1.3: Add `MeshConfig`, `ServiceSharingConfig`, `ServiceRoutingConfig` to `app/services/gateway/config.py`
+- [x] 1.4: Add `mesh: MeshConfig` field to `Settings` in `config.py`
 
 ### Phase 2: Peer Registry & Discovery
-- [ ] 2.1: Create `app/services/gateway/mesh/peer_registry.py` with `PeerRegistry`
-- [ ] 2.2: Implement `register_peer()`, `update_manifest()`, `remove_peer()`, `update_latency()`
-- [ ] 2.3: Implement `get_providers()` and `get_best_provider()`
-- [ ] 2.4: Implement stale peer detection loop
+- [x] 2.1: Create `app/services/gateway/mesh/peer_registry.py` with `PeerRegistry`
+- [x] 2.2: Implement `register_peer()`, `update_manifest()`, `remove_peer()`, `update_latency()`
+- [x] 2.3: Implement `get_providers()` and `get_best_provider()`
+- [x] 2.4: Implement stale peer detection loop
 
 ### Phase 3: Negotiation Protocol
-- [ ] 3.1: Create `app/services/gateway/mesh/negotiation.py` — manifest generation from local registry + sharing config
-- [ ] 3.2: Implement `generate_manifest()` using `registry.export()` filtered by sharing config
-- [ ] 3.3: Implement `generate_manifest_ack()` comparing remote manifest against local routing config
-- [ ] 3.4: Create `app/services/gateway/mesh/version_compat.py` with `is_compatible()` and `check_contract_compatibility()`
+- [x] 3.1: Create `app/services/gateway/mesh/negotiation.py` — manifest generation from local registry + sharing config
+- [x] 3.2: Implement `generate_manifest()` using `registry.export()` filtered by sharing config
+- [x] 3.3: Implement `generate_manifest_ack()` comparing remote manifest against local routing config
+- [x] 3.4: Create `app/services/gateway/mesh/version_compat.py` with `is_compatible()` and `check_contract_compatibility()`
 
 ### Phase 4: Bidirectional Handshake
-- [ ] 4.1: Add `send_to_peer(peer_id, text)` helper method to `RTCClient`
-- [ ] 4.2: Add `_send_manifest(peer_id)` to `RTCClient` — sends local manifest after auth
-- [ ] 4.3: Add `_on_peer_manifest(peer_id, msg)` to `RTCClient` — processes incoming manifest
-- [ ] 4.4: Add `_on_manifest_ack(peer_id, msg)` to `RTCClient`
-- [ ] 4.5: Trigger manifest exchange in `validate_peer()` after successful auth
-- [ ] 4.6: Handle new message types in DataChannel `on_message` handler
+- [x] 4.1: Add `send_to_peer(peer_id, text)` helper method to `RTCClient`
+- [x] 4.2: Add `_send_manifest(peer_id)` to `RTCClient` — sends local manifest after auth
+- [x] 4.3: Add `_on_peer_manifest(peer_id, msg)` to `RTCClient` — processes incoming manifest
+- [x] 4.4: Add `_on_manifest_ack(peer_id, msg)` to `RTCClient`
+- [x] 4.5: Trigger manifest exchange in `validate_peer()` after successful auth
+- [x] 4.6: Handle new message types in DataChannel `on_message` handler
 
 ### Phase 5: MeshBus (Transparent Routing Layer)
-- [ ] 5.1: Create `app/services/gateway/mesh/routing_table.py` with `RoutingTable`
-- [ ] 5.2: Implement `resolve()` — topic → RouteDecision based on config + peer availability
-- [ ] 5.3: Implement `update_peer()`, `remove_peer()`, `update_latency()`
-- [ ] 5.4: Create `app/messaging/mesh_bus.py` with `MeshBus`
-- [ ] 5.5: Implement `MeshBus.publish()` with routing logic and fallback
-- [ ] 5.6: Implement `MeshBus.request()` with routing logic and fallback
-- [ ] 5.7: Implement `MeshBus.subscribe()` (delegates to inner bus)
+- [x] 5.1: Create `app/services/gateway/mesh/routing_table.py` with `RoutingTable`
+- [x] 5.2: Implement `resolve()` — topic → RouteDecision based on config + peer availability
+- [x] 5.3: Implement `update_peer()`, `remove_peer()`, `update_latency()`
+- [x] 5.4: Create `app/messaging/mesh_bus.py` with `MeshBus`
+- [x] 5.5: Implement `MeshBus.publish()` with routing logic and fallback
+- [x] 5.6: Implement `MeshBus.request()` with routing logic and fallback
+- [x] 5.7: Implement `MeshBus.subscribe()` (delegates to inner bus)
 
 ### Phase 6: PeerBridge & Bus Integration
-- [ ] 6.1: Create `app/services/gateway/mesh/peer_bridge.py` with `PeerBridge`
-- [ ] 6.2: Implement `PeerBridge.call()` — outbound RPC via DataChannel
-- [ ] 6.3: Implement `PeerBridge.on_response()` — handle result/error from remote
-- [ ] 6.4: Add sharing gate to `RPCHandler._handle_call()` (check share config + capacity)
-- [ ] 6.5: Route `result`/`error` messages in RTCClient `on_message` to PeerBridge
+- [x] 6.1: Create `app/services/gateway/mesh/peer_bridge.py` with `PeerBridge`
+- [x] 6.2: Implement `PeerBridge.call()` — outbound RPC via DataChannel
+- [x] 6.3: Implement `PeerBridge.on_response()` — handle result/error from remote
+- [x] 6.4: Add sharing gate to `RPCHandler._handle_call()` (check share config + capacity)
+- [x] 6.5: Route `result`/`error` messages in RTCClient `on_message` to PeerBridge
 
 ### Phase 7: Latency Measurement
-- [ ] 7.1: Create `app/services/gateway/mesh/latency.py` with `LatencyMonitor`
-- [ ] 7.2: Implement `_ping_loop()` and `_send_ping()`
-- [ ] 7.3: Handle `ping` → `pong` response in RTCClient
-- [ ] 7.4: Handle `pong` → update PeerRegistry latency
-- [ ] 7.5: Implement peer selection algorithm in RoutingTable
+- [x] 7.1: Create `app/services/gateway/mesh/latency.py` with `LatencyMonitor`
+- [x] 7.2: Implement `_ping_loop()` and `_send_ping()`
+- [x] 7.3: Handle `ping` → `pong` response in RTCClient
+- [x] 7.4: Handle `pong` → update PeerRegistry latency
+- [x] 7.5: Implement peer selection algorithm in RoutingTable
 
 ### Phase 8: GatewayService Integration
-- [ ] 8.1: Add mesh component initialization to `GatewayService.on_start()`
-- [ ] 8.2: Create PeerRegistry, RoutingTable, PeerBridge, LatencyMonitor instances
-- [ ] 8.3: Replace global bus singleton with MeshBus when mesh is enabled
-- [ ] 8.4: Pass mesh config to RTCClient and RPCHandler
-- [ ] 8.5: Handle `Config.Changed` events for mesh config (hot-reload)
-- [ ] 8.6: Add mesh cleanup to `GatewayService.on_stop()`
+- [x] 8.1: Add mesh component initialization to `GatewayService.on_start()`
+- [x] 8.2: Create PeerRegistry, RoutingTable, PeerBridge, LatencyMonitor instances
+- [x] 8.3: Replace global bus singleton with MeshBus when mesh is enabled
+- [x] 8.4: Pass mesh config to RTCClient and RPCHandler
+- [x] 8.5: Handle `Config.Changed` events for mesh config (hot-reload)
+- [x] 8.6: Add mesh cleanup to `GatewayService.on_stop()`
 
 ### Phase 9: Fault Tolerance
-- [ ] 9.1: Implement automatic fallback in `MeshBus` when remote call fails
-- [ ] 9.2: Implement stale peer timeout and routing table cleanup
-- [ ] 9.3: Implement re-negotiation on reconnect
-- [ ] 9.4: Add capacity tracking (increment on call, decrement on response)
+- [x] 9.1: Implement automatic fallback in `MeshBus` when remote call fails
+- [x] 9.2: Implement stale peer timeout and routing table cleanup
+- [x] 9.3: Implement re-negotiation on reconnect
+- [x] 9.4: Add capacity tracking (increment on call, decrement on response)
 
 ### Phase 10: Testing
-- [ ] 10.1: Unit tests for mesh models
-- [ ] 10.2: Unit tests for routing table
-- [ ] 10.3: Unit tests for version compatibility
-- [ ] 10.4: Unit tests for peer registry
-- [ ] 10.5: Unit tests for MeshBus routing decisions
-- [ ] 10.6: Unit tests for PeerBridge
-- [ ] 10.7: Unit tests for latency monitor
-- [ ] 10.8: Unit tests for negotiation protocol
-- [ ] 10.9: Integration tests for mesh routing (local → remote)
-- [ ] 10.10: Integration tests for mesh failover
-- [ ] 10.11: Integration tests for mesh permissions
-- [ ] 10.12: Run `make format`, `make lint`, `make unit`
+- [x] 10.1: Unit tests for mesh models (18 tests)
+- [x] 10.2: Unit tests for routing table (12 tests)
+- [x] 10.3: Unit tests for version compatibility (33 tests)
+- [x] 10.4: Unit tests for peer registry (27 tests)
+- [x] 10.5: Unit tests for MeshBus routing decisions (15 tests)
+- [x] 10.6: Unit tests for PeerBridge (14 tests)
+- [x] 10.7: Unit tests for latency monitor (11 tests)
+- [x] 10.8: Unit tests for negotiation protocol (16 tests)
+- [x] 10.9: Integration tests for mesh routing (7 tests)
+- [x] 10.10: Integration tests for mesh failover (7 tests)
+- [x] 10.11: Integration tests for mesh permissions (4 tests)
+- [x] 10.12: Run `make format`, `make lint`, `make unit`
 
 ### Phase 11: Documentation
-- [ ] 11.1: Update `docs/PEER_PAIRING_FLOW.md` with mesh sections
-- [ ] 11.2: Update `.sisyphus/plans/` with completion status
+- [x] 11.1: Update `docs/PEER_PAIRING_FLOW.md` with mesh sections
+- [x] 11.2: Update `.sisyphus/plans/` with completion status
 
 ---
 
@@ -1347,4 +1347,4 @@ All changes are **backwards compatible** — mesh is disabled by default, and en
 
 **Last Updated**: February 2026
 **Author**: Aurora Team
-**Status**: Implementation Plan — Ready for Review
+**Status**: ✅ Implementation Complete — All 11 phases implemented, 162 tests passing

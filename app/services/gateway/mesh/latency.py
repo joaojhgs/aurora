@@ -8,6 +8,7 @@ use by the routing table's peer selection algorithm.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from typing import TYPE_CHECKING
 
@@ -48,10 +49,8 @@ class LatencyMonitor:
         """Stop the periodic ping loop."""
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
         self._pending_pings.clear()
 
