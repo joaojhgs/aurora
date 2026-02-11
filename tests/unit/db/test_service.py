@@ -29,6 +29,7 @@ def db_service(mock_bus):
     ):
         mock_db_mgr.return_value.initialize = AsyncMock()
         mock_scheduler_db.return_value.initialize = AsyncMock()
+        mock_rag.return_value.async_initialize = AsyncMock()
         mock_rag.return_value.combined_store = MagicMock()
 
         service = DBService()

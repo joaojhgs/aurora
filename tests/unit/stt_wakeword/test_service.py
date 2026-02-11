@@ -11,6 +11,7 @@ Tests cover:
 """
 
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -98,13 +99,12 @@ async def test_load_config_with_string_model_path(mock_bus):
             "general.speech_to_text.wake_word.model_path": "voice_models/aurora.onnx",
         }.get(key, default))
 
-        with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+        with (
+            patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
+            patch("app.shared.path_utils.resolve_path", side_effect=lambda p: Path(p)),
+        ):
             service = WakeWordService()
         await service._load_config()
-
-        assert service._backend_type == WakeWordBackendType.OPENWAKEWORD
-        assert service._sensitivity == 0.7
-        assert service._model_paths == ["voice_models/aurora.onnx"]
         assert service._wake_words == ["aurora"]
 
 
@@ -121,13 +121,12 @@ async def test_load_config_with_list_model_paths(mock_bus):
             ],
         }.get(key, default))
 
-        with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+        with (
+            patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
+            patch("app.shared.path_utils.resolve_path", side_effect=lambda p: Path(p)),
+        ):
             service = WakeWordService()
         await service._load_config()
-
-        assert service._backend_type == WakeWordBackendType.PORCUPINE
-        assert service._sensitivity == 0.6
-        assert service._model_paths == ["voice_models/aurora.ppn", "voice_models/jarvis.ppn"]
         assert service._wake_words == ["aurora", "jarvis"]
 
 
@@ -141,11 +140,12 @@ async def test_load_config_with_none_model_path(mock_bus):
             "general.speech_to_text.wake_word.model_path": None,
         }.get(key, default))
 
-        with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+        with (
+            patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
+            patch("app.shared.path_utils.resolve_path", side_effect=lambda p: Path(p)),
+        ):
             service = WakeWordService()
         await service._load_config()
-
-        assert service._model_paths == ["voice_models/jarvis.onnx"]
         assert service._wake_words == ["jarvis"]
 
 

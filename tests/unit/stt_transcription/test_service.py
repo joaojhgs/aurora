@@ -537,6 +537,7 @@ class TestTranscription:
     async def test_transcription_handles_empty_result(self, service, mock_whisper_model, mock_vad):
         """Test transcription handles empty text result."""
         await service.start()
+        service.bus.publish.reset_mock()  # Reset calls from start()/announcement
 
         # Mock empty transcription
         mock_segment = MagicMock()
