@@ -188,25 +188,38 @@ class TestOrchestratorServiceUserInputHandling:
     @pytest.mark.asyncio
     async def test_on_external_input(self, orchestrator_service):
         """Test handling external user input."""
-        from app.shared.contracts.models.common import EmptyOutput
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorProcessRequest,
+            OrchestratorResponse,
+        )
 
         request = OrchestratorProcessRequest(text="External command", session_id="external-session")
 
         with patch.object(
             orchestrator_service, "_process_input", new_callable=AsyncMock
         ) as mock_process:
+            mock_process.return_value = "Test response"
+
             # Call contract method directly
             response = await orchestrator_service.process_external_input(request)
 
-            assert isinstance(response, EmptyOutput)
-            mock_process.assert_called_once_with("External command", source="external", session_id="external-session")
+            assert isinstance(response, OrchestratorResponse)
+            assert response.text == "Test response"
+            assert response.session_id == "external-session"
+            mock_process.assert_called_once_with(
+                "External command",
+                source="external",
+                session_id="external-session",
+                return_response=True,
+            )
 
     @pytest.mark.asyncio
     async def test_on_external_input_with_error(self, orchestrator_service):
         """Test external input handling with processing error."""
-        from app.shared.contracts.models.common import EmptyOutput
-        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorProcessRequest,
+            OrchestratorResponse,
+        )
 
         request = OrchestratorProcessRequest(text="External command", session_id="external-session")
 
@@ -218,8 +231,10 @@ class TestOrchestratorServiceUserInputHandling:
             # Should not raise exception, error is caught internally
             response = await orchestrator_service.process_external_input(request)
 
-            # Returns EmptyOutput even on error
-            assert isinstance(response, EmptyOutput)
+            # Returns OrchestratorResponse with error info
+            assert isinstance(response, OrchestratorResponse)
+            assert "Processing error" in response.text
+            assert response.metadata.get("error") is True
 
 
 class TestOrchestratorServiceToolHandling:
