@@ -113,8 +113,8 @@ class GatewayService(BaseService):
 
             # Extract gateway section and map to Settings structure
             gateway = all_config.get("gateway", {})
-            webrtc = all_config.get("webrtc", {})
-            signaling_mqtt = all_config.get("signaling_mqtt", {})
+            webrtc = gateway.get("webrtc", {}) if gateway else {}
+            signaling_mqtt = gateway.get("signaling_mqtt", {}) if gateway else {}
             permissions = gateway.get("permissions", {}) if gateway else {}
             mesh = gateway.get("mesh", {}) if gateway else {}
 
