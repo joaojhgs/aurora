@@ -13,7 +13,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import main function from root main.py
-from main import main
+from main import main  # noqa: E402
 
 # Export for console script entry point
 __all__ = ["main"]

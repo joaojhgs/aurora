@@ -115,7 +115,7 @@ def get_embedding_model_signature(model_info: dict[str, str]) -> str:
 
 
 def check_and_update_embedding_model(
-    store: "SQLiteVecStore", current_model_info: dict[str, str]
+    store: "SQLiteVecStore", current_model_info: dict[str, str], embeddings=None
 ) -> bool:
     """
     Check if the embedding model has changed and re-embed all data if necessary.
@@ -123,6 +123,7 @@ def check_and_update_embedding_model(
     Args:
         store: The SQLiteVec store instance
         current_model_info: Current model information
+        embeddings: Optional pre-created embeddings instance for re-embedding
 
     Returns:
         bool: True if re-embedding was performed, False otherwise
@@ -210,7 +211,10 @@ def check_and_update_embedding_model(
                 metadatas.append(json.loads(row[2]) if row[2] else {})  # metadata
 
             # Get current embeddings to determine new dimensions
-            embeddings, _ = get_embeddings()
+            if embeddings is None:
+                raise ValueError(
+                    "embeddings must be provided when re-embedding is required"
+                )
 
             # Delete the old database file and recreate it
             db_path = store.db_file
@@ -768,8 +772,8 @@ class RAGService:
 
             # Check if embedding model changed and re-embed if necessary
             log_info("Checking for embedding model changes...")
-            memories_reembedded = check_and_update_embedding_model(self._memories_store, model_info)
-            tools_reembedded = check_and_update_embedding_model(self._tools_store, model_info)
+            memories_reembedded = check_and_update_embedding_model(self._memories_store, model_info, embeddings)
+            tools_reembedded = check_and_update_embedding_model(self._tools_store, model_info, embeddings)
 
             if memories_reembedded or tools_reembedded:
                 log_info("Embedding model update completed!")

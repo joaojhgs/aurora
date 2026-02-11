@@ -1074,6 +1074,122 @@
                         }
                     },
                     "additionalProperties": false
+                },
+                "mesh": {
+                    "type": "object",
+                    "description": "P2P mesh networking configuration",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Enable P2P mesh networking",
+                            "default": false
+                        },
+                        "node_name": {
+                            "type": "string",
+                            "description": "Human-readable name for this node in the mesh",
+                            "default": ""
+                        },
+                        "sharing": {
+                            "type": "object",
+                            "description": "Per-service sharing configuration",
+                            "additionalProperties": true
+                        },
+                        "routing": {
+                            "type": "object",
+                            "description": "Per-service routing preferences",
+                            "additionalProperties": true
+                        },
+                        "version_policy": {
+                            "type": "string",
+                            "enum": ["exact", "compatible", "any"],
+                            "description": "How strictly to enforce version matching",
+                            "default": "compatible"
+                        },
+                        "peer_selection": {
+                            "type": "string",
+                            "enum": ["lowest_latency", "round_robin", "random"],
+                            "description": "Strategy for choosing among multiple peers",
+                            "default": "lowest_latency"
+                        },
+                        "ping_interval_s": {
+                            "type": "number",
+                            "minimum": 1,
+                            "description": "How often to measure peer latency (seconds)",
+                            "default": 30.0
+                        },
+                        "registry_announce_interval_s": {
+                            "type": "number",
+                            "minimum": 1,
+                            "description": "How often to re-announce manifest (seconds)",
+                            "default": 60.0
+                        },
+                        "stale_peer_timeout_s": {
+                            "type": "number",
+                            "minimum": 1,
+                            "description": "Mark peer stale after this many seconds without pong",
+                            "default": 120.0
+                        },
+                        "remote_timeout_s": {
+                            "type": "number",
+                            "minimum": 1,
+                            "description": "Timeout for remote bus publish calls (seconds)",
+                            "default": 30.0
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "webrtc": {
+                    "type": "object",
+                    "description": "WebRTC transport configuration",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "strategy": {
+                            "type": "string"
+                        },
+                        "app_id": {
+                            "type": "string"
+                        },
+                        "room": {
+                            "type": "string"
+                        },
+                        "password": {
+                            "type": "string"
+                        },
+                        "encrypt_signaling": {
+                            "type": "boolean"
+                        },
+                        "enable_app_layer_e2ee": {
+                            "type": "boolean"
+                        },
+                        "stun_servers": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "turn_servers": {
+                            "type": "array"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "signaling_mqtt": {
+                    "type": "object",
+                    "description": "MQTT signaling configuration for WebRTC",
+                    "properties": {
+                        "brokers": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "topic_root": {
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false
@@ -1097,57 +1213,6 @@
                 "debug": {
                     "type": "boolean",
                     "description": "Enable debug mode for verbose logging"
-                }
-            },
-            "additionalProperties": false
-        },
-        "webrtc": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "strategy": {
-                    "type": "string"
-                },
-                "app_id": {
-                    "type": "string"
-                },
-                "room": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "encrypt_signaling": {
-                    "type": "boolean"
-                },
-                "enable_app_layer_e2ee": {
-                    "type": "boolean"
-                },
-                "stun_servers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "turn_servers": {
-                    "type": "array"
-                }
-            },
-            "additionalProperties": false
-        },
-        "signaling_mqtt": {
-            "type": "object",
-            "properties": {
-                "brokers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "topic_root": {
-                    "type": "string"
                 }
             },
             "additionalProperties": false
