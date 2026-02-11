@@ -215,9 +215,9 @@ class RTCClient:
 
     def configure_mesh(
         self,
-        mesh_config: "MeshConfig",
-        peer_registry: "PeerRegistry",
-        peer_bridge: "PeerBridge",
+        mesh_config: MeshConfig,
+        peer_registry: PeerRegistry,
+        peer_bridge: PeerBridge,
     ) -> None:
         """Configure mesh components on the RTCClient.
 
@@ -411,7 +411,7 @@ class RTCClient:
                 self._peer_timeout_tasks[peer] = asyncio.create_task(_auth_timeout_check())
 
             @chan.on("message")
-            def on_message(message: str | bytes) -> None:
+            def on_message(message: str | bytes | bytearray | memoryview) -> None:
                 if isinstance(message, bytes):
                     try:
                         if self._settings.webrtc.enable_app_layer_e2ee:
@@ -419,6 +419,16 @@ class RTCClient:
                             text = json.dumps(obj)
                         else:
                             text = message.decode()
+                    except Exception as e:
+                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
+                        return
+                elif isinstance(message, (bytearray, memoryview)):
+                    try:
+                        if self._settings.webrtc.enable_app_layer_e2ee:
+                            obj = aead_open(self._keys.k_data, bytes(message))
+                            text = json.dumps(obj)
+                        else:
+                            text = bytes(message).decode()
                     except Exception as e:
                         log_error(f"Failed to decrypt/decode message from {peer}: {e}")
                         return

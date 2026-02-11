@@ -8,6 +8,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
@@ -16,7 +17,6 @@ from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
-from pydantic import BaseModel
 
 
 class TTSRequest(BaseModel):
