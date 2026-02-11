@@ -90,11 +90,15 @@ class TestToolingServiceInitialization:
         # Verify tools were initialized
         tooling_service.tools_manager.initialize.assert_called_once()
 
-        # Verify initialization event was published
-        mock_bus.publish.assert_called_once()
-        call_args = mock_bus.publish.call_args
-        assert call_args[0][0] == ToolingMethods.TOOLS_INITIALIZED
-        assert isinstance(call_args[0][1], ToolsInitialized)
+        # Verify initialization event was published (may also include service announcement)
+        assert mock_bus.publish.call_count >= 1
+        # Find the ToolsInitialized publish call
+        tools_init_calls = [
+            call for call in mock_bus.publish.call_args_list
+            if call[0][0] == ToolingMethods.TOOLS_INITIALIZED
+        ]
+        assert len(tools_init_calls) == 1
+        assert isinstance(tools_init_calls[0][0][1], ToolsInitialized)
 
     @pytest.mark.asyncio
     async def test_stop(self, tooling_service):
