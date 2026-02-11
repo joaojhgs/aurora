@@ -47,10 +47,7 @@ def main():
     launcher = ProcessLauncher()
 
     # Determine which services to start
-    if "all" in args.services:
-        services_to_start = list(SERVICES.keys())
-    else:
-        services_to_start = args.services
+    services_to_start = list(SERVICES.keys()) if "all" in args.services else args.services
 
     # Start services
     for service_name in services_to_start:

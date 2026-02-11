@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
@@ -63,7 +63,7 @@ def generate_manifest(
         node_name=mesh_config.node_name,
         aurora_version=aurora_version,
         shared_services=shared_services,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
     log_info(

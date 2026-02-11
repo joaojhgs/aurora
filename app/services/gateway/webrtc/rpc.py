@@ -69,10 +69,7 @@ class RPCHandler:
         # Mesh sharing gate: check if the called service is shared
         if self._mesh_config and self._mesh_config.enabled:
             delimiter = "." if "." in method_name else "/" if "/" in method_name else None
-            if delimiter:
-                module_name = method_name.split(delimiter, 1)[0]
-            else:
-                module_name = method_name
+            module_name = method_name.split(delimiter, 1)[0] if delimiter else method_name
 
             sharing = self._mesh_config.sharing.get(module_name)
             if not sharing or not sharing.share:
@@ -80,13 +77,14 @@ class RPCHandler:
                 return
 
             # Allowed-peers check (None = open to all authenticated peers)
-            if sharing.allowed_peers is not None:
-                if not self._peer_id or self._peer_id not in sharing.allowed_peers:
-                    self._send_error(
-                        req_id, 403,
-                        f"Peer not allowed to access service {module_name}",
-                    )
-                    return
+            if sharing.allowed_peers is not None and (
+                not self._peer_id or self._peer_id not in sharing.allowed_peers
+            ):
+                self._send_error(
+                    req_id, 403,
+                    f"Peer not allowed to access service {module_name}",
+                )
+                return
 
             # Capacity check
             if sharing.max_concurrent > 0:

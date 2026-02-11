@@ -56,7 +56,7 @@ class ServiceProcessManager:
 
     def stop_all(self):
         """Stop all managed processes."""
-        for name, proc in self.processes.items():
+        for _name, proc in self.processes.items():
             try:
                 proc.terminate()
                 proc.wait(timeout=5)
