@@ -117,16 +117,21 @@ def get_embedding_model_signature(model_info: dict[str, str]) -> str:
 def check_and_update_embedding_model(
     store: "SQLiteVecStore", current_model_info: dict[str, str], embeddings=None
 ) -> bool:
-    """
-    Check if the embedding model has changed and re-embed all data if necessary.
+    """Check if the embedding model has changed and re-embed all data if necessary.
+
+    When the stored model signature differs from *current_model_info*, the
+    function drops the existing vector table and re-embeds every row using
+    *embeddings*.
 
     Args:
-        store: The SQLiteVec store instance
-        current_model_info: Current model information
-        embeddings: Optional pre-created embeddings instance for re-embedding
+        store: The SQLiteVec store instance.
+        current_model_info: Current model information dict.
+        embeddings: Pre-created embeddings instance used for re-embedding.
+            Required when a model change is detected.  Callers should obtain
+            an instance via ``async_get_embeddings()`` and pass it here.
 
     Returns:
-        bool: True if re-embedding was performed, False otherwise
+        True if re-embedding was performed, False otherwise.
     """
     current_signature = get_embedding_model_signature(current_model_info)
 
@@ -210,10 +215,11 @@ def check_and_update_embedding_model(
                 texts.append(row[1])  # text
                 metadatas.append(json.loads(row[2]) if row[2] else {})  # metadata
 
-            # Get current embeddings to determine new dimensions
+            # Embeddings are required for re-embedding
             if embeddings is None:
                 raise ValueError(
-                    "embeddings must be provided when re-embedding is required"
+                    "embeddings must be provided when re-embedding is required. "
+                    "Call async_get_embeddings() first and pass the result."
                 )
 
             # Delete the old database file and recreate it

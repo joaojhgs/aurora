@@ -118,10 +118,13 @@ async def test_rtc_client_auth_message_handling(mock_deps):
             {"type": "auth", "peer_name": "remote-peer", "token": "valid-token"}
         )
 
-        mock_channel.emit("message", auth_payload)
-
-        # Wait for async validation task
-        await asyncio.sleep(0.1)
+        # emit() returns an asyncio.Task for coroutine handlers — await it
+        # directly instead of using a timing-dependent sleep
+        task = mock_channel.emit("message", auth_payload)
+        if task is not None:
+            await task
+        else:
+            await asyncio.sleep(0)
 
         assert auth_service.authenticate_token.called
         assert auth_service.build_identity_from_token.called
@@ -154,10 +157,12 @@ async def test_rtc_client_auth_failure(mock_deps):
             {"type": "auth", "peer_name": "remote-peer", "token": "invalid-token"}
         )
 
-        mock_channel.emit("message", auth_payload)
-
-        # Wait for async validation task
-        await asyncio.sleep(0.1)
+        # emit() returns an asyncio.Task for coroutine handlers — await it
+        task = mock_channel.emit("message", auth_payload)
+        if task is not None:
+            await task
+        else:
+            await asyncio.sleep(0)
 
         assert auth_service.authenticate_token.called
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from pydantic import BaseModel, Field
 
 
@@ -71,6 +73,17 @@ class MeshConfig(BaseModel):
     remote_timeout_s: float = 30.0
 
 
+def _generate_token_secret() -> str:
+    """Generate a random token secret for signing.
+
+    This is used as the default so each Aurora instance gets a unique
+    secret on first startup.  For persistence across restarts, set
+    ``gateway.token_secret`` in config.json or the AURORA_TOKEN_SECRET
+    environment variable.
+    """
+    return secrets.token_urlsafe(32)
+
+
 class APISettings(BaseModel):
     enabled: bool = True
     host: str = "0.0.0.0"
@@ -79,7 +92,7 @@ class APISettings(BaseModel):
     cors_origins: list[str] = ["*"]
     cors_allow_credentials: bool = True
     docs: bool = True
-    token_secret: str = "change-me"
+    token_secret: str = Field(default_factory=_generate_token_secret)
     auth_enabled: bool = False
     api_keys: list[str] = []
 
