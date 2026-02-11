@@ -68,6 +68,7 @@ class MeshConfig(BaseModel):
     ping_interval_s: float = 30.0
     registry_announce_interval_s: float = 60.0
     stale_peer_timeout_s: float = 120.0
+    remote_timeout_s: float = 30.0
 
 
 class APISettings(BaseModel):
