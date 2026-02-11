@@ -167,8 +167,10 @@ class TestSupervisorErrorHandling:
     async def test_initialize_with_invalid_mode(self, supervisor):
         """Test initialization with invalid mode."""
         # Mode is read from environment variable, not config_api
-        with patch.dict("os.environ", {"AURORA_ARCHITECTURE_MODE": "invalid_mode"}):
-            with pytest.raises(ValueError, match="Unknown architecture mode"):
+        with (
+            patch.dict("os.environ", {"AURORA_ARCHITECTURE_MODE": "invalid_mode"}),
+            pytest.raises(ValueError, match="Unknown architecture mode"),
+        ):
                 await supervisor.initialize()
 
     @pytest.mark.asyncio
