@@ -184,26 +184,26 @@
             "registry_announce_interval_s": 60.0,
             "stale_peer_timeout_s": 120.0,
             "remote_timeout_s": 30.0
+        },
+        "webrtc": {
+            "enabled": false,
+            "strategy": "mqtt",
+            "app_id": "aurora",
+            "room": "default",
+            "password": "",
+            "encrypt_signaling": true,
+            "enable_app_layer_e2ee": false,
+            "stun_servers": [
+                "stun:stun.l.google.com:19302"
+            ],
+            "turn_servers": []
+        },
+        "signaling_mqtt": {
+            "brokers": [
+                "wss://broker.emqx.io:8084/mqtt",
+                "wss://test.mosquitto.org:8081/mqtt"
+            ],
+            "topic_root": "aurora"
         }
-    },
-    "webrtc": {
-        "enabled": false,
-        "strategy": "mqtt",
-        "app_id": "aurora",
-        "room": "default",
-        "password": "",
-        "encrypt_signaling": true,
-        "enable_app_layer_e2ee": false,
-        "stun_servers": [
-            "stun:stun.l.google.com:19302"
-        ],
-        "turn_servers": []
-    },
-    "signaling_mqtt": {
-        "brokers": [
-            "wss://broker.emqx.io:8084/mqtt",
-            "wss://test.mosquitto.org:8081/mqtt"
-        ],
-        "topic_root": "aurora"
     }
 }
