@@ -20,6 +20,7 @@
 12. [Audit Trail](#audit-trail)
 13. [Sequence Diagrams](#sequence-diagrams)
 14. [Configuration](#configuration)
+15. [P2P Mesh Networking](#p2p-mesh-networking)
 
 ---
 
@@ -841,3 +842,143 @@ The peer pairing system in Aurora provides a **secure, auditable, and permission
 4. **Live updates** are supported for WebRTC peers via admin-triggered permission refresh.
 5. **Every action** is recorded in the audit log for security compliance.
 6. **All secrets** (tokens, passwords) are hashed/encrypted — raw values are never stored.
+
+---
+
+## P2P Mesh Networking
+
+After a peer has been authenticated and established a DataChannel connection (as described above), Aurora can optionally enable **mesh networking** to share services across peers.
+
+### Overview
+
+The mesh layer extends the peer lifecycle with a **manifest negotiation** protocol. After mutual authentication, each peer advertises which services it is willing to share, and the other side acknowledges which of those services it finds compatible and wants to use.
+
+This allows multiple Aurora instances (or compatible clients) to form a dynamic mesh where service calls are transparently routed to local or remote providers based on configuration, availability, and latency.
+
+### Mesh Peer Lifecycle (Extended)
+
+```
+┌────────────┐     ┌──────────────┐     ┌────────────┐     ┌──────────────┐
+│  Connected │────►│ Authenticated│────►│ Negotiated │────►│    Stale      │
+│ (WebRTC)   │     │ (token OK)   │     │ (manifests │     │ (no pong for │
+│            │     │              │     │  exchanged) │     │  timeout_s)  │
+└────────────┘     └──────────────┘     └────────────┘     └──────────────┘
+                          │                    ▲                    │
+                          │                    │ pong received      │
+                          ▼                    └───────────────────-┘
+                   Register in PeerRegistry
+                   Send manifest ──►
+                   ◄── Receive manifest
+                   ◄── Receive manifest ACK
+                   Send manifest ACK ──►
+                   Begin ping/pong loop
+```
+
+### Manifest Exchange Protocol
+
+After successful authentication, the following messages are exchanged over the DataChannel:
+
+| Message Type | Direction | Purpose |
+|---|---|---|
+| `manifest` | Bidirectional | Advertises shared services with version and capability info |
+| `manifest_ack` | Bidirectional | Reports compatibility of received manifest services |
+| `manifest_request` | Either peer | Request the other peer to re-send their manifest |
+| `ping` | Either peer | Latency measurement (sends monotonic timestamp) |
+| `pong` | Either peer | Latency measurement response (echoes ping ID) |
+| `capacity_update` | Either peer | Notifies peer of a change in available capacity |
+| `call` | Either peer | JSON-RPC call to a shared service on the remote peer |
+| `result` | Either peer | Successful response to a remote `call` |
+| `error` | Either peer | Error response to a remote `call` |
+
+### Manifest Structure
+
+```json
+{
+  "type": "manifest",
+  "peer_id": "abc123",
+  "node_name": "aurora-desktop",
+  "aurora_version": "1.0.0",
+  "shared_services": [
+    {
+      "module": "TTS",
+      "version": "1.0.0",
+      "capabilities": ["streaming", "multilingual"],
+      "methods": [
+        {
+          "name": "Request",
+          "summary": "Request TTS synthesis",
+          "bus_topic": "TTS.Request",
+          "exposure": "both",
+          "required_perms": ["TTS.*"],
+          "input_model": "TTSRequest",
+          "output_model": "TTSResponse"
+        }
+      ],
+      "max_concurrent": 5,
+      "digest": "sha256..."
+    }
+  ],
+  "timestamp": "2026-01-15T10:30:00+00:00"
+}
+```
+
+### Mesh Routing
+
+Once manifests are exchanged, the **MeshBus** transparently routes messages:
+
+- **Events** (`event=True`): Always delivered locally (broadcasts).
+- **Commands/Requests** (`event=False`): Routed based on per-module `routing` config:
+  - `local_only` / `local`: Always deliver locally.
+  - `network`: Prefer remote peer, fall back based on `fallback` config.
+  - `network_only`: Remote peer only, fail if unavailable.
+
+Peer selection among multiple providers uses the configured `peer_selection` strategy:
+- `lowest_latency`: Pick the peer with the lowest measured RTT.
+- `round_robin`: Rotate among available peers.
+- `random`: Random selection.
+
+### Security Controls
+
+- **Sharing gate**: Remote peers can only call services explicitly marked `share: true`.
+- **Allowed peers**: Each shared service can restrict which peer IDs may call it via `allowed_peers`.
+- **Capacity limits**: Each shared service specifies `max_concurrent`; calls beyond that limit get HTTP 429.
+- **Permission checks**: Standard RBAC permission checks apply to all inbound RPC calls.
+- **Version compatibility**: Configurable version matching policies (`exact`, `compatible`, `any`).
+
+### Mesh Configuration
+
+```json
+{
+  "gateway": {
+    "mesh": {
+      "enabled": true,
+      "node_name": "aurora-desktop",
+      "sharing": {
+        "TTS": { "share": true, "max_concurrent": 5, "allowed_peers": null },
+        "Orchestrator": { "share": true, "max_concurrent": 2 }
+      },
+      "routing": {
+        "TTS": { "prefer": "network", "fallback": "local", "min_version": "1.0.0" },
+        "STT": { "prefer": "local_only" }
+      },
+      "version_policy": "compatible",
+      "peer_selection": "lowest_latency",
+      "ping_interval_s": 30.0,
+      "stale_peer_timeout_s": 120.0,
+      "remote_timeout_s": 30.0
+    }
+  }
+}
+```
+
+### Key Mesh Components
+
+| Component | Location | Purpose |
+|---|---|---|
+| **PeerRegistry** | `app/services/gateway/mesh/peer_registry.py` | Tracks connected peers, manifests, latency, stale detection |
+| **RoutingTable** | `app/services/gateway/mesh/routing_table.py` | Resolves bus topics to local/remote targets |
+| **PeerBridge** | `app/services/gateway/mesh/peer_bridge.py` | Sends outbound RPC calls via DataChannels |
+| **MeshBus** | `app/messaging/mesh_bus.py` | Transparent routing wrapper around the inner bus |
+| **LatencyMonitor** | `app/services/gateway/mesh/latency.py` | Periodic ping/pong RTT measurement |
+| **Negotiation** | `app/services/gateway/mesh/negotiation.py` | Manifest generation, parsing, ACK logic |
+| **VersionCompat** | `app/services/gateway/mesh/version_compat.py` | Semantic version comparison |
