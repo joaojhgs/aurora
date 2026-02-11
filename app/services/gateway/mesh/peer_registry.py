@@ -12,6 +12,7 @@ It lives inside the Gateway service as a component and is responsible for:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from typing import TYPE_CHECKING
 
@@ -48,10 +49,8 @@ class PeerRegistry:
         """Stop the stale peer detection loop."""
         if self._stale_check_task:
             self._stale_check_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._stale_check_task
-            except asyncio.CancelledError:
-                pass
             self._stale_check_task = None
 
     # ── Mutation ─────────────────────────────────────────────────────────
@@ -287,27 +286,24 @@ class PeerRegistry:
 
             # Check allowed_peers in sharing config
             sharing = self._config.sharing.get(module)
-            if sharing and sharing.allowed_peers is not None:
-                if peer.peer_id not in sharing.allowed_peers:
-                    continue
+            if sharing and sharing.allowed_peers is not None and peer.peer_id not in sharing.allowed_peers:
+                continue
 
             # Version compatibility check
-            if routing_config and routing_config.min_version:
-                if not is_compatible(
-                    routing_config.min_version,
-                    svc_info.version,
-                    version_policy,
-                    routing_config.min_version,
-                ):
-                    continue
+            if routing_config and routing_config.min_version and not is_compatible(
+                routing_config.min_version,
+                svc_info.version,
+                version_policy,
+                routing_config.min_version,
+            ):
+                continue
 
             # Required capabilities check
-            if routing_config and routing_config.required_capabilities:
-                if not all(
-                    cap in svc_info.capabilities
-                    for cap in routing_config.required_capabilities
-                ):
-                    continue
+            if routing_config and routing_config.required_capabilities and not all(
+                cap in svc_info.capabilities
+                for cap in routing_config.required_capabilities
+            ):
+                continue
 
             # Capacity check
             if svc_info.max_concurrent > 0 and peer.active_calls >= svc_info.max_concurrent:
