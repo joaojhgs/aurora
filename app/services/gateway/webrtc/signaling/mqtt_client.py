@@ -45,10 +45,14 @@ class MQTTSignaling:
         self._loop = asyncio.get_running_loop()
 
         def on_connect(client, userdata, flags, rc, props=None):
-            if rc == 0 and self._loop:
+            # Normalize rc to handle both int and MQTTv5 ReasonCode-style values
+            rc_value = getattr(rc, "value", rc)
+            if int(rc_value) == 0 and self._loop:
                 self._loop.call_soon_threadsafe(self._connected.set)
 
         for url in self._brokers:
+            # Ensure the connected event is cleared for each broker attempt
+            self._connected.clear()
             try:
                 # Determine transport based on URL scheme
                 transport = "websockets" if url.startswith(("wss://", "ws://")) else "tcp"
