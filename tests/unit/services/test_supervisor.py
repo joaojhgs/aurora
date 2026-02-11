@@ -93,11 +93,13 @@ class TestSupervisorServiceLifecycle:
             patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
             patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
             patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
+            patch("app.services.gateway.GatewayService") as mock_gateway_service,
         ):
             # Configure all mocks
             for mock_service in [mock_db_service, mock_tooling_service, mock_scheduler_service,
                                  mock_tts_service, mock_orchestrator_service, mock_config_service,
-                                 mock_coordinator, mock_transcription, mock_wakeword]:
+                                 mock_coordinator, mock_transcription, mock_wakeword,
+                                 mock_gateway_service]:
                 mock_instance = Mock()
                 mock_instance.start = AsyncMock()
                 mock_service.return_value = mock_instance
@@ -125,11 +127,12 @@ class TestSupervisorServiceLifecycle:
             patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
             patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
             patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
+            patch("app.services.gateway.GatewayService") as mock_gateway,
         ):
             # Configure all mocks
             for mock_service in [mock_db, mock_tooling, mock_scheduler, mock_tts,
                                  mock_orchestrator, mock_config, mock_wakeword,
-                                 mock_transcription, mock_coordinator]:
+                                 mock_transcription, mock_coordinator, mock_gateway]:
                 mock_instance = Mock()
                 mock_instance.start = AsyncMock()
                 mock_service.return_value = mock_instance
@@ -189,6 +192,7 @@ class TestSupervisorErrorHandling:
             patch("app.services.stt_coordinator.STTCoordinatorService") as mock_coordinator,
             patch("app.services.stt_transcription.TranscriptionService") as mock_transcription,
             patch("app.services.stt_wakeword.WakeWordService") as mock_wakeword,
+            patch("app.services.gateway.GatewayService") as mock_gateway_service,
         ):
             # Configure config service to succeed (it starts first)
             mock_config_instance = Mock()
@@ -203,7 +207,7 @@ class TestSupervisorErrorHandling:
             # Configure other services normally
             for mock_service in [mock_tooling_service, mock_scheduler_service, mock_tts_service,
                                  mock_orchestrator_service, mock_coordinator,
-                                 mock_transcription, mock_wakeword]:
+                                 mock_transcription, mock_wakeword, mock_gateway_service]:
                 mock_instance = Mock()
                 mock_instance.start = AsyncMock()
                 mock_service.return_value = mock_instance
