@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
@@ -103,7 +103,7 @@ def generate_manifest(
         node_name=mesh_config.node_name,
         aurora_version=aurora_version,
         shared_services=shared_services,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
     log_info(
@@ -146,21 +146,19 @@ def generate_manifest_ack(
         is_compat = True
 
         # Version check
-        if routing_config.min_version:
-            if not is_compatible(
-                routing_config.min_version,
-                svc.version,
-                mesh_config.version_policy,
-                routing_config.min_version,
-            ):
-                is_compat = False
+        if routing_config.min_version and not is_compatible(
+            routing_config.min_version,
+            svc.version,
+            mesh_config.version_policy,
+            routing_config.min_version,
+        ):
+            is_compat = False
 
         # Capability check
-        if routing_config.required_capabilities:
-            if not all(
-                cap in svc.capabilities for cap in routing_config.required_capabilities
-            ):
-                is_compat = False
+        if routing_config.required_capabilities and not all(
+            cap in svc.capabilities for cap in routing_config.required_capabilities
+        ):
+            is_compat = False
 
         if is_compat:
             compatible.append(svc.module)
