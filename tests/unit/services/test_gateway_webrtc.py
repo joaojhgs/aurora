@@ -76,6 +76,8 @@ async def test_rtc_client_initialization_and_signaling_config(mock_bus, mock_set
             topic_root=mock_settings.signaling_mqtt.topic_root,
             username=mock_settings.signaling_mqtt.username,
             password=mock_settings.signaling_mqtt.password,
+            encrypt_presence=mock_settings.webrtc.encrypt_signaling,
+            sig_key=client._keys.k_sig,
         )
 
         mock_mqtt_signaling.connect.assert_called_once()

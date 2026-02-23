@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -57,9 +58,11 @@ def mock_deps():
 
 @pytest.mark.asyncio
 async def test_rtc_client_handshake_on_open(mock_deps):
+    """With require_auth=True and a saved token, on_open sends DB token for auth."""
     settings, bus, registry, auth_service = mock_deps
-    client = RTCClient(settings, bus, registry, auth_service)
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._system_token = "system-token"
+    client._saved_auth_token = "saved-pairing-token-from-prior-exchange"
 
     mock_pc = MagicMock()
     mock_channel = MockDataChannel()
@@ -71,12 +74,121 @@ async def test_rtc_client_handshake_on_open(mock_deps):
         # Trigger 'open' event on the channel
         mock_channel.emit("open")
 
-        # Check if auth message was sent
+        # Check if auth message was sent with the saved token
         assert len(mock_channel.sent_messages) == 1
         msg = json.loads(mock_channel.sent_messages[0])
         assert msg["type"] == "auth"
-        assert msg["token"] == "system-token"
+        assert msg["token"] == "saved-pairing-token-from-prior-exchange"
         assert msg["peer_name"] == client._peer_id
+        # No auto-auth mechanism — token is a standard DB token from pairing
+        assert msg.get("mechanism") != "mesh_shared_secret"
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_no_saved_token_no_auto_send(mock_deps):
+    """With require_auth=True and no saved token, initiator sends nothing
+    but starts the pairing flow in the background."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    # No saved_auth_token — peer must authenticate via pairing flow
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("peer1", is_offer_initiator=True)
+
+        mock_channel.emit("open")
+
+        # No auth messages should have been sent (no auto-auth)
+        assert len(mock_channel.sent_messages) == 0
+        # But pairing task should have been created (we're initiator via _ensure_pc)
+        assert "peer1" in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_offer_receiver_no_pairing_from_local_channel(mock_deps):
+    """When _ensure_pc is called without is_offer_initiator (offer receiver),
+    the local DataChannel should NOT start the pairing flow."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    # No saved_auth_token
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        # Default is_offer_initiator=False (offer receiver path)
+        await client._ensure_pc("peer1")
+
+        mock_channel.emit("open")
+
+        # No auth messages sent
+        assert len(mock_channel.sent_messages) == 0
+        # No pairing task — offer receiver waits for initiator's PairingStart RPC
+        assert "peer1" not in client._pairing_tasks
+
+
+class MockPeerConnectionWithEvents:
+    """Mock RTCPeerConnection that captures event handler decorators."""
+
+    def __init__(self, **kwargs):
+        self._handlers: dict[str, Any] = {}
+        self.createDataChannel = MagicMock()
+        self.addIceCandidate = AsyncMock()
+        self.setRemoteDescription = AsyncMock()
+        self.setLocalDescription = AsyncMock()
+        self.createOffer = AsyncMock()
+        self.createAnswer = AsyncMock()
+        self.close = MagicMock()
+        self.localDescription = None
+
+    def on(self, event_name: str):
+        def decorator(fn):
+            self._handlers[event_name] = fn
+            return fn
+        return decorator
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_responder_no_pairing_initiation(mock_deps):
+    """Responder (received DataChannel) should NOT start pairing — waits for
+    the initiator's PairingStart RPC instead."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    # No saved_auth_token
+
+    mock_pc = MockPeerConnectionWithEvents()
+    resp_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = MockDataChannel()  # initiator channel (ignored)
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        return_value=mock_pc,
+    ):
+        await client._ensure_pc("peer1")
+
+        # Clear any pairing task that the initiator channel may have created
+        # when we emitted open on the locally-created channel
+        client._pairing_tasks.clear()
+
+        # Simulate a remote DataChannel arriving (responder path)
+        datachannel_handler = mock_pc._handlers.get("datachannel")
+        assert datachannel_handler is not None, "on_datachannel handler not registered"
+        datachannel_handler(resp_channel)
+
+        # Trigger open on the responder channel
+        resp_channel.emit("open")
+
+        # Responder should NOT have started a pairing task
+        assert "peer1" not in client._pairing_tasks
+        # No auth messages sent either
+        assert len(resp_channel.sent_messages) == 0
 
 
 @pytest.mark.asyncio

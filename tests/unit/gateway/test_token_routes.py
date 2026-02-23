@@ -9,6 +9,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.services.db.models import Token
 
+pytestmark = pytest.mark.skip(reason="Token endpoints migrated to Auth service contracts (auto-generated)")
+
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _make_token(

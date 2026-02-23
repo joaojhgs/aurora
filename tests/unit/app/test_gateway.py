@@ -191,6 +191,74 @@ class TestRegistryAggregator:
 
         await aggregator.stop()
 
+    @pytest.mark.asyncio
+    async def test_gateway_methods_loaded_in_local_registry(self, bus):
+        """Gateway service methods (PairingStart, Login, etc.) must be
+        discoverable via the registry so that WebRTC RPC calls can find them.
+
+        Regression: Gateway was previously skipped in _load_from_local_registry,
+        causing all Gateway.* RPC calls to return 404."""
+        from app.services.gateway.registry_aggregator import RegistryAggregator
+        from app.shared.contracts.registry import (
+            IOModel,
+            clear_registry,
+            register_method,
+            register_module,
+        )
+
+        # Ensure a clean slate – other tests may have cleared the global
+        # registry, so register the modules fresh here.
+        clear_registry()
+
+        # Minimal Pydantic model for the contract requirement
+        class _Dummy(IOModel):
+            pass
+
+        # Simulate what BaseService.__init__ does for the Auth service:
+        # register_module + register_method for pairing contracts.
+        register_module("Auth", summary="Auth service")
+        for method_name, method_id in [
+            ("PairingStart", "Auth.PairingStart"),
+            ("Login", "Auth.Login"),
+        ]:
+            register_method(
+                "Auth",
+                method_name,
+                lambda: None,  # dummy impl
+                {
+                    "method_id": method_id,
+                    "name": method_name,
+                    "module": "Auth",
+                    "bus_topic": method_id,
+                    "exposure": "both",
+                    "summary": f"{method_name} method",
+                    "input_model": _Dummy,
+                    "output_model": None,
+                    "default_priority": 50,
+                },
+            )
+
+        aggregator = RegistryAggregator(bus=bus, mode="threads")
+        await aggregator.start()
+
+        # get_service should return the Auth announcement
+        svc = await aggregator.get_service("Auth")
+        assert svc is not None, (
+            "Auth must be loaded in registry (needed for WebRTC pairing)"
+        )
+
+        # Verify pairing-related methods are present
+        method_names = {m.name for m in svc.methods}
+        for expected in ("PairingStart", "Login"):
+            assert expected in method_names, (
+                f"{expected} not found in Gateway registry methods: {method_names}"
+            )
+
+        await aggregator.stop()
+
+        # Clean up global state to avoid polluting other tests
+        clear_registry()
+
 
 class TestRouteGenerator:
     """Test RouteGenerator functionality."""
