@@ -59,6 +59,7 @@ class MethodInfo(IOModel):
     input_model: str | None = None
     output_model: str | None = None
     required_perms: list[str] = Field(default_factory=list)
+    method_type: str = "use"
     # JSON Schema for input/output models (for OpenAPI generation)
     input_schema: dict[str, Any] | None = None
     output_schema: dict[str, Any] | None = None
