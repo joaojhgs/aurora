@@ -53,6 +53,10 @@ Aurora consists of the following services:
    - Dynamic service discovery via message bus
    - Automatic route generation from service contracts
    - OpenAPI/Swagger documentation
+   - WebRTC peer authentication with DataChannel auth gate
+   - Pairing and login RPC methods (accessible by anonymous peers)
+   - Room auto-generation and encrypted MQTT presence
+   - P2P mesh networking for cross-instance service sharing
    - See [Gateway Documentation](./GATEWAY.md) for details
 
 9. **Supervisor** (`app/services/supervisor.py`)

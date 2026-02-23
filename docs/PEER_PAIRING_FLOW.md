@@ -10,17 +10,19 @@
 2. [Actors & Terminology](#actors--terminology)
 3. [Data Model](#data-model)
 4. [Pairing Flow (Step-by-Step)](#pairing-flow-step-by-step)
-5. [Authentication After Pairing](#authentication-after-pairing)
-6. [Permission Resolution](#permission-resolution)
-7. [Resource Access Patterns](#resource-access-patterns)
-8. [WebRTC Peer Lifecycle](#webrtc-peer-lifecycle)
-9. [Permission Updates & Re-resolution](#permission-updates--re-resolution)
-10. [Token Lifecycle](#token-lifecycle)
-11. [Security Controls](#security-controls)
-12. [Audit Trail](#audit-trail)
-13. [Sequence Diagrams](#sequence-diagrams)
-14. [Configuration](#configuration)
-15. [P2P Mesh Networking](#p2p-mesh-networking)
+5. [Bilateral Mesh Pairing](#bilateral-mesh-pairing)
+6. [Consolidated Trust Stores](#consolidated-trust-stores)
+7. [Authentication After Pairing](#authentication-after-pairing)
+8. [Permission Resolution](#permission-resolution)
+9. [Resource Access Patterns](#resource-access-patterns)
+10. [WebRTC Peer Lifecycle](#webrtc-peer-lifecycle)
+11. [Permission Updates & Re-resolution](#permission-updates--re-resolution)
+12. [Token Lifecycle](#token-lifecycle)
+13. [Security Controls](#security-controls)
+14. [Audit Trail](#audit-trail)
+15. [Sequence Diagrams](#sequence-diagrams)
+16. [Configuration](#configuration)
+17. [P2P Mesh Networking](#p2p-mesh-networking)
 
 ---
 
@@ -106,6 +108,60 @@ The system enforces a **principal-based RBAC model** where:
 - Deleting a `User` cascades to all their `Device` and `Token` records.
 - Deleting a `Device` cascades to all its `Token` records.
 
+### Mesh Peer Tables
+
+The mesh layer adds two additional tables that track this instance's stable identity and all known remote peers. These tables form a **bidirectional link** to the auth tables above via outbound foreign keys.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      mesh_identity                              │
+│ (Singleton — this instance's stable identity)                   │
+├─────────────────────────────────────────────────────────────────┤
+│ key TEXT PRIMARY KEY DEFAULT 'self'                              │
+│ peer_id TEXT NOT NULL              -- Our stable UUID            │
+│ node_name TEXT DEFAULT ''          -- Human-readable name        │
+│ created_at TIMESTAMP                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                       mesh_peers                                │
+│ (One row per known remote peer — bilateral relationship state)  │
+├─────────────────────────────────────────────────────────────────┤
+│ id TEXT PRIMARY KEY                                             │
+│ peer_id TEXT NOT NULL              -- Remote peer's stable UUID  │
+│ node_name TEXT DEFAULT ''          -- Remote peer's human name   │
+│ room_name TEXT NOT NULL                                          │
+│                                                                 │
+│ ── OUTBOUND: what WE granted to THEM ──                         │
+│ outbound_status TEXT DEFAULT 'pending'  -- pending|approved|denied│
+│ outbound_permissions TEXT DEFAULT '[]'  -- JSON permission array │
+│ outbound_token_id TEXT             -- FK → tokens.id (we issued) │
+│ outbound_device_id TEXT            -- FK → devices.id            │
+│ outbound_user_id TEXT              -- FK → users.id              │
+│ outbound_approved_at TIMESTAMP                                  │
+│ outbound_approved_by TEXT                                        │
+│                                                                 │
+│ ── INBOUND: what THEY granted to US ──                          │
+│ inbound_status TEXT DEFAULT 'pending'                            │
+│ inbound_token TEXT                 -- Raw token they issued to us│
+│ inbound_permissions TEXT DEFAULT '[]'                            │
+│ inbound_device_id TEXT             -- Device ID they assigned us │
+│ inbound_user_id TEXT               -- User ID they assigned us   │
+│                                                                 │
+│ ── Connection tracking ──                                       │
+│ connection_status TEXT DEFAULT 'never_connected'                 │
+│ first_seen_at TIMESTAMP                                         │
+│ last_seen_at TIMESTAMP                                          │
+│ updated_at TIMESTAMP                                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key design principles:**
+- **All mesh state is in DB, never in `config.json`.** Config only stores operator preferences (routing, sharing).
+- **Outbound FKs** (`outbound_token_id`, `outbound_device_id`, `outbound_user_id`) link `mesh_peers` back to the auth tables. When a mesh peer is approved and a pairing exchange completes, these FKs are written so that permission changes in `mesh_peers` can be synced to the corresponding `User` and `Token` records.
+- **Peer records never expire.** Even if a pairing code times out, the `mesh_peers` row persists with `outbound_status = 'pending'`. An admin can always approve later via the Peer Management API.
+- **`mesh_identity`** ensures a stable `peer_id` across restarts, preventing tie-breaker instability.
+
 ---
 
 ## Pairing Flow (Step-by-Step)
@@ -116,11 +172,18 @@ The pairing process is a **4-phase handshake** between the new device, the Gatew
 
 **Endpoint:** `POST /api/auth/pairing/start` *(no auth required — bypass path)*
 
-The new device sends its name to the Gateway to begin pairing.
+The new device sends its name to the Gateway to begin pairing. When the request comes from a mesh peer (via WebRTC RPC), additional fields identify the remote peer.
 
 ```json
-// Request
+// Request (basic — from HTTP client)
 { "device_name": "John's iPhone" }
+
+// Request (mesh peer — from WebRTC DataChannel RPC)
+{
+    "device_name": "John's iPhone",
+    "remote_peer_id": "a1b2c3d4-...",   // Stable UUID of the requesting peer
+    "remote_node_name": "living-room"     // Human-readable peer name
+}
 
 // Response (200)
 { "code": "482937", "expires_in_seconds": 300 }
@@ -138,9 +201,12 @@ The new device sends its name to the Gateway to begin pairing.
        "status": "pending",            # Waiting for admin approval
        "expires_at": <now + 5 min>,
        "approved_by": None,
+       "remote_peer_id": "a1b2c3d4-...",    # Empty string if not a mesh peer
+       "remote_node_name": "living-room",    # Empty string if not a mesh peer
    }
    ```
-4. **Audit event:** `pairing.started` with device name and IP.
+4. **Bus event:** `Auth.PairingRequested` is published with `PairingRequestedEvent` payload so the UI and mesh subsystem can react (e.g., display a notification to the admin).
+5. **Audit event:** `pairing.started` with device name and IP.
 
 **Device action:** Display the 6-digit code to the user and begin polling.
 
@@ -201,7 +267,8 @@ The admin (on a separate already-authenticated session — e.g., web dashboard o
    request["granted_is_admin"] = is_admin
    ```
 4. **Permission fallback:** If `permissions` is `None` (not provided), the system uses `_default_device_permissions` from the Gateway config. If `permissions` is `[]` (explicitly empty), the device gets zero permissions.
-5. **Audit event:** `pairing.approved` with the approving admin's ID, granted permissions, and admin flag.
+5. **Mesh peer sync:** If the pairing request has a `remote_peer_id` (i.e., it came from a mesh peer), the system also updates the `mesh_peers` table — setting `outbound_status = 'approved'` and `outbound_permissions` to the granted permissions. This ensures the mesh peer table stays in sync with the pairing approval.
+6. **Audit event:** `pairing.approved` with the approving admin's ID, granted permissions, and admin flag.
 
 **Admin action:** Enter the code displayed on the device, optionally customize permissions, and click approve.
 
@@ -222,7 +289,8 @@ Once the device detects `status: "approved"`, it exchanges the code for a perman
     "token": "aB3x...long_base64_token...Qz9",
     "device_id": "<uuid>",
     "user_id": "<uuid>",
-    "permissions": ["TTS.*", "STT.*", "chat.send"]
+    "permissions": ["TTS.*", "STT.*", "chat.send"],
+    "token_id": "<uuid>"
 }
 ```
 
@@ -267,11 +335,157 @@ Once the device detects `status: "approved"`, it exchanges the code for a perman
    - **Admin devices** get `scopes: ["*"]` (full access).
    - **Non-admin devices** get `scopes` = exactly the granted permissions.
 
-5. **Cleanup:** Removes the pairing request from memory and resets the IP rate limit counter.
+5. **Outbound FK linking (mesh peers):** If the pairing request has a `remote_peer_id`, the system writes the outbound foreign keys to `mesh_peers`:
+   ```sql
+   UPDATE mesh_peers SET
+       outbound_token_id = <token.id>,
+       outbound_device_id = <device.id>,
+       outbound_user_id = <user.id>
+   WHERE peer_id = <remote_peer_id>
+   ```
+   These FKs create a bidirectional link between the `mesh_peers` table and the auth tables (`users`, `devices`, `tokens`). This enables permission sync: when mesh peer permissions are updated later, the corresponding `User.permissions` and `Token.scopes` are also updated.
 
-6. **Audit event:** `pairing.exchanged` with the new device_id and user_id.
+6. **Cleanup:** Removes the pairing request from memory and resets the IP rate limit counter.
 
-**Device action:** Securely store the token, device_id, and user_id. Use the token for all future API calls.
+7. **Audit event:** `pairing.exchanged` with the new device_id, user_id, and token_id.
+
+**Device action:** Securely store the token, device_id, user_id, and token_id. Use the token for all future API calls.
+
+---
+
+## Bilateral Mesh Pairing
+
+When two Aurora instances connect via WebRTC, the standard 4-phase pairing flow described above is executed **twice** — once in each direction. This creates a **bilateral trust relationship** where each instance independently decides what permissions to grant the other.
+
+### Why Bilateral?
+
+In a standard device pairing, trust is **one-directional**: the device gets a token from Aurora. But in a peer-to-peer mesh, **each peer is an independent authority** over its own services:
+
+- **Peer A** decides what Peer B can access on A's services (e.g., `TTS.*`, `STT.*`).
+- **Peer B** independently decides what Peer A can access on B's services (e.g., `Orchestrator.*`).
+
+These are two completely independent admin decisions, potentially with different permission sets.
+
+### Two-Phase Flow
+
+```
+PHASE 1 — FORWARD PAIRING (Initiator requests access to Responder's services):
+
+  Initiator (RTCClient)                 Responder (Auth Service)
+  ─────────────────────                 ────────────────────────
+  1. RPC: Auth.PairingStart
+     {device_name, remote_peer_id,
+      remote_node_name} ──────────────► 2. Creates code, status=pending
+                                           Creates/updates mesh_peers row
+                                           Publishes Auth.PairingRequested
+                                        3. Responder admin approves with perms
+  4. RPC: Auth.PairingConnect ────────► 5. Returns status=approved
+  6. RPC: Auth.PairingExchange ───────► 7. Issues Token_A (carries P_resp)
+                                           Links outbound FKs to mesh_peers
+  8. Receives Token_A
+     Saves inbound credential to DB
+  9. Sends auth msg {token: Token_A} ─► 10. validate_peer() authenticates initiator
+                                             Initiator now trusted with P_resp
+
+PHASE 2 — REVERSE PAIRING (triggered by validate_peer):
+
+  Responder (now initiating)            Initiator (Auth Service)
+  ─────────────────────────             ────────────────────────
+  11. _reverse_pairing() triggers
+  12. RPC: Auth.PairingStart
+      {device_name, remote_peer_id,
+       remote_node_name} ─────────────► 13. Creates code, status=pending
+                                            Publishes Auth.PairingRequested
+                                        14. Initiator admin approves with perms
+  15. RPC: Auth.PairingConnect ───────► 16. Returns status=approved
+  17. RPC: Auth.PairingExchange ──────► 18. Issues Token_B (carries P_init)
+                                            Links outbound FKs to mesh_peers
+  19. Receives Token_B
+      Saves inbound credential to DB
+  20. Sends auth msg {token: Token_B} ─► 21. Responder now trusted with P_init
+
+RESULT:
+  • Initiator holds Token_A (issued by Responder, carries Responder-granted perms)
+  • Responder holds Token_B (issued by Initiator, carries Initiator-granted perms)
+  • Both tokens persisted in mesh_peers table → survive restart
+  • Each admin independently chose what to share
+  • Permission sets can be asymmetric
+```
+
+### How Phase 2 is Triggered
+
+Phase 2 (`_reverse_pairing`) is automatically triggered inside `validate_peer()` when a remote peer authenticates to us:
+
+1. Remote peer sends `{"type": "auth", "token": "..."}` over DataChannel.
+2. `validate_peer()` validates the token, builds an `Identity`, and stores it in `_peer_acl`.
+3. If mesh is enabled, the peer is registered in `PeerRegistry` and manifests are exchanged.
+4. `_reverse_pairing(peer)` is called as an `asyncio.create_task()`.
+5. `_reverse_pairing()` checks if we already have an auth token (meaning we initiated the forward pairing). If so, it skips — the reverse direction is not needed because we already hold a token.
+6. If we don't have a token, it calls `_initiate_pairing(peer, chan)` which runs the standard 4-phase flow (PairingStart → PairingConnect → PairingExchange) on the **remote peer's** auth service via DataChannel RPC.
+
+### Partial Completion
+
+If only one phase completes (admin on one side didn't approve in time), the system degrades gracefully:
+
+| Forward (Phase 1) | Reverse (Phase 2) | Result |
+|:-:|:-:|---|
+| ✅ Approved | ✅ Approved | Full bilateral mesh — both peers access each other's services |
+| ✅ Approved | ❌ Pending/Denied | One-directional: Initiator can use Responder's services, but not vice versa |
+| ❌ Denied | N/A | Pairing fails entirely — no trust established |
+
+The `mesh_peers` row persists even when a phase is incomplete. The admin can always come back later and approve via the **Peer Management API** (`POST /mesh/peers/{peer_id}/approve`), at which point the next WebRTC reconnection will complete the missing phase.
+
+---
+
+## Consolidated Trust Stores
+
+Aurora maintains **two trust stores** that are now bidirectionally synchronized:
+
+1. **Auth tables** (`users`, `devices`, `tokens`) — The authoritative identity/credential store, used by the auth middleware for all permission checks.
+2. **Mesh tables** (`mesh_peers`) — The peer relationship store, tracking bilateral pairing state, connection history, and the operator's intent for what each peer can do.
+
+### Bidirectional Sync via Outbound FKs
+
+When a mesh peer completes pairing (Phase 4: Exchange), the system writes **outbound foreign keys** to the `mesh_peers` row:
+
+```
+mesh_peers.outbound_token_id  →  tokens.id
+mesh_peers.outbound_device_id →  devices.id
+mesh_peers.outbound_user_id   →  users.id
+```
+
+These FKs create a bridge between the two stores, enabling:
+
+### Approve Mesh Peer → Also Approves Pairing Code
+
+`AuthManager.approve_mesh_peer(peer_id, permissions)` is the canonical admin action for the Peer Management API. It:
+
+1. Sets `mesh_peers.outbound_status = 'approved'` with the specified permissions.
+2. **Finds any pending pairing code** linked to this `peer_id` (via `remote_peer_id` in the in-memory pairing request) and approves it with the same permissions. This means admins can approve via the Peer Management API instead of (or in addition to) the `POST /auth/pairing/approve` endpoint.
+3. **Syncs permissions to auth principal** — if outbound FKs exist (i.e., a prior exchange completed), updates `User.permissions` and `Token.scopes` for the corresponding auth records.
+
+### Update Mesh Peer Permissions → Syncs to Auth
+
+`AuthManager.update_mesh_peer_permissions(peer_id, permissions)` updates the mesh peer's `outbound_permissions` and — if outbound FKs exist — also updates the corresponding `User.permissions` and `Token.scopes`. This ensures permission changes made through the Peer Management API are immediately effective for auth checks.
+
+### Flow Diagram
+
+```
+Admin updates permissions via Peer Management API
+    │
+    ▼
+┌──────────────────────────────┐
+│  mesh_peers table            │
+│  outbound_permissions = [..] │
+│  outbound_user_id = X ───────┼──► ┌─────────────────┐
+│  outbound_token_id = Y ──────┼──► │ users table      │
+│                              │    │ permissions = [..]│ ← synced
+└──────────────────────────────┘    └─────────────────┘
+                                    ┌─────────────────┐
+                                    │ tokens table     │
+                                    │ scopes = [..]    │ ← synced
+                                    └─────────────────┘
+```
 
 ---
 
@@ -308,18 +522,27 @@ Device ──[auth message]────────► Aurora RTCClient
          { "type": "auth", "token": "aB3x..." }
 ```
 
-**Server-side flow:**
+**Server-side flow (auth enabled):**
 1. `RTCClient._ensure_pc()` creates the peer connection and sets `ANONYMOUS` identity.
 2. An **auth timeout task** is started (default: 10 seconds).
-3. On receiving `{"type": "auth", "token": "..."}`:
+3. On DataChannel open, the Gateway sends its own auth token to the peer and extends the timeout for peers in active pairing flow (`webrtc_pairing_timeout_seconds`, default 300s).
+4. **Auth gate enforcement**: All incoming DataChannel messages are checked. Only `auth` and `reauth` messages are allowed from `ANONYMOUS` peers — all other message types are silently dropped.
+5. On receiving `{"type": "auth", "token": "..."}`:
    - Token is validated via `AuthService.authenticate_token()`.
    - `build_identity_from_token()` resolves the full `Identity`.
    - The `Identity` is stored in `_peer_acl[peer_id]`.
    - The `Token` object is stored in `_peer_tokens[peer_id]` (for later re-resolution).
    - The auth timeout task is **cancelled**.
    - **Audit:** `peer.authenticated`.
-4. If auth fails: `ANONYMOUS` identity stays, DataChannel is closed.
-5. If auth times out: peer is disconnected, **audit:** `peer.auth_timeout`.
+6. If auth fails: `ANONYMOUS` identity stays, DataChannel is closed.
+7. If auth times out: peer is disconnected, **audit:** `peer.auth_timeout`.
+
+**Server-side flow (auth disabled):**
+1. `RTCClient._ensure_pc()` creates the peer connection.
+2. On DataChannel open, the peer is immediately assigned the `OPEN_PEER` identity (full permissions, `source="open_network"`).
+3. **No auth message is sent** to the peer — the connection is open by design.
+4. The peer is immediately registered in the mesh (if mesh is enabled).
+5. All DataChannel messages are processed normally (no auth gate).
 
 ---
 
@@ -445,6 +668,8 @@ Device                           RTCClient
 
 ## WebRTC Peer Lifecycle
 
+### Auth Enabled Mode
+
 ```
                       ┌──────────────┐
                       │   Unknown    │
@@ -455,18 +680,20 @@ Device                           RTCClient
                              ▼
                       ┌──────────────┐
                       │  Connected   │     Identity = ANONYMOUS
-                      │ (DataChannel │     Auth timeout started
-                      │    open)     │     (10s default)
-                      └──────┬───────┘
+                      │ (DataChannel │     Auth timeout started (10s default)
+                      │    open)     │     Auth gate active: only auth/reauth
+                      └──────┬───────┘     messages accepted
                              │
                     ┌────────┴────────┐
                     │                 │
-             auth message        timeout (10s)
-             received            │
+             auth message        timeout expires
+             received            (heartbeat loop
+                    │             for pairing peers)
+                    │                 │
                     │                 ▼
                     │         ┌──────────────┐
                     │         │ Disconnected │  Audit: peer.auth_timeout
-                    │         │  (kicked)    │
+                    │         │  (kicked)    │         or peer.pairing_timeout
                     │         └──────────────┘
                     ▼
             ┌───────────────┐
@@ -485,6 +712,15 @@ Device                           RTCClient
 │ Token stored │
 │ Timeout      │
 │ cancelled    │
+│              │
+│ If mesh:     │
+│ → register   │
+│   peer       │
+│ → send       │
+│   manifest   │
+│ → trigger    │
+│   reverse    │
+│   pairing    │
 └──────┬───────┘
        │
        │ Can send RPC calls
@@ -500,9 +736,126 @@ Device                           RTCClient
        │
        ▼
 ┌──────────────┐
-│ Disconnected │  Cleanup: ACL, tokens, timeout tasks
-│  (normal)    │  Audit: peer.disconnected
+│ Disconnected │  Cleanup: ACL, tokens, timeout tasks,
+│  (normal)    │  data channels, peer names, pairing tasks
+│              │  Audit: peer.disconnected
 └──────────────┘
+```
+
+### Smart Auth Timeout (Heartbeat Loop)
+
+The auth timeout uses a **heartbeat-style extension** for peers in an active pairing flow:
+
+1. When a DataChannel opens, a timeout task starts with the **base auth timeout** (default 10s).
+2. After the base timeout expires, if the peer is still `ANONYMOUS`:
+   - **Not pairing** → disconnect immediately (`peer.auth_timeout` audit event).
+   - **Pairing active** (`peer in _peer_pairing_active`) → enter heartbeat loop:
+     - Check every 10 seconds whether the peer is still pairing.
+     - If the peer authenticates during a heartbeat sleep, the loop exits gracefully.
+     - If the total elapsed time exceeds `webrtc_pairing_timeout_seconds` (default 300s) and the peer is still `ANONYMOUS`, disconnect (`peer.pairing_timeout` audit event).
+3. This approach avoids a single rigid timeout and instead gives the admin realistic time to approve while still enforcing an upper bound.
+
+### Peer Identification in Logs
+
+Peers are identified in log messages using a **human-readable label** via `_peer_label(peer)`:
+
+```
+# If peer has a known node_name:
+"living-room (a1b2c3d4)"
+
+# If node_name is unknown:
+"a1b2c3d4…"
+```
+
+Node names are stored in `_peer_names` when received in `auth` messages (via the `peer_name` field) or from manifest exchanges.
+
+### Auth Disabled Mode
+
+When `api.auth_enabled` is `false`, the peer lifecycle is simplified:
+
+```
+                      ┌──────────────┐
+                      │   Unknown    │
+                      │  (no peer)   │
+                      └──────┬───────┘
+                             │ Offer/Answer exchange via
+                             │ MQTT signaling
+                             ▼
+                      ┌──────────────┐
+                      │  Connected   │     Identity = OPEN_PEER
+                      │ (DataChannel │     (full permissions,
+                      │    open)     │      source="open_network")
+                      └──────┬───────┘     No auth gate, no timeout
+                             │
+                             │ Immediately registered in mesh
+                             │ All messages processed normally
+                             │
+                             ├─── Connection state:
+                             │    "failed"/"closed"
+                             │
+                             ▼
+                      ┌──────────────┐
+                      │ Disconnected │  Cleanup: ACL
+                      │  (normal)    │
+                      └──────────────┘
+```
+
+### DataChannel Auth Gate (Auth Enabled)
+
+When authentication is enabled, the RTCClient enforces a strict **auth gate** on incoming DataChannel messages:
+
+| Peer Identity | Message Type | Action |
+|---|---|---|
+| `ANONYMOUS` | `auth`, `reauth` | ✅ Processed (authentication flow) |
+| `ANONYMOUS` | `call` (PairingStart, PairingConnect, PairingExchange, Login) | ✅ Processed (RPC allowlist) |
+| `ANONYMOUS` | `call` (any other method) | ❌ Rejected with 401 error |
+| `ANONYMOUS` | `event` | ❌ Silently dropped |
+| `ANONYMOUS` | `manifest`, `ping`, `pong`, etc. | ❌ Silently dropped |
+| Authenticated | Any | ✅ Processed normally |
+
+### Pairing Over WebRTC DataChannel
+
+Devices that connect via WebRTC can complete the pairing flow directly over the DataChannel using RPC calls, without needing the HTTP API. For mesh peers, `remote_peer_id` and `remote_node_name` are included to enable bilateral pairing and mesh_peers DB tracking.
+
+```
+New Device              RTCClient (Gateway)          Admin
+    │                        │                         │
+    │ DataChannel opens      │                         │
+    │ ──────────────────────►│ Identity = ANONYMOUS    │
+    │                        │ Heartbeat timeout starts │
+    │                        │                         │
+    │ RPC: Gateway.PairingStart                        │
+    │ {"device_name":"Phone",│                         │
+    │  "remote_peer_id":     │                         │
+    │    "<stable_uuid>",    │                         │
+    │  "remote_node_name":   │                         │
+    │    "living-room"}      │                         │
+    │ ──────────────────────►│                         │
+    │                        │ Publish Auth.PairingRequested
+    │                        │ Returns {code, expires}  │
+    │ ◄──────────────────────│                         │
+    │                        │                         │
+    │ Display code to user   │     Admin approves code │
+    │                        │     (or via Peer Mgmt API)
+    │                        │                         │
+    │ RPC: Gateway.PairingConnect                      │
+    │ {"code":"482937"}      │                         │
+    │ ──────────────────────►│ Returns {status}        │
+    │ ◄──────────────────────│                         │
+    │                        │                         │
+    │ RPC: Gateway.PairingExchange                     │
+    │ {"code":"482937"}      │                         │
+    │ ──────────────────────►│                         │
+    │                        │ Returns {token, ...,    │
+    │                        │         token_id}       │
+    │ ◄──────────────────────│                         │
+    │                        │                         │
+    │ auth message with token│                         │
+    │ ──────────────────────►│ Authenticate + resolve  │
+    │                        │ Identity = resolved      │
+    │                        │ Trigger reverse pairing │
+    │                        │ (if mesh enabled)        │
+    │                        │                         │
 ```
 
 ### Cleanup on Disconnect
@@ -512,12 +865,17 @@ When a peer disconnects (or is force-disconnected), the following resources are 
 - `_peer_acl[peer_id]` — Identity removed
 - `_peer_tokens[peer_id]` — Stored Token reference removed
 - `_peer_timeout_tasks[peer_id]` — Auth timeout task cancelled and removed
+- `_peer_data_channels[peer_id]` — DataChannel reference removed
+- `_peer_names[peer_id]` — Human-readable node name removed
+- `_peer_send_fns[peer_id]` — Send function removed
+- `_pairing_tasks[peer_id]` — Any in-flight pairing task cancelled
+- `_peer_pairing_active` — Peer removed from pairing set
 
 ---
 
 ## Permission Updates & Re-resolution
 
-Permissions can change after a device is paired. Aurora supports **live permission updates** for both HTTP and WebRTC connections.
+Permissions can change after a device is paired. Aurora supports **live permission updates** for both HTTP and WebRTC connections, and **consolidated mesh permission sync**.
 
 ### For HTTP Clients
 
@@ -536,6 +894,18 @@ Since WebRTC peers maintain long-lived connections, an admin can trigger a **liv
    - If an admin *expands* a user's permissions (e.g., adds `"DB.*"`), re-resolving with the original token scopes correctly picks up the expansion.
    - Using old effective permissions would incorrectly "freeze" the intersection.
 4. A new `Identity` is built and stored in `_peer_acl[peer_id]`.
+
+### For Mesh Peers (Consolidated Sync)
+
+When permissions are updated through the **Peer Management API** (`POST /mesh/peers/{peer_id}/permissions`), the update propagates to both stores:
+
+1. `mesh_peers.outbound_permissions` is updated in the database.
+2. If outbound FKs exist (`outbound_user_id`, `outbound_token_id`):
+   - `User.permissions` is updated to match the new permissions.
+   - `Token.scopes` is updated (using `["*"]` if wildcard, otherwise the permission list).
+3. This ensures that the next auth check (HTTP middleware or WebRTC RPC handler) sees the updated permissions immediately.
+
+Similarly, `MeshApprovePeer` (used when approving a peer for the first time or re-approving a denied peer) syncs permissions to the auth principal if outbound FKs already exist from a prior exchange.
 
 ```
 Admin                    Gateway                     RTCClient
@@ -618,15 +988,28 @@ Admin users are exempt from this validation (they can create any scopes).
 |---|---|
 | **Pairing rate limiting** | Max 5 attempts per IP. Resets on successful exchange. |
 | **Login rate limiting** | Max 10 attempts per IP. Resets on successful login. |
-| **Pairing code expiry** | 5-minute TTL for pairing codes. |
+| **Pairing code expiry** | Configurable via `webrtc_pairing_timeout_seconds` (default 300s / 5 min). |
 | **Token expiry** | Device tokens: 1 year. Session tokens: 1 day. |
-| **Auth timeout** | WebRTC peers must authenticate within 10s (configurable). |
+| **Auth timeout** | WebRTC peers must authenticate within 10s (configurable via `webrtc_auth_timeout_seconds`). |
+| **Smart pairing timeout** | Peers in active pairing get a heartbeat-loop extension up to `webrtc_pairing_timeout_seconds` (default 300s). Heartbeat checks every 10s. |
+| **DataChannel auth gate** | All non-auth messages from `ANONYMOUS` peers are dropped. Only `auth` and `reauth` messages pass through. |
+| **RPC anonymous allowlist** | Anonymous peers may only call pairing/login RPC methods (`PairingStart`, `PairingConnect`, `PairingExchange`, `Login`). All other RPC calls return 401. |
+| **Anonymous event blocking** | Events from `ANONYMOUS` peers are silently dropped by RPCHandler. |
+| **Bilateral pairing** | Mesh peers must complete a two-phase pairing (forward + reverse). Each admin independently grants permissions. Partial approval degrades gracefully. |
+| **Consolidated trust sync** | Mesh peer permissions are synced to auth tables via outbound FKs. Updates through any admin interface (Peer Mgmt API or pairing approval) propagate to both stores. |
+| **Persistent peer records** | Mesh peer records never expire. Admins can approve pending peers at any time. |
+| **Stable peer identity** | `peer_id` is generated once and stored in `mesh_identity` DB table. Survives restarts, prevents tie-breaker instability. |
 | **Token scope validation** | Token scopes ⊆ user permissions (enforced on create/update). |
-| **AEAD encryption** | WebRTC signaling messages are AEAD-encrypted. |
+| **AEAD-encrypted signaling** | WebRTC signaling/presence messages are AEAD-encrypted using room key derivatives when `encrypt_signaling` is enabled. |
+| **Encrypted MQTT presence** | Room presence announcements are sealed with `aead_seal(k_sig, payload)`. Receivers fall back to plaintext if decryption fails (backward compatibility). |
 | **App-layer E2EE** | Optional end-to-end encryption for DataChannel messages. |
+| **Room auto-generation** | Empty or default room names and empty passwords are auto-generated on startup using `secrets.token_hex`/`secrets.token_urlsafe` and persisted to config. |
+| **Public broker warning** | A warning is logged when auth is enabled but a public MQTT broker (e.g., `broker.emqx.io`) is configured. |
+| **Password validation** | Empty passwords block startup when auth is enabled. A warning is logged when auth is disabled with empty password. |
 | **Cascade deletion** | Deleting a user cascades to all devices and tokens via FK. |
 | **Password hashing** | Argon2id via passlib. |
 | **Precise path bypass** | Auth middleware uses exact + delimiter matching (no prefix false positives). |
+| **Audit proxy** | `_AuditDBProxy.store_audit_event()` routes audit writes via the message bus to the Auth service, ensuring audit events work from the Gateway's auth proxy. |
 
 ---
 
@@ -637,8 +1020,9 @@ Every significant action in the pairing and auth flow is recorded to the audit l
 | Event | When | Details |
 |---|---|---|
 | `pairing.started` | Device initiates pairing | device_name, IP |
+| `pairing.requested` | PairingRequestedEvent published | code, remote_peer_id, remote_node_name, device_name, IP, expires_at |
 | `pairing.approved` | Admin approves code | code, permissions, is_admin, admin ID |
-| `pairing.exchanged` | Device exchanges code for token | device_id, user_id |
+| `pairing.exchanged` | Device exchanges code for token | device_id, user_id, token_id |
 | `login.success` | User logs in | username, IP |
 | `login.failure` | Login attempt fails | username, IP |
 | `login.rate_limited` | Login rate limit hit | IP, username |
@@ -650,8 +1034,12 @@ Every significant action in the pairing and auth flow is recorded to the audit l
 | `peer.authenticated` | Peer auth succeeds | peer_id, principal_name |
 | `peer.auth_failed` | Peer auth fails | peer_id, token_prefix |
 | `peer.auth_timeout` | Peer didn't auth in time | peer_id |
+| `peer.pairing_timeout` | Pairing heartbeat loop expired | peer_id |
 | `peer.disconnected` | Peer disconnects | peer_id, reason |
 | `peer.force_disconnected` | Admin disconnects peer | peer_id, by_principal_id |
+| `mesh.peer_approved` | Mesh peer approved via Peer Mgmt API | peer_id, permissions, approved_by |
+| `mesh.peer_permissions_updated` | Mesh peer permissions changed | peer_id, new_permissions |
+| `mesh.peer_removed` | Mesh peer removed | peer_id |
 | `access.denied.auth` | HTTP auth fails | path, reason |
 | `access.denied.permission` | Insufficient perms (HTTP) | path, required, effective |
 | `access.denied.rpc` | Insufficient perms (WebRTC) | method, required, effective |
@@ -671,10 +1059,13 @@ GET /api/admin/audit?event=pairing.started&limit=50
 New Device              Gateway                    Admin (Web UI)
     │                      │                           │
     │ ① POST /pairing/start│                           │
-    │  {device_name}       │                           │
+    │  {device_name,       │                           │
+    │   remote_peer_id?,   │                           │
+    │   remote_node_name?} │                           │
     │ ────────────────────►│                           │
     │                      │ Generate 6-digit code     │
     │                      │ Store pairing request     │
+    │                      │ Publish Auth.PairingRequested
     │                      │ 🔒 Audit: pairing.started │
     │  {code: "482937"}    │                           │
     │ ◄────────────────────│                           │
@@ -697,6 +1088,8 @@ New Device              Gateway                    Admin (Web UI)
     │                      │ Validate admin identity    │
     │                      │ Check auth.approve perm    │
     │                      │ Mark request approved      │
+    │                      │ Sync to mesh_peers (if     │
+    │                      │   remote_peer_id present)  │
     │                      │ 🔒 Audit: pairing.approved │
     │                      │  {success: true}           │
     │                      │ ─────────────────────────►│
@@ -712,10 +1105,13 @@ New Device              Gateway                    Admin (Web UI)
     │                      │ Create User (device principal)
     │                      │ Create Device record       │
     │                      │ Create Token (scoped)      │
+    │                      │ Link outbound FKs to       │
+    │                      │   mesh_peers (if mesh peer)│
     │                      │ Cleanup pairing request    │
     │                      │ 🔒 Audit: pairing.exchanged│
     │ {token, device_id,   │                           │
-    │  user_id, perms}     │                           │
+    │  user_id, perms,     │                           │
+    │  token_id}           │                           │
     │ ◄────────────────────│                           │
     │                      │                           │
     │ Store token securely │                           │
@@ -744,7 +1140,7 @@ Paired Device            MQTT Broker              RTCClient (Gateway)
     │                        │                         │   Create PC
     │                        │                         │   Set ANONYMOUS
     │                        │                         │   Start auth timeout
-    │ Answer (AEAD encrypted)│                         │
+    │ Answer (AEAD encrypted)│                         │     (heartbeat loop)
     │ ──────────────────────────────────────────────────►│
     │                        │                         │
     │ ICE candidates ◄──────────────────────────────────►│
@@ -759,12 +1155,17 @@ Paired Device            MQTT Broker              RTCClient (Gateway)
     │ Device sends its auth  │                         │
     │ ───────────────────── (DataChannel) ────────────►│
     │ {"type":"auth",        │                         │ validate_peer():
-    │  "token":"<device_token>"}                       │   Authenticate token
-    │                        │                         │   Build Identity
+    │  "peer_name":"...",    │                         │   Authenticate token
+    │  "token":"<device_token>"}                       │   Build Identity
     │                        │                         │   Store in _peer_acl
     │                        │                         │   Store Token in _peer_tokens
+    │                        │                         │   Store name in _peer_names
     │                        │                         │   Cancel timeout
     │                        │                         │   🔒 Audit: peer.authenticated
+    │                        │                         │   If mesh enabled:
+    │                        │                         │     Register in PeerRegistry
+    │                        │                         │     Send manifest
+    │                        │                         │     Trigger _reverse_pairing()
     │                        │                         │
     │ RPC call               │                         │
     │ {"type":"call",        │                         │
@@ -823,25 +1224,31 @@ Paired Device            MQTT Broker              RTCClient (Gateway)
 
 | Setting | Effect |
 |---|---|
-| `api.auth_enabled` | Master switch for authentication. When `false`, all endpoints get `SYSTEM` identity. |
+| `api.auth_enabled` | Master switch for authentication. When `false`, all endpoints get `SYSTEM` identity; WebRTC peers get `OPEN_PEER` identity (full permissions). |
 | `api.api_keys` | Static API keys that grant `SYSTEM` access (useful for internal tools). |
 | `permissions.default_device_permissions` | Default permissions assigned to devices when admin doesn't specify custom ones during pairing. |
-| `permissions.webrtc_auth_timeout_seconds` | How long a WebRTC peer has to authenticate before being disconnected. |
-| `webrtc.password` | Shared secret used to derive AEAD keys for signaling encryption. |
+| `permissions.webrtc_auth_timeout_seconds` | How long a WebRTC peer has to authenticate before being disconnected (default: 10s). |
+| `permissions.webrtc_pairing_timeout_seconds` | Extended timeout for peers in active pairing flow (default: 300s / 5 min). Range: 30–3600s. |
+| `webrtc.room` | WebRTC room name. If set to `"default"` or empty, a random room name is auto-generated on startup and persisted to config. |
+| `webrtc.password` | Shared secret used to derive AEAD keys for signaling encryption. If empty and auth is enabled, startup is blocked with an error. If empty and auth is disabled, a warning is logged. Auto-generated if empty on startup. |
+| `webrtc.encrypt_signaling` | When `true`, MQTT presence announcements are AEAD-encrypted using room key derivatives. Receivers fall back to plaintext if decryption fails. |
 | `webrtc.enable_app_layer_e2ee` | When `true`, DataChannel messages are additionally encrypted with AEAD. |
 
 ---
 
 ## Summary
 
-The peer pairing system in Aurora provides a **secure, auditable, and permission-granular** way to onboard new devices:
+The peer pairing system in Aurora provides a **secure, auditable, and permission-granular** way to onboard new devices and mesh peers:
 
 1. **Pairing** is a 4-step code-based handshake: start → poll → approve → exchange.
-2. **Authentication** uses bearer tokens (HTTP) or DataChannel auth messages (WebRTC).
-3. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes.
-4. **Live updates** are supported for WebRTC peers via admin-triggered permission refresh.
-5. **Every action** is recorded in the audit log for security compliance.
-6. **All secrets** (tokens, passwords) are hashed/encrypted — raw values are never stored.
+2. **Bilateral mesh pairing** extends this to a 2-phase process (forward + reverse) for P2P mesh connections, each phase requiring independent admin approval.
+3. **Authentication** uses bearer tokens (HTTP) or DataChannel auth messages (WebRTC).
+4. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes.
+5. **Consolidated trust stores** — mesh_peers and auth tables (users/devices/tokens) are bidirectionally synced via outbound FKs. Permission changes through any admin interface propagate to both stores.
+6. **Live updates** are supported for WebRTC peers via admin-triggered permission refresh and mesh peer management API.
+7. **Every action** is recorded in the audit log for security compliance.
+8. **All secrets** (tokens, passwords) are hashed/encrypted — raw values are never stored.
+9. **All mesh state** is in the database, never in config files — peer records never expire.
 
 ---
 
@@ -858,20 +1265,25 @@ This allows multiple Aurora instances (or compatible clients) to form a dynamic 
 ### Mesh Peer Lifecycle (Extended)
 
 ```
-┌────────────┐     ┌──────────────┐     ┌────────────┐     ┌──────────────┐
-│  Connected │────►│ Authenticated│────►│ Negotiated │────►│    Stale      │
-│ (WebRTC)   │     │ (token OK)   │     │ (manifests │     │ (no pong for │
-│            │     │              │     │  exchanged) │     │  timeout_s)  │
-└────────────┘     └──────────────┘     └────────────┘     └──────────────┘
-                          │                    ▲                    │
-                          │                    │ pong received      │
-                          ▼                    └───────────────────-┘
-                   Register in PeerRegistry
-                   Send manifest ──►
-                   ◄── Receive manifest
-                   ◄── Receive manifest ACK
-                   Send manifest ACK ──►
-                   Begin ping/pong loop
+┌────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Connected │────►│ Authenticated│────►│  Bilateral   │────►│  Negotiated  │
+│ (WebRTC)   │     │ (token OK)   │     │  Pairing     │     │ (manifests   │
+│            │     │              │     │ (reverse dir │     │  exchanged)  │
+│            │     │              │     │  if needed)  │     │              │
+└────────────┘     └──────────────┘     └──────────────┘     └──────┬───────┘
+                          │                                         │
+                          │                                    ┌────┴────┐
+                          ▼                                    │         │
+                   Register in PeerRegistry               ping/pong  no pong
+                   Store peer_name in _peer_names         loop OK    timeout
+                   Send manifest ──►                          │         │
+                   ◄── Receive manifest                       ▼         ▼
+                   ◄── Receive manifest ACK              ┌────────┐ ┌──────┐
+                   Send manifest ACK ──►                 │ Active │ │ Stale│
+                   Trigger _reverse_pairing()            └────────┘ └──────┘
+                   Begin ping/pong loop                       ▲         │
+                                                              │ pong    │
+                                                              └─────────┘
 ```
 
 ### Manifest Exchange Protocol
@@ -885,6 +1297,7 @@ After successful authentication, the following messages are exchanged over the D
 | `manifest_request` | Either peer | Request the other peer to re-send their manifest |
 | `ping` | Either peer | Latency measurement (sends monotonic timestamp) |
 | `pong` | Either peer | Latency measurement response (echoes ping ID) |
+| `event` | Sender → Receiver | Forwards a bus event to the remote peer (fire-and-forget) |
 | `capacity_update` | Either peer | Notifies peer of a change in available capacity |
 | `call` | Either peer | JSON-RPC call to a shared service on the remote peer |
 | `result` | Either peer | Successful response to a remote `call` |
@@ -926,16 +1339,151 @@ After successful authentication, the following messages are exchanged over the D
 
 Once manifests are exchanged, the **MeshBus** transparently routes messages:
 
-- **Events** (`event=True`): Always delivered locally (broadcasts).
 - **Commands/Requests** (`event=False`): Routed based on per-module `routing` config:
   - `local_only` / `local`: Always deliver locally.
   - `network`: Prefer remote peer, fall back based on `fallback` config.
   - `network_only`: Remote peer only, fail if unavailable.
+- **Events** (`event=True`): Always delivered to the local bus. Additionally forwarded to peers when the publish call opts in via `mesh=True` and the module has `share: true` (see [Event Forwarding](#event-forwarding) below).
 
 Peer selection among multiple providers uses the configured `peer_selection` strategy:
 - `lowest_latency`: Pick the peer with the lowest measured RTT.
 - `round_robin`: Rotate among available peers.
 - `random`: Random selection.
+
+### Event Forwarding
+
+#### The Problem
+
+Aurora's voice pipeline is almost entirely **event-driven**. When a user speaks, the audio chain produces a sequence of broadcast events:
+
+```
+Audio.Stream.Microphone  →  WakeWord.Detected
+  →  STT.SessionStarted  →  Transcription.Result
+    →  STT.UserSpeechCaptured  →  Orchestrator processes  →  LLM.ResponseReady
+      →  TTS.Request (command)  →  TTS.Started / TTS.Stopped (events)
+```
+
+Every step in that chain except `TTS.Request` is an **event** (broadcast). Without event forwarding, if any service in the pipeline runs on a remote peer, the downstream event subscribers on the other instance never receive the event. The pipeline silently breaks — no errors, no logs, just silence.
+
+**Concrete example**: Suppose Instance A offloads its `Orchestrator` to Instance B. The Orchestrator on B processes the user's speech and publishes `LLM.ResponseReady` locally on B's bus. Instance A's UI bridge, TTS service, and DB service never see that event. The user gets no response, no audio, and no history entry — with zero indication that anything went wrong.
+
+#### How It Works
+
+Event forwarding is a lightweight extension to the MeshBus that solves this problem:
+
+1. **Sender side** (`MeshBus.publish`): When a service publishes an event with `mesh=True`, and the event's module has `share: true` in the mesh config, the MeshBus forwards the event to all **negotiated** peers via the WebRTC DataChannel using a `event` message type. This is fire-and-forget — no response is expected.  The `mesh` parameter is a **publish-site declaration**: each individual `bus.publish()` call decides whether the event has cross-instance relevance.
+
+2. **Receiver side** (`RPCHandler._handle_event`): The receiving peer publishes the event on its **local** bus with `origin="mesh_forwarded"`, so all local services react to it (e.g., UI bridge displays the response, TTS starts speaking).
+
+3. **Loop prevention**: Events with `origin="mesh_forwarded"` are **never re-forwarded**. This prevents infinite echo loops between peers.
+
+```
+Instance A (shares TTS)                    Instance B (routes TTS → remote)
+─────────────────────────                  ──────────────────────────────────
+TTS publishes TTS.Started with mesh=True
+  → local bus delivery (A's subscribers)
+  → MeshBus sees mesh=True + TTS share=true
+  → fire_event() via DataChannel ─────────► RPCHandler receives "event"
+                                             → publishes TTS.Started locally
+                                               with origin="mesh_forwarded"
+                                             → B's UI bridge updates state ✅
+                                             → NOT re-forwarded (loop prevention)
+```
+
+#### DataChannel Protocol
+
+Event forwarding adds one new message type to the DataChannel protocol:
+
+| Message Type | Direction | Purpose |
+|---|---|---|
+| `event` | Sender → Receiver | Forwards a bus event to the remote peer |
+
+**Event message structure:**
+
+```json
+{
+  "type": "event",
+  "topic": "TTS.Started",
+  "params": { ... }
+}
+```
+
+Events are fire-and-forget: no `id` field, no response expected. If delivery fails (peer disconnected, DataChannel closed), the failure is logged at DEBUG level and silently ignored — this matches the best-effort semantics of events on the local bus.
+
+#### Configuration
+
+Event forwarding is controlled at two levels:
+
+1. **Publish-site (code)**: The developer passes `mesh=True` on each `bus.publish()` call that has cross-instance relevance. Events without `mesh=True` (the default) stay local.
+
+2. **Mesh config (config.json)**: The module must have `share: true` in the `gateway.mesh.sharing` section. This acts as an operator-level gate — even if code says `mesh=True`, the event won't forward unless the module is shared.
+
+**Publish-site example:**
+```python
+# This event will be forwarded to mesh peers (if TTS share=true)
+await self.bus.publish(
+    TTSMethods.STARTED,
+    TTSStarted(request_id=request_id, text=text),
+    event=True,
+    mesh=True,  # ← opt-in to mesh forwarding
+    origin="internal",
+)
+
+# This event stays local (hardware-bound, high-frequency)
+await self.bus.publish(
+    AudioTopics.STREAM_MICROPHONE,
+    AudioChunk(data=chunk),
+    event=True,
+    # mesh=False is the default — no forwarding
+    origin="internal",
+)
+```
+
+**Sharing config:**
+```json
+{
+  "TTS": {
+    "share": true,
+    "max_concurrent": 10
+  }
+}
+```
+
+Event forwarding **only activates** when all of the following are true:
+- The publish call passes `mesh=True`
+- The module is marked `share: true` in mesh config
+- The event's `origin` is not `"mesh_forwarded"` (loop prevention)
+- At least one negotiated peer is connected
+
+#### Which Events Use `mesh=True`
+
+| Service | Events with `mesh=True` | Events without (local-only) |
+|---|---|---|
+| **TTS** | `STARTED`, `STOPPED`, `PAUSED`, `RESUMED`, `ERROR` | — |
+| **Orchestrator** | `RESPONSE` (LLM response) | — |
+| **STTCoordinator** | `SESSION_STARTED`, `USER_SPEECH_CAPTURED`, `SESSION_ENDED` | `Audio.Started`, `Audio.Stopped`, `Audio.Stream.Microphone` |
+| **Config** | `UPDATED` | — |
+| **Tooling** | `TOOLS_INITIALIZED`, `TOOLS_RELOADED` | — |
+
+#### When to Share Modules
+
+Since event forwarding is now handled per-publish-call via `mesh=True`, the only config decision is whether to **share** a module with peers:
+
+| Scenario | Recommendation | Reason |
+|---|---|---|
+| Remote TTS | ✅ **Share** | `TTS.Started` / `TTS.Stopped` events (tagged `mesh=True`) drive UI state on the consumer. |
+| Remote Orchestrator | ✅ **Share** | `LLM.ResponseReady` (tagged `mesh=True`) is how the UI and TTS know the LLM responded. |
+| Remote STT services | ✅ **Share** | `STT.UserSpeechCaptured` (tagged `mesh=True`) drives the Orchestrator and UI. Audio stream events stay local automatically. |
+| Remote DB | ⚠️ **Optional** | DB events are less common. Share if you want cross-instance notifications. |
+| Remote Scheduler | ⚠️ **Optional** | `Sched.JobFired` events may need to reach the Orchestrator on another instance. |
+| Remote Config | ⚠️ **Optional** | `Config.Changed` events trigger service reloads. Share if you want config propagation across peers. |
+
+#### Performance Considerations
+
+- **Bandwidth**: Each forwarded event is a single JSON message over the DataChannel. For typical Aurora events (transcription results, TTS state changes), this is negligible — a few KB per interaction.
+- **Latency**: Events are forwarded asynchronously. The local bus delivery is never blocked by event forwarding; remote delivery happens in the background.
+- **Failure tolerance**: If forwarding fails for a peer (e.g., DataChannel closed), the error is silently logged and the other peers still receive their copies. Local delivery is always guaranteed regardless of forwarding outcome.
+- **No back-pressure**: Event forwarding is fire-and-forget. There is no acknowledgement or retry. If a peer is too slow to process events, they will be silently dropped by the DataChannel buffer. This is intentional — events are ephemeral notifications, not durable commands.
 
 ### Security Controls
 
@@ -944,8 +1492,11 @@ Peer selection among multiple providers uses the configured `peer_selection` str
 - **Capacity limits**: Each shared service specifies `max_concurrent`; calls beyond that limit get HTTP 429.
 - **Permission checks**: Standard RBAC permission checks apply to all inbound RPC calls.
 - **Version compatibility**: Configurable version matching policies (`exact`, `compatible`, `any`).
+- **Event forwarding scope**: Only events published with `mesh=True` from modules marked `share: true` are forwarded. A module that is not shared will never leak events to peers. Events without `mesh=True` (like audio streams) stay local regardless of config.
 
 ### Mesh Configuration
+
+All nine Aurora service modules are pre-populated in the default configuration with safe defaults (`share: false`, `prefer: "local"`), so users do not need to guess module names or write configuration objects from scratch — they only need to toggle the settings they want to change.
 
 ```json
 {
@@ -954,12 +1505,26 @@ Peer selection among multiple providers uses the configured `peer_selection` str
       "enabled": true,
       "node_name": "aurora-desktop",
       "sharing": {
-        "TTS": { "share": true, "max_concurrent": 5, "allowed_peers": null },
-        "Orchestrator": { "share": true, "max_concurrent": 2 }
+        "TTS": { "share": true, "max_concurrent": 10 },
+        "STTCoordinator": { "share": false, "max_concurrent": 10 },
+        "WakeWord": { "share": false, "max_concurrent": 10 },
+        "Transcription": { "share": false, "max_concurrent": 10 },
+        "DB": { "share": false, "max_concurrent": 10 },
+        "Orchestrator": { "share": true, "max_concurrent": 2 },
+        "Tooling": { "share": false, "max_concurrent": 10 },
+        "Scheduler": { "share": false, "max_concurrent": 10 },
+        "Config": { "share": false, "max_concurrent": 10 }
       },
       "routing": {
         "TTS": { "prefer": "network", "fallback": "local", "min_version": "1.0.0" },
-        "STT": { "prefer": "local_only" }
+        "STTCoordinator": { "prefer": "local", "fallback": "local" },
+        "WakeWord": { "prefer": "local", "fallback": "local" },
+        "Transcription": { "prefer": "local", "fallback": "local" },
+        "DB": { "prefer": "local", "fallback": "local" },
+        "Orchestrator": { "prefer": "local", "fallback": "local" },
+        "Tooling": { "prefer": "local", "fallback": "local" },
+        "Scheduler": { "prefer": "local", "fallback": "local" },
+        "Config": { "prefer": "local", "fallback": "local" }
       },
       "version_policy": "compatible",
       "peer_selection": "lowest_latency",
@@ -977,8 +1542,12 @@ Peer selection among multiple providers uses the configured `peer_selection` str
 |---|---|---|
 | **PeerRegistry** | `app/services/gateway/mesh/peer_registry.py` | Tracks connected peers, manifests, latency, stale detection |
 | **RoutingTable** | `app/services/gateway/mesh/routing_table.py` | Resolves bus topics to local/remote targets |
-| **PeerBridge** | `app/services/gateway/mesh/peer_bridge.py` | Sends outbound RPC calls via DataChannels |
-| **MeshBus** | `app/messaging/mesh_bus.py` | Transparent routing wrapper around the inner bus |
+| **PeerBridge** | `app/services/gateway/mesh/peer_bridge.py` | Sends outbound RPC calls and forwards events via DataChannels |
+| **MeshBus** | `app/messaging/mesh_bus.py` | Transparent routing wrapper; handles command routing and event forwarding |
+| **RPCHandler** | `app/services/gateway/webrtc/rpc.py` | Receives inbound RPC calls and forwarded events from peers |
+| **RTCClient** | `app/services/gateway/webrtc/rtc_client.py` | WebRTC peer management, auth gate, bilateral pairing, heartbeat timeout |
+| **AuthManager** | `app/services/auth/auth_manager.py` | Pairing flow, mesh peer CRUD, consolidated trust store sync |
+| **AuthProxy** | `app/services/gateway/auth_proxy.py` | Gateway-side auth proxy with audit event routing via bus |
 | **LatencyMonitor** | `app/services/gateway/mesh/latency.py` | Periodic ping/pong RTT measurement |
 | **Negotiation** | `app/services/gateway/mesh/negotiation.py` | Manifest generation, parsing, ACK logic |
 | **VersionCompat** | `app/services/gateway/mesh/version_compat.py` | Semantic version comparison |
