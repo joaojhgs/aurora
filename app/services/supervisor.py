@@ -136,6 +136,7 @@ class Supervisor(BaseService):
         log_info("Starting services in threads mode...")
 
         # Import services
+        from app.services.auth import AuthService
         from app.services.config import ConfigService
         from app.services.db import DBService
         from app.services.gateway import GatewayService
@@ -147,11 +148,12 @@ class Supervisor(BaseService):
         log_info("Service imports complete")
 
         # Create service instances
-        # Order matters: DB and Tooling first (foundation services)
-        # Then Scheduler, TTS, STT (old or new), and finally Orchestrator
+        # Order matters: Config → DB → Auth → Tooling (foundation services)
+        # Then Scheduler, TTS, STT, Orchestrator, and finally Gateway
         log_info("Creating service instances...")
         config_service = ConfigService()
         db_service = DBService()
+        auth_service = AuthService()
         tooling_service = ToolingService()
         scheduler_service = SchedulerService()
         tts_service = TTSService()
@@ -177,6 +179,16 @@ class Supervisor(BaseService):
             log_info("✓ DB service started")
         except Exception as e:
             log_error(f"Failed to start DB service: {e}", exc_info=True)
+            raise
+
+        # Start Auth service (depends on DB, Gateway depends on Auth)
+        try:
+            log_info("Starting Auth service...")
+            await auth_service.start()
+            self.services.append(auth_service)
+            log_info("✓ Auth service started")
+        except Exception as e:
+            log_error(f"Failed to start Auth service: {e}", exc_info=True)
             raise
 
         # Start Tooling service (needs DB to be ready for tool sync)
@@ -230,6 +242,7 @@ class Supervisor(BaseService):
         services = [
             ("ConfigService", "app.services.config"),
             ("DBService", "app.services.db"),
+            ("AuthService", "app.services.auth"),
             ("ToolingService", "app.services.tooling"),
             ("SchedulerService", "app.services.scheduler"),
             ("TTSService", "app.services.tts"),
@@ -412,16 +425,13 @@ class Supervisor(BaseService):
         output_model=ServiceControlResponse,
         exposure="internal",
     )
-    async def _handle_restart_service(self, envelope: Envelope) -> None:
+    async def _handle_restart_service(
+        self, data: ServiceControlCommand, *, envelope: Envelope | None = None
+    ) -> ServiceControlResponse:
         """Handle RestartService command."""
         # TODO: Implement service restart logic
         # For now, just return success
-        if envelope.reply_to:
-            await self.bus.publish(
-                envelope.reply_to,
-                ServiceControlResponse(success=True, message="Not implemented yet"),
-                event=False,
-            )
+        return ServiceControlResponse(success=True, message="Not implemented yet")
 
 
 # Convenience function for running supervisor

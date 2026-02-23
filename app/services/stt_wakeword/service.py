@@ -288,6 +288,7 @@ class WakeWordService(BaseService):
         input_model=STTAudioChunk,
         output_model=EmptyOutput,
         exposure="both",
+        method_type="use",
     )
     async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
@@ -345,16 +346,16 @@ class WakeWordService(BaseService):
         input_model=WakewordControl,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
-    async def _on_control(self, env: Envelope) -> None:
+    async def _on_control(self, data: WakewordControl) -> None:
         """Handle wake word control commands.
 
         Args:
-            env: Message envelope containing WakeWordControl
+            data: Validated WakewordControl payload
         """
         try:
-            cmd: WakewordControl = env.payload
-            action = cmd.action.lower()
+            action = data.action.lower()
 
             if action == "start":
                 self._enabled = True
@@ -384,6 +385,7 @@ class WakeWordService(BaseService):
         input_model=WakeWordDetectRequest,
         output_model=WakeWordDetectResponse,
         exposure="both",
+        method_type="use",
     )
     async def detect_wake_word(self, request: WakeWordDetectRequest) -> WakeWordDetectResponse:
         """Check audio chunk for wake word and return detection result.

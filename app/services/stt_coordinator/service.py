@@ -543,6 +543,9 @@ class STTCoordinatorService(BaseService):
         await self.bus.publish(
             STTMethods.SESSION_STARTED,
             STTSessionStarted(wake_word=wake_word, session_id=session_id),
+            event=True,
+            mesh=True,
+            origin="internal",
         )
 
     async def _timeout_handler(self) -> None:
@@ -611,7 +614,13 @@ class STTCoordinatorService(BaseService):
         )
 
         log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTMethods.USER_SPEECH_CAPTURED}")
-        await self.bus.publish(STTMethods.USER_SPEECH_CAPTURED, speech_event)
+        await self.bus.publish(
+            STTMethods.USER_SPEECH_CAPTURED,
+            speech_event,
+            event=True,
+            mesh=True,
+            origin="internal",
+        )
 
         # Check if we should continue listening (multi-turn)
         if self._multi_turn_enabled:
@@ -647,6 +656,9 @@ class STTCoordinatorService(BaseService):
                 reason=reason,
                 transcription=transcription if transcription else None,
             ),
+            event=True,
+            mesh=True,
+            origin="internal",
         )
 
         # Pause transcription to save resources (ONLY if ambient transcription is disabled)
@@ -686,6 +698,7 @@ class STTCoordinatorService(BaseService):
         input_model=STTListenRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_listen(self, request: STTListenRequest) -> EmptyOutput:
         """Handle listen command."""
@@ -697,6 +710,7 @@ class STTCoordinatorService(BaseService):
             STTMethods.SESSION_STARTED,
             STTSessionStarted(session_id=request.session_id or "manual", wake_word="manual"),
             event=True,
+            mesh=True,
             origin="internal",
         )
 
@@ -708,6 +722,7 @@ class STTCoordinatorService(BaseService):
         input_model=STTStopListeningRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_stop_listening(self, request: STTStopListeningRequest) -> EmptyOutput:
         """Handle stop listening command."""
@@ -723,8 +738,9 @@ class STTCoordinatorService(BaseService):
         input_model=STTAudioChunk,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
-    async def _on_audio_chunk(self, env: Envelope) -> None:
+    async def _on_audio_chunk(self, data: STTAudioChunk) -> None:
         """Handle audio chunk."""
         # Processing logic...
         pass
@@ -735,15 +751,15 @@ class STTCoordinatorService(BaseService):
         input_model=STTCoordinatorControl,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
-    async def _on_control(self, envelope: Envelope) -> None:
+    async def _on_control(self, data: STTCoordinatorControl) -> None:
         """Handle control commands.
 
         Args:
-            envelope: Message envelope containing STTCoordinatorControl
+            data: Validated STTCoordinatorControl payload
         """
-        control: STTCoordinatorControl = envelope.payload
-        action = control.action
+        action = data.action
 
         log_info(f"Control command: {action}")
 
