@@ -117,6 +117,16 @@ class RoutingTable:
         # Unknown prefer value → default to local
         return RouteDecision(target="local", module=module)
 
+    def get_negotiated_peers(self) -> list:
+        """Get all peers that have completed negotiation.
+
+        Delegates to the PeerRegistry.
+
+        Returns:
+            List of negotiated PeerState objects.
+        """
+        return self._registry.get_negotiated_peers()
+
     def resolve_fallback(
         self,
         topic: str,

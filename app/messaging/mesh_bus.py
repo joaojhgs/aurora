@@ -9,8 +9,19 @@ For each ``publish()`` or ``request()`` call:
 3. If prefer=network → find best remote peer, send via PeerBridge
 4. On failure → apply fallback strategy (local, network, error)
 
-Events (``event=True``) are **always** delivered locally. Only commands
-and requests are candidates for remote routing.
+Events (``event=True``) are **always** delivered locally first. Additionally,
+if the caller passes ``mesh=True`` **and** the event's module has
+``share: true`` in the mesh config, the event is forwarded to all
+connected (negotiated) peers so they can react to remote lifecycle
+events (e.g., TTS.Started, LLM.Response).
+
+The ``mesh`` flag is a *publish-site* declaration: each individual
+``bus.publish()`` call decides whether the event has cross-instance
+relevance.  High-frequency / hardware-bound events (e.g. audio
+streams) default to ``mesh=False`` and stay local.
+
+Events received from peers (``origin="mesh_forwarded"``) are NOT
+re-forwarded, preventing infinite loops.
 
 The MeshBus implements the same ``MessageBus`` protocol, so all existing
 services work without any modification.
@@ -78,48 +89,82 @@ class MeshBus:
         message: BaseModel,
         *,
         event: bool = True,
+        mesh: bool = False,
         priority: int = 50,
         origin: str = "internal",
         reliable: bool = True,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        reply_to: str | None = None,
+        principal_id: str | None = None,
     ) -> None:
         """Publish with mesh routing.
 
-        Events are ALWAYS delivered locally (they're broadcasts for local state).
+        Events are delivered locally first. If ``mesh=True`` and the
+        event's module has ``share: true`` in the mesh config, the event
+        is forwarded to negotiated peers (unless it was itself forwarded,
+        to prevent loops).
         Commands may be routed to remote peers based on routing config.
 
         Args:
             topic: Topic name (e.g., "TTS.Request")
             message: Message payload
             event: True for broadcast events, False for commands
+            mesh: If True, forward this event to mesh peers when the
+                  module is shared.  Ignored for commands (event=False).
             priority: Message priority (0=highest)
             origin: Message origin
             reliable: Whether to guarantee delivery
             ttl_ms: Time-to-live in milliseconds
             max_attempts: Maximum retry attempts
+            reply_to: Optional reply topic for request/response pattern
         """
-        # Events always go local (they're broadcasts for local state)
+        # Events always go local first
         if event:
             await self._inner.publish(
                 topic, message, event=True, priority=priority,
                 origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                max_attempts=max_attempts,
+                max_attempts=max_attempts, reply_to=reply_to,
+                principal_id=principal_id,
             )
+            # Forward events to connected peers when mesh=True and module is shared
+            if mesh and self._peer_bridge and origin != "mesh_forwarded":
+                module = topic.split(".")[0] if "." in topic else topic
+                sharing_cfg = self._config.sharing.get(module)
+                if sharing_cfg and sharing_cfg.share:
+                    peers = self._routing_table.get_negotiated_peers()
+                    for peer in peers:
+                        try:
+                            self._peer_bridge.fire_event(
+                                peer.peer_id, topic, message,
+                            )
+                        except Exception as exc:
+                            log_debug(
+                                f"MeshBus: Failed to forward event {topic} "
+                                f"to {peer.peer_id}: {exc}"
+                            )
             return
 
         # For commands, check routing
         route = self._routing_table.resolve(topic)
+        log_info(
+            f"MeshBus: Routing command {topic} → target={route.target}, "
+            f"peer={route.peer_id or 'n/a'}, module={route.module}"
+        )
 
         if route.target == "local":
             await self._inner.publish(
                 topic, message, event=False, priority=priority,
                 origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                max_attempts=max_attempts,
+                max_attempts=max_attempts, reply_to=reply_to,
+                principal_id=principal_id,
             )
             return
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
+            log_info(
+                f"MeshBus: Routing command {topic} to remote peer {route.peer_id}"
+            )
             try:
                 result = await self._peer_bridge.call(
                     route.peer_id, topic, message, timeout=self._remote_timeout,
@@ -145,7 +190,8 @@ class MeshBus:
                 await self._inner.publish(
                     topic, message, event=False, priority=priority,
                     origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                    max_attempts=max_attempts,
+                    max_attempts=max_attempts, reply_to=reply_to,
+                    principal_id=principal_id,
                 )
                 return
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
@@ -171,7 +217,8 @@ class MeshBus:
                 await self._inner.publish(
                     topic, message, event=False, priority=priority,
                     origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                    max_attempts=max_attempts,
+                    max_attempts=max_attempts, reply_to=reply_to,
+                    principal_id=principal_id,
                 )
                 return
 
@@ -186,7 +233,8 @@ class MeshBus:
         await self._inner.publish(
             topic, message, event=False, priority=priority,
             origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-            max_attempts=max_attempts,
+            max_attempts=max_attempts, reply_to=reply_to,
+            principal_id=principal_id,
         )
 
     # ── Request ──────────────────────────────────────────────────────────
@@ -201,6 +249,7 @@ class MeshBus:
         timeout: float = 5.0,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        principal_id: str | None = None,
     ) -> QueryResult:
         """Request with mesh routing.
 
@@ -219,14 +268,22 @@ class MeshBus:
             QueryResult containing the response data or error
         """
         route = self._routing_table.resolve(topic)
+        log_info(
+            f"MeshBus: Routing request {topic} → target={route.target}, "
+            f"peer={route.peer_id or 'n/a'}, module={route.module}"
+        )
 
         if route.target == "local":
             return await self._inner.request(
                 topic, message, priority=priority, origin=origin,
                 timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                principal_id=principal_id,
             )
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
+            log_info(
+                f"MeshBus: Routing request {topic} to remote peer {route.peer_id}"
+            )
             try:
                 result = await self._peer_bridge.call(
                     route.peer_id, topic, message, timeout=timeout,
@@ -249,6 +306,7 @@ class MeshBus:
                 return await self._inner.request(
                     topic, message, priority=priority, origin=origin,
                     timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                    principal_id=principal_id,
                 )
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
                 try:
@@ -261,6 +319,7 @@ class MeshBus:
                     return await self._inner.request(
                         topic, message, priority=priority, origin=origin,
                         timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                        principal_id=principal_id,
                     )
 
         if route.target == "error":
@@ -273,6 +332,7 @@ class MeshBus:
         return await self._inner.request(
             topic, message, priority=priority, origin=origin,
             timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+            principal_id=principal_id,
         )
 
     # ── Subscribe ────────────────────────────────────────────────────────
