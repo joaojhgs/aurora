@@ -164,6 +164,9 @@ async def test_on_wake_word_detected_starts_session(service, mock_bus):
     mock_bus.publish.assert_any_call(
         STTMethods.SESSION_STARTED,
         ANY,
+        event=True,
+        mesh=True,
+        origin="internal",
     )
 
     # Check that transcription is resumed
@@ -234,12 +237,18 @@ async def test_transcription_result_ends_session(service, mock_bus):
     mock_bus.publish.assert_any_call(
         STTCoordinatorTopics.USER_SPEECH_CAPTURED,
         ANY,
+        event=True,
+        mesh=True,
+        origin="internal",
     )
 
     # Check that session ended event was published
     mock_bus.publish.assert_any_call(
         STTMethods.SESSION_ENDED,
         ANY,
+        event=True,
+        mesh=True,
+        origin="internal",
     )
 
     # Check that transcription is paused
@@ -324,6 +333,9 @@ async def test_control_commands(service, mock_bus):
     mock_bus.publish.assert_any_call(
         STTMethods.SESSION_ENDED,
         ANY,
+        event=True,
+        mesh=True,
+        origin="internal",
     )
 
     # Test reset

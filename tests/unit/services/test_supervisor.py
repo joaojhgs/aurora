@@ -85,6 +85,7 @@ class TestSupervisorServiceLifecycle:
         # Services are imported inside _start_services_threads, so patch at those paths
         with (
             patch("app.services.db.DBService") as mock_db_service,
+            patch("app.services.auth.AuthService") as mock_auth_service,
             patch("app.services.tooling.ToolingService") as mock_tooling_service,
             patch("app.services.scheduler.SchedulerService") as mock_scheduler_service,
             patch("app.services.tts.TTSService") as mock_tts_service,
@@ -96,7 +97,8 @@ class TestSupervisorServiceLifecycle:
             patch("app.services.gateway.GatewayService") as mock_gateway_service,
         ):
             # Configure all mocks
-            for mock_service in [mock_db_service, mock_tooling_service, mock_scheduler_service,
+            for mock_service in [mock_db_service, mock_auth_service, mock_tooling_service,
+                                 mock_scheduler_service,
                                  mock_tts_service, mock_orchestrator_service, mock_config_service,
                                  mock_coordinator, mock_transcription, mock_wakeword,
                                  mock_gateway_service]:
@@ -119,6 +121,7 @@ class TestSupervisorServiceLifecycle:
         # Mock all services at the import paths used by supervisor
         with (
             patch("app.services.db.DBService") as mock_db,
+            patch("app.services.auth.AuthService") as mock_auth,
             patch("app.services.tooling.ToolingService") as mock_tooling,
             patch("app.services.scheduler.SchedulerService") as mock_scheduler,
             patch("app.services.tts.TTSService") as mock_tts,
@@ -130,7 +133,7 @@ class TestSupervisorServiceLifecycle:
             patch("app.services.gateway.GatewayService") as mock_gateway,
         ):
             # Configure all mocks
-            for mock_service in [mock_db, mock_tooling, mock_scheduler, mock_tts,
+            for mock_service in [mock_db, mock_auth, mock_tooling, mock_scheduler, mock_tts,
                                  mock_orchestrator, mock_config, mock_wakeword,
                                  mock_transcription, mock_coordinator, mock_gateway]:
                 mock_instance = Mock()
@@ -184,6 +187,7 @@ class TestSupervisorErrorHandling:
         # Services are imported inside _start_services_threads, so patch at those paths
         with (
             patch("app.services.db.DBService") as mock_db_service,
+            patch("app.services.auth.AuthService") as mock_auth_service,
             patch("app.services.tooling.ToolingService") as mock_tooling_service,
             patch("app.services.scheduler.SchedulerService") as mock_scheduler_service,
             patch("app.services.tts.TTSService") as mock_tts_service,
@@ -205,7 +209,8 @@ class TestSupervisorErrorHandling:
             mock_db_service.return_value = mock_db
 
             # Configure other services normally
-            for mock_service in [mock_tooling_service, mock_scheduler_service, mock_tts_service,
+            for mock_service in [mock_auth_service, mock_tooling_service, mock_scheduler_service,
+                                 mock_tts_service,
                                  mock_orchestrator_service, mock_coordinator,
                                  mock_transcription, mock_wakeword, mock_gateway_service]:
                 mock_instance = Mock()

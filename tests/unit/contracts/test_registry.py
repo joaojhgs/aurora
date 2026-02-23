@@ -67,8 +67,8 @@ def test_method_contract_decorator():
     # Manually register the method (normally done by BaseService)
     register_method("TestModule", "TestMethod", test_method, test_method._contract_metadata)
 
-    # Check method is registered (by method name, not full method_id)
-    contract = get_contract("TestMethod")
+    # Check method is registered (by full bus_topic)
+    contract = get_contract("TestModule.TestMethod")
     assert contract is not None
     assert contract.module == "TestModule"
     assert contract.name == "TestMethod"
@@ -192,8 +192,8 @@ def test_all_contracts():
 
     contracts = all_contracts()
     assert len(contracts) == 2
-    assert "Method1" in contracts
-    assert "Method2" in contracts
+    assert "Mod1.Method1" in contracts
+    assert "Mod1.Method2" in contracts
 
 
 def test_module_auto_creation():
