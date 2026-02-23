@@ -99,6 +99,10 @@ class PeerState(BaseModel):
     last_manifest: float = 0.0
     active_calls: int = 0
     status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale"
+    # Compatibility report from manifest ACK (what the remote peer thinks of OUR services)
+    remote_compatible: list[str] = Field(default_factory=list)
+    remote_incompatible: list[str] = Field(default_factory=list)
+    remote_unused: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

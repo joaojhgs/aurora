@@ -194,6 +194,44 @@ class PeerBridge:
         """
         return len(self._pending_calls)
 
+    def fire_event(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: BaseModel | dict,
+    ) -> None:
+        """Forward an event to a remote peer (fire-and-forget).
+
+        Unlike ``call()``, this does not wait for a response.
+        Events are best-effort; failures are silently logged.
+
+        Args:
+            peer_id: Target peer identifier
+            topic: Event topic (e.g., "TTS.Started")
+            payload: Event payload (Pydantic model or dict)
+        """
+        if isinstance(payload, BaseModel):
+            params = payload.model_dump(mode="json")
+        elif isinstance(payload, dict):
+            params = payload
+        else:
+            params = {}
+
+        msg = {
+            "type": "event",
+            "topic": topic,
+            "params": params,
+        }
+
+        sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+        if sent:
+            log_debug(f"PeerBridge: Forwarded event {topic} to {peer_id}")
+        else:
+            log_debug(
+                f"PeerBridge: Could not forward event {topic} to "
+                f"{peer_id} (not connected)"
+            )
+
     async def cancel_all(self) -> None:
         """Cancel all pending calls.
 
