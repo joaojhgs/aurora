@@ -1,7 +1,7 @@
-"""Access Control Layer for Aurora Gateway.
+"""Shared authentication primitives for Aurora services.
 
-Re-exports from the shared auth module for backward compatibility.
-New code should import from ``app.shared.auth`` directly.
+Provides Identity, permission matching, and audit helpers used by
+both the Auth service and the Gateway middleware.
 """
 
 from app.shared.auth.identity import ANONYMOUS, OPEN_PEER, SYSTEM, Identity, build_identity

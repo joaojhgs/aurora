@@ -8,7 +8,7 @@ from typing import Any, Optional, Union
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging import MessageBus
-from app.services.db.models import CronJob
+from app.shared.models.db import CronJob
 
 from .scheduler_manager import SchedulerManager
 
