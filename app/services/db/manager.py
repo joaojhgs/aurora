@@ -12,7 +12,7 @@ import aiosqlite
 
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.db.migration_manager import MigrationManager
-from app.services.db.models import Device, Message, Token, User
+from app.services.db.models import Device, MeshCredential, Message, Token, User
 
 
 class DatabaseManager:
@@ -707,3 +707,70 @@ class DatabaseManager:
         # This is a no-op since we use connection per operation
         # but included for API consistency and future use
         pass
+
+    # ── Mesh credentials ─────────────────────────────────────────────────
+
+    async def save_mesh_credential(self, credential: MeshCredential) -> bool:
+        """Upsert a mesh credential (INSERT OR REPLACE keyed by room_name)."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO mesh_credentials
+                        (id, room_name, token, remote_device_id, remote_user_id,
+                         created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(room_name) DO UPDATE SET
+                        token = excluded.token,
+                        remote_device_id = excluded.remote_device_id,
+                        remote_user_id = excluded.remote_user_id,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        credential.id,
+                        credential.room_name,
+                        credential.token,
+                        credential.remote_device_id,
+                        credential.remote_user_id,
+                        credential.created_at.isoformat() if credential.created_at else None,
+                        credential.updated_at.isoformat() if credential.updated_at else None,
+                    ),
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            log_error(f"Error saving mesh credential for room '{credential.room_name}': {e}")
+            return False
+
+    async def get_mesh_credential_by_room(self, room_name: str) -> MeshCredential | None:
+        """Retrieve a stored mesh credential by room name."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    "SELECT * FROM mesh_credentials WHERE room_name = ?",
+                    (room_name,),
+                )
+                row = await cursor.fetchone()
+                return MeshCredential.from_dict(dict(row)) if row else None
+        except Exception as e:
+            log_error(f"Error retrieving mesh credential for room '{room_name}': {e}")
+            return None
+
+    async def delete_mesh_credential(self, room_name: str) -> bool:
+        """Delete a mesh credential by room name."""
+        db = None
+        try:
+            db = await self._connect()
+            cursor = await db.execute(
+                "DELETE FROM mesh_credentials WHERE room_name = ?",
+                (room_name,),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            log_error(f"Error deleting mesh credential for room '{room_name}': {e}")
+            return False
+        finally:
+            if db:
+                await db.close()
