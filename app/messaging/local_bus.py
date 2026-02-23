@@ -260,12 +260,14 @@ class LocalBus:
         message: BaseModel,
         *,
         event: bool = True,
+        mesh: bool = False,
         priority: int = 50,
         origin: str = "internal",
         reliable: bool = True,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         reply_to: str | None = None,
+        principal_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -273,6 +275,7 @@ class LocalBus:
             topic: Topic name
             message: Message payload
             event: True for broadcast events, False for point-to-point commands
+            mesh: Accepted for API compatibility with MeshBus (ignored by LocalBus)
             priority: Message priority (0=highest, 99=lowest)
             origin: Message origin
             reliable: Whether to guarantee delivery (with retries)
@@ -301,6 +304,7 @@ class LocalBus:
             priority=priority,
             max_attempts=max_attempts if reliable else 1,
             reply_to=reply_to,
+            principal_id=principal_id,
         )
 
         self._stats["published"] += 1
@@ -341,6 +345,7 @@ class LocalBus:
         timeout: float = 5.0,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        principal_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
@@ -415,6 +420,7 @@ class LocalBus:
             origin=origin,
             max_attempts=max_attempts,
             reply_to=reply_topic,
+            principal_id=principal_id,
         )
 
         # Wait for response
