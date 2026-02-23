@@ -12,6 +12,9 @@ class ServiceSharingConfig(BaseModel):
     how many concurrent remote calls are allowed, and which peers
     may use it.
 
+    Event forwarding is controlled at the publish site via the
+    ``mesh=True`` parameter on ``bus.publish()``, not here.
+
     Attributes:
         share: Whether to share this service with the network
         max_concurrent: Maximum concurrent remote calls to this service
@@ -145,6 +148,7 @@ class PermissionSettings(BaseModel):
 
     default_device_permissions: list[str] = []
     webrtc_auth_timeout_seconds: float = 10.0
+    webrtc_pairing_timeout_seconds: float = 300.0
 
 
 class Settings(BaseModel):

@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 
@@ -22,6 +22,10 @@ from .models import PeerManifest, PeerState
 
 if TYPE_CHECKING:
     from app.services.gateway.config import MeshConfig, ServiceRoutingConfig
+    from app.services.gateway.mesh.models import ManifestAck
+
+# Callback type: async fn(peer_id, node_name, status) -> None
+PeerLifecycleCallback = Callable[[str, str, str], Coroutine[Any, Any, None]]
 
 
 class PeerRegistry:
@@ -29,6 +33,11 @@ class PeerRegistry:
 
     Thread-safe via asyncio.Lock. All mutating operations acquire the lock.
     Read-only operations snapshot state under the lock and release quickly.
+
+    Supports optional lifecycle callbacks for DB persistence:
+    - ``on_peer_registered``: called after a peer is (re-)registered
+    - ``on_peer_removed``: called after a peer is removed
+    - ``on_peer_status_changed``: called when peer status changes
     """
 
     def __init__(self, mesh_config: MeshConfig) -> None:
@@ -36,6 +45,11 @@ class PeerRegistry:
         self._peers: dict[str, PeerState] = {}
         self._lock = asyncio.Lock()
         self._stale_check_task: asyncio.Task | None = None
+
+        # Lifecycle callbacks (set by gateway for DB persistence)
+        self.on_peer_registered: PeerLifecycleCallback | None = None
+        self.on_peer_removed: PeerLifecycleCallback | None = None
+        self.on_peer_status_changed: PeerLifecycleCallback | None = None
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -81,6 +95,13 @@ class PeerRegistry:
                 )
                 log_info(f"PeerRegistry: Peer {peer_id} registered ({node_name or 'unnamed'})")
 
+        # Fire lifecycle callback outside the lock
+        if self.on_peer_registered:
+            try:
+                await self.on_peer_registered(peer_id, node_name, "authenticated")
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_registered callback failed: {exc}")
+
     async def update_manifest(self, peer_id: str, manifest: PeerManifest) -> None:
         """Update a peer's capability manifest.
 
@@ -91,6 +112,7 @@ class PeerRegistry:
             peer_id: Peer identifier
             manifest: The peer's capability manifest
         """
+        node_name = ""
         async with self._lock:
             state = self._peers.get(peer_id)
             if not state:
@@ -98,12 +120,44 @@ class PeerRegistry:
                 return
             state.manifest = manifest
             state.node_name = manifest.node_name or state.node_name
+            node_name = state.node_name
             state.last_manifest = time.monotonic()
             state.status = "negotiated"
             svc_names = [s.module for s in manifest.shared_services]
             log_info(
                 f"PeerRegistry: Peer {peer_id} manifest updated — "
                 f"services: {svc_names}"
+            )
+
+        # Fire status change callback outside the lock
+        if self.on_peer_status_changed:
+            try:
+                await self.on_peer_status_changed(peer_id, node_name, "negotiated")
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
+
+    async def update_manifest_ack(self, peer_id: str, ack: ManifestAck) -> None:
+        """Store a manifest ACK's compatibility report for a peer.
+
+        Called when a remote peer responds to our manifest with their
+        compatibility assessment of our shared services.
+
+        Args:
+            peer_id: Peer identifier
+            ack: The manifest acknowledgment with compatibility data
+        """
+        async with self._lock:
+            state = self._peers.get(peer_id)
+            if not state:
+                log_warning(f"PeerRegistry: Manifest ACK from unknown peer {peer_id}")
+                return
+            state.remote_compatible = list(ack.compatible_services)
+            state.remote_incompatible = list(ack.incompatible_services)
+            state.remote_unused = list(ack.unused_services)
+            log_debug(
+                f"PeerRegistry: Peer {peer_id} ACK stored — "
+                f"compat={ack.compatible_services}, "
+                f"incompat={ack.incompatible_services}"
             )
 
     async def remove_peer(self, peer_id: str) -> None:
@@ -114,10 +168,19 @@ class PeerRegistry:
         Args:
             peer_id: Peer identifier to remove
         """
+        node_name = ""
         async with self._lock:
             removed = self._peers.pop(peer_id, None)
             if removed:
+                node_name = removed.node_name
                 log_info(f"PeerRegistry: Peer {peer_id} removed")
+
+        # Fire lifecycle callback outside the lock
+        if removed and self.on_peer_removed:
+            try:
+                await self.on_peer_removed(peer_id, node_name, "disconnected")
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_removed callback failed: {exc}")
 
     async def update_latency(self, peer_id: str, latency_ms: float) -> None:
         """Update latency measurement for a peer.
@@ -166,6 +229,21 @@ class PeerRegistry:
             state = self._peers.get(peer_id)
             if state and state.active_calls > 0:
                 state.active_calls -= 1
+
+    async def set_active_calls(self, peer_id: str, count: int) -> None:
+        """Set the active call count for a peer directly.
+
+        Used when receiving a capacity update from a remote peer
+        that reports its own active/available counts.
+
+        Args:
+            peer_id: Peer identifier
+            count: New active call count
+        """
+        async with self._lock:
+            state = self._peers.get(peer_id)
+            if state:
+                state.active_calls = max(0, count)
 
     # ── Queries ──────────────────────────────────────────────────────────
 
