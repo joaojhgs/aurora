@@ -94,7 +94,11 @@ class BaseService(ABC):
 
     @property
     def bus(self) -> Any:
-        """Get the message bus instance (lazy initialization).
+        """Get the message bus instance.
+
+        Always delegates to the global singleton so that when MeshBus
+        replaces the inner bus at runtime, all services see the change
+        transparently (no stale cached reference).
 
         Returns:
             MessageBus instance
@@ -102,15 +106,16 @@ class BaseService(ABC):
         Raises:
             RuntimeError: If bus has not been initialized
         """
-        if self._bus is None:
-            try:
-                self._bus = get_bus_singleton()
-            except RuntimeError:
-                # Fallback: try to initialize bus for this service
+        try:
+            return get_bus_singleton()
+        except RuntimeError:
+            # Fallback: try to initialize bus for this service
+            # (only happens during early startup before the supervisor sets the bus)
+            if self._bus is None:
                 from app.shared.messaging.bus_init import initialize_bus_for_service
 
                 self._bus = initialize_bus_for_service(self.module)
-        return self._bus
+            return self._bus
 
     async def start(self) -> None:
         """Start the service.
@@ -291,10 +296,20 @@ class BaseService(ABC):
         It wraps the method to handle:
         1. Envelope unpacking
         2. Input model validation
-        3. Method execution
+        3. Method execution (passing Envelope if method accepts it, else payload)
         4. Response publishing (if reply_to is set)
         """
+        import inspect
+
         from app.messaging import Envelope
+
+        def _wants_envelope(method: Any) -> bool:
+            """Check if method signature has an 'envelope' parameter."""
+            try:
+                sig = inspect.signature(method)
+                return "envelope" in sig.parameters
+            except (ValueError, TypeError):
+                return False
 
         for attr_name in dir(self):
             try:
@@ -308,7 +323,10 @@ class BaseService(ABC):
                     if topic:
                         # Create a wrapper to handle the envelope and types
                         async def create_wrapper(
-                            method=attr, model=input_model, method_name=attr_name
+                            method=attr,
+                            model=input_model,
+                            method_name=attr_name,
+                            pass_envelope=_wants_envelope(attr),
                         ):
                             async def wrapper(envelope: Envelope) -> None:
                                 try:
@@ -350,12 +368,18 @@ class BaseService(ABC):
                                             return
 
                                         # 2. Execute method
-                                        result = await method(data)
+                                        if pass_envelope:
+                                            result = await method(data, envelope=envelope)
+                                        else:
+                                            result = await method(data)
                                     else:
-                                        # No input model, pass payload directly?
-                                        # Or pass nothing if it takes no args?
-                                        # For now, assume it takes payload if no model
-                                        result = await method(envelope.payload)
+                                        # No input model, pass payload directly
+                                        if pass_envelope:
+                                            result = await method(
+                                                envelope.payload, envelope=envelope
+                                            )
+                                        else:
+                                            result = await method(envelope.payload)
 
                                     # 3. Handle response
                                     if result is not None and envelope.reply_to:
@@ -508,6 +532,7 @@ class BaseService(ABC):
                         input_model=method.input_model.__name__ if method.input_model else None,
                         output_model=method.output_model.__name__ if method.output_model else None,
                         required_perms=method.required_perms,
+                        method_type=method.method_type,
                         input_schema=input_schema,
                         output_schema=output_schema,
                     )
