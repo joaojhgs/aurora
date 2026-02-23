@@ -162,6 +162,7 @@ class TTSService(BaseService):
                     TTSMethods.STOPPED,
                     TTSStopped(request_id=request_id, reason="completed"),
                     event=True,
+                    mesh=True,
                     origin="internal",
                 ),
                 self._loop,
@@ -221,6 +222,7 @@ class TTSService(BaseService):
         input_model=TTSRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_tts_request(self, request: TTSRequest) -> EmptyOutput:
         """Handle TTS request command.
@@ -258,6 +260,7 @@ class TTSService(BaseService):
                 TTSMethods.ERROR,
                 TTSError(request_id=request_id, error=str(e)),
                 event=True,
+                mesh=True,
                 origin="internal",
             )
             return EmptyOutput()
@@ -268,6 +271,7 @@ class TTSService(BaseService):
         input_model=EmptyInput,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_stop(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS stop command.
@@ -289,6 +293,7 @@ class TTSService(BaseService):
         input_model=EmptyInput,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_pause(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS pause command.
@@ -308,6 +313,7 @@ class TTSService(BaseService):
                     TTSMethods.PAUSED,
                     TTSPaused(request_id=""),
                     event=True,
+                    mesh=True,
                     origin="internal",
                 )
             return EmptyOutput()
@@ -321,6 +327,7 @@ class TTSService(BaseService):
         input_model=EmptyInput,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def _on_resume(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS resume command.
@@ -340,6 +347,7 @@ class TTSService(BaseService):
                     TTSMethods.RESUMED,
                     TTSResumed(request_id=""),
                     event=True,
+                    mesh=True,
                     origin="internal",
                 )
             return EmptyOutput()
@@ -364,6 +372,7 @@ class TTSService(BaseService):
                 TTSMethods.STARTED,
                 TTSStarted(request_id=request_id, text=text),
                 event=True,
+                mesh=True,
                 origin="internal",
             )
 
@@ -404,6 +413,7 @@ class TTSService(BaseService):
                 TTSMethods.STOPPED,
                 TTSStopped(request_id=request_id, reason=reason),
                 event=True,
+                mesh=True,
                 origin="internal",
             )
             log_info(f"TTS playback stopped: {reason}")
@@ -476,6 +486,7 @@ class TTSService(BaseService):
         input_model=TTSSynthesizeRequest,
         output_model=TTSSynthesizeResponse,
         exposure="both",
+        method_type="use",
     )
     async def synthesize(self, request: TTSSynthesizeRequest) -> TTSSynthesizeResponse:
         """Synthesize text to audio and return as base64-encoded data.

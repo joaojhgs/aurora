@@ -66,11 +66,9 @@ class UIBridge(QObject):
         self.bus.subscribe(STTMethods.SESSION_STARTED, self._on_stt_session_started)
 
         # Subscribe to orchestrator and TTS events
-        self.bus.subscribe(OrchestratorMethods.LLM_RESPONSE, self._on_llm_response)
+        self.bus.subscribe(OrchestratorMethods.RESPONSE, self._on_llm_response)
         self.bus.subscribe(TTSMethods.STARTED, self._on_tts_started)
         self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_stopped)
-
-        self.bus.subscribe(DBMethods.MESSAGES_RESPONSE, self._on_messages_loaded)
 
         # Connect UI signals to bus messages
         self._connect_ui_signals()
@@ -90,56 +88,51 @@ class UIBridge(QObject):
         self.ui_window._stop_tts_callback = self._on_stop_tts_request
 
     async def _load_today_messages(self):
-        """Load today's messages from database."""
+        """Load today's messages from database via bus.request()."""
         try:
-            from app.shared.messaging.models.db_models import GetMessagesForDate
+            from app.shared.contracts.models.db import DBGetMessagesForDateRequest
 
             log_info("UI Bridge: Requesting today's messages from database...")
 
-            # Request messages for today (date=None means today)
-            await self.bus.publish(
+            # Use bus.request() to get a direct response from DBService
+            result = await self.bus.request(
                 DBMethods.GET_MESSAGES_FOR_DATE,
-                GetMessagesForDate(date=None),
-                event=False,
-                origin="internal",
-            )  # Command/Query
+                DBGetMessagesForDateRequest(date=None),
+                timeout=10.0,
+            )
+
+            if result and result.ok and result.data:
+                # Extract messages from the response
+                if hasattr(result.data, "messages"):
+                    messages = result.data.messages
+                elif isinstance(result.data, dict):
+                    messages = result.data.get("messages", [])
+                else:
+                    messages = []
+
+                log_info(f"UI Bridge: Received {len(messages)} historical messages")
+
+                # Add each message to UI using the UI's built-in signals (thread-safe)
+                if hasattr(self.ui_window, "signals"):
+                    for msg in messages:
+                        is_user = msg["role"] == "user"
+                        # Determine source type from metadata if available
+                        source_type = None
+                        if is_user and msg.get("metadata"):
+                            source_type = msg["metadata"].get("source_type")
+
+                        self.ui_window.signals.message_received.emit(
+                            msg["content"], is_user, source_type
+                        )
+
+                    log_debug(f"UI Bridge: Emitted {len(messages)} messages to UI")
+                else:
+                    log_error("UI window does not have signals!")
+            else:
+                log_info("UI Bridge: No messages returned from database")
 
         except Exception as e:
             log_error(f"Error loading today's messages: {e}", exc_info=True)
-
-    async def _on_messages_loaded(self, env: Envelope) -> None:
-        """Handle messages loaded from database.
-
-        Args:
-            env: Message envelope containing MessagesResponse
-        """
-        try:
-            from app.db.service import MessagesResponse
-
-            response = MessagesResponse.model_validate(env.payload)
-            messages = response.messages
-
-            log_info(f"UI Bridge: Received {len(messages)} historical messages")
-
-            # Add each message to UI using the UI's built-in signals (thread-safe)
-            if hasattr(self.ui_window, "signals"):
-                for msg in messages:
-                    is_user = msg["role"] == "user"
-                    # Determine source type from metadata if available
-                    source_type = None
-                    if is_user and msg.get("metadata"):
-                        source_type = msg["metadata"].get("source_type")
-
-                    self.ui_window.signals.message_received.emit(
-                        msg["content"], is_user, source_type
-                    )
-
-                log_debug(f"UI Bridge: Emitted {len(messages)} messages to UI")
-            else:
-                log_error("UI window does not have signals!")
-
-        except Exception as e:
-            log_error(f"Error handling loaded messages: {e}", exc_info=True)
 
     def _on_ui_message(self, text: str):
         """Handle user message from UI.
@@ -152,7 +145,7 @@ class UIBridge(QObject):
         # Publish to bus as UserInput command with high priority
         asyncio.run_coroutine_threadsafe(
             self.bus.publish(
-                OrchestratorMethods.UI_USER_INPUT,
+                OrchestratorMethods.USER_INPUT,
                 UserInput(text=text, source="ui"),
                 event=False,  # Command
                 priority=get_interactive_priority(),

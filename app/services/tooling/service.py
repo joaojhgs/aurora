@@ -80,6 +80,7 @@ class ToolingService(BaseService):
                 total_tools=stats["total_tools"], mcp_tools_loaded=stats["mcp_tools_loaded"]
             ),
             event=True,
+            mesh=True,
             priority=get_system_priority(),
             origin="internal",
         )
@@ -196,6 +197,7 @@ class ToolingService(BaseService):
         input_model=ToolingGetToolsRequest,
         output_model=ToolingGetToolsResponse,
         exposure="both",
+        method_type="use",
     )
     async def _on_get_tools(self, request: ToolingGetToolsRequest) -> ToolingGetToolsResponse:
         """Handle get tools query.
@@ -334,6 +336,7 @@ class ToolingService(BaseService):
         input_model=ToolingGetToolByNameRequest,
         output_model=ToolingGetToolByNameResponse,
         exposure="both",
+        method_type="use",
     )
     async def _on_get_tool_by_name(
         self, request: ToolingGetToolByNameRequest
@@ -366,6 +369,7 @@ class ToolingService(BaseService):
         input_model=ToolingGetStatsRequest,
         output_model=ToolingGetStatsResponse,
         exposure="both",
+        method_type="use",
     )
     async def _on_get_stats(self, request: ToolingGetStatsRequest) -> ToolingGetStatsResponse:
         """Handle get stats query.
@@ -395,6 +399,7 @@ class ToolingService(BaseService):
         input_model=ToolingGetMCPStatusRequest,
         output_model=ToolingGetMCPStatusResponse,
         exposure="both",
+        method_type="use",
     )
     async def _on_get_mcp_status(
         self, request: ToolingGetMCPStatusRequest
@@ -421,6 +426,7 @@ class ToolingService(BaseService):
         input_model=ToolingReloadMCPRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
     async def _on_reload_mcp(self, request: ToolingReloadMCPRequest) -> EmptyOutput:
         """Handle reload MCP tools command.
@@ -438,6 +444,7 @@ class ToolingService(BaseService):
                 ToolingMethods.TOOLS_RELOADED,
                 ToolsReloaded(total_tools=stats["total_tools"]),
                 event=True,
+                mesh=True,
                 priority=get_system_priority(),
                 origin="internal",
             )
@@ -455,6 +462,7 @@ class ToolingService(BaseService):
         input_model=ToolingExecuteToolRequest,
         output_model=ToolingExecuteToolResponse,
         exposure="both",
+        method_type="use",
     )
     async def _on_execute_tool(
         self, request: ToolingExecuteToolRequest
