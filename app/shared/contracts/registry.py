@@ -46,6 +46,7 @@ class MethodContract(BaseModel):
         default_priority: Default message priority
         allow_origins: Allowed message origins
         required_perms: Required permissions to invoke
+        method_type: Access level - "use" (read/invoke) or "manage" (write/admin)
         input_model: Pydantic model for input validation
         output_model: Pydantic model for output (optional)
         exposure: Visibility level ("internal" | "external" | "both")
@@ -59,6 +60,7 @@ class MethodContract(BaseModel):
     default_priority: int = 50
     allow_origins: list[str] = ["internal"]
     required_perms: list[str] = []
+    method_type: str = "use"
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None = None
     exposure: str = "internal"
@@ -188,6 +190,7 @@ def method_contract(
     output_model: type[IOModel] | None = None,
     exposure: str = "internal",
     default_priority: int = 50,
+    method_type: str = "use",
     **kwargs,
 ):
     """Register a method contract.
@@ -199,6 +202,7 @@ def method_contract(
         output_model: Pydantic model for output (optional)
         exposure: "internal", "external", or "both"
         default_priority: Default message priority (0-100)
+        method_type: "use" (read/invoke) or "manage" (write/admin)
 
     Example:
         @method_contract(
@@ -221,6 +225,7 @@ def method_contract(
             "output_model": output_model,
             "exposure": exposure,
             "default_priority": default_priority,
+            "method_type": method_type,
             **kwargs,
         }
         return fn
@@ -252,10 +257,19 @@ def register_method(
     elif "module_version" not in metadata:
         metadata["module_version"] = _get_package_version()
 
-    # Create and register contract
+    # Ensure bus_topic is always set (used as registry key)
+    if "bus_topic" not in metadata or not metadata["bus_topic"]:
+        metadata["bus_topic"] = (
+            metadata.get("method_id")
+            or f"{module_name}.{method_name}"
+        )
+
+    # Create and register contract — key by full bus_topic to avoid
+    # cross-module collisions (e.g. "DB.CreateToken" vs "Auth.CreateToken").
     mc = MethodContract(**metadata)
-    _registry[mc.name] = mc
-    _impls[mc.name] = fn
+    registry_key = mc.bus_topic or f"{mc.module}.{mc.name}"
+    _registry[registry_key] = mc
+    _impls[registry_key] = fn
 
     # Add to module
     if module_name in _modules:
@@ -273,10 +287,10 @@ def register_method(
 
 
 def get_contract(name: str) -> MethodContract | None:
-    """Get a contract by method name.
+    """Get a contract by bus topic (e.g. ``"DB.CreateToken"``).
 
     Args:
-        name: Method name
+        name: Full bus topic ("Module.Method")
 
     Returns:
         MethodContract if found, None otherwise
@@ -288,7 +302,7 @@ def all_contracts() -> dict[str, MethodContract]:
     """Get all registered contracts.
 
     Returns:
-        Dictionary mapping method names to contracts
+        Dictionary mapping bus topics ("Module.Method") to contracts
     """
     return dict(_registry)
 
@@ -297,7 +311,7 @@ def get_implementation(name: str) -> Callable[..., Any] | None:
     """Get the implementation function for a method.
 
     Args:
-        name: Method name
+        name: Full bus topic ("Module.Method")
 
     Returns:
         Implementation function if found, None otherwise
