@@ -1061,6 +1061,12 @@
                             "minimum": 1,
                             "default": 10.0
                         },
+                        "webrtc_pairing_timeout_seconds": {
+                            "type": "number",
+                            "description": "Timeout in seconds for peers in the pairing flow (awaiting human approval)",
+                            "minimum": 10,
+                            "default": 300.0
+                        },
                         "audit_enabled": {
                             "type": "boolean",
                             "description": "Enable audit logging of security events",
@@ -1152,10 +1158,12 @@
                             "type": "string"
                         },
                         "room": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signaling room name. Auto-generated on first run if set to 'default' or empty."
                         },
                         "password": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Room password for signaling encryption. Auto-generated on first run if empty. Use 'python scripts/config_updater.py --room-export' to share with other devices."
                         },
                         "encrypt_signaling": {
                             "type": "boolean"
