@@ -39,31 +39,48 @@ class ConfigAPI:
 
         This property is only accessed when actually making config requests,
         ensuring ConfigService is ready before we try to use the bus.
+
+        Always verifies the cached reference matches the current global
+        singleton so that stale bus references are transparently replaced
+        (e.g. when the Supervisor creates a new bus after module-level
+        ConfigAPI construction).
         """
-        if self._bus is None and not self._bus_initialized:
-            try:
-                self._bus = get_bus_singleton()
+        try:
+            current = get_bus_singleton()
+            if self._bus is not current:
+                self._bus = current
+            self._bus_initialized = True
+        except RuntimeError:
+            # Bus not ready yet - this is OK, we'll try again on first use
+            if not self._bus_initialized:
                 self._bus_initialized = True
-            except RuntimeError:
-                # Bus not ready yet - this is OK, we'll try again on first use
-                self._bus_initialized = True
-                return None
+            return self._bus  # may be None
         return self._bus
 
     def _ensure_bus(self):
-        """Ensure bus is available, retrying if needed."""
-        if self._bus is None:
-            try:
-                self._bus = get_bus_singleton()
-            except RuntimeError:
-                # Fallback: try to initialize bus
-                from app.shared.messaging.bus_init import initialize_bus_for_service
+        """Ensure bus is available, retrying if needed.
 
-                try:
-                    self._bus = initialize_bus_for_service("ConfigAPI")
-                except Exception:
-                    # Bus still not available
-                    return False
+        Verifies the cached bus matches the current global singleton to
+        avoid using a stale LocalBus created before the Supervisor.
+        """
+        try:
+            current = get_bus_singleton()
+            if self._bus is not current:
+                self._bus = current
+            return True
+        except RuntimeError:
+            pass
+
+        if self._bus is not None:
+            return True
+
+        # Last resort: try to create a bus for this service
+        from app.shared.messaging.bus_init import initialize_bus_for_service
+
+        try:
+            self._bus = initialize_bus_for_service("ConfigAPI")
+        except Exception:
+            return False
         return self._bus is not None
 
     def _is_config_service_ready(self) -> bool:
