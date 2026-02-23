@@ -33,7 +33,6 @@ class GatewayService(BaseService):
         self._gateway_task = None
         self._registry_aggregator = None
         self._rtc_client = None
-        self._auth_service = None
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
         # Mesh P2P components
@@ -41,11 +40,11 @@ class GatewayService(BaseService):
         self._mesh_routing_table = None
         self._mesh_peer_bridge = None
         self._mesh_latency_monitor = None
+        self._mesh_announcer = None
         self._mesh_bus = None
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
-        await self._init_auth_service()
         self._subscribe_to_config_changes()
         await self._start_gateway()
         await self._start_webrtc()
@@ -67,29 +66,6 @@ class GatewayService(BaseService):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
-
-    async def _init_auth_service(self) -> None:
-        """Initialize authentication service."""
-        try:
-            from app.services.gateway.auth_service import AuthService
-            from app.services.gateway.dependencies import set_auth_service
-
-            self._auth_service = AuthService()
-            await self._auth_service.initialize()
-            set_auth_service(self._auth_service)
-
-            # Set initial default device permissions from config
-            try:
-                settings = await self._get_gateway_config()
-                self._auth_service.update_permission_defaults(
-                    settings.permissions.default_device_permissions
-                )
-            except Exception as e:
-                log_warning(f"Could not load initial permission defaults: {e}")
-
-            log_info("Gateway Auth Service initialized")
-        except Exception as e:
-            log_error(f"Failed to initialize Auth Service: {e}")
 
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
@@ -167,7 +143,6 @@ class GatewayService(BaseService):
                 cors_allow_credentials=cors_allow_credentials,
                 auth_enabled=auth_enabled,
                 auth_api_keys=auth_api_keys,
-                auth_service=self._auth_service,
                 request_timeout=request_timeout,
             )
 
@@ -215,6 +190,36 @@ class GatewayService(BaseService):
                 log_info("WebRTC disabled in configuration")
                 return
 
+            # Enhancement A: Auto-generate room ID and password if at defaults
+            config_changed = False
+            try:
+                from app.services.config.config_manager import ConfigManager
+                import secrets as _secrets
+
+                _cfg_mgr = ConfigManager()
+
+                if settings.webrtc.room in ("default", ""):
+                    new_room = f"aurora-{_secrets.token_hex(8)}"
+                    _cfg_mgr.set("gateway.webrtc.room", new_room)
+                    settings.webrtc.room = new_room
+                    config_changed = True
+                    log_info(f"Auto-generated WebRTC room ID: {new_room}")
+
+                if not settings.webrtc.password:
+                    new_password = _secrets.token_urlsafe(32)
+                    _cfg_mgr.set("gateway.webrtc.password", new_password)
+                    settings.webrtc.password = new_password
+                    config_changed = True
+                    log_info("Auto-generated WebRTC room password")
+
+                if config_changed:
+                    log_info(
+                        "Room credentials auto-generated and saved to config.json. "
+                        "Use 'python scripts/config_updater.py --room-export' to share with other devices."
+                    )
+            except Exception as e:
+                log_warning(f"Could not auto-generate room credentials: {e}")
+
             if not self._registry_aggregator:
                 from app.services.gateway.registry_aggregator import RegistryAggregator
 
@@ -227,18 +232,20 @@ class GatewayService(BaseService):
 
             from app.services.gateway.webrtc.rtc_client import RTCClient
 
-            if not self._auth_service:
-                log_error("AuthService not initialized, cannot start WebRTC client")
-                return
-
+            from app.services.gateway.auth_proxy import BusAuthProxy
             from app.services.gateway.dependencies import set_rtc_client
+
+            auth_proxy = BusAuthProxy(self.bus)
 
             self._rtc_client = RTCClient(
                 settings=settings,
                 bus=self.bus,
                 registry=self._registry_aggregator,
-                auth_service=self._auth_service,
+                auth_service=auth_proxy,
+                require_auth=settings.api.auth_enabled,
             )
+            # Enhancement B: Wire pairing timeout from config
+            self._rtc_client._pairing_timeout = settings.permissions.webrtc_pairing_timeout_seconds
             await self._rtc_client.start()
             set_rtc_client(self._rtc_client)
             log_info("WebRTC client started")
@@ -285,22 +292,20 @@ class GatewayService(BaseService):
             log_error(f"Error stopping gateway: {e}")
 
     async def _reload_auth_config(self) -> None:
-        """Reload auth/permission settings from config."""
+        """Reload WebRTC auth/permission settings from config."""
         try:
             settings = await self._get_gateway_config()
             perm_settings = settings.permissions
 
             if self._rtc_client:
                 self._rtc_client._auth_timeout = perm_settings.webrtc_auth_timeout_seconds
-
-            if self._auth_service:
-                self._auth_service.update_permission_defaults(
-                    perm_settings.default_device_permissions
-                )
+                self._rtc_client._pairing_timeout = perm_settings.webrtc_pairing_timeout_seconds
+                self._rtc_client._require_auth = settings.api.auth_enabled
 
             log_debug(
-                f"Auth config reloaded: webrtc_auth_timeout={perm_settings.webrtc_auth_timeout_seconds}s, "
-                f"default_perms={perm_settings.default_device_permissions}"
+                f"WebRTC auth config reloaded: webrtc_auth_timeout={perm_settings.webrtc_auth_timeout_seconds}s, "
+                f"pairing_timeout={perm_settings.webrtc_pairing_timeout_seconds}s, "
+                f"auth_enabled={settings.api.auth_enabled}"
             )
         except Exception as e:
             log_error(f"Error reloading auth config: {e}")
@@ -352,10 +357,14 @@ class GatewayService(BaseService):
 
             from app.messaging.bus_runtime import get_bus, set_bus
             from app.messaging.mesh_bus import MeshBus
+            from app.services.gateway.mesh.announcer import MeshAnnouncer
             from app.services.gateway.mesh.latency import LatencyMonitor
             from app.services.gateway.mesh.peer_bridge import PeerBridge
             from app.services.gateway.mesh.peer_registry import PeerRegistry
             from app.services.gateway.mesh.routing_table import RoutingTable
+
+            # ── Fix 1: Stable peer_id from DB ────────────────────────────
+            peer_id = await self._get_or_create_peer_id(mesh_config)
 
             # Create mesh components
             self._mesh_peer_registry = PeerRegistry(mesh_config)
@@ -369,12 +378,154 @@ class GatewayService(BaseService):
             )
             self._mesh_peer_bridge.set_latency_monitor(self._mesh_latency_monitor)
 
+            # ── Fix 2: Wire DB persistence callbacks on PeerRegistry ─────
+            room_name_for_callbacks = settings.webrtc.room or "default"
+            bus_for_callbacks = self.bus
+
+            async def _on_peer_registered(
+                p_id: str, p_name: str, p_status: str
+            ) -> None:
+                from app.shared.contracts.models.mesh import MeshPeerUpsertRequest
+
+                await bus_for_callbacks.request(
+                    "Auth.MeshUpsertPeer",
+                    MeshPeerUpsertRequest(
+                        peer_id=p_id,
+                        room_name=room_name_for_callbacks,
+                        node_name=p_name,
+                    ),
+                    timeout=5.0,
+                )
+
+            async def _on_peer_removed(
+                p_id: str, p_name: str, p_status: str
+            ) -> None:
+                from app.shared.contracts.models.mesh import (
+                    MeshPeerUpdateConnectionRequest,
+                )
+
+                await bus_for_callbacks.request(
+                    "Auth.MeshUpdatePeerConnection",
+                    MeshPeerUpdateConnectionRequest(
+                        peer_id=p_id,
+                        room_name=room_name_for_callbacks,
+                        connection_status="disconnected",
+                    ),
+                    timeout=5.0,
+                )
+
+            async def _on_peer_status_changed(
+                p_id: str, p_name: str, p_status: str
+            ) -> None:
+                from app.shared.contracts.models.mesh import (
+                    MeshPeerUpdateConnectionRequest,
+                )
+
+                await bus_for_callbacks.request(
+                    "Auth.MeshUpdatePeerConnection",
+                    MeshPeerUpdateConnectionRequest(
+                        peer_id=p_id,
+                        room_name=room_name_for_callbacks,
+                        connection_status=p_status,
+                    ),
+                    timeout=5.0,
+                )
+
+            self._mesh_peer_registry.on_peer_registered = _on_peer_registered
+            self._mesh_peer_registry.on_peer_removed = _on_peer_removed
+            self._mesh_peer_registry.on_peer_status_changed = _on_peer_status_changed
+
             # Configure RTCClient for mesh
             self._rtc_client.configure_mesh(
                 mesh_config=mesh_config,
                 peer_registry=self._mesh_peer_registry,
                 peer_bridge=self._mesh_peer_bridge,
             )
+
+            # ── Fix 3: Load per-peer inbound credentials ─────────────────
+            room_name = settings.webrtc.room or "default"
+            try:
+                from app.shared.contracts.models.mesh import MeshPeerLoadInboundRequest
+                resp = await self.bus.request(
+                    "Auth.MeshLoadInboundCredentials",
+                    MeshPeerLoadInboundRequest(room_name=room_name),
+                    timeout=5.0,
+                )
+                creds = resp.data.get("credentials", {}) if hasattr(resp, "data") else {}
+                if isinstance(resp, dict):
+                    creds = resp.get("credentials", {})
+                elif hasattr(resp, "credentials"):
+                    creds = resp.credentials
+
+                if creds:
+                    # Pass per-peer tokens to RTCClient
+                    self._rtc_client.set_saved_peer_tokens(creds)
+                    log_info(f"Loaded {len(creds)} inbound credential(s) for room '{room_name}'")
+                else:
+                    log_debug(f"No inbound credentials for room '{room_name}'")
+            except Exception as e:
+                log_warning(f"Could not load mesh credentials: {e}")
+
+            # ── Fix 3: Per-peer persist callback ─────────────────────────
+            bus_ref = self.bus  # capture for closure
+
+            async def _persist_token(
+                token_str: str,
+                remote_device_id: str | None = None,
+                remote_user_id: str | None = None,
+                remote_peer_id: str | None = None,
+                remote_node_name: str | None = None,
+                permissions: list[str] | None = None,
+            ) -> None:
+                """Persist an inbound token from a remote peer."""
+                try:
+                    if remote_peer_id:
+                        # New per-peer save
+                        from app.shared.contracts.models.mesh import (
+                            MeshPeerSaveInboundRequest,
+                            MeshPeerUpsertRequest,
+                        )
+                        # Ensure peer row exists
+                        await bus_ref.request(
+                            "Auth.MeshUpsertPeer",
+                            MeshPeerUpsertRequest(
+                                peer_id=remote_peer_id,
+                                room_name=room_name,
+                                node_name=remote_node_name or "",
+                            ),
+                            timeout=5.0,
+                        )
+                        # Save inbound credential
+                        await bus_ref.request(
+                            "Auth.MeshSaveInboundCredential",
+                            MeshPeerSaveInboundRequest(
+                                remote_peer_id=remote_peer_id,
+                                room_name=room_name,
+                                token=token_str,
+                                permissions=permissions or [],
+                                remote_device_id=remote_device_id,
+                                remote_user_id=remote_user_id,
+                                remote_node_name=remote_node_name,
+                            ),
+                            timeout=5.0,
+                        )
+                    else:
+                        # Legacy single-room save (backward compat)
+                        from app.shared.contracts.models.auth import MeshCredentialSaveRequest
+                        await bus_ref.request(
+                            "Auth.SaveMeshCredential",
+                            MeshCredentialSaveRequest(
+                                room_name=room_name,
+                                token=token_str,
+                                remote_device_id=remote_device_id,
+                                remote_user_id=remote_user_id,
+                            ),
+                            timeout=5.0,
+                        )
+                except Exception as exc:
+                    log_warning(f"Failed to persist mesh pairing token: {exc}")
+
+            self._rtc_client.set_on_token_saved(_persist_token)
 
             # Create MeshBus wrapping the current inner bus
             inner_bus = get_bus()
@@ -386,17 +537,27 @@ class GatewayService(BaseService):
             )
 
             # Replace the global bus singleton with MeshBus
+            # Update BOTH singletons so all code paths see the MeshBus
             set_bus(self._mesh_bus)
+            from app.shared.messaging.bus_init import set_bus as set_shared_bus
+            set_shared_bus(self._mesh_bus)
 
             # Start background tasks
             await self._mesh_peer_registry.start()
             await self._mesh_latency_monitor.start()
 
+            # Start periodic manifest re-announcer
+            self._mesh_announcer = MeshAnnouncer(
+                self._rtc_client,
+                interval_s=mesh_config.registry_announce_interval_s,
+            )
+            await self._mesh_announcer.start()
+
             node_name = mesh_config.node_name or "unnamed"
             shared = [m for m, s in mesh_config.sharing.items() if s.share]
             routed = [m for m, r in mesh_config.routing.items() if r.prefer != "local"]
             log_info(
-                f"Mesh P2P started — node='{node_name}', "
+                f"Mesh P2P started — node='{node_name}', peer_id='{peer_id}', "
                 f"sharing={shared}, routed={routed}"
             )
 
@@ -404,6 +565,68 @@ class GatewayService(BaseService):
             log_warning(f"Mesh dependencies not available: {e}")
         except Exception as e:
             log_error(f"Failed to start mesh P2P: {e}", exc_info=True)
+
+    async def _get_or_create_peer_id(self, mesh_config: Any) -> str:
+        """Load a stable peer_id from the DB, or generate and persist one.
+
+        This ensures the same Aurora instance always announces the same
+        ``peer_id`` across restarts, which is critical for bilateral peer
+        approval and token mapping.
+
+        Args:
+            mesh_config: The current mesh configuration object.
+
+        Returns:
+            The stable peer_id string.
+        """
+        import secrets as _secrets
+
+        try:
+            from app.shared.contracts.models.mesh import (
+                MeshIdentityLoadRequest,
+                MeshIdentitySaveRequest,
+            )
+
+            resp = await self.bus.request(
+                "Auth.LoadMeshIdentity",
+                MeshIdentityLoadRequest(),
+                timeout=5.0,
+            )
+            data = resp.data if hasattr(resp, "data") else resp
+            if isinstance(data, dict):
+                saved_peer_id = data.get("peer_id")
+            else:
+                saved_peer_id = getattr(data, "peer_id", None)
+
+            node_name = getattr(mesh_config, "node_name", "") or ""
+
+            if saved_peer_id:
+                log_info(f"Loaded stable mesh peer_id from DB: {saved_peer_id}")
+                # Update node_name if changed
+                await self.bus.request(
+                    "Auth.SaveMeshIdentity",
+                    MeshIdentitySaveRequest(
+                        peer_id=saved_peer_id, node_name=node_name
+                    ),
+                    timeout=5.0,
+                )
+                return saved_peer_id
+
+            # Generate new peer_id
+            new_peer_id = f"aurora-{_secrets.token_hex(16)}"
+            await self.bus.request(
+                "Auth.SaveMeshIdentity",
+                MeshIdentitySaveRequest(
+                    peer_id=new_peer_id, node_name=node_name
+                ),
+                timeout=5.0,
+            )
+            log_info(f"Generated and saved new mesh peer_id: {new_peer_id}")
+            return new_peer_id
+
+        except Exception as e:
+            log_warning(f"Could not load/save mesh identity, using ephemeral: {e}")
+            return f"aurora-{_secrets.token_hex(16)}"
 
     async def _stop_mesh(self) -> None:
         """Stop mesh P2P components and restore original bus."""
@@ -413,14 +636,21 @@ class GatewayService(BaseService):
         try:
             log_info("Stopping mesh P2P...")
 
-            # Restore the inner bus as the global singleton
+            # Restore the inner bus as the global singleton (both modules)
             from app.messaging.bus_runtime import set_bus
+            from app.shared.messaging.bus_init import set_bus as set_shared_bus
 
             if self._mesh_bus:
-                set_bus(self._mesh_bus._inner)
+                inner = self._mesh_bus._inner
+                set_bus(inner)
+                set_shared_bus(inner)
                 self._mesh_bus = None
 
             # Stop background tasks
+            if self._mesh_announcer:
+                await self._mesh_announcer.stop()
+                self._mesh_announcer = None
+
             if self._mesh_latency_monitor:
                 await self._mesh_latency_monitor.stop()
                 self._mesh_latency_monitor = None

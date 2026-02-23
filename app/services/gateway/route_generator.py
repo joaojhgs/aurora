@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, create_model
 
@@ -119,11 +119,84 @@ def _strip_additional_properties(schema: dict[str, Any] | None) -> dict[str, Any
     return result
 
 
+def _python_type_from_json_schema(
+    prop_schema: dict[str, Any],
+    defs: dict[str, Any] | None = None,
+) -> Any:
+    """Convert a JSON Schema property definition to a Python type annotation.
+
+    Handles ``type``, ``anyOf`` (Pydantic v2 ``Optional``), ``$ref``,
+    nested objects, and typed arrays.
+
+    Args:
+        prop_schema: Single property schema dict.
+        defs: Top-level ``$defs`` for resolving ``$ref``.
+
+    Returns:
+        A Python type suitable for ``create_model()``.
+    """
+    if defs is None:
+        defs = {}
+
+    # ── $ref → inline and recurse ────────────────────────────────────
+    if "$ref" in prop_schema:
+        ref_path = prop_schema["$ref"]
+        if ref_path.startswith("#/$defs/"):
+            def_name = ref_path.replace("#/$defs/", "")
+            if def_name in defs:
+                return _python_type_from_json_schema(defs[def_name], defs)
+        return Any
+
+    # ── anyOf / oneOf (Pydantic v2 unions & Optional) ────────────────
+    any_of = prop_schema.get("anyOf") or prop_schema.get("oneOf")
+    if any_of:
+        non_null = [s for s in any_of if s.get("type") != "null"]
+        has_null = len(non_null) < len(any_of)
+
+        if len(non_null) == 1:
+            inner = _python_type_from_json_schema(non_null[0], defs)
+            return inner | None if has_null else inner  # type: ignore[return-value]
+        elif len(non_null) > 1:
+            # Multi-type union — simplify to Any
+            return Any
+        else:
+            return type(None)
+
+    # ── Scalar type ──────────────────────────────────────────────────
+    json_type = prop_schema.get("type")
+    enum_values = prop_schema.get("enum")
+
+    if json_type == "array":
+        items_schema = prop_schema.get("items", {})
+        item_type = _python_type_from_json_schema(items_schema, defs)
+        return list[item_type]  # type: ignore[valid-type]
+
+    if json_type == "object":
+        # Nested object with known properties → dict (could refine later)
+        return dict
+
+    # ── enum → Literal (preserves enum values from WithJsonSchema) ───
+    if enum_values and json_type == "string":
+        return Literal[tuple(enum_values)]  # type: ignore[valid-type]
+
+    simple_map: dict[str, type] = {
+        "string": str,
+        "integer": int,
+        "number": float,
+        "boolean": bool,
+        "null": type(None),
+    }
+    return simple_map.get(json_type, Any) if json_type else Any  # type: ignore[return-value]
+
+
 def _create_model_from_schema(
     name: str,
     schema: dict[str, Any] | None,
 ) -> type[BaseModel]:
     """Create a Pydantic model from a JSON Schema.
+
+    Properly handles Pydantic v2 schemas including ``anyOf`` unions,
+    typed arrays (``items``), ``$ref`` / ``$defs``, and default values.
 
     Args:
         name: Model name
@@ -133,42 +206,32 @@ def _create_model_from_schema(
         Pydantic model class
     """
     if schema is None:
-        # Return a simple empty model that allows extra fields
         return create_model(name, __base__=DynamicModelBase)
 
-    # Extract properties from schema
+    # Resolve top-level $defs for reference lookup
+    defs = schema.get("$defs", {})
     properties = schema.get("properties", {})
     required = set(schema.get("required", []))
 
-    # Map JSON Schema types to Python types
-    type_mapping = {
-        "string": str,
-        "integer": int,
-        "number": float,
-        "boolean": bool,
-        "array": list,
-        "object": dict,
-    }
-
-    # Build field definitions
     field_definitions: dict[str, Any] = {}
 
     for prop_name, prop_schema in properties.items():
-        prop_type = prop_schema.get("type")
+        python_type = _python_type_from_json_schema(prop_schema, defs)
 
-        # If no type specified (e.g., `Any` in Pydantic), use Any
-        python_type = Any if prop_type is None else type_mapping.get(prop_type, Any)
+        # Determine default value
+        has_default = "default" in prop_schema
+        default_value = prop_schema.get("default")
 
-        # Handle optional fields
-        if prop_name in required:
+        if prop_name in required and not has_default:
             field_definitions[prop_name] = (python_type, ...)
+        elif has_default:
+            field_definitions[prop_name] = (python_type, default_value)
         else:
-            field_definitions[prop_name] = (python_type | None, None)
+            # Optional field with no explicit default → None
+            field_definitions[prop_name] = (python_type | None, None)  # type: ignore[assignment]
 
-    # Create model with DynamicModelBase to allow extra fields
     model = create_model(name, __base__=DynamicModelBase, **field_definitions)
 
-    # Copy description and title from schema
     if "description" in schema:
         model.__doc__ = schema["description"]
 
@@ -323,7 +386,7 @@ class RouteGenerator:
         timeout = self._request_timeout
         topic = method_info.bus_topic or f"{module_name}.{method_info.name}"
 
-        async def handler(request: Any = None) -> dict[str, Any]:
+        async def handler(request: Any = None, principal_id: str | None = None) -> dict[str, Any]:
             """Handle API request by forwarding to service via bus."""
             from fastapi import HTTPException, Request
             from pydantic import BaseModel
@@ -365,6 +428,7 @@ class RouteGenerator:
                     payload,
                     timeout=timeout,
                     origin="external",
+                    principal_id=principal_id,
                 )
                 log_debug(f"Gateway received result: ok={result.ok}, data={result.data}")
 
@@ -442,15 +506,19 @@ class RouteGenerator:
             inner_handler: Callable,
             req_model: type[BaseModel],
             scopes: list[str],
+            method_type: str = "use",
         ) -> Callable:
             from fastapi import Security
 
-            from app.services.gateway.auth import check_auth_enabled
+            from app.services.gateway.auth import create_scoped_auth_check
+
+            # Create a scoped auth check that knows this method's type
+            auth_check = create_scoped_auth_check(method_type=method_type)
 
             # Use closure default value to bind scopes
             # FastAPI requires Security() in defaults for dependency injection
             def auth_dependency(
-                _auth: Any = Security(check_auth_enabled, scopes=scopes),  # noqa: B008
+                _auth: Any = Security(auth_check, scopes=scopes),  # noqa: B008
             ) -> Any:
                 return _auth
 
@@ -460,10 +528,14 @@ class RouteGenerator:
             ) -> dict[str, Any]:  # type: ignore[valid-type]
                 from fastapi.responses import JSONResponse
 
+                # Extract principal_id from the resolved Identity
+                pid = getattr(_auth, "principal_id", None) if _auth else None
+
                 # Use exclude_unset=True to only send fields that were explicitly
                 # provided, allowing the service's model to use its own defaults
                 result = await inner_handler(
-                    request_body.model_dump(exclude_unset=True) if request_body else {}
+                    request_body.model_dump(exclude_unset=True) if request_body else {},
+                    principal_id=pid,
                 )
                 # Return the raw result dict - don't filter through response model
                 # This preserves all fields from the service response
@@ -488,27 +560,43 @@ class RouteGenerator:
             return typed_handler
 
         method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
+        # Bus topic IS the permission — single namespace, no required_perms
         scopes = [method_id]
-        if method_info.required_perms:
-            scopes.extend(method_info.required_perms)
 
-        wrapped_handler = create_typed_handler(handler, request_model_cls, scopes)
+        wrapped_handler = create_typed_handler(
+            handler, request_model_cls, scopes,
+            method_type=method_info.method_type,
+        )
 
         # Copy metadata to wrapper
         wrapped_handler.__name__ = handler.__name__
         wrapped_handler.__doc__ = handler.__doc__
 
-        # Build description with schema info
-        description_parts = [
-            f"Invoke service method via message bus.\n\n"
-            f"**Topic**: `{method_info.bus_topic}`\n"
-            f"**Exposure**: {method_info.exposure}"
-        ]
+        # Build human-readable description for Swagger UI
+        description_parts: list[str] = []
 
+        # Lead with the contract summary if available
+        if method_info.summary:
+            description_parts.append(f"{method_info.summary}\n")
+
+        # Method type badge — tells users what access level is needed
+        module_prefix = method_id.split(".")[0] if "." in method_id else module_name
+        if method_info.method_type == "manage":
+            description_parts.append(
+                f"\n🔧 **Type**: `manage` — requires `{module_prefix}.manage` or higher\n"
+            )
+        else:
+            description_parts.append(
+                f"\n📡 **Type**: `use` — requires `{module_prefix}.use` or higher\n"
+            )
+
+        # Technical details in a smaller section
+        detail_lines = [f"**Bus topic**: `{method_info.bus_topic}`"]
         if method_info.input_model:
-            description_parts.append(f"\n**Input Model**: `{method_info.input_model}`")
+            detail_lines.append(f"**Input**: `{method_info.input_model}`")
         if method_info.output_model:
-            description_parts.append(f"\n**Output Model**: `{method_info.output_model}`")
+            detail_lines.append(f"**Output**: `{method_info.output_model}`")
+        description_parts.append("\n---\n" + " · ".join(detail_lines))
 
         # Build OpenAPI response schema from the output schema
         # Strip additionalProperties to avoid "additionalProp1" in Swagger UI

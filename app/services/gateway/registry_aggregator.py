@@ -121,10 +121,6 @@ class RegistryAggregator:
 
             async with self._lock:
                 for module_name, module_contract in modules.items():
-                    # Skip Gateway itself
-                    if module_name == "Gateway":
-                        continue
-
                     # Convert to ServiceAnnouncement with schemas
                     methods = []
                     for m in module_contract.methods:
@@ -149,6 +145,7 @@ class RegistryAggregator:
                                 input_model=m.input_model.__name__ if m.input_model else None,
                                 output_model=m.output_model.__name__ if m.output_model else None,
                                 required_perms=m.required_perms,
+                                method_type=m.method_type,
                                 input_schema=input_schema,
                                 output_schema=output_schema,
                             )

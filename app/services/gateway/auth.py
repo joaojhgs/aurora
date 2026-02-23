@@ -8,28 +8,15 @@ This module provides optional authentication for the HTTP API:
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException, Request
-from fastapi.security import SecurityScopes
+from fastapi import HTTPException, Request, Security
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
-from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.acl.identity import ANONYMOUS, SYSTEM, Identity
-from app.services.gateway.auth_service import AuthService
 from app.services.gateway.dependencies import get_gateway_auth
-
-
-def _fire_and_forget(coro: Any) -> None:
-    """Schedule a coroutine as a fire-and-forget task.
-
-    The task reference is kept alive via the done callback to prevent
-    garbage collection before completion.
-    """
-    task = asyncio.create_task(coro)
-    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
 
 class GatewayAuth:
@@ -44,7 +31,7 @@ class GatewayAuth:
 
     def __init__(
         self,
-        auth_service: AuthService | None = None,
+        auth_service: Any = None,
         enabled: bool = False,
         api_keys: list[str] | None = None,
         bypass_paths: list[str] | None = None,
@@ -52,7 +39,7 @@ class GatewayAuth:
         """Initialize authentication handler.
 
         Args:
-            auth_service: AuthService instance for token validation
+            auth_service: Auth service or BusAuthProxy for token validation
             enabled: Whether authentication is enabled
             api_keys: List of valid API keys
             bypass_paths: Paths that don't require authentication
@@ -224,23 +211,6 @@ def create_auth_middleware(auth: GatewayAuth) -> Callable:
 
         log_warning(f"Authentication failed for path: {request.url.path}")
 
-        # Audit: authentication failure
-        try:
-            from app.services.gateway.dependencies import get_auth_service
-
-            _auth_svc = get_auth_service()
-            _fire_and_forget(
-                audit_event(
-                    _auth_svc.db_manager,
-                    "access.denied.auth",
-                    principal_id=None,
-                    details={"path": request.url.path, "reason": "invalid_or_missing_credentials"},
-                    ip_address=request.client.host if request.client else None,
-                )
-            )
-        except Exception:
-            pass  # Audit must not break the request flow
-
         return JSONResponse(
             status_code=401,
             content={
@@ -253,15 +223,94 @@ def create_auth_middleware(auth: GatewayAuth) -> Callable:
     return auth_middleware
 
 
+# ---------------------------------------------------------------------------
+# OpenAPI security schemes
+# ---------------------------------------------------------------------------
+# Declaring these as module-level objects causes FastAPI / Swagger UI to
+# render the **Authorize** button with both options.  ``auto_error=False``
+# means the dependency itself never raises — the logic below handles 401.
+_bearer_scheme = HTTPBearer(auto_error=False)
+_apikey_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
 async def check_auth_enabled(
     request: Request,
     security_scopes: SecurityScopes,
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
+    api_key_header: str | None = Security(_apikey_scheme),
     auth: Any = None,
 ) -> Identity:
     """FastAPI Security dependency that returns an Identity.
 
     When auth is disabled, returns SYSTEM. When enabled, resolves the
     Identity from the middleware and checks required scopes.
+
+    The ``bearer`` and ``api_key_header`` parameters are declared so that
+    FastAPI's OpenAPI generator registers the **Authorize** button in
+    Swagger UI.  The actual credential resolution still happens via the
+    middleware (``request.state.identity``) with a fallback to direct
+    header inspection.
+
+    Returns:
+        Identity for the current request.
+
+    Raises:
+        HTTPException 401 if not authenticated.
+        HTTPException 403 if insufficient permissions.
+    """
+    return await _resolve_identity_and_check(
+        request, security_scopes, bearer, api_key_header, auth=auth,
+    )
+
+
+def create_scoped_auth_check(method_type: str = "use"):
+    """Factory that creates an auth dependency with ``method_type`` context.
+
+    This allows the permission engine to match type-based permissions
+    like ``"Auth.use"`` or ``"TTS.manage"`` against the required bus
+    topic scope.
+
+    Args:
+        method_type: ``"use"`` or ``"manage"`` — the method's access level.
+
+    Returns:
+        An async FastAPI security dependency with the same signature as
+        :func:`check_auth_enabled`.
+    """
+
+    async def scoped_auth_check(
+        request: Request,
+        security_scopes: SecurityScopes,
+        bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
+        api_key_header: str | None = Security(_apikey_scheme),
+    ) -> Identity:
+        return await _resolve_identity_and_check(
+            request, security_scopes, bearer, api_key_header,
+            method_type=method_type,
+        )
+
+    return scoped_auth_check
+
+
+async def _resolve_identity_and_check(
+    request: Request,
+    security_scopes: SecurityScopes,
+    bearer: HTTPAuthorizationCredentials | None,
+    api_key_header: str | None,
+    auth: Any = None,
+    method_type: str | None = None,
+) -> Identity:
+    """Core identity resolution and permission checking logic.
+
+    Args:
+        request: The incoming request.
+        security_scopes: Required scopes from ``Security()``.
+        bearer: Bearer token header (for OpenAPI schema).
+        api_key_header: API key header (for OpenAPI schema).
+        auth: Optional GatewayAuth instance override.
+        method_type: ``"use"`` or ``"manage"`` — enables type-based
+            permission matching (e.g. ``"Auth.use"`` grants any Auth
+            method with ``method_type="use"``).
 
     Returns:
         Identity for the current request.
@@ -298,34 +347,15 @@ async def check_auth_enabled(
     if identity is None:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    # Permission check
-    if security_scopes.scopes and not identity.can(*security_scopes.scopes):
+    # Permission check — method_type enables "Auth.use" / "Auth.manage" matching
+    if security_scopes.scopes and not identity.can(
+        *security_scopes.scopes, method_type=method_type
+    ):
         log_warning(
             f"Permission denied for {request.url.path}. "
             f"Required: {security_scopes.scopes}, "
             f"Effective: {list(identity.effective_perms)}"
         )
-
-        # Audit: access denied (permission check)
-        try:
-            from app.services.gateway.dependencies import get_auth_service
-
-            _auth_svc = get_auth_service()
-            _fire_and_forget(
-                audit_event(
-                    _auth_svc.db_manager,
-                    "access.denied.permission",
-                    principal_id=identity.principal_id,
-                    details={
-                        "path": request.url.path,
-                        "required": security_scopes.scopes,
-                        "effective": list(identity.effective_perms),
-                    },
-                    ip_address=request.client.host if request.client else None,
-                )
-            )
-        except Exception:
-            pass  # Audit must not break the request flow
 
         raise HTTPException(
             status_code=403,
