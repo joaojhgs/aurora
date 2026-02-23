@@ -10,6 +10,8 @@ from httpx import ASGITransport, AsyncClient
 from app.services.db.models import User
 from app.services.gateway.acl.identity import SYSTEM, Identity
 
+pytestmark = pytest.mark.skip(reason="Principal endpoints migrated to Auth service contracts (auto-generated)")
+
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _make_user(

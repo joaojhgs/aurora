@@ -60,10 +60,121 @@ class TestMeshBusPublish:
     """Tests for MeshBus.publish()."""
 
     @pytest.mark.asyncio
-    async def test_events_always_go_local(self, mesh_bus, inner_bus, routing_table):
+    async def test_events_go_local_by_default(self, mesh_bus, inner_bus, routing_table):
+        """Events without mesh=True are delivered locally only."""
         await mesh_bus.publish("TTS.StateChanged", FakePayload(), event=True)
         inner_bus.publish.assert_awaited_once()
         routing_table.resolve.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_events_with_mesh_false_not_forwarded(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Events with explicit mesh=False are NOT forwarded to peers."""
+        cfg = MeshConfig(
+            enabled=True,
+            node_name="test",
+            sharing={"TTS": ServiceSharingConfig(share=True)},
+            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+
+        await bus.publish("TTS.StateChanged", FakePayload(), event=True, mesh=False)
+        inner_bus.publish.assert_awaited_once()
+        peer_bridge.fire_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_events_with_mesh_true_forwarded_when_shared(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Events with mesh=True are forwarded to peers when the module is shared."""
+        cfg = MeshConfig(
+            enabled=True,
+            node_name="test",
+            sharing={"TTS": ServiceSharingConfig(share=True)},
+            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+        )
+        fake_peer = MagicMock()
+        fake_peer.peer_id = "peer-1"
+        routing_table.get_negotiated_peers.return_value = [fake_peer]
+
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+        await bus.publish("TTS.Started", FakePayload(), event=True, mesh=True)
+
+        # Local delivery
+        inner_bus.publish.assert_awaited_once()
+        # Peer forwarding
+        peer_bridge.fire_event.assert_called_once_with(
+            "peer-1", "TTS.Started", FakePayload()
+        )
+
+    @pytest.mark.asyncio
+    async def test_events_with_mesh_true_not_forwarded_when_not_shared(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Events with mesh=True are NOT forwarded when the module share=false."""
+        cfg = MeshConfig(
+            enabled=True,
+            node_name="test",
+            sharing={"TTS": ServiceSharingConfig(share=False)},
+            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+
+        await bus.publish("TTS.Started", FakePayload(), event=True, mesh=True)
+        inner_bus.publish.assert_awaited_once()
+        peer_bridge.fire_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mesh_forwarded_events_not_re_forwarded(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Events from mesh peers (origin=mesh_forwarded) are NOT re-forwarded."""
+        cfg = MeshConfig(
+            enabled=True,
+            node_name="test",
+            sharing={"TTS": ServiceSharingConfig(share=True)},
+            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+
+        await bus.publish(
+            "TTS.Started", FakePayload(), event=True, mesh=True, origin="mesh_forwarded"
+        )
+        inner_bus.publish.assert_awaited_once()
+        peer_bridge.fire_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_events_with_mesh_true_no_sharing_config(
+        self, mesh_bus, inner_bus, peer_bridge
+    ):
+        """Events with mesh=True but no sharing config for module stay local."""
+        # Default mesh_config fixture has no sharing entries
+        await mesh_bus.publish("Unknown.Event", FakePayload(), event=True, mesh=True)
+        inner_bus.publish.assert_awaited_once()
+        peer_bridge.fire_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_events_forwarded_to_multiple_peers(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Events with mesh=True are forwarded to ALL negotiated peers."""
+        cfg = MeshConfig(
+            enabled=True,
+            node_name="test",
+            sharing={"TTS": ServiceSharingConfig(share=True)},
+            routing={},
+        )
+        peer1 = MagicMock()
+        peer1.peer_id = "peer-1"
+        peer2 = MagicMock()
+        peer2.peer_id = "peer-2"
+        routing_table.get_negotiated_peers.return_value = [peer1, peer2]
+
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+        await bus.publish("TTS.Started", FakePayload(), event=True, mesh=True)
+
+        assert peer_bridge.fire_event.call_count == 2
 
     @pytest.mark.asyncio
     async def test_command_local_route(self, mesh_bus, inner_bus, routing_table):
