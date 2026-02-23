@@ -44,6 +44,7 @@ class Envelope(BaseModel):
     deadline_ms: int | None = None
     attempts: int = 0
     max_attempts: int = 3
+    principal_id: str | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -108,11 +109,13 @@ class MessageBus(Protocol):
         message: BaseModel,
         *,
         event: bool = True,
+        mesh: bool = False,
         priority: int = 50,
         origin: str = "internal",
         reliable: bool = True,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        principal_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -120,6 +123,9 @@ class MessageBus(Protocol):
             topic: Topic name (e.g., "TTS.Request", "STT.TranscriptionDetected")
             message: Message payload (must be a BaseModel)
             event: True for broadcast events, False for point-to-point commands
+            mesh: If True and event=True, forward this event to mesh peers
+                  (only effective when MeshBus is active and the module is shared).
+                  Defaults to False — events stay local unless explicitly opted in.
             priority: Message priority (0=highest, 99=lowest)
             origin: Message origin ("internal" | "external" | "system")
             reliable: Whether to guarantee delivery (with retries)
@@ -138,6 +144,7 @@ class MessageBus(Protocol):
         timeout: float = 5.0,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        principal_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
