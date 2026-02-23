@@ -326,9 +326,16 @@ async def synthesize(self, request: TTSRequest) -> TTSResponse:
 - **Responsibilities**:
   - REST API for service control
   - WebSocket/WebRTC for real-time events and streaming
-  - Authentication and authorization
+  - Authentication and authorization (delegated to Auth service)
+  - **WebRTC Auth Enforcement**: DataChannel auth gate blocks non-auth messages from anonymous peers; RPC allowlist permits only pairing/login methods before authentication; uses heartbeat-based smart timeout instead of fire-and-forget timer
+  - **Pairing over DataChannel**: 4 method contracts (`Gateway.PairingStart`, `Gateway.PairingConnect`, `Gateway.PairingExchange`, `Gateway.Login`) exposed as `both` for HTTP + WebRTC access
+  - **Bilateral Mesh Pairing**: On authenticating an initiator with `remote_peer_id`, RTCClient auto-triggers `_reverse_pairing()` — calling PairingStart back on the initiator so both admins independently approve each other
+  - **Room Auto-Generation**: Empty or default room names and passwords are auto-generated on startup and persisted to config
+  - **Encrypted MQTT Presence**: Room presence sealed with `aead_seal(k_sig, payload)` when `encrypt_signaling` is enabled
+  - **OPEN_PEER Identity**: When auth is disabled, WebRTC peers get `OPEN_PEER` identity (full permissions) immediately on connect
   - **P2P Mesh Networking**: Transparent service sharing across Aurora instances
   - **Registry Aggregator**: Dynamically collects contracts from all running services to build the external API schema.
+  - **Peer Identification**: Connected peers identified by `node_name (peer_id[:8])` in logs via `_peer_label()` helper and `_peer_names` dict
 - **Registry Aggregator**:
   - Listens for service announcements on the bus.
   - Validates contracts and permissions.
@@ -338,13 +345,27 @@ async def synthesize(self, request: TTSRequest) -> TTSResponse:
   - **PeerRegistry**: Tracks connected peers, manifests, latency, stale detection
   - **RoutingTable**: Resolves bus topics to local/remote targets based on config
   - **PeerBridge**: Outbound RPC calls to remote peers via WebRTC DataChannels
-  - **MeshBus** (`app/messaging/mesh_bus.py`): Transparent routing wrapper around the inner bus; replaces global bus singleton when mesh is enabled
+  - **MeshBus** (`app/messaging/mesh_bus.py`): Transparent routing wrapper around the inner bus; replaces global bus singleton when mesh is enabled. Routes commands to remote peers and forwards events tagged with `mesh=True` to all negotiated peers (gated by `share: true` config).
   - **LatencyMonitor**: Periodic ping/pong RTT measurement
   - **Negotiation**: Manifest generation (process-mode-aware via RegistryAggregator), parsing, ACK logic
   - **VersionCompat**: Semantic version comparison with configurable policies
   - Enabled/disabled via `config.json` → `gateway.mesh.enabled`
   - See `docs/PEER_PAIRING_FLOW.md` § "P2P Mesh Networking" for full protocol docs
 - **Configuration**: `config.json` → `gateway.*`
+
+#### **Auth Service** (`app/services/auth/`)
+- **Purpose**: Authentication, authorization, and peer trust management
+- **Responsibilities**:
+  - Device pairing flow (start → connect → approve → exchange)
+  - Token issuance and validation (JWT)
+  - **Consolidated Trust Stores**: `users/devices/tokens` tables bidirectionally synced with `mesh_peers` table via outbound FKs (`outbound_token_id`, `outbound_device_id`, `outbound_user_id`)
+  - **Peer Management API**: CRUD for mesh peers — approve, deny, update permissions, list, remove
+  - **Permission Sync**: `approve_mesh_peer()` and `update_mesh_peer_permissions()` propagate changes to auth tables (User.permissions, Token.scopes)
+  - **Typed Permissions**: 195 validated permission strings covering all bus topics (lazy-loaded from `app/shared/auth/permissions.py`)
+  - **Audit Trail**: `_AuditDBProxy.store_audit_event()` routes audit events via the message bus
+  - DB persistence via `mesh_peers` and `mesh_identity` tables in SQLite
+- **Topics**: `Auth.PairingStart`, `Auth.PairingConnect`, `Auth.PairingExchange`, `Auth.Login`, `Auth.PairingRequested`, `Auth.ApproveMeshPeer`, `Auth.DenyMeshPeer`, `Auth.UpdateMeshPeerPermissions`, `Auth.ListMeshPeers`, `Auth.RemoveMeshPeer`
+- **Dependencies**: ConfigService, DBService
 
 ---
 
@@ -375,6 +396,7 @@ await bus.publish(
 - Multiple subscribers supported
 - No retry logic
 - Wildcard topic matching (`"TTS.*"`)
+- Optional mesh forwarding via `mesh=True` parameter
 - **Use for**: Notifications, state changes
 
 **Example**:
@@ -383,6 +405,7 @@ await bus.publish(
     "STT.TranscriptionDetected",
     TranscriptionResult(text="Hello world"),
     event=True,  # Event
+    mesh=True,   # Forward to mesh peers (if module is shared)
     priority=10,
     origin="internal"
 )
@@ -477,6 +500,58 @@ class Envelope:
     ttl_ms: int | None      # Time-to-live in milliseconds
     reply_to: str | None    # Reply topic for queries
 ```
+
+### Event Forwarding via Mesh
+
+When a P2P mesh is active (`MeshBus` wraps the inner bus), events can be forwarded to connected peers. Forwarding is controlled at two levels:
+
+#### 1. Publish-site declaration (`mesh=True`)
+
+Each `bus.publish()` call declares whether the event has cross-instance relevance by passing `mesh=True`. This is a **developer decision** — the person writing the publish call decides if the event matters across the mesh:
+
+```python
+# ✅ Cross-instance event — forwarded to peers
+await self.bus.publish(
+    TTSMethods.STARTED,
+    TTSStarted(request_id=request_id, text=text),
+    event=True,
+    mesh=True,  # This event matters across instances
+    origin="internal",
+)
+
+# ✅ Local-only event — stays on this instance
+await self.bus.publish(
+    AudioTopics.STREAM_MICROPHONE,
+    AudioChunk(data=chunk),
+    event=True,
+    # mesh=False is the default — hardware-bound, high-frequency
+    origin="internal",
+)
+```
+
+#### 2. Operator gate (`share: true` in config)
+
+Even if code passes `mesh=True`, the event won't forward unless the module has `share: true` in `gateway.mesh.sharing`. This lets operators control which modules participate in the mesh without touching code.
+
+#### Events with `mesh=True` by Service
+
+| Service | Mesh Events | Local-only Events |
+|---|---|---|
+| **TTS** | `STARTED`, `STOPPED`, `PAUSED`, `RESUMED`, `ERROR` | — |
+| **Orchestrator** | `RESPONSE` | — |
+| **STTCoordinator** | `SESSION_STARTED`, `USER_SPEECH_CAPTURED`, `SESSION_ENDED` | `Audio.Started`, `Audio.Stopped`, `Audio.Stream.Microphone` |
+| **Config** | `UPDATED` | — |
+| **Tooling** | `TOOLS_INITIALIZED`, `TOOLS_RELOADED` | — |
+
+#### Loop Prevention
+
+Events received from peers arrive with `origin="mesh_forwarded"`. The MeshBus never re-forwards such events, preventing infinite loops.
+
+#### Adding `mesh=True` to New Events
+
+When creating a new service or adding a new event, ask:
+- **Does a remote instance need to know about this?** → `mesh=True`
+- **Is this hardware-bound, high-frequency, or purely local?** → leave default (`mesh=False`)
 
 ---
 
@@ -1351,6 +1426,8 @@ async def my_method(self, param: str) -> str:
 - **Architecture**: `docs/ARCHITECTURE.md`
 - **Messaging**: `docs/MESSAGING_ARCHITECTURE.md`
 - **Peer Pairing & Mesh**: `docs/PEER_PAIRING_FLOW.md`
+- **Mesh Pairing Fix Plan**: `docs/MESH_PAIRING_FIX_PLAN.md` (all 9 fixes ✅ implemented)
+- **Gateway API**: `docs/GATEWAY.md`
 - **Process Mode**: `README.process-mode.md`
 - **Testing**: `docs/TESTING_PROCESS_MODE.md`
 - **UI Integration**: `docs/UI_INTEGRATION.md`
@@ -1369,6 +1446,11 @@ async def my_method(self, param: str) -> str:
 - **MeshBus**: `app/messaging/mesh_bus.py`
 - **Config API**: `app/shared/config/interface.py`
 - **Gateway Mesh**: `app/services/gateway/mesh/` (peer_registry, routing_table, peer_bridge, negotiation, latency, version_compat)
+- **Auth Manager**: `app/services/auth/auth_manager.py` (pairing flows, trust store sync, mesh peer CRUD)
+- **Auth Service**: `app/services/auth/service.py` (bus contract handlers)
+- **RTCClient**: `app/services/gateway/webrtc/rtc_client.py` (WebRTC peer lifecycle, bilateral pairing, auth gate)
+- **Auth Proxy**: `app/services/gateway/auth_proxy.py` (audit routing via bus)
+- **Permissions**: `app/shared/auth/permissions.py` (195 typed permission strings)
 
 ### Development Commands
 
@@ -1432,3 +1514,66 @@ Aurora is a **microservices-based voice assistant** with a **message bus archite
 **Last Updated**: January 2026
 **Version**: 1.0.0
 **Maintainers**: Aurora Team
+
+<!-- gitnexus:start -->
+# GitNexus MCP
+
+This project is indexed by GitNexus as **aurora** (3585 symbols, 11757 relationships, 293 execution flows).
+
+GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
+
+## Always Start Here
+
+For any task involving code understanding, debugging, impact analysis, or refactoring, you must:
+
+1. **Read `gitnexus://repo/{name}/context`** — codebase overview + check index freshness
+2. **Match your task to a skill below** and **read that skill file**
+3. **Follow the skill's workflow and checklist**
+
+> If step 1 warns the index is stale, run `npx gitnexus analyze` in the terminal first.
+
+## Skills
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/refactoring/SKILL.md` |
+
+## Tools Reference
+
+| Tool | What it gives you |
+|------|-------------------|
+| `query` | Process-grouped code intelligence — execution flows related to a concept |
+| `context` | 360-degree symbol view — categorized refs, processes it participates in |
+| `impact` | Symbol blast radius — what breaks at depth 1/2/3 with confidence |
+| `detect_changes` | Git-diff impact — what do your current changes affect |
+| `rename` | Multi-file coordinated rename with confidence-tagged edits |
+| `cypher` | Raw graph queries (read `gitnexus://repo/{name}/schema` first) |
+| `list_repos` | Discover indexed repos |
+
+## Resources Reference
+
+Lightweight reads (~100-500 tokens) for navigation:
+
+| Resource | Content |
+|----------|---------|
+| `gitnexus://repo/{name}/context` | Stats, staleness check |
+| `gitnexus://repo/{name}/clusters` | All functional areas with cohesion scores |
+| `gitnexus://repo/{name}/cluster/{clusterName}` | Area members |
+| `gitnexus://repo/{name}/processes` | All execution flows |
+| `gitnexus://repo/{name}/process/{processName}` | Step-by-step trace |
+| `gitnexus://repo/{name}/schema` | Graph schema for Cypher |
+
+## Graph Schema
+
+**Nodes:** File, Function, Class, Interface, Method, Community, Process
+**Edges (via CodeRelation.type):** CALLS, IMPORTS, EXTENDS, IMPLEMENTS, DEFINES, MEMBER_OF, STEP_IN_PROCESS
+
+```cypher
+MATCH (caller)-[:CodeRelation {type: 'CALLS'}]->(f:Function {name: "myFunc"})
+RETURN caller.name, caller.filePath
+```
+
+<!-- gitnexus:end -->
