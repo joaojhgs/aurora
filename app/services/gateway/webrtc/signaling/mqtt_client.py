@@ -15,11 +15,15 @@ class MQTTSignaling:
         topic_root: str = "aurora",
         username: str | None = None,
         password: str | None = None,
+        encrypt_presence: bool = False,
+        sig_key: bytes | None = None,
     ):
         self._brokers = brokers
         self._topic_root = topic_root
         self._username = username
         self._password = password
+        self._encrypt_presence = encrypt_presence
+        self._sig_key = sig_key
 
         try:
             from paho.mqtt.enums import CallbackAPIVersion
@@ -126,7 +130,7 @@ class MQTTSignaling:
         self._peer_id = peer_id
 
         topics = [
-            (self._topic("presence"), 0),
+            (self._topic("presence/+"), 1),
             (self._topic("offer", to_peer=peer_id), 0),
             (self._topic("answer", to_peer=peer_id), 0),
             (self._topic("candidate", to_peer=peer_id), 0),
@@ -139,8 +143,21 @@ class MQTTSignaling:
         self._subscribed = True
 
         presence_msg = {"type": "presence", "app_id": app_id, "room": room, "peer_id": peer_id}
+
+        if self._encrypt_presence and self._sig_key:
+            from app.services.gateway.utils.crypto import aead_seal
+
+            payload = aead_seal(self._sig_key, presence_msg)
+        else:
+            payload = json.dumps(presence_msg).encode()
+
+        # Use a per-peer subtopic with retain=True so that late joiners
+        # receive presence from peers already in the room.
         self._client.publish(
-            self._topic("presence"), json.dumps(presence_msg).encode(), qos=0, retain=False
+            self._topic(f"presence/{peer_id}"),
+            payload,
+            qos=1,
+            retain=True,
         )
 
     def on_message(self, channel: str, handler: OnMessage) -> None:
@@ -151,7 +168,12 @@ class MQTTSignaling:
         parts = topic.split("/")
         if len(parts) >= 4:
             channel = parts[3]
-            handler = self._handlers.get(channel)
+            # Presence subtopics (presence/{peer_id}) should route to
+            # the "presence" handler via the wildcard subscription.
+            if channel == "presence" and len(parts) >= 5:
+                handler = self._handlers.get("presence")
+            else:
+                handler = self._handlers.get(channel)
             if handler and self._loop:
                 asyncio.run_coroutine_threadsafe(handler(msg.payload), self._loop)
 
@@ -160,7 +182,14 @@ class MQTTSignaling:
 
     async def leave(self) -> None:
         if self._subscribed:
-            channels = ["presence", "offer", "answer", "candidate", "broadcast"]
+            # Clear our retained presence so other peers stop seeing us
+            self._client.publish(
+                self._topic(f"presence/{self._peer_id}"),
+                b"",
+                qos=1,
+                retain=True,
+            )
+            channels = ["presence/+", "offer", "answer", "candidate", "broadcast"]
             for ch in channels:
                 to_peer = self._peer_id if ch in ("offer", "answer", "candidate") else None
                 self._client.unsubscribe(self._topic(ch, to_peer=to_peer))

@@ -9,26 +9,11 @@ from fastapi import Request
 if TYPE_CHECKING:
     from app.services.gateway.acl.identity import Identity
     from app.services.gateway.auth import GatewayAuth
-    from app.services.gateway.auth_service import AuthService
     from app.services.gateway.webrtc.rtc_client import RTCClient
 
 # Singleton instances
-_auth_service: AuthService | None = None
 _gateway_auth: GatewayAuth | None = None
 _rtc_client: RTCClient | None = None
-
-
-def get_auth_service() -> AuthService:
-    """Get the AuthService instance."""
-    if _auth_service is None:
-        raise RuntimeError("AuthService not initialized")
-    return _auth_service
-
-
-def set_auth_service(auth_service: AuthService) -> None:
-    """Set the AuthService instance."""
-    global _auth_service
-    _auth_service = auth_service
 
 
 def get_gateway_auth() -> GatewayAuth:
