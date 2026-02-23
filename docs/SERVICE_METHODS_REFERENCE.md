@@ -17,6 +17,7 @@ This document provides a comprehensive reference of all service methods in Auror
 - [DB Service](#db-service)
 - [Tooling Service](#tooling-service)
 - [Config Service](#config-service)
+- [Gateway Service](#gateway-service)
 - [Supervisor Service](#supervisor-service)
 
 ---
@@ -420,6 +421,96 @@ Configuration management.
 
 ---
 
+## Gateway Service
+
+WebRTC peer authentication and pairing management.
+
+| Method ID | Summary | Input | Output | Exposure |
+|-----------|---------|-------|--------|----------|
+| `Gateway.PairingStart` | Start device pairing | `PairingStartRequest` | `PairingStartResponse` | **both** |
+| `Gateway.PairingConnect` | Poll pairing status | `PairingConnectRequest` | `PairingConnectResponse` | **both** |
+| `Gateway.PairingExchange` | Exchange code for token | `PairingExchangeRequest` | `PairingExchangeResponse` | **both** |
+| `Gateway.Login` | Authenticate with credentials | `LoginRequest` | `LoginResponse` | **both** |
+
+### Method Details
+
+#### `Gateway.PairingStart` (Both)
+**Purpose**: Initiate a pairing flow for a new device. Generates a 6-digit code.
+
+```python
+# Input
+PairingStartRequest(
+    device_name: str,      # Name of the device to pair
+    client_ip: str = ""    # Client IP for rate limiting
+)
+
+# Output
+PairingStartResponse(
+    code: str,                  # 6-digit pairing code
+    expires_in_seconds: int     # Code TTL (from webrtc_pairing_timeout_seconds)
+)
+```
+
+**Why Both**: Accessible via HTTP API and also via WebRTC DataChannel RPC from anonymous peers.
+
+#### `Gateway.PairingConnect` (Both)
+**Purpose**: Poll the status of a pairing request.
+
+```python
+# Input
+PairingConnectRequest(
+    code: str    # 6-digit pairing code
+)
+
+# Output
+PairingConnectResponse(
+    request_id: str,     # Pairing request UUID
+    device_name: str,    # Device name
+    status: str          # "pending" | "approved" | "expired"
+)
+```
+
+#### `Gateway.PairingExchange` (Both)
+**Purpose**: Exchange an approved pairing code for a permanent bearer token.
+
+```python
+# Input
+PairingExchangeRequest(
+    code: str    # 6-digit pairing code (must be approved)
+)
+
+# Output
+PairingExchangeResponse(
+    token: str,           # Bearer token
+    device_id: str,       # Created device UUID
+    user_id: str,         # Created principal UUID
+    permissions: list     # Granted permissions
+)
+```
+
+#### `Gateway.Login` (Both)
+**Purpose**: Authenticate with username and password credentials.
+
+```python
+# Input
+LoginRequest(
+    username: str,
+    password: str
+)
+
+# Output
+LoginResponse(
+    token: str,           # Bearer token
+    user_id: str          # Authenticated user UUID
+)
+```
+
+### Anonymous Access Note
+
+These four methods are the **only** RPC calls that anonymous (unauthenticated) WebRTC peers are allowed to make. The RTCClient's auth gate and RPCHandler's anonymous allowlist ensure all other operations require authentication first.
+
+---
+
 ## Supervisor Service
 
 Service lifecycle management.
@@ -461,6 +552,10 @@ These methods are exposed via HTTP POST at `/api/{service}/{method}`:
 | Config | Validate | `POST /api/config/validate` |
 | Config | GetPlugin | `POST /api/config/getplugin` |
 | Config | SetPlugin | `POST /api/config/setplugin` |
+| Gateway | PairingStart | `POST /api/gateway/pairingstart` |
+| Gateway | PairingConnect | `POST /api/gateway/pairingconnect` |
+| Gateway | PairingExchange | `POST /api/gateway/pairingexchange` |
+| Gateway | Login | `POST /api/gateway/login` |
 | Supervisor | GetStatus | `POST /api/supervisor/getstatus` |
 
 ### Internal-Only Methods
