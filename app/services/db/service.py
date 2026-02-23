@@ -17,14 +17,41 @@ from app.services.db.manager import DatabaseManager
 from app.services.db.models import CronJob, JobStatus, Message, ScheduleType
 from app.services.db.rag_service import RAGService
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
+from app.shared.models.db import Device, MeshCredential, Token, User
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.db import (
+    DBAuditLogRequest,
+    DBAuditLogResponse,
+    DBBoolResponse,
+    DBCountAuditEventsRequest,
+    DBCountResponse,
+    DBCountUsersRequest,
+    DBCreateDeviceRequest,
+    DBCreateTokenRequest,
+    DBCreateUserRequest,
     DBDeleteCronJobRequest,
+    DBDeleteDeviceRequest,
+    DBDeleteMeshCredentialRequest,
+    DBDeleteUserRequest,
+    DBDeviceListResponse,
+    DBDeviceResponse,
+    DBExecuteSQLRequest,
+    DBExecuteSQLResponse,
     DBGetCronJobsRequest,
     DBGetCronJobsResponse,
+    DBGetDeviceByIdRequest,
+    DBGetMeshCredentialByRoomRequest,
     DBGetMessagesForDateRequest,
     DBGetMessagesRequest,
     DBGetMessagesResponse,
+    DBGetTokenByHashRequest,
+    DBGetTokenByIdRequest,
+    DBGetUserByIdRequest,
+    DBGetUserByUsernameRequest,
+    DBListDevicesRequest,
+    DBListTokensRequest,
+    DBListUsersRequest,
+    DBMeshCredentialResponse,
     DBMethods,
     DBModule,
     DBRAGDeleteRequest,
@@ -34,9 +61,17 @@ from app.shared.contracts.models.db import (
     DBRAGListResponse,
     DBRAGSearchRequest,
     DBRAGStoreRequest,
+    DBRevokeTokenRequest,
+    DBSaveMeshCredentialRequest,
     DBSaveMessageRequest,
     DBSaveMessageResponse,
     DBStoreCronJobRequest,
+    DBTokenListResponse,
+    DBTokenResponse,
+    DBUpdateTokenScopesRequest,
+    DBUpdateUserRequest,
+    DBUserListResponse,
+    DBUserResponse,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
@@ -112,6 +147,7 @@ class DBService(BaseService):
         output_model=DBSaveMessageResponse,
         summary="Store a chat message",
         exposure="internal",
+        method_type="use",
     )
     async def store_message(self, cmd: DBSaveMessageRequest) -> DBSaveMessageResponse:
         """Handle store message command."""
@@ -168,6 +204,7 @@ class DBService(BaseService):
         output_model=DBGetMessagesResponse,
         summary="Get recent chat messages",
         exposure="both",
+        method_type="use",
     )
     async def get_messages(self, query: DBGetMessagesRequest) -> DBGetMessagesResponse:
         """Handle get recent messages query."""
@@ -202,6 +239,7 @@ class DBService(BaseService):
         output_model=DBGetMessagesResponse,
         summary="Get messages for a specific date",
         exposure="both",
+        method_type="use",
     )
     async def get_messages_for_date(
         self, query: DBGetMessagesForDateRequest
@@ -249,6 +287,7 @@ class DBService(BaseService):
         output_model=EmptyOutput,
         summary="Store a cron job",
         exposure="internal",
+        method_type="manage",
     )
     async def store_cron_job(self, cmd: DBStoreCronJobRequest) -> EmptyOutput:
         """Handle store cron job command."""
@@ -290,6 +329,7 @@ class DBService(BaseService):
         output_model=DBGetCronJobsResponse,
         summary="Get cron jobs",
         exposure="internal",
+        method_type="use",
     )
     async def get_cron_jobs(self, query: DBGetCronJobsRequest) -> DBGetCronJobsResponse:
         """Handle get cron jobs query."""
@@ -318,6 +358,7 @@ class DBService(BaseService):
         output_model=EmptyOutput,
         summary="Delete a cron job",
         exposure="internal",
+        method_type="manage",
     )
     async def delete_cron_job(self, cmd: DBDeleteCronJobRequest) -> EmptyOutput:
         """Handle delete cron job command."""
@@ -344,6 +385,7 @@ class DBService(BaseService):
         output_model=EmptyOutput,
         summary="Store item in RAG",
         exposure="internal",
+        method_type="use",
     )
     async def rag_store(self, cmd: DBRAGStoreRequest) -> EmptyOutput:
         """Handle RAG store command."""
@@ -374,6 +416,7 @@ class DBService(BaseService):
         output_model=EmptyOutput,
         summary="Delete item from RAG",
         exposure="internal",
+        method_type="manage",
     )
     async def rag_delete(self, cmd: DBRAGDeleteRequest) -> EmptyOutput:
         """Handle RAG delete command."""
@@ -404,6 +447,7 @@ class DBService(BaseService):
         output_model=DBRAGListResponse,
         summary="Search RAG store",
         exposure="both",
+        method_type="use",
     )
     async def rag_search(self, query: DBRAGSearchRequest) -> DBRAGListResponse:
         """Handle RAG search query."""
@@ -458,6 +502,7 @@ class DBService(BaseService):
         output_model=DBRAGItemResponse,
         summary="Get RAG item",
         exposure="internal",
+        method_type="use",
     )
     async def rag_get(self, query: DBRAGGetRequest) -> DBRAGItemResponse | None:
         """Handle RAG get query."""
@@ -497,6 +542,7 @@ class DBService(BaseService):
         output_model=DBRAGListResponse,
         summary="List RAG items",
         exposure="internal",
+        method_type="use",
     )
     async def rag_list(self, query: DBRAGListRequest) -> DBRAGListResponse:
         """Handle RAG list query."""
@@ -536,3 +582,512 @@ class DBService(BaseService):
         except Exception as e:
             log_error(f"Error listing RAG items: {e}", exc_info=True)
             return DBRAGListResponse(items=[])
+
+    # ── User CRUD ────────────────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.CREATE_USER,
+        input_model=DBCreateUserRequest,
+        output_model=DBBoolResponse,
+        summary="Create a user",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def create_user(self, cmd: DBCreateUserRequest) -> DBBoolResponse:
+        """Create a new user."""
+        try:
+            from datetime import datetime
+
+            user = User(
+                id=cmd.id,
+                username=cmd.username,
+                password_hash=cmd.password_hash,
+                role=cmd.role,
+                permissions=cmd.permissions or [],
+                is_admin=cmd.is_admin,
+                created_at=datetime.fromisoformat(cmd.created_at)
+                if cmd.created_at
+                else None,
+            )
+            success = await self.db_manager.create_user(user)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error creating user: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.GET_USER_BY_USERNAME,
+        input_model=DBGetUserByUsernameRequest,
+        output_model=DBUserResponse,
+        summary="Get a user by username",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_user_by_username(self, query: DBGetUserByUsernameRequest) -> DBUserResponse:
+        """Get a user by username."""
+        try:
+            user = await self.db_manager.get_user_by_username(query.username)
+            return DBUserResponse(user=user.to_dict() if user else None)
+        except Exception as e:
+            log_error(f"Error getting user by username: {e}", exc_info=True)
+            return DBUserResponse(user=None)
+
+    @method_contract(
+        method_id=DBMethods.GET_USER_BY_ID,
+        input_model=DBGetUserByIdRequest,
+        output_model=DBUserResponse,
+        summary="Get a user by ID",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_user_by_id(self, query: DBGetUserByIdRequest) -> DBUserResponse:
+        """Get a user by ID."""
+        try:
+            user = await self.db_manager.get_user_by_id(query.user_id)
+            return DBUserResponse(user=user.to_dict() if user else None)
+        except Exception as e:
+            log_error(f"Error getting user by ID: {e}", exc_info=True)
+            return DBUserResponse(user=None)
+
+    @method_contract(
+        method_id=DBMethods.COUNT_USERS,
+        input_model=DBCountUsersRequest,
+        output_model=DBCountResponse,
+        summary="Count total users",
+        exposure="internal",
+        method_type="use",
+    )
+    async def count_users(self, query: DBCountUsersRequest) -> DBCountResponse:
+        """Count total users."""
+        try:
+            count = await self.db_manager.count_users()
+            return DBCountResponse(count=count)
+        except Exception as e:
+            log_error(f"Error counting users: {e}", exc_info=True)
+            return DBCountResponse(count=0)
+
+    @method_contract(
+        method_id=DBMethods.LIST_USERS,
+        input_model=DBListUsersRequest,
+        output_model=DBUserListResponse,
+        summary="List all users",
+        exposure="internal",
+        method_type="use",
+    )
+    async def list_users(self, query: DBListUsersRequest) -> DBUserListResponse:
+        """List all users."""
+        try:
+            users = await self.db_manager.list_users()
+            return DBUserListResponse(users=[u.to_dict() for u in users])
+        except Exception as e:
+            log_error(f"Error listing users: {e}", exc_info=True)
+            return DBUserListResponse(users=[])
+
+    @method_contract(
+        method_id=DBMethods.UPDATE_USER,
+        input_model=DBUpdateUserRequest,
+        output_model=DBBoolResponse,
+        summary="Update a user's fields",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def update_user(self, cmd: DBUpdateUserRequest) -> DBBoolResponse:
+        """Update a user's fields."""
+        try:
+            success = await self.db_manager.update_user(cmd.user_id, **cmd.fields)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error updating user: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.DELETE_USER,
+        input_model=DBDeleteUserRequest,
+        output_model=DBBoolResponse,
+        summary="Delete a user",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def delete_user(self, cmd: DBDeleteUserRequest) -> DBBoolResponse:
+        """Delete a user."""
+        try:
+            success = await self.db_manager.delete_user(cmd.user_id)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error deleting user: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    # ── Device CRUD ──────────────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.CREATE_DEVICE,
+        input_model=DBCreateDeviceRequest,
+        output_model=DBBoolResponse,
+        summary="Create a device",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def create_device(self, cmd: DBCreateDeviceRequest) -> DBBoolResponse:
+        """Create a new device."""
+        try:
+            device = Device(
+                id=cmd.id,
+                user_id=cmd.user_id,
+                name=cmd.name,
+                public_key=cmd.public_key,
+                is_trusted=cmd.is_trusted,
+            )
+            success = await self.db_manager.create_device(device)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error creating device: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.GET_DEVICE_BY_ID,
+        input_model=DBGetDeviceByIdRequest,
+        output_model=DBDeviceResponse,
+        summary="Get a device by ID",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_device_by_id(self, query: DBGetDeviceByIdRequest) -> DBDeviceResponse:
+        """Get a device by ID."""
+        try:
+            device = await self.db_manager.get_device_by_id(query.device_id)
+            return DBDeviceResponse(device=device.to_dict() if device else None)
+        except Exception as e:
+            log_error(f"Error getting device by ID: {e}", exc_info=True)
+            return DBDeviceResponse(device=None)
+
+    @method_contract(
+        method_id=DBMethods.LIST_DEVICES,
+        input_model=DBListDevicesRequest,
+        output_model=DBDeviceListResponse,
+        summary="List devices, optionally filtered by user",
+        exposure="internal",
+        method_type="use",
+    )
+    async def list_devices(self, query: DBListDevicesRequest) -> DBDeviceListResponse:
+        """List devices, optionally filtered by user."""
+        try:
+            if query.user_id:
+                devices = await self.db_manager.get_devices_by_user(query.user_id)
+            else:
+                devices = await self.db_manager.list_devices()
+            return DBDeviceListResponse(devices=[d.to_dict() for d in devices])
+        except Exception as e:
+            log_error(f"Error listing devices: {e}", exc_info=True)
+            return DBDeviceListResponse(devices=[])
+
+    @method_contract(
+        method_id=DBMethods.DELETE_DEVICE,
+        input_model=DBDeleteDeviceRequest,
+        output_model=DBBoolResponse,
+        summary="Delete a device",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def delete_device(self, cmd: DBDeleteDeviceRequest) -> DBBoolResponse:
+        """Delete a device."""
+        try:
+            success = await self.db_manager.delete_device(cmd.device_id)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error deleting device: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    # ── Token CRUD ───────────────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.CREATE_TOKEN,
+        input_model=DBCreateTokenRequest,
+        output_model=DBBoolResponse,
+        summary="Create a token",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def create_token(self, cmd: DBCreateTokenRequest) -> DBBoolResponse:
+        """Create a new token."""
+        try:
+            from datetime import datetime
+
+            token = Token(
+                id=cmd.id,
+                token_hash=cmd.token_hash,
+                prefix=cmd.prefix,
+                device_id=cmd.device_id,
+                user_id=cmd.user_id,
+                scopes=cmd.scopes or [],
+                expires_at=datetime.fromisoformat(cmd.expires_at) if cmd.expires_at else None,
+            )
+            success = await self.db_manager.create_token(token)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error creating token: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOKEN_BY_HASH,
+        input_model=DBGetTokenByHashRequest,
+        output_model=DBTokenResponse,
+        summary="Get a token by hash",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_token_by_hash(self, query: DBGetTokenByHashRequest) -> DBTokenResponse:
+        """Get a token by hash."""
+        try:
+            token = await self.db_manager.get_token_by_hash(query.token_hash)
+            return DBTokenResponse(token=token.to_dict() if token else None)
+        except Exception as e:
+            log_error(f"Error getting token by hash: {e}", exc_info=True)
+            return DBTokenResponse(token=None)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOKEN_BY_ID,
+        input_model=DBGetTokenByIdRequest,
+        output_model=DBTokenResponse,
+        summary="Get a token by ID",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_token_by_id(self, query: DBGetTokenByIdRequest) -> DBTokenResponse:
+        """Get a token by ID."""
+        try:
+            token = await self.db_manager.get_token_by_id(query.token_id)
+            return DBTokenResponse(token=token.to_dict() if token else None)
+        except Exception as e:
+            log_error(f"Error getting token by ID: {e}", exc_info=True)
+            return DBTokenResponse(token=None)
+
+    @method_contract(
+        method_id=DBMethods.LIST_TOKENS,
+        input_model=DBListTokensRequest,
+        output_model=DBTokenListResponse,
+        summary="List tokens, optionally filtered",
+        exposure="internal",
+        method_type="use",
+    )
+    async def list_tokens(self, query: DBListTokensRequest) -> DBTokenListResponse:
+        """List tokens, optionally filtered by user and/or device."""
+        try:
+            tokens = await self.db_manager.list_tokens(
+                user_id=query.user_id, device_id=query.device_id
+            )
+            return DBTokenListResponse(tokens=[t.to_dict() for t in tokens])
+        except Exception as e:
+            log_error(f"Error listing tokens: {e}", exc_info=True)
+            return DBTokenListResponse(tokens=[])
+
+    @method_contract(
+        method_id=DBMethods.UPDATE_TOKEN_SCOPES,
+        input_model=DBUpdateTokenScopesRequest,
+        output_model=DBBoolResponse,
+        summary="Update token scopes",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def update_token_scopes(self, cmd: DBUpdateTokenScopesRequest) -> DBBoolResponse:
+        """Update the scopes of a token."""
+        try:
+            success = await self.db_manager.update_token_scopes(cmd.token_id, cmd.scopes)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error updating token scopes: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.REVOKE_TOKEN,
+        input_model=DBRevokeTokenRequest,
+        output_model=DBBoolResponse,
+        summary="Revoke a token",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def revoke_token(self, cmd: DBRevokeTokenRequest) -> DBBoolResponse:
+        """Revoke (delete) a token."""
+        try:
+            success = await self.db_manager.revoke_token(cmd.token_id)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error revoking token: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    # ── Audit Log ────────────────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.GET_AUDIT_LOG,
+        input_model=DBAuditLogRequest,
+        output_model=DBAuditLogResponse,
+        summary="Query the audit log",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_audit_log(self, query: DBAuditLogRequest) -> DBAuditLogResponse:
+        """Query the audit log with optional filters."""
+        try:
+            events = await self.db_manager.get_audit_log(
+                limit=query.limit,
+                offset=query.offset,
+                principal_id=query.principal_id,
+                event=query.event,
+            )
+            # Count total matching events for pagination
+            total = await self._count_audit_events(
+                principal_id=query.principal_id, event=query.event
+            )
+            return DBAuditLogResponse(events=events, total=total)
+        except Exception as e:
+            log_error(f"Error getting audit log: {e}", exc_info=True)
+            return DBAuditLogResponse(events=[], total=0)
+
+    @method_contract(
+        method_id=DBMethods.COUNT_AUDIT_EVENTS,
+        input_model=DBCountAuditEventsRequest,
+        output_model=DBCountResponse,
+        summary="Count audit events matching filters",
+        exposure="internal",
+        method_type="use",
+    )
+    async def count_audit_events(self, query: DBCountAuditEventsRequest) -> DBCountResponse:
+        """Count audit events matching filters."""
+        try:
+            count = await self._count_audit_events(
+                principal_id=query.principal_id, event=query.event
+            )
+            return DBCountResponse(count=count)
+        except Exception as e:
+            log_error(f"Error counting audit events: {e}", exc_info=True)
+            return DBCountResponse(count=0)
+
+    async def _count_audit_events(
+        self,
+        principal_id: str | None = None,
+        event: str | None = None,
+    ) -> int:
+        """Internal helper to count audit events matching filters."""
+        import aiosqlite
+
+        try:
+            async with aiosqlite.connect(self.db_manager.db_path) as db:
+                query_str = "SELECT COUNT(*) FROM audit_log WHERE 1=1"
+                params: list[object] = []
+                if event:
+                    query_str += " AND event = ?"
+                    params.append(event)
+                if principal_id:
+                    query_str += " AND principal_id = ?"
+                    params.append(principal_id)
+                cursor = await db.execute(query_str, params)
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            log_error(f"Error counting audit events: {e}")
+            return 0
+
+    # ── Mesh Credentials ─────────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.SAVE_MESH_CREDENTIAL,
+        input_model=DBSaveMeshCredentialRequest,
+        output_model=DBBoolResponse,
+        summary="Save a mesh credential",
+        exposure="internal",
+        method_type="use",
+    )
+    async def save_mesh_credential(self, cmd: DBSaveMeshCredentialRequest) -> DBBoolResponse:
+        """Save a mesh credential."""
+        try:
+            credential = MeshCredential(
+                id=cmd.id,
+                room_name=cmd.room_name,
+                token=cmd.token,
+                remote_device_id=cmd.remote_device_id,
+                remote_user_id=cmd.remote_user_id,
+            )
+            success = await self.db_manager.save_mesh_credential(credential)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error saving mesh credential: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.GET_MESH_CREDENTIAL_BY_ROOM,
+        input_model=DBGetMeshCredentialByRoomRequest,
+        output_model=DBMeshCredentialResponse,
+        summary="Get a mesh credential by room name",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_mesh_credential_by_room(
+        self, query: DBGetMeshCredentialByRoomRequest
+    ) -> DBMeshCredentialResponse:
+        """Get a mesh credential by room name."""
+        try:
+            credential = await self.db_manager.get_mesh_credential_by_room(query.room_name)
+            return DBMeshCredentialResponse(
+                credential=credential.to_dict() if credential else None
+            )
+        except Exception as e:
+            log_error(f"Error getting mesh credential: {e}", exc_info=True)
+            return DBMeshCredentialResponse(credential=None)
+
+    @method_contract(
+        method_id=DBMethods.DELETE_MESH_CREDENTIAL,
+        input_model=DBDeleteMeshCredentialRequest,
+        output_model=DBBoolResponse,
+        summary="Delete a mesh credential by room name",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def delete_mesh_credential(self, cmd: DBDeleteMeshCredentialRequest) -> DBBoolResponse:
+        """Delete a mesh credential by room name."""
+        try:
+            success = await self.db_manager.delete_mesh_credential(cmd.room_name)
+            return DBBoolResponse(success=success)
+        except Exception as e:
+            log_error(f"Error deleting mesh credential: {e}", exc_info=True)
+            return DBBoolResponse(success=False)
+
+    # ── Generic SQL Execution ────────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.EXECUTE_SQL,
+        input_model=DBExecuteSQLRequest,
+        output_model=DBExecuteSQLResponse,
+        summary="Execute raw SQL (internal use only)",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def execute_sql(self, cmd: DBExecuteSQLRequest) -> DBExecuteSQLResponse:
+        """Execute arbitrary SQL for internal services (e.g. auth_manager).
+
+        Supports both read (SELECT) and write (INSERT/UPDATE/DELETE) queries.
+        Returns rows for SELECTs and rowcount for writes.
+        """
+        try:
+            import aiosqlite
+
+            params = tuple(cmd.params) if cmd.params else ()
+            async with aiosqlite.connect(self.db_manager.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(cmd.sql, params)
+
+                # Detect if this is a SELECT (returns rows)
+                sql_stripped = cmd.sql.strip().upper()
+                if sql_stripped.startswith("SELECT"):
+                    rows = await cursor.fetchall()
+                    return DBExecuteSQLResponse(
+                        rows=[dict(row) for row in rows],
+                        rowcount=len(rows),
+                    )
+                else:
+                    await db.commit()
+                    return DBExecuteSQLResponse(
+                        rows=[],
+                        rowcount=cursor.rowcount,
+                    )
+        except Exception as e:
+            log_error(f"Error executing SQL: {e}", exc_info=True)
+            return DBExecuteSQLResponse(rows=[], rowcount=0)
