@@ -187,6 +187,7 @@ class BullMQBus:
                     max_attempts=job.opts.get("attempts", 3),
                     reply_to=job_data.get("reply_to"),
                     correlation_id=job_data.get("correlation_id"),
+                    principal_id=job_data.get("principal_id"),
                 )
 
                 # Find matching handlers (direct + wildcard)
@@ -284,12 +285,14 @@ class BullMQBus:
         message: BaseModel,
         *,
         event: bool = True,
+        mesh: bool = False,
         priority: int = 50,
         origin: str = "internal",
         reliable: bool = True,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         reply_to: str | None = None,
+        principal_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -297,6 +300,7 @@ class BullMQBus:
             topic: Topic name (queue name in BullMQ)
             message: Message payload
             event: True for broadcast, False for point-to-point
+            mesh: Accepted for API compatibility with MeshBus (ignored by BullMQBus)
             priority: Job priority (0=highest, 99=lowest)
             origin: Message origin
             reliable: Whether to guarantee delivery (with retries)
@@ -350,6 +354,7 @@ class BullMQBus:
             else message,
             "origin": origin,
             "reply_to": reply_to,
+            "principal_id": principal_id,
         }
 
         # Job options
@@ -386,6 +391,7 @@ class BullMQBus:
         timeout: float = 5.0,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        principal_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
@@ -447,6 +453,7 @@ class BullMQBus:
             "origin": origin,
             "reply_to": reply_topic,
             "correlation_id": correlation_id,
+            "principal_id": principal_id,
         }
 
         # Determine target queue
