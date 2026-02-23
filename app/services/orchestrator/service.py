@@ -120,6 +120,7 @@ class OrchestratorService(BaseService):
         input_model=OrchestratorProcessRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def process_user_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
         """Handle UI user input command."""
@@ -155,6 +156,7 @@ class OrchestratorService(BaseService):
         input_model=OrchestratorProcessRequest,
         output_model=OrchestratorResponse,
         exposure="external",
+        method_type="use",
     )
     async def process_external_input(
         self, cmd: OrchestratorProcessRequest
@@ -188,6 +190,7 @@ class OrchestratorService(BaseService):
         input_model=OrchestratorToolResultRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="use",
     )
     async def process_tool_result(
         self, cmd: OrchestratorToolResultRequest
@@ -250,7 +253,9 @@ class OrchestratorService(BaseService):
                         session_id=session_id,
                         metadata={"source": source},
                     ),
-                    priority=get_interactive_priority(),  # High priority for interactive response
+                    event=True,  # Broadcast to all subscribers (UI, TTS, etc.)
+                    mesh=True,
+                    priority=get_interactive_priority(),
                     origin="internal",
                 )
 

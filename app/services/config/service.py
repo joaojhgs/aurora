@@ -90,7 +90,7 @@ class ConfigService(BaseService):
     async def _publish_config_change(self, event: ConfigChangedEvent) -> None:
         """Publish config change event to bus."""
         try:
-            await self.bus.publish(ConfigMethods.UPDATED, event, event=True)
+            await self.bus.publish(ConfigMethods.UPDATED, event, event=True, mesh=True)
             log_debug(f"Published config change event: {event.key_path}")
         except Exception as e:
             log_error(f"Failed to publish config change event: {e}")
@@ -101,6 +101,7 @@ class ConfigService(BaseService):
         input_model=GetConfigQuery,
         output_model=GetConfigResponse,
         exposure="both",
+        method_type="use",
     )
     async def _handle_get_config(self, query: GetConfigQuery) -> GetConfigResponse:
         """Handle GetConfig query.
@@ -135,6 +136,7 @@ class ConfigService(BaseService):
         input_model=UpdateConfigCommand,
         output_model=UpdateConfigResponse,
         exposure="both",
+        method_type="manage",
     )
     async def _handle_update_config(
         self, cmd: UpdateConfigCommand
@@ -154,6 +156,7 @@ class ConfigService(BaseService):
         input_model=ValidateConfigQuery,
         output_model=ValidateConfigResponse,
         exposure="both",
+        method_type="use",
     )
     async def _handle_validate_config(
         self, query: ValidateConfigQuery
@@ -169,6 +172,7 @@ class ConfigService(BaseService):
         input_model=GetPluginStatusQuery,
         output_model=GetPluginStatusResponse,
         exposure="both",
+        method_type="use",
     )
     async def _handle_get_plugin_status(
         self, query: GetPluginStatusQuery
@@ -184,6 +188,7 @@ class ConfigService(BaseService):
         input_model=UpdatePluginStatusCommand,
         output_model=UpdateConfigResponse,
         exposure="both",
+        method_type="manage",
     )
     async def _handle_update_plugin_status(
         self, cmd: UpdatePluginStatusCommand
@@ -203,6 +208,7 @@ class ConfigService(BaseService):
         input_model=ReloadServiceCommand,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
     async def _handle_reload_service(self, cmd: ReloadServiceCommand) -> EmptyOutput:
         """Handle ReloadService command."""

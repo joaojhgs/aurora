@@ -94,6 +94,7 @@ class SchedulerService(BaseService):
         input_model=SchedulerScheduleJobRequest,
         output_model=EmptyOutput,
         exposure="both",
+        method_type="manage",
     )
     async def schedule_job(self, cmd: SchedulerScheduleJobRequest) -> EmptyOutput:
         """Handle schedule job command."""
@@ -144,6 +145,7 @@ class SchedulerService(BaseService):
         input_model=SchedulerCancelJobRequest,
         output_model=EmptyOutput,
         exposure="both",
+        method_type="manage",
     )
     async def cancel_job(self, cmd: SchedulerCancelJobRequest) -> EmptyOutput:
         """Handle cancel job command."""
@@ -184,6 +186,7 @@ class SchedulerService(BaseService):
         input_model=SchedulerPauseJobRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
     async def pause_job(self, cmd: SchedulerPauseJobRequest) -> EmptyOutput:
         """Handle pause job command."""
@@ -211,6 +214,7 @@ class SchedulerService(BaseService):
         input_model=SchedulerResumeJobRequest,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
     async def resume_job(self, cmd: SchedulerResumeJobRequest) -> EmptyOutput:
         """Handle resume job command."""
@@ -262,6 +266,7 @@ class SchedulerService(BaseService):
         input_model=SchedulerListJobsRequest,
         output_model=SchedulerListJobsResponse,
         exposure="both",
+        method_type="use",
     )
     async def list_jobs(self, query: SchedulerListJobsRequest) -> SchedulerListJobsResponse:
         """List all scheduled jobs.

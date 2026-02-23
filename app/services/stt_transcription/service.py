@@ -538,7 +538,10 @@ class TranscriptionService(BaseService):
 
         # Emit to general result topic
         asyncio.run_coroutine_threadsafe(
-            self.bus.publish(TranscriptionMethods.RESULT, result), self._loop
+            self.bus.publish(
+                TranscriptionMethods.RESULT, result, event=True, origin="internal",
+            ),
+            self._loop,
         )
 
     def _emit_error(self, error_message: str, error_type: str) -> None:
@@ -560,7 +563,10 @@ class TranscriptionService(BaseService):
         )
 
         asyncio.run_coroutine_threadsafe(
-            self.bus.publish(TranscriptionMethods.ERROR, error), self._loop
+            self.bus.publish(
+                TranscriptionMethods.ERROR, error, event=True, origin="internal",
+            ),
+            self._loop,
         )
 
     def _reset_speech_state(self) -> None:
@@ -622,6 +628,7 @@ class TranscriptionService(BaseService):
         input_model=STTAudioChunk,
         output_model=EmptyOutput,
         exposure="both",
+        method_type="use",
     )
     async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
@@ -671,15 +678,15 @@ class TranscriptionService(BaseService):
         input_model=STTControl,
         output_model=EmptyOutput,
         exposure="internal",
+        method_type="manage",
     )
-    async def _on_control(self, envelope: Envelope) -> None:
+    async def _on_control(self, data: STTControl) -> None:
         """Handle control commands.
 
         Args:
-            envelope: Message envelope containing TranscriptionControl
+            data: Validated STTControl payload
         """
-        control: TranscriptionControl = envelope.payload
-        action = control.action
+        action = data.action
 
         log_info(f"Transcription control: {action}")
 
@@ -695,15 +702,15 @@ class TranscriptionService(BaseService):
             self._silence_chunks = 0
             log_info("Cleared audio buffers on resume")
         elif action == "set_language":
-            if control.language:
-                self._language = control.language
+            if data.language:
+                self._language = data.language
                 log_info(f"Language set to: {self._language}")
-        elif action == "enable_realtime" and control.enabled is not None:
-            self._realtime_enabled = control.enabled
-            log_info(f"Realtime transcription: {'enabled' if control.enabled else 'disabled'}")
-        elif action == "enable_accurate" and control.enabled is not None:
-            self._accurate_enabled = control.enabled
-            log_info(f"Accurate transcription: {'enabled' if control.enabled else 'disabled'}")
+        elif action == "enable_realtime" and data.enabled is not None:
+            self._realtime_enabled = data.enabled
+            log_info(f"Realtime transcription: {'enabled' if data.enabled else 'disabled'}")
+        elif action == "enable_accurate" and data.enabled is not None:
+            self._accurate_enabled = data.enabled
+            log_info(f"Accurate transcription: {'enabled' if data.enabled else 'disabled'}")
 
     def _decode_audio_to_numpy(
         self,
@@ -804,6 +811,7 @@ class TranscriptionService(BaseService):
         input_model=TranscribeAudioRequest,
         output_model=TranscribeAudioResponse,
         exposure="both",
+        method_type="use",
     )
     async def transcribe_audio(self, request: TranscribeAudioRequest) -> TranscribeAudioResponse:
         """Transcribe complete audio and return result immediately.
