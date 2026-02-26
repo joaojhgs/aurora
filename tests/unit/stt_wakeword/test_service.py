@@ -66,7 +66,7 @@ def mock_backend():
 def service(mock_bus, mock_config):
     """Create WakeWordService instance with mocked dependencies."""
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
-        return WakeWordService()
+        yield WakeWordService()
 
 
 # ============================================================================
@@ -93,11 +93,13 @@ def test_service_initialization(service, mock_bus):
 async def test_load_config_with_string_model_path(mock_bus):
     """Test loading configuration with string model path."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
-        mock_cfg.aget = AsyncMock(side_effect=lambda key, default: {
-            "general.speech_to_text.wake_word.backend": "oww",
-            "general.speech_to_text.wake_word.threshold": 0.7,
-            "general.speech_to_text.wake_word.model_path": "voice_models/aurora.onnx",
-        }.get(key, default))
+        mock_cfg.aget = AsyncMock(
+            side_effect=lambda key, default: {
+                "general.speech_to_text.wake_word.backend": "oww",
+                "general.speech_to_text.wake_word.threshold": 0.7,
+                "general.speech_to_text.wake_word.model_path": "voice_models/aurora.onnx",
+            }.get(key, default)
+        )
 
         with (
             patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
@@ -112,14 +114,16 @@ async def test_load_config_with_string_model_path(mock_bus):
 async def test_load_config_with_list_model_paths(mock_bus):
     """Test loading configuration with multiple model paths."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
-        mock_cfg.aget = AsyncMock(side_effect=lambda key, default: {
-            "general.speech_to_text.wake_word.backend": "pvp",  # Use correct enum value
-            "general.speech_to_text.wake_word.threshold": 0.6,
-            "general.speech_to_text.wake_word.model_path": [
-                "voice_models/aurora.ppn",
-                "voice_models/jarvis.ppn",
-            ],
-        }.get(key, default))
+        mock_cfg.aget = AsyncMock(
+            side_effect=lambda key, default: {
+                "general.speech_to_text.wake_word.backend": "pvp",  # Use correct enum value
+                "general.speech_to_text.wake_word.threshold": 0.6,
+                "general.speech_to_text.wake_word.model_path": [
+                    "voice_models/aurora.ppn",
+                    "voice_models/jarvis.ppn",
+                ],
+            }.get(key, default)
+        )
 
         with (
             patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
@@ -134,11 +138,13 @@ async def test_load_config_with_list_model_paths(mock_bus):
 async def test_load_config_with_none_model_path(mock_bus):
     """Test loading configuration with None model path uses default."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
-        mock_cfg.aget = AsyncMock(side_effect=lambda key, default: {
-            "general.speech_to_text.wake_word.backend": "oww",
-            "general.speech_to_text.wake_word.threshold": 0.5,
-            "general.speech_to_text.wake_word.model_path": None,
-        }.get(key, default))
+        mock_cfg.aget = AsyncMock(
+            side_effect=lambda key, default: {
+                "general.speech_to_text.wake_word.backend": "oww",
+                "general.speech_to_text.wake_word.threshold": 0.5,
+                "general.speech_to_text.wake_word.model_path": None,
+            }.get(key, default)
+        )
 
         with (
             patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus),
@@ -228,9 +234,10 @@ async def test_start_service(service, mock_bus):
         assert service._enabled is True
 
         # Verify subscriptions - at least the microphone stream
-        assert any(call.args[0] == AudioTopics.STREAM_MICROPHONE for call in mock_bus.subscribe.call_args_list), (
-            "Missing subscription to STREAM_MICROPHONE"
-        )
+        assert any(
+            call.args[0] == AudioTopics.STREAM_MICROPHONE
+            for call in mock_bus.subscribe.call_args_list
+        ), "Missing subscription to STREAM_MICROPHONE"
 
 
 @pytest.mark.asyncio
@@ -441,9 +448,8 @@ async def test_control_command_start(service):
     service._enabled = False
 
     cmd = WakeWordControl(action="start")
-    envelope = Envelope(type="command", payload=cmd)
 
-    await service._on_control(envelope)
+    await service._on_control(cmd)
 
     assert service._enabled is True
 
@@ -454,9 +460,8 @@ async def test_control_command_stop(service):
     service._enabled = True
 
     cmd = WakeWordControl(action="stop")
-    envelope = Envelope(type="command", payload=cmd)
 
-    await service._on_control(envelope)
+    await service._on_control(cmd)
 
     assert service._enabled is False
 
@@ -467,9 +472,8 @@ async def test_control_command_pause(service):
     service._enabled = True
 
     cmd = WakeWordControl(action="pause")
-    envelope = Envelope(type="command", payload=cmd)
 
-    await service._on_control(envelope)
+    await service._on_control(cmd)
 
     assert service._enabled is False
 
@@ -480,9 +484,8 @@ async def test_control_command_resume(service):
     service._enabled = False
 
     cmd = WakeWordControl(action="resume")
-    envelope = Envelope(type="command", payload=cmd)
 
-    await service._on_control(envelope)
+    await service._on_control(cmd)
 
     assert service._enabled is True
 
@@ -493,9 +496,8 @@ async def test_control_command_case_insensitive(service):
     service._enabled = False
 
     cmd = WakeWordControl(action="START")
-    envelope = Envelope(type="command", payload=cmd)
 
-    await service._on_control(envelope)
+    await service._on_control(cmd)
 
     assert service._enabled is True
 

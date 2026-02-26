@@ -1,4 +1,5 @@
 """Unit tests for token management API routes."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -9,9 +10,12 @@ from httpx import ASGITransport, AsyncClient
 
 from app.services.db.models import Token
 
-pytestmark = pytest.mark.skip(reason="Token endpoints migrated to Auth service contracts (auto-generated)")
+pytestmark = pytest.mark.skip(
+    reason="Token endpoints migrated to Auth service contracts (auto-generated)"
+)
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_token(
     id: str = "tok-1",
@@ -52,9 +56,14 @@ def app(mock_auth_service):
     registry.start = AsyncMock()
     registry.stop = AsyncMock()
     registry.get_services = AsyncMock(return_value=[])
-    registry.get_registry_export = AsyncMock(return_value={
-        "modules": [], "digest": "", "service_count": 0, "method_count": 0,
-    })
+    registry.get_registry_export = AsyncMock(
+        return_value={
+            "modules": [],
+            "digest": "",
+            "service_count": 0,
+            "method_count": 0,
+        }
+    )
 
     gateway_auth = GatewayAuth(auth_service=mock_auth_service, enabled=False)
 
@@ -102,9 +111,7 @@ async def test_list_tokens_filtered_by_principal(app, mock_auth_service):
         resp = await client.get("/api/admin/tokens?principal_id=user-1")
 
     assert resp.status_code == 200
-    mock_auth_service.list_tokens.assert_called_once_with(
-        principal_id="user-1", device_id=None
-    )
+    mock_auth_service.list_tokens.assert_called_once_with(principal_id="user-1", device_id=None)
 
 
 @pytest.mark.asyncio

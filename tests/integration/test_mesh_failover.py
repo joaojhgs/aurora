@@ -79,8 +79,7 @@ async def _register_peer(registry, peer_id, modules, latency=50.0):
     manifest = PeerManifest(
         peer_id=peer_id,
         shared_services=[
-            PeerServiceInfo(module=m, version="1.0.0", max_concurrent=10)
-            for m in modules
+            PeerServiceInfo(module=m, version="1.0.0", max_concurrent=10) for m in modules
         ],
     )
     await registry.update_manifest(peer_id, manifest)
@@ -99,9 +98,7 @@ class TestRemoteFailureFallback:
         await _register_peer(peer_registry, "slow-peer", ["Orchestrator"])
 
         # Don't simulate a response — the call will timeout
-        result = await mesh_bus.request(
-            "Orchestrator.Query", DummyPayload(), timeout=0.2
-        )
+        result = await mesh_bus.request("Orchestrator.Query", DummyPayload(), timeout=0.2)
 
         # Should fall back to local after timeout
         assert result.ok is True
@@ -131,11 +128,14 @@ class TestRemoteFailureFallback:
             await asyncio.sleep(0.05)
             for req_id, fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
-                    peer_bridge.on_response("error-peer", {
-                        "type": "error",
-                        "id": req_id,
-                        "error": {"message": "Service unavailable", "code": 503},
-                    })
+                    peer_bridge.on_response(
+                        "error-peer",
+                        {
+                            "type": "error",
+                            "id": req_id,
+                            "error": {"message": "Service unavailable", "code": 503},
+                        },
+                    )
 
         task = asyncio.create_task(simulate_error())
         result = await mesh_bus.request("Orchestrator.Query", DummyPayload())
@@ -166,11 +166,14 @@ class TestNetworkFallbackToAnotherPeer:
             # The second call to peer-2 should get a response
             for req_id, fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
-                    peer_bridge.on_response("peer-2", {
-                        "type": "result",
-                        "id": req_id,
-                        "result": {"source": "peer-2"},
-                    })
+                    peer_bridge.on_response(
+                        "peer-2",
+                        {
+                            "type": "result",
+                            "id": req_id,
+                            "result": {"source": "peer-2"},
+                        },
+                    )
 
         task = asyncio.create_task(simulate_fallback_response())
         result = await mesh_bus.request("STT.Transcribe", DummyPayload(), timeout=0.1)
@@ -191,9 +194,7 @@ class TestNetworkOnlyWithNoFallback:
         assert result.ok is False
 
     @pytest.mark.asyncio
-    async def test_peer_timeout_returns_error(
-        self, mesh_bus, peer_registry, mock_rtc_client
-    ):
+    async def test_peer_timeout_returns_error(self, mesh_bus, peer_registry, mock_rtc_client):
         """network_only with peer timeout → eventually returns error or timeout."""
         await _register_peer(peer_registry, "gpu-peer", ["GPU"])
 
@@ -209,9 +210,7 @@ class TestPeerLifecycleImpactsRouting:
     """Tests that peer lifecycle events (connect/disconnect/stale) affect routing."""
 
     @pytest.mark.asyncio
-    async def test_peer_removal_causes_local_fallback(
-        self, mesh_bus, inner_bus, peer_registry
-    ):
+    async def test_peer_removal_causes_local_fallback(self, mesh_bus, inner_bus, peer_registry):
         """After removing a peer, routing falls back to local."""
         await _register_peer(peer_registry, "temp-peer", ["Orchestrator"])
 

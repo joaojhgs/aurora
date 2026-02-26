@@ -104,7 +104,9 @@ class TestGenerateManifest:
 
     @patch("app.shared.contracts.registry.list_modules")
     @patch("app.shared.contracts.registry._get_package_version")
-    def test_excludes_non_shared_modules(self, mock_version, mock_list_modules, mesh_config_sharing):
+    def test_excludes_non_shared_modules(
+        self, mock_version, mock_list_modules, mesh_config_sharing
+    ):
         mock_version.return_value = "0.5.0"
 
         db_contract = SimpleNamespace(

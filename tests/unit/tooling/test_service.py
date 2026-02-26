@@ -94,7 +94,8 @@ class TestToolingServiceInitialization:
         assert mock_bus.publish.call_count >= 1
         # Find the ToolsInitialized publish call
         tools_init_calls = [
-            call for call in mock_bus.publish.call_args_list
+            call
+            for call in mock_bus.publish.call_args_list
             if call[0][0] == ToolingMethods.TOOLS_INITIALIZED
         ]
         assert len(tools_init_calls) == 1
@@ -124,7 +125,7 @@ class TestToolingServiceQueries:
 
         # Verify response was returned (contract methods return directly now)
         assert response is not None
-        assert hasattr(response, 'tools')
+        assert hasattr(response, "tools")
 
     @pytest.mark.asyncio
     async def test_get_tools_with_query(self, tooling_service, mock_bus):
