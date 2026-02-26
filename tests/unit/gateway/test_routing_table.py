@@ -87,9 +87,7 @@ class TestRoutingTableResolve:
     async def test_prefer_network_with_peer(self, routing_table, peer_registry):
         peer = _make_negotiated_peer("peer-1", ["TTS"], latency_ms=20.0)
         await peer_registry.register_peer("peer-1")
-        await peer_registry.update_manifest(
-            "peer-1", peer.manifest
-        )
+        await peer_registry.update_manifest("peer-1", peer.manifest)
         await peer_registry.update_latency("peer-1", 20.0)
 
         route = routing_table.resolve("TTS.Request")

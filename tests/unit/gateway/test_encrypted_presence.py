@@ -8,6 +8,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import cryptography.exceptions
 import pytest
 
 from app.services.gateway.utils.crypto import aead_open, aead_seal, derive_room_keys
@@ -24,11 +25,16 @@ class TestEncryptedPresenceRoundtrip:
 
     def test_seal_open_roundtrip(self, room_keys):
         """Plain crypto roundtrip: aead_seal → aead_open returns original dict."""
-        presence = {"type": "presence", "app_id": "aurora", "room": "test-room", "peer_id": "peer-B"}
+        presence = {
+            "type": "presence",
+            "app_id": "aurora",
+            "room": "test-room",
+            "peer_id": "peer-B",
+        }
         sealed = aead_seal(room_keys.k_sig, presence)
 
         # Must not be valid JSON (it's encrypted)
-        with pytest.raises(Exception):
+        with pytest.raises((json.JSONDecodeError, UnicodeDecodeError)):
             json.loads(sealed)
 
         # aead_open must recover the original dict
@@ -41,7 +47,7 @@ class TestEncryptedPresenceRoundtrip:
         sealed = aead_seal(room_keys.k_sig, presence)
 
         wrong_keys = derive_room_keys("wrong-password", "aurora", "test-room")
-        with pytest.raises(Exception):
+        with pytest.raises(cryptography.exceptions.InvalidTag):
             aead_open(wrong_keys.k_sig, sealed)
 
     @pytest.mark.asyncio
@@ -55,9 +61,7 @@ class TestEncryptedPresenceRoundtrip:
         client._peer_id = "peer-A"
         client._pcs = {}
         client._keys = room_keys
-        client._settings = SimpleNamespace(
-            webrtc=SimpleNamespace(encrypt_signaling=True)
-        )
+        client._settings = SimpleNamespace(webrtc=SimpleNamespace(encrypt_signaling=True))
         client.connect_to = AsyncMock()
 
         # Import and call _on_presence unbound
@@ -78,9 +82,7 @@ class TestEncryptedPresenceRoundtrip:
         client._peer_id = "peer-A"
         client._pcs = {}
         client._keys = room_keys
-        client._settings = SimpleNamespace(
-            webrtc=SimpleNamespace(encrypt_signaling=False)
-        )
+        client._settings = SimpleNamespace(webrtc=SimpleNamespace(encrypt_signaling=False))
         client.connect_to = AsyncMock()
 
         from app.services.gateway.webrtc.rtc_client import RTCClient
@@ -100,9 +102,7 @@ class TestEncryptedPresenceRoundtrip:
         client._peer_id = "peer-A"
         client._pcs = {}
         client._keys = room_keys
-        client._settings = SimpleNamespace(
-            webrtc=SimpleNamespace(encrypt_signaling=True)
-        )
+        client._settings = SimpleNamespace(webrtc=SimpleNamespace(encrypt_signaling=True))
         client.connect_to = AsyncMock()
 
         from app.services.gateway.webrtc.rtc_client import RTCClient

@@ -68,7 +68,12 @@ async def test_rtc_client_initialization_and_signaling_config(mock_bus, mock_set
         mock_mqtt_signaling.on_message = MagicMock()
 
         mock_auth_service = AsyncMock()
-        client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry, auth_service=mock_auth_service)
+        client = RTCClient(
+            settings=mock_settings,
+            bus=mock_bus,
+            registry=mock_registry,
+            auth_service=mock_auth_service,
+        )
         await client.start()
 
         mock_mqtt_signaling_cls.assert_called_once_with(
@@ -95,7 +100,9 @@ async def test_rtc_client_respects_ice_servers_config(mock_bus, mock_settings):
 
     mock_registry = AsyncMock()
     mock_auth_service = AsyncMock()
-    client = RTCClient(settings=mock_settings, bus=mock_bus, registry=mock_registry, auth_service=mock_auth_service)
+    client = RTCClient(
+        settings=mock_settings, bus=mock_bus, registry=mock_registry, auth_service=mock_auth_service
+    )
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection") as mock_pc_cls:
         mock_pc = mock_pc_cls.return_value

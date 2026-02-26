@@ -34,7 +34,7 @@ def orchestrator_service(mock_bus):
     # Mock the bus singleton
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
         service = OrchestratorService()
-        return service
+        yield service
 
 
 class TestOrchestratorServiceInitialization:
@@ -102,7 +102,9 @@ class TestOrchestratorServiceTranscriptionHandling:
             await orchestrator_service._on_transcription(envelope)
 
             # Verify process_input was called with correct arguments (including session_id)
-            mock_process.assert_called_once_with("Hello Aurora", source="stt", session_id="test-session")
+            mock_process.assert_called_once_with(
+                "Hello Aurora", source="stt", session_id="test-session"
+            )
 
     @pytest.mark.asyncio
     async def test_on_transcription_with_non_final_text(self, orchestrator_service):
@@ -171,7 +173,9 @@ class TestOrchestratorServiceUserInputHandling:
             response = await orchestrator_service.process_user_input(request)
 
             assert isinstance(response, EmptyOutput)
-            mock_process.assert_called_once_with("Test command", source="ui", session_id="ui-session")
+            mock_process.assert_called_once_with(
+                "Test command", source="ui", session_id="ui-session"
+            )
 
     @pytest.mark.asyncio
     async def test_on_user_input_with_invalid_payload(self, orchestrator_service):
@@ -246,7 +250,9 @@ class TestOrchestratorServiceToolHandling:
         from app.shared.contracts.models.common import EmptyOutput
         from app.shared.contracts.models.orchestrator import OrchestratorToolResultRequest
 
-        request = OrchestratorToolResultRequest(request_id="test-123", result={"data": "success"}, success=True)
+        request = OrchestratorToolResultRequest(
+            request_id="test-123", result={"data": "success"}, success=True
+        )
 
         # Call contract method directly
         response = await orchestrator_service.process_tool_result(request)

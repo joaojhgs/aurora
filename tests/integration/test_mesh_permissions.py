@@ -83,12 +83,14 @@ class TestSharingGate:
             mesh_config=mesh_config,
         )
 
-        call_msg = json.dumps({
-            "type": "call",
-            "id": "req-1",
-            "method": "TTS.Synthesize",
-            "params": {"text": "Hello"},
-        })
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "req-1",
+                "method": "TTS.Synthesize",
+                "params": {"text": "Hello"},
+            }
+        )
 
         await handler.on_message(call_msg)
 
@@ -118,12 +120,14 @@ class TestSharingGate:
             mesh_config=mesh_config,
         )
 
-        call_msg = json.dumps({
-            "type": "call",
-            "id": "req-2",
-            "method": "TTS.Synthesize",
-            "params": {},
-        })
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "req-2",
+                "method": "TTS.Synthesize",
+                "params": {},
+            }
+        )
 
         await handler.on_message(call_msg)
 
@@ -154,12 +158,14 @@ class TestSharingGate:
         # Simulate one active call
         handler._active_remote_calls["TTS"] = 1
 
-        call_msg = json.dumps({
-            "type": "call",
-            "id": "req-3",
-            "method": "TTS.Synthesize",
-            "params": {},
-        })
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "req-3",
+                "method": "TTS.Synthesize",
+                "params": {},
+            }
+        )
 
         await handler.on_message(call_msg)
 
@@ -180,12 +186,14 @@ class TestSharingGate:
             lambda: admin_identity,
         )
 
-        call_msg = json.dumps({
-            "type": "call",
-            "id": "req-4",
-            "method": "TTS.Synthesize",
-            "params": {"text": "test"},
-        })
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "req-4",
+                "method": "TTS.Synthesize",
+                "params": {"text": "test"},
+            }
+        )
 
         await handler.on_message(call_msg)
 

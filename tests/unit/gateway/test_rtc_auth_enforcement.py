@@ -100,14 +100,21 @@ async def test_require_auth_allows_auth_messages(mock_deps):
     from app.services.db.models import Token
 
     valid_token = Token(
-        id="token-id", token_hash="hash", prefix="prefix",
-        device_id="device-id", user_id="user-id", scopes=["read"],
+        id="token-id",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="device-id",
+        user_id="user-id",
+        scopes=["read"],
     )
     auth_service.authenticate_token.return_value = valid_token
     auth_service.build_identity_from_token.return_value = Identity(
-        principal_id="user-id", principal_name="remote",
-        is_admin=False, effective_perms=frozenset(["read"]),
-        device_id="device-id", source="webrtc_peer",
+        principal_id="user-id",
+        principal_name="remote",
+        is_admin=False,
+        effective_perms=frozenset(["read"]),
+        device_id="device-id",
+        source="webrtc_peer",
     )
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
@@ -137,27 +144,32 @@ async def test_require_auth_allows_pairing_rpc(mock_deps):
 
     rpc_handler_on_message = AsyncMock()
 
-    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        with patch("app.services.gateway.webrtc.rtc_client.RPCHandler") as MockRPC:
-            mock_rpc_instance = MagicMock()
-            mock_rpc_instance.on_message = rpc_handler_on_message
-            MockRPC.return_value = mock_rpc_instance
+    with (
+        patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc),
+        patch("app.services.gateway.webrtc.rtc_client.RPCHandler") as mock_rpc_cls,
+    ):
+        mock_rpc_instance = MagicMock()
+        mock_rpc_instance.on_message = rpc_handler_on_message
+        mock_rpc_cls.return_value = mock_rpc_instance
 
-            await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1")
 
-            # ANONYMOUS peer sends pairing RPC call
-            call_msg = json.dumps({
-                "type": "call", "id": "1",
+        # ANONYMOUS peer sends pairing RPC call
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "1",
                 "method": "Auth.PairingStart",
                 "params": {"device_name": "test"},
-            })
-            task = mock_channel.emit("message", call_msg)
-            if task is not None:
-                await task
-            await asyncio.sleep(0.05)
+            }
+        )
+        task = mock_channel.emit("message", call_msg)
+        if task is not None:
+            await task
+        await asyncio.sleep(0.05)
 
-            # The RPC handler should have received the message
-            assert rpc_handler_on_message.called
+        # The RPC handler should have received the message
+        assert rpc_handler_on_message.called
 
 
 @pytest.mark.asyncio
@@ -172,27 +184,32 @@ async def test_require_auth_blocks_non_pairing_rpc(mock_deps):
 
     rpc_handler_on_message = AsyncMock()
 
-    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        with patch("app.services.gateway.webrtc.rtc_client.RPCHandler") as MockRPC:
-            mock_rpc_instance = MagicMock()
-            mock_rpc_instance.on_message = rpc_handler_on_message
-            MockRPC.return_value = mock_rpc_instance
+    with (
+        patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc),
+        patch("app.services.gateway.webrtc.rtc_client.RPCHandler") as mock_rpc_cls,
+    ):
+        mock_rpc_instance = MagicMock()
+        mock_rpc_instance.on_message = rpc_handler_on_message
+        mock_rpc_cls.return_value = mock_rpc_instance
 
-            await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1")
 
-            # ANONYMOUS peer sends non-pairing RPC
-            call_msg = json.dumps({
-                "type": "call", "id": "1",
+        # ANONYMOUS peer sends non-pairing RPC
+        call_msg = json.dumps(
+            {
+                "type": "call",
+                "id": "1",
                 "method": "TTS.Say",
                 "params": {"text": "hello"},
-            })
-            task = mock_channel.emit("message", call_msg)
-            if task is not None:
-                await task
-            await asyncio.sleep(0.05)
+            }
+        )
+        task = mock_channel.emit("message", call_msg)
+        if task is not None:
+            await task
+        await asyncio.sleep(0.05)
 
-            # The RPC handler should NOT have received the message
-            assert not rpc_handler_on_message.called
+        # The RPC handler should NOT have received the message
+        assert not rpc_handler_on_message.called
 
 
 @pytest.mark.asyncio
@@ -216,10 +233,7 @@ async def test_no_auth_grants_open_peer(mock_deps):
         identity = client._peer_acl.get("peer1")
         assert identity == OPEN_PEER
         # No auth message should have been sent
-        auth_msgs = [
-            m for m in mock_channel.sent_messages
-            if json.loads(m).get("type") == "auth"
-        ]
+        auth_msgs = [m for m in mock_channel.sent_messages if json.loads(m).get("type") == "auth"]
         assert len(auth_msgs) == 0
 
 
@@ -252,7 +266,7 @@ async def test_on_open_sends_saved_token_if_available(mock_deps):
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._system_token = "system-token"
-    client._saved_auth_token = "my-saved-pairing-token"
+    client._saved_auth_tokens["peer1"] = "my-saved-pairing-token"
 
     mock_pc = MagicMock()
     mock_channel = MockDataChannel()
@@ -265,8 +279,7 @@ async def test_on_open_sends_saved_token_if_available(mock_deps):
 
         # Should have sent exactly one auth message with the saved token
         auth_msgs = [
-            json.loads(m) for m in mock_channel.sent_messages
-            if json.loads(m).get("type") == "auth"
+            json.loads(m) for m in mock_channel.sent_messages if json.loads(m).get("type") == "auth"
         ]
         assert len(auth_msgs) == 1
         msg = auth_msgs[0]
@@ -295,8 +308,7 @@ async def test_on_open_no_auto_auth_without_saved_token(mock_deps):
 
         # No auth messages should have been sent
         auth_msgs = [
-            json.loads(m) for m in mock_channel.sent_messages
-            if json.loads(m).get("type") == "auth"
+            json.loads(m) for m in mock_channel.sent_messages if json.loads(m).get("type") == "auth"
         ]
         assert len(auth_msgs) == 0
         # Peer should still be ANONYMOUS
@@ -312,16 +324,21 @@ async def test_db_token_auth_grants_scoped_identity(mock_deps):
     from app.services.db.models import Token
 
     valid_token = Token(
-        id="token-id", token_hash="hash", prefix="prefix",
-        device_id="device-id", user_id="user-id",
+        id="token-id",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="device-id",
+        user_id="user-id",
         scopes=["TTS.Request", "STT.UserSpeechCaptured"],
     )
     auth_service.authenticate_token.return_value = valid_token
     auth_service.build_identity_from_token.return_value = Identity(
-        principal_id="user-id", principal_name="device_aurora-remote_abc123",
+        principal_id="user-id",
+        principal_name="device_aurora-remote_abc123",
         is_admin=False,
         effective_perms=frozenset(["TTS.Request", "STT.UserSpeechCaptured"]),
-        device_id="device-id", source="webrtc_peer",
+        device_id="device-id",
+        source="webrtc_peer",
     )
 
     mock_pc = MagicMock()
@@ -332,11 +349,13 @@ async def test_db_token_auth_grants_scoped_identity(mock_deps):
         await client._ensure_pc("peer1")
 
         # Peer sends DB-token auth (from a prior pairing exchange)
-        auth_msg = json.dumps({
-            "type": "auth",
-            "peer_name": "remote-peer",
-            "token": "valid-pairing-token",
-        })
+        auth_msg = json.dumps(
+            {
+                "type": "auth",
+                "peer_name": "remote-peer",
+                "token": "valid-pairing-token",
+            }
+        )
         task = mock_channel.emit("message", auth_msg)
         if task is not None:
             await task
@@ -469,14 +488,16 @@ async def test_public_broker_warning_when_auth_enabled(mock_deps):
 
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
 
-    with patch("app.services.gateway.webrtc.rtc_client.derive_room_keys"):
-        with patch("app.services.gateway.webrtc.rtc_client.MQTTSignaling") as mock_mqtt:
-            mock_adapter = AsyncMock()
-            mock_mqtt.return_value = mock_adapter
+    with (
+        patch("app.services.gateway.webrtc.rtc_client.derive_room_keys"),
+        patch("app.services.gateway.webrtc.rtc_client.MQTTSignaling") as mock_mqtt,
+    ):
+        mock_adapter = AsyncMock()
+        mock_mqtt.return_value = mock_adapter
 
-            with patch("app.services.gateway.webrtc.rtc_client.log_warning") as mock_warn:
-                await client.start()
+        with patch("app.services.gateway.webrtc.rtc_client.log_warning") as mock_warn:
+            await client.start()
 
-                # Check that a public broker warning was logged
-                warn_calls = [str(c) for c in mock_warn.call_args_list]
-                assert any("PUBLIC MQTT" in str(c) for c in warn_calls)
+            # Check that a public broker warning was logged
+            warn_calls = [str(c) for c in mock_warn.call_args_list]
+            assert any("PUBLIC MQTT" in str(c) for c in warn_calls)

@@ -53,7 +53,9 @@ def mock_config_manager():
             "general.speech_to_text.audio_input.auto_start": False,  # Disable auto-start for tests
         }
         mock_config.get.side_effect = lambda key, default=None: config_values.get(key, default)
-        mock_config.aget = AsyncMock(side_effect=lambda key, default=None: config_values.get(key, default))
+        mock_config.aget = AsyncMock(
+            side_effect=lambda key, default=None: config_values.get(key, default)
+        )
         yield mock_config
 
 
@@ -94,7 +96,7 @@ def service(mock_bus):
 async def test_service_initialization(service, mock_bus):
     """Test that the service initializes correctly."""
     # Service uses bus singleton - check via property
-    assert service._bus is mock_bus
+    assert service.bus is mock_bus
     assert service._state == STTState.IDLE
     assert not service._running
 
@@ -308,11 +310,7 @@ async def test_control_commands(service, mock_bus):
     await service.start()
 
     # Test start_session
-    await service._on_control(
-        Envelope(
-            payload=STTCoordinatorControl(action="start_session"), type=STTCoordinatorTopics.CONTROL
-        )
-    )
+    await service._on_control(STTCoordinatorControl(action="start_session"))
     assert service._state == STTState.LISTENING
     session_id = service._current_session_id
     assert session_id is not None
@@ -324,11 +322,7 @@ async def test_control_commands(service, mock_bus):
             await service._timeout_task
 
     # Test end_session
-    await service._on_control(
-        Envelope(
-            payload=STTCoordinatorControl(action="end_session"), type=STTMethods.STOP_LISTENING
-        )
-    )
+    await service._on_control(STTCoordinatorControl(action="end_session"))
     assert service._state == STTState.IDLE
     mock_bus.publish.assert_any_call(
         STTMethods.SESSION_ENDED,
@@ -340,7 +334,5 @@ async def test_control_commands(service, mock_bus):
 
     # Test reset
     await service._transition_to(STTState.LISTENING)  # force a state change
-    await service._on_control(
-        Envelope(payload=STTCoordinatorControl(action="reset"), type=STTMethods.CONTROL)
-    )
+    await service._on_control(STTCoordinatorControl(action="reset"))
     assert service._state == STTState.IDLE

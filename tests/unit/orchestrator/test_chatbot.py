@@ -94,7 +94,10 @@ class TestChatbotMemorySearch:
         ):
             # Update the mock response for this specific test
             import app.services.orchestrator.agents.chatbot as chatbot_module
-            chatbot_module.llm.bind_tools.return_value.invoke.return_value.content = "Paris is the capital of France."
+
+            chatbot_module.llm.bind_tools.return_value.invoke.return_value.content = (
+                "Paris is the capital of France."
+            )
 
             result = await chatbot(mock_state, bus=mock_bus)
 

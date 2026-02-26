@@ -243,9 +243,7 @@ class TestRegistryAggregator:
 
         # get_service should return the Auth announcement
         svc = await aggregator.get_service("Auth")
-        assert svc is not None, (
-            "Auth must be loaded in registry (needed for WebRTC pairing)"
-        )
+        assert svc is not None, "Auth must be loaded in registry (needed for WebRTC pairing)"
 
         # Verify pairing-related methods are present
         method_names = {m.name for m in svc.methods}
