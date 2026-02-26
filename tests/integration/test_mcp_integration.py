@@ -75,7 +75,9 @@ class TestMCPToolIntegration:
 
         # Patch the config_api inside the initialize method
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget = AsyncMock(
+                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+            )
             mock_config.aget_config = AsyncMock(return_value=servers_config)
 
             with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
@@ -103,7 +105,9 @@ class TestMCPToolIntegration:
 
         # Test initialization
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget = AsyncMock(
+                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+            )
             mock_config.aget_config = AsyncMock(return_value=servers_config)
 
             with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
@@ -176,7 +180,9 @@ class TestMCPConfigurationIntegration:
         mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
 
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(side_effect=lambda key, default=None: True if key == "mcp.enabled" else default)
+            mock_config.aget = AsyncMock(
+                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
+            )
             mock_config.aget_config = AsyncMock(return_value=servers_config)
 
             manager = MCPClientManager()

@@ -110,11 +110,14 @@ class TestMeshRoutingEndToEnd:
             await asyncio.sleep(0.05)
             for req_id, fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
-                    peer_bridge.on_response("remote-1", {
-                        "type": "result",
-                        "id": req_id,
-                        "result": {"source": "remote", "answer": "42"},
-                    })
+                    peer_bridge.on_response(
+                        "remote-1",
+                        {
+                            "type": "result",
+                            "id": req_id,
+                            "result": {"source": "remote", "answer": "42"},
+                        },
+                    )
 
         task = asyncio.create_task(simulate_remote_response())
         result = await mesh_bus.request("Orchestrator.Query", TTSRequest(text="What is 6*7?"))
@@ -125,9 +128,7 @@ class TestMeshRoutingEndToEnd:
         mock_rtc_client.send_to_peer.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_network_route_falls_back_to_local_when_no_peer(
-        self, mesh_bus, inner_bus
-    ):
+    async def test_network_route_falls_back_to_local_when_no_peer(self, mesh_bus, inner_bus):
         """Orchestrator prefer=network but no peers → fallback=local."""
         result = await mesh_bus.request("Orchestrator.Query", TTSRequest())
         assert result.ok is True
@@ -155,9 +156,7 @@ class TestMeshRegistryToRouting:
     """Tests that PeerRegistry state correctly affects routing decisions."""
 
     @pytest.mark.asyncio
-    async def test_stale_peer_excluded_from_routing(
-        self, routing_table, peer_registry
-    ):
+    async def test_stale_peer_excluded_from_routing(self, routing_table, peer_registry):
         """A stale peer should not be selected as a route target."""
         await peer_registry.register_peer("stale-peer")
         manifest = PeerManifest(

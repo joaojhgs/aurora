@@ -62,7 +62,7 @@ async def test_rtc_client_handshake_on_open(mock_deps):
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._system_token = "system-token"
-    client._saved_auth_token = "saved-pairing-token-from-prior-exchange"
+    client._saved_auth_tokens["peer1"] = "saved-pairing-token-from-prior-exchange"
 
     mock_pc = MagicMock()
     mock_channel = MockDataChannel()
@@ -151,6 +151,7 @@ class MockPeerConnectionWithEvents:
         def decorator(fn):
             self._handlers[event_name] = fn
             return fn
+
         return decorator
 
 

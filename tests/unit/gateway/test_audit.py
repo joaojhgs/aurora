@@ -1,4 +1,5 @@
 """Unit tests for the audit logging helper."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock

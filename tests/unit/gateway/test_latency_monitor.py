@@ -20,10 +20,12 @@ def mock_rtc_client():
 @pytest.fixture
 def mock_peer_registry():
     reg = MagicMock()
-    reg.get_negotiated_peers = MagicMock(return_value=[
-        PeerState(peer_id="peer-1", status="negotiated"),
-        PeerState(peer_id="peer-2", status="negotiated"),
-    ])
+    reg.get_negotiated_peers = MagicMock(
+        return_value=[
+            PeerState(peer_id="peer-1", status="negotiated"),
+            PeerState(peer_id="peer-2", status="negotiated"),
+        ]
+    )
     reg.update_latency = AsyncMock()
     return reg
 

@@ -191,18 +191,22 @@ def _make_sharing_entry(share: bool = True, allowed_peers=None, max_concurrent: 
 
 @pytest.mark.asyncio
 async def test_mesh_gate_blocks_unshared_service(
-    mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
 ):
     """When mesh is enabled but a service is not shared, calls are rejected 403."""
     mesh_config = _make_mesh_config(enabled=True, sharing={})
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
         mesh_config=mesh_config,
     )
     # Doesn't need a real method — gate blocks before _find_method
-    await handler.on_message(
-        json.dumps({"type": "call", "id": "m1", "method": "TTS.Request"})
-    )
+    await handler.on_message(json.dumps({"type": "call", "id": "m1", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
     assert resp["error"]["code"] == 403
@@ -211,7 +215,10 @@ async def test_mesh_gate_blocks_unshared_service(
 
 @pytest.mark.asyncio
 async def test_mesh_gate_allows_shared_service(
-    mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
 ):
     """When a service IS shared, calls pass through the mesh gate."""
     mesh_config = _make_mesh_config(
@@ -219,26 +226,31 @@ async def test_mesh_gate_allows_shared_service(
         sharing={"TTS": _make_sharing_entry(share=True)},
     )
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
         mesh_config=mesh_config,
     )
 
     method_info = MethodInfo(name="Request")
     mock_registry.get_service.return_value = ServiceAnnouncement(
-        module="TTS", version="1.0", methods=[method_info],
+        module="TTS",
+        version="1.0",
+        methods=[method_info],
     )
     mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
 
-    await handler.on_message(
-        json.dumps({"type": "call", "id": "m2", "method": "TTS.Request"})
-    )
+    await handler.on_message(json.dumps({"type": "call", "id": "m2", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "result"
 
 
 @pytest.mark.asyncio
 async def test_mesh_gate_skips_pairing_methods(
-    mock_bus, mock_registry, mock_send_fn,
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
 ):
     """Pairing/auth infrastructure methods bypass the mesh sharing gate entirely."""
     # ANONYMOUS identity so we also verify ANON allowlist works together
@@ -253,22 +265,30 @@ async def test_mesh_gate_skips_pairing_methods(
 
     mesh_config = _make_mesh_config(enabled=True, sharing={})  # No services shared
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn, acl_provider,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        acl_provider,
         mesh_config=mesh_config,
     )
 
     method_info = MethodInfo(name="PairingStart")
     mock_registry.get_service.return_value = ServiceAnnouncement(
-        module="Auth", version="1.0", methods=[method_info],
+        module="Auth",
+        version="1.0",
+        methods=[method_info],
     )
     mock_bus.request.return_value = QueryResult(ok=True, data={"code": "123456"})
 
     await handler.on_message(
-        json.dumps({
-            "type": "call", "id": "p1",
-            "method": "Auth.PairingStart",
-            "params": {"device_name": "test"},
-        })
+        json.dumps(
+            {
+                "type": "call",
+                "id": "p1",
+                "method": "Auth.PairingStart",
+                "params": {"device_name": "test"},
+            }
+        )
     )
     resp = json.loads(mock_send_fn.call_args[0][0])
     # Should NOT be blocked by mesh gate — pairing is infrastructure
@@ -278,7 +298,9 @@ async def test_mesh_gate_skips_pairing_methods(
 
 @pytest.mark.asyncio
 async def test_mesh_gate_skips_login_method(
-    mock_bus, mock_registry, mock_send_fn,
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
 ):
     """Auth.Login bypasses the mesh sharing gate."""
     anon_identity = Identity(
@@ -292,22 +314,30 @@ async def test_mesh_gate_skips_login_method(
 
     mesh_config = _make_mesh_config(enabled=True, sharing={})
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn, acl_provider,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        acl_provider,
         mesh_config=mesh_config,
     )
 
     method_info = MethodInfo(name="Login")
     mock_registry.get_service.return_value = ServiceAnnouncement(
-        module="Auth", version="1.0", methods=[method_info],
+        module="Auth",
+        version="1.0",
+        methods=[method_info],
     )
     mock_bus.request.return_value = QueryResult(ok=True, data={"token": "abc"})
 
     await handler.on_message(
-        json.dumps({
-            "type": "call", "id": "l1",
-            "method": "Auth.Login",
-            "params": {"username": "admin", "password": "pass"},
-        })
+        json.dumps(
+            {
+                "type": "call",
+                "id": "l1",
+                "method": "Auth.Login",
+                "params": {"username": "admin", "password": "pass"},
+            }
+        )
     )
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "result"
@@ -315,23 +345,28 @@ async def test_mesh_gate_skips_login_method(
 
 @pytest.mark.asyncio
 async def test_mesh_gate_capacity_exceeded(
-    mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
 ):
     """When a shared service is at capacity, calls are rejected 429."""
     sharing = _make_sharing_entry(share=True, max_concurrent=1)
     mesh_config = _make_mesh_config(
-        enabled=True, sharing={"TTS": sharing},
+        enabled=True,
+        sharing={"TTS": sharing},
     )
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn, mock_acl_provider,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
         mesh_config=mesh_config,
     )
     # Simulate an active call already
     handler._active_remote_calls["TTS"] = 1
 
-    await handler.on_message(
-        json.dumps({"type": "call", "id": "c1", "method": "TTS.Request"})
-    )
+    await handler.on_message(json.dumps({"type": "call", "id": "c1", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
     assert resp["error"]["code"] == 429
@@ -360,7 +395,12 @@ async def test_handle_call_datetime_in_response(rpc_handler, mock_registry, mock
 
     await rpc_handler.on_message(
         json.dumps(
-            {"type": "call", "id": "dt-1", "method": "Auth.PairingConnect", "params": {"code": "123456"}}
+            {
+                "type": "call",
+                "id": "dt-1",
+                "method": "Auth.PairingConnect",
+                "params": {"code": "123456"},
+            }
         )
     )
 

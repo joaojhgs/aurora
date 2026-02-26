@@ -1,4 +1,5 @@
 """Unit tests for principal management API routes."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,9 +11,12 @@ from httpx import ASGITransport, AsyncClient
 from app.services.db.models import User
 from app.services.gateway.acl.identity import SYSTEM, Identity
 
-pytestmark = pytest.mark.skip(reason="Principal endpoints migrated to Auth service contracts (auto-generated)")
+pytestmark = pytest.mark.skip(
+    reason="Principal endpoints migrated to Auth service contracts (auto-generated)"
+)
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_user(
     id: str = "user-1",
@@ -67,9 +71,14 @@ def app(mock_auth_service, admin_identity):
     registry.start = AsyncMock()
     registry.stop = AsyncMock()
     registry.get_services = AsyncMock(return_value=[])
-    registry.get_registry_export = AsyncMock(return_value={
-        "modules": [], "digest": "", "service_count": 0, "method_count": 0,
-    })
+    registry.get_registry_export = AsyncMock(
+        return_value={
+            "modules": [],
+            "digest": "",
+            "service_count": 0,
+            "method_count": 0,
+        }
+    )
 
     gateway_auth = GatewayAuth(auth_service=mock_auth_service, enabled=False)
 

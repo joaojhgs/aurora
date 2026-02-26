@@ -50,17 +50,19 @@ def mock_bus():
 def mock_config():
     """Mock config manager to avoid loading real config."""
     with patch("app.services.stt_transcription.service.config_api") as mock_cfg:
-        mock_cfg.aget = AsyncMock(side_effect=lambda key, default: {
-            "general.speech_to_text.language": "en",
-            "general.speech_to_text.transcription.realtime_model.enabled": True,
-            "general.speech_to_text.transcription.accurate_model.enabled": True,
-            "general.speech_to_text.transcription.realtime_model.model_size": "tiny",
-            "general.speech_to_text.transcription.accurate_model.model_size": "base",
-            "general.speech_to_text.transcription.realtime_model.device": "cpu",
-            "general.speech_to_text.transcription.accurate_model.device": "cpu",
-            "general.speech_to_text.transcription.realtime_model.compute_type": "int8",
-            "general.speech_to_text.transcription.accurate_model.compute_type": "int8",
-        }.get(key, default))
+        mock_cfg.aget = AsyncMock(
+            side_effect=lambda key, default: {
+                "general.speech_to_text.language": "en",
+                "general.speech_to_text.transcription.realtime_model.enabled": True,
+                "general.speech_to_text.transcription.accurate_model.enabled": True,
+                "general.speech_to_text.transcription.realtime_model.model_size": "tiny",
+                "general.speech_to_text.transcription.accurate_model.model_size": "base",
+                "general.speech_to_text.transcription.realtime_model.device": "cpu",
+                "general.speech_to_text.transcription.accurate_model.device": "cpu",
+                "general.speech_to_text.transcription.realtime_model.compute_type": "int8",
+                "general.speech_to_text.transcription.accurate_model.compute_type": "int8",
+            }.get(key, default)
+        )
         yield mock_cfg
 
 
@@ -98,7 +100,7 @@ def mock_vad():
 def service(mock_bus, mock_config, mock_whisper_model, mock_vad):
     """Create a TranscriptionService instance with mocked dependencies."""
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
-        return TranscriptionService()
+        yield TranscriptionService()
 
 
 @pytest.fixture
@@ -131,26 +133,28 @@ class TestInitialization:
         with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
             service = TranscriptionService()
 
-        assert service.bus is mock_bus
-        assert service._running is False
-        assert service._transcribing is False
-        assert service._paused is False
-        assert service._realtime_model is None
-        assert service._accurate_model is None
-        assert len(service._audio_buffer) == 0
-        assert service._audio_format is None
-        assert service._current_source == "microphone"
-        assert service._chunks_received == 0
-        assert service._transcriptions_done == 0
+            assert service.bus is mock_bus
+            assert service._running is False
+            assert service._transcribing is False
+            assert service._paused is False
+            assert service._realtime_model is None
+            assert service._accurate_model is None
+            assert len(service._audio_buffer) == 0
+            assert service._audio_format is None
+            assert service._current_source == "microphone"
+            assert service._chunks_received == 0
+            assert service._transcriptions_done == 0
 
     @pytest.mark.asyncio
     async def test_loads_configuration(self, mock_bus, mock_config, mock_whisper_model, mock_vad):
         """Test service loads configuration on initialization."""
-        mock_config.aget = AsyncMock(side_effect=lambda key, default: {
-            "general.speech_to_text.language": "en",
-            "general.speech_to_text.transcription.realtime_model.enabled": True,
-            "general.speech_to_text.transcription.accurate_model.enabled": True,
-        }.get(key, default))
+        mock_config.aget = AsyncMock(
+            side_effect=lambda key, default: {
+                "general.speech_to_text.language": "en",
+                "general.speech_to_text.transcription.realtime_model.enabled": True,
+                "general.speech_to_text.transcription.accurate_model.enabled": True,
+            }.get(key, default)
+        )
 
         with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
             service = TranscriptionService()
@@ -571,9 +575,8 @@ class TestControlCommands:
     async def test_pause_command(self, service):
         """Test pause control command."""
         control = TranscriptionControl(action="pause")
-        envelope = Envelope(type=TranscriptionMethods.CONTROL, payload=control)
 
-        await service._on_control(envelope)
+        await service._on_control(control)
 
         assert service._paused is True
 
@@ -584,9 +587,8 @@ class TestControlCommands:
         service._audio_buffer.append(b"old data")
 
         control = TranscriptionControl(action="resume")
-        envelope = Envelope(type=TranscriptionMethods.CONTROL, payload=control)
 
-        await service._on_control(envelope)
+        await service._on_control(control)
 
         assert service._paused is False
         assert len(service._audio_buffer) == 0  # Buffers cleared
@@ -595,9 +597,8 @@ class TestControlCommands:
     async def test_set_language_command(self, service):
         """Test set language control command."""
         control = TranscriptionControl(action="set_language", language="es")
-        envelope = Envelope(type=TranscriptionMethods.CONTROL, payload=control)
 
-        await service._on_control(envelope)
+        await service._on_control(control)
 
         assert service._language == "es"
 
@@ -605,9 +606,8 @@ class TestControlCommands:
     async def test_enable_realtime_command(self, service):
         """Test enable realtime transcription command."""
         control = TranscriptionControl(action="enable_realtime", enabled=False)
-        envelope = Envelope(type=TranscriptionMethods.CONTROL, payload=control)
 
-        await service._on_control(envelope)
+        await service._on_control(control)
 
         assert service._realtime_enabled is False
 
@@ -615,9 +615,8 @@ class TestControlCommands:
     async def test_enable_accurate_command(self, service):
         """Test enable accurate transcription command."""
         control = TranscriptionControl(action="enable_accurate", enabled=False)
-        envelope = Envelope(type=TranscriptionMethods.CONTROL, payload=control)
 
-        await service._on_control(envelope)
+        await service._on_control(control)
 
         assert service._accurate_enabled is False
 
