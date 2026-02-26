@@ -14,8 +14,8 @@ from croniter import croniter
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import MessageBus
-from app.shared.models.db import CronJob, JobStatus, ScheduleType
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
+from app.shared.models.db import CronJob, JobStatus, ScheduleType
 
 
 class SchedulerManager:

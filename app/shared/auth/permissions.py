@@ -224,7 +224,10 @@ def has_permission(
         for perm in granted_perms:
             if perm.endswith(".*"):
                 prefix_parts = perm[:-2].split(".")  # Strip ".*" then split
-                if len(prefix_parts) < len(required_parts) and required_parts[: len(prefix_parts)] == prefix_parts:
+                if (
+                    len(prefix_parts) < len(required_parts)
+                    and required_parts[: len(prefix_parts)] == prefix_parts
+                ):
                     return True
 
     # 4. Type-based matching: "Auth.use" matches "Auth.Login" if method_type="use"

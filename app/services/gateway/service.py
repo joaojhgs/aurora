@@ -97,8 +97,12 @@ class GatewayService(BaseService):
             return Settings(
                 api=APISettings.from_gateway_dict(gateway),
                 webrtc=WebRTCSettings.model_validate(webrtc) if webrtc else WebRTCSettings(),
-                signaling_mqtt=MQTTSettings.model_validate(signaling_mqtt) if signaling_mqtt else MQTTSettings(),
-                permissions=PermissionSettings.model_validate(permissions) if permissions else PermissionSettings(),
+                signaling_mqtt=MQTTSettings.model_validate(signaling_mqtt)
+                if signaling_mqtt
+                else MQTTSettings(),
+                permissions=PermissionSettings.model_validate(permissions)
+                if permissions
+                else PermissionSettings(),
                 mesh=MeshConfig.model_validate(mesh) if mesh else MeshConfig(),
             )
 
@@ -193,8 +197,9 @@ class GatewayService(BaseService):
             # Enhancement A: Auto-generate room ID and password if at defaults
             config_changed = False
             try:
-                from app.services.config.config_manager import ConfigManager
                 import secrets as _secrets
+
+                from app.services.config.config_manager import ConfigManager
 
                 _cfg_mgr = ConfigManager()
 
@@ -230,10 +235,9 @@ class GatewayService(BaseService):
 
             await self._registry_aggregator.start()
 
-            from app.services.gateway.webrtc.rtc_client import RTCClient
-
             from app.services.gateway.auth_proxy import BusAuthProxy
             from app.services.gateway.dependencies import set_rtc_client
+            from app.services.gateway.webrtc.rtc_client import RTCClient
 
             auth_proxy = BusAuthProxy(self.bus)
 
@@ -382,9 +386,7 @@ class GatewayService(BaseService):
             room_name_for_callbacks = settings.webrtc.room or "default"
             bus_for_callbacks = self.bus
 
-            async def _on_peer_registered(
-                p_id: str, p_name: str, p_status: str
-            ) -> None:
+            async def _on_peer_registered(p_id: str, p_name: str, p_status: str) -> None:
                 from app.shared.contracts.models.mesh import MeshPeerUpsertRequest
 
                 await bus_for_callbacks.request(
@@ -397,9 +399,7 @@ class GatewayService(BaseService):
                     timeout=5.0,
                 )
 
-            async def _on_peer_removed(
-                p_id: str, p_name: str, p_status: str
-            ) -> None:
+            async def _on_peer_removed(p_id: str, p_name: str, p_status: str) -> None:
                 from app.shared.contracts.models.mesh import (
                     MeshPeerUpdateConnectionRequest,
                 )
@@ -414,9 +414,7 @@ class GatewayService(BaseService):
                     timeout=5.0,
                 )
 
-            async def _on_peer_status_changed(
-                p_id: str, p_name: str, p_status: str
-            ) -> None:
+            async def _on_peer_status_changed(p_id: str, p_name: str, p_status: str) -> None:
                 from app.shared.contracts.models.mesh import (
                     MeshPeerUpdateConnectionRequest,
                 )
@@ -446,6 +444,7 @@ class GatewayService(BaseService):
             room_name = settings.webrtc.room or "default"
             try:
                 from app.shared.contracts.models.mesh import MeshPeerLoadInboundRequest
+
                 resp = await self.bus.request(
                     "Auth.MeshLoadInboundCredentials",
                     MeshPeerLoadInboundRequest(room_name=room_name),
@@ -485,6 +484,7 @@ class GatewayService(BaseService):
                             MeshPeerSaveInboundRequest,
                             MeshPeerUpsertRequest,
                         )
+
                         # Ensure peer row exists
                         await bus_ref.request(
                             "Auth.MeshUpsertPeer",
@@ -512,6 +512,7 @@ class GatewayService(BaseService):
                     else:
                         # Legacy single-room save (backward compat)
                         from app.shared.contracts.models.auth import MeshCredentialSaveRequest
+
                         await bus_ref.request(
                             "Auth.SaveMeshCredential",
                             MeshCredentialSaveRequest(
@@ -540,6 +541,7 @@ class GatewayService(BaseService):
             # Update BOTH singletons so all code paths see the MeshBus
             set_bus(self._mesh_bus)
             from app.shared.messaging.bus_init import set_bus as set_shared_bus
+
             set_shared_bus(self._mesh_bus)
 
             # Start background tasks
@@ -605,9 +607,7 @@ class GatewayService(BaseService):
                 # Update node_name if changed
                 await self.bus.request(
                     "Auth.SaveMeshIdentity",
-                    MeshIdentitySaveRequest(
-                        peer_id=saved_peer_id, node_name=node_name
-                    ),
+                    MeshIdentitySaveRequest(peer_id=saved_peer_id, node_name=node_name),
                     timeout=5.0,
                 )
                 return saved_peer_id
@@ -616,9 +616,7 @@ class GatewayService(BaseService):
             new_peer_id = f"aurora-{_secrets.token_hex(16)}"
             await self.bus.request(
                 "Auth.SaveMeshIdentity",
-                MeshIdentitySaveRequest(
-                    peer_id=new_peer_id, node_name=node_name
-                ),
+                MeshIdentitySaveRequest(peer_id=new_peer_id, node_name=node_name),
                 timeout=5.0,
             )
             log_info(f"Generated and saved new mesh peer_id: {new_peer_id}")

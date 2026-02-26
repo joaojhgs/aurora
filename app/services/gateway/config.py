@@ -118,7 +118,6 @@ class APISettings(BaseModel):
         )
 
 
-
 class WebRTCSettings(BaseModel):
     enabled: bool = True
     strategy: str = "mqtt"

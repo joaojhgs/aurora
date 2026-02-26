@@ -122,9 +122,15 @@ class MeshBus:
         # Events always go local first
         if event:
             await self._inner.publish(
-                topic, message, event=True, priority=priority,
-                origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                max_attempts=max_attempts, reply_to=reply_to,
+                topic,
+                message,
+                event=True,
+                priority=priority,
+                origin=origin,
+                reliable=reliable,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                reply_to=reply_to,
                 principal_id=principal_id,
             )
             # Forward events to connected peers when mesh=True and module is shared
@@ -136,12 +142,13 @@ class MeshBus:
                     for peer in peers:
                         try:
                             self._peer_bridge.fire_event(
-                                peer.peer_id, topic, message,
+                                peer.peer_id,
+                                topic,
+                                message,
                             )
                         except Exception as exc:
                             log_debug(
-                                f"MeshBus: Failed to forward event {topic} "
-                                f"to {peer.peer_id}: {exc}"
+                                f"MeshBus: Failed to forward event {topic} to {peer.peer_id}: {exc}"
                             )
             return
 
@@ -154,20 +161,27 @@ class MeshBus:
 
         if route.target == "local":
             await self._inner.publish(
-                topic, message, event=False, priority=priority,
-                origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                max_attempts=max_attempts, reply_to=reply_to,
+                topic,
+                message,
+                event=False,
+                priority=priority,
+                origin=origin,
+                reliable=reliable,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                reply_to=reply_to,
                 principal_id=principal_id,
             )
             return
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
-            log_info(
-                f"MeshBus: Routing command {topic} to remote peer {route.peer_id}"
-            )
+            log_info(f"MeshBus: Routing command {topic} to remote peer {route.peer_id}")
             try:
                 result = await self._peer_bridge.call(
-                    route.peer_id, topic, message, timeout=self._remote_timeout,
+                    route.peer_id,
+                    topic,
+                    message,
+                    timeout=self._remote_timeout,
                 )
             except Exception as e:
                 log_warning(f"MeshBus: Remote publish to {route.peer_id} failed: {e}")
@@ -184,20 +198,29 @@ class MeshBus:
 
             # Try fallback (either transport error or application-level error)
             fallback = self._routing_table.resolve_fallback(
-                topic, failed_peer_id=route.peer_id,
+                topic,
+                failed_peer_id=route.peer_id,
             )
             if fallback.target == "local":
                 await self._inner.publish(
-                    topic, message, event=False, priority=priority,
-                    origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                    max_attempts=max_attempts, reply_to=reply_to,
+                    topic,
+                    message,
+                    event=False,
+                    priority=priority,
+                    origin=origin,
+                    reliable=reliable,
+                    ttl_ms=ttl_ms,
+                    max_attempts=max_attempts,
+                    reply_to=reply_to,
                     principal_id=principal_id,
                 )
                 return
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
                 try:
                     result = await self._peer_bridge.call(
-                        fallback.peer_id, topic, message,
+                        fallback.peer_id,
+                        topic,
+                        message,
                         timeout=self._remote_timeout,
                     )
                 except Exception as e2:
@@ -215,9 +238,15 @@ class MeshBus:
 
                 # Last resort — deliver locally so the command isn't dropped
                 await self._inner.publish(
-                    topic, message, event=False, priority=priority,
-                    origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-                    max_attempts=max_attempts, reply_to=reply_to,
+                    topic,
+                    message,
+                    event=False,
+                    priority=priority,
+                    origin=origin,
+                    reliable=reliable,
+                    ttl_ms=ttl_ms,
+                    max_attempts=max_attempts,
+                    reply_to=reply_to,
                     principal_id=principal_id,
                 )
                 return
@@ -231,9 +260,15 @@ class MeshBus:
 
         # Default: deliver locally
         await self._inner.publish(
-            topic, message, event=False, priority=priority,
-            origin=origin, reliable=reliable, ttl_ms=ttl_ms,
-            max_attempts=max_attempts, reply_to=reply_to,
+            topic,
+            message,
+            event=False,
+            priority=priority,
+            origin=origin,
+            reliable=reliable,
+            ttl_ms=ttl_ms,
+            max_attempts=max_attempts,
+            reply_to=reply_to,
             principal_id=principal_id,
         )
 
@@ -275,18 +310,24 @@ class MeshBus:
 
         if route.target == "local":
             return await self._inner.request(
-                topic, message, priority=priority, origin=origin,
-                timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
                 principal_id=principal_id,
             )
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
-            log_info(
-                f"MeshBus: Routing request {topic} to remote peer {route.peer_id}"
-            )
+            log_info(f"MeshBus: Routing request {topic} to remote peer {route.peer_id}")
             try:
                 result = await self._peer_bridge.call(
-                    route.peer_id, topic, message, timeout=timeout,
+                    route.peer_id,
+                    topic,
+                    message,
+                    timeout=timeout,
                 )
                 if result.ok:
                     return result
@@ -299,26 +340,40 @@ class MeshBus:
 
             # Try fallback
             fallback = self._routing_table.resolve_fallback(
-                topic, failed_peer_id=route.peer_id,
+                topic,
+                failed_peer_id=route.peer_id,
             )
             if fallback.target == "local":
                 log_info(f"MeshBus: Falling back to local for {topic}")
                 return await self._inner.request(
-                    topic, message, priority=priority, origin=origin,
-                    timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                    topic,
+                    message,
+                    priority=priority,
+                    origin=origin,
+                    timeout=timeout,
+                    ttl_ms=ttl_ms,
+                    max_attempts=max_attempts,
                     principal_id=principal_id,
                 )
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
                 try:
                     return await self._peer_bridge.call(
-                        fallback.peer_id, topic, message, timeout=timeout,
+                        fallback.peer_id,
+                        topic,
+                        message,
+                        timeout=timeout,
                     )
                 except Exception as e2:
                     log_warning(f"MeshBus: Fallback remote request failed: {e2}")
                     # Last resort — try local
                     return await self._inner.request(
-                        topic, message, priority=priority, origin=origin,
-                        timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+                        topic,
+                        message,
+                        priority=priority,
+                        origin=origin,
+                        timeout=timeout,
+                        ttl_ms=ttl_ms,
+                        max_attempts=max_attempts,
                         principal_id=principal_id,
                     )
 
@@ -330,8 +385,13 @@ class MeshBus:
 
         # Default: deliver locally
         return await self._inner.request(
-            topic, message, priority=priority, origin=origin,
-            timeout=timeout, ttl_ms=ttl_ms, max_attempts=max_attempts,
+            topic,
+            message,
+            priority=priority,
+            origin=origin,
+            timeout=timeout,
+            ttl_ms=ttl_ms,
+            max_attempts=max_attempts,
             principal_id=principal_id,
         )
 
