@@ -1,4 +1,5 @@
 """Integration tests for login / logout / me / token-refresh endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -14,7 +15,9 @@ from app.services.gateway.dependencies import set_gateway_auth
 from app.services.gateway.fastapi_app import create_gateway_app
 from app.services.gateway.registry_aggregator import RegistryAggregator
 
-pytestmark = pytest.mark.skip(reason="Auth endpoints migrated to Auth service contracts (auto-generated)")
+pytestmark = pytest.mark.skip(
+    reason="Auth endpoints migrated to Auth service contracts (auto-generated)"
+)
 
 
 @pytest_asyncio.fixture

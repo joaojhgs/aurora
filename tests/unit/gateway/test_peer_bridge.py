@@ -47,11 +47,14 @@ class TestPeerBridgeCall:
             # Find the pending call and resolve it
             for req_id, fut in list(bridge._pending_calls.items()):
                 if not fut.done():
-                    bridge.on_response("peer-1", {
-                        "type": "result",
-                        "id": req_id,
-                        "result": {"text": "world"},
-                    })
+                    bridge.on_response(
+                        "peer-1",
+                        {
+                            "type": "result",
+                            "id": req_id,
+                            "result": {"text": "world"},
+                        },
+                    )
 
         task = asyncio.create_task(simulate_response())
         result = await bridge.call("peer-1", "TTS.Request", FakePayload(), timeout=5.0)
@@ -81,11 +84,14 @@ class TestPeerBridgeCall:
             await asyncio.sleep(0.05)
             for req_id, fut in list(bridge._pending_calls.items()):
                 if not fut.done():
-                    bridge.on_response("peer-1", {
-                        "type": "result",
-                        "id": req_id,
-                        "result": {"ok": True},
-                    })
+                    bridge.on_response(
+                        "peer-1",
+                        {
+                            "type": "result",
+                            "id": req_id,
+                            "result": {"ok": True},
+                        },
+                    )
 
         task = asyncio.create_task(simulate_response())
         result = await bridge.call("peer-1", "TTS.Request", {"text": "hi"}, timeout=5.0)
@@ -102,11 +108,14 @@ class TestPeerBridgeOnResponse:
         fut = loop.create_future()
         bridge._pending_calls["req-123"] = fut
 
-        bridge.on_response("peer-1", {
-            "type": "result",
-            "id": "req-123",
-            "result": {"data": 42},
-        })
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "result",
+                "id": "req-123",
+                "result": {"data": 42},
+            },
+        )
 
         result = fut.result()
         assert result.ok is True
@@ -118,11 +127,14 @@ class TestPeerBridgeOnResponse:
         fut = loop.create_future()
         bridge._pending_calls["req-456"] = fut
 
-        bridge.on_response("peer-1", {
-            "type": "error",
-            "id": "req-456",
-            "error": {"message": "Not found", "code": 404},
-        })
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "error",
+                "id": "req-456",
+                "error": {"message": "Not found", "code": 404},
+            },
+        )
 
         result = fut.result()
         assert result.ok is False

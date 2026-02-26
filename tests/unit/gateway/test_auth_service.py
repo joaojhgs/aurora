@@ -7,10 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.messaging.bus import QueryResult
+from app.services.auth.auth_manager import AuthManager as AuthService
 from app.shared.contracts.models.db import DBMethods
 from app.shared.models.db import Device, Token, User
-from app.services.auth.auth_manager import AuthManager as AuthService
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -247,7 +246,9 @@ async def test_pairing_with_explicit_permissions(auth_service):
     assert pairing_code is not None
 
     granted_perms = ["TTS.*", "STT.Transcribe"]
-    success = await auth_service.approve_pairing(pairing_code, "admin-id", permissions=granted_perms)
+    success = await auth_service.approve_pairing(
+        pairing_code, "admin-id", permissions=granted_perms
+    )
     assert success is True
     assert auth_service.pairing_requests[pairing_code]["granted_permissions"] == granted_perms
     assert auth_service.pairing_requests[pairing_code]["granted_is_admin"] is False
@@ -345,7 +346,6 @@ async def test_pairing_expiration(auth_service):
 
 
 class TestValidateScopesSubset:
-
     def _make_user(
         self,
         permissions: list[str] | None = None,
@@ -631,9 +631,7 @@ async def test_load_mesh_credential_found(auth_service):
 
 @pytest.mark.asyncio
 async def test_load_mesh_credential_not_found(auth_service):
-    auth_service._bus_router.on(
-        DBMethods.GET_MESH_CREDENTIAL_BY_ROOM, _ok({"credential": None})
-    )
+    auth_service._bus_router.on(DBMethods.GET_MESH_CREDENTIAL_BY_ROOM, _ok({"credential": None}))
     result = await auth_service.load_mesh_credential("unknown-room")
     assert result is None
 

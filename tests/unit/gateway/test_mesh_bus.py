@@ -104,9 +104,7 @@ class TestMeshBusPublish:
         # Local delivery
         inner_bus.publish.assert_awaited_once()
         # Peer forwarding
-        peer_bridge.fire_event.assert_called_once_with(
-            "peer-1", "TTS.Started", FakePayload()
-        )
+        peer_bridge.fire_event.assert_called_once_with("peer-1", "TTS.Started", FakePayload())
 
     @pytest.mark.asyncio
     async def test_events_with_mesh_true_not_forwarded_when_not_shared(
@@ -145,9 +143,7 @@ class TestMeshBusPublish:
         peer_bridge.fire_event.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_events_with_mesh_true_no_sharing_config(
-        self, mesh_bus, inner_bus, peer_bridge
-    ):
+    async def test_events_with_mesh_true_no_sharing_config(self, mesh_bus, inner_bus, peer_bridge):
         """Events with mesh=True but no sharing config for module stay local."""
         # Default mesh_config fixture has no sharing entries
         await mesh_bus.publish("Unknown.Event", FakePayload(), event=True, mesh=True)
@@ -155,9 +151,7 @@ class TestMeshBusPublish:
         peer_bridge.fire_event.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_events_forwarded_to_multiple_peers(
-        self, inner_bus, routing_table, peer_bridge
-    ):
+    async def test_events_forwarded_to_multiple_peers(self, inner_bus, routing_table, peer_bridge):
         """Events with mesh=True are forwarded to ALL negotiated peers."""
         cfg = MeshConfig(
             enabled=True,
@@ -199,9 +193,7 @@ class TestMeshBusPublish:
             target="remote", peer_id="peer-1", module="TTS"
         )
         peer_bridge.call.side_effect = Exception("connection lost")
-        routing_table.resolve_fallback.return_value = RouteDecision(
-            target="local", module="TTS"
-        )
+        routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
         inner_bus.publish.assert_awaited_once()
 
@@ -245,9 +237,7 @@ class TestMeshBusRequest:
             target="remote", peer_id="peer-1", module="TTS"
         )
         peer_bridge.call.side_effect = Exception("timeout")
-        routing_table.resolve_fallback.return_value = RouteDecision(
-            target="local", module="TTS"
-        )
+        routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is True
         inner_bus.request.assert_awaited_once()
@@ -260,9 +250,7 @@ class TestMeshBusRequest:
             target="remote", peer_id="peer-1", module="TTS"
         )
         peer_bridge.call.return_value = QueryResult(ok=False, error="Service error")
-        routing_table.resolve_fallback.return_value = RouteDecision(
-            target="local", module="TTS"
-        )
+        routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is True
         inner_bus.request.assert_awaited_once()

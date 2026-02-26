@@ -15,7 +15,9 @@ from app.services.gateway.dependencies import set_gateway_auth
 from app.services.gateway.fastapi_app import create_gateway_app
 from app.services.gateway.registry_aggregator import RegistryAggregator
 
-pytestmark = pytest.mark.skip(reason="Pairing endpoints migrated to Auth service contracts (auto-generated)")
+pytestmark = pytest.mark.skip(
+    reason="Pairing endpoints migrated to Auth service contracts (auto-generated)"
+)
 
 
 @pytest_asyncio.fixture

@@ -51,7 +51,9 @@ def _make_authenticated_acl():
 async def test_anonymous_blocked_from_rpc_call(mock_bus, mock_registry, mock_send_fn):
     """ANONYMOUS peer calling non-pairing method gets 401."""
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
         _make_anonymous_acl(),
     )
 
@@ -65,11 +67,16 @@ async def test_anonymous_blocked_from_rpc_call(mock_bus, mock_registry, mock_sen
     announcement.methods = [method_info]
     mock_registry.get_service.return_value = announcement
 
-    await handler.on_message(json.dumps({
-        "type": "call", "id": "1",
-        "method": "SomeService.DoSomething",
-        "params": {},
-    }))
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "1",
+                "method": "SomeService.DoSomething",
+                "params": {},
+            }
+        )
+    )
 
     # Should get 401 error
     mock_send_fn.assert_called_once()
@@ -82,7 +89,9 @@ async def test_anonymous_blocked_from_rpc_call(mock_bus, mock_registry, mock_sen
 async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_send_fn):
     """ANONYMOUS peer calling PairingStart is allowed through."""
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
         _make_anonymous_acl(),
     )
 
@@ -95,13 +104,20 @@ async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_sen
     announcement.methods = [method_info]
     mock_registry.get_service.return_value = announcement
 
-    mock_bus.request.return_value = QueryResult(ok=True, data={"code": "123456", "expires_in_seconds": 300})
+    mock_bus.request.return_value = QueryResult(
+        ok=True, data={"code": "123456", "expires_in_seconds": 300}
+    )
 
-    await handler.on_message(json.dumps({
-        "type": "call", "id": "2",
-        "method": "Auth.PairingStart",
-        "params": {"device_name": "test-device"},
-    }))
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "2",
+                "method": "Auth.PairingStart",
+                "params": {"device_name": "test-device"},
+            }
+        )
+    )
 
     # Should get a result, not an error
     mock_send_fn.assert_called_once()
@@ -113,7 +129,9 @@ async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_sen
 async def test_anonymous_allowed_pairing_exchange(mock_bus, mock_registry, mock_send_fn):
     """ANONYMOUS peer calling PairingExchange is allowed through."""
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
         _make_anonymous_acl(),
     )
 
@@ -126,13 +144,20 @@ async def test_anonymous_allowed_pairing_exchange(mock_bus, mock_registry, mock_
     announcement.methods = [method_info]
     mock_registry.get_service.return_value = announcement
 
-    mock_bus.request.return_value = QueryResult(ok=True, data={"token": "abc", "device_id": "d1", "user_id": "u1"})
+    mock_bus.request.return_value = QueryResult(
+        ok=True, data={"token": "abc", "device_id": "d1", "user_id": "u1"}
+    )
 
-    await handler.on_message(json.dumps({
-        "type": "call", "id": "3",
-        "method": "Auth.PairingExchange",
-        "params": {"code": "123456"},
-    }))
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "3",
+                "method": "Auth.PairingExchange",
+                "params": {"code": "123456"},
+            }
+        )
+    )
 
     mock_send_fn.assert_called_once()
     response = json.loads(mock_send_fn.call_args[0][0])
@@ -143,15 +168,21 @@ async def test_anonymous_allowed_pairing_exchange(mock_bus, mock_registry, mock_
 async def test_anonymous_blocked_from_event(mock_bus, mock_registry, mock_send_fn):
     """ANONYMOUS peer sending an event gets it blocked (not published to bus)."""
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
         _make_anonymous_acl(),
     )
 
-    await handler.on_message(json.dumps({
-        "type": "event",
-        "topic": "TTS.Started",
-        "params": {"text": "hello"},
-    }))
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"text": "hello"},
+            }
+        )
+    )
 
     # Bus.publish should NOT have been called
     mock_bus.publish.assert_not_called()
@@ -161,7 +192,9 @@ async def test_anonymous_blocked_from_event(mock_bus, mock_registry, mock_send_f
 async def test_authenticated_peer_rpc_works(mock_bus, mock_registry, mock_send_fn):
     """Authenticated peer can call any method they have permissions for."""
     handler = RPCHandler(
-        mock_bus, mock_registry, mock_send_fn,
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
         _make_authenticated_acl(),
     )
 
@@ -176,11 +209,16 @@ async def test_authenticated_peer_rpc_works(mock_bus, mock_registry, mock_send_f
 
     mock_bus.request.return_value = QueryResult(ok=True, data={"result": "ok"})
 
-    await handler.on_message(json.dumps({
-        "type": "call", "id": "4",
-        "method": "SomeService.DoSomething",
-        "params": {},
-    }))
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "4",
+                "method": "SomeService.DoSomething",
+                "params": {},
+            }
+        )
+    )
 
     mock_send_fn.assert_called_once()
     response = json.loads(mock_send_fn.call_args[0][0])

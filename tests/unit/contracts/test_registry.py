@@ -237,7 +237,9 @@ def test_explicit_module_registration_preserves_metadata():
     async def explicit_method(req: TestInput) -> None:
         pass
 
-    register_method("ExplicitModule", "ExplicitMethod", explicit_method, explicit_method._contract_metadata)
+    register_method(
+        "ExplicitModule", "ExplicitMethod", explicit_method, explicit_method._contract_metadata
+    )
 
     modules = list_modules()
     module = modules["ExplicitModule"]

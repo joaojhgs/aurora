@@ -4,6 +4,7 @@ import json
 import os
 import sys
 
+import cryptography.exceptions
 import pytest
 
 # Ensure scripts directory is importable
@@ -39,7 +40,7 @@ class TestSealOpenRoundtrip:
 
         sealed = _seal_invite(key_a, data)
 
-        with pytest.raises(Exception):
+        with pytest.raises(cryptography.exceptions.InvalidTag):
             _open_invite(key_b, sealed)
 
     def test_different_keys_produce_different_output(self):
@@ -73,14 +74,24 @@ class TestExportImport:
 
         # Capture the invite code from export
         captured_output = []
-        monkeypatch.setattr("builtins.print", lambda *args: captured_output.append(" ".join(str(a) for a in args)))
+        monkeypatch.setattr(
+            "builtins.print", lambda *args: captured_output.append(" ".join(str(a) for a in args))
+        )
 
         with patch("scripts.config_updater.ConfigManager", return_value=export_config):
             from scripts.config_updater import export_room_invite
+
             export_room_invite(passphrase="test123")
 
         # Extract the invite code (it's the line between the separator lines)
-        code_lines = [line for line in captured_output if not line.startswith("=") and not line.startswith("Share") and not line.startswith("Tip") and not line.startswith("AURORA")]
+        code_lines = [
+            line
+            for line in captured_output
+            if not line.startswith("=")
+            and not line.startswith("Share")
+            and not line.startswith("Tip")
+            and not line.startswith("AURORA")
+        ]
         invite_code = code_lines[0].strip() if code_lines else ""
         assert len(invite_code) > 0
 
@@ -97,6 +108,7 @@ class TestExportImport:
 
         with patch("scripts.config_updater.ConfigManager", return_value=import_config):
             from scripts.config_updater import import_room_invite
+
             import_room_invite(invite_code, passphrase="test123")
 
         assert set_calls["gateway.webrtc.room"] == "aurora-test123"
@@ -148,6 +160,7 @@ class TestExportImport:
 
         with patch("scripts.config_updater.ConfigManager", return_value=import_config):
             from scripts.config_updater import import_room_invite
+
             import_room_invite(invite_code, passphrase="default-passphrase")
 
         # Only gateway keys should be set

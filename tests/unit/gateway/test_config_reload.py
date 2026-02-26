@@ -1,4 +1,5 @@
 """Unit tests for gateway config hot-reload (auth settings)."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
