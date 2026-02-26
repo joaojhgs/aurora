@@ -26,6 +26,7 @@ def _json_default(obj: object) -> str:
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
+
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
     from app.services.gateway.acl.identity import Identity
@@ -126,7 +127,11 @@ class RPCHandler:
 
         # Extract method short name for infrastructure checks
         delimiter = "." if "." in method_name else "/" if "/" in method_name else None
-        short_name = method_name.split(delimiter, 1)[1] if delimiter and delimiter in method_name else method_name
+        short_name = (
+            method_name.split(delimiter, 1)[1]
+            if delimiter and delimiter in method_name
+            else method_name
+        )
         is_infra_method = short_name in self._ANON_ALLOWED_METHODS
 
         # Mesh sharing gate: check if the called service is shared
@@ -144,7 +149,8 @@ class RPCHandler:
                 not self._peer_id or self._peer_id not in sharing.allowed_peers
             ):
                 self._send_error(
-                    req_id, 403,
+                    req_id,
+                    403,
                     f"Peer not allowed to access service {module_name}",
                 )
                 return
@@ -168,13 +174,10 @@ class RPCHandler:
         identity: Identity = self._acl_provider()
 
         # Gap 2C: Block ANONYMOUS from all methods except pairing/auth
-        if identity.principal_id == "anonymous":
-            if meta.name not in self._ANON_ALLOWED_METHODS:
-                log_warning(
-                    f"RPCHandler: Blocked call to {method_name} from ANONYMOUS peer"
-                )
-                self._send_error(req_id, 401, "Authentication required")
-                return
+        if identity.principal_id == "anonymous" and meta.name not in self._ANON_ALLOWED_METHODS:
+            log_warning(f"RPCHandler: Blocked call to {method_name} from ANONYMOUS peer")
+            self._send_error(req_id, 401, "Authentication required")
+            return
 
         if perms_needed and not identity.can(*perms_needed):
             log_warning(
@@ -216,7 +219,9 @@ class RPCHandler:
             # Notify peers of capacity change
             if self._capacity_notify_fn and max_concurrent > 0:
                 active = self._active_remote_calls[module_for_capacity]
-                self._capacity_notify_fn(module_for_capacity, max_concurrent - active, max_concurrent)
+                self._capacity_notify_fn(
+                    module_for_capacity, max_concurrent - active, max_concurrent
+                )
         try:
             log_debug(f"RPCHandler: Executing {topic} via bus")
             res = await self._bus.request(
@@ -239,7 +244,12 @@ class RPCHandler:
                             if isinstance(chunk, bytes):
                                 data = chunk.decode(errors="ignore")
 
-                            self._send(json.dumps({"type": "chunk", "id": req_id, "data": data}, default=_json_default))
+                            self._send(
+                                json.dumps(
+                                    {"type": "chunk", "id": req_id, "data": data},
+                                    default=_json_default,
+                                )
+                            )
                         self._send(json.dumps({"type": "eof", "id": req_id}))
                     except Exception as e:
                         log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
@@ -249,7 +259,12 @@ class RPCHandler:
                     if hasattr(res.data, "model_dump"):
                         result_data = res.data.model_dump()
 
-                    self._send(json.dumps({"type": "result", "id": req_id, "result": result_data}, default=_json_default))
+                    self._send(
+                        json.dumps(
+                            {"type": "result", "id": req_id, "result": result_data},
+                            default=_json_default,
+                        )
+                    )
             else:
                 self._send_error(req_id, 500, res.error or "Service request failed")
 
@@ -267,7 +282,9 @@ class RPCHandler:
                 # Notify peers of capacity change
                 if self._capacity_notify_fn and max_concurrent > 0:
                     active = self._active_remote_calls.get(module_for_capacity, 0)
-                    self._capacity_notify_fn(module_for_capacity, max_concurrent - active, max_concurrent)
+                    self._capacity_notify_fn(
+                        module_for_capacity, max_concurrent - active, max_concurrent
+                    )
 
     async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
         delimiter = "." if "." in method_name else "/" if "/" in method_name else None

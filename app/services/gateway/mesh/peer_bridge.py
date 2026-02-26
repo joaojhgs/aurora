@@ -227,10 +227,7 @@ class PeerBridge:
         if sent:
             log_debug(f"PeerBridge: Forwarded event {topic} to {peer_id}")
         else:
-            log_debug(
-                f"PeerBridge: Could not forward event {topic} to "
-                f"{peer_id} (not connected)"
-            )
+            log_debug(f"PeerBridge: Could not forward event {topic} to {peer_id} (not connected)")
 
     async def cancel_all(self) -> None:
         """Cancel all pending calls.
@@ -239,7 +236,5 @@ class PeerBridge:
         """
         for _req_id, fut in list(self._pending_calls.items()):
             if not fut.done():
-                fut.set_result(
-                    QueryResult(ok=False, error="PeerBridge shutting down")
-                )
+                fut.set_result(QueryResult(ok=False, error="PeerBridge shutting down"))
         self._pending_calls.clear()

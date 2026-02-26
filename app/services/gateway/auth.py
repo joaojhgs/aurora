@@ -144,10 +144,7 @@ class GatewayAuth:
         Returns:
             True if path should bypass auth
         """
-        return any(
-            path == bp or path.startswith(bp + "/")
-            for bp in self._bypass_paths
-        )
+        return any(path == bp or path.startswith(bp + "/") for bp in self._bypass_paths)
 
     def add_api_key(self, api_key: str) -> None:
         """Add an API key.
@@ -236,8 +233,8 @@ _apikey_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 async def check_auth_enabled(
     request: Request,
     security_scopes: SecurityScopes,
-    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
-    api_key_header: str | None = Security(_apikey_scheme),
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),  # noqa: B008
+    api_key_header: str | None = Security(_apikey_scheme),  # noqa: B008
     auth: Any = None,
 ) -> Identity:
     """FastAPI Security dependency that returns an Identity.
@@ -259,7 +256,11 @@ async def check_auth_enabled(
         HTTPException 403 if insufficient permissions.
     """
     return await _resolve_identity_and_check(
-        request, security_scopes, bearer, api_key_header, auth=auth,
+        request,
+        security_scopes,
+        bearer,
+        api_key_header,
+        auth=auth,
     )
 
 
@@ -281,11 +282,14 @@ def create_scoped_auth_check(method_type: str = "use"):
     async def scoped_auth_check(
         request: Request,
         security_scopes: SecurityScopes,
-        bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
-        api_key_header: str | None = Security(_apikey_scheme),
+        bearer: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),  # noqa: B008
+        api_key_header: str | None = Security(_apikey_scheme),  # noqa: B008
     ) -> Identity:
         return await _resolve_identity_and_check(
-            request, security_scopes, bearer, api_key_header,
+            request,
+            security_scopes,
+            bearer,
+            api_key_header,
             method_type=method_type,
         )
 

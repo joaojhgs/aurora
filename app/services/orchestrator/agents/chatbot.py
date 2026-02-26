@@ -344,13 +344,17 @@ async def _initialize_llm() -> None:
                     llama_init_options["model_path"] = str(resolved_model_path)  # Use resolved path
                     llama_init_options["disable_streaming"] = True
 
-                    log_info(f"Attempting to initialize Llama.cpp LLM with model: {resolved_model_path}")
+                    log_info(
+                        f"Attempting to initialize Llama.cpp LLM with model: {resolved_model_path}"
+                    )
                     log_debug(
                         f"Llama.cpp initialization options: {list(llama_init_options.keys())}"
                     )
 
                     llm = ChatLlamaCpp(**llama_init_options)
-                    log_info(f"Successfully initialized Llama.cpp LLM with model: {resolved_model_path}")
+                    log_info(
+                        f"Successfully initialized Llama.cpp LLM with model: {resolved_model_path}"
+                    )
                 except Exception as e:
                     log_error(f"Failed to initialize Llama.cpp LLM: {e}", exc_info=True)
                     llm = None

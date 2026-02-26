@@ -109,6 +109,7 @@ OPEN_PEER: Identity = Identity(
 
 # ── Builder ──────────────────────────────────────────────────────────────
 
+
 def build_identity(
     *,
     user_id: str,

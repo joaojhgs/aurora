@@ -259,10 +259,7 @@ def register_method(
 
     # Ensure bus_topic is always set (used as registry key)
     if "bus_topic" not in metadata or not metadata["bus_topic"]:
-        metadata["bus_topic"] = (
-            metadata.get("method_id")
-            or f"{module_name}.{method_name}"
-        )
+        metadata["bus_topic"] = metadata.get("method_id") or f"{module_name}.{method_name}"
 
     # Create and register contract — key by full bus_topic to avoid
     # cross-module collisions (e.g. "DB.CreateToken" vs "Auth.CreateToken").

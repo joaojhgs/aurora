@@ -19,9 +19,7 @@ from app.shared.config.interface import ConfigAPI
 config_api = ConfigAPI()
 
 
-async def _async_wait_for_config_service(
-    max_retries: int = 30, retry_delay: float = 1.0
-) -> bool:
+async def _async_wait_for_config_service(max_retries: int = 30, retry_delay: float = 1.0) -> bool:
     """Async version: Wait for the config service to be ready.
 
     Args:
@@ -778,8 +776,12 @@ class RAGService:
 
             # Check if embedding model changed and re-embed if necessary
             log_info("Checking for embedding model changes...")
-            memories_reembedded = check_and_update_embedding_model(self._memories_store, model_info, embeddings)
-            tools_reembedded = check_and_update_embedding_model(self._tools_store, model_info, embeddings)
+            memories_reembedded = check_and_update_embedding_model(
+                self._memories_store, model_info, embeddings
+            )
+            tools_reembedded = check_and_update_embedding_model(
+                self._tools_store, model_info, embeddings
+            )
 
             if memories_reembedded or tools_reembedded:
                 log_info("Embedding model update completed!")

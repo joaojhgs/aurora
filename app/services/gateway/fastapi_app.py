@@ -89,7 +89,7 @@ def create_gateway_app(
             "| API Key | `X-API-Key: <key>` | `X-API-Key: my-secret-key` |\n"
             "| Bearer Token | `Authorization: Bearer <token>` "
             "| `Authorization: Bearer eyJ…` |\n\n"
-            "Use the **Authorize** button above to set credentials for \"Try it out\".\n\n"
+            'Use the **Authorize** button above to set credentials for "Try it out".\n\n'
             "Endpoints under *Auth → Pairing* (`/start`, `/connect`, `/exchange`) "
             "and `/login` do **not** require authentication."
         ),

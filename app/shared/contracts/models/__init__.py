@@ -61,6 +61,8 @@ from .auth import (
     TokenCreateResponse,
     TokenListRequest,
     TokenListResponse,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
     TokenResponse,
     TokenRevokeRequest,
     TokenRevokeResponse,
@@ -70,8 +72,6 @@ from .auth import (
     ValidateTokenResponse,
     WhoAmIRequest,
     WhoAmIResponse,
-    TokenRefreshRequest,
-    TokenRefreshResponse,
 )
 from .common import (
     EmptyInput,

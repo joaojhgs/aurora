@@ -395,7 +395,11 @@ class LocalBus:
                 if isinstance(result_data, dict) and "ok" in result_data:
                     log_debug("Reply handler: Creating QueryResult from dict with ok field")
                     fut.set_result(QueryResult(**result_data))
-                elif isinstance(result_data, dict) and "error" in result_data and result_data["error"]:
+                elif (
+                    isinstance(result_data, dict)
+                    and "error" in result_data
+                    and result_data["error"]
+                ):
                     # ErrorOutput response - service returned an error
                     error_msg = result_data.get("error", "Unknown service error")
                     log_debug(f"Reply handler: ErrorOutput received: {error_msg}")

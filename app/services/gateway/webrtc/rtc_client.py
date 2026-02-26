@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -9,9 +10,9 @@ from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSession
 from aiortc.sdp import candidate_from_sdp
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.shared.models.db import Token
 from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, Identity
+from app.shared.models.db import Token
 
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
 from .rpc import RPCHandler
@@ -156,8 +157,7 @@ class RTCClient:
 
         # Gap 3D: Warn about public brokers when auth is enabled
         broker_hosts = {
-            b.split("://")[-1].split(":")[0].split("/")[0]
-            for b in s.signaling_mqtt.brokers
+            b.split("://")[-1].split(":")[0].split("/")[0] for b in s.signaling_mqtt.brokers
         }
         if self._require_auth and broker_hosts & self._PUBLIC_BROKERS:
             log_warning(
@@ -178,10 +178,8 @@ class RTCClient:
     async def close(self) -> None:
         # Broadcast graceful departure before tearing down connections
         if self._mesh_enabled and self._adapter:
-            try:
+            with contextlib.suppress(Exception):
                 await self.send_broadcast("peer_leaving", {"peer_id": self._peer_id})
-            except Exception:
-                pass  # Best-effort departure notice
 
         # Cancel all pending auth timeout tasks
         for task in self._peer_timeout_tasks.values():
@@ -211,14 +209,16 @@ class RTCClient:
         peers = []
         for peer_id, pc in self._pcs.items():
             identity = self._peer_acl.get(peer_id, ANONYMOUS)
-            peers.append({
-                "peer_id": peer_id,
-                "connection_state": pc.connectionState,
-                "principal_name": identity.principal_name,
-                "is_admin": identity.is_admin,
-                "effective_perms": list(identity.effective_perms),
-                "source": identity.source,
-            })
+            peers.append(
+                {
+                    "peer_id": peer_id,
+                    "connection_state": pc.connectionState,
+                    "principal_name": identity.principal_name,
+                    "is_admin": identity.is_admin,
+                    "effective_perms": list(identity.effective_perms),
+                    "source": identity.source,
+                }
+            )
         return peers
 
     async def disconnect_peer(self, peer_id: str, by_principal_id: str | None = None) -> bool:
@@ -238,10 +238,14 @@ class RTCClient:
         log_info(f"Force disconnected peer {peer_id}")
 
         # Audit: peer force-disconnected
-        await self._audit("peer.force_disconnected", identity.principal_id, {
-            "peer_id": peer_id,
-            "by_principal_id": by_principal_id,
-        })
+        await self._audit(
+            "peer.force_disconnected",
+            identity.principal_id,
+            {
+                "peer_id": peer_id,
+                "by_principal_id": by_principal_id,
+            },
+        )
         return True
 
     async def update_peer_permissions(self, peer_id: str) -> bool:
@@ -470,7 +474,9 @@ class RTCClient:
             active_calls = max(0, max_concurrent - available)
             await self._peer_registry.set_active_calls(peer_id, active_calls)
 
-    def send_capacity_update(self, peer_id: str, module: str, available: int, max_concurrent: int) -> bool:
+    def send_capacity_update(
+        self, peer_id: str, module: str, available: int, max_concurrent: int
+    ) -> bool:
         """Send a capacity update to a peer.
 
         Args:
@@ -621,7 +627,11 @@ class RTCClient:
     )
 
     async def _rpc_call(
-        self, peer: str, method: str, params: dict, timeout: float = 10.0,
+        self,
+        peer: str,
+        method: str,
+        params: dict,
+        timeout: float = 10.0,
     ) -> dict | None:
         """Send an outbound RPC call to a remote peer and await the response.
 
@@ -653,7 +663,7 @@ class RTCClient:
 
         try:
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_rpc.pop(call_id, None)
             log_warning(f"RTCClient: RPC {method} to {peer} timed out")
             return None
@@ -676,16 +686,16 @@ class RTCClient:
         try:
             device_name = f"aurora-mesh-{self._peer_id[:8]}"
             result = await self._rpc_call(
-                peer, "Auth.PairingStart", {
+                peer,
+                "Auth.PairingStart",
+                {
                     "device_name": device_name,
                     "remote_peer_id": self._peer_id,
                     "remote_node_name": device_name,
                 },
             )
             if not result or not result.get("code"):
-                log_warning(
-                    f"Pairing initiation failed for peer {peer}: {result}"
-                )
+                log_warning(f"Pairing initiation failed for peer {peer}: {result}")
                 return
 
             pairing_code = result["code"]
@@ -708,7 +718,9 @@ class RTCClient:
                     return  # Disconnected
 
                 poll_result = await self._rpc_call(
-                    peer, "Auth.PairingConnect", {"code": pairing_code},
+                    peer,
+                    "Auth.PairingConnect",
+                    {"code": pairing_code},
                 )
                 if not poll_result:
                     continue  # Timeout / transient failure — retry
@@ -720,9 +732,7 @@ class RTCClient:
                 elif status == "pending":
                     continue
                 else:
-                    log_warning(
-                        f"Unexpected pairing status from peer {peer[:8]}…: {status}"
-                    )
+                    log_warning(f"Unexpected pairing status from peer {peer[:8]}…: {status}")
                     return
 
             if peer not in self._pcs or peer not in self._peer_pairing_active:
@@ -730,7 +740,9 @@ class RTCClient:
 
             # Exchange for token
             exchange_result = await self._rpc_call(
-                peer, "Auth.PairingExchange", {"code": pairing_code},
+                peer,
+                "Auth.PairingExchange",
+                {"code": pairing_code},
             )
             if not exchange_result or not exchange_result.get("token"):
                 log_warning(f"Token exchange failed for peer {peer[:8]}…")
@@ -825,9 +837,7 @@ class RTCClient:
 
         # Don't start reverse pairing if we're already pairing with this peer
         if peer in self._peer_pairing_active:
-            log_debug(
-                f"Reverse pairing skipped for {peer[:8]}… — pairing already active"
-            )
+            log_debug(f"Reverse pairing skipped for {peer[:8]}… — pairing already active")
             return
 
         chan = self._peer_data_channels.get(peer)
@@ -864,9 +874,13 @@ class RTCClient:
                     channel.send(text)
             except Exception:
                 log_debug(f"RTCClient: Failed to send to peer {peer} (channel closed)")
+
         # Store the send function for mesh P2P outbound messaging
         self._peer_send_fns[peer] = send_fn
-        async def _rpc_audit(event: str, pid: str | None = None, details: dict | None = None) -> None:
+
+        async def _rpc_audit(
+            event: str, pid: str | None = None, details: dict | None = None
+        ) -> None:
             await self._audit(event, pid, details)
 
         handler = RPCHandler(
@@ -879,7 +893,9 @@ class RTCClient:
             peer_id=peer,
             capacity_notify_fn=lambda module, available, max_conc: (
                 self.broadcast_capacity_update(module, available, max_conc)
-            ) if self._mesh_enabled else None,
+            )
+            if self._mesh_enabled
+            else None,
             pairing_notify_fn=lambda pid: self._peer_pairing_active.add(peer),
         )
 
@@ -917,9 +933,7 @@ class RTCClient:
                         )
                         # Only the connection initiator starts the pairing flow.
                         # The responder waits for the initiator's PairingStart RPC.
-                        task = asyncio.create_task(
-                            self._initiate_pairing(peer, chan)
-                        )
+                        task = asyncio.create_task(self._initiate_pairing(peer, chan))
                         self._pairing_tasks[peer] = task
                     else:
                         log_info(
@@ -937,13 +951,14 @@ class RTCClient:
                         if identity == ANONYMOUS:
                             # Heartbeat loop: keep extending while pairing is active
                             if peer in self._peer_pairing_active:
-                                heartbeat_interval = 10.0
                                 elapsed = self._auth_timeout
                                 while (
                                     peer in self._pcs
                                     and peer in self._peer_pairing_active
                                     and elapsed < self._pairing_timeout
                                 ):
+                                    remaining = self._pairing_timeout - elapsed
+                                    heartbeat_interval = min(10.0, max(0.1, remaining))
                                     log_debug(
                                         f"Peer {peer[:8]}… pairing heartbeat "
                                         f"({elapsed:.0f}s / {self._pairing_timeout}s)"
@@ -972,14 +987,10 @@ class RTCClient:
                                 f"Peer {peer} did not authenticate within "
                                 f"{self._auth_timeout}s — disconnecting"
                             )
-                            await self._audit(
-                                "peer.auth_timeout", details={"peer_id": peer}
-                            )
+                            await self._audit("peer.auth_timeout", details={"peer_id": peer})
                             chan.close()
 
-                    self._peer_timeout_tasks[peer] = asyncio.create_task(
-                        _auth_timeout_check()
-                    )
+                    self._peer_timeout_tasks[peer] = asyncio.create_task(_auth_timeout_check())
 
                 else:
                     # Auth disabled — grant open access immediately
@@ -1071,7 +1082,10 @@ class RTCClient:
                                     await self._audit(
                                         "peer.authenticated",
                                         identity.principal_id,
-                                        {"peer_id": peer, "principal_name": identity.principal_name},
+                                        {
+                                            "peer_id": peer,
+                                            "principal_name": identity.principal_name,
+                                        },
                                     )
 
                                     if self._mesh_enabled and self._peer_registry:
@@ -1109,7 +1123,9 @@ class RTCClient:
                                     )
                                     self._peer_acl[peer] = identity
                                     self._peer_tokens[peer] = token
-                                    log_info(f"Peer {peer} re-authenticated as {identity.principal_name}")
+                                    log_info(
+                                        f"Peer {peer} re-authenticated as {identity.principal_name}"
+                                    )
                                 else:
                                     log_warning(f"Peer {peer} failed re-authentication")
 
@@ -1149,7 +1165,9 @@ class RTCClient:
                         if self._peer_bridge:
                             self._peer_bridge.on_response(peer, obj)
                         else:
-                            log_debug(f"RTCClient: Received {msg_type} but no PeerBridge configured")
+                            log_debug(
+                                f"RTCClient: Received {msg_type} but no PeerBridge configured"
+                            )
                     else:
                         asyncio.create_task(handler.on_message(text))
                 except Exception as e:
@@ -1194,7 +1212,7 @@ class RTCClient:
                 if pairing_task:
                     pairing_task.cancel()
                 # Reject any pending outbound RPC futures for this peer
-                for cid, fut in list(self._pending_rpc.items()):
+                for _cid, fut in list(self._pending_rpc.items()):
                     if not fut.done():
                         fut.set_result(None)
                 self._pcs.pop(peer, None)

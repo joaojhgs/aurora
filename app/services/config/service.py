@@ -138,9 +138,7 @@ class ConfigService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def _handle_update_config(
-        self, cmd: UpdateConfigCommand
-    ) -> UpdateConfigResponse:
+    async def _handle_update_config(self, cmd: UpdateConfigCommand) -> UpdateConfigResponse:
         """Handle UpdateConfig command."""
         try:
             self.config_manager.set(cmd.key_path, cmd.value)
@@ -158,9 +156,7 @@ class ConfigService(BaseService):
         exposure="both",
         method_type="use",
     )
-    async def _handle_validate_config(
-        self, query: ValidateConfigQuery
-    ) -> ValidateConfigResponse:
+    async def _handle_validate_config(self, query: ValidateConfigQuery) -> ValidateConfigResponse:
         """Handle ValidateConfig query."""
         errors = self.config_manager.validate_current_config()
         log_debug(f"Handled ValidateConfig query: {len(errors)} errors")
