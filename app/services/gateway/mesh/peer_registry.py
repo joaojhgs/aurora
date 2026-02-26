@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import TYPE_CHECKING, Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 
@@ -124,10 +125,7 @@ class PeerRegistry:
             state.last_manifest = time.monotonic()
             state.status = "negotiated"
             svc_names = [s.module for s in manifest.shared_services]
-            log_info(
-                f"PeerRegistry: Peer {peer_id} manifest updated — "
-                f"services: {svc_names}"
-            )
+            log_info(f"PeerRegistry: Peer {peer_id} manifest updated — services: {svc_names}")
 
         # Fire status change callback outside the lock
         if self.on_peer_status_changed:
@@ -199,7 +197,9 @@ class PeerRegistry:
                 # If peer was stale, restore to negotiated (if it has a manifest)
                 if state.status == "stale" and state.manifest:
                     state.status = "negotiated"
-                    log_info(f"PeerRegistry: Peer {peer_id} recovered from stale (latency={latency_ms:.1f}ms)")
+                    log_info(
+                        f"PeerRegistry: Peer {peer_id} recovered from stale (latency={latency_ms:.1f}ms)"
+                    )
 
     async def increment_active_calls(self, peer_id: str) -> bool:
         """Increment the active call count for a peer.
@@ -364,22 +364,33 @@ class PeerRegistry:
 
             # Check allowed_peers in sharing config
             sharing = self._config.sharing.get(module)
-            if sharing and sharing.allowed_peers is not None and peer.peer_id not in sharing.allowed_peers:
+            if (
+                sharing
+                and sharing.allowed_peers is not None
+                and peer.peer_id not in sharing.allowed_peers
+            ):
                 continue
 
             # Version compatibility check
-            if routing_config and routing_config.min_version and not is_compatible(
-                routing_config.min_version,
-                svc_info.version,
-                version_policy,
-                routing_config.min_version,
+            if (
+                routing_config
+                and routing_config.min_version
+                and not is_compatible(
+                    routing_config.min_version,
+                    svc_info.version,
+                    version_policy,
+                    routing_config.min_version,
+                )
             ):
                 continue
 
             # Required capabilities check
-            if routing_config and routing_config.required_capabilities and not all(
-                cap in svc_info.capabilities
-                for cap in routing_config.required_capabilities
+            if (
+                routing_config
+                and routing_config.required_capabilities
+                and not all(
+                    cap in svc_info.capabilities for cap in routing_config.required_capabilities
+                )
             ):
                 continue
 

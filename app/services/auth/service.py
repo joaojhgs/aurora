@@ -12,6 +12,7 @@ from typing import Any
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import Envelope
 from app.services.auth.auth_manager import AuthManager
+from app.shared.auth.audit import audit_event
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
     AuditLogResponse,
@@ -68,12 +69,13 @@ from app.shared.contracts.models.auth import (
     WhoAmIRequest,
     WhoAmIResponse,
 )
-from app.shared.auth.audit import audit_event
+from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.mesh import (
     MeshBoolResponse,
     MeshIdentityLoadRequest,
     MeshIdentityLoadResponse,
     MeshIdentitySaveRequest,
+    MeshPeerApprovedEvent,
     MeshPeerApproveRequest,
     MeshPeerDenyRequest,
     MeshPeerGetRequest,
@@ -83,16 +85,14 @@ from app.shared.contracts.models.mesh import (
     MeshPeerListResponse,
     MeshPeerLoadInboundRequest,
     MeshPeerLoadInboundResponse,
+    MeshPeerPermissionsUpdatedEvent,
     MeshPeerRemoveRequest,
     MeshPeerSaveInboundRequest,
     MeshPeerUpdateConnectionRequest,
     MeshPeerUpdatePermissionsRequest,
     MeshPeerUpsertRequest,
-    MeshPeerApprovedEvent,
-    MeshPeerPermissionsUpdatedEvent,
     PairingRequestedEvent,
 )
-from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
@@ -105,9 +105,17 @@ class AuthService(BaseService):
             module="Auth",
             summary="Authentication, authorization, pairing, and principal management",
             capabilities=[
-                "login", "logout", "validate_token", "refresh_token",
-                "pairing", "principals", "permissions", "tokens",
-                "devices", "audit", "mesh_credentials",
+                "login",
+                "logout",
+                "validate_token",
+                "refresh_token",
+                "pairing",
+                "principals",
+                "permissions",
+                "tokens",
+                "devices",
+                "audit",
+                "mesh_credentials",
             ],
         )
         self._manager: AuthManager | None = None
@@ -127,10 +135,9 @@ class AuthService(BaseService):
         # Load default device permissions from config
         try:
             from app.shared.config.interface import ConfigAPI
+
             config = ConfigAPI()
-            default_perms = config.get(
-                "gateway.auth.default_device_permissions", default=[]
-            )
+            default_perms = config.get("gateway.auth.default_device_permissions", default=[])
             if default_perms:
                 self._manager.update_permission_defaults(default_perms)
         except Exception:
@@ -145,10 +152,9 @@ class AuthService(BaseService):
         if config_section in (None, "gateway", "auth"):
             try:
                 from app.shared.config.interface import ConfigAPI
+
                 config = ConfigAPI()
-                default_perms = config.get(
-                    "gateway.auth.default_device_permissions", default=[]
-                )
+                default_perms = config.get("gateway.auth.default_device_permissions", default=[])
                 if self._manager:
                     self._manager.update_permission_defaults(default_perms)
             except Exception:
@@ -203,9 +209,7 @@ class AuthService(BaseService):
         exposure="internal",
         method_type="use",
     )
-    async def handle_validate_token(
-        self, data: ValidateTokenRequest
-    ) -> ValidateTokenResponse:
+    async def handle_validate_token(self, data: ValidateTokenRequest) -> ValidateTokenResponse:
         token = await self.manager.authenticate_token(data.token)
         if not token:
             return ValidateTokenResponse(valid=False)
@@ -372,9 +376,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_list_principals(
-        self, data: PrincipalListRequest
-    ) -> PrincipalListResponse:
+    async def handle_list_principals(self, data: PrincipalListRequest) -> PrincipalListResponse:
         users = await self.manager.list_principals()
         return PrincipalListResponse(
             principals=[
@@ -492,9 +494,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_set_permissions(
-        self, data: PermissionSetRequest
-    ) -> PermissionSetResponse:
+    async def handle_set_permissions(self, data: PermissionSetRequest) -> PermissionSetResponse:
         success = await self.manager.set_permissions(data.user_id, data.permissions)
         return PermissionSetResponse(success=success)
 
@@ -524,9 +524,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="use",
     )
-    async def handle_change_password(
-        self, data: PasswordChangeRequest
-    ) -> PasswordChangeResponse:
+    async def handle_change_password(self, data: PasswordChangeRequest) -> PasswordChangeResponse:
         success = await self.manager.change_password(
             data.user_id, data.old_password, data.new_password
         )
@@ -657,9 +655,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_delete_device(
-        self, data: DeviceDeleteRequest
-    ) -> DeviceDeleteResponse:
+    async def handle_delete_device(self, data: DeviceDeleteRequest) -> DeviceDeleteResponse:
         success = await self.manager.delete_device(data.device_id)
         return DeviceDeleteResponse(success=success)
 
@@ -758,9 +754,7 @@ class AuthService(BaseService):
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_mesh_identity(
-        self, data: MeshIdentitySaveRequest
-    ) -> EmptyOutput:
+    async def handle_save_mesh_identity(self, data: MeshIdentitySaveRequest) -> EmptyOutput:
         await self.manager.save_mesh_identity(
             peer_id=data.peer_id,
             node_name=data.node_name,
@@ -777,9 +771,7 @@ class AuthService(BaseService):
         exposure="internal",
         method_type="use",
     )
-    async def handle_upsert_peer(
-        self, data: MeshPeerUpsertRequest
-    ) -> MeshBoolResponse:
+    async def handle_upsert_peer(self, data: MeshPeerUpsertRequest) -> MeshBoolResponse:
         try:
             await self.manager.upsert_mesh_peer(
                 peer_id=data.peer_id,
@@ -801,9 +793,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="use",
     )
-    async def handle_list_peers(
-        self, data: MeshPeerListRequest
-    ) -> MeshPeerListResponse:
+    async def handle_list_peers(self, data: MeshPeerListRequest) -> MeshPeerListResponse:
         rows = await self.manager.list_mesh_peers(
             room_name=data.room_name,
             outbound_status=data.outbound_status,
@@ -820,9 +810,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="use",
     )
-    async def handle_get_peer(
-        self, data: MeshPeerGetRequest
-    ) -> MeshPeerGetResponse:
+    async def handle_get_peer(self, data: MeshPeerGetRequest) -> MeshPeerGetResponse:
         row = await self.manager.get_mesh_peer(
             peer_id=data.peer_id,
             room_name=data.room_name,
@@ -839,9 +827,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_approve_peer(
-        self, data: MeshPeerApproveRequest
-    ) -> MeshBoolResponse:
+    async def handle_approve_peer(self, data: MeshPeerApproveRequest) -> MeshBoolResponse:
         # Get the approving user from envelope metadata if available
         approved_by = getattr(data, "_principal_id", None)
 
@@ -866,9 +852,7 @@ class AuthService(BaseService):
                 log_warning(f"Failed to publish peer approval event: {e}")
 
             return MeshBoolResponse(success=True)
-        return MeshBoolResponse(
-            success=False, message=f"Peer {data.peer_id} not found"
-        )
+        return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
         method_id="Auth.MeshDenyPeer",
@@ -878,15 +862,11 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_deny_peer(
-        self, data: MeshPeerDenyRequest
-    ) -> MeshBoolResponse:
+    async def handle_deny_peer(self, data: MeshPeerDenyRequest) -> MeshBoolResponse:
         success = await self.manager.deny_mesh_peer(data.peer_id)
         if success:
             return MeshBoolResponse(success=True)
-        return MeshBoolResponse(
-            success=False, message=f"Peer {data.peer_id} not found"
-        )
+        return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
         method_id="Auth.MeshUpdatePeerPermissions",
@@ -932,9 +912,7 @@ class AuthService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def handle_remove_peer(
-        self, data: MeshPeerRemoveRequest
-    ) -> MeshBoolResponse:
+    async def handle_remove_peer(self, data: MeshPeerRemoveRequest) -> MeshBoolResponse:
         # Optionally revoke associated token
         if data.revoke_token:
             peer = await self.manager.get_mesh_peer(data.peer_id)
@@ -947,9 +925,7 @@ class AuthService(BaseService):
         success = await self.manager.remove_mesh_peer(data.peer_id)
         if success:
             return MeshBoolResponse(success=True)
-        return MeshBoolResponse(
-            success=False, message=f"Peer {data.peer_id} not found"
-        )
+        return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
         method_id="Auth.MeshSaveInboundCredential",
@@ -959,9 +935,7 @@ class AuthService(BaseService):
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_inbound_credential(
-        self, data: MeshPeerSaveInboundRequest
-    ) -> EmptyOutput:
+    async def handle_save_inbound_credential(self, data: MeshPeerSaveInboundRequest) -> EmptyOutput:
         await self.manager.save_inbound_credential(
             remote_peer_id=data.remote_peer_id,
             room_name=data.room_name,

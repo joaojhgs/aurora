@@ -539,7 +539,10 @@ class TranscriptionService(BaseService):
         # Emit to general result topic
         asyncio.run_coroutine_threadsafe(
             self.bus.publish(
-                TranscriptionMethods.RESULT, result, event=True, origin="internal",
+                TranscriptionMethods.RESULT,
+                result,
+                event=True,
+                origin="internal",
             ),
             self._loop,
         )
@@ -564,7 +567,10 @@ class TranscriptionService(BaseService):
 
         asyncio.run_coroutine_threadsafe(
             self.bus.publish(
-                TranscriptionMethods.ERROR, error, event=True, origin="internal",
+                TranscriptionMethods.ERROR,
+                error,
+                event=True,
+                origin="internal",
             ),
             self._loop,
         )

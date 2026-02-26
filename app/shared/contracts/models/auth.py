@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from app.shared.auth.permissions import Permission
 
-
 # =============================================================================
 # Module Identifiers
 # =============================================================================
@@ -91,6 +90,7 @@ class AuthMethods:
 
 # ── Login / Logout ───────────────────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -115,6 +115,7 @@ class LogoutResponse(BaseModel):
 
 # ── Token Validation ─────────────────────────────────────────────────────
 
+
 class ValidateTokenRequest(BaseModel):
     token: str
 
@@ -132,6 +133,7 @@ class ValidateTokenResponse(BaseModel):
 
 # ── Token Refresh ────────────────────────────────────────────────────────
 
+
 class TokenRefreshRequest(BaseModel):
     token: str
 
@@ -143,8 +145,10 @@ class TokenRefreshResponse(BaseModel):
 
 # ── WhoAmI ───────────────────────────────────────────────────────────────
 
+
 class WhoAmIRequest(BaseModel):
     """Empty request — identity is derived from envelope.principal_id."""
+
     pass
 
 
@@ -159,6 +163,7 @@ class WhoAmIResponse(BaseModel):
 
 
 # ── Pairing ──────────────────────────────────────────────────────────────
+
 
 class PairingStartRequest(BaseModel):
     device_name: str
@@ -206,6 +211,7 @@ class PairingExchangeResponse(BaseModel):
 
 # ── Principal CRUD ───────────────────────────────────────────────────────
 
+
 class PrincipalCreateRequest(BaseModel):
     username: str
     password: str | None = None
@@ -223,6 +229,7 @@ class PrincipalResponse(BaseModel):
 
 class PrincipalListRequest(BaseModel):
     """Empty request to list principals."""
+
     pass
 
 
@@ -257,6 +264,7 @@ PrincipalUpdateResponse = PrincipalResponse
 
 # ── Permissions ──────────────────────────────────────────────────────────
 
+
 class PermissionSetRequest(BaseModel):
     user_id: str
     permissions: list[Permission]
@@ -278,6 +286,7 @@ class PermissionPatchResponse(BaseModel):
 
 # ── Password ─────────────────────────────────────────────────────────────
 
+
 class PasswordChangeRequest(BaseModel):
     user_id: str
     old_password: str
@@ -289,6 +298,7 @@ class PasswordChangeResponse(BaseModel):
 
 
 # ── Token CRUD ───────────────────────────────────────────────────────────
+
 
 class TokenCreateRequest(BaseModel):
     principal_id: str
@@ -343,6 +353,7 @@ class TokenRevokeResponse(BaseModel):
 
 # ── Devices ──────────────────────────────────────────────────────────────
 
+
 class DeviceListRequest(BaseModel):
     principal_id: str | None = None
 
@@ -370,6 +381,7 @@ class DeviceDeleteResponse(BaseModel):
 
 # ── Audit ────────────────────────────────────────────────────────────────
 
+
 class AuditLogRequest(BaseModel):
     limit: int = 50
     offset: int = 0
@@ -383,6 +395,7 @@ class AuditLogResponse(BaseModel):
 
 
 # ── Mesh Credentials ────────────────────────────────────────────────────
+
 
 class MeshCredentialSaveRequest(BaseModel):
     room_name: str

@@ -17,6 +17,8 @@ from passlib.context import CryptContext
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import MessageBus
+from app.shared.auth.identity import SYSTEM, Identity, build_identity
+from app.shared.auth.permissions import has_permission
 from app.shared.contracts.models.db import (
     DBAuditLogRequest,
     DBCountAuditEventsRequest,
@@ -44,8 +46,6 @@ from app.shared.contracts.models.db import (
     DBUpdateUserRequest,
 )
 from app.shared.models.db import Device, MeshCredential, Token, User
-from app.shared.auth.identity import SYSTEM, Identity, build_identity
-from app.shared.auth.permissions import has_permission
 
 # Password hashing configuration
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -242,9 +242,7 @@ class AuthManager:
     ) -> list[dict[str, Any]]:
         data = await self._db_request(
             DBMethods.GET_AUDIT_LOG,
-            DBAuditLogRequest(
-                limit=limit, offset=offset, principal_id=principal_id, event=event
-            ),
+            DBAuditLogRequest(limit=limit, offset=offset, principal_id=principal_id, event=event),
         )
         if data and data.get("events"):
             return data["events"]
@@ -439,9 +437,7 @@ class AuthManager:
                     )
 
             if migrated_count > 0:
-                log_info(
-                    f"Permission migration complete: {migrated_count} user(s) updated"
-                )
+                log_info(f"Permission migration complete: {migrated_count} user(s) updated")
         except Exception as e:
             log_error(f"Error during permission migration: {e}")
 
@@ -528,6 +524,7 @@ class AuthManager:
         # Publish PairingRequestedEvent so UI / mesh subsystem can react
         try:
             from app.shared.contracts.models.mesh import PairingRequestedEvent
+
             await self.bus.publish(
                 "Auth.PairingRequested",
                 PairingRequestedEvent(
@@ -586,16 +583,17 @@ class AuthManager:
         remote_peer_id = request.get("remote_peer_id", "")
         if remote_peer_id:
             import json as _json
+
             try:
                 await self._db_request(
                     DBMethods.EXECUTE_SQL,
                     _MeshSQL.approve_peer(
-                        remote_peer_id, _json.dumps(resolved_perms), user_id,
+                        remote_peer_id,
+                        _json.dumps(resolved_perms),
+                        user_id,
                     ),
                 )
-                log_info(
-                    f"Synced pairing approval to mesh_peers for peer {remote_peer_id}"
-                )
+                log_info(f"Synced pairing approval to mesh_peers for peer {remote_peer_id}")
             except Exception as e:
                 log_warning(f"Failed to sync pairing approval to mesh_peers: {e}")
 
@@ -657,7 +655,10 @@ class AuthManager:
                 await self._db_request(
                     DBMethods.EXECUTE_SQL,
                     _MeshSQL.link_outbound_fks(
-                        remote_peer_id, token_id, device_id, device_user.id,
+                        remote_peer_id,
+                        token_id,
+                        device_id,
+                        device_user.id,
                     ),
                 )
                 log_info(
@@ -776,17 +777,13 @@ class AuthManager:
             current -= set(revoke)
         return await self._update_user(user_id, permissions=list(current))
 
-    async def change_password(
-        self, user_id: str, old_password: str, new_password: str
-    ) -> bool:
+    async def change_password(self, user_id: str, old_password: str, new_password: str) -> bool:
         user = await self._get_user_by_id(user_id)
         if not user:
             return False
         if not pwd_context.verify(old_password, user.password_hash):
             return False
-        return await self._update_user(
-            user_id, password_hash=pwd_context.hash(new_password)
-        )
+        return await self._update_user(user_id, password_hash=pwd_context.hash(new_password))
 
     # ── Token CRUD ───────────────────────────────────────────────────────
 
@@ -871,13 +868,10 @@ class AuthManager:
         for scope in scopes:
             if not has_permission(scope, user_perms):
                 raise ValueError(
-                    f"Scope '{scope}' exceeds principal's permissions: "
-                    f"{sorted(user_perms)}"
+                    f"Scope '{scope}' exceeds principal's permissions: {sorted(user_perms)}"
                 )
 
-    async def login(
-        self, username: str, password: str
-    ) -> tuple[Token, str, User] | None:
+    async def login(self, username: str, password: str) -> tuple[Token, str, User] | None:
         user = await self.authenticate_user(username, password)
         if not user:
             return None
@@ -913,9 +907,7 @@ class AuthManager:
         events = await self._get_audit_log(
             limit=limit, offset=offset, principal_id=principal_id, event=event
         )
-        total = await self._count_audit_events(
-            principal_id=principal_id, event=event
-        )
+        total = await self._count_audit_events(principal_id=principal_id, event=event)
         return events, total
 
     # ── Mesh credential persistence ──────────────────────────────────────
@@ -1049,10 +1041,9 @@ class AuthManager:
                     req["status"] = "approved"
                     req["approved_by"] = approved_by
                     req["granted_permissions"] = permissions
-                    req["granted_is_admin"] = ("*" in permissions)
+                    req["granted_is_admin"] = "*" in permissions
                     log_info(
-                        f"MeshApprovePeer also approved pairing code {code} "
-                        f"for peer {peer_id}"
+                        f"MeshApprovePeer also approved pairing code {code} for peer {peer_id}"
                     )
                     break  # At most one active code per peer
 
@@ -1065,10 +1056,7 @@ class AuthManager:
                 if token_id:
                     token_scopes = ["*"] if "*" in permissions else permissions
                     await self._update_token_scopes(token_id, token_scopes)
-                log_info(
-                    f"Synced permissions to auth principal {user_id} "
-                    f"for mesh peer {peer_id}"
-                )
+                log_info(f"Synced permissions to auth principal {user_id} for mesh peer {peer_id}")
 
         return updated
 
@@ -1080,9 +1068,7 @@ class AuthManager:
         )
         return bool(data and data.get("rowcount", 0) > 0)
 
-    async def update_mesh_peer_permissions(
-        self, peer_id: str, permissions: list[str]
-    ) -> bool:
+    async def update_mesh_peer_permissions(self, peer_id: str, permissions: list[str]) -> bool:
         """Update outbound permissions for an already-approved peer.
 
         Consolidation: also syncs to User.permissions and Token.scopes
@@ -1106,10 +1092,7 @@ class AuthManager:
                 if token_id:
                     token_scopes = ["*"] if "*" in permissions else permissions
                     await self._update_token_scopes(token_id, token_scopes)
-                log_info(
-                    f"Synced permissions to auth principal {user_id} "
-                    f"for mesh peer {peer_id}"
-                )
+                log_info(f"Synced permissions to auth principal {user_id} for mesh peer {peer_id}")
 
         return updated
 
@@ -1138,8 +1121,13 @@ class AuthManager:
         await self._db_request(
             DBMethods.EXECUTE_SQL,
             _MeshSQL.save_inbound_credential(
-                remote_peer_id, room_name, token, perms_json,
-                remote_device_id, remote_user_id, remote_node_name,
+                remote_peer_id,
+                room_name,
+                token,
+                perms_json,
+                remote_device_id,
+                remote_user_id,
+                remote_node_name,
             ),
         )
         log_info(f"Saved inbound credential from peer {remote_peer_id}")
@@ -1155,9 +1143,7 @@ class AuthManager:
         rows = data.get("rows", []) if data else []
         return {r["peer_id"]: r["inbound_token"] for r in rows if r.get("inbound_token")}
 
-    async def update_peer_connection_status(
-        self, peer_id: str, status: str
-    ) -> None:
+    async def update_peer_connection_status(self, peer_id: str, status: str) -> None:
         """Update connection_status and last_seen_at."""
         await self._db_request(
             DBMethods.EXECUTE_SQL,
@@ -1281,9 +1267,7 @@ class _MeshSQL:
         )
 
     @staticmethod
-    def update_peer_permissions(
-        peer_id: str, permissions_json: str
-    ) -> DBExecuteSQLRequest:
+    def update_peer_permissions(peer_id: str, permissions_json: str) -> DBExecuteSQLRequest:
         return DBExecuteSQLRequest(
             sql=(
                 "UPDATE mesh_peers SET "
@@ -1326,15 +1310,18 @@ class _MeshSQL:
                 "WHERE peer_id = ? AND room_name = ?"
             ),
             params=[
-                token, perms_json, remote_device_id, remote_user_id,
-                remote_node_name, remote_peer_id, room_name,
+                token,
+                perms_json,
+                remote_device_id,
+                remote_user_id,
+                remote_node_name,
+                remote_peer_id,
+                room_name,
             ],
         )
 
     @staticmethod
-    def load_inbound_credentials(
-        room_name: str, remote_peer_id: str | None
-    ) -> DBExecuteSQLRequest:
+    def load_inbound_credentials(room_name: str, remote_peer_id: str | None) -> DBExecuteSQLRequest:
         if remote_peer_id:
             return DBExecuteSQLRequest(
                 sql=(

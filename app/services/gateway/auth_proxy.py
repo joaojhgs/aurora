@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 @dataclass
 class _TokenProxy:
     """Minimal Token-like object returned by authenticate_token()."""
+
     id: str
     prefix: str | None = None
     device_id: str | None = None
@@ -38,6 +39,7 @@ class _TokenProxy:
 @dataclass
 class _UserProxy:
     """Minimal User-like object returned by get_principal()."""
+
     id: str
     username: str
     permissions: list[str] | None = None
@@ -303,6 +305,7 @@ class BusAuthProxy:
     async def save_mesh_credential(self, **kwargs: Any) -> bool:
         try:
             from app.shared.contracts.models.auth import MeshCredentialSaveRequest
+
             resp = await self._bus.request(
                 "Auth.SaveMeshCredential",
                 MeshCredentialSaveRequest(**kwargs),
@@ -316,6 +319,7 @@ class BusAuthProxy:
     async def load_mesh_credential(self, room_name: str) -> str | None:
         try:
             from app.shared.contracts.models.auth import MeshCredentialLoadRequest
+
             resp = await self._bus.request(
                 "Auth.LoadMeshCredential",
                 MeshCredentialLoadRequest(room_name=room_name),

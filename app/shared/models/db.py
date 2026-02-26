@@ -159,7 +159,9 @@ class User:
             role=data.get("role", "admin"),
             permissions=permissions,
             is_admin=bool(data.get("is_admin", False)),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
+            created_at=datetime.fromisoformat(data["created_at"])
+            if data.get("created_at")
+            else None,
         )
 
 
@@ -455,6 +457,10 @@ class MeshCredential:
             token=data["token"],
             remote_device_id=data.get("remote_device_id"),
             remote_user_id=data.get("remote_user_id"),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
-            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None,
+            created_at=datetime.fromisoformat(data["created_at"])
+            if data.get("created_at")
+            else None,
+            updated_at=datetime.fromisoformat(data["updated_at"])
+            if data.get("updated_at")
+            else None,
         )

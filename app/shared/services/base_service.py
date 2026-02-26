@@ -326,7 +326,7 @@ class BaseService(ABC):
                             method=attr,
                             model=input_model,
                             method_name=attr_name,
-                            pass_envelope=_wants_envelope(attr),
+                            pass_envelope=_wants_envelope(attr),  # noqa: B008
                         ):
                             async def wrapper(envelope: Envelope) -> None:
                                 try:

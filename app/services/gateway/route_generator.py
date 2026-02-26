@@ -564,7 +564,9 @@ class RouteGenerator:
         scopes = [method_id]
 
         wrapped_handler = create_typed_handler(
-            handler, request_model_cls, scopes,
+            handler,
+            request_model_cls,
+            scopes,
             method_type=method_info.method_type,
         )
 

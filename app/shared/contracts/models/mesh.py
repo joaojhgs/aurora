@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from app.shared.auth.permissions import Permission
 
-
 # ── Peer Info (returned by queries) ──────────────────────────────────────
 
 

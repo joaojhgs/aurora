@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import sys
+from datetime import UTC
 
 from app.services.config.config_manager import ConfigManager
 
@@ -203,7 +204,7 @@ def export_room_invite(passphrase=None):
         "password": password,
         "brokers": config.get("gateway.signaling_mqtt.brokers", []),
         "topic_root": config.get("gateway.signaling_mqtt.topic_root", "aurora"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
     key = _derive_invite_key(passphrase or _DEFAULT_PASSPHRASE)
@@ -332,10 +333,17 @@ def main():
         if args.room_info:
             show_room_info()
 
-        if not any([
-            args.provider, args.feature_level, args.backend, args.setup_keys,
-            args.room_export, args.room_import, args.room_info,
-        ]):
+        if not any(
+            [
+                args.provider,
+                args.feature_level,
+                args.backend,
+                args.setup_keys,
+                args.room_export,
+                args.room_import,
+                args.room_info,
+            ]
+        ):
             parser.print_help()
 
     except Exception as e:
