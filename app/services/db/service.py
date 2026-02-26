@@ -17,7 +17,6 @@ from app.services.db.manager import DatabaseManager
 from app.services.db.models import CronJob, JobStatus, Message, ScheduleType
 from app.services.db.rag_service import RAGService
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
-from app.shared.models.db import Device, MeshCredential, Token, User
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.db import (
     DBAuditLogRequest,
@@ -74,6 +73,7 @@ from app.shared.contracts.models.db import (
     DBUserResponse,
 )
 from app.shared.contracts.registry import method_contract
+from app.shared.models.db import Device, MeshCredential, Token, User
 from app.shared.services.base_service import BaseService
 
 
@@ -605,9 +605,7 @@ class DBService(BaseService):
                 role=cmd.role,
                 permissions=cmd.permissions or [],
                 is_admin=cmd.is_admin,
-                created_at=datetime.fromisoformat(cmd.created_at)
-                if cmd.created_at
-                else None,
+                created_at=datetime.fromisoformat(cmd.created_at) if cmd.created_at else None,
             )
             success = await self.db_manager.create_user(user)
             return DBBoolResponse(success=success)
@@ -1026,9 +1024,7 @@ class DBService(BaseService):
         """Get a mesh credential by room name."""
         try:
             credential = await self.db_manager.get_mesh_credential_by_room(query.room_name)
-            return DBMeshCredentialResponse(
-                credential=credential.to_dict() if credential else None
-            )
+            return DBMeshCredentialResponse(credential=credential.to_dict() if credential else None)
         except Exception as e:
             log_error(f"Error getting mesh credential: {e}", exc_info=True)
             return DBMeshCredentialResponse(credential=None)

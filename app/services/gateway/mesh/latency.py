@@ -148,10 +148,7 @@ class LatencyMonitor:
             Number of removed stale pings
         """
         now = time.monotonic()
-        stale = [
-            pid for pid, (_, ts) in self._pending_pings.items()
-            if (now - ts) > max_age_s
-        ]
+        stale = [pid for pid, (_, ts) in self._pending_pings.items() if (now - ts) > max_age_s]
         for pid in stale:
             self._pending_pings.pop(pid, None)
         return len(stale)

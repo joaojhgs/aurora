@@ -126,9 +126,7 @@ class OrchestratorService(BaseService):
         """Handle UI user input command."""
         try:
             log_info(f"Processing UI input: {cmd.text}")
-            await self._process_input(
-                cmd.text, source="ui", session_id=cmd.session_id
-            )
+            await self._process_input(cmd.text, source="ui", session_id=cmd.session_id)
             # Wait, OrchestratorProcessRequest has session_id?
             # Let's check the model definition I created.
             # It has 'message', 'context', 'stream', 'max_tokens'.
@@ -158,9 +156,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
     )
-    async def process_external_input(
-        self, cmd: OrchestratorProcessRequest
-    ) -> OrchestratorResponse:
+    async def process_external_input(self, cmd: OrchestratorProcessRequest) -> OrchestratorResponse:
         """Handle external user input command and return the response."""
         try:
             log_info(f"Processing external input: {cmd.text}")
