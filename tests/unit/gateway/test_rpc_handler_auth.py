@@ -201,6 +201,7 @@ async def test_authenticated_peer_rpc_works(mock_bus, mock_registry, mock_send_f
     method_info = MagicMock(spec=MethodInfo)
     method_info.name = "DoSomething"
     method_info.required_perms = ["user"]
+    method_info.method_type = "use"
     method_info.bus_topic = "SomeService.DoSomething"
 
     announcement = MagicMock(spec=ServiceAnnouncement)

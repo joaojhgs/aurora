@@ -177,7 +177,7 @@ def _python_type_from_json_schema(
 
     # ── enum → Literal (preserves enum values from WithJsonSchema) ───
     if enum_values and json_type == "string":
-        return Literal[tuple(enum_values)]  # type: ignore[valid-type]
+        return Literal.__getitem__(tuple(enum_values))  # type: ignore[valid-type]
 
     simple_map: dict[str, type] = {
         "string": str,

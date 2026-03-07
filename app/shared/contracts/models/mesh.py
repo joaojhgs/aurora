@@ -11,6 +11,18 @@ from pydantic import BaseModel
 
 from app.shared.auth.permissions import Permission
 
+# =============================================================================
+# Method/Event Identifiers
+# =============================================================================
+
+
+class MeshEvents:
+    """Event identifiers for mesh peer lifecycle broadcasts."""
+
+    PEER_APPROVED = "Mesh.PeerApproved"
+    PEER_PERMISSIONS_UPDATED = "Mesh.PeerPermissionsUpdated"
+
+
 # ── Peer Info (returned by queries) ──────────────────────────────────────
 
 

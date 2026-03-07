@@ -339,7 +339,7 @@ def create_gateway_app(
         summary="List connected WebRTC peers",
     )
     async def list_peers(
-        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["Auth.manage"])],
     ) -> list[dict[str, Any]]:
         rtc = get_rtc_client()
         if not rtc:
@@ -354,7 +354,7 @@ def create_gateway_app(
     )
     async def disconnect_peer(
         peer_id: str,
-        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["Auth.manage"])],
     ) -> None:
         rtc = get_rtc_client()
         if not rtc:
@@ -370,7 +370,7 @@ def create_gateway_app(
     )
     async def refresh_peer_permissions(
         peer_id: str,
-        identity: Annotated[Any, Security(check_auth_enabled, scopes=["auth.manage"])],
+        identity: Annotated[Any, Security(check_auth_enabled, scopes=["Auth.manage"])],
     ) -> dict[str, bool]:
         rtc = get_rtc_client()
         if not rtc:
