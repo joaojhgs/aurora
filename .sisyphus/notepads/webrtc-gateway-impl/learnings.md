@@ -1,2 +1,0 @@
-- GatewayService and RegistryAggregator use local imports within methods, which requires patching the original modules they import from rather than the service module itself.
-- BaseService's bus property is read-only and needs to be set via the internal _bus attribute or by mocking the singleton getter.

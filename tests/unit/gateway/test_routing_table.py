@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.services.gateway.config import MeshConfig, ServiceRoutingConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState, RouteDecision
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
@@ -26,13 +26,12 @@ def mesh_config():
     return MeshConfig(
         enabled=True,
         node_name="test-node",
-        routing={
-            "TTS": ServiceRoutingConfig(prefer="network", fallback="local"),
-            "DB": ServiceRoutingConfig(prefer="local"),
-            "STT": ServiceRoutingConfig(prefer="network_only", fallback="error"),
-            "Scheduler": ServiceRoutingConfig(prefer="local_only"),
+        services={
+            "TTS": MeshServiceConfig(prefer="network", fallback="local"),
+            "DB": MeshServiceConfig(prefer="local"),
+            "STT": MeshServiceConfig(prefer="network_only", fallback="error"),
+            "Scheduler": MeshServiceConfig(prefer="local_only"),
         },
-        sharing={},
     )
 
 
@@ -123,7 +122,7 @@ class TestRoutingTableResolveFallback:
 
     @pytest.mark.asyncio
     async def test_fallback_network_finds_another_peer(self, mesh_config, peer_registry):
-        mesh_config.routing["TTS"] = ServiceRoutingConfig(prefer="network", fallback="network")
+        mesh_config.services["TTS"] = MeshServiceConfig(prefer="network", fallback="network")
         routing_table = RoutingTable(mesh_config, peer_registry)
 
         # Register two peers
@@ -141,7 +140,7 @@ class TestRoutingTableResolveFallback:
         assert fallback.peer_id == "peer-2"
 
     def test_fallback_error(self, routing_table):
-        config = ServiceRoutingConfig(prefer="network_only", fallback="error")
+        config = MeshServiceConfig(prefer="network_only", fallback="error")
         route = routing_table.resolve_fallback("STT.Request", routing_config=config)
         assert route.target == "error"
 

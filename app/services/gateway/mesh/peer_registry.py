@@ -22,7 +22,7 @@ from app.helpers.aurora_logger import log_debug, log_info, log_warning
 from .models import PeerManifest, PeerState
 
 if TYPE_CHECKING:
-    from app.services.gateway.config import MeshConfig, ServiceRoutingConfig
+    from app.services.gateway.config import MeshConfig, MeshServiceConfig
     from app.services.gateway.mesh.models import ManifestAck
 
 # Callback type: async fn(peer_id, node_name, status) -> None
@@ -318,7 +318,7 @@ class PeerRegistry:
     def get_best_provider(
         self,
         module: str,
-        routing_config: ServiceRoutingConfig | None = None,
+        routing_config: MeshServiceConfig | None = None,
         version_policy: str = "compatible",
         exclude: list[str] | None = None,
     ) -> PeerState | None:
@@ -363,7 +363,7 @@ class PeerRegistry:
                 continue
 
             # Check allowed_peers in sharing config
-            sharing = self._config.sharing.get(module)
+            sharing = self._config.services.get(module)
             if (
                 sharing
                 and sharing.allowed_peers is not None
