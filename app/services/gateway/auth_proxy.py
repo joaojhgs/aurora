@@ -15,6 +15,21 @@ from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_warning
 from app.shared.auth.identity import SYSTEM, Identity
+from app.shared.contracts.models.auth import (
+    AuditLogRequest,
+    AuthMethods,
+    MeshCredentialLoadRequest,
+    MeshCredentialSaveRequest,
+    PrincipalGetRequest,
+    StoreAuditEventRequest,
+    ValidateTokenRequest,
+)
+from app.shared.contracts.models.mesh import (
+    MeshPeerLoadInboundRequest,
+    MeshPeerSaveInboundRequest,
+    MeshPeerUpdateConnectionRequest,
+    MeshPeerUpsertRequest,
+)
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
@@ -69,51 +84,36 @@ class _AuditDBProxy:
         details: str | None = None,
         ip_address: str | None = None,
     ) -> None:
-        """Persist an audit event via the bus (Fix 8).
+        """Persist an audit event via the bus.
 
         ``audit_event()`` in ``app/shared/auth/audit.py`` calls
         ``db_manager.store_audit_event(...)`` — this method provides
         that interface, forwarding to the Auth service via the bus.
         """
         try:
-            from app.shared.contracts.models.auth import AuditLogRequest
-
-            await self._bus.publish(
-                "Auth.AuditEvent",
-                AuditLogRequest(
-                    limit=1,
-                    principal_id=principal_id,
+            await self._bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
                     event=event or "unknown",
+                    principal_id=principal_id,
+                    details=details,
+                    ip_address=ip_address,
                 ),
-                event=True,
-                origin="internal",
+                timeout=5.0,
             )
         except Exception as exc:
             log_warning(f"_AuditDBProxy.store_audit_event failed: {exc}")
 
     async def log_audit_event(self, **kwargs: Any) -> None:
-        """Forward audit event to the Auth service via the bus.
-
-        The Auth service handles audit logging internally through its
-        ``audit_event()`` helper.  Here we re-use the existing
-        ``Auth.AuditLog`` contract for writes by sending a minimal
-        audit payload that the auth_manager persists.
-        """
+        """Forward audit event to the Auth service via the bus."""
         try:
-            from app.shared.contracts.models.auth import AuditLogRequest
-
-            # The audit_event() helper expects a db_manager.  Since we
-            # don't have one, we publish a lightweight event instead.
-            # The Auth service stores via its own DB path.
-            await self._bus.publish(
-                "Auth.AuditEvent",
-                AuditLogRequest(
-                    limit=1,
-                    principal_id=kwargs.get("actor_id"),
+            await self._bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
                     event=kwargs.get("event_type", "unknown"),
+                    principal_id=kwargs.get("actor_id"),
                 ),
-                event=True,
-                origin="internal",
+                timeout=5.0,
             )
         except Exception as exc:
             log_warning(f"_AuditDBProxy.log_audit_event failed: {exc}")
@@ -121,10 +121,8 @@ class _AuditDBProxy:
     async def get_audit_log(self, **kwargs: Any) -> list[dict]:
         """Retrieve audit log entries via the Auth.AuditLog contract."""
         try:
-            from app.shared.contracts.models.auth import AuditLogRequest
-
             resp = await self._bus.request(
-                "Auth.AuditLog",
+                AuthMethods.AUDIT_LOG,
                 AuditLogRequest(
                     limit=kwargs.get("limit", 50),
                     offset=kwargs.get("offset", 0),
@@ -195,10 +193,8 @@ class BusAuthProxy:
         ``build_identity_from_token()`` call can return immediately.
         """
         try:
-            from app.shared.contracts.models.auth import ValidateTokenRequest
-
             resp = await self._bus.request(
-                "Auth.ValidateToken",
+                AuthMethods.VALIDATE_TOKEN,
                 ValidateTokenRequest(token=token_str),
                 timeout=5.0,
             )
@@ -271,10 +267,8 @@ class BusAuthProxy:
     async def get_principal(self, principal_id: str) -> _UserProxy | None:
         """Look up a principal via Auth.GetPrincipal bus call."""
         try:
-            from app.shared.contracts.models.auth import PrincipalGetRequest
-
             resp = await self._bus.request(
-                "Auth.GetPrincipal",
+                AuthMethods.GET_PRINCIPAL,
                 PrincipalGetRequest(user_id=principal_id),
                 timeout=5.0,
             )
@@ -304,10 +298,8 @@ class BusAuthProxy:
 
     async def save_mesh_credential(self, **kwargs: Any) -> bool:
         try:
-            from app.shared.contracts.models.auth import MeshCredentialSaveRequest
-
             resp = await self._bus.request(
-                "Auth.SaveMeshCredential",
+                AuthMethods.SAVE_MESH_CREDENTIAL,
                 MeshCredentialSaveRequest(**kwargs),
                 timeout=5.0,
             )
@@ -318,10 +310,8 @@ class BusAuthProxy:
 
     async def load_mesh_credential(self, room_name: str) -> str | None:
         try:
-            from app.shared.contracts.models.auth import MeshCredentialLoadRequest
-
             resp = await self._bus.request(
-                "Auth.LoadMeshCredential",
+                AuthMethods.LOAD_MESH_CREDENTIAL,
                 MeshCredentialLoadRequest(room_name=room_name),
                 timeout=5.0,
             )
@@ -342,10 +332,8 @@ class BusAuthProxy:
     ) -> bool:
         """Ensure a mesh_peers row exists for the given peer."""
         try:
-            from app.shared.contracts.models.mesh import MeshPeerUpsertRequest
-
             resp = await self._bus.request(
-                "Auth.MeshUpsertPeer",
+                AuthMethods.MESH_UPSERT_PEER,
                 MeshPeerUpsertRequest(
                     peer_id=peer_id,
                     room_name=room_name,
@@ -373,10 +361,8 @@ class BusAuthProxy:
     ) -> bool:
         """Save an inbound pairing credential for a specific remote peer."""
         try:
-            from app.shared.contracts.models.mesh import MeshPeerSaveInboundRequest
-
             resp = await self._bus.request(
-                "Auth.MeshSaveInboundCredential",
+                AuthMethods.MESH_SAVE_INBOUND_CREDENTIAL,
                 MeshPeerSaveInboundRequest(
                     remote_peer_id=remote_peer_id,
                     room_name=room_name,
@@ -397,10 +383,8 @@ class BusAuthProxy:
     async def load_inbound_credentials(self, room_name: str) -> dict[str, str]:
         """Load all inbound credentials for a room, keyed by remote peer_id."""
         try:
-            from app.shared.contracts.models.mesh import MeshPeerLoadInboundRequest
-
             resp = await self._bus.request(
-                "Auth.MeshLoadInboundCredentials",
+                AuthMethods.MESH_LOAD_INBOUND_CREDENTIALS,
                 MeshPeerLoadInboundRequest(room_name=room_name),
                 timeout=5.0,
             )
@@ -415,10 +399,8 @@ class BusAuthProxy:
     ) -> bool:
         """Update the connection_status of a mesh peer."""
         try:
-            from app.shared.contracts.models.mesh import MeshPeerUpdateConnectionRequest
-
             resp = await self._bus.request(
-                "Auth.MeshUpdatePeerConnection",
+                AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                 MeshPeerUpdateConnectionRequest(
                     peer_id=peer_id,
                     room_name=room_name,

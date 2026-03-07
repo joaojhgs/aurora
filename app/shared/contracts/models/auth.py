@@ -67,6 +67,10 @@ class AuthMethods:
 
     # Audit
     AUDIT_LOG = f"{AuthModule.NAME}.AuditLog"
+    STORE_AUDIT_EVENT = f"{AuthModule.NAME}.StoreAuditEvent"
+
+    # Events (broadcast, not request/response)
+    PAIRING_REQUESTED = f"{AuthModule.NAME}.PairingRequested"
 
     # Mesh credential storage
     SAVE_MESH_CREDENTIAL = f"{AuthModule.NAME}.SaveMeshCredential"
@@ -380,6 +384,15 @@ class DeviceDeleteResponse(BaseModel):
 
 
 # ── Audit ────────────────────────────────────────────────────────────────
+
+
+class StoreAuditEventRequest(BaseModel):
+    """Request to store a single audit event."""
+
+    event: str
+    principal_id: str | None = None
+    details: str | None = None
+    ip_address: str | None = None
 
 
 class AuditLogRequest(BaseModel):

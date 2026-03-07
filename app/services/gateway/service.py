@@ -11,6 +11,7 @@ import os
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.services.base_service import BaseService
 
 
@@ -390,7 +391,7 @@ class GatewayService(BaseService):
                 from app.shared.contracts.models.mesh import MeshPeerUpsertRequest
 
                 await bus_for_callbacks.request(
-                    "Auth.MeshUpsertPeer",
+                    AuthMethods.MESH_UPSERT_PEER,
                     MeshPeerUpsertRequest(
                         peer_id=p_id,
                         room_name=room_name_for_callbacks,
@@ -405,7 +406,7 @@ class GatewayService(BaseService):
                 )
 
                 await bus_for_callbacks.request(
-                    "Auth.MeshUpdatePeerConnection",
+                    AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
                         peer_id=p_id,
                         room_name=room_name_for_callbacks,
@@ -420,7 +421,7 @@ class GatewayService(BaseService):
                 )
 
                 await bus_for_callbacks.request(
-                    "Auth.MeshUpdatePeerConnection",
+                    AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
                         peer_id=p_id,
                         room_name=room_name_for_callbacks,
@@ -446,7 +447,7 @@ class GatewayService(BaseService):
                 from app.shared.contracts.models.mesh import MeshPeerLoadInboundRequest
 
                 resp = await self.bus.request(
-                    "Auth.MeshLoadInboundCredentials",
+                    AuthMethods.MESH_LOAD_INBOUND_CREDENTIALS,
                     MeshPeerLoadInboundRequest(room_name=room_name),
                     timeout=5.0,
                 )
@@ -487,7 +488,7 @@ class GatewayService(BaseService):
 
                         # Ensure peer row exists
                         await bus_ref.request(
-                            "Auth.MeshUpsertPeer",
+                            AuthMethods.MESH_UPSERT_PEER,
                             MeshPeerUpsertRequest(
                                 peer_id=remote_peer_id,
                                 room_name=room_name,
@@ -497,7 +498,7 @@ class GatewayService(BaseService):
                         )
                         # Save inbound credential
                         await bus_ref.request(
-                            "Auth.MeshSaveInboundCredential",
+                            AuthMethods.MESH_SAVE_INBOUND_CREDENTIAL,
                             MeshPeerSaveInboundRequest(
                                 remote_peer_id=remote_peer_id,
                                 room_name=room_name,
@@ -514,7 +515,7 @@ class GatewayService(BaseService):
                         from app.shared.contracts.models.auth import MeshCredentialSaveRequest
 
                         await bus_ref.request(
-                            "Auth.SaveMeshCredential",
+                            AuthMethods.SAVE_MESH_CREDENTIAL,
                             MeshCredentialSaveRequest(
                                 room_name=room_name,
                                 token=token_str,
@@ -590,7 +591,7 @@ class GatewayService(BaseService):
             )
 
             resp = await self.bus.request(
-                "Auth.LoadMeshIdentity",
+                AuthMethods.LOAD_MESH_IDENTITY,
                 MeshIdentityLoadRequest(),
                 timeout=5.0,
             )
@@ -606,7 +607,7 @@ class GatewayService(BaseService):
                 log_info(f"Loaded stable mesh peer_id from DB: {saved_peer_id}")
                 # Update node_name if changed
                 await self.bus.request(
-                    "Auth.SaveMeshIdentity",
+                    AuthMethods.SAVE_MESH_IDENTITY,
                     MeshIdentitySaveRequest(peer_id=saved_peer_id, node_name=node_name),
                     timeout=5.0,
                 )
@@ -615,7 +616,7 @@ class GatewayService(BaseService):
             # Generate new peer_id
             new_peer_id = f"aurora-{_secrets.token_hex(16)}"
             await self.bus.request(
-                "Auth.SaveMeshIdentity",
+                AuthMethods.SAVE_MESH_IDENTITY,
                 MeshIdentitySaveRequest(peer_id=new_peer_id, node_name=node_name),
                 timeout=5.0,
             )

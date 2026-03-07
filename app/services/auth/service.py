@@ -16,6 +16,7 @@ from app.shared.auth.audit import audit_event
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
     AuditLogResponse,
+    AuthMethods,
     DeviceDeleteRequest,
     DeviceDeleteResponse,
     DeviceListRequest,
@@ -53,6 +54,7 @@ from app.shared.contracts.models.auth import (
     PrincipalListResponse,
     PrincipalResponse,
     PrincipalUpdateRequest,
+    StoreAuditEventRequest,
     TokenCreateRequest,
     TokenCreateResponse,
     TokenListRequest,
@@ -72,6 +74,7 @@ from app.shared.contracts.models.auth import (
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.mesh import (
     MeshBoolResponse,
+    MeshEvents,
     MeshIdentityLoadRequest,
     MeshIdentityLoadResponse,
     MeshIdentitySaveRequest,
@@ -662,7 +665,40 @@ class AuthService(BaseService):
     # ── Audit ────────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.AuditLog",
+        method_id=AuthMethods.STORE_AUDIT_EVENT,
+        summary="Store a single audit event",
+        input_model=StoreAuditEventRequest,
+        output_model=MeshBoolResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_store_audit_event(self, data: StoreAuditEventRequest) -> MeshBoolResponse:
+        import uuid
+
+        from app.shared.contracts.models.db import DBExecuteSQLRequest, DBMethods
+
+        try:
+            result = await self.bus.request(
+                DBMethods.EXECUTE_SQL,
+                DBExecuteSQLRequest(
+                    sql="INSERT INTO audit_log (id, event, principal_id, details, ip_address) VALUES (?, ?, ?, ?, ?)",
+                    params=[
+                        str(uuid.uuid4()),
+                        data.event,
+                        data.principal_id,
+                        data.details,
+                        data.ip_address,
+                    ],
+                ),
+                timeout=5.0,
+            )
+            return MeshBoolResponse(success=result.ok if hasattr(result, "ok") else True)
+        except Exception as e:
+            log_warning(f"Failed to store audit event: {e}")
+            return MeshBoolResponse(success=False, message=str(e))
+
+    @method_contract(
+        method_id=AuthMethods.AUDIT_LOG,
         summary="Get audit log entries",
         input_model=AuditLogRequest,
         output_model=AuditLogResponse,
@@ -840,7 +876,7 @@ class AuthService(BaseService):
             # Publish approval event for mesh subsystem
             try:
                 await self.bus.publish(
-                    "Mesh.PeerApproved",
+                    MeshEvents.PEER_APPROVED,
                     MeshPeerApprovedEvent(
                         peer_id=data.peer_id,
                         permissions=data.permissions,
@@ -888,7 +924,7 @@ class AuthService(BaseService):
             # Publish permissions updated event for mesh subsystem.
             try:
                 await self.bus.publish(
-                    "Mesh.PeerPermissionsUpdated",
+                    MeshEvents.PEER_PERMISSIONS_UPDATED,
                     MeshPeerPermissionsUpdatedEvent(
                         peer_id=data.peer_id,
                         permissions=data.permissions,
