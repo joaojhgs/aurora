@@ -12,6 +12,7 @@ from aiortc.sdp import candidate_from_sdp
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, Identity
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.models.db import Token
 
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
@@ -620,10 +621,10 @@ class RTCClient:
 
     # RPC method prefixes that ANONYMOUS peers may call for pairing/auth
     _ANON_ALLOWED_RPC_PREFIXES = (
-        "Auth.PairingStart",
-        "Auth.PairingConnect",
-        "Auth.PairingExchange",
-        "Auth.Login",
+        AuthMethods.PAIRING_START,
+        AuthMethods.PAIRING_CONNECT,
+        AuthMethods.PAIRING_EXCHANGE,
+        AuthMethods.LOGIN,
     )
 
     async def _rpc_call(

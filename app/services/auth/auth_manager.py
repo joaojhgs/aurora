@@ -523,10 +523,11 @@ class AuthManager:
 
         # Publish PairingRequestedEvent so UI / mesh subsystem can react
         try:
+            from app.shared.contracts.models.auth import AuthMethods
             from app.shared.contracts.models.mesh import PairingRequestedEvent
 
             await self.bus.publish(
-                "Auth.PairingRequested",
+                AuthMethods.PAIRING_REQUESTED,
                 PairingRequestedEvent(
                     code=pairing_code,
                     remote_peer_id=remote_peer_id,
