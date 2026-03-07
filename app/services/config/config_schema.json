@@ -1095,15 +1095,22 @@
                             "description": "Human-readable name for this node in the mesh",
                             "default": ""
                         },
-                        "sharing": {
+                        "services": {
                             "type": "object",
-                            "description": "Per-service sharing configuration",
-                            "additionalProperties": true
-                        },
-                        "routing": {
-                            "type": "object",
-                            "description": "Per-service routing preferences",
-                            "additionalProperties": true
+                            "description": "Per-service mesh configuration (sharing + routing combined)",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "share": { "type": "boolean", "description": "Whether to share this service with the network", "default": false },
+                                    "max_concurrent": { "type": "integer", "minimum": 0, "description": "Maximum concurrent remote calls", "default": 10 },
+                                    "allowed_peers": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Specific peer IDs allowed (null = all authenticated)", "default": null },
+                                    "prefer": { "type": "string", "enum": ["local", "network", "network_only", "local_only"], "description": "Routing preference", "default": "local" },
+                                    "fallback": { "type": "string", "enum": ["local", "network", "error", "none"], "description": "Fallback strategy", "default": "local" },
+                                    "min_version": { "type": ["string", "null"], "description": "Minimum required remote service version (semver)", "default": null },
+                                    "required_capabilities": { "type": "array", "items": { "type": "string" }, "description": "Required capabilities for remote service", "default": [] }
+                                },
+                                "additionalProperties": false
+                            }
                         },
                         "version_policy": {
                             "type": "string",

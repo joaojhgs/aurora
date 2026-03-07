@@ -349,6 +349,10 @@ class GatewayService(BaseService):
         the global bus singleton.
         """
         try:
+            if self._mesh_bus:
+                log_debug("Mesh P2P already initialized — skipping duplicate start")
+                return
+
             settings = await self._get_gateway_config()
             mesh_config = settings.mesh
 
@@ -557,8 +561,8 @@ class GatewayService(BaseService):
             await self._mesh_announcer.start()
 
             node_name = mesh_config.node_name or "unnamed"
-            shared = [m for m, s in mesh_config.sharing.items() if s.share]
-            routed = [m for m, r in mesh_config.routing.items() if r.prefer != "local"]
+            shared = [m for m, s in mesh_config.services.items() if s.share]
+            routed = [m for m, s in mesh_config.services.items() if s.prefer != "local"]
             log_info(
                 f"Mesh P2P started — node='{node_name}', peer_id='{peer_id}', "
                 f"sharing={shared}, routed={routed}"

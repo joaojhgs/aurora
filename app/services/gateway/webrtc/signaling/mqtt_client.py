@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-from collections.abc import Awaitable, Callable
+import urllib.parse
 
 import paho.mqtt.client as mqtt
 
@@ -78,36 +78,22 @@ class MQTTSignaling:
                 self._client.on_message = self._on_message
 
                 if transport == "websockets":
-                    # Paho 2.0+ requires valid port for connect() even with URL, or use connect_uri if available
-                    # Since connect_uri is missing, we must parse manually or use default ports
-                    parsed_url = url.replace("wss://", "").replace("ws://", "")
-                    if ":" in parsed_url:
-                        host, port_str = parsed_url.split(":")
-                        port = int(port_str.split("/")[0])
-                    else:
-                        host = parsed_url.split("/")[0]
-                        port = 443 if url.startswith("wss://") else 80
+                    parsed = urllib.parse.urlparse(url)
+                    host = parsed.hostname or "localhost"
+                    default_port = 443 if parsed.scheme == "wss" else 80
+                    port = parsed.port or default_port
+                    path = parsed.path or "/"
 
-                    # For WSS, we need to set the path if it exists
-                    path = "/"
-                    if "/" in parsed_url:
-                        parts = parsed_url.split("/", 1)
-                        if len(parts) > 1:
-                            path = "/" + parts[1]
-
-                    if url.startswith("wss://"):
+                    if parsed.scheme == "wss":
                         self._client.tls_set()
 
                     self._client.ws_set_options(path=path)
                     self._client.connect(host=host, port=port, keepalive=30)
                 else:
-                    clean_url = url.replace("mqtt://", "")
-                    if ":" in clean_url:
-                        host, port_str = clean_url.split(":")
-                        port = int(port_str)
-                    else:
-                        host = clean_url
-                        port = 1883
+                    normalized = url if "://" in url else f"mqtt://{url}"
+                    parsed = urllib.parse.urlparse(normalized)
+                    host = parsed.hostname or "localhost"
+                    port = parsed.port or 1883
                     self._client.connect(host, port, keepalive=30)
 
                 self._client.loop_start()

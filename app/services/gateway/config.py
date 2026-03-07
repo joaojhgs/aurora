@@ -5,12 +5,12 @@ import secrets
 from pydantic import BaseModel, Field
 
 
-class ServiceSharingConfig(BaseModel):
-    """Per-service sharing configuration for the mesh network.
+class MeshServiceConfig(BaseModel):
+    """Per-service mesh configuration (sharing + routing combined).
 
     Controls whether a local service is shared with remote peers,
-    how many concurrent remote calls are allowed, and which peers
-    may use it.
+    how many concurrent remote calls are allowed, which peers may
+    use it, and how the MeshBus routes messages for this service.
 
     Event forwarding is controlled at the publish site via the
     ``mesh=True`` parameter on ``bus.publish()``, not here.
@@ -19,30 +19,24 @@ class ServiceSharingConfig(BaseModel):
         share: Whether to share this service with the network
         max_concurrent: Maximum concurrent remote calls to this service
         allowed_peers: Specific peer IDs allowed (None = all authenticated)
-    """
-
-    share: bool = False
-    max_concurrent: int = 10
-    allowed_peers: list[str] | None = None
-
-
-class ServiceRoutingConfig(BaseModel):
-    """Per-service routing preference for the mesh network.
-
-    Controls how the MeshBus routes messages for a given service —
-    whether to prefer local execution, network execution, or a mix.
-
-    Attributes:
         prefer: Routing preference ("local" | "network" | "network_only" | "local_only")
         fallback: Fallback strategy ("local" | "network" | "error" | "none")
         min_version: Minimum required version (semver) for remote service
         required_capabilities: Capabilities the remote service must have
     """
 
+    share: bool = False
+    max_concurrent: int = 10
+    allowed_peers: list[str] | None = None
     prefer: str = "local"
     fallback: str = "local"
     min_version: str | None = None
     required_capabilities: list[str] = Field(default_factory=list)
+
+
+# Backward-compatible aliases
+ServiceSharingConfig = MeshServiceConfig
+ServiceRoutingConfig = MeshServiceConfig
 
 
 class MeshConfig(BaseModel):
@@ -55,8 +49,7 @@ class MeshConfig(BaseModel):
     Attributes:
         enabled: Whether mesh networking is active
         node_name: Human-readable name for this node in the mesh
-        sharing: Per-module sharing configuration
-        routing: Per-module routing preferences
+        services: Per-module mesh configuration (sharing + routing)
         version_policy: How strictly to enforce version matching
         peer_selection: Strategy for choosing among multiple peers
         ping_interval_s: How often to measure peer latency (seconds)
@@ -66,8 +59,7 @@ class MeshConfig(BaseModel):
 
     enabled: bool = False
     node_name: str = ""
-    sharing: dict[str, ServiceSharingConfig] = Field(default_factory=dict)
-    routing: dict[str, ServiceRoutingConfig] = Field(default_factory=dict)
+    services: dict[str, MeshServiceConfig] = Field(default_factory=dict)
     version_policy: str = "compatible"  # "exact" | "compatible" | "any"
     peer_selection: str = "lowest_latency"  # "lowest_latency" | "round_robin" | "random"
     ping_interval_s: float = 30.0

@@ -560,8 +560,7 @@ class RouteGenerator:
             return typed_handler
 
         method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
-        # Bus topic IS the permission — single namespace, no required_perms
-        scopes = [method_id]
+        scopes = list(method_info.required_perms) if method_info.required_perms else [method_id]
 
         wrapped_handler = create_typed_handler(
             handler,

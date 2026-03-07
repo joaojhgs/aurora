@@ -246,9 +246,8 @@ Key settings classes:
 - `WebRTCSettings` -- room, password, STUN/TURN, signaling
 - `MQTTSettings` -- broker, port, topic_root, TLS, encrypt_signaling
 - `PermissionSettings` -- default permissions for new devices/users
-- `MeshConfig` -- enabled, node_name, sharing, routing, ping interval
-- `ServiceSharingConfig` -- per-service: share, max_concurrent, allowed_peers
-- `ServiceRoutingConfig` -- per-service: prefer (local/network), fallback, min_version
+- `MeshConfig` -- enabled, node_name, services, ping interval
+- `MeshServiceConfig` -- per-service: share, max_concurrent, allowed_peers, prefer, fallback, min_version
 
 ### token_secret Generation
 

@@ -139,7 +139,7 @@ class RPCHandler:
         if self._mesh_config and self._mesh_config.enabled and not is_infra_method:
             module_name = method_name.split(delimiter, 1)[0] if delimiter else method_name
 
-            sharing = self._mesh_config.sharing.get(module_name)
+            sharing = self._mesh_config.services.get(module_name)
             if not sharing or not sharing.share:
                 self._send_error(req_id, 403, f"Service {module_name} is not shared")
                 return
@@ -214,7 +214,7 @@ class RPCHandler:
             self._active_remote_calls[module_for_capacity] = (
                 self._active_remote_calls.get(module_for_capacity, 0) + 1
             )
-            sharing = self._mesh_config.sharing.get(module_for_capacity)
+            sharing = self._mesh_config.services.get(module_for_capacity)
             max_concurrent = sharing.max_concurrent if sharing else 0
             # Notify peers of capacity change
             if self._capacity_notify_fn and max_concurrent > 0:
@@ -224,9 +224,15 @@ class RPCHandler:
                 )
         try:
             log_debug(f"RPCHandler: Executing {topic} via bus")
+            typed_params = params
+            if meta.input_model and isinstance(params, dict):
+                try:
+                    typed_params = meta.input_model(**params)
+                except Exception:
+                    typed_params = params
             res = await self._bus.request(
                 topic,
-                params,  # type: ignore[arg-type]
+                typed_params,  # type: ignore[arg-type]
                 timeout=30.0,
                 origin="external",
                 principal_id=identity.principal_id,

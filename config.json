@@ -153,7 +153,7 @@
     "servers": {}
   },
   "gateway": {
-    "enabled": false,
+    "enabled": true,
     "host": "0.0.0.0",
     "port": 8000,
     "request_timeout_s": 30.0,
@@ -164,8 +164,10 @@
       "allow_credentials": true
     },
     "auth": {
-      "enabled": false,
-      "api_keys": [],
+      "enabled": true,
+      "api_keys": [
+        "1234"
+      ],
       "token_expiry_days": 365,
       "session_token_expiry_hours": 24,
       "pairing_code_expiry_minutes": 5,
@@ -177,89 +179,60 @@
       "audit_retention_days": 90
     },
     "mesh": {
-      "enabled": false,
-      "node_name": "",
-      "sharing": {
+      "enabled": true,
+      "node_name": "node1",
+      "services": {
         "TTS": {
-          "share": false,
+          "share": true,
           "max_concurrent": 10,
-          "forward_events": true
+          "prefer": "local",
+          "fallback": "local"
         },
         "STTCoordinator": {
           "share": false,
           "max_concurrent": 10,
-          "forward_events": true
-        },
-        "WakeWord": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "Transcription": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "DB": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "Orchestrator": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "Tooling": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "Scheduler": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        },
-        "Config": {
-          "share": false,
-          "max_concurrent": 10,
-          "forward_events": true
-        }
-      },
-      "routing": {
-        "TTS": {
-          "prefer": "local",
-          "fallback": "local"
-        },
-        "STTCoordinator": {
           "prefer": "local",
           "fallback": "local"
         },
         "WakeWord": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "Transcription": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "DB": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "Orchestrator": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "Tooling": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "Scheduler": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         },
         "Config": {
+          "share": false,
+          "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
         }
@@ -272,11 +245,11 @@
       "remote_timeout_s": 30.0
     },
     "webrtc": {
-      "enabled": false,
+      "enabled": true,
       "strategy": "mqtt",
       "app_id": "aurora",
-      "room": "default",
-      "password": "",
+      "room": "aurora-5fd7c355f41dfc32",
+      "password": "1234",
       "encrypt_signaling": true,
       "enable_app_layer_e2ee": false,
       "stun_servers": [

@@ -136,7 +136,7 @@ class MeshBus:
             # Forward events to connected peers when mesh=True and module is shared
             if mesh and self._peer_bridge and origin != "mesh_forwarded":
                 module = topic.split(".")[0] if "." in topic else topic
-                sharing_cfg = self._config.sharing.get(module)
+                sharing_cfg = self._config.services.get(module)
                 if sharing_cfg and sharing_cfg.share:
                     peers = self._routing_table.get_negotiated_peers()
                     for peer in peers:

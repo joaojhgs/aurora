@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
-from app.services.gateway.config import MeshConfig, ServiceRoutingConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
@@ -28,12 +28,9 @@ def mesh_config():
     return MeshConfig(
         enabled=True,
         node_name="local-node",
-        sharing={
-            "TTS": ServiceSharingConfig(share=True, max_concurrent=5),
-        },
-        routing={
-            "Orchestrator": ServiceRoutingConfig(prefer="network", fallback="local"),
-            "TTS": ServiceRoutingConfig(prefer="local"),
+        services={
+            "TTS": MeshServiceConfig(share=True, max_concurrent=5, prefer="local"),
+            "Orchestrator": MeshServiceConfig(prefer="network", fallback="local"),
         },
         peer_selection="lowest_latency",
         stale_peer_timeout_s=120.0,

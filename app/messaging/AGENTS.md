@@ -187,7 +187,7 @@ await self.bus.publish(AudioTopics.STREAM_MICROPHONE, ..., event=True)  # mesh=F
 
 ### Gate 2: Operator config (`share: true`)
 
-Even with `mesh=True`, the event won't forward unless the module has `share: true` in `gateway.mesh.sharing` config.
+Even with `mesh=True`, the event won't forward unless the module has `share: true` in `gateway.mesh.services` config.
 
 ### Events with `mesh=True` by Service
 
