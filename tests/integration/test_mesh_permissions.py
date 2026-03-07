@@ -11,7 +11,7 @@ import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
-from app.services.gateway.config import MeshConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.webrtc.rpc import RPCHandler
 
 
@@ -71,8 +71,8 @@ class TestSharingGate:
         """When a service is shared, calls should be allowed."""
         mesh_config = MeshConfig(
             enabled=True,
-            sharing={
-                "TTS": ServiceSharingConfig(share=True, max_concurrent=5),
+            services={
+                "TTS": MeshServiceConfig(share=True, max_concurrent=5),
             },
         )
         handler = RPCHandler(
@@ -108,8 +108,8 @@ class TestSharingGate:
         """When a service is NOT shared, calls should be rejected."""
         mesh_config = MeshConfig(
             enabled=True,
-            sharing={
-                "TTS": ServiceSharingConfig(share=False),
+            services={
+                "TTS": MeshServiceConfig(share=False),
             },
         )
         handler = RPCHandler(
@@ -144,8 +144,8 @@ class TestSharingGate:
         """When a service is at capacity, calls should be rejected with 429."""
         mesh_config = MeshConfig(
             enabled=True,
-            sharing={
-                "TTS": ServiceSharingConfig(share=True, max_concurrent=1),
+            services={
+                "TTS": MeshServiceConfig(share=True, max_concurrent=1),
             },
         )
         handler = RPCHandler(

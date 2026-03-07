@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.gateway.config import MeshConfig, ServiceRoutingConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import ManifestAck, PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.negotiation import (
     generate_manifest,
@@ -25,11 +25,10 @@ def mesh_config_sharing():
     return MeshConfig(
         enabled=True,
         node_name="test-node",
-        sharing={
-            "TTS": ServiceSharingConfig(share=True, max_concurrent=5),
-            "DB": ServiceSharingConfig(share=False),
+        services={
+            "TTS": MeshServiceConfig(share=True, max_concurrent=5),
+            "DB": MeshServiceConfig(share=False),
         },
-        routing={},
     )
 
 
@@ -39,14 +38,13 @@ def mesh_config_routing():
     return MeshConfig(
         enabled=True,
         node_name="test-node",
-        sharing={},
-        routing={
-            "TTS": ServiceRoutingConfig(
+        services={
+            "TTS": MeshServiceConfig(
                 prefer="network",
                 fallback="local",
                 min_version="1.0.0",
             ),
-            "Scheduler": ServiceRoutingConfig(prefer="local"),
+            "Scheduler": MeshServiceConfig(prefer="local"),
         },
         version_policy="compatible",
     )
@@ -194,8 +192,8 @@ class TestGenerateManifestAck:
     def test_required_capabilities_missing(self):
         config = MeshConfig(
             enabled=True,
-            routing={
-                "TTS": ServiceRoutingConfig(
+            services={
+                "TTS": MeshServiceConfig(
                     prefer="network",
                     min_version="1.0.0",
                     required_capabilities=["streaming"],

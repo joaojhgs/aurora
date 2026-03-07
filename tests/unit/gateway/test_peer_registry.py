@@ -5,11 +5,7 @@ import time
 
 import pytest
 
-from app.services.gateway.config import (
-    MeshConfig,
-    ServiceRoutingConfig,
-    ServiceSharingConfig,
-)
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 
@@ -19,11 +15,10 @@ def mesh_config():
     return MeshConfig(
         enabled=True,
         node_name="test",
-        sharing={
-            "TTS": ServiceSharingConfig(share=True, max_concurrent=5),
-        },
-        routing={
-            "TTS": ServiceRoutingConfig(prefer="network", fallback="local"),
+        services={
+            "TTS": MeshServiceConfig(
+                share=True, max_concurrent=5, prefer="network", fallback="local"
+            ),
         },
         stale_peer_timeout_s=10.0,
         peer_selection="lowest_latency",

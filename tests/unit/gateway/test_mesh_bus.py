@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
-from app.services.gateway.config import MeshConfig, ServiceRoutingConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import RouteDecision
 
 
@@ -45,8 +45,8 @@ def mesh_config():
     return MeshConfig(
         enabled=True,
         node_name="test",
-        routing={
-            "TTS": ServiceRoutingConfig(prefer="network", fallback="local"),
+        services={
+            "TTS": MeshServiceConfig(prefer="network", fallback="local"),
         },
     )
 
@@ -74,8 +74,7 @@ class TestMeshBusPublish:
         cfg = MeshConfig(
             enabled=True,
             node_name="test",
-            sharing={"TTS": ServiceSharingConfig(share=True)},
-            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+            services={"TTS": MeshServiceConfig(share=True, prefer="network", fallback="local")},
         )
         bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
 
@@ -91,8 +90,7 @@ class TestMeshBusPublish:
         cfg = MeshConfig(
             enabled=True,
             node_name="test",
-            sharing={"TTS": ServiceSharingConfig(share=True)},
-            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+            services={"TTS": MeshServiceConfig(share=True, prefer="network", fallback="local")},
         )
         fake_peer = MagicMock()
         fake_peer.peer_id = "peer-1"
@@ -114,8 +112,7 @@ class TestMeshBusPublish:
         cfg = MeshConfig(
             enabled=True,
             node_name="test",
-            sharing={"TTS": ServiceSharingConfig(share=False)},
-            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+            services={"TTS": MeshServiceConfig(share=False, prefer="network", fallback="local")},
         )
         bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
 
@@ -131,8 +128,7 @@ class TestMeshBusPublish:
         cfg = MeshConfig(
             enabled=True,
             node_name="test",
-            sharing={"TTS": ServiceSharingConfig(share=True)},
-            routing={"TTS": ServiceRoutingConfig(prefer="network", fallback="local")},
+            services={"TTS": MeshServiceConfig(share=True, prefer="network", fallback="local")},
         )
         bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
 
@@ -156,8 +152,7 @@ class TestMeshBusPublish:
         cfg = MeshConfig(
             enabled=True,
             node_name="test",
-            sharing={"TTS": ServiceSharingConfig(share=True)},
-            routing={},
+            services={"TTS": MeshServiceConfig(share=True)},
         )
         peer1 = MagicMock()
         peer1.peer_id = "peer-1"

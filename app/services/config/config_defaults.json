@@ -177,27 +177,16 @@
         "mesh": {
             "enabled": false,
             "node_name": "",
-            "sharing": {
-                "TTS": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "STTCoordinator": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "WakeWord": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "Transcription": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "DB": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "Orchestrator": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "Tooling": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "Scheduler": { "share": false, "max_concurrent": 10, "forward_events": true },
-                "Config": { "share": false, "max_concurrent": 10, "forward_events": true }
-            },
-            "routing": {
-                "TTS": { "prefer": "local", "fallback": "local" },
-                "STTCoordinator": { "prefer": "local", "fallback": "local" },
-                "WakeWord": { "prefer": "local", "fallback": "local" },
-                "Transcription": { "prefer": "local", "fallback": "local" },
-                "DB": { "prefer": "local", "fallback": "local" },
-                "Orchestrator": { "prefer": "local", "fallback": "local" },
-                "Tooling": { "prefer": "local", "fallback": "local" },
-                "Scheduler": { "prefer": "local", "fallback": "local" },
-                "Config": { "prefer": "local", "fallback": "local" }
+            "services": {
+                "TTS": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "STTCoordinator": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "WakeWord": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "Transcription": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "DB": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "Orchestrator": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "Tooling": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "Scheduler": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" },
+                "Config": { "share": false, "max_concurrent": 10, "prefer": "local", "fallback": "local" }
             },
             "version_policy": "compatible",
             "peer_selection": "lowest_latency",

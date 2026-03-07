@@ -16,7 +16,7 @@ from app.helpers.aurora_logger import log_debug
 from .models import RouteDecision
 
 if TYPE_CHECKING:
-    from app.services.gateway.config import MeshConfig, ServiceRoutingConfig
+    from app.services.gateway.config import MeshConfig, MeshServiceConfig
     from app.services.gateway.mesh.peer_registry import PeerRegistry
 
 
@@ -35,7 +35,7 @@ class RoutingTable:
     def resolve(
         self,
         topic: str,
-        routing_config: ServiceRoutingConfig | None = None,
+        routing_config: MeshServiceConfig | None = None,
         exclude: list[str] | None = None,
     ) -> RouteDecision:
         """Determine where to route a message.
@@ -59,7 +59,7 @@ class RoutingTable:
 
         # Get routing config for this module
         if routing_config is None:
-            routing_config = self._config.routing.get(module)
+            routing_config = self._config.services.get(module)
 
         # No routing config or mesh disabled → always local
         if not routing_config:
@@ -130,7 +130,7 @@ class RoutingTable:
     def resolve_fallback(
         self,
         topic: str,
-        routing_config: ServiceRoutingConfig | None = None,
+        routing_config: MeshServiceConfig | None = None,
         failed_peer_id: str | None = None,
     ) -> RouteDecision:
         """Resolve a fallback route after a primary route failure.
@@ -146,7 +146,7 @@ class RoutingTable:
         module = _extract_module(topic)
 
         if routing_config is None:
-            routing_config = self._config.routing.get(module)
+            routing_config = self._config.services.get(module)
 
         if not routing_config:
             return RouteDecision(target="local", module=module)

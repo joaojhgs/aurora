@@ -20,7 +20,7 @@ from .models import ManifestAck, PeerManifest, PeerServiceInfo
 from .version_compat import is_compatible
 
 if TYPE_CHECKING:
-    from app.services.gateway.config import MeshConfig, ServiceRoutingConfig
+    from app.services.gateway.config import MeshConfig, MeshServiceConfig
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
@@ -87,7 +87,7 @@ def _build_services_from_local(
     shared: list[PeerServiceInfo] = []
 
     for module_name, module_contract in modules.items():
-        sharing_config = mesh_config.sharing.get(module_name)
+        sharing_config = mesh_config.services.get(module_name)
         if not sharing_config or not sharing_config.share:
             continue
 
@@ -134,12 +134,10 @@ def _build_services_from_aggregator(
     """
     shared: list[PeerServiceInfo] = []
 
-    # Read a snapshot of the aggregator's internal service state.
-    # In process mode the aggregator is populated by bus announcements.
-    services_snapshot: dict = dict(registry._services)  # module -> ServiceAnnouncement
+    services_snapshot: dict = registry.snapshot_services()
 
     for module_name, announcement in services_snapshot.items():
-        sharing_config = mesh_config.sharing.get(module_name)
+        sharing_config = mesh_config.services.get(module_name)
         if not sharing_config or not sharing_config.share:
             continue
 
@@ -200,7 +198,7 @@ def generate_manifest_ack(
 
     for svc in remote_manifest.shared_services:
         # Check if we have routing config that wants this service from the network
-        routing_config = mesh_config.routing.get(svc.module)
+        routing_config = mesh_config.services.get(svc.module)
 
         if not routing_config or routing_config.prefer in ("local_only", "local"):
             # We don't want this service from the network
