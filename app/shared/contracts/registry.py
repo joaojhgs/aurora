@@ -284,15 +284,25 @@ def register_method(
 
 
 def get_contract(name: str) -> MethodContract | None:
-    """Get a contract by bus topic (e.g. ``"DB.CreateToken"``).
+    """Get a contract by bus topic or short method name.
+
+    Tries exact bus-topic lookup first (e.g. ``"DB.CreateToken"``).
+    Falls back to scanning for a matching short ``name`` attribute
+    when the exact key is not found.
 
     Args:
-        name: Full bus topic ("Module.Method")
+        name: Full bus topic ("Module.Method") or short method name ("CreateToken")
 
     Returns:
         MethodContract if found, None otherwise
     """
-    return _registry.get(name)
+    contract = _registry.get(name)
+    if contract is not None:
+        return contract
+    for mc in _registry.values():
+        if mc.name == name:
+            return mc
+    return None
 
 
 def all_contracts() -> dict[str, MethodContract]:

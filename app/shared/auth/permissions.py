@@ -122,28 +122,47 @@ def _ensure_initialized() -> None:
     global _initialized
     if _initialized:
         return
-    _initialized = True
-    perms, prefixes = _collect_permissions(*_load_all_method_classes())
+    try:
+        perms, prefixes = _collect_permissions(*_load_all_method_classes())
+    except Exception:
+        return
     KNOWN_PERMISSIONS.update(perms)
     KNOWN_PERMISSION_PREFIXES.update(prefixes)
     _permission_enum_list.extend(sorted(KNOWN_PERMISSIONS))
+    _initialized = True
+
+
+def _normalize_prefix(raw: str) -> str | None:
+    """Return the canonical prefix for *raw* via case-insensitive lookup.
+
+    Returns ``None`` when no known prefix matches.
+    """
+    lower = raw.lower()
+    for known in KNOWN_PERMISSION_PREFIXES:
+        if known.lower() == lower:
+            return known
+    return None
 
 
 def validate_permission(perm: str) -> str:
-    """Validate a permission string.
+    """Validate a permission string, normalising case when possible.
 
-    Returns the permission if valid, raises ValueError otherwise.
+    Returns the permission (with canonical prefix casing) if valid,
+    raises ``ValueError`` otherwise.
+
     Accepts:
     - ``"*"`` (superuser wildcard)
     - Any exact match in ``KNOWN_PERMISSIONS`` (bus topic strings)
-    - Any string whose dot-prefix is in ``KNOWN_PERMISSION_PREFIXES``
+    - Any string whose dot-prefix matches a known prefix
+      (case-insensitive — ``"tts"`` becomes ``"TTS"``,
+      ``"tts.Request"`` becomes ``"TTS.Request"``)
 
     Args:
         perm: The permission string to validate (e.g. ``"Auth.Login"``,
               ``"TTS.use"``, ``"Config.*"``).
 
     Returns:
-        The validated permission string.
+        The validated permission string with canonical prefix casing.
 
     Raises:
         ValueError: When the permission prefix is unknown.
@@ -153,10 +172,22 @@ def validate_permission(perm: str) -> str:
         return perm
     if perm in KNOWN_PERMISSIONS:
         return perm
-    # Check if prefix is known (for new specific permissions under a known prefix)
-    prefix = perm.split(".")[0]
-    if prefix in KNOWN_PERMISSION_PREFIXES:
+
+    parts = perm.split(".", 1)
+    raw_prefix = parts[0]
+
+    # Exact prefix hit (fast path)
+    if raw_prefix in KNOWN_PERMISSION_PREFIXES:
         return perm
+
+    # Case-insensitive prefix match — normalise to canonical casing
+    canonical = _normalize_prefix(raw_prefix)
+    if canonical is not None:
+        normalised = f"{canonical}.{parts[1]}" if len(parts) > 1 else canonical
+        if normalised in KNOWN_PERMISSIONS:
+            return normalised
+        return normalised
+
     raise ValueError(
         f"Unknown permission '{perm}'. Must start with a known service prefix: "
         f"{sorted(KNOWN_PERMISSION_PREFIXES)} or be a known permission."

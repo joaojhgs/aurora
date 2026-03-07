@@ -389,3 +389,12 @@ class RegistryAggregator:
 
         age = datetime.utcnow() - last_seen
         return age < self._heartbeat_timeout * 2
+
+    def snapshot_services(self) -> dict[str, ServiceAnnouncement]:
+        """Return a shallow copy of the internal services dict.
+
+        This is safe to call from synchronous code (e.g. manifest
+        generation).  The returned dict is a snapshot — mutations to it
+        won't affect the aggregator.
+        """
+        return dict(self._services)

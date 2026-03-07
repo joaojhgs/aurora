@@ -1,1 +1,0 @@
-# Issues - Refactor Gateway Auth

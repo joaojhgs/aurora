@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
-from app.services.gateway.config import MeshConfig, ServiceRoutingConfig, ServiceSharingConfig
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
@@ -28,10 +28,10 @@ def mesh_config():
     return MeshConfig(
         enabled=True,
         node_name="failover-test",
-        routing={
-            "Orchestrator": ServiceRoutingConfig(prefer="network", fallback="local"),
-            "STT": ServiceRoutingConfig(prefer="network", fallback="network"),
-            "GPU": ServiceRoutingConfig(prefer="network_only", fallback="error"),
+        services={
+            "Orchestrator": MeshServiceConfig(prefer="network", fallback="local"),
+            "STT": MeshServiceConfig(prefer="network", fallback="network"),
+            "GPU": MeshServiceConfig(prefer="network_only", fallback="error"),
         },
         peer_selection="lowest_latency",
     )

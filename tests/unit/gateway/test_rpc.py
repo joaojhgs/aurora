@@ -177,7 +177,7 @@ def _make_mesh_config(enabled: bool = True, sharing: dict | None = None):
     """Create a mock mesh config object."""
     cfg = MagicMock()
     cfg.enabled = enabled
-    cfg.sharing = sharing or {}
+    cfg.services = sharing or {}
     return cfg
 
 
