@@ -566,7 +566,7 @@ class RouteGenerator:
             handler,
             request_model_cls,
             scopes,
-            method_type=method_info.method_type,
+            method_type=method_info.method_type or "use",
         )
 
         # Copy metadata to wrapper

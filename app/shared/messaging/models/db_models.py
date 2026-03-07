@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.messaging import Command, Query
 
@@ -13,7 +13,7 @@ class StoreMessage(Command):
     role: str
     content: str
     session_id: str | None = None
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict)
 
 
 class GetRecentMessages(Query):

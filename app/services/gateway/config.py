@@ -89,7 +89,7 @@ class APISettings(BaseModel):
     docs: bool = True
     token_secret: str = Field(default_factory=_generate_token_secret)
     auth_enabled: bool = False
-    api_keys: list[str] = []
+    api_keys: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_gateway_dict(cls, gateway: dict) -> APISettings:
@@ -119,7 +119,7 @@ class WebRTCSettings(BaseModel):
     encrypt_signaling: bool = True
     enable_app_layer_e2ee: bool = False
     stun_servers: list[str] = ["stun:stun.l.google.com:19302"]
-    turn_servers: list[str] = []
+    turn_servers: list[str] = Field(default_factory=list)
     turn_username: str | None = None
     turn_password: str | None = None
 
@@ -137,7 +137,7 @@ class MQTTSettings(BaseModel):
 class PermissionSettings(BaseModel):
     """Default permission settings for new principals."""
 
-    default_device_permissions: list[str] = []
+    default_device_permissions: list[str] = Field(default_factory=list)
     webrtc_auth_timeout_seconds: float = 10.0
     webrtc_pairing_timeout_seconds: float = 300.0
 

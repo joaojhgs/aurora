@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.shared.contracts.registry import IOModel
 
@@ -32,7 +32,7 @@ class ServiceStatus(BaseModel):
     name: str
     running: bool
     uptime_seconds: float = 0.0
-    details: dict[str, Any] = {}
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class GetStatusResponse(IOModel):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.messaging import Command, Event, Query
 
@@ -32,7 +32,7 @@ class GetToolsQuery(Query):
 class GetToolsResponse(BaseModel):
     """Response for GetToolsQuery."""
 
-    tools: list[dict[str, Any]] = []
+    tools: list[dict[str, Any]] = Field(default_factory=list)
     count: int = 0
 
 
@@ -75,7 +75,7 @@ class ExecuteToolCommand(Command):
     """Command to execute a tool by name."""
 
     tool_name: str
-    arguments: dict[str, Any] = {}
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecuteToolResponse(BaseModel):
