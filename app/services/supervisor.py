@@ -14,7 +14,7 @@ import asyncio
 import contextlib
 import logging
 import signal
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope
@@ -32,9 +32,6 @@ from app.shared.contracts.models.supervisor import (
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
-
-if TYPE_CHECKING:
-    pass
 
 
 class Supervisor(BaseService):

@@ -560,7 +560,7 @@ class RouteGenerator:
             return typed_handler
 
         method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
-        scopes = list(method_info.required_perms) if method_info.required_perms else [method_id]
+        scopes = list(method_info.required_perms) if method_info.required_perms else []
 
         wrapped_handler = create_typed_handler(
             handler,
@@ -592,7 +592,8 @@ class RouteGenerator:
             )
 
         # Technical details in a smaller section
-        detail_lines = [f"**Bus topic**: `{method_info.bus_topic}`"]
+        bus_topic_for_description = method_info.bus_topic or method_id
+        detail_lines = [f"**Bus topic**: `{bus_topic_for_description}`"]
         if method_info.input_model:
             detail_lines.append(f"**Input**: `{method_info.input_model}`")
         if method_info.output_model:
