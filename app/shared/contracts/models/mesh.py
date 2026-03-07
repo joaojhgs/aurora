@@ -7,7 +7,7 @@ violating the "no cross-service imports" rule.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.shared.auth.permissions import Permission
 
@@ -38,13 +38,13 @@ class MeshPeerInfo(BaseModel):
 
     # Outbound: what WE granted to THEM
     outbound_status: str = "pending"  # pending | approved | denied
-    outbound_permissions: list[Permission] = []
+    outbound_permissions: list[Permission] = Field(default_factory=list)
     outbound_approved_at: str | None = None
     outbound_approved_by: str | None = None
 
     # Inbound: what THEY granted to US
     inbound_status: str = "unknown"  # unknown | pending | approved | denied
-    inbound_permissions: list[Permission] = []
+    inbound_permissions: list[Permission] = Field(default_factory=list)
     inbound_approved_at: str | None = None
 
     # Connection state
@@ -91,7 +91,7 @@ class MeshPeerListRequest(BaseModel):
 class MeshPeerListResponse(BaseModel):
     """List of known mesh peers."""
 
-    peers: list[MeshPeerInfo] = []
+    peers: list[MeshPeerInfo] = Field(default_factory=list)
     total: int = 0
 
 
@@ -163,7 +163,7 @@ class MeshPeerSaveInboundRequest(BaseModel):
     remote_peer_id: str
     room_name: str
     token: str
-    permissions: list[Permission] = []
+    permissions: list[Permission] = Field(default_factory=list)
     remote_device_id: str | None = None
     remote_user_id: str | None = None
     remote_node_name: str | None = None
@@ -179,7 +179,7 @@ class MeshPeerLoadInboundRequest(BaseModel):
 class MeshPeerLoadInboundResponse(BaseModel):
     """Map of remote_peer_id → inbound_token."""
 
-    credentials: dict[str, str] = {}  # peer_id → token
+    credentials: dict[str, str] = Field(default_factory=dict)
 
 
 # ── Upsert Peer Record (create or update on discovery) ──────────────────

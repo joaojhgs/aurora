@@ -90,6 +90,9 @@ class RPCHandler:
         Publishes the event on the local bus so local services react
         to remote lifecycle events (e.g., TTS.Started from a remote TTS).
         Events are fire-and-forget — no response is sent back.
+
+        We attempt to reconstruct the original Pydantic model so that
+        subscribers receive a typed payload instead of a raw dict.
         """
         topic = msg.get("topic")
         params = msg.get("params") or {}
@@ -106,15 +109,42 @@ class RPCHandler:
 
         log_debug(f"RPCHandler: Received forwarded event {topic}")
         try:
+            payload: Any = params
+            if isinstance(params, dict) and self._registry:
+                payload = await self._reconstruct_event_model(topic, params)
+
             await self._bus.publish(
                 topic,
-                params,  # type: ignore[arg-type]
+                payload,
                 event=True,
                 origin="mesh_forwarded",
                 principal_id=identity.principal_id,
             )
         except Exception as e:
             log_error(f"RPCHandler: Error publishing forwarded event {topic}: {e}")
+
+    async def _reconstruct_event_model(self, topic: str, params: dict) -> Any:
+        """Try to reconstruct a Pydantic model from a forwarded event dict.
+
+        Looks up the service announcement in the registry to find
+        the method's input model class. Falls back to the raw dict
+        if reconstruction is not possible.
+        """
+        try:
+            delimiter = "." if "." in topic else None
+            if not delimiter:
+                return params
+            svc_name, method_name = topic.split(delimiter, 1)
+            announcement = await self._registry.get_service(svc_name)
+            if announcement:
+                for m in announcement.methods:
+                    if m.name == method_name and m.input_model:
+                        model_cls = m.input_model
+                        if isinstance(model_cls, type):
+                            return model_cls.model_validate(params)
+        except Exception:
+            pass
+        return params
 
     async def _handle_call(self, msg: dict[str, Any]) -> None:
         method_name = msg.get("method")

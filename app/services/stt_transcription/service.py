@@ -686,7 +686,7 @@ class TranscriptionService(BaseService):
         exposure="internal",
         method_type="manage",
     )
-    async def _on_control(self, data: STTControl) -> None:
+    async def _on_control(self, data: STTControl) -> EmptyOutput:
         """Handle control commands.
 
         Args:
@@ -717,6 +717,8 @@ class TranscriptionService(BaseService):
         elif action == "enable_accurate" and data.enabled is not None:
             self._accurate_enabled = data.enabled
             log_info(f"Accurate transcription: {'enabled' if data.enabled else 'disabled'}")
+
+        return EmptyOutput()
 
     def _decode_audio_to_numpy(
         self,

@@ -58,8 +58,8 @@ class MethodContract(BaseModel):
     summary: str = ""
     bus_topic: str | None = None
     default_priority: int = 50
-    allow_origins: list[str] = ["internal"]
-    required_perms: list[str] = []
+    allow_origins: list[str] = Field(default_factory=lambda: ["internal"])
+    required_perms: list[str] = Field(default_factory=list)
     method_type: str = "use"
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None = None
