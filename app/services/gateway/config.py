@@ -112,7 +112,7 @@ class APISettings(BaseModel):
             cors_origins=cors.get("origins", ["*"]),
             cors_allow_credentials=cors.get("allow_credentials", True),
             docs=gateway.get("docs", True),
-            token_secret=gateway.get("token_secret", "change-me"),
+            token_secret=gateway.get("token_secret") or _generate_token_secret(),
             auth_enabled=auth.get("enabled", False),
             api_keys=auth.get("api_keys", []),
         )

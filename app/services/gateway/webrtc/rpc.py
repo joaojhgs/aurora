@@ -179,7 +179,7 @@ class RPCHandler:
             self._send_error(req_id, 401, "Authentication required")
             return
 
-        if perms_needed and not identity.can(*perms_needed):
+        if perms_needed and not identity.can(*perms_needed, method_type=meta.method_type):
             log_warning(
                 f"RPCHandler: Forbidden call to {method_name} from "
                 f"{identity.principal_name} (need {perms_needed}, "

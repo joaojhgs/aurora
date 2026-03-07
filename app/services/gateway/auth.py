@@ -187,8 +187,12 @@ def create_auth_middleware(auth: GatewayAuth) -> Callable:
         """Authentication middleware."""
         from fastapi.responses import JSONResponse
 
-        if not auth.is_enabled() or auth.should_bypass(request.url.path):
-            request.state.identity = SYSTEM  # unauthenticated paths get full access
+        if not auth.is_enabled():
+            request.state.identity = SYSTEM
+            return await call_next(request)
+
+        if auth.should_bypass(request.url.path):
+            request.state.identity = ANONYMOUS
             return await call_next(request)
 
         # 1. API key
