@@ -126,24 +126,12 @@ class RPCHandler:
     async def _reconstruct_event_model(self, topic: str, params: dict) -> Any:
         """Try to reconstruct a Pydantic model from a forwarded event dict.
 
-        Looks up the service announcement in the registry to find
-        the method's input model class. Falls back to the raw dict
-        if reconstruction is not possible.
+        The registry stores ``input_model`` as a *string* name (e.g.
+        ``"TTSStarted"``), not an actual Python class.  Since we cannot
+        resolve the class from a bare name without an import registry, we
+        simply pass the raw dict through. The local bus and subscribers
+        already handle dict payloads gracefully.
         """
-        try:
-            delimiter = "." if "." in topic else None
-            if not delimiter:
-                return params
-            svc_name, method_name = topic.split(delimiter, 1)
-            announcement = await self._registry.get_service(svc_name)
-            if announcement:
-                for m in announcement.methods:
-                    if m.name == method_name and m.input_model:
-                        model_cls = m.input_model
-                        if isinstance(model_cls, type):
-                            return model_cls.model_validate(params)
-        except Exception:
-            pass
         return params
 
     async def _handle_call(self, msg: dict[str, Any]) -> None:
@@ -255,10 +243,14 @@ class RPCHandler:
         try:
             log_debug(f"RPCHandler: Executing {topic} via bus")
             typed_params = params
-            if meta.input_model and isinstance(params, dict):
+            if meta.input_model and isinstance(params, dict) and callable(meta.input_model):
                 try:
                     typed_params = meta.input_model(**params)
-                except Exception:
+                except Exception as exc:
+                    log_warning(
+                        f"RPCHandler: Failed to construct {meta.input_model!r} "
+                        f"for {method_name}: {exc}. Falling back to raw params."
+                    )
                     typed_params = params
             res = await self._bus.request(
                 topic,

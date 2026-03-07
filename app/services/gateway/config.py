@@ -4,6 +4,8 @@ import secrets
 
 from pydantic import BaseModel, Field
 
+from app.helpers.aurora_logger import log_warning
+
 
 class MeshServiceConfig(BaseModel):
     """Per-service mesh configuration (sharing + routing combined).
@@ -96,6 +98,16 @@ class APISettings(BaseModel):
         """Create APISettings from gateway config dict."""
         cors = gateway.get("cors", {})
         auth = gateway.get("auth", {})
+        auth_enabled = auth.get("enabled", False)
+        explicit_secret = gateway.get("token_secret")
+
+        if auth_enabled and not explicit_secret:
+            log_warning(
+                "Gateway auth is enabled but no token_secret is configured. "
+                "Tokens will be invalidated on restart. Set gateway.token_secret "
+                "in config.json or AURORA_TOKEN_SECRET env var to persist it."
+            )
+
         return cls(
             enabled=gateway.get("enabled", True),
             host=gateway.get("host", "0.0.0.0"),
@@ -104,8 +116,8 @@ class APISettings(BaseModel):
             cors_origins=cors.get("origins", ["*"]),
             cors_allow_credentials=cors.get("allow_credentials", True),
             docs=gateway.get("docs", True),
-            token_secret=gateway.get("token_secret") or _generate_token_secret(),
-            auth_enabled=auth.get("enabled", False),
+            token_secret=explicit_secret or _generate_token_secret(),
+            auth_enabled=auth_enabled,
             api_keys=auth.get("api_keys", []),
         )
 
