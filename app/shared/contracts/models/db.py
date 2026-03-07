@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from pydantic import Field
+
 from app.shared.contracts.registry import IOModel
 
 
@@ -457,5 +459,5 @@ class DBExecuteSQLResponse(IOModel):
     ``rowcount`` is the number of rows affected by INSERT/UPDATE/DELETE.
     """
 
-    rows: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = Field(default_factory=list)
     rowcount: int = 0

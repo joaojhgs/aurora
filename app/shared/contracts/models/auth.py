@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.shared.auth.permissions import Permission
 
@@ -129,8 +129,8 @@ class ValidateTokenResponse(BaseModel):
     principal_id: str | None = None
     principal_name: str | None = None
     is_admin: bool = False
-    permissions: list[Permission] = []
-    effective_perms: list[Permission] = []
+    permissions: list[Permission] = Field(default_factory=list)
+    effective_perms: list[Permission] = Field(default_factory=list)
     device_id: str | None = None
     source: str = "unknown"
 
@@ -209,7 +209,7 @@ class PairingExchangeResponse(BaseModel):
     token: str
     device_id: str
     user_id: str
-    permissions: list[Permission] = []
+    permissions: list[Permission] = Field(default_factory=list)
     token_id: str = ""  # Internal token row ID (for mesh_peers FK)
 
 

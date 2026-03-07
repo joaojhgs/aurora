@@ -103,6 +103,7 @@ def _build_services_from_local(
                         required_perms=mc.required_perms,
                         input_model=mc.input_model.__name__ if mc.input_model else None,
                         output_model=mc.output_model.__name__ if mc.output_model else None,
+                        method_type=mc.method_type,
                     )
                 )
 

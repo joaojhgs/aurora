@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from app.shared.contracts.registry import IOModel
 
 
@@ -36,7 +38,7 @@ class OrchestratorResponse(IOModel):
 
     text: str
     session_id: str | None = None
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class OrchestratorToolResultRequest(IOModel):

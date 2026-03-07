@@ -5,6 +5,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
+from pydantic import Field
+
 from app.messaging import Command, Event
 
 
@@ -28,7 +30,7 @@ class LLMResponseReady(Event):
 
     text: str
     session_id: str | None = None
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict)
 
 
 class ToolRequest(Command):

@@ -348,7 +348,7 @@ class WakeWordService(BaseService):
         exposure="internal",
         method_type="manage",
     )
-    async def _on_control(self, data: WakewordControl) -> None:
+    async def _on_control(self, data: WakewordControl) -> EmptyOutput:
         """Handle wake word control commands.
 
         Args:
@@ -378,6 +378,8 @@ class WakeWordService(BaseService):
 
         except Exception as e:
             log_error(f"Error handling control command: {e}", exc_info=True)
+
+        return EmptyOutput()
 
     @method_contract(
         method_id=WakeWordMethods.DETECT,
