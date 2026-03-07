@@ -740,10 +740,9 @@ class STTCoordinatorService(BaseService):
         exposure="internal",
         method_type="use",
     )
-    async def _on_audio_chunk(self, data: STTAudioChunk) -> None:
+    async def _on_audio_chunk(self, data: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunk."""
-        # Processing logic...
-        pass
+        return EmptyOutput()
 
     @method_contract(
         method_id=STTMethods.CONTROL,
@@ -753,7 +752,7 @@ class STTCoordinatorService(BaseService):
         exposure="internal",
         method_type="manage",
     )
-    async def _on_control(self, data: STTCoordinatorControl) -> None:
+    async def _on_control(self, data: STTCoordinatorControl) -> EmptyOutput:
         """Handle control commands.
 
         Args:
@@ -780,6 +779,8 @@ class STTCoordinatorService(BaseService):
             if self._current_session_id:
                 await self._end_session("manual")
             await self._transition_to(STTState.IDLE)
+
+        return EmptyOutput()
 
 
 # Export service and types

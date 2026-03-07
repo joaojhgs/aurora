@@ -70,6 +70,7 @@ class TestGenerateManifest:
             required_perms=["TTS.*"],
             input_model=type("TTSRequest", (), {"__name__": "TTSRequest"}),
             output_model=type("TTSResponse", (), {"__name__": "TTSResponse"}),
+            method_type="use",
         )
         tts_contract = SimpleNamespace(
             version="1.2.0",
