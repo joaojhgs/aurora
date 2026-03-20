@@ -153,10 +153,11 @@
     "servers": {}
   },
   "gateway": {
-    "enabled": true,
+    "enabled": false,
     "host": "0.0.0.0",
     "port": 8000,
     "request_timeout_s": 30.0,
+    "token_secret": "",
     "cors": {
       "origins": [
         "*"
@@ -164,10 +165,8 @@
       "allow_credentials": true
     },
     "auth": {
-      "enabled": true,
-      "api_keys": [
-        "1234"
-      ],
+      "enabled": false,
+      "api_keys": [],
       "token_expiry_days": 365,
       "session_token_expiry_hours": 24,
       "pairing_code_expiry_minutes": 5,
@@ -179,11 +178,11 @@
       "audit_retention_days": 90
     },
     "mesh": {
-      "enabled": true,
-      "node_name": "node1",
+      "enabled": false,
+      "node_name": "",
       "services": {
         "TTS": {
-          "share": true,
+          "share": false,
           "max_concurrent": 10,
           "prefer": "local",
           "fallback": "local"
@@ -245,11 +244,11 @@
       "remote_timeout_s": 30.0
     },
     "webrtc": {
-      "enabled": true,
+      "enabled": false,
       "strategy": "mqtt",
       "app_id": "aurora",
-      "room": "aurora-5fd7c355f41dfc32",
-      "password": "1234",
+      "room": "default",
+      "password": "",
       "encrypt_signaling": true,
       "enable_app_layer_e2ee": false,
       "stun_servers": [
