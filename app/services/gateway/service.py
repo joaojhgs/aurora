@@ -122,6 +122,30 @@ class GatewayService(BaseService):
             log_info("Gateway disabled in configuration")
             return
 
+        # Persist token_secret to .env when auth is enabled and it was auto-generated
+        # (required for JWT signing and mesh inbound token encryption at rest)
+        if config.auth_enabled:
+            try:
+                from app.services.config.config_manager import ConfigManager
+                from dotenv import set_key
+
+                _cfg_mgr = ConfigManager()
+                has_env = bool(os.environ.get("AURORA_TOKEN_SECRET"))
+                gateway = _cfg_mgr._config.get("gateway") or {}
+                has_config = bool(gateway.get("token_secret"))
+                if not has_env and not has_config:
+                    env_path = ".env"
+                    if not os.path.exists(env_path):
+                        open(env_path, "a").close()
+                    set_key(env_path, "AURORA_TOKEN_SECRET", config.token_secret)
+                    os.environ["AURORA_TOKEN_SECRET"] = config.token_secret
+                    log_info(
+                        "Auto-generated token_secret and saved to .env "
+                        "(used for JWT signing and mesh inbound token encryption)."
+                    )
+            except Exception as e:
+                log_warning(f"Could not persist token_secret to .env: {e}")
+
         try:
             from app.services.gateway.fastapi_app import create_gateway_app
             from app.services.gateway.registry_aggregator import RegistryAggregator

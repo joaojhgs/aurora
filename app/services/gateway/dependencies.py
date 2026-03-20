@@ -17,9 +17,21 @@ _rtc_client: RTCClient | None = None
 
 
 def get_gateway_auth() -> GatewayAuth:
-    """Get the GatewayAuth instance."""
-    if _gateway_auth is None:
-        raise RuntimeError("GatewayAuth not initialized")
+    """Get the GatewayAuth instance.
+
+    If the gateway auth has not been explicitly initialized (e.g. when
+    auth is disabled in config), this lazily creates and caches a disabled
+    GatewayAuth instance. This avoids runtime failures on routes that
+    depend on auth when auth is disabled.
+    """
+    global _gateway_auth
+
+    if _gateway_auth is not None:
+        return _gateway_auth
+
+    from app.services.gateway.auth import GatewayAuth
+
+    _gateway_auth = GatewayAuth(enabled=False)
     return _gateway_auth
 
 

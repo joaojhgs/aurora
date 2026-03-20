@@ -63,6 +63,11 @@
                                                 "max_tokens"
                                             ],
                                             "properties": {
+                                                "api_key": {
+                                                    "type": "string",
+                                                    "format": "password",
+                                                    "description": "OpenAI API key (sensitive; prefer OPENAI_API_KEY in .env)"
+                                                },
                                                 "model": {
                                                     "type": "string",
                                                     "description": "OpenAI model to use",
@@ -120,7 +125,8 @@
                                                 },
                                                 "access_token": {
                                                     "type": "string",
-                                                    "description": "HuggingFace access token"
+                                                    "format": "password",
+                                                    "description": "HuggingFace access token (sensitive; prefer .env)"
                                                 },
                                                 "temperature": {
                                                     "type": "number",
@@ -670,7 +676,8 @@
                     "properties": {
                         "credentials_file": {
                             "type": "string",
-                            "description": "Path to Google credentials JSON file",
+                            "format": "password",
+                            "description": "Path to Google credentials JSON file (sensitive; prefer .env)",
                             "ui_type": "file",
                             "ui_file_filter": "JSON files (*.json)|*.json|All files (*.*)|*.*"
                         }
@@ -692,7 +699,8 @@
                         },
                         "api_token": {
                             "type": "string",
-                            "description": "Jira API token"
+                            "format": "password",
+                            "description": "Jira API token (sensitive; prefer .env)"
                         },
                         "username": {
                             "type": "string",
@@ -732,7 +740,8 @@
                         },
                         "api_key": {
                             "type": "string",
-                            "description": "Brave Search API key"
+                            "format": "password",
+                            "description": "Brave Search API key (sensitive; prefer .env)"
                         }
                     },
                     "additionalProperties": false
@@ -756,7 +765,8 @@
                         },
                         "app_private_key": {
                             "type": "string",
-                            "description": "GitHub App private key"
+                            "format": "password",
+                            "description": "GitHub App private key (sensitive; prefer .env)"
                         },
                         "repository": {
                             "type": "string",
@@ -778,7 +788,8 @@
                         },
                         "user_token": {
                             "type": "string",
-                            "description": "Slack user token"
+                            "format": "password",
+                            "description": "Slack user token (sensitive; prefer .env)"
                         }
                     },
                     "additionalProperties": false
@@ -986,6 +997,12 @@
                     "description": "Request timeout in seconds",
                     "default": 30.0
                 },
+                "token_secret": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Secret for JWT signing and mesh inbound token encryption. Config overrides .env (AURORA_TOKEN_SECRET). Prefer .env for security.",
+                    "default": ""
+                },
                 "cors": {
                     "type": "object",
                     "description": "CORS configuration",
@@ -1017,9 +1034,10 @@
                         },
                         "api_keys": {
                             "type": "array",
-                            "description": "List of valid API keys",
+                            "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
                             "items": {
-                                "type": "string"
+                                "type": "string",
+                                "format": "password"
                             },
                             "default": []
                         },
@@ -1170,7 +1188,8 @@
                         },
                         "password": {
                             "type": "string",
-                            "description": "Room password for signaling encryption. Auto-generated on first run if empty. Use 'python scripts/config_updater.py --room-export' to share with other devices."
+                            "format": "password",
+                            "description": "Room password for signaling encryption (sensitive; prefer AURORA_WEBRTC_PASSWORD in .env). Auto-generated on first run if empty. Use 'python scripts/config_updater.py --room-export' to share with other devices."
                         },
                         "encrypt_signaling": {
                             "type": "boolean"

@@ -15,6 +15,8 @@ from typing import Any
 
 from passlib.context import CryptContext
 
+from app.shared.crypto import derive_mesh_inbound_key, open_str, seal_str
+
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import MessageBus
 from app.shared.auth.identity import SYSTEM, Identity, build_identity
@@ -63,6 +65,22 @@ class AuthManager:
         self.pairing_attempts: dict[str, int] = {}
         self._default_device_permissions: list[str] = []
         self.login_attempts: dict[str, int] = {}
+        self._mesh_inbound_key: bytes | None = None
+
+    def _get_mesh_inbound_key(self) -> bytes:
+        """Lazy-load encryption key for inbound tokens from gateway config.
+
+        The token_secret is persisted by GatewayService when auth is enabled and
+        it was auto-generated, so config should have it before any pairing/load.
+        """
+        if self._mesh_inbound_key is not None:
+            return self._mesh_inbound_key
+        from app.shared.config.interface import ConfigAPI
+
+        config = ConfigAPI()
+        secret = config.get("gateway.token_secret", default="")
+        self._mesh_inbound_key = derive_mesh_inbound_key(secret)
+        return self._mesh_inbound_key
 
     # ── Bus helpers ──────────────────────────────────────────────────────
 
@@ -1115,16 +1133,21 @@ class AuthManager:
         remote_user_id: str | None = None,
         remote_node_name: str | None = None,
     ) -> None:
-        """Save the token a remote peer issued to us (inbound side)."""
+        """Save the token a remote peer issued to us (inbound side).
+
+        Tokens are encrypted at rest using the gateway token secret.
+        """
         import json as _json
 
+        key = self._get_mesh_inbound_key()
+        encrypted_token = seal_str(key, token)
         perms_json = _json.dumps(permissions or [])
         await self._db_request(
             DBMethods.EXECUTE_SQL,
             _MeshSQL.save_inbound_credential(
                 remote_peer_id,
                 room_name,
-                token,
+                encrypted_token,
                 perms_json,
                 remote_device_id,
                 remote_user_id,
@@ -1136,13 +1159,22 @@ class AuthManager:
     async def load_inbound_credentials(
         self, room_name: str, remote_peer_id: str | None = None
     ) -> dict[str, str]:
-        """Load inbound tokens for reconnection. Returns {peer_id: token}."""
+        """Load inbound tokens for reconnection. Returns {peer_id: token}.
+
+        Decrypts tokens stored with seal_str; passes through legacy plaintext.
+        """
         data = await self._db_request(
             DBMethods.EXECUTE_SQL,
             _MeshSQL.load_inbound_credentials(room_name, remote_peer_id),
         )
         rows = data.get("rows", []) if data else []
-        return {r["peer_id"]: r["inbound_token"] for r in rows if r.get("inbound_token")}
+        key = self._get_mesh_inbound_key()
+        result: dict[str, str] = {}
+        for r in rows:
+            raw = r.get("inbound_token")
+            if raw:
+                result[r["peer_id"]] = open_str(key, raw)
+        return result
 
     async def update_peer_connection_status(self, peer_id: str, status: str) -> None:
         """Update connection_status and last_seen_at."""

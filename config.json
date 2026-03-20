@@ -157,6 +157,7 @@
     "host": "0.0.0.0",
     "port": 8000,
     "request_timeout_s": 30.0,
+    "token_secret": "",
     "cors": {
       "origins": [
         "*"

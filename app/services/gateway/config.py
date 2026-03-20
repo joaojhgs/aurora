@@ -105,7 +105,7 @@ class APISettings(BaseModel):
             log_warning(
                 "Gateway auth is enabled but no token_secret is configured. "
                 "Tokens will be invalidated on restart. Set gateway.token_secret "
-                "in config.json or AURORA_TOKEN_SECRET env var to persist it."
+                "in config.json or AURORA_TOKEN_SECRET in .env to persist it."
             )
 
         return cls(
