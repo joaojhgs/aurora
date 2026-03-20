@@ -1,6 +1,8 @@
-"""Contract IO Models for the Auth service.
+"""Contract IO models for the Auth service.
 
-Contains Pydantic request/response models for all Auth method contracts.
+Contains Pydantic request/response models for all Auth method contracts
+(login, pairing, principals, tokens, devices, audit). Mesh identity and peer
+management models live in ``app.shared.contracts.models.mesh``.
 These live in ``app.shared`` so any service can import them without
 violating the "no cross-service imports" rule.
 """

@@ -8,6 +8,8 @@ from jsonschema import ValidationError, validate
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 
+from app.services.config.env_config import ENV_CONFIG_MAP
+
 
 class ConfigManager:
     """
@@ -70,21 +72,42 @@ class ConfigManager:
         except Exception as e:
             log_error(f"Error saving config: {e}")
 
+    def _is_value_set(self, value: Any) -> bool:
+        """Return True if value is considered 'set' (non-empty, config override)."""
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return value.strip() != ""
+        if isinstance(value, (list, dict)):
+            return len(value) > 0
+        return True
+
     def get(self, key_path: str, default: Any = None) -> Any:
         """
-        Get configuration value using dot notation (e.g., 'ui.activate')
+        Get configuration value using dot notation (e.g., 'ui.activate').
 
-        Can also retrieve entire sections (e.g., 'llm.third_party.openai')
+        Resolution order: config.json (if set) > .env > default.
+        Config overrides allow runtime changes without reloading .env.
         """
         keys = key_path.split(".")
-        value = self._config
-
+        config_val = self._config
         try:
             for key in keys:
-                value = value[key]
-            return value
+                config_val = config_val[key]
         except (KeyError, TypeError):
-            return default
+            config_val = None
+        if self._is_value_set(config_val):
+            return config_val
+        env_info = ENV_CONFIG_MAP.get(key_path)
+        if env_info:
+            env_var, converter = env_info
+            env_val = os.environ.get(env_var)
+            if env_val is not None and env_val != "":
+                try:
+                    return converter(env_val)
+                except (ValueError, TypeError):
+                    pass
+        return config_val if config_val is not None else default
 
     def get_section(self, section_path: str, default: Any = None) -> Any:
         """
@@ -221,108 +244,84 @@ class ConfigManager:
 
             return cleaned_count
 
-    def migrate_from_env(self):
-        """Migrate existing environment variables to config.json"""
-        migration_map = {
-            "AURORA_UI_ACTIVATE": ("ui.activate", lambda x: x.lower() == "true"),
-            "AURORA_DARK_MODE": ("ui.dark_mode", lambda x: x.lower() == "true"),
-            "AURORA_UI_DEBUG": ("ui.debug", lambda x: x.lower() == "true"),
-            "LLM_PROVIDER": ("llm.provider", str),
-            "LLAMMA_CPP_MODEL_PATH": ("llm.local.llama_cpp.options.model_path", str),
-            "OPENAI_MODEL": ("llm.third_party.openai.options.model", str),
-            "OPENAI_CHAT_MODEL": ("llm.third_party.openai.options.model", str),
-            "HUGGINGFACE_ACCESS_TOKEN": (
-                "llm.third_party.huggingface_endpoint.options.access_token",
-                str,
-            ),
-            "HUGGINGFACE_ENDPOINT_URL": (
-                "llm.third_party.huggingface_endpoint.options.endpoint_url",
-                str,
-            ),
-            "HUGGINGFACE_MODEL_NAME": ("llm.third_party.huggingface_endpoint.options.model", str),
-            "HUGGINGFACE_PIPELINE_MODEL": ("llm.local.huggingface_pipeline.options.model", str),
-            "HUGGINGFACE_PIPELINE_DEVICE": ("llm.local.huggingface_pipeline.options.device", str),
-            "HUGGINGFACE_PIPELINE_TORCH_DTYPE": (
-                "llm.local.huggingface_pipeline.options.torch_dtype",
-                str,
-            ),
-            "USE_LOCAL_EMBEDDINGS": ("embeddings.use_local", lambda x: x.lower() == "true"),
-            "STT_LANGUAGE": ("speech_to_text.language", str),
-            "STT_SILERO_DEACTIVITY_DETECTION": (
-                "speech_to_text.silero_deactivity_detection",
-                lambda x: x.lower() == "true",
-            ),
-            "STT_WAKEWORD_SPEEDX_NOISE_REDUCTION": (
-                "speech_to_text.wakeword_speedx_noise_reduction",
-                lambda x: x.lower() == "true",
-            ),
-            "TTS_MODEL_FILE_PATH": ("text_to_speech.model_file_path", str),
-            "TTS_MODEL_CONFIG_FILE_PATH": ("text_to_speech.model_config_file_path", str),
-            "TTS_MODEL_SAMPLE_RATE": ("text_to_speech.model_sample_rate", int),
-            "PIPER_PATH": ("text_to_speech.piper_path", str),
-            # New Docker Hub environment variables
-            "AURORA_TTS_MODEL_FILE_PATH": ("general.text_to_speech.model_file_path", str),
-            "AURORA_TTS_MODEL_CONFIG_FILE_PATH": (
-                "general.text_to_speech.model_config_file_path",
-                str,
-            ),
-            "AURORA_WAKE_WORD_MODEL_PATH": ("general.speech_to_text.wake_word.model_path", str),
-            "AURORA_LLAMA_CPP_MODEL_PATH": ("general.llm.local.llama_cpp.options.model_path", str),
-            "AURORA_HUGGINGFACE_MODEL_ID": (
-                "general.llm.local.huggingface_pipeline.options.model",
-                str,
-            ),
-            "AURORA_MODELS_DIR": ("general.models_dir", str),
-            "USE_CUDA_TTS": ("cuda.use_cuda_tts", lambda x: x.lower() == "true"),
-            "USE_CUDA_STT": ("cuda.use_cuda_stt", lambda x: x.lower() == "true"),
-            "USE_CUDA_OCR_BG": ("cuda.use_cuda_ocr_bg", lambda x: x.lower() == "true"),
-            "USE_CUDA_OCR_CURR": ("cuda.use_cuda_ocr_curr", lambda x: x.lower() == "true"),
-            "JIRA_ACTIVATE_PLUGIN": ("plugins.jira.activate", lambda x: x.lower() == "true"),
-            "JIRA_API_TOKEN": ("plugins.jira.api_token", str),
-            "JIRA_USERNAME": ("plugins.jira.username", str),
-            "JIRA_INSTANCE_URL": ("plugins.jira.instance_url", str),
-            "OPENRECALL_ACTIVATE_PLUGIN": (
-                "plugins.openrecall.activate",
-                lambda x: x.lower() == "true",
-            ),
-            "BRAVE_SEARCH_ACTIVATE_PLUGIN": (
-                "plugins.brave_search.activate",
-                lambda x: x.lower() == "true",
-            ),
-            "BRAVE_API_KEY": ("plugins.brave_search.api_key", str),
-            "GITHUB_ACTIVATE_PLUGIN": ("plugins.github.activate", lambda x: x.lower() == "true"),
-            "GITHUB_APP_ID": ("plugins.github.app_id", str),
-            "GITHUB_APP_PRIVATE_KEY": ("plugins.github.app_private_key", str),
-            "GITHUB_REPOSITORY": ("plugins.github.repository", str),
-            "SLACK_ACTIVATE_PLUGIN": ("plugins.slack.activate", lambda x: x.lower() == "true"),
-            "SLACK_USER_TOKEN": ("plugins.slack.user_token", str),
-            "GMAIL_ACTIVATE_PLUGIN": ("plugins.gmail.activate", lambda x: x.lower() == "true"),
-            "GCALENDAR_ACTIVATE_PLUGIN": (
-                "plugins.gcalendar.activate",
-                lambda x: x.lower() == "true",
-            ),
-            "GOOGLE_CREDENTIALS_FILE": ("google.credentials_file", str),
-        }
+    def migrate_secrets_to_env(self) -> bool:
+        """One-time migration: move secrets from config.json to .env.
 
+        Returns True if any migration occurred.
+        """
         migrated = False
-        for env_var, (config_path, converter) in migration_map.items():
-            env_value = os.environ.get(env_var)
-            if env_value is not None and env_value != "":
-                try:
-                    converted_value = converter(env_value)
-                    self.set(config_path, converted_value, save=False)
-                    migrated = True
-                except (ValueError, TypeError) as e:
-                    log_warning(f"Failed to convert {env_var}={env_value}: {e}")
+        env_path = ".env"
+        try:
+            from dotenv import set_key
 
+            from app.services.config.env_config import ENV_CONFIG_MAP, SENSITIVE_KEYS
+
+            if not os.path.exists(env_path):
+                open(env_path, "a").close()
+            for config_path in SENSITIVE_KEYS:
+                if config_path not in ENV_CONFIG_MAP:
+                    continue
+                env_var, _ = ENV_CONFIG_MAP[config_path]
+                keys = config_path.split(".")
+                d = self._config
+                try:
+                    for key in keys:
+                        d = d[key]
+                except (KeyError, TypeError):
+                    continue
+                if not self._is_value_set(d):
+                    continue
+                if isinstance(d, list):
+                    set_key(env_path, env_var, ",".join(str(x) for x in d))
+                else:
+                    set_key(env_path, env_var, str(d))
+                self.set(config_path, [] if isinstance(d, list) else "", save=False)
+                migrated = True
+                log_info(f"Migrated {config_path} from config.json to .env")
+        except Exception as e:
+            log_warning(f"Could not migrate secrets to .env: {e}")
         if migrated:
             self.save_config()
-            log_info("Migrated environment variables to config.json")
+        return migrated
+
+    def migrate_from_env(self):
+        """One-time migration: move secrets from config.json to .env.
+
+        Config and .env now live in parallel. No env→config migration.
+        """
+        self.migrate_secrets_to_env()
 
     def get_config_dict(self) -> dict[str, Any]:
-        """Get a copy of the entire configuration dictionary"""
+        """Get a copy of the entire configuration dictionary with env fallbacks resolved."""
         with self.config_lock:
-            return json.loads(json.dumps(self._config))  # Deep copy
+            config_copy = json.loads(json.dumps(self._config))
+        return self._resolve_env_fallbacks(config_copy)
+
+    def _resolve_env_fallbacks(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Merge env fallback values into config (config overrides env)."""
+        for config_path, (env_var, converter) in ENV_CONFIG_MAP.items():
+            keys = config_path.split(".")
+            d = config
+            try:
+                val = d
+                for key in keys:
+                    val = val[key]
+                if self._is_value_set(val):
+                    continue
+            except (KeyError, TypeError):
+                pass
+            env_val = os.environ.get(env_var)
+            if env_val is None or env_val == "":
+                continue
+            try:
+                resolved = converter(env_val)
+            except (ValueError, TypeError):
+                continue
+            d = config
+            for key in keys[:-1]:
+                d = d.setdefault(key, {})
+            d[keys[-1]] = resolved
+        return config
 
     def _get_config_schema(self) -> dict[str, Any]:
         """Return the JSON schema for configuration validation with UI metadata"""
