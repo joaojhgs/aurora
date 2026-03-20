@@ -120,6 +120,21 @@ def clean_build_dirs():
             click.echo(f"🧹 Cleaned {dir_path}")
 
 
+DEFAULT_CONFIG_SOURCE = PROJECT_ROOT / "app/services/config/config_defaults.json"
+
+
+def prepare_bundle_config_json() -> Path:
+    """Copy schema-valid defaults to build/config.json for PyInstaller bundle.
+
+    ``config.json`` is not tracked in git; bundled apps ship the same defaults
+    as :file:`app/services/config/config_defaults.json`.
+    """
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = BUILD_DIR / "config.json"
+    shutil.copy2(DEFAULT_CONFIG_SOURCE, dest)
+    return dest
+
+
 def get_platform_args():
     """Get platform-specific PyInstaller arguments"""
     system = platform.system().lower()
@@ -133,7 +148,7 @@ def get_platform_args():
         # Add data files
         f"--add-data={PROJECT_ROOT / 'app'}:app",
         f"--add-data={PROJECT_ROOT / 'modules'}:modules",
-        f"--add-data={PROJECT_ROOT / 'config.json'}:.",
+        f"--add-data={prepare_bundle_config_json()}:.",
         # Optimize
         "--optimize=2",
         "--strip",
@@ -447,7 +462,7 @@ COPY scripts/ scripts/
 COPY app/ app/
 COPY modules/ modules/
 COPY main.py .
-COPY config.json .
+COPY app/services/config/config_defaults.json ./config.json
 
 # Install Python dependencies using pyproject.toml
 # Use runtime dependencies with CPU torch for containers
