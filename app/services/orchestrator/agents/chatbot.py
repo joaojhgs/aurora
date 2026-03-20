@@ -126,22 +126,23 @@ async def _initialize_llm() -> None:
                 model_name = openai_options.get("model")
                 log_info(f"Attempting to initialize OpenAI LLM with model: {model_name}")
 
-                # Check for API key
-                api_key = os.getenv("OPENAI_API_KEY")
+                # Check for API key (config or env)
+                api_key = openai_options.get("api_key") or os.getenv("OPENAI_API_KEY")
                 if not api_key:
-                    log_error("OPENAI_API_KEY environment variable is not set!")
                     log_error(
-                        "OpenAI LLM requires OPENAI_API_KEY to be set in environment variables"
+                        "OpenAI API key not set. Set general.llm.third_party.openai.options.api_key "
+                        "in config.json or OPENAI_API_KEY in .env"
                     )
                     llm = None
                 else:
-                    log_debug(f"OPENAI_API_KEY found (length: {len(api_key)} chars)")
+                    log_debug(f"OpenAI API key found (length: {len(api_key)} chars)")
                     try:
-                        # Log options without sensitive data
-                        safe_options = {k: v for k, v in openai_options.items() if k != "api_key"}
+                        # Ensure api_key is in options for ChatOpenAI
+                        opts = {**openai_options, "api_key": api_key}
+                        safe_options = {k: v for k, v in opts.items() if k != "api_key"}
                         log_debug(f"OpenAI initialization options: {safe_options}")
 
-                        llm = ChatOpenAI(**openai_options)
+                        llm = ChatOpenAI(**opts)
                         log_info(f"Successfully initialized OpenAI LLM with model: {model_name}")
                     except Exception as e:
                         log_error(f"Failed to initialize OpenAI LLM: {e}", exc_info=True)
@@ -372,7 +373,9 @@ async def _initialize_llm() -> None:
         log_error(f"❌ Failed to initialize LLM with provider: {provider}")
         log_error("Please check:")
         log_error("  1. Configuration file has correct LLM settings")
-        log_error("  2. Required environment variables are set (e.g., OPENAI_API_KEY)")
+        log_error(
+            "  2. API keys are set (e.g. general.llm.third_party.openai.options.api_key or OPENAI_API_KEY)"
+        )
         log_error("  3. Required dependencies are installed")
         log_error("  4. ConfigService is running and accessible")
 

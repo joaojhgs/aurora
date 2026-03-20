@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS mesh_peers (
 
     -- ── INBOUND: what THEY granted to US (we store their token) ──
     inbound_status TEXT NOT NULL DEFAULT 'unknown',      -- unknown | pending | approved | denied
-    inbound_token TEXT,                                  -- Plaintext token THEY issued to US
+    inbound_token TEXT,                                  -- Token THEY issued to US (encrypted at rest
+                                                        -- via AuthManager using gateway.token_secret)
     inbound_permissions TEXT NOT NULL DEFAULT '[]',       -- JSON: permissions THEY granted US
     inbound_device_id TEXT,                               -- Device ID they assigned us
     inbound_user_id TEXT,                                 -- User ID they assigned us
