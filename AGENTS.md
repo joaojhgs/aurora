@@ -204,7 +204,7 @@ aurora/
 ├── docker/                      # Docker configs
 ├── docs/                        # Documentation
 ├── main.py                      # Entry point
-├── config.json                  # Configuration
+├── config.json                  # Local only (gitignored): created from config_defaults.json if missing
 └── pyproject.toml               # Package config
 ```
 
@@ -212,7 +212,7 @@ aurora/
 
 ## Configuration
 
-**Primary**: `config.json` (structured settings)
+**Primary**: `config.json` (structured settings, **not committed** — first run copies `app/services/config/config_defaults.json`)
 **Secondary**: `.env` (sensitive credentials, gitignored)
 
 ```python
@@ -222,7 +222,7 @@ provider = config_api.get("general.llm.provider")
 config_api.set("ui.dark_mode", True)
 ```
 
-**Environment variables** override `config.json`:
+**Resolution**: values set in `config.json` win; otherwise mapped `.env` vars apply; see `ENV_CONFIG_MAP` in `app/services/config/env_config.py`. Example env vars:
 ```bash
 AURORA_ARCHITECTURE_MODE=processes
 REDIS_URL=redis://localhost:6379
