@@ -1,5 +1,4 @@
 import asyncio
-from typing import Optional
 
 from langchain_google_community.calendar.utils import (
     get_google_credentials,
@@ -43,8 +42,11 @@ async def async_get_google_credentials():
 
     Uses await config_api.aget() to properly access config in async context.
     Thread-safe via asyncio.Lock (created lazily so import does not require a running loop).
+
+    Also updates the module-level ``google_credentials`` alias so synchronous code that
+    imported it sees the same object after the first successful load.
     """
-    global _google_credentials, _credentials_lock
+    global _google_credentials, _credentials_lock, google_credentials
     if _credentials_lock is None:
         _credentials_lock = asyncio.Lock()
     async with _credentials_lock:
@@ -56,6 +58,7 @@ async def async_get_google_credentials():
                 scopes=scopes,
                 client_secrets_file=credentials_file,
             )
+            google_credentials = _google_credentials
         return _google_credentials
 
 
@@ -68,6 +71,6 @@ def get_cached_google_credentials():
     return _google_credentials
 
 
-# Backward compatibility: Expose as module-level variable that gets initialized later
+# Backward compatibility: updated when async_get_google_credentials() completes
 # Code should migrate to using async_get_google_credentials() instead
 google_credentials = None

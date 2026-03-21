@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, QueryResult
 
 if TYPE_CHECKING:
@@ -156,7 +156,7 @@ class MeshBus:
 
         # For commands, check routing
         route = self._routing_table.resolve(topic)
-        log_info(
+        log_debug(
             f"MeshBus: Routing command {topic} → target={route.target}, "
             f"peer={route.peer_id or 'n/a'}, module={route.module}"
         )
@@ -178,7 +178,7 @@ class MeshBus:
             return
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
-            log_info(f"MeshBus: Routing command {topic} to remote peer {route.peer_id}")
+            log_debug(f"MeshBus: Routing command {topic} to remote peer {route.peer_id}")
             try:
                 result = await self._peer_bridge.call(
                     route.peer_id,
@@ -309,7 +309,7 @@ class MeshBus:
             QueryResult containing the response data or error
         """
         route = self._routing_table.resolve(topic)
-        log_info(
+        log_debug(
             f"MeshBus: Routing request {topic} → target={route.target}, "
             f"peer={route.peer_id or 'n/a'}, module={route.module}"
         )
@@ -327,7 +327,7 @@ class MeshBus:
             )
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
-            log_info(f"MeshBus: Routing request {topic} to remote peer {route.peer_id}")
+            log_debug(f"MeshBus: Routing request {topic} to remote peer {route.peer_id}")
             try:
                 result = await self._peer_bridge.call(
                     route.peer_id,
@@ -350,7 +350,7 @@ class MeshBus:
                 failed_peer_id=route.peer_id,
             )
             if fallback.target == "local":
-                log_info(f"MeshBus: Falling back to local for {topic}")
+                log_debug(f"MeshBus: Falling back to local for {topic}")
                 return await self._inner.request(
                     topic,
                     message,

@@ -174,6 +174,9 @@ class ToolsManager:
         # Gmail plugin
         if await config_api.aget("plugins.gmail.activate", False):
             try:
+                from app.helpers.getGoogleCredentials import async_get_google_credentials
+
+                await async_get_google_credentials()
                 from app.services.tooling.tools.gmail_toolkit import gmail_tools
 
                 self.tools.extend(gmail_tools)
@@ -184,6 +187,9 @@ class ToolsManager:
         # GCalendar plugin
         if await config_api.aget("plugins.gcalendar.activate", False):
             try:
+                from app.helpers.getGoogleCredentials import async_get_google_credentials
+
+                await async_get_google_credentials()
                 from app.services.tooling.tools.gcalendar_toolkit import gcalendar_tools
 
                 self.tools.extend(gcalendar_tools)

@@ -1,12 +1,6 @@
 from langchain_google_community import GmailToolkit
-from langchain_google_community.gmail.utils import (
-    build_resource_service,
-)
 
-from app.helpers.getGoogleCredentials import google_credentials
-
-api_resource = build_resource_service(credentials=google_credentials)
-
+# Credentials must be loaded first via async_get_google_credentials() (see tools_manager).
 toolkit = GmailToolkit()
 
 gmail_tools = toolkit.get_tools()
