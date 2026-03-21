@@ -382,7 +382,7 @@ class LocalBus:
         import uuid as uuid_lib
 
         # Create a future for the response
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
         reply_topic = f"reply.{message.__class__.__name__}.{uuid_lib.uuid4()}"
 
         # Subscribe to reply topic (skip validation for dynamic reply topics)
@@ -427,11 +427,8 @@ class LocalBus:
                     log_debug("Reply handler: Wrapping data in QueryResult")
                     fut.set_result(QueryResult(ok=True, data=result_data))
 
-        # Temporarily disable validation for reply topic subscription
-        original_validate = self._validate_topics
-        self._validate_topics = False
+        # Reply topics are not validated on publish when topic starts with "reply."
         self.subscribe(reply_topic, _on_reply)
-        self._validate_topics = original_validate
 
         # Publish request with reply_to field
         try:

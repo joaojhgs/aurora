@@ -1,13 +1,12 @@
 import json
 import os
 from collections.abc import Callable
-from threading import Lock
+from threading import RLock
 from typing import Any
 
 from jsonschema import ValidationError, validate
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
-
 from app.services.config.env_config import ENV_CONFIG_MAP
 
 
@@ -18,7 +17,7 @@ class ConfigManager:
     """
 
     _instance = None
-    _lock = Lock()
+    _lock = RLock()
     _schema = None
 
     def __new__(cls):
@@ -31,7 +30,7 @@ class ConfigManager:
     def __init__(self):
         if not hasattr(self, "initialized"):
             self.config_file = "config.json"
-            self.config_lock = Lock()
+            self.config_lock = RLock()
             self._config = {}
             self._observers = []
             self._schema = self._get_config_schema()
@@ -88,16 +87,19 @@ class ConfigManager:
 
         Resolution order: config.json (if set) > .env > default.
         Config overrides allow runtime changes without reloading .env.
+        Empty string / empty list / empty dict in config are treated as unset and
+        fall through to env, then default.
         """
         keys = key_path.split(".")
-        config_val = self._config
-        try:
-            for key in keys:
-                config_val = config_val[key]
-        except (KeyError, TypeError):
-            config_val = None
-        if self._is_value_set(config_val):
-            return config_val
+        with self.config_lock:
+            config_val = self._config
+            try:
+                for key in keys:
+                    config_val = config_val[key]
+            except (KeyError, TypeError):
+                config_val = None
+            if self._is_value_set(config_val):
+                return config_val
         env_info = ENV_CONFIG_MAP.get(key_path)
         if env_info:
             env_var, converter = env_info
@@ -107,7 +109,7 @@ class ConfigManager:
                     return converter(env_val)
                 except (ValueError, TypeError):
                     pass
-        return config_val if config_val is not None else default
+        return default
 
     def get_section(self, section_path: str, default: Any = None) -> Any:
         """
@@ -445,41 +447,41 @@ class ConfigManager:
         """Validate configuration and return list of validation errors"""
         errors = []
 
-        # Validate LLM configuration
-        provider = self.get("llm.provider")
+        # Validate LLM configuration (canonical paths under general.*)
+        provider = self.get("general.llm.provider")
         if not provider:
             errors.append("No LLM provider specified")
         else:
             if provider == "openai":
-                if not self.get("llm.third_party.openai.options.model"):
+                if not self.get("general.llm.third_party.openai.options.model"):
                     errors.append("OpenAI model not specified")
             elif provider == "huggingface_endpoint":
-                if not self.get("llm.third_party.huggingface_endpoint.options.endpoint_url"):
+                if not self.get("general.llm.third_party.huggingface_endpoint.options.endpoint_url"):
                     errors.append("HuggingFace endpoint URL not specified")
-                if not self.get("llm.third_party.huggingface_endpoint.options.access_token"):
+                if not self.get("general.llm.third_party.huggingface_endpoint.options.access_token"):
                     errors.append("HuggingFace access token not specified")
             elif provider == "huggingface_pipeline":
-                if not self.get("llm.local.huggingface_pipeline.options.model"):
+                if not self.get("general.llm.local.huggingface_pipeline.options.model"):
                     errors.append("HuggingFace Pipeline model not specified")
             elif provider == "llama_cpp":
-                model_path = self.get("llm.local.llama_cpp.options.model_path")
+                model_path = self.get("general.llm.local.llama_cpp.options.model_path")
                 if not model_path:
                     errors.append("Llama.cpp model path not specified")
                 elif not os.path.exists(model_path):
                     errors.append(f"Llama.cpp model file not found: {model_path}")
 
         # Validate TTS model paths exist
-        tts_model = self.get("text_to_speech.model_file_path")
+        tts_model = self.get("general.text_to_speech.model_file_path")
         if tts_model and not os.path.exists(tts_model.lstrip("/")):
             errors.append(f"TTS model file not found: {tts_model}")
 
         # Validate hardware acceleration configuration
         hw_accel_keys = ["tts", "stt", "ocr_bg", "ocr_curr", "llm"]
         for key in hw_accel_keys:
-            value = self.get(f"hardware_acceleration.{key}")
+            value = self.get(f"general.hardware_acceleration.{key}")
             if not isinstance(value, bool):
                 errors.append(
-                    f"Hardware acceleration setting hardware_acceleration.{key} must be boolean, got {type(value)}"
+                    f"Hardware acceleration setting general.hardware_acceleration.{key} must be boolean, got {type(value)}"
                 )
 
         return errors

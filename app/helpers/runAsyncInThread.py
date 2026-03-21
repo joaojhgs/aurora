@@ -1,9 +1,9 @@
 import asyncio
 from collections.abc import Coroutine
-from typing import Any, Optional, Union
+from typing import Any
 
 
-def run_async_in_thread(coro: Coroutine) -> asyncio.Task | Any | None:
+def run_async_in_thread(coro: Coroutine) -> asyncio.Task | Any:
     """
     Run an async coroutine, handling both sync and async calling contexts.
 
@@ -16,7 +16,9 @@ def run_async_in_thread(coro: Coroutine) -> asyncio.Task | Any | None:
     Returns:
         - asyncio.Task if scheduled in existing loop
         - The coroutine's return value if run with asyncio.run()
-        - None if execution fails
+
+    Raises:
+        Exception: Propagates any exception from the coroutine (including from asyncio.run).
     """
     try:
         loop = asyncio.get_running_loop()

@@ -475,13 +475,8 @@ class BullMQBus:
             else:
                 fut.set_result(QueryResult(ok=True, data=result_data))
 
-        # Subscribe to reply topic (skip validation for dynamic reply topics)
-        original_validate = self._validate_topics
-        self._validate_topics = False
-        try:
-            self.subscribe(reply_topic, _on_reply)
-        finally:
-            self._validate_topics = original_validate
+        # Subscribe to reply topic (publish already exempts reply.* from contract validation)
+        self.subscribe(reply_topic, _on_reply)
 
         log_debug(f"Sent request to {topic} with correlation_id {correlation_id}")
 

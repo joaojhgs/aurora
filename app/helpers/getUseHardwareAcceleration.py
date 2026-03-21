@@ -28,3 +28,7 @@ def get_use_hardware_acceleration(config_key: str):
 
     # Default to CPU if not specified
     return "cpu"
+
+
+# Legacy camelCase name for external / older imports
+getUseHardwareAcceleration = get_use_hardware_acceleration  # noqa: N816
