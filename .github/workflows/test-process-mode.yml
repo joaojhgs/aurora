@@ -31,13 +31,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: 📦 Install UV
+        run: pip install uv
+
       - name: 📦 Install dependencies
         run: |
-          pip install -e .[dev,test,mode-processes]
+          uv pip install --system -e .[dev,test,mode-processes]
 
       - name: 🧪 Run process mode tests
         env:
           AURORA_ARCHITECTURE_MODE: processes
           REDIS_URL: redis://localhost:6379
         run: |
-          pytest tests/integration/test_process_mode.py -v -m process_mode
+          pytest tests/integration -v -m process_mode

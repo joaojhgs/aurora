@@ -940,7 +940,9 @@ markers = [
     "langgraph: tests related to the langgraph module",
     "scheduler: tests related to the scheduler module",
     "stt: tests related to the speech-to-text module",
-    "tts: tests related to the text-to-speech module", 
+    "tts: tests related to the text-to-speech module",
+    "process_mode: tests for process mode (microservices / BullMQ)",
+    "bullmq_redis: live Redis + BullMQ round-trip tests",
 ]
 # Default timeout for tests in seconds (prevents hanging tests)
 timeout = 300

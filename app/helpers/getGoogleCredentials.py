@@ -9,9 +9,9 @@ from app.shared.config.interface import ConfigAPI
 
 config_api = ConfigAPI()
 
-# Lazy-initialized credentials
+# Lazy-initialized credentials (lock created on first async use — safe event loop).
 _google_credentials = None
-_credentials_lock = asyncio.Lock()
+_credentials_lock: asyncio.Lock | None = None
 
 
 def _get_scopes_sync() -> list:
@@ -42,9 +42,11 @@ async def async_get_google_credentials():
     """Get Google credentials asynchronously with proper config loading.
 
     Uses await config_api.aget() to properly access config in async context.
-    Thread-safe via asyncio.Lock.
+    Thread-safe via asyncio.Lock (created lazily so import does not require a running loop).
     """
-    global _google_credentials
+    global _google_credentials, _credentials_lock
+    if _credentials_lock is None:
+        _credentials_lock = asyncio.Lock()
     async with _credentials_lock:
         if _google_credentials is None:
             scopes = await _async_get_scopes()

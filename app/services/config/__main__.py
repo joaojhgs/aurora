@@ -8,14 +8,14 @@ import asyncio
 import sys
 from pathlib import Path
 
+# Ensure project root is on sys.path before any `app.*` imports (process-mode entrypoint).
+project_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from app.helpers.aurora_logger import log_error, log_info
 from app.messaging import register_all_service_topics
 from app.services.config.service import ConfigService
 from app.shared.messaging.bus_init import initialize_bus_for_service
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 
 async def main():

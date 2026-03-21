@@ -178,6 +178,26 @@ class TestBullMQBusInterface:
         job_data = call_args[0][1]
         assert job_data["reply_to"] == "reply.TTS.123"
 
+    async def test_publish_with_correlation_id(self, mock_bullmq):
+        """Reply jobs must carry correlation_id for request/response matching."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        message = SampleMessage(content="test")
+
+        await bus.publish(
+            "reply.SampleMessage.abc-123",
+            message,
+            event=False,
+            correlation_id="abc-123",
+        )
+
+        call_args = mock_bullmq["queue_instance"].add.call_args
+        job_data = call_args[0][1]
+        assert job_data["correlation_id"] == "abc-123"
+
     async def test_request_response_pattern(self, mock_bullmq):
         """Test request/response pattern."""
         bus = BullMQBus(validate_topics=False)
