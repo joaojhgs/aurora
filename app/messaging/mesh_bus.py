@@ -97,6 +97,7 @@ class MeshBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Publish with mesh routing.
 
@@ -132,6 +133,7 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
+                correlation_id=correlation_id,
             )
             # Forward events to connected peers when mesh=True and module is shared
             if mesh and self._peer_bridge and origin != "mesh_forwarded":
@@ -171,6 +173,7 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
+                correlation_id=correlation_id,
             )
             return
 
@@ -213,6 +216,7 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
+                    correlation_id=correlation_id,
                 )
                 return
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
@@ -248,6 +252,7 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
+                    correlation_id=correlation_id,
                 )
                 return
 
@@ -270,6 +275,7 @@ class MeshBus:
             max_attempts=max_attempts,
             reply_to=reply_to,
             principal_id=principal_id,
+            correlation_id=correlation_id,
         )
 
     # ── Request ──────────────────────────────────────────────────────────

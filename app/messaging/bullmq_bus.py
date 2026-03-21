@@ -163,6 +163,25 @@ class BullMQBus:
 
             log_debug(f"Subscribed handler to topic: {topic}")
 
+    def unsubscribe(self, topic: str, handler: Handler) -> None:
+        """Remove a handler previously registered with ``subscribe``."""
+        if "*" in topic:
+            handlers = self._wildcard_patterns.get(topic)
+            if handlers:
+                try:
+                    handlers.remove(handler)
+                    log_debug(f"Unsubscribed wildcard handler from pattern: {topic}")
+                except ValueError:
+                    pass
+            return
+        handlers = self._handlers.get(topic)
+        if handlers:
+            try:
+                handlers.remove(handler)
+                log_debug(f"Unsubscribed handler from topic: {topic}")
+            except ValueError:
+                pass
+
     def _create_worker(self, queue_name: str) -> None:
         """Create a BullMQ worker for a queue.
 
@@ -293,6 +312,7 @@ class BullMQBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -307,6 +327,7 @@ class BullMQBus:
             ttl_ms: Job time-to-live in milliseconds
             max_attempts: Maximum retry attempts
             reply_to: Optional reply topic for request/response pattern
+            correlation_id: Echoed on Envelope for request/response matching
 
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
@@ -355,6 +376,7 @@ class BullMQBus:
             "origin": origin,
             "reply_to": reply_to,
             "principal_id": principal_id,
+            "correlation_id": correlation_id,
         }
 
         # Job options
@@ -420,89 +442,75 @@ class BullMQBus:
         reply_topic = f"reply.{message.__class__.__name__}.{correlation_id}"
 
         # Create future for response
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._response_futures[correlation_id] = fut
 
         # Subscribe to reply topic (one-time handler)
         async def _on_reply(env: Envelope) -> None:
-            """Handle reply message."""
-            if (
-                env.correlation_id == correlation_id
-                and not fut.done()
-                and hasattr(env.payload, "model_dump")
-            ):
-                result_data = env.payload.model_dump()
-            elif env.correlation_id == correlation_id and not fut.done():
+            """Handle reply message; match LocalBus logic + correlation_id."""
+            if env.correlation_id != correlation_id or fut.done():
+                return
+
+            if hasattr(env.payload, "model_dump"):
+                try:
+                    result_data = env.payload.model_dump()
+                except Exception as e:
+                    log_error(f"Failed to dump reply model: {e}")
+                    result_data = {"data": str(env.payload)}
+            elif isinstance(env.payload, dict):
                 result_data = env.payload
+            else:
+                log_warning(f"Reply handler: unexpected payload type {type(env.payload)}")
+                result_data = {"data": str(env.payload)}
 
-                if isinstance(result_data, dict) and "ok" in result_data:
-                    fut.set_result(QueryResult(**result_data))
-                else:
-                    fut.set_result(QueryResult(ok=True, data=result_data))
+            if isinstance(result_data, dict) and "ok" in result_data:
+                fut.set_result(QueryResult(**result_data))
+            elif (
+                isinstance(result_data, dict)
+                and "error" in result_data
+                and result_data["error"]
+            ):
+                error_msg = result_data.get("error", "Unknown service error")
+                fut.set_result(QueryResult(ok=False, error=error_msg, data=result_data))
+            else:
+                fut.set_result(QueryResult(ok=True, data=result_data))
 
-        # Subscribe to reply topic
-        self.subscribe(reply_topic, _on_reply)
-
-        # Publish request with reply_to and correlation_id
-        job_data = {
-            "id": str(uuid_lib.uuid4()),
-            "type": topic,
-            "payload": message.model_dump(mode="json")
-            if hasattr(message, "model_dump")
-            else message,
-            "origin": origin,
-            "reply_to": reply_topic,
-            "correlation_id": correlation_id,
-            "principal_id": principal_id,
-        }
-
-        # Determine target queue
-        queue_name = topic
-        if "*" in topic:
-            queue_name = topic.split("*")[0].rstrip(".")
-            if not queue_name:
-                queue_name = "_all_topics_"
-
-        # Get or create queue
-        if queue_name not in self._queues:
-            self._queues[queue_name] = self._Queue(
-                queue_name,
-                {"connection": self.redis_url},
-            )
-
-        queue = self._queues[queue_name]
-
-        # Job options
-        job_opts = {
-            "priority": priority,
-            "attempts": max_attempts,
-            "backoff": {
-                "type": "exponential",
-                "delay": 250,
-            },
-            "removeOnComplete": True,
-            "removeOnFail": False,
-        }
-
-        if ttl_ms:
-            job_opts["ttl"] = ttl_ms
-
-        # Publish request
-        await queue.add(queue_name, job_data, job_opts)
-        self._stats["published"] += 1
+        # Subscribe to reply topic (skip validation for dynamic reply topics)
+        original_validate = self._validate_topics
+        self._validate_topics = False
+        try:
+            self.subscribe(reply_topic, _on_reply)
+        finally:
+            self._validate_topics = original_validate
 
         log_debug(f"Sent request to {topic} with correlation_id {correlation_id}")
 
-        # Wait for response with timeout
         try:
-            result = await asyncio.wait_for(fut, timeout)
-            log_debug(f"Received response for correlation_id {correlation_id}")
-            return result
-        except TimeoutError:
-            log_error(f"Request to {topic} timed out after {timeout}s")
-            # Clean up future
+            await self.publish(
+                topic,
+                message,
+                event=False,
+                mesh=False,
+                priority=priority,
+                origin=origin,
+                reliable=True,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                reply_to=reply_topic,
+                principal_id=principal_id,
+                correlation_id=correlation_id,
+            )
+
+            try:
+                result = await asyncio.wait_for(fut, timeout)
+                log_debug(f"Received response for correlation_id {correlation_id}")
+                return result
+            except TimeoutError:
+                log_error(f"Request to {topic} timed out after {timeout}s")
+                return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
+        finally:
             self._response_futures.pop(correlation_id, None)
-            return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
+            self.unsubscribe(reply_topic, _on_reply)
 
     def get_stats(self) -> dict:
         """Get bus statistics.

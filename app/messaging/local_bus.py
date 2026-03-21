@@ -113,10 +113,26 @@ class LocalBus:
         self._subs[topic].append(handler)
         log_debug(f"Subscribed handler to topic: {topic}")
 
+        # Wildcard patterns (e.g. TTS.*) match concrete topics; events are queued per
+        # concrete topic only — do not start an idle worker for the pattern key.
+        if "*" in topic:
+            return
+
         # Start event worker for this topic if not already started
         if not self._evt_workers_started[topic]:
             self._evt_workers_started[topic] = True
             asyncio.create_task(self._event_worker(topic))
+
+    def unsubscribe(self, topic: str, handler: Handler) -> None:
+        """Remove a handler previously registered with ``subscribe``."""
+        handlers = self._subs.get(topic)
+        if not handlers:
+            return
+        try:
+            handlers.remove(handler)
+            log_debug(f"Unsubscribed handler from topic: {topic}")
+        except ValueError:
+            pass
 
     async def _deliver(self, topic: str, env: Envelope, raise_errors: bool = False) -> None:
         """Deliver a message to all matching subscribers concurrently.
@@ -268,6 +284,7 @@ class LocalBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -305,6 +322,7 @@ class LocalBus:
             max_attempts=max_attempts if reliable else 1,
             reply_to=reply_to,
             principal_id=principal_id,
+            correlation_id=correlation_id,
         )
 
         self._stats["published"] += 1
@@ -416,24 +434,27 @@ class LocalBus:
         self._validate_topics = original_validate
 
         # Publish request with reply_to field
-        await self.publish(
-            topic,
-            message,
-            event=False,
-            priority=priority,
-            origin=origin,
-            max_attempts=max_attempts,
-            reply_to=reply_topic,
-            principal_id=principal_id,
-        )
-
-        # Wait for response
         try:
-            result = await asyncio.wait_for(fut, timeout)
-            return result
-        except TimeoutError:
-            log_error(f"Request to {topic} timed out after {timeout}s")
-            return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
+            await self.publish(
+                topic,
+                message,
+                event=False,
+                priority=priority,
+                origin=origin,
+                max_attempts=max_attempts,
+                reply_to=reply_topic,
+                principal_id=principal_id,
+            )
+
+            # Wait for response
+            try:
+                result = await asyncio.wait_for(fut, timeout)
+                return result
+            except TimeoutError:
+                log_error(f"Request to {topic} timed out after {timeout}s")
+                return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
+        finally:
+            self.unsubscribe(reply_topic, _on_reply)
 
     def get_stats(self) -> dict:
         """Get bus statistics.

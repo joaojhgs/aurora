@@ -35,6 +35,8 @@ tests/
 │   ├── test_auth_*.py           # Auth pairing, endpoints
 │   ├── test_mesh_*.py           # Mesh routing, failover, permissions
 │   ├── test_principal_*.py      # Principal/token management
+│   ├── messaging/
+│   │   └── test_bullmq_redis_roundtrip.py  # Live Redis + BullMQ (skipped if no Redis)
 │   └── test_process_mode.py     # Multi-process tests
 ├── e2e/                         # Full workflow tests
 └── performance/                 # Benchmarks
@@ -72,7 +74,8 @@ pytest -n auto                          # Parallel execution
 @pytest.mark.integration   # Integration test (component interaction)
 @pytest.mark.e2e           # End-to-end test (full workflow)
 @pytest.mark.performance   # Performance benchmark
-@pytest.mark.process_mode  # Requires process mode setup
+@pytest.mark.process_mode  # Requires process mode setup (Redis in CI for some tests)
+@pytest.mark.bullmq_redis  # Live BullMQ + Redis (see tests/integration/messaging/)
 @pytest.mark.slow          # Takes >5 seconds
 @pytest.mark.external      # Requires external services (Redis, APIs)
 @pytest.mark.gpu           # Requires GPU

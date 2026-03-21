@@ -364,6 +364,7 @@ class BaseService(ABC):
                                                     error_response,
                                                     event=False,
                                                     origin=self.module,
+                                                    correlation_id=envelope.correlation_id,
                                                 )
                                             return
 
@@ -391,6 +392,7 @@ class BaseService(ABC):
                                             payload,
                                             event=False,
                                             origin=self.module,  # Responses are point-to-point replies
+                                            correlation_id=envelope.correlation_id,
                                         )
                                         log_debug(
                                             f"Sent response for {method_name} to {envelope.reply_to}"
@@ -417,6 +419,7 @@ class BaseService(ABC):
                                             error_response,
                                             event=False,
                                             origin=self.module,
+                                            correlation_id=envelope.correlation_id,
                                         )
 
                             return wrapper

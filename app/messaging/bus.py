@@ -115,7 +115,9 @@ class MessageBus(Protocol):
         reliable: bool = True,
         ttl_ms: int | None = None,
         max_attempts: int = 3,
+        reply_to: str | None = None,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -131,6 +133,9 @@ class MessageBus(Protocol):
             reliable: Whether to guarantee delivery (with retries)
             ttl_ms: Time-to-live in milliseconds
             max_attempts: Maximum retry attempts
+            reply_to: Optional reply topic (request/response)
+            principal_id: Optional authenticated principal
+            correlation_id: Propagate request correlation (required for BullMQBus replies)
         """
         ...
 
