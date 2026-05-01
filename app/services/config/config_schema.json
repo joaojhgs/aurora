@@ -1,1256 +1,1229 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "required": [
-        "general",
-        "mcp",
-        "plugins",
-        "ui"
-    ],
-    "properties": {
-        "general": {
-            "type": "object",
-            "required": [
-                "llm",
-                "embeddings",
-                "speech_to_text",
-                "text_to_speech",
-                "hardware_acceleration"
-            ],
-            "properties": {
-                "llm": {
-                    "type": "object",
-                    "required": [
-                        "provider",
-                        "third_party",
-                        "local"
-                    ],
-                    "properties": {
-                        "provider": {
-                            "type": "string",
-                            "enum": [
-                                "openai",
-                                "huggingface_endpoint",
-                                "huggingface_pipeline",
-                                "llama_cpp"
-                            ],
-                            "description": "LLM provider to use",
-                            "ui_choices": [
-                                "llama_cpp",
-                                "openai",
-                                "huggingface_endpoint",
-                                "huggingface_pipeline"
-                            ]
-                        },
-                        "third_party": {
-                            "type": "object",
-                            "required": [
-                                "openai",
-                                "huggingface_endpoint"
-                            ],
-                            "properties": {
-                                "openai": {
-                                    "type": "object",
-                                    "required": [
-                                        "options"
-                                    ],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "model",
-                                                "temperature",
-                                                "max_tokens"
-                                            ],
-                                            "properties": {
-                                                "api_key": {
-                                                    "type": "string",
-                                                    "format": "password",
-                                                    "description": "OpenAI API key (sensitive; prefer OPENAI_API_KEY in .env)"
-                                                },
-                                                "model": {
-                                                    "type": "string",
-                                                    "description": "OpenAI model to use",
-                                                    "ui_choices": [
-                                                        "gpt-4o",
-                                                        "gpt-4",
-                                                        "gpt-3.5-turbo",
-                                                        "gpt-4-turbo",
-                                                        "gpt-4.1",
-                                                        "gpt-5-mini",
-                                                        "gpt-5-nano"
-                                                    ]
-                                                },
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                    "description": "Sampling temperature for OpenAI models"
-                                                },
-                                                "max_tokens": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "maximum": 4096,
-                                                    "description": "Maximum tokens for OpenAI responses"
-                                                }
-                                            },
-                                            "additionalProperties": false
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                },
-                                "huggingface_endpoint": {
-                                    "type": "object",
-                                    "required": [
-                                        "options"
-                                    ],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "endpoint_url",
-                                                "model",
-                                                "access_token",
-                                                "temperature",
-                                                "max_tokens"
-                                            ],
-                                            "properties": {
-                                                "endpoint_url": {
-                                                    "type": "string",
-                                                    "description": "HuggingFace endpoint URL"
-                                                },
-                                                "model": {
-                                                    "type": "string",
-                                                    "description": "HuggingFace model name"
-                                                },
-                                                "access_token": {
-                                                    "type": "string",
-                                                    "format": "password",
-                                                    "description": "HuggingFace access token (sensitive; prefer .env)"
-                                                },
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                    "description": "Sampling temperature"
-                                                },
-                                                "max_tokens": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "maximum": 4096,
-                                                    "description": "Maximum tokens for responses"
-                                                }
-                                            },
-                                            "additionalProperties": false
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                }
-                            },
-                            "additionalProperties": false
-                        },
-                        "local": {
-                            "type": "object",
-                            "required": [
-                                "huggingface_pipeline",
-                                "llama_cpp"
-                            ],
-                            "properties": {
-                                "huggingface_pipeline": {
-                                    "type": "object",
-                                    "required": [
-                                        "options"
-                                    ],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "model"
-                                            ],
-                                            "properties": {
-                                                "model": {
-                                                    "type": "string",
-                                                    "description": "HuggingFace model name for local pipeline"
-                                                },
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                    "description": "Sampling temperature"
-                                                },
-                                                "max_tokens": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "description": "Maximum tokens for responses"
-                                                },
-                                                "torch_dtype": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "auto",
-                                                        "float32",
-                                                        "float16",
-                                                        "bfloat16"
-                                                    ],
-                                                    "description": "PyTorch data type",
-                                                    "ui_choices": [
-                                                        "auto",
-                                                        "float32",
-                                                        "float16",
-                                                        "bfloat16"
-                                                    ]
-                                                },
-                                                "device": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "cpu",
-                                                        "cuda",
-                                                        "auto"
-                                                    ],
-                                                    "description": "Device to run the model on",
-                                                    "ui_choices": [
-                                                        "cpu",
-                                                        "cuda",
-                                                        "auto"
-                                                    ]
-                                                },
-                                                "pipeline_kwargs": {
-                                                    "type": "object"
-                                                },
-                                                "model_kwargs": {
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "additionalProperties": true
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                },
-                                "llama_cpp": {
-                                    "type": "object",
-                                    "required": [
-                                        "options"
-                                    ],
-                                    "properties": {
-                                        "options": {
-                                            "type": "object",
-                                            "required": [
-                                                "model_path",
-                                                "temperature",
-                                                "max_tokens",
-                                                "n_ctx",
-                                                "n_gpu_layers",
-                                                "n_batch",
-                                                "top_p",
-                                                "top_k",
-                                                "repeat_penalty",
-                                                "min_p"
-                                            ],
-                                            "properties": {
-                                                "model_path": {
-                                                    "type": "string",
-                                                    "description": "Path to the GGUF model file",
-                                                    "ui_type": "file",
-                                                    "ui_file_filter": "GGUF files (*.gguf)|*.gguf|All files (*.*)|*.*"
-                                                },
-                                                "temperature": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 2,
-                                                    "description": "Sampling temperature for Llama.cpp"
-                                                },
-                                                "max_tokens": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "maximum": 4096,
-                                                    "description": "Maximum tokens for responses"
-                                                },
-                                                "n_ctx": {
-                                                    "type": "integer",
-                                                    "minimum": 512,
-                                                    "maximum": 32768,
-                                                    "description": "Context window size"
-                                                },
-                                                "n_gpu_layers": {
-                                                    "type": "integer",
-                                                    "minimum": 0,
-                                                    "maximum": 100,
-                                                    "description": "Number of layers to offload to GPU"
-                                                },
-                                                "n_batch": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "maximum": 2048,
-                                                    "description": "Batch size for processing"
-                                                },
-                                                "top_p": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 1,
-                                                    "description": "Top-p sampling parameter"
-                                                },
-                                                "top_k": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "maximum": 200,
-                                                    "description": "Top-k sampling parameter"
-                                                },
-                                                "repeat_penalty": {
-                                                    "type": "number",
-                                                    "minimum": 0.1,
-                                                    "maximum": 2.0,
-                                                    "description": "Repetition penalty"
-                                                },
-                                                "min_p": {
-                                                    "type": "number",
-                                                    "minimum": 0,
-                                                    "maximum": 1,
-                                                    "description": "Minimum probability threshold"
-                                                },
-                                                "chat_format": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "chatml",
-                                                        "chatml-function-calling",
-                                                        "llama-2",
-                                                        "alpaca",
-                                                        "vicuna"
-                                                    ],
-                                                    "description": "Chat format template to use",
-                                                    "ui_choices": [
-                                                        "chatml",
-                                                        "chatml-function-calling",
-                                                        "llama-2",
-                                                        "alpaca",
-                                                        "vicuna"
-                                                    ]
-                                                }
-                                            },
-                                            "additionalProperties": true
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                }
-                            },
-                            "additionalProperties": false
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "embeddings": {
-                    "type": "object",
-                    "required": [
-                        "use_local"
-                    ],
-                    "properties": {
-                        "use_local": {
-                            "type": "boolean",
-                            "description": "Use local embeddings model instead of API"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "speech_to_text": {
-                    "type": "object",
-                    "required": [
-                        "language",
-                        "ambient_transcription"
-                    ],
-                    "properties": {
-                        "language": {
-                            "type": "string",
-                            "enum": [
-                                "",
-                                "en",
-                                "pt",
-                                "es",
-                                "fr",
-                                "de",
-                                "it",
-                                "ja",
-                                "ko",
-                                "zh"
-                            ],
-                            "description": "Language for speech recognition (empty for auto-detect)",
-                            "ui_choices": [
-                                "",
-                                "en",
-                                "pt",
-                                "es",
-                                "fr",
-                                "de",
-                                "it",
-                                "ja",
-                                "ko",
-                                "zh"
-                            ]
-                        },
-                        "ambient_transcription": {
-                            "type": "object",
-                            "required": [
-                                "enable",
-                                "chunk_duration",
-                                "storage_path",
-                                "filter_short_transcriptions",
-                                "min_transcription_length"
-                            ],
-                            "properties": {
-                                "enable": {
-                                    "type": "boolean",
-                                    "description": "Enable ambient transcription"
-                                },
-                                "chunk_duration": {
-                                    "type": "number", 
-                                    "minimum": 0.5, 
-                                    "maximum": 60.0,
-                                    "description": "Duration in seconds of audio chunks to process"
-                                },
-                                "storage_path": {
-                                    "type": "string",
-                                    "description": "Directory path for file storage"
-                                },
-                                "filter_short_transcriptions": {
-                                    "type": "boolean",
-                                    "description": "Filter out short transcriptions to reduce noise"
-                                },
-                                "min_transcription_length": {
-                                    "type": "integer", 
-                                    "minimum": 0,
-                                    "description": "Minimum character length for transcriptions when filtering"
-                                }
-                            },
-                            "additionalProperties": false
-                        },
-                        "audio_input": {
-                            "type": "object",
-                            "properties": {
-                                "device_index": {
-                                    "type": ["integer", "null"],
-                                    "description": "Audio input device index (null for default)"
-                                },
-                                "sample_rate": {
-                                    "type": "integer",
-                                    "enum": [8000, 16000, 22050, 44100, 48000],
-                                    "description": "Audio sample rate in Hz"
-                                },
-                                "channels": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 2,
-                                    "description": "Number of audio channels"
-                                },
-                                "chunk_size": {
-                                    "type": "integer",
-                                    "minimum": 128,
-                                    "maximum": 8192,
-                                    "description": "Audio chunk size in frames"
-                                },
-                                "format": {
-                                    "type": "string",
-                                    "enum": ["int16", "int32", "float32"],
-                                    "description": "Audio sample format"
-                                }
-                            },
-                            "additionalProperties": false
-                        },
-                        "wake_word": {
-                            "type": "object",
-                            "properties": {
-                                "enabled": {
-                                    "type": "boolean",
-                                    "description": "Enable wake word detection"
-                                },
-                                "backend": {
-                                    "type": "string",
-                                    "enum": ["oww", "pvp"],
-                                    "description": "Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)"
-                                },
-                                "model_path": {
-                                    "type": ["string", "null"],
-                                    "description": "Path to wake word model file"
-                                },
-                                "threshold": {
-                                    "type": "number",
-                                    "minimum": 0.0,
-                                    "maximum": 1.0,
-                                    "description": "Wake word detection threshold"
-                                },
-                                "inference_framework": {
-                                    "type": "string",
-                                    "enum": ["onnx", "tflite"],
-                                    "description": "Inference framework for wake word detection"
-                                }
-                            },
-                            "additionalProperties": false
-                        },
-                        "transcription": {
-                            "type": "object",
-                            "properties": {
-                                "vad_enabled": {
-                                    "type": "boolean",
-                                    "description": "Enable voice activity detection"
-                                },
-                                "vad_threshold": {
-                                    "type": "number",
-                                    "minimum": 0.0,
-                                    "maximum": 1.0,
-                                    "description": "VAD threshold"
-                                },
-                                "silence_duration_ms": {
-                                    "type": "integer",
-                                    "minimum": 100,
-                                    "maximum": 5000,
-                                    "description": "Silence duration in milliseconds before stopping"
-                                },
-                                "max_speech_duration_s": {
-                                    "type": "integer",
-                                    "minimum": 5,
-                                    "maximum": 300,
-                                    "description": "Maximum speech duration in seconds"
-                                },
-                                "realtime_model": {
-                                    "type": "object",
-                                    "properties": {
-                                        "enabled": {
-                                            "type": "boolean",
-                                            "description": "Enable realtime transcription model"
-                                        },
-                                        "model_size": {
-                                            "type": "string",
-                                            "enum": ["tiny", "base", "small", "medium", "large"],
-                                            "description": "Whisper model size for realtime transcription"
-                                        },
-                                        "device": {
-                                            "type": "string",
-                                            "enum": ["cpu", "cuda", "auto"],
-                                            "description": "Device for realtime model"
-                                        },
-                                        "compute_type": {
-                                            "type": "string",
-                                            "enum": ["int8", "int16", "float16", "float32"],
-                                            "description": "Compute type for realtime model"
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                },
-                                "accurate_model": {
-                                    "type": "object",
-                                    "properties": {
-                                        "enabled": {
-                                            "type": "boolean",
-                                            "description": "Enable accurate transcription model"
-                                        },
-                                        "model_size": {
-                                            "type": "string",
-                                            "enum": ["tiny", "base", "small", "medium", "large"],
-                                            "description": "Whisper model size for accurate transcription"
-                                        },
-                                        "device": {
-                                            "type": "string",
-                                            "enum": ["cpu", "cuda", "auto"],
-                                            "description": "Device for accurate model"
-                                        },
-                                        "compute_type": {
-                                            "type": "string",
-                                            "enum": ["int8", "int16", "float16", "float32"],
-                                            "description": "Compute type for accurate model"
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                }
-                            },
-                            "additionalProperties": false
-                        },
-                        "coordinator": {
-                            "type": "object",
-                            "properties": {
-                                "session_timeout_s": {
-                                    "type": "number",
-                                    "minimum": 1.0,
-                                    "maximum": 300.0,
-                                    "description": "Session timeout in seconds"
-                                },
-                                "multi_turn_enabled": {
-                                    "type": "boolean",
-                                    "description": "Enable multi-turn conversation"
-                                },
-                                "pause_tts_on_listen": {
-                                    "type": "boolean",
-                                    "description": "Pause TTS when listening for speech"
-                                }
-                            },
-                            "additionalProperties": false
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "text_to_speech": {
-                    "type": "object",
-                    "required": [
-                        "model_file_path",
-                        "model_config_file_path",
-                        "model_sample_rate",
-                        "piper_path"
-                    ],
-                    "properties": {
-                        "model_file_path": {
-                            "type": "string",
-                            "description": "Path to the TTS model file",
-                            "ui_type": "file",
-                            "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*"
-                        },
-                        "model_config_file_path": {
-                            "type": "string",
-                            "description": "Path to the TTS model configuration file",
-                            "ui_type": "file",
-                            "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*"
-                        },
-                        "model_sample_rate": {
-                            "type": "integer",
-                            "minimum": 8000,
-                            "maximum": 48000,
-                            "description": "Sample rate for TTS output"
-                        },
-                        "piper_path": {
-                            "type": "string",
-                            "description": "Path to Piper TTS executable",
-                            "ui_type": "file",
-                            "ui_file_filter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "hardware_acceleration": {
-                    "type": "object",
-                    "required": [
-                        "tts",
-                        "stt",
-                        "ocr_bg",
-                        "ocr_curr",
-                        "llm"
-                    ],
-                    "properties": {
-                        "tts": {
-                            "type": "boolean",
-                            "description": "Enable hardware acceleration for TTS"
-                        },
-                        "stt": {
-                            "type": "boolean",
-                            "description": "Enable hardware acceleration for STT"
-                        },
-                        "ocr_bg": {
-                            "type": "boolean",
-                            "description": "Enable hardware acceleration for background OCR"
-                        },
-                        "ocr_curr": {
-                            "type": "boolean",
-                            "description": "Enable hardware acceleration for current OCR"
-                        },
-                        "llm": {
-                            "type": "boolean",
-                            "description": "Enable hardware acceleration for LLM"
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ui": {
+      "type": "object",
+      "description": "User interface settings",
+      "additionalProperties": false,
+      "properties": {
+        "activate": {
+          "type": "boolean",
+          "description": "Enable graphical user interface",
+          "default": false
         },
-        "plugins": {
-            "type": "object",
-            "required": [
-                "google",
-                "jira",
-                "openrecall",
-                "brave_search",
-                "github",
-                "slack",
-                "gmail",
-                "gcalendar"
-            ],
-            "properties": {
-                "google": {
-                    "type": "object",
-                    "required": [
-                        "credentials_file"
-                    ],
-                    "properties": {
-                        "credentials_file": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "Path to Google credentials JSON file (sensitive; prefer .env)",
-                            "ui_type": "file",
-                            "ui_file_filter": "JSON files (*.json)|*.json|All files (*.*)|*.*"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "jira": {
-                    "type": "object",
-                    "required": [
-                        "activate",
-                        "api_token",
-                        "username",
-                        "instance_url"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable Jira integration"
-                        },
-                        "api_token": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "Jira API token (sensitive; prefer .env)"
-                        },
-                        "username": {
-                            "type": "string",
-                            "description": "Jira username"
-                        },
-                        "instance_url": {
-                            "type": "string",
-                            "format": "uri",
-                            "description": "Jira instance URL"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "openrecall": {
-                    "type": "object",
-                    "required": [
-                        "activate"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable OpenRecall integration"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "brave_search": {
-                    "type": "object",
-                    "required": [
-                        "activate",
-                        "api_key"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable Brave Search integration"
-                        },
-                        "api_key": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "Brave Search API key (sensitive; prefer .env)"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "github": {
-                    "type": "object",
-                    "required": [
-                        "activate",
-                        "app_id",
-                        "app_private_key",
-                        "repository"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable GitHub integration"
-                        },
-                        "app_id": {
-                            "type": "string",
-                            "description": "GitHub App ID"
-                        },
-                        "app_private_key": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "GitHub App private key (sensitive; prefer .env)"
-                        },
-                        "repository": {
-                            "type": "string",
-                            "description": "GitHub repository"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "slack": {
-                    "type": "object",
-                    "required": [
-                        "activate",
-                        "user_token"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable Slack integration"
-                        },
-                        "user_token": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "Slack user token (sensitive; prefer .env)"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "gmail": {
-                    "type": "object",
-                    "required": [
-                        "activate"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable Gmail integration"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "gcalendar": {
-                    "type": "object",
-                    "required": [
-                        "activate"
-                    ],
-                    "properties": {
-                        "activate": {
-                            "type": "boolean",
-                            "description": "Enable Google Calendar integration"
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
+        "dark_mode": {
+          "type": "boolean",
+          "description": "Enable dark mode theme",
+          "default": false
         },
-        "mcp": {
-            "type": "object",
-            "required": [
-                "enabled",
-                "servers"
-            ],
-            "properties": {
-                "enabled": {
-                    "type": "boolean",
-                    "description": "Enable Model Context Protocol integration"
-                },
-                "servers": {
-                    "type": "object",
-                    "description": "MCP server configurations indexed by server name",
-                    "patternProperties": {
-                        "^[a-zA-Z][a-zA-Z0-9_-]*$": {
-                            "type": "object",
-                            "description": "MCP server configuration",
-                            "properties": {
-                                "enabled": {
-                                    "type": "boolean",
-                                    "description": "Enable or disable this MCP server",
-                                    "default": true
-                                },
-                                "transport": {
-                                    "type": "string",
-                                    "enum": [
-                                        "stdio",
-                                        "streamable_http",
-                                        "sse",
-                                        "websocket"
-                                    ],
-                                    "description": "Transport protocol for MCP communication. 'stdio' runs a local process",
-                                    "ui_choices": [
-                                        "stdio",
-                                        "streamable_http", 
-                                        "sse",
-                                        "websocket"
-                                    ]
-                                },
-                                "command": {
-                                    "type": "string",
-                                    "description": "Command to start the MCP server (required for stdio transport)"
-                                },
-                                "args": {
-                                    "type": "array",
-                                    "description": "Arguments to pass to the command (used with stdio transport)",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "default": []
-                                },
-                                "url": {
-                                    "type": "string",
-                                    "format": "uri",
-                                    "description": "URL endpoint for HTTP-based transports (required for streamable_http, sse, websocket)"
-                                },
-                                "headers": {
-                                    "type": "object",
-                                    "description": "Custom HTTP headers for authentication and configuration (supported by streamable_http, sse, websocket). For Atlassian servers, consider using stdio transport with mcp-remote instead of manual authentication.",
-                                    "patternProperties": {
-                                        "^.+$": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "default": {}
-                                },
-                                "env": {
-                                    "type": "object",
-                                    "description": "Environment variables for the MCP server process (used with stdio transport)",
-                                    "patternProperties": {
-                                        "^.+$": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "default": {}
-                                },
-                                "cwd": {
-                                    "type": "string",
-                                    "description": "Working directory for the MCP server process (used with stdio transport)"
-                                },
-                                "timeout": {
-                                    "type": "number",
-                                    "description": "Connection timeout in seconds",
-                                    "minimum": 1,
-                                    "maximum": 300,
-                                    "default": 30
-                                }
-                            },
-                            "required": [
-                                "transport"
-                            ],
-                            "allOf": [
-                                {
-                                    "if": {
-                                        "properties": {
-                                            "transport": {
-                                                "const": "stdio"
-                                            }
-                                        }
-                                    },
-                                    "then": {
-                                        "required": [
-                                            "command",
-                                            "args"
-                                        ],
-                                        "not": {
-                                            "required": [
-                                                "url"
-                                            ]
-                                        }
-                                    }
-                                },
-                                {
-                                    "if": {
-                                        "properties": {
-                                            "transport": {
-                                                "enum": [
-                                                    "streamable_http",
-                                                    "sse", 
-                                                    "websocket"
-                                                ]
-                                            }
-                                        }
-                                    },
-                                    "then": {
-                                        "required": [
-                                            "url"
-                                        ],
-                                        "not": {
-                                            "required": [
-                                                "command",
-                                                "args"
-                                            ]
-                                        }
-                                    }
-                                }
-                            ],
-                            "additionalProperties": false
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        },
+        "debug": {
+          "type": "boolean",
+          "description": "Enable debug mode for verbose logging",
+          "default": false
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "description": "System-wide settings",
+      "additionalProperties": false,
+      "properties": {
+        "models_dir": {
+          "type": "string",
+          "description": "Base directory for voice/model files",
+          "default": "voice_models/"
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "description": "Per-service configuration sections",
+      "additionalProperties": false,
+      "properties": {
         "gateway": {
-            "type": "object",
-            "description": "HTTP Gateway configuration for REST API access",
-            "properties": {
-                "enabled": {
-                    "type": "boolean",
-                    "description": "Enable HTTP Gateway for REST API access",
-                    "default": false
-                },
+          "type": "object",
+          "description": "HTTP Gateway configuration for REST API, WebRTC, and mesh networking",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable HTTP Gateway for REST API access",
+              "default": false
+            },
+            "api": {
+              "type": "object",
+              "description": "REST API settings",
+              "additionalProperties": false,
+              "properties": {
                 "host": {
-                    "type": "string",
-                    "description": "Host address to bind the gateway",
-                    "default": "0.0.0.0"
+                  "type": "string",
+                  "description": "Host address to bind the gateway",
+                  "default": "0.0.0.0"
                 },
                 "port": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "Port number for the gateway",
-                    "default": 8000
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "Port number for the gateway",
+                  "default": 8000
                 },
                 "request_timeout_s": {
-                    "type": "number",
-                    "minimum": 1,
-                    "maximum": 300,
-                    "description": "Request timeout in seconds",
-                    "default": 30.0
-                },
-                "token_secret": {
-                    "type": "string",
-                    "format": "password",
-                    "description": "Secret for JWT signing and mesh inbound token encryption. Config overrides .env (AURORA_TOKEN_SECRET). Prefer .env for security.",
-                    "default": ""
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 300,
+                  "description": "Request timeout in seconds",
+                  "default": 30.0
                 },
                 "cors": {
-                    "type": "object",
-                    "description": "CORS configuration",
-                    "properties": {
-                        "origins": {
-                            "type": "array",
-                            "description": "Allowed CORS origins",
-                            "items": {
-                                "type": "string"
-                            },
-                            "default": ["*"]
-                        },
-                        "allow_credentials": {
-                            "type": "boolean",
-                            "description": "Allow credentials in CORS requests",
-                            "default": true
-                        }
+                  "type": "object",
+                  "description": "CORS configuration",
+                  "additionalProperties": false,
+                  "properties": {
+                    "origins": {
+                      "type": "array",
+                      "description": "Allowed CORS origins",
+                      "items": { "type": "string" },
+                      "default": ["*"]
                     },
-                    "additionalProperties": false
+                    "allow_credentials": {
+                      "type": "boolean",
+                      "description": "Allow credentials in CORS requests",
+                      "default": true
+                    }
+                  }
                 },
-                "auth": {
-                    "type": "object",
-                    "description": "Authentication and authorization configuration",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean",
-                            "description": "Enable API key authentication",
-                            "default": false
-                        },
-                        "api_keys": {
-                            "type": "array",
-                            "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
-                            "items": {
-                                "type": "string",
-                                "format": "password"
-                            },
-                            "default": []
-                        },
-                        "token_expiry_days": {
-                            "type": "integer",
-                            "description": "Default token expiry in days",
-                            "minimum": 1,
-                            "default": 365
-                        },
-                        "session_token_expiry_hours": {
-                            "type": "integer",
-                            "description": "Session token expiry in hours (for login)",
-                            "minimum": 1,
-                            "default": 24
-                        },
-                        "pairing_code_expiry_minutes": {
-                            "type": "integer",
-                            "description": "Pairing code expiry in minutes",
-                            "minimum": 1,
-                            "default": 5
-                        },
-                        "pairing_max_attempts_per_ip": {
-                            "type": "integer",
-                            "description": "Max pairing attempts per IP before rate limiting",
-                            "minimum": 1,
-                            "default": 5
-                        },
-                        "default_pairing_permissions": {
-                            "type": "array",
-                            "description": "Default permissions assigned to new devices during pairing",
-                            "items": {
-                                "type": "string"
-                            },
-                            "default": []
-                        },
-                        "webrtc_auth_timeout_seconds": {
-                            "type": "number",
-                            "description": "Timeout in seconds for WebRTC peer authentication",
-                            "minimum": 1,
-                            "default": 10.0
-                        },
-                        "webrtc_pairing_timeout_seconds": {
-                            "type": "number",
-                            "description": "Timeout in seconds for peers in the pairing flow (awaiting human approval)",
-                            "minimum": 10,
-                            "default": 300.0
-                        },
-                        "audit_enabled": {
-                            "type": "boolean",
-                            "description": "Enable audit logging of security events",
-                            "default": true
-                        },
-                        "audit_retention_days": {
-                            "type": "integer",
-                            "description": "Audit log retention period in days",
-                            "minimum": 1,
-                            "default": 90
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "mesh": {
-                    "type": "object",
-                    "description": "P2P mesh networking configuration",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean",
-                            "description": "Enable P2P mesh networking",
-                            "default": false
-                        },
-                        "node_name": {
-                            "type": "string",
-                            "description": "Human-readable name for this node in the mesh",
-                            "default": ""
-                        },
-                        "services": {
-                            "type": "object",
-                            "description": "Per-service mesh configuration (sharing + routing combined)",
-                            "additionalProperties": {
-                                "type": "object",
-                                "properties": {
-                                    "share": { "type": "boolean", "description": "Whether to share this service with the network", "default": false },
-                                    "max_concurrent": { "type": "integer", "minimum": 0, "description": "Maximum concurrent remote calls", "default": 10 },
-                                    "allowed_peers": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Specific peer IDs allowed (null = all authenticated)", "default": null },
-                                    "prefer": { "type": "string", "enum": ["local", "network", "network_only", "local_only"], "description": "Routing preference", "default": "local" },
-                                    "fallback": { "type": "string", "enum": ["local", "network", "error", "none"], "description": "Fallback strategy", "default": "local" },
-                                    "min_version": { "type": ["string", "null"], "description": "Minimum required remote service version (semver)", "default": null },
-                                    "required_capabilities": { "type": "array", "items": { "type": "string" }, "description": "Required capabilities for remote service", "default": [] }
-                                },
-                                "additionalProperties": false
-                            }
-                        },
-                        "version_policy": {
-                            "type": "string",
-                            "enum": ["exact", "compatible", "any"],
-                            "description": "How strictly to enforce version matching",
-                            "default": "compatible"
-                        },
-                        "peer_selection": {
-                            "type": "string",
-                            "enum": ["lowest_latency", "round_robin", "random"],
-                            "description": "Strategy for choosing among multiple peers",
-                            "default": "lowest_latency"
-                        },
-                        "ping_interval_s": {
-                            "type": "number",
-                            "minimum": 1,
-                            "description": "How often to measure peer latency (seconds)",
-                            "default": 30.0
-                        },
-                        "registry_announce_interval_s": {
-                            "type": "number",
-                            "minimum": 1,
-                            "description": "How often to re-announce manifest (seconds)",
-                            "default": 60.0
-                        },
-                        "stale_peer_timeout_s": {
-                            "type": "number",
-                            "minimum": 1,
-                            "description": "Mark peer stale after this many seconds without pong",
-                            "default": 120.0
-                        },
-                        "remote_timeout_s": {
-                            "type": "number",
-                            "minimum": 1,
-                            "description": "Timeout for remote bus publish calls (seconds)",
-                            "default": 30.0
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "webrtc": {
-                    "type": "object",
-                    "description": "WebRTC transport configuration",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean"
-                        },
-                        "strategy": {
-                            "type": "string"
-                        },
-                        "app_id": {
-                            "type": "string"
-                        },
-                        "room": {
-                            "type": "string",
-                            "description": "Signaling room name. Auto-generated on first run if set to 'default' or empty."
-                        },
-                        "password": {
-                            "type": "string",
-                            "format": "password",
-                            "description": "Room password for signaling encryption (sensitive; prefer AURORA_WEBRTC_PASSWORD in .env). Auto-generated on first run if empty. Use 'python scripts/config_updater.py --room-export' to share with other devices."
-                        },
-                        "encrypt_signaling": {
-                            "type": "boolean"
-                        },
-                        "enable_app_layer_e2ee": {
-                            "type": "boolean"
-                        },
-                        "stun_servers": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        "turn_servers": {
-                            "type": "array"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "signaling_mqtt": {
-                    "type": "object",
-                    "description": "MQTT signaling configuration for WebRTC",
-                    "properties": {
-                        "brokers": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        "topic_root": {
-                            "type": "string"
-                        }
-                    },
-                    "additionalProperties": false
+                "token_secret": {
+                  "type": "string",
+                  "format": "password",
+                  "description": "Secret for JWT signing and mesh inbound token encryption. Prefer AURORA_TOKEN_SECRET in .env.",
+                  "default": ""
                 }
+              }
             },
-            "additionalProperties": false
+            "mesh_network": {
+              "type": "object",
+              "description": "P2P mesh networking configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable P2P mesh networking",
+                  "default": false
+                },
+                "node_name": {
+                  "type": "string",
+                  "description": "Human-readable name for this node in the mesh",
+                  "default": ""
+                },
+                "version_policy": {
+                  "type": "string",
+                  "enum": ["exact", "compatible", "any"],
+                  "description": "How strictly to enforce version matching",
+                  "default": "compatible"
+                },
+                "peer_selection": {
+                  "type": "string",
+                  "enum": ["lowest_latency", "round_robin", "random"],
+                  "description": "Strategy for choosing among multiple peers",
+                  "default": "lowest_latency"
+                },
+                "ping_interval_s": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "How often to measure peer latency (seconds)",
+                  "default": 30.0
+                },
+                "registry_announce_interval_s": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "How often to re-announce manifest (seconds)",
+                  "default": 60.0
+                },
+                "stale_peer_timeout_s": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "Mark peer stale after this many seconds without pong",
+                  "default": 120.0
+                },
+                "remote_timeout_s": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "Timeout for remote bus publish calls (seconds)",
+                  "default": 30.0
+                }
+              }
+            },
+            "webrtc": {
+              "type": "object",
+              "description": "WebRTC transport configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable WebRTC transport",
+                  "default": false
+                },
+                "strategy": {
+                  "type": "string",
+                  "description": "Signaling strategy",
+                  "default": "mqtt"
+                },
+                "app_id": {
+                  "type": "string",
+                  "description": "Application ID for signaling",
+                  "default": "aurora"
+                },
+                "room": {
+                  "type": "string",
+                  "description": "Signaling room name. Auto-generated on first run if set to 'default' or empty.",
+                  "default": "default"
+                },
+                "password": {
+                  "type": "string",
+                  "format": "password",
+                  "description": "Room password for signaling encryption. Auto-generated on first run if empty. Prefer AURORA_WEBRTC_PASSWORD in .env.",
+                  "default": ""
+                },
+                "encrypt_signaling": {
+                  "type": "boolean",
+                  "description": "Enable signaling encryption",
+                  "default": true
+                },
+                "enable_app_layer_e2ee": {
+                  "type": "boolean",
+                  "description": "Enable application-layer end-to-end encryption",
+                  "default": false
+                },
+                "stun_servers": {
+                  "type": "array",
+                  "description": "STUN server URLs for NAT traversal",
+                  "items": { "type": "string" },
+                  "default": ["stun:stun.l.google.com:19302"]
+                },
+                "turn_servers": {
+                  "type": "array",
+                  "description": "TURN server configurations for relay",
+                  "items": {},
+                  "default": []
+                }
+              }
+            },
+            "signaling_mqtt": {
+              "type": "object",
+              "description": "MQTT signaling configuration for WebRTC",
+              "additionalProperties": false,
+              "properties": {
+                "brokers": {
+                  "type": "array",
+                  "description": "MQTT broker WebSocket URLs",
+                  "items": { "type": "string" },
+                  "default": [
+                    "wss://broker.emqx.io:8084/mqtt",
+                    "wss://test.mosquitto.org:8081/mqtt"
+                  ]
+                },
+                "topic_root": {
+                  "type": "string",
+                  "description": "Root MQTT topic for signaling",
+                  "default": "aurora"
+                }
+              }
+            }
+          }
         },
-        "ui": {
-            "type": "object",
-            "required": [
-                "activate",
-                "dark_mode",
-                "debug"
-            ],
-            "properties": {
-                "activate": {
-                    "type": "boolean",
-                    "description": "Enable graphical user interface"
-                },
-                "dark_mode": {
-                    "type": "boolean",
-                    "description": "Enable dark mode theme"
-                },
-                "debug": {
-                    "type": "boolean",
-                    "description": "Enable debug mode for verbose logging"
-                }
+        "auth": {
+          "type": "object",
+          "description": "Authentication and authorization service",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable authentication service",
+              "default": false
             },
-            "additionalProperties": false
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "api_keys": {
+              "type": "array",
+              "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
+              "items": { "type": "string", "format": "password" },
+              "default": []
+            },
+            "token_expiry_days": {
+              "type": "integer",
+              "description": "Default token expiry in days",
+              "minimum": 1,
+              "default": 365
+            },
+            "session_token_expiry_hours": {
+              "type": "integer",
+              "description": "Session token expiry in hours (for login)",
+              "minimum": 1,
+              "default": 24
+            },
+            "pairing_code_expiry_minutes": {
+              "type": "integer",
+              "description": "Pairing code expiry in minutes",
+              "minimum": 1,
+              "default": 5
+            },
+            "pairing_max_attempts_per_ip": {
+              "type": "integer",
+              "description": "Max pairing attempts per IP before rate limiting",
+              "minimum": 1,
+              "default": 5
+            },
+            "default_pairing_permissions": {
+              "type": "array",
+              "description": "Default permissions assigned to new devices during pairing",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "webrtc_auth_timeout_seconds": {
+              "type": "number",
+              "description": "Timeout in seconds for WebRTC peer authentication",
+              "minimum": 1,
+              "default": 10.0
+            },
+            "webrtc_pairing_timeout_seconds": {
+              "type": "number",
+              "description": "Timeout in seconds for peers in the pairing flow (awaiting human approval)",
+              "minimum": 10,
+              "default": 300.0
+            },
+            "audit_enabled": {
+              "type": "boolean",
+              "description": "Enable audit logging of security events",
+              "default": true
+            },
+            "audit_retention_days": {
+              "type": "integer",
+              "description": "Audit log retention period in days",
+              "minimum": 1,
+              "default": 90
+            }
+          }
+        },
+        "tts": {
+          "type": "object",
+          "description": "Text-to-speech service configuration",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable TTS service",
+              "default": false
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "hardware_acceleration": {
+              "type": "boolean",
+              "description": "Enable hardware acceleration for TTS",
+              "default": false
+            },
+            "model_file_path": {
+              "type": "string",
+              "description": "Path to the TTS model file",
+              "ui_type": "file",
+              "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
+              "default": "voice_models/en_US-lessac-medium.onnx"
+            },
+            "model_config_file_path": {
+              "type": "string",
+              "description": "Path to the TTS model configuration file",
+              "ui_type": "file",
+              "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+              "default": "voice_models/en_US-lessac-medium.onnx.txt"
+            },
+            "model_sample_rate": {
+              "type": "integer",
+              "minimum": 8000,
+              "maximum": 48000,
+              "description": "Sample rate for TTS output",
+              "default": 22050
+            },
+            "piper_path": {
+              "type": "string",
+              "description": "Path to Piper TTS executable",
+              "ui_type": "file",
+              "ui_file_filter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+              "default": ""
+            }
+          }
+        },
+        "stt": {
+          "type": "object",
+          "description": "Speech-to-text services configuration",
+          "additionalProperties": false,
+          "properties": {
+            "language": {
+              "type": "string",
+              "enum": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+              "description": "Language for speech recognition (empty for auto-detect)",
+              "ui_choices": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+              "default": "en"
+            },
+            "coordinator": {
+              "type": "object",
+              "description": "STT coordinator service settings",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable STT coordinator",
+                  "default": false
+                },
+                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "session_timeout_s": {
+                  "type": "number",
+                  "minimum": 1.0,
+                  "maximum": 300.0,
+                  "description": "Session timeout in seconds",
+                  "default": 10.0
+                },
+                "multi_turn_enabled": {
+                  "type": "boolean",
+                  "description": "Enable multi-turn conversation",
+                  "default": false
+                },
+                "pause_tts_on_listen": {
+                  "type": "boolean",
+                  "description": "Pause TTS when listening for speech",
+                  "default": true
+                },
+                "ambient_transcription": {
+                  "type": "object",
+                  "description": "Ambient transcription settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enable": {
+                      "type": "boolean",
+                      "description": "Enable ambient transcription",
+                      "default": false
+                    },
+                    "chunk_duration": {
+                      "type": "number",
+                      "minimum": 0.5,
+                      "maximum": 60.0,
+                      "description": "Duration in seconds of audio chunks to process",
+                      "default": 3.0
+                    },
+                    "storage_path": {
+                      "type": "string",
+                      "description": "Directory path for file storage",
+                      "default": "ambient_logs/"
+                    },
+                    "filter_short_transcriptions": {
+                      "type": "boolean",
+                      "description": "Filter out short transcriptions to reduce noise",
+                      "default": true
+                    },
+                    "min_transcription_length": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Minimum character length for transcriptions when filtering",
+                      "default": 10
+                    }
+                  }
+                },
+                "audio_input": {
+                  "type": "object",
+                  "description": "Audio input device settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "device_index": {
+                      "type": ["integer", "null"],
+                      "description": "Audio input device index (null for default)",
+                      "default": null
+                    },
+                    "sample_rate": {
+                      "type": "integer",
+                      "enum": [8000, 16000, 22050, 44100, 48000],
+                      "description": "Audio sample rate in Hz",
+                      "default": 16000
+                    },
+                    "channels": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2,
+                      "description": "Number of audio channels",
+                      "default": 1
+                    },
+                    "chunk_size": {
+                      "type": "integer",
+                      "minimum": 128,
+                      "maximum": 8192,
+                      "description": "Audio chunk size in frames",
+                      "default": 1024
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": ["int16", "int32", "float32"],
+                      "description": "Audio sample format",
+                      "default": "int16"
+                    }
+                  }
+                }
+              }
+            },
+            "wakeword": {
+              "type": "object",
+              "description": "Wake word detection service settings",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable wake word detection",
+                  "default": false
+                },
+                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "backend": {
+                  "type": "string",
+                  "enum": ["oww", "pvp"],
+                  "description": "Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)",
+                  "default": "oww"
+                },
+                "model_path": {
+                  "type": ["string", "null"],
+                  "description": "Path to wake word model file",
+                  "default": null
+                },
+                "threshold": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "description": "Wake word detection threshold",
+                  "default": 0.5
+                },
+                "inference_framework": {
+                  "type": "string",
+                  "enum": ["onnx", "tflite"],
+                  "description": "Inference framework for wake word detection",
+                  "default": "onnx"
+                }
+              }
+            },
+            "transcription": {
+              "type": "object",
+              "description": "Transcription service settings",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable transcription service",
+                  "default": false
+                },
+                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "vad_enabled": {
+                  "type": "boolean",
+                  "description": "Enable voice activity detection",
+                  "default": true
+                },
+                "vad_threshold": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "description": "VAD threshold",
+                  "default": 0.5
+                },
+                "silence_duration_ms": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 5000,
+                  "description": "Silence duration in milliseconds before stopping",
+                  "default": 900
+                },
+                "max_speech_duration_s": {
+                  "type": "integer",
+                  "minimum": 5,
+                  "maximum": 300,
+                  "description": "Maximum speech duration in seconds",
+                  "default": 30
+                },
+                "realtime_model": {
+                  "type": "object",
+                  "description": "Realtime transcription model settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Enable realtime transcription model",
+                      "default": true
+                    },
+                    "model_size": {
+                      "type": "string",
+                      "enum": ["tiny", "base", "small", "medium", "large"],
+                      "description": "Whisper model size for realtime transcription",
+                      "default": "tiny"
+                    },
+                    "device": {
+                      "type": "string",
+                      "enum": ["cpu", "cuda", "auto"],
+                      "description": "Device for realtime model",
+                      "default": "cpu"
+                    },
+                    "compute_type": {
+                      "type": "string",
+                      "enum": ["int8", "int16", "float16", "float32"],
+                      "description": "Compute type for realtime model",
+                      "default": "int8"
+                    }
+                  }
+                },
+                "accurate_model": {
+                  "type": "object",
+                  "description": "Accurate transcription model settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Enable accurate transcription model",
+                      "default": true
+                    },
+                    "model_size": {
+                      "type": "string",
+                      "enum": ["tiny", "base", "small", "medium", "large"],
+                      "description": "Whisper model size for accurate transcription",
+                      "default": "base"
+                    },
+                    "device": {
+                      "type": "string",
+                      "enum": ["cpu", "cuda", "auto"],
+                      "description": "Device for accurate model",
+                      "default": "cpu"
+                    },
+                    "compute_type": {
+                      "type": "string",
+                      "enum": ["int8", "int16", "float16", "float32"],
+                      "description": "Compute type for accurate model",
+                      "default": "int8"
+                    }
+                  }
+                }
+              }
+            },
+            "hardware_acceleration": {
+              "type": "boolean",
+              "description": "Enable hardware acceleration for STT",
+              "default": false
+            }
+          }
+        },
+        "orchestrator": {
+          "type": "object",
+          "description": "Orchestrator service (LLM coordination, tool calls)",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable orchestrator service",
+              "default": true
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "hardware_acceleration": {
+              "type": "boolean",
+              "description": "Enable hardware acceleration for LLM",
+              "default": false
+            },
+            "llm": {
+              "type": "object",
+              "description": "LLM provider configuration",
+              "additionalProperties": false,
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": ["openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"],
+                  "description": "LLM provider to use",
+                  "ui_choices": ["llama_cpp", "openai", "huggingface_endpoint", "huggingface_pipeline"],
+                  "default": "openai"
+                },
+                "third_party": {
+                  "type": "object",
+                  "description": "Third-party LLM provider options",
+                  "additionalProperties": false,
+                  "properties": {
+                    "openai": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "options": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "api_key": {
+                              "type": "string",
+                              "format": "password",
+                              "description": "OpenAI API key (sensitive; prefer OPENAI_API_KEY in .env)",
+                              "default": ""
+                            },
+                            "model": {
+                              "type": "string",
+                              "description": "OpenAI model to use",
+                              "ui_choices": ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4.1", "gpt-5-mini", "gpt-5-nano"],
+                              "default": "gpt-4o"
+                            },
+                            "temperature": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2,
+                              "description": "Sampling temperature for OpenAI models",
+                              "default": 0.7
+                            },
+                            "max_tokens": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 4096,
+                              "description": "Maximum tokens for OpenAI responses",
+                              "default": 512
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "huggingface_endpoint": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "options": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "endpoint_url": {
+                              "type": "string",
+                              "description": "HuggingFace endpoint URL",
+                              "default": ""
+                            },
+                            "model": {
+                              "type": "string",
+                              "description": "HuggingFace model name",
+                              "default": ""
+                            },
+                            "access_token": {
+                              "type": "string",
+                              "format": "password",
+                              "description": "HuggingFace access token (sensitive; prefer .env)",
+                              "default": ""
+                            },
+                            "temperature": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2,
+                              "description": "Sampling temperature",
+                              "default": 0.7
+                            },
+                            "max_tokens": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 4096,
+                              "description": "Maximum tokens for responses",
+                              "default": 512
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "local": {
+                  "type": "object",
+                  "description": "Local LLM provider options",
+                  "additionalProperties": false,
+                  "properties": {
+                    "huggingface_pipeline": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "options": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "model": {
+                              "type": "string",
+                              "description": "HuggingFace model name for local pipeline",
+                              "default": "microsoft/DialoGPT-medium"
+                            },
+                            "temperature": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2,
+                              "description": "Sampling temperature",
+                              "default": 0.7
+                            },
+                            "max_tokens": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "Maximum tokens for responses"
+                            },
+                            "torch_dtype": {
+                              "type": "string",
+                              "enum": ["auto", "float32", "float16", "bfloat16"],
+                              "description": "PyTorch data type",
+                              "ui_choices": ["auto", "float32", "float16", "bfloat16"],
+                              "default": "auto"
+                            },
+                            "device": {
+                              "type": "string",
+                              "enum": ["cpu", "cuda", "auto"],
+                              "description": "Device to run the model on",
+                              "ui_choices": ["cpu", "cuda", "auto"]
+                            },
+                            "pipeline_kwargs": {
+                              "type": "object",
+                              "description": "Additional pipeline keyword arguments"
+                            },
+                            "model_kwargs": {
+                              "type": "object",
+                              "description": "Additional model keyword arguments"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "llama_cpp": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "options": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "model_path": {
+                              "type": "string",
+                              "description": "Path to the GGUF model file",
+                              "ui_type": "file",
+                              "ui_file_filter": "GGUF files (*.gguf)|*.gguf|All files (*.*)|*.*",
+                              "default": ""
+                            },
+                            "temperature": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 2,
+                              "description": "Sampling temperature for Llama.cpp",
+                              "default": 1.0
+                            },
+                            "max_tokens": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 4096,
+                              "description": "Maximum tokens for responses",
+                              "default": 512
+                            },
+                            "n_ctx": {
+                              "type": "integer",
+                              "minimum": 512,
+                              "maximum": 32768,
+                              "description": "Context window size",
+                              "default": 2048
+                            },
+                            "n_gpu_layers": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100,
+                              "description": "Number of layers to offload to GPU",
+                              "default": 0
+                            },
+                            "n_batch": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 2048,
+                              "description": "Batch size for processing",
+                              "default": 1000
+                            },
+                            "top_p": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1,
+                              "description": "Top-p sampling parameter",
+                              "default": 0.95
+                            },
+                            "top_k": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 200,
+                              "description": "Top-k sampling parameter",
+                              "default": 64
+                            },
+                            "repeat_penalty": {
+                              "type": "number",
+                              "minimum": 0.1,
+                              "maximum": 2.0,
+                              "description": "Repetition penalty",
+                              "default": 1.0
+                            },
+                            "min_p": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1,
+                              "description": "Minimum probability threshold",
+                              "default": 0.0
+                            },
+                            "chat_format": {
+                              "type": "string",
+                              "enum": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                              "description": "Chat format template to use",
+                              "ui_choices": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                              "default": "chatml-function-calling"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "db": {
+          "type": "object",
+          "description": "Database service configuration",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable database service",
+              "default": true
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "embeddings": {
+              "type": "object",
+              "description": "Embeddings configuration",
+              "additionalProperties": false,
+              "properties": {
+                "use_local": {
+                  "type": "boolean",
+                  "description": "Use local embeddings model instead of API",
+                  "default": true
+                }
+              }
+            }
+          }
+        },
+        "tooling": {
+          "type": "object",
+          "description": "Tooling service (plugins, MCP, tools)",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable tooling service",
+              "default": true
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "hardware_acceleration": {
+              "type": "object",
+              "description": "Hardware acceleration for OCR features",
+              "additionalProperties": false,
+              "properties": {
+                "ocr_bg": {
+                  "type": "boolean",
+                  "description": "Enable hardware acceleration for background OCR",
+                  "default": false
+                },
+                "ocr_curr": {
+                  "type": "boolean",
+                  "description": "Enable hardware acceleration for current OCR",
+                  "default": false
+                }
+              }
+            },
+            "mcp": {
+              "type": "object",
+              "description": "Model Context Protocol integration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable Model Context Protocol integration",
+                  "default": true
+                },
+                "servers": {
+                  "type": "object",
+                  "description": "MCP server configurations indexed by server name",
+                  "patternProperties": {
+                    "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+                      "type": "object",
+                      "description": "MCP server configuration",
+                      "required": ["transport"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Enable or disable this MCP server",
+                          "default": true
+                        },
+                        "transport": {
+                          "type": "string",
+                          "enum": ["stdio", "streamable_http", "sse", "websocket"],
+                          "description": "Transport protocol for MCP communication",
+                          "ui_choices": ["stdio", "streamable_http", "sse", "websocket"]
+                        },
+                        "command": {
+                          "type": "string",
+                          "description": "Command to start the MCP server (required for stdio transport)"
+                        },
+                        "args": {
+                          "type": "array",
+                          "description": "Arguments to pass to the command (used with stdio transport)",
+                          "items": { "type": "string" },
+                          "default": []
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "URL endpoint for HTTP-based transports (required for streamable_http, sse, websocket)"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "description": "Custom HTTP headers for authentication and configuration",
+                          "patternProperties": { "^.+$": { "type": "string" } },
+                          "default": {}
+                        },
+                        "env": {
+                          "type": "object",
+                          "description": "Environment variables for the MCP server process (used with stdio transport)",
+                          "patternProperties": { "^.+$": { "type": "string" } },
+                          "default": {}
+                        },
+                        "cwd": {
+                          "type": "string",
+                          "description": "Working directory for the MCP server process (used with stdio transport)"
+                        },
+                        "timeout": {
+                          "type": "number",
+                          "description": "Connection timeout in seconds",
+                          "minimum": 1,
+                          "maximum": 300,
+                          "default": 30
+                        }
+                      },
+                      "allOf": [
+                        {
+                          "if": { "properties": { "transport": { "const": "stdio" } } },
+                          "then": {
+                            "required": ["command", "args"],
+                            "not": { "required": ["url"] }
+                          }
+                        },
+                        {
+                          "if": { "properties": { "transport": { "enum": ["streamable_http", "sse", "websocket"] } } },
+                          "then": {
+                            "required": ["url"],
+                            "not": { "required": ["command", "args"] }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "default": {}
+                }
+              }
+            },
+            "plugins": {
+              "type": "object",
+              "description": "Plugin integrations",
+              "additionalProperties": false,
+              "properties": {
+                "google": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "credentials_file": {
+                      "type": "string",
+                      "format": "password",
+                      "description": "Path to Google credentials JSON file (sensitive; prefer .env)",
+                      "ui_type": "file",
+                      "ui_file_filter": "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                      "default": "google_credentials.json"
+                    }
+                  }
+                },
+                "jira": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable Jira integration",
+                      "default": false
+                    },
+                    "api_token": {
+                      "type": "string",
+                      "format": "password",
+                      "description": "Jira API token (sensitive; prefer .env)",
+                      "default": ""
+                    },
+                    "username": {
+                      "type": "string",
+                      "description": "Jira username",
+                      "default": ""
+                    },
+                    "instance_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Jira instance URL",
+                      "default": "https://jira.atlassian.net/"
+                    }
+                  }
+                },
+                "openrecall": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable OpenRecall integration",
+                      "default": false
+                    }
+                  }
+                },
+                "brave_search": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable Brave Search integration",
+                      "default": false
+                    },
+                    "api_key": {
+                      "type": "string",
+                      "format": "password",
+                      "description": "Brave Search API key (sensitive; prefer .env)",
+                      "default": ""
+                    }
+                  }
+                },
+                "github": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable GitHub integration",
+                      "default": false
+                    },
+                    "app_id": {
+                      "type": "string",
+                      "description": "GitHub App ID",
+                      "default": ""
+                    },
+                    "app_private_key": {
+                      "type": "string",
+                      "format": "password",
+                      "description": "GitHub App private key (sensitive; prefer .env)",
+                      "default": ""
+                    },
+                    "repository": {
+                      "type": "string",
+                      "description": "GitHub repository",
+                      "default": ""
+                    }
+                  }
+                },
+                "slack": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable Slack integration",
+                      "default": false
+                    },
+                    "user_token": {
+                      "type": "string",
+                      "format": "password",
+                      "description": "Slack user token (sensitive; prefer .env)",
+                      "default": ""
+                    }
+                  }
+                },
+                "gmail": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable Gmail integration",
+                      "default": false
+                    }
+                  }
+                },
+                "gcalendar": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activate": {
+                      "type": "boolean",
+                      "description": "Enable Google Calendar integration",
+                      "default": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "scheduler": {
+          "type": "object",
+          "description": "Scheduler service for cron jobs and scheduled tasks",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable scheduler service",
+              "default": true
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" }
+          }
+        },
+        "config": {
+          "type": "object",
+          "description": "Config service settings",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable config service",
+              "default": true
+            },
+            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" }
+          }
         }
-    },
-    "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "mesh_sharing": {
+      "type": "object",
+      "description": "Per-service mesh sharing and routing configuration",
+      "additionalProperties": false,
+      "properties": {
+        "share": {
+          "type": "boolean",
+          "description": "Whether to share this service with the network",
+          "default": false
+        },
+        "max_concurrent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum concurrent remote calls",
+          "default": 10
+        },
+        "prefer": {
+          "type": "string",
+          "enum": ["local", "network", "network_only", "local_only"],
+          "description": "Routing preference",
+          "default": "local"
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["local", "network", "error", "none"],
+          "description": "Fallback strategy",
+          "default": "local"
+        }
+      }
+    }
+  }
 }

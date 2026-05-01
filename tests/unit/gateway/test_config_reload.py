@@ -85,7 +85,7 @@ async def test_reload_none_section_triggers_auth_reload(mock_gateway_service):
 def test_permission_settings_defaults():
     """PermissionSettings has sensible defaults."""
     ps = PermissionSettings()
-    assert ps.default_device_permissions == []
+    assert ps.default_pairing_permissions == []
     assert ps.webrtc_auth_timeout_seconds == 10.0
 
 

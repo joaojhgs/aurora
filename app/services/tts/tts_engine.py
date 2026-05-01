@@ -1,12 +1,13 @@
 import asyncio
 import os
-from typing import Optional
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
 from app.services.tts.piper_engine import PiperEngine
 from app.services.tts.service import reduce_volume_except_current, restore_volume_except_current
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Tts
 from app.shared.path_utils import get_project_root
 
 config_api = ConfigAPI()
@@ -46,17 +47,13 @@ def get_voice_sync() -> PiperVoice:
 async def async_get_voice() -> PiperVoice:
     """Get voice configuration asynchronously from config service.
 
-    Uses await config_api.aget() to properly access config in async context.
+    Uses await config_api.aget(ConfigKeys.services.tts, Tts) to load validated TTS config.
     """
     from app.shared.path_utils import resolve_path
 
-    model_file_path = await config_api.aget(
-        "general.text_to_speech.model_file_path", "voice_models/en_US-lessac-medium.onnx"
-    )
-    config_file_path = await config_api.aget(
-        "general.text_to_speech.model_config_file_path",
-        "voice_models/en_US-lessac-medium.onnx.txt",
-    )
+    tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+    model_file_path = tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
+    config_file_path = tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
     model_file = str(resolve_path(model_file_path))
     config_file = str(resolve_path(config_file_path)) if config_file_path else None
     return PiperVoice(model_file=model_file, config_file=config_file)

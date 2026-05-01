@@ -220,6 +220,9 @@ class TestChatbotLLMIntegration:
     async def test_chatbot_llm_not_initialized(self, mock_bus, mock_state):
         """Test chatbot with uninitialized LLM."""
         with (
+            patch(
+                "app.services.orchestrator.agents.chatbot._initialize_llm", new_callable=AsyncMock
+            ),
             patch("app.services.orchestrator.agents.chatbot.llm", None),
             contextlib.suppress(ValueError),
         ):

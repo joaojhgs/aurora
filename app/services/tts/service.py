@@ -23,6 +23,8 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope, MessageBus
 from app.services.tts.piper_engine import PiperEngine
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Tts
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.tts import (
     TTSControl,
@@ -93,17 +95,16 @@ class TTSService(BaseService):
 
         # Fall back to config if env vars not set
         if model_file_env is None:
-            config_path = await config_api.aget(
-                "general.text_to_speech.model_file_path", "voice_models/en_US-lessac-medium.onnx"
-            )
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            config_path = tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
             model_file = resolve_path(config_path)
         else:
             model_file = resolve_path(model_file_env)
 
         if config_file_env is None:
-            config_path = await config_api.aget(
-                "general.text_to_speech.model_config_file_path",
-                "voice_models/en_US-lessac-medium.onnx.txt",
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            config_path = (
+                tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
             )
             config_file = resolve_path(config_path) if config_path else None
         else:
@@ -118,7 +119,10 @@ class TTSService(BaseService):
             model_file, config_file = await self._get_model_paths()
 
             # Get sample rate for caching
-            sample_rate = await config_api.aget("general.text_to_speech.model_sample_rate", 24000)
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            sample_rate = (
+                tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
+            )
 
             # Create Piper voice
             voice = PiperVoice(model_file=model_file, config_file=config_file)
@@ -198,8 +202,8 @@ class TTSService(BaseService):
         # If TTS config changed, reinitialize the engine
         if (
             config_section is None
-            or config_section == "general"
-            or config_section == "text_to_speech"
+            or config_section == "services"
+            or config_section == "services.tts"
         ):
             log_info("TTS configuration changed, reinitializing engine...")
             try:
@@ -209,7 +213,7 @@ class TTSService(BaseService):
                     self._playing = False
 
                 # Reinitialize engine with new config
-                self._initialize_engine()
+                await self._initialize_engine()
                 log_info("TTS engine reinitialized successfully")
             except Exception as e:
                 log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)

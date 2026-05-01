@@ -4,10 +4,11 @@ from collections.abc import Callable
 from threading import RLock
 from typing import Any
 
-from jsonschema import ValidationError, validate
+from pydantic import ValidationError
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.services.config.env_config import ENV_CONFIG_MAP
+from app.shared.config.models import Model as AppConfig
 
 
 class ConfigManager:
@@ -29,7 +30,8 @@ class ConfigManager:
 
     def __init__(self):
         if not hasattr(self, "initialized"):
-            self.config_file = "config.json"
+            # Optional override (e.g. tests); process-mode images bake config.json at /app (see Dockerfiles).
+            self.config_file = os.environ.get("AURORA_CONFIG_FILE", "config.json")
             self.config_lock = RLock()
             self._config = {}
             self._observers = []
@@ -41,18 +43,28 @@ class ConfigManager:
         """Load configuration from JSON file, create default if not exists"""
         try:
             self._schema = self._get_config_schema()  # Ensure schema is loaded
-            if os.path.exists(self.config_file):
+            # Bind mounts sometimes expose `config.json` as a directory (wrong compose context);
+            # fall back to image-baked path used by Dockerfiles.
+            if os.path.isdir(self.config_file):
+                log_warning(
+                    "Config path %r is a directory, not a JSON file; using /app/config.json instead",
+                    self.config_file,
+                )
+                self.config_file = "/app/config.json"
+            # Use isfile — exists() is true for directories and would make open() fail.
+            if os.path.isfile(self.config_file):
                 with open(self.config_file) as f:
                     config_data = json.load(f)
 
-                # Validate the loaded configuration against schema
+                # Validate the loaded configuration against AppConfig Pydantic model
                 try:
-                    self._validate_config(config_data)
-                    self._config = config_data
-                    log_info("Configuration loaded and validated from config.json")
+                    self._config = AppConfig.model_validate(config_data).model_dump(
+                        exclude_unset=False
+                    )
+                    log_info(f"Configuration loaded and validated from {self.config_file}")
                 except ValidationError as e:
-                    log_error(f"Configuration validation failed: {e.message}")
-                    raise RuntimeError(f"Configuration validation failed: {e.message}") from e
+                    log_error(f"Configuration validation failed: {e}")
+                    raise RuntimeError(f"Configuration validation failed: {e}") from e
             else:
                 self._config = self._get_default_config()
                 self.save_config()
@@ -145,7 +157,7 @@ class ConfigManager:
                     config_ref[keys[-1]] = old_value
                 else:
                     del config_ref[keys[-1]]
-                raise ValueError(f"Configuration change rejected: {e.message}") from e
+                raise ValueError(f"Configuration change rejected: {e}") from e
 
             # Save to file if requested
             if save:
@@ -204,19 +216,7 @@ class ConfigManager:
                 return json.load(f)
         except Exception as e:
             log_error(f"Failed to load default config from {defaults_path}: {e}")
-            # Fallback to minimal config if defaults file is missing
-            return {
-                "general": {
-                    "llm": {"provider": "openai"},
-                    "embeddings": {"use_local": True},
-                    "speech_to_text": {"language": "", "ambient_transcription": {"enable": False}},
-                    "text_to_speech": {},
-                    "hardware_acceleration": {},
-                },
-                "ui": {"activate": False, "dark_mode": False, "debug": False},
-                "plugins": {},
-                "mcp": {"enabled": True, "servers": {}},
-            }
+            return AppConfig().model_dump(exclude_unset=False)
 
     def clean_empty_strings(self, save: bool = True) -> int:
         """Remove empty string values from configuration and return count of cleaned fields"""
@@ -408,7 +408,7 @@ class ConfigManager:
         metadata.update(
             {
                 # Dictionaries that should NOT be expanded (treat as single JSON fields)
-                "plugins.jira.env": {
+                "services.tooling.plugins.jira.env": {
                     "expand_dict": False,
                     "type": "dict",
                     "description": "Environment variables for Jira plugin",
@@ -419,14 +419,28 @@ class ConfigManager:
         return metadata
 
     def _validate_config(self, config_data: dict[str, Any]) -> None:
-        """Validate configuration data against the schema"""
+        """Validate configuration data against the Pydantic model and JSON Schema.
+
+        Pydantic validation is strict (raises on failure).
+        JSON Schema validation is advisory (logs warnings for constraint
+        violations like patternProperties that Pydantic codegen cannot model).
+        """
+        AppConfig.model_validate(config_data)
+        self._validate_json_schema(config_data)
+
+    def _validate_json_schema(self, config_data: dict[str, Any]) -> None:
+        """Run JSON Schema validation and log constraint violations as warnings."""
+        if not self._schema:
+            return
         try:
-            validate(instance=config_data, schema=self._schema)
-        except ValidationError as e:
-            # Re-raise with more context
-            raise ValidationError(
-                f"Configuration validation failed at '{e.json_path}': {e.message}"
-            ) from e
+            import jsonschema
+
+            validator = jsonschema.Draft7Validator(self._schema)
+            for error in validator.iter_errors(config_data):
+                path = ".".join(str(p) for p in error.absolute_path) or "(root)"
+                log_warning("JSON Schema constraint violation at %s: %s", path, error.message)
+        except Exception as e:
+            log_warning("JSON Schema validation could not run: %s", e)
 
     def validate_current_config(self) -> list[str]:
         """Validate current configuration and return list of validation errors"""
@@ -447,45 +461,74 @@ class ConfigManager:
         """Validate configuration and return list of validation errors"""
         errors = []
 
-        # Validate LLM configuration (canonical paths under general.*)
-        provider = self.get("general.llm.provider")
+        # Validate LLM configuration (canonical paths under services.orchestrator.llm.*)
+        provider = self.get("services.orchestrator.llm.provider")
         if not provider:
             errors.append("No LLM provider specified")
         else:
             if provider == "openai":
-                if not self.get("general.llm.third_party.openai.options.model"):
+                if not self.get("services.orchestrator.llm.third_party.openai.options.model"):
                     errors.append("OpenAI model not specified")
             elif provider == "huggingface_endpoint":
-                if not self.get("general.llm.third_party.huggingface_endpoint.options.endpoint_url"):
+                if not self.get(
+                    "services.orchestrator.llm.third_party.huggingface_endpoint.options.endpoint_url"
+                ):
                     errors.append("HuggingFace endpoint URL not specified")
-                if not self.get("general.llm.third_party.huggingface_endpoint.options.access_token"):
+                if not self.get(
+                    "services.orchestrator.llm.third_party.huggingface_endpoint.options.access_token"
+                ):
                     errors.append("HuggingFace access token not specified")
             elif provider == "huggingface_pipeline":
-                if not self.get("general.llm.local.huggingface_pipeline.options.model"):
+                if not self.get(
+                    "services.orchestrator.llm.local.huggingface_pipeline.options.model"
+                ):
                     errors.append("HuggingFace Pipeline model not specified")
             elif provider == "llama_cpp":
-                model_path = self.get("general.llm.local.llama_cpp.options.model_path")
+                model_path = self.get(
+                    "services.orchestrator.llm.local.llama_cpp.options.model_path"
+                )
                 if not model_path:
                     errors.append("Llama.cpp model path not specified")
                 elif not os.path.exists(model_path):
                     errors.append(f"Llama.cpp model file not found: {model_path}")
 
         # Validate TTS model paths exist
-        tts_model = self.get("general.text_to_speech.model_file_path")
+        tts_model = self.get("services.tts.model_file_path")
         if tts_model and not os.path.exists(tts_model.lstrip("/")):
             errors.append(f"TTS model file not found: {tts_model}")
 
-        # Validate hardware acceleration configuration
-        hw_accel_keys = ["tts", "stt", "ocr_bg", "ocr_curr", "llm"]
-        for key in hw_accel_keys:
-            value = self.get(f"general.hardware_acceleration.{key}")
-            if not isinstance(value, bool):
+        hw_accel_paths = [
+            "services.tts.hardware_acceleration",
+            "services.stt.hardware_acceleration",
+            "services.orchestrator.hardware_acceleration",
+        ]
+        for path in hw_accel_paths:
+            value = self.get(path)
+            if value is not None and not isinstance(value, bool):
                 errors.append(
-                    f"Hardware acceleration setting general.hardware_acceleration.{key} must be boolean, got {type(value)}"
+                    f"Hardware acceleration setting {path} must be boolean, got {type(value)}"
                 )
 
         return errors
 
 
-# Global instance
-config_manager = ConfigManager()
+_lazy_global_config_manager: ConfigManager | None = None
+
+
+def get_config_manager() -> ConfigManager:
+    """Return the process-wide ConfigManager singleton (lazy).
+
+    Avoid eager ``ConfigManager()`` at import time so non-config processes
+    that accidentally import this module do not create ``config.json``.
+    """
+    global _lazy_global_config_manager
+    if _lazy_global_config_manager is None:
+        _lazy_global_config_manager = ConfigManager()
+    return _lazy_global_config_manager
+
+
+def __getattr__(name: str) -> Any:
+    """Backward-compatible ``from app.services.config.config_manager import config_manager``."""
+    if name == "config_manager":
+        return get_config_manager()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

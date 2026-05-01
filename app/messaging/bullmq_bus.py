@@ -281,6 +281,53 @@ class BullMQBus:
             f"Job {job.id} moved to dead-letter: {error}", exc_info=bool(error) if error else False
         )
 
+    @staticmethod
+    def _is_ephemeral_reply_queue_name(name: str) -> bool:
+        """True for per-request RPC reply queues (``reply.{Model}.{uuid}``)."""
+        return name.startswith("reply.")
+
+    async def _async_teardown_topic(self, topic: str) -> None:
+        """Close and drop BullMQ worker/queue for a one-shot ``reply.*`` consumer.
+
+        ``request()`` subscribes a unique ``reply.{Model}.{uuid}`` per call; without
+        teardown, each call leaks a Worker (and FDs) until EMFILE.
+        """
+        if not self._is_ephemeral_reply_queue_name(topic):
+            return
+        if self._handlers.get(topic):
+            return
+
+        self._handlers.pop(topic, None)
+
+        worker = self._workers.pop(topic, None)
+        if worker is not None:
+            try:
+                await worker.close()
+                log_debug(f"Tore down BullMQ worker for ephemeral reply queue: {topic}")
+            except Exception as e:
+                log_debug(f"Error closing worker for {topic}: {e}")
+
+        queue = self._queues.pop(topic, None)
+        if queue is not None:
+            try:
+                await queue.close()
+                log_debug(f"Tore down BullMQ queue for ephemeral reply: {topic}")
+            except Exception as e:
+                log_debug(f"Error closing queue for {topic}: {e}")
+
+    async def _async_close_ephemeral_reply_queue_after_publish(self, queue_name: str) -> None:
+        """Responders only ``publish`` to ``reply.*``; drop the Queue after ``add`` to avoid FD leaks."""
+        if not self._is_ephemeral_reply_queue_name(queue_name):
+            return
+        queue = self._queues.pop(queue_name, None)
+        if queue is None:
+            return
+        try:
+            await queue.close()
+            log_debug(f"Closed ephemeral reply publish queue: {queue_name}")
+        except Exception as e:
+            log_debug(f"Error closing ephemeral reply queue {queue_name}: {e}")
+
     def _topic_matches(self, topic: str, pattern: str) -> bool:
         """Check if a topic matches a subscription pattern.
 
@@ -403,6 +450,9 @@ class BullMQBus:
             f"with priority {priority}"
         )
 
+        # One-shot reply jobs: do not keep Queue clients forever (each unique reply_to leaks FDs).
+        await self._async_close_ephemeral_reply_queue_after_publish(queue_name)
+
     async def request(
         self,
         topic: str,
@@ -465,11 +515,7 @@ class BullMQBus:
 
             if isinstance(result_data, dict) and "ok" in result_data:
                 fut.set_result(QueryResult(**result_data))
-            elif (
-                isinstance(result_data, dict)
-                and "error" in result_data
-                and result_data["error"]
-            ):
+            elif isinstance(result_data, dict) and "error" in result_data and result_data["error"]:
                 error_msg = result_data.get("error", "Unknown service error")
                 fut.set_result(QueryResult(ok=False, error=error_msg, data=result_data))
             else:
@@ -506,6 +552,7 @@ class BullMQBus:
         finally:
             self._response_futures.pop(correlation_id, None)
             self.unsubscribe(reply_topic, _on_reply)
+            await self._async_teardown_topic(reply_topic)
 
     def get_stats(self) -> dict:
         """Get bus statistics.

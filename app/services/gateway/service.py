@@ -11,8 +11,22 @@ import os
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import (
+    Auth as AuthConfigModel,
+    Gateway as GatewayConfigModel,
+    MeshSharing,
+)
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.services.base_service import BaseService
+
+
+def _config_secret_plain(val: Any) -> Any:
+    if val is None:
+        return None
+    if hasattr(val, "get_secret_value"):
+        return val.get_secret_value()
+    return val
 
 
 class GatewayService(BaseService):
@@ -63,7 +77,7 @@ class GatewayService(BaseService):
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration."""
-        if config_section is None or config_section == "gateway":
+        if config_section in (None, "services", "gateway", "auth"):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
@@ -78,6 +92,7 @@ class GatewayService(BaseService):
             from app.services.gateway.config import (
                 APISettings,
                 MeshConfig,
+                MeshServiceConfig,
                 MQTTSettings,
                 PermissionSettings,
                 Settings,
@@ -86,28 +101,76 @@ class GatewayService(BaseService):
             from app.shared.config.interface import ConfigAPI
 
             config_api = ConfigAPI()
-            all_config = await config_api.aget_config()
 
-            # Extract gateway section and map to Settings structure
-            gateway = all_config.get("gateway", {})
-            webrtc = gateway.get("webrtc", {}) if gateway else {}
-            signaling_mqtt = gateway.get("signaling_mqtt", {}) if gateway else {}
-            permissions = gateway.get("permissions", {}) if gateway else {}
-            mesh = gateway.get("mesh", {}) if gateway else {}
+            gw_conf = await config_api.aget(
+                ConfigKeys.services.gateway,
+                GatewayConfigModel,
+                config_timeout=20.0,
+            )
+            auth_conf = await config_api.aget(
+                ConfigKeys.services.auth,
+                AuthConfigModel,
+                config_timeout=20.0,
+            )
+
+            gw_d = gw_conf.model_dump(mode="python")
+            auth_d = auth_conf.model_dump(mode="python")
+
+            api_d = dict(gw_d.get("api") or {})
+            if "token_secret" in api_d:
+                api_d["token_secret"] = _config_secret_plain(api_d.get("token_secret"))
+
+            gateway_for_api = {k: v for k, v in gw_d.items() if k != "api"}
+            gateway_for_api.update(api_d)
+            gateway_for_api["auth"] = dict(auth_d)
+            raw_keys = gateway_for_api["auth"].get("api_keys")
+            if raw_keys:
+                gateway_for_api["auth"]["api_keys"] = [_config_secret_plain(x) for x in raw_keys]
+
+            mesh = dict(gw_d.get("mesh_network") or {})
+
+            async def _mesh_service_config(mesh_key: str) -> MeshServiceConfig:
+                ms = await config_api.aget(mesh_key, MeshSharing, config_timeout=20.0)
+                return MeshServiceConfig.model_validate(ms.model_dump())
+
+            mesh["services"] = {
+                "STTCoordinator": await _mesh_service_config(
+                    ConfigKeys.services.stt.coordinator.mesh_sharing
+                ),
+                "WakeWord": await _mesh_service_config(
+                    ConfigKeys.services.stt.wakeword.mesh_sharing
+                ),
+                "Transcription": await _mesh_service_config(
+                    ConfigKeys.services.stt.transcription.mesh_sharing
+                ),
+                "DB": await _mesh_service_config(ConfigKeys.services.db.mesh_sharing),
+                "TTS": await _mesh_service_config(ConfigKeys.services.tts.mesh_sharing),
+                "Tooling": await _mesh_service_config(ConfigKeys.services.tooling.mesh_sharing),
+                "Scheduler": await _mesh_service_config(ConfigKeys.services.scheduler.mesh_sharing),
+                "Orchestrator": await _mesh_service_config(
+                    ConfigKeys.services.orchestrator.mesh_sharing
+                ),
+            }
+
+            webrtc_d = dict(gw_d.get("webrtc") or {})
+            if webrtc_d:
+                webrtc_d["password"] = _config_secret_plain(webrtc_d.get("password")) or ""
+
+            mqtt_d = dict(gw_d.get("signaling_mqtt") or {})
 
             return Settings(
-                api=APISettings.from_gateway_dict(gateway),
-                webrtc=WebRTCSettings.model_validate(webrtc) if webrtc else WebRTCSettings(),
-                signaling_mqtt=MQTTSettings.model_validate(signaling_mqtt)
-                if signaling_mqtt
-                else MQTTSettings(),
-                permissions=PermissionSettings.model_validate(permissions)
-                if permissions
+                api=APISettings.from_gateway_dict(gateway_for_api),
+                webrtc=WebRTCSettings.model_validate(webrtc_d) if webrtc_d else WebRTCSettings(),
+                signaling_mqtt=MQTTSettings.model_validate(mqtt_d) if mqtt_d else MQTTSettings(),
+                permissions=PermissionSettings.model_validate(auth_d)
+                if auth_d
                 else PermissionSettings(),
                 mesh=MeshConfig.model_validate(mesh) if mesh else MeshConfig(),
             )
 
         except Exception as e:
+            from app.helpers.aurora_logger import log_warning
+
             log_warning(f"Failed to get gateway config, using defaults: {e}")
             from app.services.gateway.config import Settings
 
@@ -126,22 +189,37 @@ class GatewayService(BaseService):
         # (required for JWT signing and mesh inbound token encryption at rest)
         if config.auth_enabled:
             try:
-                from app.services.config.config_manager import ConfigManager
                 from dotenv import set_key
 
-                _cfg_mgr = ConfigManager()
+                from app.shared.config.interface import ConfigAPI
+
+                cfg_api = ConfigAPI()
                 has_env = bool(os.environ.get("AURORA_TOKEN_SECRET"))
-                gateway = _cfg_mgr._config.get("gateway") or {}
-                has_config = bool(gateway.get("token_secret"))
+                existing_secret = await cfg_api.aget(
+                    ConfigKeys.services.gateway.api.token_secret,
+                    default="",
+                    config_timeout=20.0,
+                )
+                plain_secret = _config_secret_plain(existing_secret)
+                has_config = bool(str(plain_secret).strip()) if plain_secret is not None else False
                 if not has_env and not has_config:
                     env_path = ".env"
                     if not os.path.exists(env_path):
                         open(env_path, "a").close()
                     set_key(env_path, "AURORA_TOKEN_SECRET", config.token_secret)
                     os.environ["AURORA_TOKEN_SECRET"] = config.token_secret
+                    persisted = await cfg_api.aupdate_config(
+                        ConfigKeys.services.gateway.api.token_secret,
+                        config.token_secret,
+                        timeout=20.0,
+                    )
+                    if not persisted:
+                        log_warning(
+                            "token_secret written to .env but Config.Set failed — "
+                            "other services may not see services.gateway.api.token_secret until config is updated"
+                        )
                     log_info(
-                        "Auto-generated token_secret and saved to .env "
-                        "(used for JWT signing and mesh inbound token encryption)."
+                        "Auto-generated token_secret (JWT / mesh crypto): .env + ConfigService."
                     )
             except Exception as e:
                 log_warning(f"Could not persist token_secret to .env: {e}")
@@ -224,27 +302,39 @@ class GatewayService(BaseService):
             try:
                 import secrets as _secrets
 
-                from app.services.config.config_manager import ConfigManager
+                from app.shared.config.interface import ConfigAPI
 
-                _cfg_mgr = ConfigManager()
+                cfg_api = ConfigAPI()
 
                 if settings.webrtc.room in ("default", ""):
                     new_room = f"aurora-{_secrets.token_hex(8)}"
-                    _cfg_mgr.set("gateway.webrtc.room", new_room)
+                    ok = await cfg_api.aupdate_config(
+                        ConfigKeys.services.gateway.webrtc.room, new_room
+                    )
+                    if not ok:
+                        log_warning(
+                            "Could not persist WebRTC room via Config.Set; using in-memory value only"
+                        )
                     settings.webrtc.room = new_room
                     config_changed = True
                     log_info(f"Auto-generated WebRTC room ID: {new_room}")
 
                 if not settings.webrtc.password:
                     new_password = _secrets.token_urlsafe(32)
-                    _cfg_mgr.set("gateway.webrtc.password", new_password)
+                    ok = await cfg_api.aupdate_config(
+                        ConfigKeys.services.gateway.webrtc.password, new_password
+                    )
+                    if not ok:
+                        log_warning(
+                            "Could not persist WebRTC password via Config.Set; using in-memory value only"
+                        )
                     settings.webrtc.password = new_password
                     config_changed = True
                     log_info("Auto-generated WebRTC room password")
 
                 if config_changed:
                     log_info(
-                        "Room credentials auto-generated and saved to config.json. "
+                        "Room credentials auto-generated and persisted via ConfigService. "
                         "Use 'python scripts/config_updater.py --room-export' to share with other devices."
                     )
             except Exception as e:

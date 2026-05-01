@@ -3,8 +3,13 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT"
+
 COMPOSE_FILE="docker-compose.process.yml"
 CONFIG_FILE="config.json"
+COMPOSE_PROJECT="${AURORA_COMPOSE_PROJECT:-aurora-process}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -68,18 +73,26 @@ main() {
     check_docker
     check_config
     create_directories
-    
+
+    if [ ! -f "${ROOT}/.env" ]; then
+        print_warning "No .env in repo root — copy .env.example to .env for secrets and optional compose vars."
+    fi
+
+
+
+
     print_info ""
-    print_info "Starting Aurora services in process mode..."
-    print_info "Use 'docker-compose -f $COMPOSE_FILE logs -f' to view logs"
-    print_info "Use 'docker-compose -f $COMPOSE_FILE down' to stop services"
+    print_info "Starting Aurora services in process mode (project: $COMPOSE_PROJECT)..."
+    print_info "Use 'docker compose -p $COMPOSE_PROJECT -f $COMPOSE_FILE logs -f' to view logs"
+    print_info "Use 'docker compose -p $COMPOSE_PROJECT -f $COMPOSE_FILE down' to stop services"
     print_info ""
+    eval "$(python scripts/config_to_docker_env.py --format shell)"
     
     # Use docker compose (v2) or docker-compose (v1)
     if docker compose version &> /dev/null; then
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" up -d
     else
-        docker-compose -f "$COMPOSE_FILE" up -d
+        docker-compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" up -d
     fi
     
     if [ $? -eq 0 ]; then
@@ -87,10 +100,10 @@ main() {
         print_info "✓ All services started successfully!"
         print_info ""
         print_info "Services are running. Check status with:"
-        print_info "  docker-compose -f $COMPOSE_FILE ps"
+        print_info "  docker compose -p $COMPOSE_PROJECT -f $COMPOSE_FILE ps"
         print_info ""
         print_info "View logs with:"
-        print_info "  docker-compose -f $COMPOSE_FILE logs -f"
+        print_info "  docker compose -p $COMPOSE_PROJECT -f $COMPOSE_FILE logs -f"
     else
         print_error "Failed to start services"
         exit 1

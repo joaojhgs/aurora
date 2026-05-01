@@ -1,0 +1,33 @@
+# Gateway Service Dockerfile — HTTP API, WebRTC, mesh signaling
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+RUN pip install uv
+
+COPY --chown=aurora:aurora pyproject.toml ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+
+RUN uv pip install --system --no-cache -e .[gateway,mode-processes]
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+EXPOSE 8000
+
+USER aurora
+
+CMD ["python", "-m", "app.services.gateway"]

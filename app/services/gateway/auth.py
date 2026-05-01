@@ -83,7 +83,7 @@ class GatewayAuth:
         return api_key in self._api_keys
 
     async def authenticate_token(self, token_str: str) -> Any | None:
-        """Authenticate a token using AuthService.
+        """Authenticate a token via ``auth_service`` (typically :class:`BusAuthProxy`).
 
         Args:
             token_str: The token string to validate

@@ -7,72 +7,68 @@ The orchestrator service supports multiple LLM provider modes with different Doc
 ### 1. OpenAI (Default)
 - **Image Size**: ~200MB
 - **Dependencies**: langchain-core, langchain-openai, langgraph, Jinja2
-- **Configuration**: Set `general.llm.provider=openai` in `config.json`
+- **Configuration**: Set `services.orchestrator.llm.provider=openai` in `config.json`
 - **Use Case**: When you have OpenAI API access and want a smaller, faster image
 
 ### 2. HuggingFace Endpoint
 - **Image Size**: ~250MB
 - **Dependencies**: Above + langchain-huggingface (endpoint only)
-- **Configuration**: Set `general.llm.provider=huggingface_endpoint` in `config.json`
+- **Configuration**: Set `services.orchestrator.llm.provider=huggingface_endpoint` in `config.json`
 - **Use Case**: When you have HuggingFace endpoint API access
 
 ### 3. HuggingFace Local Pipeline
 - **Image Size**: ~7GB
 - **Dependencies**: Above + langchain-huggingface (pipeline) + torch + transformers + sentence-transformers
-- **Configuration**: Set `general.llm.provider=huggingface_pipeline` in `config.json`
+- **Configuration**: Set `services.orchestrator.llm.provider=huggingface_pipeline` in `config.json`
 - **Use Case**: When you want to run HuggingFace models locally without API calls
 
 ### 4. Llama.cpp CPU
 - **Image Size**: ~700MB
 - **Dependencies**: Above + llama-cpp-python (CPU)
-- **Configuration**: Set `general.llm.provider=llama_cpp` in `config.json`
+- **Configuration**: Set `services.orchestrator.llm.provider=llama_cpp` in `config.json`
 - **Use Case**: When you want to run llama.cpp models locally on CPU
 
 ### 5. Llama.cpp CUDA
 - **Image Size**: ~700MB
 - **Dependencies**: Above + llama-cpp-python[cuda]
-- **Configuration**: Set `general.llm.provider=llama_cpp` in `config.json` with CUDA support
+- **Configuration**: Set `services.orchestrator.llm.provider=llama_cpp` in `config.json` with CUDA support
 - **Use Case**: When you want to run llama.cpp models locally with GPU acceleration
 
 ## Docker Usage
 
-### Using Build Args (Recommended)
+### Using Config-Driven Make Targets (Recommended)
 
 #### OpenAI (Default)
 ```bash
-# Build with OpenAI (default)
-docker-compose -f docker-compose.process.yml build orchestrator-service
+# Build from services.orchestrator.llm in config.json
+make docker-orchestrator-build
 
-# Or explicitly set the mode
-ORCHESTRATOR_LLM_MODE=openai docker-compose -f docker-compose.process.yml build orchestrator-service
+# Or explicitly build the OpenAI variant
+make docker-orchestrator-build-openai
 ```
 
 #### HuggingFace Endpoint
 ```bash
 # Build with HuggingFace endpoint
-ORCHESTRATOR_LLM_MODE=huggingface-endpoint docker-compose -f docker-compose.process.yml build orchestrator-service
+make docker-orchestrator-build-hf-endpoint
 ```
 
 #### HuggingFace Local Pipeline
 ```bash
 # Build with local HuggingFace pipeline
-ORCHESTRATOR_LLM_MODE=huggingface-local docker-compose -f docker-compose.process.yml build orchestrator-service
-
-# Or set it in your shell environment
-export ORCHESTRATOR_LLM_MODE=huggingface-local
-docker-compose -f docker-compose.process.yml build orchestrator-service
+make docker-orchestrator-build-hf-local
 ```
 
 #### Llama.cpp CPU
 ```bash
 # Build with llama.cpp CPU
-ORCHESTRATOR_LLM_MODE=llama-cpp docker-compose -f docker-compose.process.yml build orchestrator-service
+make docker-orchestrator-build-llama-cpp
 ```
 
 #### Llama.cpp CUDA
 ```bash
 # Build with llama.cpp CUDA
-ORCHESTRATOR_LLM_MODE=llama-cpp-cuda docker-compose -f docker-compose.process.yml build orchestrator-service
+make docker-orchestrator-build-llama-cpp-cuda
 ```
 
 ### Using Makefile
@@ -110,19 +106,21 @@ The LLM provider mode is controlled by `config.json`:
 
 ```json
 {
-  "general": {
-    "llm": {
-      "provider": "openai"  // Options: "openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"
+  "services": {
+    "orchestrator": {
+      "llm": {
+        "provider": "openai"
+      }
     }
   }
 }
 ```
 
 **Important**: The Docker image must match your configuration:
-- If `provider=openai`: Use `ORCHESTRATOR_LLM_MODE=openai` (or default)
-- If `provider=huggingface_endpoint`: Use `ORCHESTRATOR_LLM_MODE=huggingface-endpoint`
-- If `provider=huggingface_pipeline`: Use `ORCHESTRATOR_LLM_MODE=huggingface-local`
-- If `provider=llama_cpp`: Use `ORCHESTRATOR_LLM_MODE=llama-cpp` or `llama-cpp-cuda`
+- If `provider=openai`: `make docker-orchestrator-build` emits `ORCHESTRATOR_LLM_MODE=openai`
+- If `provider=huggingface_endpoint`: `make docker-orchestrator-build` emits `ORCHESTRATOR_LLM_MODE=huggingface-endpoint`
+- If `provider=huggingface_pipeline`: `make docker-orchestrator-build` emits `ORCHESTRATOR_LLM_MODE=huggingface-local`
+- If `provider=llama_cpp`: `make docker-orchestrator-build` emits `ORCHESTRATOR_LLM_MODE=llama-cpp`
 
 ## Size Comparison
 
@@ -137,14 +135,14 @@ The LLM provider mode is controlled by `config.json`:
 ## Switching Between Modes
 
 ### From OpenAI to HuggingFace Local
-1. Update `config.json`: Set `general.llm.provider=huggingface_pipeline`
-2. Rebuild orchestrator: `ORCHESTRATOR_LLM_MODE=huggingface-local docker-compose -f docker-compose.process.yml build orchestrator-service`
-3. Restart: `docker-compose -f docker-compose.process.yml up -d orchestrator-service`
+1. Update `config.json`: Set `services.orchestrator.llm.provider=huggingface_pipeline`
+2. Rebuild orchestrator: `make docker-orchestrator-build`
+3. Restart: `make docker-process-up`
 
 ### From HuggingFace Local to OpenAI
-1. Update `config.json`: Set `general.llm.provider=openai`
-2. Rebuild orchestrator: `ORCHESTRATOR_LLM_MODE=openai docker-compose -f docker-compose.process.yml build orchestrator-service`
-3. Restart: `docker-compose -f docker-compose.process.yml up -d orchestrator-service`
+1. Update `config.json`: Set `services.orchestrator.llm.provider=openai`
+2. Rebuild orchestrator: `make docker-orchestrator-build`
+3. Restart: `make docker-process-up`
 
 ## Troubleshooting
 
@@ -174,15 +172,10 @@ The LLM provider mode is controlled by `config.json`:
    - You have sufficient disk space and build time
 4. **Use llama.cpp** when you want local models with smaller footprint than HuggingFace
 
-## Environment Variables
+## Inspect Generated Build Args
 
-You can set `ORCHESTRATOR_LLM_MODE` as an environment variable:
+The supported Make/scripts workflows derive `ORCHESTRATOR_LLM_MODE` from config:
 
 ```bash
-# In .env file or export
-export ORCHESTRATOR_LLM_MODE=huggingface-local
-
-# Then use normally
-docker-compose -f docker-compose.process.yml up -d
+python scripts/config_to_docker_env.py --format env
 ```
-

@@ -65,11 +65,11 @@ class TestExportImport:
         # Mock ConfigManager for export
         export_config = MagicMock()
         export_config.get.side_effect = lambda key, default=None: {
-            "gateway.webrtc.room": "aurora-test123",
-            "gateway.webrtc.password": "super-secret",
-            "gateway.webrtc.app_id": "aurora",
-            "gateway.signaling_mqtt.brokers": ["wss://broker.emqx.io:8084/mqtt"],
-            "gateway.signaling_mqtt.topic_root": "aurora",
+            "services.gateway.webrtc.room": "aurora-test123",
+            "services.gateway.webrtc.password": "super-secret",
+            "services.gateway.webrtc.app_id": "aurora",
+            "services.gateway.signaling_mqtt.brokers": ["wss://broker.emqx.io:8084/mqtt"],
+            "services.gateway.signaling_mqtt.topic_root": "aurora",
         }.get(key, default)
 
         # Capture the invite code from export
@@ -111,9 +111,11 @@ class TestExportImport:
 
             import_room_invite(invite_code, passphrase="test123")
 
-        assert set_calls["gateway.webrtc.room"] == "aurora-test123"
-        assert set_calls["gateway.webrtc.password"] == "super-secret"
-        assert set_calls["gateway.signaling_mqtt.brokers"] == ["wss://broker.emqx.io:8084/mqtt"]
+        assert set_calls["services.gateway.webrtc.room"] == "aurora-test123"
+        assert set_calls["services.gateway.webrtc.password"] == "super-secret"
+        assert set_calls["services.gateway.signaling_mqtt.brokers"] == [
+            "wss://broker.emqx.io:8084/mqtt"
+        ]
 
     def test_export_fails_on_default_room(self, monkeypatch):
         """Export fails when room is still at default."""
@@ -121,8 +123,8 @@ class TestExportImport:
 
         config = MagicMock()
         config.get.side_effect = lambda key, default=None: {
-            "gateway.webrtc.room": "default",
-            "gateway.webrtc.password": "",
+            "services.gateway.webrtc.room": "default",
+            "services.gateway.webrtc.password": "",
         }.get(key, default)
 
         with patch("scripts.config_updater.ConfigManager", return_value=config):
@@ -165,10 +167,10 @@ class TestExportImport:
 
         # Only gateway keys should be set
         expected_keys = {
-            "gateway.webrtc.app_id",
-            "gateway.webrtc.room",
-            "gateway.webrtc.password",
-            "gateway.signaling_mqtt.brokers",
-            "gateway.signaling_mqtt.topic_root",
+            "services.gateway.webrtc.app_id",
+            "services.gateway.webrtc.room",
+            "services.gateway.webrtc.password",
+            "services.gateway.signaling_mqtt.brokers",
+            "services.gateway.signaling_mqtt.topic_root",
         }
         assert set(set_calls.keys()) == expected_keys

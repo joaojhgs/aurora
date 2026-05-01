@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "tilt-mcp": {
+      "command": "uvx",
+      "args": ["--from", "tilt-mcp==0.1.3", "tilt-mcp"]
+    },
+    "gitnexus": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"gitnexus@latest",
+				"mcp"
+			]
+		}
+  }
+}

@@ -41,51 +41,51 @@ COPY --chown=aurora:aurora modules/ modules/
 RUN case "$ORCHESTRATOR_LLM_MODE" in \
         "openai") \
             echo "Installing orchestrator with OpenAI (smaller - ~200MB)"; \
-            uv pip install --no-cache -e .[service-orchestrator,mode-processes]; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
             ;; \
         "huggingface-endpoint") \
             echo "Installing orchestrator with HuggingFace endpoint (small - ~250MB)"; \
-            uv pip install --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-endpoint,mode-processes]; \
+            uv pip install --system --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-endpoint,mode-processes]; \
             ;; \
         "huggingface-local") \
             echo "Installing orchestrator with HuggingFace local pipeline (larger - ~7GB)"; \
-            uv pip install --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-local,mode-processes]; \
+            uv pip install --system --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-local,mode-processes]; \
             ;; \
         "llama-cpp"*) \
             echo "Installing orchestrator with llama.cpp (hardware: $ORCHESTRATOR_HARDWARE)"; \
-            uv pip install --no-cache -e .[service-orchestrator,mode-processes]; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
             # Install llama-cpp-python based on hardware
             case "$ORCHESTRATOR_HARDWARE" in \
                 cuda) \
-                    uv pip install llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/ || \
-                    uv pip install llama-cpp-python[cuda]; \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/ || \
+                    uv pip install --system llama-cpp-python[cuda]; \
                     ;; \
                 rocm) \
-                    uv pip install llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/rocm/ || \
-                    CMAKE_ARGS="-DGGML_HIPBLAS=ON" uv pip install llama-cpp-python; \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/rocm/ || \
+                    CMAKE_ARGS="-DGGML_HIPBLAS=ON" uv pip install --system llama-cpp-python; \
                     ;; \
                 metal) \
-                    uv pip install llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/metal/ || \
-                    CMAKE_ARGS="-DGGML_METAL=ON" uv pip install llama-cpp-python; \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/metal/ || \
+                    CMAKE_ARGS="-DGGML_METAL=ON" uv pip install --system llama-cpp-python; \
                     ;; \
                 vulkan) \
-                    CMAKE_ARGS="-DGGML_VULKAN=ON" uv pip install llama-cpp-python; \
+                    CMAKE_ARGS="-DGGML_VULKAN=ON" uv pip install --system llama-cpp-python; \
                     ;; \
                 sycl) \
-                    CMAKE_ARGS="-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" uv pip install llama-cpp-python; \
+                    CMAKE_ARGS="-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" uv pip install --system llama-cpp-python; \
                     ;; \
                 rpc) \
-                    CMAKE_ARGS="-DGGML_RPC=ON" uv pip install llama-cpp-python; \
+                    CMAKE_ARGS="-DGGML_RPC=ON" uv pip install --system llama-cpp-python; \
                     ;; \
                 *) \
-                    uv pip install llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cpu/ || \
-                    CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" uv pip install llama-cpp-python; \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cpu/ || \
+                    CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" uv pip install --system llama-cpp-python; \
                     ;; \
             esac; \
             ;; \
         *) \
             echo "Unknown ORCHESTRATOR_LLM_MODE: $ORCHESTRATOR_LLM_MODE, defaulting to openai"; \
-            uv pip install --no-cache -e .[service-orchestrator,mode-processes]; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
             ;; \
     esac
 

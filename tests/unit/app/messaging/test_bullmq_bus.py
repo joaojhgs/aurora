@@ -234,6 +234,70 @@ class TestBullMQBusInterface:
         assert result.ok is False
         assert "timeout" in result.error.lower()
 
+        # Ephemeral reply worker must be torn down (EMFILE fix — phase 1)
+        reply_workers = [k for k in bus._workers if k.startswith("reply.")]
+        assert reply_workers == []
+        mock_bullmq["worker_instance"].close.assert_called()
+
+    async def test_request_teardown_skips_when_handlers_remain(self, mock_bullmq):
+        """Do not close worker if another handler is still subscribed to the reply topic."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        other = AsyncMock()
+        reply_topic = "reply.SampleMessage.keep-me"
+
+        bus.subscribe(reply_topic, other)
+        mock_bullmq["Worker"].reset_mock()
+        mock_bullmq["worker_instance"].close.reset_mock()
+
+        await bus._async_teardown_topic(reply_topic)
+
+        assert reply_topic in bus._workers
+        mock_bullmq["worker_instance"].close.assert_not_called()
+
+        bus.unsubscribe(reply_topic, other)
+        await bus._async_teardown_topic(reply_topic)
+
+        assert reply_topic not in bus._workers
+        mock_bullmq["worker_instance"].close.assert_called()
+
+    async def test_publish_closes_ephemeral_reply_queue(self, mock_bullmq):
+        """Publishing to reply.* must not leave Queue clients in _queues forever."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        message = SampleMessage(content="reply-body")
+        topic = "reply.SampleMessage.test-uuid"
+
+        await bus.publish(topic, message, event=False, correlation_id="test-uuid")
+
+        assert topic not in bus._queues
+        mock_bullmq["queue_instance"].close.assert_called()
+
+    async def test_multiple_requests_do_not_accumulate_reply_workers(self, mock_bullmq):
+        """Each timed-out request must drop its reply.* worker."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        message = SampleMessage(content="x")
+        for _ in range(5):
+            result = await bus.request(
+                "TTS.Request",
+                message,
+                priority=10,
+                timeout=0.01,
+            )
+            assert result.ok is False
+
+        assert not any(k.startswith("reply.") for k in bus._workers)
+
     async def test_get_stats(self):
         """Test get_stats method returns correct statistics."""
         bus = BullMQBus()

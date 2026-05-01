@@ -15,8 +15,6 @@ from typing import Any
 
 from passlib.context import CryptContext
 
-from app.shared.crypto import derive_mesh_inbound_key, open_str, seal_str
-
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import MessageBus
 from app.shared.auth.identity import SYSTEM, Identity, build_identity
@@ -47,6 +45,7 @@ from app.shared.contracts.models.db import (
     DBUpdateTokenScopesRequest,
     DBUpdateUserRequest,
 )
+from app.shared.crypto import derive_mesh_inbound_key, open_str, seal_str
 from app.shared.models.db import Device, MeshCredential, Token, User
 
 # Password hashing configuration
@@ -67,19 +66,27 @@ class AuthManager:
         self.login_attempts: dict[str, int] = {}
         self._mesh_inbound_key: bytes | None = None
 
-    def _get_mesh_inbound_key(self) -> bytes:
-        """Lazy-load encryption key for inbound tokens from gateway config.
+    def invalidate_mesh_inbound_key_cache(self) -> None:
+        """Clear cached mesh crypto key after services.gateway.api.token_secret changes."""
+        self._mesh_inbound_key = None
 
-        The token_secret is persisted by GatewayService when auth is enabled and
-        it was auto-generated, so config should have it before any pairing/load.
+    async def _aget_mesh_inbound_key(self) -> bytes:
+        """Lazy-load encryption key for inbound tokens via ConfigService (bus).
+
+        Must use ``aget`` — sync ``ConfigAPI.get()`` returns default when called
+        from async context and would derive the wrong key.
         """
         if self._mesh_inbound_key is not None:
             return self._mesh_inbound_key
         from app.shared.config.interface import ConfigAPI
 
         config = ConfigAPI()
-        secret = config.get("gateway.token_secret", default="")
-        self._mesh_inbound_key = derive_mesh_inbound_key(secret)
+        from app.shared.config.keys import ConfigKeys
+
+        secret = await config.aget(
+            ConfigKeys.services.gateway.api.token_secret, default="", config_timeout=15.0
+        )
+        self._mesh_inbound_key = derive_mesh_inbound_key(secret or "")
         return self._mesh_inbound_key
 
     # ── Bus helpers ──────────────────────────────────────────────────────
@@ -1139,7 +1146,7 @@ class AuthManager:
         """
         import json as _json
 
-        key = self._get_mesh_inbound_key()
+        key = await self._aget_mesh_inbound_key()
         encrypted_token = seal_str(key, token)
         perms_json = _json.dumps(permissions or [])
         await self._db_request(
@@ -1168,7 +1175,7 @@ class AuthManager:
             _MeshSQL.load_inbound_credentials(room_name, remote_peer_id),
         )
         rows = data.get("rows", []) if data else []
-        key = self._get_mesh_inbound_key()
+        key = await self._aget_mesh_inbound_key()
         result: dict[str, str] = {}
         for r in rows:
             raw = r.get("inbound_token")

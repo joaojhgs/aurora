@@ -75,7 +75,7 @@ def _generate_token_secret() -> str:
 
     This is used as the default so each Aurora instance gets a unique
     secret on first startup.  For persistence across restarts, set
-    ``gateway.token_secret`` in config.json or the AURORA_TOKEN_SECRET
+    ``services.gateway.api.token_secret`` in config.json or the AURORA_TOKEN_SECRET
     environment variable.
     """
     return secrets.token_urlsafe(32)
@@ -96,15 +96,15 @@ class APISettings(BaseModel):
     @classmethod
     def from_gateway_dict(cls, gateway: dict) -> APISettings:
         """Create APISettings from gateway config dict."""
-        cors = gateway.get("cors", {})
-        auth = gateway.get("auth", {})
+        cors = gateway.get("cors") or {}
+        auth = gateway.get("auth") or {}
         auth_enabled = auth.get("enabled", False)
         explicit_secret = gateway.get("token_secret")
 
         if auth_enabled and not explicit_secret:
             log_warning(
                 "Gateway auth is enabled but no token_secret is configured. "
-                "Tokens will be invalidated on restart. Set gateway.token_secret "
+                "Tokens will be invalidated on restart. Set services.gateway.api.token_secret "
                 "in config.json or AURORA_TOKEN_SECRET in .env to persist it."
             )
 
@@ -149,7 +149,7 @@ class MQTTSettings(BaseModel):
 class PermissionSettings(BaseModel):
     """Default permission settings for new principals."""
 
-    default_device_permissions: list[str] = Field(default_factory=list)
+    default_pairing_permissions: list[str] = Field(default_factory=list)
     webrtc_auth_timeout_seconds: float = 10.0
     webrtc_pairing_timeout_seconds: float = 300.0
 

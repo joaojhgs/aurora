@@ -116,8 +116,8 @@ runtime = [
     "Jinja2==3.1.6",
     "MarkupSafe==3.0.2",
     
-    # ML Text Processing
-    "ctranslate2==4.5.0",
+    # ML Text Processing (>=4.7: wheels built without executable stack; fixes glibc 2.41+ / Docker load errors)
+    "ctranslate2>=4.7.1,<5",
     "tokenizers==0.21.0",
     "tiktoken==0.8.0",
     "sentence-transformers==3.0.0",
@@ -148,6 +148,12 @@ service-config = [
     # Only uses jsonschema (already in core dependencies)
 ]
 
+# Auth service (process mode): bus-only DB access; crypto + password hashing
+service-auth = [
+    "passlib[argon2]>=1.7.4",
+    "cryptography>=43.0.0",
+]
+
 service-db = [
     "aiosqlite>=0.19.0",
     "sqlite-vec",
@@ -171,10 +177,16 @@ service-db-local-embeddings = [
 
 service-scheduler = [
     "croniter==6.0.0",
+    # Scheduler imports DB helpers (scheduler_manager → db); Docker image only had service-scheduler before.
+    "aiosqlite>=0.19.0",
 ]
 
 service-tooling = [
+    # Pomodoro tools import scheduler → SchedulerDatabaseService → aiosqlite (same as service-scheduler).
+    "croniter==6.0.0",
+    "aiosqlite>=0.19.0",
     "aiohttp==3.11.12",
+    "duckduckgo-search==7.5.2",
     "langchain-community==0.3.24",
     "langchain-core==0.3.62",
     "langchain-google-community==2.0.7",
@@ -196,7 +208,7 @@ service-stt-transcription = [
     "faster-whisper==1.1.1",
     "RealtimeSTT==0.3.94",
     "webrtcvad-wheels==2.0.14",
-    "ctranslate2==4.5.0",
+    "ctranslate2>=4.7.1,<5",
     "numpy==1.26.4",
 ]
 
@@ -258,7 +270,7 @@ service-orchestrator-llama-cpp-cuda = [
 ]
 
 all-services = [
-    "aurora[service-config,service-db,service-scheduler,service-tooling,service-stt-wakeword,service-stt-transcription,service-stt-coordinator,service-tts,service-orchestrator]",
+    "aurora[service-config,service-auth,service-db,service-scheduler,service-tooling,service-stt-wakeword,service-stt-transcription,service-stt-coordinator,service-tts,service-orchestrator,gateway]",
 ]
 
 # ============================================================================
@@ -273,6 +285,8 @@ mode-threads = [
 mode-processes = [
     "bullmq>=1.7.0",
     # Note: Redis is required as external service (not Python package)
+    # Used by docker-compose.tilt.yml (watchmedo auto-restart in containers)
+    "watchdog>=4.0.0,<5",
 ]
 
 # Gateway dependencies (FastAPI HTTP API)
@@ -449,6 +463,7 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "ruff>=0.8.4",
+    "datamodel-code-generator>=0.25.0",
     "mypy",
     "pre-commit",
     "ipython",
@@ -475,6 +490,7 @@ test = [
     "httpx[testing]",
     "pytest-timeout",
     "pytest-benchmark",
+    "passlib[argon2]>=1.7.4",
 ]
 
 # Dependencies for unit tests
@@ -644,6 +660,8 @@ service-stt-transcription = "app.services.stt_transcription.__main__:run"
 service-stt-wakeword = "app.services.stt_wakeword.__main__:run"
 service-tooling = "app.services.tooling.__main__:run"
 service-tts = "app.services.tts.__main__:run"
+service-auth = "app.services.auth.__main__:run"
+service-gateway = "app.services.gateway.__main__:run"
 aurora-build = "scripts.build:main"
 aurora-setup = "scripts.setup:main"
 

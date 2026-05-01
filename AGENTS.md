@@ -16,6 +16,7 @@ Detailed guidance lives next to the code it describes. **Always read the relevan
 | Message bus (topics, events, commands, priorities) | [`app/messaging/AGENTS.md`](app/messaging/AGENTS.md) |
 | Shared code (what belongs, imports, models) | [`app/shared/AGENTS.md`](app/shared/AGENTS.md) |
 | Contracts (topic constants, IO models, registry) | [`app/shared/contracts/AGENTS.md`](app/shared/contracts/AGENTS.md) |
+| **Configuration (ConfigAPI vs ConfigManager, process mode)** | [`docs/CONFIG_SERVICE_PATTERN.md`](docs/CONFIG_SERVICE_PATTERN.md) |
 | Tests (structure, markers, mocking patterns) | [`tests/AGENTS.md`](tests/AGENTS.md) |
 
 ---
@@ -212,13 +213,29 @@ aurora/
 
 ## Configuration
 
-**Primary**: `config.json` (structured settings, **not committed** — first run copies `app/services/config/config_defaults.json`)
+**Source of truth**: `app/services/config/config_schema.json` (JSON Schema).
+Run `make generate-config` after editing the schema to regenerate:
+- `app/shared/config/models.py` — Pydantic models (via `datamodel-code-generator`)
+- `app/shared/config/keys.py` — nested `ConfigKeys` path object (every dot-path)
+- `app/services/config/config_defaults.json` — default values
+
+**Primary**: `config.json` (structured settings, **not committed** — first run copies `config_defaults.json`)
 **Secondary**: `.env` (sensitive credentials, gitignored)
 
 ```python
 from app.shared.config.interface import config_api
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Tts as TtsConfig
 
-provider = config_api.get("general.llm.provider")
+# Typed section access (returns Pydantic model)
+tts_cfg = await config_api.aget(ConfigKeys.services.tts, TtsConfig)
+model_path = tts_cfg.model_file_path
+
+# Scalar/leaf access (returns plain value)
+provider = await config_api.aget(
+    ConfigKeys.services.orchestrator.llm.provider,
+    default="openai",
+)
 config_api.set("ui.dark_mode", True)
 ```
 
@@ -253,6 +270,13 @@ make docker-process-up       # Start services
 make docker-process-down     # Stop services
 make docker-process-logs     # View logs
 ```
+
+**Process-mode Compose** (`docker-compose.process.yml`) runs **separate containers** per service. There is **no supervisor image**: **Auth** (`Dockerfile.auth`, `python -m app.services.auth`) and **Gateway** (`Dockerfile.gateway`, `python -m app.services.gateway`) are first-class services alongside DB, Orchestrator, etc.
+
+### Tilt (Compose + dev UX)
+
+- **Doc**: [`docs/TILT.md`](docs/TILT.md) — `tilt up`, merge `docker-compose.tilt.yml` (per-service log levels + `working_dir` `/app/host` + `watchmedo` on `app/`/`modules/` under that mount), log-level UI buttons, optional ngrok.
+- **MCP**: Use **`.cursor/mcp.json`** — **`tilt-mcp`** via **`uvx --from tilt-mcp==0.1.3`** (requires **`tilt`** on PATH and usually **`tilt up`**). For stack health without Tilt, use **`docker compose`** / **`curl`** (e.g. `http://127.0.0.1:${GATEWAY_HOST_PORT:-8000}/api/health`) or **`./scripts/compose-docker.sh`** if the Compose plugin is missing.
 
 ---
 
@@ -425,6 +449,7 @@ async def my_method(self, param: str) -> str:
 - **Peer Pairing & Mesh**: `docs/PEER_PAIRING_FLOW.md`
 - **Gateway API**: `docs/GATEWAY.md`
 - **Process Mode**: `README.process-mode.md`
+- **Tilt (Compose dev)**: `docs/TILT.md`
 - **Testing**: `docs/TESTING_PROCESS_MODE.md`
 - **UI Integration**: `docs/UI_INTEGRATION.md`
 - **MCP Integration**: `docs/MCP_INTEGRATION.md`

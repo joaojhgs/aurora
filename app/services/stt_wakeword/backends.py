@@ -65,6 +65,27 @@ class WakeWordBackend(ABC):
         pass
 
 
+def _openwakeword_feature_models_dir() -> str:
+    """Directory for OpenWakeWord built-in assets (melspectrogram, embedding, VAD).
+
+    Defaults to site-packages ``resources/models``, which is not writable in Docker when
+    running as non-root. Prefer ``/app/data/...`` in containers or XDG cache locally.
+    """
+    import os
+
+    for key in ("AURORA_OPENWAKEWORD_MODELS_DIR", "OPENWAKEWORD_MODELS_DIR"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            return raw
+    if os.path.isdir("/app/data"):
+        return "/app/data/openwakeword/models"
+    cache_home = os.environ.get("XDG_CACHE_HOME") or os.path.join(
+        os.path.expanduser("~"),
+        ".cache",
+    )
+    return os.path.join(cache_home, "openwakeword", "models")
+
+
 class OpenWakeWordBackend(WakeWordBackend):
     """OpenWakeWord detection backend implementation."""
 
@@ -94,22 +115,31 @@ class OpenWakeWordBackend(WakeWordBackend):
 
             log_info("Loading OpenWakeWord models...")
 
-            # Ensure models are downloaded (they're not included in the package)
-            models_dir = os.path.join(
-                os.path.dirname(__import__("openwakeword").__file__),
-                "resources",
-                "models",
-            )
-            melspectrogram_path = os.path.join(models_dir, "melspectrogram.onnx")
-            if not os.path.exists(melspectrogram_path):
-                log_info("Downloading OpenWakeWord model files (first-time setup)...")
-                download_models()
-                log_info("Model files downloaded successfully")
+            # Writable dir (Docker non-root; bind-mounted ./data may be root-owned on host)
+            from app.shared.path_utils import ensure_path_writable_or_tmp
 
-            # Load custom models
+            models_dir = ensure_path_writable_or_tmp(
+                _openwakeword_feature_models_dir(),
+                tmp_leaf="openwakeword",
+            )
+            # Some openwakeword paths consult OPENWAKEWORD_MODELS_DIR; align before importing Model.
+            os.environ.setdefault("OPENWAKEWORD_MODELS_DIR", models_dir)
+            melspectrogram_path = os.path.join(models_dir, "melspectrogram.onnx")
+            embedding_path = os.path.join(models_dir, "embedding_model.onnx")
+            if not os.path.isfile(melspectrogram_path) or not os.path.isfile(embedding_path):
+                log_info(
+                    "Downloading OpenWakeWord feature models (first-time setup) to %s...",
+                    models_dir,
+                )
+                download_models(target_directory=models_dir)
+                log_info("OpenWakeWord feature models downloaded successfully")
+
+            # Load custom wakeword ONNX models; point preprocessor at same writable dir
             self._model = Model(
                 wakeword_models=self.model_paths,
                 inference_framework="onnx",
+                melspec_model_path=melspectrogram_path,
+                embedding_model_path=embedding_path,
             )
 
             log_info(f"OpenWakeWord models loaded: {self.wake_words}")

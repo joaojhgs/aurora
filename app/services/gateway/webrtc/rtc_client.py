@@ -129,7 +129,7 @@ class RTCClient:
         if self._require_auth and not self._settings.webrtc.password:
             log_error(
                 "WebRTC room password is empty but auth is enabled. "
-                "Set 'gateway.webrtc.password' in config.json to a strong random value. "
+                "Set 'services.gateway.webrtc.password' in config.json to a strong random value. "
                 "WebRTC client will NOT start."
             )
             return
@@ -137,7 +137,7 @@ class RTCClient:
         if not self._require_auth and not self._settings.webrtc.password:
             log_warning(
                 "WebRTC room password is empty. Signaling encryption is weak. "
-                "Consider setting 'gateway.webrtc.password' in config.json."
+                "Consider setting 'services.gateway.webrtc.password' in config.json."
             )
 
         self._system_token = await self._auth_service.get_system_token()
@@ -893,10 +893,10 @@ class RTCClient:
             mesh_config=self._mesh_config,
             peer_id=peer,
             capacity_notify_fn=lambda module, available, max_conc: (
-                self.broadcast_capacity_update(module, available, max_conc)
-            )
-            if self._mesh_enabled
-            else None,
+                (self.broadcast_capacity_update(module, available, max_conc))
+                if self._mesh_enabled
+                else None
+            ),
             pairing_notify_fn=lambda pid: self._peer_pairing_active.add(peer),
         )
 

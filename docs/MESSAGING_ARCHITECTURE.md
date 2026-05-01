@@ -122,6 +122,17 @@ Request/response pattern:
 - Timeout support
 - Correlation IDs for tracking
 
+#### BullMQ / processes mode: ephemeral `reply.*` queues
+
+Each `bus.request()` uses a unique topic `reply.{ModelName}.{uuid}`. **BullMQBus** tears these down after the call completes so Workers (on the caller) and Queue clients (after publishing a one-shot reply on the callee) do not accumulate and exhaust file descriptors (`EMFILE`). Stable service topics are unchanged.
+
+#### Config access in process mode
+
+- **Full pattern (required reading for new services):** [`CONFIG_SERVICE_PATTERN.md`](./CONFIG_SERVICE_PATTERN.md).
+- Services should use **`ConfigAPI`** (`aget` / `aget_config` / **`aupdate_config`**) so reads and writes go through **ConfigService** on the bus. Avoid **`ConfigManager()`** outside the config service (it touches `config.json` in the local process only).
+- Use **`config_timeout`** on **`ConfigAPI.aget`** / **`aget_config`** when another container may still be starting (default bus timeout is short; cold start can exceed it).
+- **Never** use sync **`ConfigAPI.get()`** from **`async`** code — it returns the **default** without hitting the bus (use **`aget`**).
+
 ## Service Architecture
 
 ### Available Services

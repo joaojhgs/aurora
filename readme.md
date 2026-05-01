@@ -144,7 +144,7 @@ uv run python main.py
    - ✅ Guide you through configuration
 
 3. **Configure your environment:**
-   - Copy `.env.file` to `.env` and add any API keys you want to use
+   - Copy `.env.example` to `.env` and add any API keys you want to use
    - Modify `config.json` if needed (defaults work for most users)
 
 4. **Run Aurora:**

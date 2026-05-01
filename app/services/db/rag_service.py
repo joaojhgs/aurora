@@ -15,11 +15,13 @@ from langgraph.store.base import BaseStore, Item
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Db, Embeddings
 
 config_api = ConfigAPI()
 
 
-async def _async_wait_for_config_service(max_retries: int = 30, retry_delay: float = 1.0) -> bool:
+async def _async_wait_for_config_service(max_retries: int = 45, retry_delay: float = 1.0) -> bool:
     """Async version: Wait for the config service to be ready.
 
     Args:
@@ -42,8 +44,9 @@ async def _async_wait_for_config_service(max_retries: int = 30, retry_delay: flo
                 await asyncio.sleep(retry_delay)
             continue
 
-        # Contracts registered, try to get config value using async API
-        result = await config_api.aget("general.embeddings.use_local", None)
+        # Probe with raw access (no model) — if ConfigService is not responding,
+        # aget returns the default (None), distinguishing from a real response.
+        result = await config_api.aget(ConfigKeys.services.db.embeddings.use_local, default=None)
         if result is not None:
             log_debug(f"Config service ready after {attempt + 1} attempt(s)")
             return True
@@ -76,7 +79,9 @@ async def async_get_embeddings():
         )
 
     # Get config value using async API
-    use_local = await config_api.aget("general.embeddings.use_local", False)
+    db_cfg = await config_api.aget(ConfigKeys.services.db, Db)
+    embeddings_cfg = db_cfg.embeddings or Embeddings()
+    use_local = embeddings_cfg.use_local if embeddings_cfg.use_local is not None else True
 
     if use_local:
         try:
@@ -766,12 +771,14 @@ class RAGService:
             # Create embeddings instance using async version
             embeddings, model_info = await async_get_embeddings()
 
-            # Create separate SQLite vector stores for memories and tools in the data folder
+            # Create separate SQLite vector stores for memories and tools in the service data folder.
+            data_dir = Path(__file__).parent.parent.parent / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
             self._memories_store = SQLiteVecStore(
-                db_file="./data/memories.db", table="memories", embeddings=embeddings
+                db_file=str(data_dir / "memories.db"), table="memories", embeddings=embeddings
             )
             self._tools_store = SQLiteVecStore(
-                db_file="./data/tools.db", table="tools", embeddings=embeddings
+                db_file=str(data_dir / "tools.db"), table="tools", embeddings=embeddings
             )
 
             # Check if embedding model changed and re-embed if necessary

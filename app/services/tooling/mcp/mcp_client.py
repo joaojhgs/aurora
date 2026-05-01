@@ -6,12 +6,14 @@ to connect to both local (stdio) and remote (HTTP) MCP servers and load their
 tools into Aurora's tool system.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.tools import BaseTool
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Mcp, Tooling
 
 config_api = ConfigAPI()
 
@@ -26,21 +28,25 @@ class MCPClientManager:
 
     async def initialize(self) -> None:
         """Initialize MCP client and load tools from configured servers."""
-        if not await config_api.aget("mcp.enabled", True):
+
+        mcp_enabled = await config_api.aget(ConfigKeys.services.tooling.mcp.enabled, default=False)
+        if not mcp_enabled:
             log_info("MCP integration disabled in configuration")
             return
 
-        servers_config = await config_api.aget_config("mcp.servers") or {}
+        tooling_cfg = await config_api.aget(ConfigKeys.services.tooling, Tooling)
+        mcp_cfg = tooling_cfg.mcp or Mcp()
+        servers_config = mcp_cfg.servers or {}
         if not servers_config:
             log_info("No MCP servers configured")
             return
 
         try:
-            # Filter enabled servers
+            # Filter enabled servers (None enabled => default True)
             enabled_servers = {
                 name: config
                 for name, config in servers_config.items()
-                if config.get("enabled", True)
+                if (config.enabled if config.enabled is not None else True)
             }
 
             if not enabled_servers:
@@ -56,10 +62,10 @@ class MCPClientManager:
             client_config = {}
             for name, server_config in enabled_servers.items():
                 try:
-                    log_debug(
-                        f"Preparing config for server '{name}' with transport '{server_config.get('transport')}'"
-                    )
-                    client_config[name] = self._prepare_server_config(server_config)
+                    raw_cfg = server_config.model_dump(mode="python", exclude_none=True)
+                    transport = raw_cfg.get("transport")
+                    log_debug(f"Preparing config for server '{name}' with transport '{transport}'")
+                    client_config[name] = self._prepare_server_config(raw_cfg)
                     log_debug(f"Prepared config for server '{name}': {client_config[name]}")
                 except Exception as e:
                     log_error(f"Invalid configuration for server '{name}': {e}")
@@ -169,6 +175,8 @@ class MCPClientManager:
 
         elif transport in ["streamable_http", "sse", "websocket"]:
             url = server_config.get("url")
+            if url is not None and not isinstance(url, str):
+                url = str(url)
             if not url:
                 raise ValueError(f"URL is required for {transport} transport")
             config["url"] = url

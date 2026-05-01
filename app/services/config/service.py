@@ -173,7 +173,9 @@ class ConfigService(BaseService):
         self, query: GetPluginStatusQuery
     ) -> GetPluginStatusResponse:
         """Handle GetPluginStatus query."""
-        active = self.config_manager.get(f"plugins.{query.plugin_name}.activate", False)
+        active = self.config_manager.get(
+            f"services.tooling.plugins.{query.plugin_name}.activate", False
+        )
         log_debug(f"Handled GetPluginStatus query: {query.plugin_name}={active}")
         return GetPluginStatusResponse(active=active)
 
@@ -190,7 +192,9 @@ class ConfigService(BaseService):
     ) -> UpdateConfigResponse:
         """Handle UpdatePluginStatus command."""
         try:
-            self.config_manager.set(f"plugins.{cmd.plugin_name}.activate", cmd.active)
+            self.config_manager.set(
+                f"services.tooling.plugins.{cmd.plugin_name}.activate", cmd.active
+            )
             log_info(f"Updated plugin status: {cmd.plugin_name}={cmd.active}")
             return UpdateConfigResponse(success=True)
         except Exception as e:

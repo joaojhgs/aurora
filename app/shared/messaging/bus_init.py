@@ -118,7 +118,8 @@ def initialize_bus_for_service(service_name: str) -> MessageBus:
         if service_name not in _service_buses:
             # Get Redis URL from environment variable
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-            bus = BullMQBus(redis_url=redis_url)
+            # Per-process contract registry only lists this service; allow cross-service RPC.
+            bus = BullMQBus(redis_url=redis_url, validate_topics=False)
             set_bus_for_service(service_name, bus)
             log_info(
                 f"Initialized BullMQBus (processes mode) for service '{service_name}' with Redis: {redis_url}"

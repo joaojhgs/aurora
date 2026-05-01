@@ -2,7 +2,7 @@
 
 > **Scope**: `app/services/auth/` -- Authentication, authorization, pairing, mesh peer trust.
 > **Parent**: [Services AGENTS.md](../AGENTS.md); [Root AGENTS.md](../../../AGENTS.md).
-> **Related**: [Gateway AGENTS.md](../gateway/AGENTS.md) for how Gateway uses Auth; [Contracts AGENTS.md](../../shared/contracts/AGENTS.md) for `AuthMethods` constants.
+> **Related**: [Gateway AGENTS.md](../gateway/AGENTS.md) for how Gateway uses Auth; [Contracts AGENTS.md](../../shared/contracts/AGENTS.md) for `AuthMethods` constants. **Config**: use **ConfigAPI.aget** (never sync **get** in async code) — [CONFIG_SERVICE_PATTERN.md](../../../docs/CONFIG_SERVICE_PATTERN.md).
 
 ---
 
