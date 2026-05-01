@@ -420,7 +420,7 @@ Aurora uses a hybrid configuration system with both `config.json` and `.env` fil
 - Falls back to safe defaults if validation fails
 
 **Environment Variables (`.env`)**:
-- Clone the `.env.file` and rename it to `.env` in the root directory
+- Copy `.env.example` to `.env` in the root directory
 - Contains development settings and configuration for third party software that works with envs such as:
   - `OPENAI_API_KEY` - Your OpenAI API key for embeddings and chat models (if you decide to use any)
   - Langsmith logging and tracing for development
@@ -621,7 +621,7 @@ python scripts/wheel_installer.py --help
 ls -la .env
 
 # Copy example if needed
-cp .env.file .env
+cp .env.example .env
 
 # Edit with your API keys
 nano .env  # or your preferred editor

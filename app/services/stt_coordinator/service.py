@@ -15,13 +15,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import threading
 import uuid
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-import pyaudio
-from pydantic import Field
+from app.shared.config.keys import ConfigKeys
+
+try:
+    import pyaudio
+except ImportError:
+    pyaudio = None  # type: ignore[misc, assignment]
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
@@ -39,6 +45,7 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
@@ -89,9 +96,9 @@ class STTCoordinatorService(BaseService):
         self._session_start_time: datetime | None = None
         self._accumulated_transcription: str = ""
 
-        # PyAudio resources
-        self._pyaudio: pyaudio.PyAudio | None = None
-        self._stream: pyaudio.Stream | None = None
+        # PyAudio resources (Any: optional dependency; types are pyaudio.PyAudio / Stream when installed)
+        self._pyaudio: Any = None
+        self._stream: Any = None
         self._capture_thread: threading.Thread | None = None
 
         # Audio capture state
@@ -103,8 +110,10 @@ class STTCoordinatorService(BaseService):
         self._sample_rate = 16000
         self._channels = 1
         self._chunk_size = 1024  # Frames per buffer
-        self._format = pyaudio.paInt16
+        # pyaudio.paInt16 == 8; keep numeric constant when PyAudio is not installed (unit tests / minimal env)
+        self._format = pyaudio.paInt16 if pyaudio is not None else 8
         self._device_index: int | None = None
+        self._audio_input_available: bool = False
 
         # Stream tracking
         self._stream_id: str | None = None
@@ -144,16 +153,21 @@ class STTCoordinatorService(BaseService):
         # Store event loop
         self._loop = asyncio.get_event_loop()
 
-        # Initialize PyAudio
+        # Initialize PyAudio (optional in Docker without /dev/snd unless AURORA_STT_REQUIRE_MICROPHONE=1)
         self._initialize_pyaudio()
 
         # Set initial state
         await self._transition_to(STTState.IDLE)
 
-        # Auto-start audio capture if configured
-        auto_start = await config_api.aget("general.speech_to_text.audio_input.auto_start", True)
-        if auto_start:
+        # Auto-start audio capture if configured and hardware is available
+        # Schema has no audio_input.auto_start; default matches prior missing-key behavior.
+        auto_start = True
+        if auto_start and self._audio_input_available:
             await self._start_audio_capture()
+        elif auto_start and not self._audio_input_available:
+            log_warning(
+                "Audio auto_start skipped: no microphone / PyAudio input (STT bus events still work)"
+            )
 
         # Subscribe to wake word detection events
         self.bus.subscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected)
@@ -163,7 +177,9 @@ class STTCoordinatorService(BaseService):
 
         log_info("STT coordinator started with audio capture")
         log_info(f"   Audio: {self._sample_rate}Hz, {self._channels}ch, {self._chunk_size} frames")
-        log_info(f"   Device: {self._device_index or 'default'}")
+        log_info(
+            f"   Device: {self._device_index if self._audio_input_available else 'unavailable'}"
+        )
         log_info(f"   Listen timeout: {self._listen_timeout_seconds}s")
         log_info(f"   Multi-turn: {'enabled' if self._multi_turn_enabled else 'disabled'}")
         log_info(f"   Pause TTS: {'yes' if self._pause_tts_on_listening else 'no'}")
@@ -211,8 +227,8 @@ class STTCoordinatorService(BaseService):
         # If STT or audio config changed, reload
         if (
             config_section is None
-            or config_section == "general"
-            or config_section == "speech_to_text"
+            or config_section == "services"
+            or config_section == "services.stt"
         ):
             log_info("STT coordinator configuration changed, reloading...")
             was_capturing = self._capturing
@@ -233,35 +249,60 @@ class STTCoordinatorService(BaseService):
             log_debug(f"STT coordinator reloaded for section: {config_section}")
 
     async def _load_config(self) -> None:
-        """Load configuration from config manager."""
+        """Load configuration from configuration service."""
+        coord_config = await config_api.aget(ConfigKeys.services.stt.coordinator, Coordinator)
+
         # Audio configuration
-        self._sample_rate = await config_api.aget(
-            "general.speech_to_text.audio_input.sample_rate", 16000
+        audio_input = coord_config.audio_input or AudioInput()
+        self._sample_rate = (
+            audio_input.sample_rate if audio_input.sample_rate is not None else 16000
         )
-        self._channels = await config_api.aget("general.speech_to_text.audio_input.channels", 1)
-        self._chunk_size = await config_api.aget(
-            "general.speech_to_text.audio_input.chunk_size", 1024
-        )
-        self._device_index = await config_api.aget(
-            "general.speech_to_text.audio_input.device_index", None
-        )
+        self._channels = audio_input.channels if audio_input.channels is not None else 1
+        self._chunk_size = audio_input.chunk_size if audio_input.chunk_size is not None else 1024
+        self._device_index = audio_input.device_index
 
         # Coordinator configuration
-        self._listen_timeout_seconds = await config_api.aget(
-            "general.speech_to_text.coordinator.session_timeout_s", 10.0
+        self._listen_timeout_seconds = (
+            coord_config.session_timeout_s if coord_config.session_timeout_s is not None else 10.0
         )
-        self._multi_turn_enabled = await config_api.aget(
-            "general.speech_to_text.coordinator.multi_turn_enabled", False
+        self._multi_turn_enabled = (
+            coord_config.multi_turn_enabled
+            if coord_config.multi_turn_enabled is not None
+            else False
         )
-        self._pause_tts_on_listening = await config_api.aget(
-            "general.speech_to_text.coordinator.pause_tts_on_listen", True
+        # Not present in schema; kept for compatibility with any future use.
+        self._multi_turn_timeout = 10.0
+
+        self._pause_tts_on_listening = (
+            coord_config.pause_tts_on_listen
+            if coord_config.pause_tts_on_listen is not None
+            else True
         )
-        self._ambient_transcription_enabled = await config_api.aget(
-            "general.speech_to_text.ambient_transcription.enable", False
+
+        ambient = coord_config.ambient_transcription or AmbientTranscription()
+        self._ambient_transcription_enabled = (
+            ambient.enable if ambient.enable is not None else False
         )
 
     def _initialize_pyaudio(self) -> None:
         """Initialize PyAudio and enumerate devices."""
+        self._audio_input_available = False
+        if pyaudio is None:
+            require = os.environ.get("AURORA_STT_REQUIRE_MICROPHONE", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if require:
+                raise RuntimeError(
+                    "PyAudio is required (AURORA_STT_REQUIRE_MICROPHONE=1) but the module is not installed"
+                )
+            log_warning(
+                "PyAudio is not installed; STT coordinator will run without microphone capture"
+            )
+            self._pyaudio = None
+            self._device_index = None
+            return
         try:
             self._pyaudio = pyaudio.PyAudio()
 
@@ -285,14 +326,33 @@ class STTCoordinatorService(BaseService):
                 self._device_index = default_device["index"]
                 log_debug(f"Using default input device: {default_device['name']}")
 
+            self._audio_input_available = True
+
         except Exception as e:
             log_error(f"Failed to initialize PyAudio: {e}", exc_info=True)
-            raise
+            require = os.environ.get("AURORA_STT_REQUIRE_MICROPHONE", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if require:
+                raise
+            self._pyaudio = None
+            self._device_index = None
+            self._audio_input_available = False
+            log_warning(
+                "STT coordinator running without local microphone capture "
+                "(set AURORA_STT_REQUIRE_MICROPHONE=1 to fail fast in production)"
+            )
 
     async def _start_audio_capture(self) -> None:
         """Start audio capture from microphone."""
         if self._capturing:
             log_warning("Audio capture already active")
+            return
+
+        if not self._audio_input_available or self._pyaudio is None:
+            log_warning("Audio capture skipped: no PyAudio input device")
             return
 
         log_info("Starting audio capture...")
@@ -304,28 +364,7 @@ class STTCoordinatorService(BaseService):
             self._total_chunks = 0
             self._stream_start_time = datetime.utcnow()
 
-            # Create audio format descriptor
-            audio_format = AudioFormat(
-                sample_rate=self._sample_rate,
-                channels=self._channels,
-                encoding=AudioEncoding.PCM_S16LE,
-                bits_per_sample=16,
-                chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
-            )
-
-            # Emit stream started event
-            await self.bus.publish(
-                AudioTopics.STARTED,
-                AudioStreamStarted(
-                    stream_id=self._stream_id,
-                    source="microphone",
-                    format=audio_format,
-                ),
-                event=True,
-                priority=get_interactive_priority(),
-            )
-
-            # Open PyAudio stream
+            # Open PyAudio stream before bus events so we never emit STARTED then fail to open
             self._stream = self._pyaudio.open(
                 format=self._format,
                 channels=self._channels,
@@ -339,6 +378,26 @@ class STTCoordinatorService(BaseService):
             self._capturing = True
             self._paused = False
 
+            # Create audio format descriptor
+            audio_format = AudioFormat(
+                sample_rate=self._sample_rate,
+                channels=self._channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+                chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
+            )
+
+            await self.bus.publish(
+                AudioTopics.STARTED,
+                AudioStreamStarted(
+                    stream_id=self._stream_id,
+                    source="microphone",
+                    format=audio_format,
+                ),
+                event=True,
+                priority=get_interactive_priority(),
+            )
+
             # Start capture thread
             self._capture_thread = threading.Thread(
                 target=self._capture_loop, daemon=True, name="AudioCapture"
@@ -349,7 +408,26 @@ class STTCoordinatorService(BaseService):
 
         except Exception as e:
             log_error(f"Failed to start audio capture: {e}", exc_info=True)
-            raise
+            self._capturing = False
+            self._capture_thread = None
+            if self._stream is not None:
+                with contextlib.suppress(Exception):
+                    self._stream.stop_stream()
+                with contextlib.suppress(Exception):
+                    self._stream.close()
+                self._stream = None
+            require = os.environ.get("AURORA_STT_REQUIRE_MICROPHONE", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if require:
+                raise
+            self._audio_input_available = False
+            log_warning(
+                "STT coordinator continuing without microphone capture after stream failure "
+                "(set AURORA_STT_REQUIRE_MICROPHONE=1 to fail fast)"
+            )
 
     async def _stop_audio_capture(self, reason: str = "user_request") -> None:
         """Stop audio capture.

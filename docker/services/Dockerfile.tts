@@ -26,28 +26,24 @@ RUN pip install uv
 COPY --chown=aurora:aurora pyproject.toml ./
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
+COPY --chown=aurora:aurora docker/services/constraints-tts-cpu.txt /tmp/constraints-tts-cpu.txt
 
-# Install dependencies using pyproject.toml optional groups
-# TTS service needs core + service-tts + mode-processes
-RUN uv pip install --no-cache -e .[service-tts,mode-processes]
-
-# Install PyTorch based on hardware
-RUN case "$TTS_HARDWARE" in \
-    cuda) \
-        uv pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
-            --extra-index-url=https://download.pytorch.org/whl/cu124; \
-        ;; \
-    rocm) \
-        uv pip install torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
-            --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
-        ;; \
-    metal) \
-        uv pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0; \
-        ;; \
-    *) \
-        uv pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0; \
-        ;; \
-esac
+# TTS: install deps; pin torch to CPU wheels unless build-arg requests GPU (saves GB vs PyPI CUDA default).
+RUN if [ "$TTS_HARDWARE" = "cuda" ]; then \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        && uv pip install --system --no-cache --force-reinstall \
+          torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
+          --extra-index-url=https://download.pytorch.org/whl/cu124; \
+    elif [ "$TTS_HARDWARE" = "rocm" ]; then \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        && uv pip install --system --no-cache --force-reinstall \
+          torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
+    else \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        --constraint /tmp/constraints-tts-cpu.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu; \
+    fi
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app

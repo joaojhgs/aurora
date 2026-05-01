@@ -6,7 +6,10 @@ This module handles text-to-speech synthesis including:
 - Audio playback
 """
 
-from app.services.tts.service import TTSService
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from app.shared.messaging.models.tts_models import (
     TTSError,
     TTSPause,
@@ -16,6 +19,9 @@ from app.shared.messaging.models.tts_models import (
     TTSStop,
     TTSStopped,
 )
+
+if TYPE_CHECKING:
+    from app.services.tts.service import TTSService
 
 __all__ = [
     "TTSService",
@@ -27,3 +33,11 @@ __all__ = [
     "TTSResume",
     "TTSError",
 ]
+
+
+def __getattr__(name: str):
+    if name == "TTSService":
+        from app.services.tts.service import TTSService as _TTSService
+
+        return _TTSService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

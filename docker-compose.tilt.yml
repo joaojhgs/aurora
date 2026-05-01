@@ -1,0 +1,137 @@
+# Tilt / process-mode dev overlay: merge with docker-compose.process.yml
+#
+# Hot reload uses the same repo bind-mount as process mode: /app/host (see docker-compose.process.yml).
+# We set working_dir to /app/host so "python -m app...." loads from /app/host/app (live host tree).
+#
+# We intentionally do NOT mount ${ROOT}/app:/app/app again: if the project directory / bind mount is wrong on the
+# Docker host, Compose can create an empty directory and hide the image's package → ModuleNotFoundError.
+#
+# Watch: /app/host/app and /app/host/modules (same sources as the single /app/host mount).
+#
+# working_dir is /app/host. Default AURORA_CONFIG_FILE to /app/host/config.json so edits to the
+# repo-root config apply without rebuilding images (ConfigService reads this path).
+#
+# Requires watchdog (mode-processes). Tunable: AURORA_HOT_RELOAD_DEBOUNCE_SEC (Compose-interpolated below).
+
+x-tilt-hotreload-cmd: &tilt-hotreload-cmd
+  - /bin/sh
+  - -c
+  - "exec watchmedo auto-restart --directory=/app/host/app --directory=/app/host/modules --pattern='*.py' --recursive --signal=SIGTERM --debounce-interval=${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5} --ignore-patterns='*/__pycache__/*;*.pyc' -- python -m $$AURORA_TILT_PY_MODULE"
+
+x-tilt-working-dir: &tilt-working-dir
+  working_dir: /app/host
+
+# Prefer bind-mounted sources over image /app (editable install still points at image tree).
+x-tilt-pythonpath: &tilt-pythonpath
+  PYTHONPATH: /app/host:/app
+
+services:
+  config-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${CONFIG_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.config
+    command: *tilt-hotreload-cmd
+
+  db-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${DB_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.db
+    command: *tilt-hotreload-cmd
+
+  auth-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${AUTH_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.auth
+    command: *tilt-hotreload-cmd
+
+  orchestrator-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${ORCHESTRATOR_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.orchestrator
+    command: *tilt-hotreload-cmd
+
+  gateway-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${GATEWAY_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.gateway
+    command: *tilt-hotreload-cmd
+
+  tts-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${TTS_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.tts
+    command: *tilt-hotreload-cmd
+
+  stt-transcription-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${STT_TRANSCRIPTION_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.stt_transcription
+    command: *tilt-hotreload-cmd
+
+  stt-wakeword-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${STT_WAKEWORD_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.stt_wakeword
+    command: *tilt-hotreload-cmd
+
+  scheduler-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${SCHEDULER_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.scheduler
+    command: *tilt-hotreload-cmd
+
+  tooling-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${TOOLING_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.tooling
+    command: *tilt-hotreload-cmd
+
+  stt-coordinator-service:
+    <<: *tilt-working-dir
+    environment:
+      <<: *tilt-pythonpath
+      AURORA_LOG_LEVEL: ${STT_COORDINATOR_SERVICE_LOG_LEVEL:-INFO}
+      AURORA_HOT_RELOAD_DEBOUNCE_SEC: ${AURORA_HOT_RELOAD_DEBOUNCE_SEC:-0.5}
+      AURORA_CONFIG_FILE: ${AURORA_CONFIG_FILE:-/app/host/config.json}
+      AURORA_TILT_PY_MODULE: app.services.stt_coordinator
+    command: *tilt-hotreload-cmd

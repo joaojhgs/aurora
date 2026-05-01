@@ -58,7 +58,7 @@ class TestRAGServiceCore:
     @pytest.mark.asyncio
     async def test_get_embeddings_local(self, mock_config):
         """Test getting local embeddings."""
-        mock_config.aget = AsyncMock(return_value=True)  # use_local = True
+        mock_config.aget = AsyncMock(return_value={"embeddings": {"use_local": True}})
 
         with (
             patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
@@ -77,7 +77,7 @@ class TestRAGServiceCore:
     @pytest.mark.asyncio
     async def test_get_embeddings_openai(self, mock_config):
         """Test getting OpenAI embeddings."""
-        mock_config.aget = AsyncMock(return_value=False)  # use_local = False
+        mock_config.aget = AsyncMock(return_value={"embeddings": {"use_local": False}})
 
         with (
             patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),

@@ -99,7 +99,7 @@ class ToolingService(BaseService):
         """
         log_info(f"Reloading ToolingService configuration: section={config_section}")
         # Reload tools if MCP config changed
-        if config_section is None or config_section in ["mcp", "plugins"]:
+        if config_section is None or config_section in ["services"]:
             log_info("Reloading tools due to config change...")
             await self.tools_manager.reload()
         log_info("ToolingService configuration reloaded")

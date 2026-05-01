@@ -31,6 +31,8 @@ from app.services.stt_wakeword.backends import (
     WakeWordBackend,
 )
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Wakeword
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
@@ -128,7 +130,7 @@ class WakeWordService(BaseService):
         """
         log_info(f"Reloading WakeWordService configuration: section={config_section}")
         # Reload wake word backend if config changed
-        if config_section is None or config_section in ["speech_to_text", "general"]:
+        if config_section is None or config_section in ("services", "services.stt"):
             log_info("Reloading wake word backend due to config change...")
             if self._backend:
                 await self._backend.cleanup()
@@ -143,25 +145,29 @@ class WakeWordService(BaseService):
 
         from app.shared.path_utils import resolve_path
 
+        _t = 20.0
+        wakeword_cfg = await config_api.aget(
+            ConfigKeys.services.stt.wakeword, Wakeword, config_timeout=_t
+        )
+
         # Backend configuration
-        backend_str = await config_api.aget("general.speech_to_text.wake_word.backend", "oww")
+        backend_str = wakeword_cfg.backend or "oww"
         self._backend_type = WakeWordBackendType(backend_str)
 
         # Wake word configuration
-        self._sensitivity = await config_api.aget("general.speech_to_text.wake_word.threshold", 0.5)
+        self._sensitivity = wakeword_cfg.threshold if wakeword_cfg.threshold is not None else 0.5
 
-        # Check environment variable first
+        # Optional override (compose may pass empty string when unset — treat as absent)
         model_path = os.getenv("AURORA_WAKE_WORD_MODEL_PATH")
+        if not model_path or not str(model_path).strip():
+            model_path = None
 
         # Fall back to config if env var not set
         if model_path is None:
-            model_path = await config_api.aget(
-                "general.speech_to_text.wake_word.model_path", "voice_models/jarvis.onnx"
-            )
+            model_path = wakeword_cfg.model_path or "voice_models/jarvis.onnx"
 
-        # Convert model path to list if it's a string or None
-        # Support comma-separated paths from env var
-        if model_path is None:
+        # JSON null / empty string must not become raw_paths [""] (breaks wake word labels / OWW)
+        if model_path is None or (isinstance(model_path, str) and not str(model_path).strip()):
             raw_paths = ["voice_models/jarvis.onnx"]
         elif isinstance(model_path, str):
             # Split by comma if multiple paths provided
@@ -185,6 +191,7 @@ class WakeWordService(BaseService):
         log_info("Wake word configuration loaded:")
         log_info(f"  Backend: {self._backend_type.value}")
         log_info(f"  Wake words: {self._wake_words}")
+        log_info(f"  Model paths (resolved): {self._model_paths}")
         log_info(f"  Sensitivity: {self._sensitivity}")
 
     async def _initialize_backend(self) -> None:

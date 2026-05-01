@@ -12,6 +12,8 @@ from collections.abc import Callable
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Mcp, Tooling
 
 config_api = ConfigAPI()
 
@@ -113,7 +115,10 @@ class ToolsManager:
         log_info("Loading plugin tools...")
 
         # OpenRecall plugin
-        if await config_api.aget("plugins.openrecall.activate", False):
+
+        if await config_api.aget(
+            ConfigKeys.services.tooling.plugins.openrecall.activate, default=False
+        ):
             try:
                 from app.services.tooling.tools.current_screen import current_screen_tool
 
@@ -123,7 +128,8 @@ class ToolsManager:
                 log_warning(f"Failed to load OpenRecall tools: {e}")
 
         # Jira plugin
-        if await config_api.aget("plugins.jira.activate", False):
+
+        if await config_api.aget(ConfigKeys.services.tooling.plugins.jira.activate, default=False):
             try:
                 from app.services.tooling.tools.jira_toolkit import jira_tools
 
@@ -133,7 +139,8 @@ class ToolsManager:
                 log_warning(f"Failed to load Jira tools: {e}")
 
         # Slack plugin
-        if await config_api.aget("plugins.slack.activate", False):
+
+        if await config_api.aget(ConfigKeys.services.tooling.plugins.slack.activate, default=False):
             try:
                 from app.services.tooling.tools.slack_toolkit import slack_tools
 
@@ -143,7 +150,10 @@ class ToolsManager:
                 log_warning(f"Failed to load Slack tools: {e}")
 
         # GitHub plugin
-        if await config_api.aget("plugins.github.activate", False):
+
+        if await config_api.aget(
+            ConfigKeys.services.tooling.plugins.github.activate, default=False
+        ):
             try:
                 from app.services.tooling.tools.github_toolkit import github_tools
 
@@ -153,12 +163,21 @@ class ToolsManager:
                 log_warning(f"Failed to load GitHub tools: {e}")
 
         # Search tools (Brave or DuckDuckGo as fallback)
-        if await config_api.aget("plugins.brave_search.activate", False):
-            try:
-                from app.services.tooling.tools.brave_search import search_brave_tool
 
-                self.tools.append(search_brave_tool)
-                log_info("Loaded Brave Search tool")
+        if await config_api.aget(
+            ConfigKeys.services.tooling.plugins.brave_search.activate, default=False
+        ):
+            try:
+                from app.services.tooling.tools.brave_search import async_get_brave_search_tool
+
+                brave_tool = await async_get_brave_search_tool()
+                if brave_tool:
+                    self.tools.append(brave_tool)
+                    log_info("Loaded Brave Search tool")
+                else:
+                    log_warning(
+                        "Brave Search activated but tool initialization failed (no API key?)"
+                    )
             except Exception as e:
                 log_warning(f"Failed to load Brave Search tool: {e}")
         else:
@@ -172,7 +191,8 @@ class ToolsManager:
                 log_warning(f"Failed to load DuckDuckGo Search tool: {e}")
 
         # Gmail plugin
-        if await config_api.aget("plugins.gmail.activate", False):
+
+        if await config_api.aget(ConfigKeys.services.tooling.plugins.gmail.activate, default=False):
             try:
                 from app.helpers.getGoogleCredentials import async_get_google_credentials
 
@@ -185,7 +205,10 @@ class ToolsManager:
                 log_warning(f"Failed to load Gmail tools: {e}")
 
         # GCalendar plugin
-        if await config_api.aget("plugins.gcalendar.activate", False):
+
+        if await config_api.aget(
+            ConfigKeys.services.tooling.plugins.gcalendar.activate, default=False
+        ):
             try:
                 from app.helpers.getGoogleCredentials import async_get_google_credentials
 
@@ -199,7 +222,8 @@ class ToolsManager:
 
     async def _load_mcp_tools(self) -> None:
         """Load MCP (Model Context Protocol) tools."""
-        if not await config_api.aget("mcp.enabled", True):
+
+        if not await config_api.aget(ConfigKeys.services.tooling.mcp.enabled, default=False):
             log_info("MCP is disabled in configuration")
             return
 
@@ -449,8 +473,13 @@ class ToolsManager:
                 mcp_tool_names = [tool.name for tool in current_mcp_tools]
 
             # Use async config access to avoid sync/async context issues
-            mcp_enabled = await config_api.aget("mcp.enabled", True)
-            mcp_servers = await config_api.aget("mcp.servers", {})
+
+            mcp_enabled = await config_api.aget(
+                ConfigKeys.services.tooling.mcp.enabled, default=False
+            )
+            tooling_cfg = await config_api.aget(ConfigKeys.services.tooling, Tooling)
+            mcp = tooling_cfg.mcp or Mcp()
+            servers_map = mcp.servers or {}
 
             return {
                 "enabled": mcp_enabled,
@@ -458,7 +487,7 @@ class ToolsManager:
                 "tools_loaded": self._mcp_tools_loaded,
                 "tool_count": mcp_tool_count,
                 "tool_names": mcp_tool_names,
-                "servers_configured": list(mcp_servers.keys()),
+                "servers_configured": list(servers_map.keys()),
             }
         except Exception as e:
             log_error(f"Failed to get MCP status: {e}")

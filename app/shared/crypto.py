@@ -21,7 +21,7 @@ def derive_mesh_inbound_key(secret: str) -> bytes:
     """Derive a 32-byte AES key from the gateway token secret.
 
     Args:
-        secret: The gateway.token_secret (or equivalent) string.
+        secret: The services.gateway.api.token_secret (or equivalent) string.
 
     Returns:
         32 bytes suitable for AES-GCM.

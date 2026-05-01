@@ -57,8 +57,13 @@ class BaseService(ABC):
         register_module(module, summary=summary, capabilities=capabilities or [])
 
         # Auto-register method contracts with validation
+        import inspect
+
         for attr_name in dir(self):
             try:
+                descriptor = inspect.getattr_static(self, attr_name, None)
+                if isinstance(descriptor, property):
+                    continue
                 attr = getattr(self, attr_name)
                 if hasattr(attr, "_contract_metadata"):
                     metadata = attr._contract_metadata
@@ -259,7 +264,7 @@ class BaseService(ABC):
                 # Determine which section changed
                 config_section = None
                 if key_path:
-                    # Extract section from key_path (e.g., "llm.provider" -> "llm")
+                    # Extract section from key_path (e.g., "services.orchestrator.llm.provider" -> "services")
                     parts = key_path.split(".")
                     if len(parts) > 0:
                         config_section = parts[0]
@@ -313,6 +318,9 @@ class BaseService(ABC):
 
         for attr_name in dir(self):
             try:
+                descriptor = inspect.getattr_static(self, attr_name, None)
+                if isinstance(descriptor, property):
+                    continue
                 attr = getattr(self, attr_name)
                 if hasattr(attr, "_contract_metadata"):
                     metadata = attr._contract_metadata

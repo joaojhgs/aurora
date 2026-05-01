@@ -81,7 +81,7 @@ class OrchestratorService(BaseService):
         """
         log_info(f"Reloading OrchestratorService configuration: section={config_section}")
         # Reload orchestrator if LLM config changed
-        if config_section is None or config_section in ["llm", "general"]:
+        if config_section is None or config_section in ["services", "services.orchestrator"]:
             log_info("Reloading orchestrator due to LLM config change...")
             # Reinitialize orchestrator with new config
             await self.stop()

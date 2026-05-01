@@ -34,7 +34,7 @@ COPY --chown=aurora:aurora app/services/config/config_defaults.json ./config.jso
 
 # Install dependencies using pyproject.toml
 # This installs all services for threads mode (monolithic container)
-RUN uv pip install --no-cache -e .[all-services,mode-threads]
+RUN uv pip install --system --no-cache -e .[all-services,mode-threads]
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/logs /app/cache && \

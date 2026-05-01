@@ -1,7 +1,12 @@
 # Aurora Voice Assistant - Makefile
 # Simple commands for common development tasks
 
-.PHONY: help setup lint test format check coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+# Prefer Docker Compose V2 (`docker compose`) when the plugin is installed
+DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+# Match Tiltfile `project_name` so `make docker-process-up` and `tilt up` use the same project/images
+AURORA_COMPOSE_PROJECT ?= aurora-process
+
+.PHONY: help setup lint test format check check-config-generated coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -11,6 +16,7 @@ help:
 	@echo "make lint        - Run linting on all files (ruff)"
 	@echo "make format      - Run auto-formatting (ruff)"
 	@echo "make check       - Run all checks (lint + typing)"
+	@echo "make check-config-generated - Verify generated config artifacts are current"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
 	@echo "make integration - Run integration tests only"
@@ -25,12 +31,16 @@ help:
 	@echo "make docker-process-logs  - View logs from all services"
 	@echo "make docker-process-ps    - Show status of all services"
 	@echo "make docker-process-restart - Restart all services"
+	@echo "make compose-validate-tilt - Validate process + Tilt compose merge (needs Docker Compose)"
+	@echo "make tilt-up              - Start Tilt UI (requires tilt CLI)"
+	@echo "make tilt-compose-rebuild - Build image(s) + tilt trigger (stack stays up; pass SERVICES=...)"
+	@echo "make docker-process-rebuild-tilt - Rebuild all Compose images for Tilt project"
 	@echo ""
 	@echo "DB Service Build Commands:"
 	@echo "-------------------------"
 	@echo "make docker-db-build-openai - Build DB service with OpenAI embeddings (~500MB)"
 	@echo "make docker-db-build-local   - Build DB service with local embeddings (~8GB)"
-	@echo "make docker-db-build        - Build DB service (default: OpenAI, set DB_EMBEDDINGS_MODE=local for local)"
+	@echo "make docker-db-build        - Build DB service from config.json services.db.embeddings.use_local"
 	@echo ""
 	@echo "Orchestrator Service Build Commands:"
 	@echo "-----------------------------------"
@@ -39,7 +49,7 @@ help:
 	@echo "make docker-orchestrator-build-hf-local    - Build orchestrator with HuggingFace local (~7GB)"
 	@echo "make docker-orchestrator-build-llama-cpp  - Build orchestrator with llama.cpp CPU (~700MB)"
 	@echo "make docker-orchestrator-build-llama-cpp-cuda - Build orchestrator with llama.cpp CUDA (~700MB)"
-	@echo "make docker-orchestrator-build            - Build orchestrator (default: OpenAI, set ORCHESTRATOR_LLM_MODE for others)"
+	@echo "make docker-orchestrator-build            - Build orchestrator from config.json services.orchestrator.llm"
 
 # Setup development environment
 setup:
@@ -101,6 +111,16 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
+# Config codegen: regenerate Pydantic models, ConfigKeys, and defaults from config_schema.json
+generate-config:
+	uv run python scripts/generate_config_artifacts.py
+
+check-config-generated:
+	@echo "Checking generated config artifacts are current..."
+	@uv run python scripts/generate_config_artifacts.py --check
+	@echo "Generated config artifacts are current."
+
+
 # Docker Process Mode Commands
 docker-process-mode:
 	@echo "Setting up and starting Aurora in process mode..."
@@ -108,61 +128,95 @@ docker-process-mode:
 
 docker-process-up:
 	@echo "Starting Aurora services in process mode..."
-	@docker-compose -f docker-compose.process.yml up -d
+	
+	@eval "$$(python scripts/config_to_docker_env.py --format shell)" && \
+		$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml up -d
 
 docker-process-down:
 	@echo "Stopping Aurora services in process mode..."
-	@docker-compose -f docker-compose.process.yml down
+	@$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml down
 
 docker-process-logs:
 	@echo "Viewing logs from all Aurora services..."
-	@docker-compose -f docker-compose.process.yml logs -f
+	@$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml logs -f
 
 docker-process-ps:
 	@echo "Status of Aurora services:"
-	@docker-compose -f docker-compose.process.yml ps
+	@$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml ps
 
 docker-process-restart:
 	@echo "Restarting Aurora services..."
-	@docker-compose -f docker-compose.process.yml restart
+	@$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml restart
+
+compose-validate-tilt:
+	@echo "Validating docker-compose.process.yml + docker-compose.tilt.yml..."
+	
+	@eval "$$(python scripts/config_to_docker_env.py --format shell)" && \
+	if $(DOCKER_COMPOSE) version >/dev/null 2>&1; then \
+		$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml -f docker-compose.tilt.yml config --quiet; \
+	else \
+		bash scripts/compose-docker.sh -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml -f docker-compose.tilt.yml config --quiet; \
+	fi
+	@echo "OK"
+
+tilt-up:
+	@command -v tilt >/dev/null 2>&1 || (echo "Install Tilt: https://docs.tilt.dev/install.html"; exit 1)
+	tilt up
+
+# Rebuild one or more services and tell a running `tilt up` to pick up new images (no `tilt down`).
+# Examples: make tilt-compose-rebuild
+#           make tilt-compose-rebuild SERVICES="db-service auth-service"
+tilt-compose-rebuild:
+	@bash scripts/tilt-compose-rebuild.sh $(SERVICES)
+
+# Rebuild images used by Tilt (project aurora-process) after dependency/Dockerfile changes
+docker-process-rebuild-tilt:
+	
+	@eval "$$(python scripts/config_to_docker_env.py --format shell)" && \
+		$(DOCKER_COMPOSE) -p $(AURORA_COMPOSE_PROJECT) -f docker-compose.process.yml -f docker-compose.tilt.yml build
 
 # DB Service Build Commands
 docker-db-build-openai:
 	@echo "Building DB service with OpenAI embeddings (smaller - ~500MB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg DB_EMBEDDINGS_MODE=openai db-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg DB_EMBEDDINGS_MODE=openai db-service
 
 docker-db-build-local:
 	@echo "Building DB service with local embeddings (larger - ~8GB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg DB_EMBEDDINGS_MODE=local db-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg DB_EMBEDDINGS_MODE=local db-service
 
 docker-db-build:
-	@echo "Building DB service (using DB_EMBEDDINGS_MODE env var, default: openai)..."
-	@docker-compose -f docker-compose.process.yml build db-service
+	@echo "Building DB service from config.json services.db.embeddings.use_local..."
+	@eval "$$(python scripts/config_to_docker_env.py --format shell)" && \
+		$(DOCKER_COMPOSE) -f docker-compose.process.yml build db-service
 
 # Orchestrator Service Build Commands
 docker-orchestrator-build-openai:
 	@echo "Building orchestrator service with OpenAI (smaller - ~200MB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=openai orchestrator-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=openai orchestrator-service
 
 docker-orchestrator-build-hf-endpoint:
 	@echo "Building orchestrator service with HuggingFace endpoint (small - ~250MB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=huggingface-endpoint orchestrator-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=huggingface-endpoint orchestrator-service
 
 docker-orchestrator-build-hf-local:
 	@echo "Building orchestrator service with HuggingFace local pipeline (larger - ~7GB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=huggingface-local orchestrator-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=huggingface-local orchestrator-service
 
 docker-orchestrator-build-llama-cpp:
 	@echo "Building orchestrator service with llama.cpp CPU (medium - ~700MB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=llama-cpp orchestrator-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=llama-cpp orchestrator-service
 
 docker-orchestrator-build-llama-cpp-cuda:
 	@echo "Building orchestrator service with llama.cpp CUDA (medium - ~700MB)..."
-	@docker-compose -f docker-compose.process.yml build --build-arg ORCHESTRATOR_LLM_MODE=llama-cpp-cuda orchestrator-service
+	@$(DOCKER_COMPOSE) -f docker-compose.process.yml build \
+		--build-arg ORCHESTRATOR_LLM_MODE=llama-cpp \
+		--build-arg ORCHESTRATOR_HARDWARE=cuda \
+		orchestrator-service
 
 docker-orchestrator-build:
-	@echo "Building orchestrator service (using ORCHESTRATOR_LLM_MODE env var, default: openai)..."
-	@docker-compose -f docker-compose.process.yml build orchestrator-service
+	@echo "Building orchestrator service from config.json services.orchestrator.llm..."
+	@eval "$$(python scripts/config_to_docker_env.py --format shell)" && \
+		$(DOCKER_COMPOSE) -f docker-compose.process.yml build orchestrator-service
 
 # Dependency Analysis Commands
 analyze-deps:

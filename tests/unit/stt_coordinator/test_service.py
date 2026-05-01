@@ -15,6 +15,7 @@ from app.messaging import (
 )
 from app.services.stt_coordinator.service import STTCoordinatorService
 from app.services.stt_wakeword.messages import WakeWordBackendType, WakeWordDetected
+from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator
 from app.shared.contracts.models.stt import (
     STTCoordinatorControl,
     STTMethods,
@@ -37,25 +38,31 @@ class Any:
 ANY = Any()
 
 
+_MOCK_COORDINATOR = Coordinator(
+    session_timeout_s=5.0,
+    multi_turn_enabled=False,
+    pause_tts_on_listen=True,
+    ambient_transcription=AmbientTranscription(enable=False),
+    audio_input=AudioInput(
+        sample_rate=16000,
+        channels=1,
+        chunk_size=1024,
+        device_index=None,
+    ),
+)
+
+
 # Mock config_manager before it's imported by the service
 @pytest.fixture(autouse=True)
 def mock_config_manager():
     with patch("app.services.stt_coordinator.service.config_api") as mock_config:
-        config_values = {
-            "general.speech_to_text.coordinator.session_timeout_s": 5.0,
-            "general.speech_to_text.coordinator.multi_turn_enabled": False,
-            "general.speech_to_text.coordinator.pause_tts_on_listen": True,
-            "general.speech_to_text.ambient_transcription.enable": False,
-            "general.speech_to_text.audio_input.sample_rate": 16000,
-            "general.speech_to_text.audio_input.channels": 1,
-            "general.speech_to_text.audio_input.chunk_size": 1024,
-            "general.speech_to_text.audio_input.device_index": None,
-            "general.speech_to_text.audio_input.auto_start": False,  # Disable auto-start for tests
-        }
-        mock_config.get.side_effect = lambda key, default=None: config_values.get(key, default)
-        mock_config.aget = AsyncMock(
-            side_effect=lambda key, default=None: config_values.get(key, default)
-        )
+
+        async def mock_aget_coord(key, *args, **kwargs):
+            if args and args[0] is Coordinator:
+                return _MOCK_COORDINATOR
+            return False
+
+        mock_config.aget = AsyncMock(side_effect=mock_aget_coord)
         yield mock_config
 
 

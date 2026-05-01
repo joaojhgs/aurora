@@ -1,0 +1,4 @@
+# RealtimeSTT / faster-whisper stacks may pull CUDA torch from PyPI; pin CPU wheels for Docker.
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+torchaudio==2.6.0+cpu

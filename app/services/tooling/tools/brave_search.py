@@ -1,9 +1,10 @@
 import asyncio
-from typing import Optional
 
 from langchain_community.tools import BraveSearch
 
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Plugins, Tooling
 
 config_api = ConfigAPI()
 
@@ -24,7 +25,12 @@ async def async_get_brave_search_tool() -> BraveSearch | None:
     global _search_brave_tool
     async with _tool_lock:
         if _search_brave_tool is None:
-            api_key = await config_api.aget("plugins.brave_search.api_key", None)
+            tooling = await config_api.aget(ConfigKeys.services.tooling, Tooling)
+            plugins = tooling.plugins or Plugins()
+            bs = plugins.brave_search
+            api_key = None
+            if bs and bs.api_key is not None:
+                api_key = bs.api_key.get_secret_value()
             if api_key:
                 _search_brave_tool = BraveSearch.from_api_key(
                     api_key=api_key, search_kwargs={"count": 3}

@@ -104,6 +104,9 @@ class AuthService(BaseService):
     """Standalone authentication service for Aurora."""
 
     def __init__(self) -> None:
+        # Before BaseService.__init__: contract scan may access ``manager`` property,
+        # which reads ``_manager`` — must exist or Python raises AttributeError.
+        self._manager: AuthManager | None = None
         super().__init__(
             module="Auth",
             summary="Authentication, authorization, pairing, and principal management",
@@ -121,7 +124,6 @@ class AuthService(BaseService):
                 "mesh_credentials",
             ],
         )
-        self._manager: AuthManager | None = None
 
     @property
     def manager(self) -> AuthManager:
@@ -135,16 +137,25 @@ class AuthService(BaseService):
         self._manager = AuthManager(self.bus)
         await self._manager.initialize()
 
-        # Load default device permissions from config
+        # Load default device permissions from config (bus → ConfigService only).
+        # Longer timeout: in process mode Config workers may not be ready immediately after depends_on.
         try:
             from app.shared.config.interface import ConfigAPI
+            from app.shared.config.keys import ConfigKeys
+            from app.shared.config.models import Auth as AuthConfigModel
 
             config = ConfigAPI()
-            default_perms = config.get("gateway.auth.default_device_permissions", default=[])
+            auth_cfg = await config.aget(
+                ConfigKeys.services.auth, AuthConfigModel, config_timeout=20.0
+            )
+            default_perms = list(auth_cfg.default_pairing_permissions or [])
             if default_perms:
                 self._manager.update_permission_defaults(default_perms)
-        except Exception:
-            pass
+        except Exception as e:
+            log_warning(
+                f"Could not load services.auth.default_pairing_permissions from ConfigService: {e}",
+                exc_info=True,
+            )
 
         log_info("Auth service started")
 
@@ -152,16 +163,25 @@ class AuthService(BaseService):
         log_info("Auth service stopped")
 
     async def reload(self, config_section: str | None = None) -> None:
-        if config_section in (None, "gateway", "auth"):
+        if config_section in (None, "services", "services.auth"):
             try:
                 from app.shared.config.interface import ConfigAPI
+                from app.shared.config.keys import ConfigKeys
+                from app.shared.config.models import Auth as AuthConfigModel
 
                 config = ConfigAPI()
-                default_perms = config.get("gateway.auth.default_device_permissions", default=[])
+                auth_cfg = await config.aget(
+                    ConfigKeys.services.auth, AuthConfigModel, config_timeout=20.0
+                )
+                default_perms = list(auth_cfg.default_pairing_permissions or [])
                 if self._manager:
+                    self._manager.invalidate_mesh_inbound_key_cache()
                     self._manager.update_permission_defaults(default_perms)
-            except Exception:
-                pass
+            except Exception as e:
+                log_warning(
+                    f"Auth reload: could not refresh permission defaults: {e}",
+                    exc_info=True,
+                )
 
     # ── Login / Logout ───────────────────────────────────────────────────
 

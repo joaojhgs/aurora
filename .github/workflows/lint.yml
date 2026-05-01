@@ -27,14 +27,17 @@ jobs:
         
     - name: Install linting dependencies
       run: uv pip install --system -e .[dev]
+
+    - name: Check generated config artifacts
+      run: make check-config-generated
         
     - name: Lint with ruff
       run: |
-        ruff check app tests
+        ruff check app tests scripts
         
     - name: Check formatting with ruff
       run: |
-        ruff format --check app tests
+        ruff format --check app tests scripts
         
     # Disabled for now as there are too many errors to be fixed 
     # - name: Type check with mypy

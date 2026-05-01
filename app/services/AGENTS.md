@@ -2,7 +2,7 @@
 
 > **Scope**: `app/services/` -- All Aurora services, their lifecycle, and development patterns.
 > **Parent**: [Root AGENTS.md](../../AGENTS.md) for global rules.
-> **Related**: [Messaging AGENTS.md](../messaging/AGENTS.md) for bus rules; [Contracts AGENTS.md](../shared/contracts/AGENTS.md) for topic constants and IO models; [Shared AGENTS.md](../shared/AGENTS.md) for shared code rules.
+> **Related**: [Messaging AGENTS.md](../messaging/AGENTS.md) for bus rules; [Contracts AGENTS.md](../shared/contracts/AGENTS.md) for topic constants and IO models; [Shared AGENTS.md](../shared/AGENTS.md) for shared code rules. **Config**: [CONFIG_SERVICE_PATTERN.md](../../docs/CONFIG_SERVICE_PATTERN.md).
 > **Service-specific guides**: [Gateway](gateway/AGENTS.md), [Auth](auth/AGENTS.md).
 
 ---
@@ -34,7 +34,13 @@ class MyService(BaseService):
     async def reload(self, config_section: str | None = None):
         """Handle config hot-reload. Called when Config.Updated fires."""
         if config_section == "my_section" or config_section is None:
-            self._setting = config_api.get("my_section.setting")
+            from app.shared.config.interface import ConfigAPI
+
+            self._setting = await ConfigAPI().aget(
+                "my_section.setting",
+                default=None,
+                config_timeout=15.0,
+            )
 ```
 
 ### What BaseService Does Automatically
@@ -227,7 +233,10 @@ my-plugin = ["my-plugin-dependency>=1.0.0"]
 
 In ToolsManager:
 ```python
-if config_manager.get("plugins.my_plugin.activate"):
+from app.shared.config.interface import config_api
+from app.shared.config.keys import ConfigKeys
+
+if await config_api.aget(ConfigKeys.services.tooling.plugins.my_plugin.activate, default=False):
     from .tools.plugins.my_plugin.tools import my_plugin_action
     self._tools.append(my_plugin_action)
 ```
@@ -261,7 +270,7 @@ Services automatically receive reload calls when `Config.Updated` fires:
 ```python
 async def reload(self, config_section: str | None = None):
     if config_section == "my_section" or config_section is None:
-        self._setting = config_api.get("my_section.setting")
+        self._setting = await config_api.aget("my_section.setting")
 ```
 
 Some services (like Orchestrator) stop and restart themselves on LLM config changes.

@@ -7,7 +7,9 @@ It uses the message bus under the hood to communicate with the ConfigService.
 from __future__ import annotations
 
 import warnings
-from typing import Any
+from typing import Any, TypeVar, overload
+
+from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.services.config.messages import (
@@ -19,6 +21,8 @@ from app.services.config.messages import (
 )
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.messaging.bus_init import get_bus_singleton
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class ConfigAPI:
@@ -84,7 +88,18 @@ class ConfigAPI:
         return self._bus is not None
 
     def _is_config_service_ready(self) -> bool:
-        """Check if ConfigService has registered its contracts."""
+        """Check if ConfigService has registered its contracts.
+
+        In **processes** mode each service only registers its own methods, so
+        ``Config.Get`` never appears in this process's registry even when Config
+        is healthy on Redis. Rely on the bus being up and use live requests instead.
+        """
+        import os
+
+        mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
+        if mode == "processes":
+            return bool(self._ensure_bus())
+
         try:
             from app.shared.contracts.registry import all_contracts
 
@@ -124,20 +139,14 @@ class ConfigAPI:
             # Check if we're already in an async context
             try:
                 asyncio.get_running_loop()
-                # If we're in an async context, we can't use asyncio.run()
-                # We also can't use run_coroutine_threadsafe from the same thread
-                # Best we can do is return empty dict and log warning
-                # Callers should use aget_config() instead
                 log_error(
                     "get_config() called from async context. Use aget_config() or await bus.request() directly."
                 )
                 return {}
             except RuntimeError:
-                # No running loop, safe to use asyncio.run()
                 result = asyncio.run(self.bus.request(ConfigMethods.GET, query, timeout=5.0))
 
             if result.ok and result.data:
-                # Extract config from response
                 if hasattr(result.data, "config"):
                     return result.data.config
                 return result.data
@@ -151,11 +160,13 @@ class ConfigAPI:
             log_error(f"Error getting config: {e}")
             return {}
 
-    async def aget_config(self, section: str = None) -> dict[str, Any]:
+    async def aget_config(self, section: str = None, *, timeout: float = 5.0) -> dict[str, Any]:
         """Get entire config or specific section (async version).
 
         Args:
             section: Optional section name to get
+            timeout: Bus request timeout (seconds); use a higher value during cross-process
+                startup when ConfigService may still be registering workers.
 
         Returns:
             Configuration dictionary
@@ -172,7 +183,7 @@ class ConfigAPI:
 
         try:
             query = GetConfigQuery(section=section)
-            result = await self.bus.request(ConfigMethods.GET, query, timeout=5.0)
+            result = await self.bus.request(ConfigMethods.GET, query, timeout=timeout)
 
             if result.ok and result.data:
                 # Extract config from response
@@ -192,48 +203,76 @@ class ConfigAPI:
             log_error(f"Error getting config: {e}")
             return {}
 
-    def get(self, key_path: str, default: Any = None) -> Any:
+    def get_app_config(self) -> Any:
+        """Get the fully typed application configuration.
+
+        This method retrieves the full configuration dictionary and parses it into
+        the strongly-typed AppConfig model, returning defaults for missing fields.
+
+        .. deprecated:: Use ``aget(ConfigKeys.services.section, SectionModel)`` instead.
+        """
+        from app.shared.config.models import Model as AppConfig
+
+        config_dict = self.get("", default={})
+
+        try:
+            return AppConfig.model_validate(config_dict)
+        except Exception as e:
+            log_error(f"Failed to validate AppConfig from defaults: {e}")
+            return AppConfig()
+
+    @overload
+    def get(self, key_path: str, model: type[T]) -> T: ...
+
+    @overload
+    def get(self, key_path: str, default: Any = ...) -> Any: ...
+
+    def get(self, key_path: str, default_or_model: Any = None) -> Any:
         """Get configuration value using dot notation (e.g., 'ui.activate').
 
-        This method provides backward compatibility with config_manager.get().
+        Two call signatures (mirrors ``aget``):
 
-        OPTIMIZATION: Instead of requesting full config, request only the needed section
-        to avoid flooding the bus with full config requests.
+        * ``get("services.tts", default={})`` — returns raw dict/scalar.
+        * ``get("services.tts", TtsConfig)`` — returns a validated Pydantic model.
 
         Args:
-            key_path: Configuration key path (e.g., 'llm.provider')
-            default: Default value if key not found
+            key_path: Configuration key path (e.g., 'services.tts')
+            default_or_model: Default value or Pydantic model class.
 
         Returns:
-            Configuration value or default
+            Configuration value, default, or validated Pydantic model instance.
         """
         import inspect
         import os
 
+        model: type[BaseModel] | None = None
+        default: Any = None
+
+        if isinstance(default_or_model, type) and issubclass(default_or_model, BaseModel):
+            model = default_or_model
+        else:
+            default = default_or_model
+
         try:
             import asyncio
 
-            # Check if we're in an async context
             try:
                 asyncio.get_running_loop()
-                # We're in an async context - can't use sync get_config()
-                # Log warning and emit RuntimeWarning for developers
                 warning_msg = (
                     f"ConfigAPI.get('{key_path}') called from async context. "
                     "Use 'await config_api.aget()' instead. Returning default value."
                 )
                 log_warning(warning_msg)
                 warnings.warn(warning_msg, RuntimeWarning, stacklevel=3)
+                if model is not None:
+                    return model()
                 return default
             except RuntimeError:
-                # No running loop, safe to proceed
                 pass
 
-            # Extract section from key_path to optimize request (e.g., 'llm.provider' -> 'llm')
             keys = key_path.split(".")
             section = keys[0] if keys else None
 
-            # Debug: Log caller for repeated calls
             stack = inspect.stack()
             if len(stack) > 1:
                 caller_frame = stack[1]
@@ -248,53 +287,113 @@ class ConfigAPI:
                     f"ConfigAPI.get('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()"
                 )
 
-            # Request only the needed section instead of full config
             if section:
                 config = self.get_config(section=section)
-                # Skip the first key since we already navigated to the section
                 keys_to_iterate = keys[1:]
             else:
                 config = self.get_config()
                 keys_to_iterate = keys
 
-            # Navigate to the value using dot notation
             value = config
 
             for k in keys_to_iterate:
                 if isinstance(value, dict):
                     value = value.get(k)
                     if value is None:
-                        return default
+                        break
                 else:
-                    return default
+                    value = None
+                    break
+
+            if model is not None:
+                if value is None or value == {}:
+                    return model()
+                return model.model_validate(value)
 
             return value if value is not None else default
         except Exception as e:
             log_error(f"Error getting config value: {e}")
+            if model is not None:
+                return model()
             return default
 
-    async def aget(self, key_path: str, default: Any = None) -> Any:
+    async def aget_app_config(self, *, config_timeout: float = 5.0) -> Any:
+        """Get the fully typed application configuration asynchronously.
+
+        .. deprecated:: Use ``aget(ConfigKeys.services.section, SectionModel)`` instead.
+        """
+        from app.shared.config.models import Model as AppConfig
+
+        config_dict = await self.aget("", default={}, config_timeout=config_timeout)
+
+        try:
+            return AppConfig.model_validate(config_dict)
+        except Exception as e:
+            log_error(f"Failed to validate AppConfig from defaults: {e}")
+            return AppConfig()
+
+    @overload
+    async def aget(
+        self,
+        key_path: str,
+        model: type[T],
+        *,
+        config_timeout: float = ...,
+        default: T | None = ...,
+    ) -> T: ...
+
+    @overload
+    async def aget(
+        self,
+        key_path: str,
+        default: Any = ...,
+        *,
+        config_timeout: float = ...,
+    ) -> Any: ...
+
+    async def aget(
+        self,
+        key_path: str,
+        default_or_model: Any = None,
+        *,
+        config_timeout: float = 5.0,
+        default: Any = None,
+    ) -> Any:
         """Get configuration value using dot notation (async version).
 
-        OPTIMIZATION: Instead of requesting full config, request only the needed section
-        to avoid flooding the bus with full config requests.
+        Two call signatures:
+
+        * ``await aget("services.tts", default={})`` — returns raw dict/scalar
+          (backward-compatible).
+        * ``await aget("services.tts", TtsConfig)`` — validates the raw dict
+          against the Pydantic model and returns a typed instance.
 
         Args:
-            key_path: Configuration key path (e.g., 'llm.provider')
-            default: Default value if key not found
+            key_path: Configuration key path (e.g., ``services.tts``).
+            default_or_model: Either a default value **or** a Pydantic model
+                class.  When a model class is passed, the raw section dict is
+                validated against it.
+            config_timeout: Timeout for the underlying Config.Get bus request.
+            default: Explicit default when using the model overload.
 
         Returns:
-            Configuration value or default
+            Configuration value, default, or a validated Pydantic model instance.
         """
         import inspect
         import os
 
+        model: type[BaseModel] | None = None
+        actual_default = default
+
+        if isinstance(default_or_model, type) and issubclass(default_or_model, BaseModel):
+            model = default_or_model
+        elif default is None:
+            actual_default = default_or_model
+
         try:
-            # Extract section from key_path to optimize request (e.g., 'llm.provider' -> 'llm')
             keys = key_path.split(".")
             section = keys[0] if keys else None
 
-            # Debug: Log caller for repeated calls
             stack = inspect.stack()
             if len(stack) > 1:
                 caller_frame = stack[1]
@@ -309,30 +408,35 @@ class ConfigAPI:
                     f"ConfigAPI.aget('{key_path}') called from {caller_file}:{caller_line} in {caller_func}()"
                 )
 
-            # Request only the needed section instead of full config
             if section:
-                config = await self.aget_config(section=section)
-                # Skip the first key since we already navigated to the section
+                config = await self.aget_config(section=section, timeout=config_timeout)
                 keys_to_iterate = keys[1:]
             else:
-                config = await self.aget_config()
+                config = await self.aget_config(timeout=config_timeout)
                 keys_to_iterate = keys
 
-            # Navigate to the value using dot notation
             value = config
 
             for k in keys_to_iterate:
                 if isinstance(value, dict):
                     value = value.get(k)
                     if value is None:
-                        return default
+                        break
                 else:
-                    return default
+                    value = None
+                    break
 
-            return value if value is not None else default
+            if model is not None:
+                if value is None or value == {}:
+                    return actual_default if actual_default is not None else model()
+                return model.model_validate(value)
+
+            return value if value is not None else actual_default
         except Exception as e:
             log_error(f"Error getting config value: {e}")
-            return default
+            if model is not None:
+                return actual_default if actual_default is not None else model()
+            return actual_default
 
     def get_config_dict(self) -> dict[str, Any]:
         """Get a copy of the entire configuration dictionary.
@@ -348,7 +452,7 @@ class ConfigAPI:
         This method provides backward compatibility with config_manager.get_section().
 
         Args:
-            section_path: Configuration section path (e.g., 'llm.third_party.openai.options')
+            section_path: Configuration section path (e.g., 'services.orchestrator.llm.third_party.openai.options')
             default: Default value if section not found
 
         Returns:
@@ -360,7 +464,7 @@ class ConfigAPI:
         """Update a specific configuration value.
 
         Args:
-            key_path: Configuration key path (e.g., "llm.provider")
+            key_path: Configuration key path (e.g., "services.orchestrator.llm.provider")
             value: New value
 
         Returns:
@@ -381,6 +485,33 @@ class ConfigAPI:
                 return False
         except RuntimeError as e:
             log_error(f"Bus not initialized: {e}")
+            return False
+        except Exception as e:
+            log_error(f"Error updating config: {e}")
+            return False
+
+    async def aupdate_config(self, key_path: str, value: Any, *, timeout: float = 15.0) -> bool:
+        """Update configuration via ConfigService (async; use from service coroutines).
+
+        Args:
+            key_path: Dot-notation path (e.g. ``services.gateway.webrtc.room``).
+            value: JSON-serializable value to set.
+            timeout: Bus request timeout in seconds.
+
+        Returns:
+            True if Config.Set succeeded.
+        """
+        if not self._ensure_bus():
+            log_error("Bus not available for config update")
+            return False
+        try:
+            command = UpdateConfigCommand(key_path=key_path, value=value)
+            result = await self.bus.request(ConfigMethods.SET, command, timeout=timeout)
+            if result.ok and result.data:
+                if hasattr(result.data, "success"):
+                    return bool(result.data.success)
+                return True
+            log_error(f"Error updating config: {getattr(result, 'error', None)}")
             return False
         except Exception as e:
             log_error(f"Error updating config: {e}")
@@ -575,7 +706,7 @@ class ConfigAPI:
         """
         try:
             # Update configuration
-            success = self.update_config("mcp.servers", servers_config)
+            success = self.update_config("services.tooling.mcp.servers", servers_config)
             if not success:
                 return {"success": False, "error": "Failed to update config"}
 
@@ -660,14 +791,14 @@ class ConfigAPI:
                 }
 
             # Get current MCP config
-            current_servers = self.get_config().get("mcp", {}).get("servers", {})
+            current_servers = self.get("services.tooling.mcp.servers", {})
 
             # Merge with discovered servers
             updated_servers = current_servers.copy()
             updated_servers.update(discovered)
 
             # Update configuration
-            success = self.update_config("mcp.servers", updated_servers)
+            success = self.update_config("services.tooling.mcp.servers", updated_servers)
             if not success:
                 return {"success": False, "error": "Failed to update config"}
 

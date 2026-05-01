@@ -75,10 +75,16 @@ class TestMCPToolIntegration:
 
         # Patch the config_api inside the initialize method
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(
-                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
-            )
-            mock_config.aget_config = AsyncMock(return_value=servers_config)
+
+            async def mock_aget(key, *args, **kwargs):
+                k = str(key).lower()
+                if "enabled" in k:
+                    return True
+                if "servers" in k:
+                    return servers_config
+                return {}
+
+            mock_config.aget = AsyncMock(side_effect=mock_aget)
 
             with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
                 await manager.initialize()
@@ -105,10 +111,16 @@ class TestMCPToolIntegration:
 
         # Test initialization
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(
-                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
-            )
-            mock_config.aget_config = AsyncMock(return_value=servers_config)
+
+            async def mock_aget(key, *args, **kwargs):
+                k = str(key).lower()
+                if "enabled" in k:
+                    return True
+                if "servers" in k:
+                    return servers_config
+                return {}
+
+            mock_config.aget = AsyncMock(side_effect=mock_aget)
 
             with patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}):
                 # Initialize
@@ -133,7 +145,7 @@ class TestMCPConfigurationIntegration:
     def test_mcp_configuration_schema_validation(self):
         """Test that MCP configuration follows expected schema."""
         # Test with current configuration
-        mcp_config = config_manager.get("mcp", {})
+        mcp_config = config_manager.get("services.tooling.mcp", {})
 
         # Should have required keys
         assert isinstance(mcp_config.get("enabled"), bool)
@@ -180,10 +192,16 @@ class TestMCPConfigurationIntegration:
         mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
 
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
-            mock_config.aget = AsyncMock(
-                side_effect=lambda key, default=None: True if key == "mcp.enabled" else default
-            )
-            mock_config.aget_config = AsyncMock(return_value=servers_config)
+
+            async def mock_aget(key, *args, **kwargs):
+                k = str(key).lower()
+                if "enabled" in k:
+                    return True
+                if "servers" in k:
+                    return servers_config
+                return {}
+
+            mock_config.aget = AsyncMock(side_effect=mock_aget)
 
             manager = MCPClientManager()
 

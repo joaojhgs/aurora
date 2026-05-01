@@ -2,16 +2,17 @@
 
 import asyncio
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 # Ensure project root is on sys.path before any `app.*` imports (process-mode entrypoint).
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_project_root))
 
-from app.helpers.aurora_logger import log_error, log_info
-from app.messaging import register_all_service_topics
-from app.services.auth.service import AuthService
-from app.shared.messaging.bus_init import initialize_bus_for_service
+from app.helpers.aurora_logger import log_error, log_info  # noqa: E402
+from app.messaging import register_all_service_topics  # noqa: E402
+from app.services.auth.service import AuthService  # noqa: E402
+from app.shared.messaging.bus_init import initialize_bus_for_service  # noqa: E402
 
 
 async def main() -> None:
@@ -38,12 +39,15 @@ async def main() -> None:
     except Exception as e:
         log_error(f"Error running {service_name}: {e}", exc_info=True)
         if bus is not None:
-            try:
+            with suppress(Exception):
                 await bus.stop()
-            except Exception:
-                pass
         raise SystemExit(1) from e
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Synchronous entry point for console scripts."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

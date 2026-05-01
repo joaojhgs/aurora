@@ -12,12 +12,18 @@ Tests cover:
 - Threading and async event loop handling
 """
 
+# ruff: noqa: E402
+
 import asyncio
 import sys
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
 import pytest
+
+# Mock hardware dependencies before importing transcription service
+sys.modules["faster_whisper"] = MagicMock()
+sys.modules["webrtcvad"] = MagicMock()
 
 from app.messaging import (
     AudioChunk,
@@ -30,11 +36,8 @@ from app.messaging import (
     TranscriptionType,
 )
 from app.services.stt_transcription.service import TranscriptionService, VADMode
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
 from app.shared.contracts.models.stt import TranscriptionMethods
-
-# Mock hardware dependencies before imports
-sys.modules["faster_whisper"] = MagicMock()
-sys.modules["webrtcvad"] = MagicMock()
 
 
 @pytest.fixture
@@ -50,19 +53,40 @@ def mock_bus():
 def mock_config():
     """Mock config manager to avoid loading real config."""
     with patch("app.services.stt_transcription.service.config_api") as mock_cfg:
-        mock_cfg.aget = AsyncMock(
-            side_effect=lambda key, default: {
-                "general.speech_to_text.language": "en",
-                "general.speech_to_text.transcription.realtime_model.enabled": True,
-                "general.speech_to_text.transcription.accurate_model.enabled": True,
-                "general.speech_to_text.transcription.realtime_model.model_size": "tiny",
-                "general.speech_to_text.transcription.accurate_model.model_size": "base",
-                "general.speech_to_text.transcription.realtime_model.device": "cpu",
-                "general.speech_to_text.transcription.accurate_model.device": "cpu",
-                "general.speech_to_text.transcription.realtime_model.compute_type": "int8",
-                "general.speech_to_text.transcription.accurate_model.compute_type": "int8",
-            }.get(key, default)
-        )
+        app_config_mock = MagicMock()
+        stt = app_config_mock.services.stt
+        stt.language = "en"
+        stt.transcription.realtime_model.enabled = True
+        stt.transcription.accurate_model.enabled = True
+        stt.transcription.realtime_model.model_size = "tiny"
+        stt.transcription.accurate_model.model_size = "base"
+        stt.transcription.realtime_model.device = "cpu"
+        stt.transcription.accurate_model.device = "cpu"
+        stt.transcription.realtime_model.compute_type = "int8"
+        stt.transcription.accurate_model.compute_type = "int8"
+
+        async def mock_aget(key, default_or_model=None, *args, **kwargs):
+            if default_or_model is Stt:
+                return Stt(
+                    language="en",
+                    transcription=Transcription(
+                        realtime_model=RealtimeModel(
+                            enabled=True,
+                            model_size="tiny",
+                            device="cpu",
+                            compute_type="int8",
+                        ),
+                        accurate_model=AccurateModel(
+                            enabled=True,
+                            model_size="base",
+                            device="cpu",
+                            compute_type="int8",
+                        ),
+                    ),
+                )
+            return {}
+
+        mock_cfg.aget = AsyncMock(side_effect=mock_aget)
         yield mock_cfg
 
 
@@ -148,13 +172,12 @@ class TestInitialization:
     @pytest.mark.asyncio
     async def test_loads_configuration(self, mock_bus, mock_config, mock_whisper_model, mock_vad):
         """Test service loads configuration on initialization."""
-        mock_config.aget = AsyncMock(
-            side_effect=lambda key, default: {
-                "general.speech_to_text.language": "en",
-                "general.speech_to_text.transcription.realtime_model.enabled": True,
-                "general.speech_to_text.transcription.accurate_model.enabled": True,
-            }.get(key, default)
-        )
+        app_config_mock = MagicMock()
+        stt = app_config_mock.services.stt
+        stt.language = "en"
+        stt.transcription.realtime_model.enabled = True
+        stt.transcription.accurate_model.enabled = True
+        mock_config.aget_app_config = AsyncMock(return_value=app_config_mock)
 
         with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
             service = TranscriptionService()
@@ -240,7 +263,7 @@ class TestModelLoading:
             "tiny",
             device="cpu",
             compute_type="int8",
-            download_root="chat_models",
+            download_root=ANY,
         )
 
         await service.stop()
@@ -255,7 +278,7 @@ class TestModelLoading:
             "base",
             device="cpu",
             compute_type="int8",
-            download_root="chat_models",
+            download_root=ANY,
         )
 
         await service.stop()

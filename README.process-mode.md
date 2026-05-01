@@ -89,28 +89,52 @@ The process mode setup runs the following services:
 - **redis**: Redis server for BullMQBus message queue
 - **config-service**: Configuration management (starts first)
 - **db-service**: Database and RAG operations
+- **auth-service**: Authentication, pairing, JWT, mesh trust (uses DB via bus)
 - **tooling-service**: Tool management and MCP integration
 - **scheduler-service**: Cron job scheduling
 - **tts-service**: Text-to-speech synthesis
-- **audio-input-service**: Audio capture from microphone
-- **wakeword-service**: Wake word detection
-- **transcription-service**: Speech-to-text transcription
-- **stt-coordinator-service**: STT workflow coordination
-- **orchestrator-service**: Main orchestration (starts last)
+- **stt-wakeword-service**: Wake word detection
+- **stt-transcription-service**: Speech-to-text transcription
+- **stt-coordinator-service**: STT workflow and audio capture (see **Microphone / Linux audio** below)
+- **orchestrator-service**: LangGraph / LLM orchestration
+- **gateway-service**: HTTP/WebSocket/WebRTC API (`GATEWAY_HOST_PORT` → container `8000`)
+
+There is **no supervisor container** in process mode: Compose + Redis replace in-process `Supervisor` startup.
+
+## Microphone / Linux audio (STT coordinator)
+
+The coordinator container uses **PyAudio** → **PortAudio** → **ALSA**. On Linux, Compose passes through **`/dev/snd`** and adds the host **`audio` group GID** so the non-root `aurora` user can open the mic.
+
+1. **GID is synced into `.env` when needed**: `make docker-process-up`, `./scripts/docker-process-mode.sh`, and **`tilt up`** run **`scripts/sync-stt-audio-gid-in-dotenv.sh`**, which sets **`STT_HOST_AUDIO_GID`** from `getent group audio` (fallback **29**) **only if** `.env` is missing the key or the value changed — avoiding constant file churn. If you have no `.env`, Compose still uses **`STT_HOST_AUDIO_GID:-29`** from the YAML.
+2. **Docker Desktop on macOS** does not provide `/dev/snd`. Use **Linux**, **WSL2**, or a compose override that removes `devices` / `group_add` for `stt-coordinator-service` if you only run headless STT.
+3. **PulseAudio / PipeWire**: if you need the container to use the host session server, set `PULSE_SERVER` (e.g. `unix:/run/user/1000/pulse/native`) and bind-mount the host’s runtime dir in a **local override** file — paths differ per distro/user.
+
+The coordinator image installs **`libasound2`** at runtime (not only `portaudio19-dev` at build time).
+
+## Tilt (optional)
+
+For iterative dev with per-service `DEBUG` buttons and optional ngrok, see **[docs/TILT.md](docs/TILT.md)**.
 
 ## Service Dependencies
 
-Services start in dependency order:
-1. Redis (foundation)
-2. Config Service (needed by all)
-3. DB Service (foundation)
-4. Tooling Service (depends on DB)
-5. Scheduler Service (depends on DB)
-6. TTS Service (standalone)
-7. Audio Input Service (standalone)
-8. Wake Word & Transcription Services (depend on Audio Input)
-9. STT Coordinator (depends on Wake Word & Transcription)
-10. Orchestrator (depends on all above)
+Services start in dependency order (see `docker-compose.process.yml` for exact `depends_on`):
+
+1. **Redis** (foundation; healthcheck before config)
+2. **Config** (needed by all Aurora services)
+3. **DB** (after config)
+4. **Auth** (after config, DB, Redis)
+5. **Tooling** / **Scheduler** (after config, DB, auth, Redis)
+6. **Orchestrator** (after config, DB, auth, tooling, Redis)
+7. **Gateway** (after config, DB, auth, tooling, orchestrator, Redis) — exposes port **8000** in-container
+8. **TTS**, **STT** workers (after config; coordinator also depends on wakeword + transcription)
+
+## Gateway port
+
+Host port defaults to **8000**. Override when port is busy:
+
+```bash
+GATEWAY_HOST_PORT=18000 docker compose -f docker-compose.process.yml up -d gateway-service
+```
 
 ## Configuration
 
@@ -122,21 +146,27 @@ All services support these environment variables:
 - `AURORA_ARCHITECTURE_MODE`: Must be `processes` for this setup
 - `REDIS_URL`: Redis connection URL (default: `redis://redis:6379`)
 - `AURORA_LOG_LEVEL`: Logging level (default: `INFO`)
-
 ### Volumes
 
-The following directories are mounted:
+Paths on the left are relative to the **Compose project directory** (repo root when you run `docker compose` from there):
 
-- `./data` → `/app/data`: Application data and databases
-- `./config` → `/app/config`: Configuration files
-- `./logs` → `/app/logs`: Service logs
-- `./config.json` → `/app/config.json`: Main config file
-- `./chat_models` → `/app/chat_models`: LLM models (if needed)
-- `./voice_models` → `/app/voice_models`: Voice models (if needed)
+- `…/data` → `/app/data`: Application data and databases
+- `…/config` → `/app/config`: Writable config dir
+- `…/logs` → `/app/logs`: Service logs
+- `…/` (repo root) → `/app/host`: Optional full checkout (read/write) for dev sync
+- `…/models` → `/app/models`: LLM/voice/wakeword assets (services that need models)
+
+**Configuration**: Only **`config-service`** bakes **`config.json`** at image build (`docker/services/Dockerfile.config` copies the repo-root **`config.json`**). That file **must exist** when you build (create one from **`app/services/config/config_defaults.json`** if you do not keep `config.json` in the tree). All other services use **ConfigAPI** over the bus to **ConfigService**—they do not ship a local `config.json`. Change settings at runtime via **ConfigService** / API; to change the image’s starting config, edit **`config.json`** and **rebuild `config-service`** only.
+
+Build-time image variants are also derived from **`config.json`** by the supported Make/scripts workflows. `scripts/config_to_docker_env.py` maps `services.db.embeddings.use_local`, `services.orchestrator.llm.provider`, and hardware acceleration flags into Compose build args such as `DB_EMBEDDINGS_MODE`, `ORCHESTRATOR_LLM_MODE`, and `TTS_HARDWARE`. Inspect with:
+
+```bash
+python scripts/config_to_docker_env.py --format env
+```
 
 ### Audio Devices (Linux only)
 
-The `audio-input-service` requires access to audio devices. On Linux, this is handled via device mounting (`/dev/snd`). On macOS/Windows, you may need to use different approaches.
+The **stt-coordinator-service** mounts `/dev/snd` for microphone capture. On macOS/Windows, use Linux/WSL2 or adjust audio passthrough for your environment.
 
 ## Monitoring
 
@@ -168,7 +198,7 @@ docker-compose -f docker-compose.process.yml restart orchestrator-service
 You can run multiple instances of stateless services:
 
 ```bash
-docker-compose -f docker-compose.process.yml up -d --scale transcription-service=2
+docker compose -f docker-compose.process.yml up -d --scale stt-transcription-service=2
 ```
 
 ## Troubleshooting
@@ -206,7 +236,7 @@ docker-compose -f docker-compose.process.yml up -d --scale transcription-service
 
 - On Linux: Ensure `/dev/snd` devices are accessible
 - On macOS/Windows: Consider using virtual audio devices or WSL2
-- Check audio-input-service logs for device errors
+- Check stt-coordinator-service logs for device errors
 
 ### High memory usage
 

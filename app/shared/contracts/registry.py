@@ -58,8 +58,8 @@ class MethodContract(BaseModel):
     summary: str = ""
     bus_topic: str | None = None
     default_priority: int = 50
-    allow_origins: list[str] = Field(default_factory=lambda: ["internal"])
-    required_perms: list[str] = Field(default_factory=list)
+    allow_origins: list[str] = ["internal"]
+    required_perms: list[str] = []
     method_type: str = "use"
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None = None
@@ -283,26 +283,39 @@ def register_method(
         )
 
 
-def get_contract(name: str) -> MethodContract | None:
-    """Get a contract by bus topic or short method name.
+def unregister_method(registry_key: str) -> None:
+    """Remove a specific method contract from the registry by its bus topic."""
+    if registry_key in _registry:
+        mc = _registry.pop(registry_key)
+        _impls.pop(registry_key, None)
+        # Also remove from module
+        if mc.module in _modules:
+            module = _modules[mc.module]
+            module.methods = [
+                m for m in module.methods if (m.bus_topic or f"{m.module}.{m.name}") != registry_key
+            ]
 
-    Tries exact bus-topic lookup first (e.g. ``"DB.CreateToken"``).
-    Falls back to scanning for a matching short ``name`` attribute
-    when the exact key is not found.
+
+def unregister_module(module_name: str) -> None:
+    """Remove a module and all its method contracts from the registry."""
+    if module_name in _modules:
+        module = _modules.pop(module_name)
+        for mc in module.methods:
+            registry_key = mc.bus_topic or f"{mc.module}.{mc.name}"
+            _registry.pop(registry_key, None)
+            _impls.pop(registry_key, None)
+
+
+def get_contract(name: str) -> MethodContract | None:
+    """Get a contract by bus topic (e.g. ``"DB.CreateToken"``).
 
     Args:
-        name: Full bus topic ("Module.Method") or short method name ("CreateToken")
+        name: Full bus topic ("Module.Method")
 
     Returns:
         MethodContract if found, None otherwise
     """
-    contract = _registry.get(name)
-    if contract is not None:
-        return contract
-    for mc in _registry.values():
-        if mc.name == name:
-            return mc
-    return None
+    return _registry.get(name)
 
 
 def all_contracts() -> dict[str, MethodContract]:

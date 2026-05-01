@@ -25,7 +25,7 @@ COPY --chown=aurora:aurora modules/ modules/
 
 # Install dependencies using pyproject.toml optional groups
 # Scheduler service needs core + service-scheduler + mode-processes
-RUN uv pip install --no-cache -e .[service-scheduler,mode-processes]
+RUN uv pip install --system --no-cache -e .[service-scheduler,mode-processes]
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app

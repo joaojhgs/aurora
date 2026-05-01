@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.supervisor import Supervisor
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
 
 config_api = ConfigAPI()
 
@@ -61,7 +62,7 @@ async def main_async():
         log_info("✓ Config change subscription active")
 
         # Start OpenRecall if enabled
-        if await config_api.aget("plugins.openrecall.activate", False):
+        if await config_api.aget(ConfigKeys.SERVICES_TOOLING_PLUGINS_OPENRECALL_ACTIVATE, default=False):
             log_info("Starting OpenRecall integration...")
             from threading import Thread
 
@@ -248,7 +249,8 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        if config_api.get("ui.activate"):
+        ui_active = config_api.get(ConfigKeys.UI_ACTIVATE, default=False)
+        if ui_active:
             # UI mode - run supervisor in background thread
             main_with_ui()
         else:

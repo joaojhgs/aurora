@@ -81,7 +81,7 @@ python main.py  # UI activation controlled by config.json
 ```
 
 **Configuration:**
-- Copy `.env.file` to `.env` and add API keys
+- Copy `.env.example` to `.env` and add API keys
 - Modify `config.json` for settings (defaults work for most users)
 - Model files stored in `chat_models/` and `voice_models/` directories
 

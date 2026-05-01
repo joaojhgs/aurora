@@ -23,6 +23,7 @@ from app.services.stt_wakeword.messages import (
     WakeWordDetected,
 )
 from app.services.stt_wakeword.service import WakeWordService
+from app.shared.config.models import Wakeword
 from app.shared.contracts.models.stt import WakeWordMethods
 
 # Mock hardware dependencies before imports
@@ -45,9 +46,9 @@ def mock_config():
     """Mock config manager to avoid loading real config."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
         mock_cfg.get.side_effect = lambda key, default: {
-            "general.speech_to_text.wake_word.backend": "oww",
-            "general.speech_to_text.wake_word.threshold": 0.5,
-            "general.speech_to_text.wake_word.model_path": "voice_models/jarvis.onnx",
+            "services.stt.wake_word.backend": "oww",
+            "services.stt.wake_word.threshold": 0.5,
+            "services.stt.wake_word.model_path": "voice_models/jarvis.onnx",
         }.get(key, default)
         yield mock_cfg
 
@@ -94,11 +95,9 @@ async def test_load_config_with_string_model_path(mock_bus):
     """Test loading configuration with string model path."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
         mock_cfg.aget = AsyncMock(
-            side_effect=lambda key, default: {
-                "general.speech_to_text.wake_word.backend": "oww",
-                "general.speech_to_text.wake_word.threshold": 0.7,
-                "general.speech_to_text.wake_word.model_path": "voice_models/aurora.onnx",
-            }.get(key, default)
+            return_value=Wakeword(
+                backend="oww", threshold=0.7, model_path="voice_models/aurora.onnx"
+            )
         )
 
         with (
@@ -112,17 +111,14 @@ async def test_load_config_with_string_model_path(mock_bus):
 
 @pytest.mark.asyncio
 async def test_load_config_with_list_model_paths(mock_bus):
-    """Test loading configuration with multiple model paths."""
+    """Test loading configuration with comma-separated model paths."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
         mock_cfg.aget = AsyncMock(
-            side_effect=lambda key, default: {
-                "general.speech_to_text.wake_word.backend": "pvp",  # Use correct enum value
-                "general.speech_to_text.wake_word.threshold": 0.6,
-                "general.speech_to_text.wake_word.model_path": [
-                    "voice_models/aurora.ppn",
-                    "voice_models/jarvis.ppn",
-                ],
-            }.get(key, default)
+            return_value=Wakeword(
+                backend="pvp",
+                threshold=0.6,
+                model_path="voice_models/aurora.ppn,voice_models/jarvis.ppn",
+            )
         )
 
         with (
@@ -139,11 +135,7 @@ async def test_load_config_with_none_model_path(mock_bus):
     """Test loading configuration with None model path uses default."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
         mock_cfg.aget = AsyncMock(
-            side_effect=lambda key, default: {
-                "general.speech_to_text.wake_word.backend": "oww",
-                "general.speech_to_text.wake_word.threshold": 0.5,
-                "general.speech_to_text.wake_word.model_path": None,
-            }.get(key, default)
+            return_value=Wakeword(backend="oww", threshold=0.5, model_path=None)
         )
 
         with (

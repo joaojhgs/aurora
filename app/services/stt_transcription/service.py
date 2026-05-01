@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
+import os
 import threading
 import time
 import wave
@@ -42,6 +43,8 @@ from app.messaging import (
     TranscriptionType,
 )
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
@@ -52,6 +55,7 @@ from app.shared.contracts.models.stt import (
     TranscriptionModule,
 )
 from app.shared.contracts.registry import method_contract
+from app.shared.path_utils import ensure_path_writable_or_tmp
 from app.shared.services.base_service import BaseService
 
 config_api = ConfigAPI()
@@ -134,16 +138,27 @@ class TranscriptionService(BaseService):
             return
 
         # Load configuration (async)
-        self._language = await config_api.aget("general.speech_to_text.language", "")
-        self._realtime_enabled = await config_api.aget(
-            "general.speech_to_text.transcription.realtime_model.enabled", True
-        )
-        self._accurate_enabled = await config_api.aget(
-            "general.speech_to_text.transcription.accurate_model.enabled", True
-        )
+        stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
+        self._language = stt_cfg.language or ""
+        transcription_cfg = stt_cfg.transcription or Transcription()
+
+        realtime_model = transcription_cfg.realtime_model
+        if realtime_model is not None and realtime_model.enabled is not None:
+            self._realtime_enabled = realtime_model.enabled
+        else:
+            self._realtime_enabled = True
+
+        accurate_model = transcription_cfg.accurate_model
+        if accurate_model is not None and accurate_model.enabled is not None:
+            self._accurate_enabled = accurate_model.enabled
+        else:
+            self._accurate_enabled = True
 
         log_info("Starting transcription service...")
         self._running = True
+
+        # Bind-mounted ./data is often root-owned; HF/xet need a writable cache.
+        self._ensure_huggingface_cache_env()
 
         # Store event loop for callbacks
         self._loop = asyncio.get_event_loop()
@@ -187,6 +202,22 @@ class TranscriptionService(BaseService):
         self._set_started(False)
         log_info("Transcription service stopped")
 
+    def _ensure_huggingface_cache_env(self) -> None:
+        """Point HF hub/xet at a writable tree (bind-mounted ./data is often root-owned)."""
+        hf_home = os.environ.get("HF_HOME", "/app/data/huggingface")
+        writable = ensure_path_writable_or_tmp(hf_home, tmp_leaf="huggingface")
+        os.environ["HF_HOME"] = writable
+        hub = os.path.join(writable, "hub")
+        os.makedirs(hub, exist_ok=True)
+        os.environ["HF_HUB_CACHE"] = hub
+        os.environ["HUGGINGFACE_HUB_CACHE"] = hub
+        if os.path.normpath(writable) != os.path.normpath(hf_home):
+            log_warning(
+                "HF cache not writable at %r; using %r for HF_HOME / hub cache",
+                hf_home,
+                writable,
+            )
+
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
 
@@ -195,7 +226,7 @@ class TranscriptionService(BaseService):
         """
         log_info(f"Reloading TranscriptionService configuration: section={config_section}")
         # Reload transcription models if config changed
-        if config_section is None or config_section in ["speech_to_text", "general"]:
+        if config_section is None or config_section in ("services", "services.stt"):
             log_info("Reloading transcription models due to config change...")
             if self._realtime_model:
                 del self._realtime_model
@@ -204,13 +235,21 @@ class TranscriptionService(BaseService):
                 del self._accurate_model
                 self._accurate_model = None
             # Reload config and models
-            self._language = await config_api.aget("general.speech_to_text.language", "")
-            self._realtime_enabled = await config_api.aget(
-                "general.speech_to_text.transcription.realtime_model.enabled", True
-            )
-            self._accurate_enabled = await config_api.aget(
-                "general.speech_to_text.transcription.accurate_model.enabled", True
-            )
+            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
+            self._language = stt_cfg.language or ""
+            transcription_cfg = stt_cfg.transcription or Transcription()
+
+            realtime_model = transcription_cfg.realtime_model
+            if realtime_model is not None and realtime_model.enabled is not None:
+                self._realtime_enabled = realtime_model.enabled
+            else:
+                self._realtime_enabled = True
+
+            accurate_model = transcription_cfg.accurate_model
+            if accurate_model is not None and accurate_model.enabled is not None:
+                self._accurate_enabled = accurate_model.enabled
+            else:
+                self._accurate_enabled = True
             await self._load_models()
         log_info("TranscriptionService configuration reloaded")
 
@@ -229,31 +268,32 @@ class TranscriptionService(BaseService):
 
         try:
             # Get model configuration
-            accurate_model_size = await config_api.aget(
-                "general.speech_to_text.transcription.accurate_model.model_size", "base"
-            )
-            realtime_model_size = await config_api.aget(
-                "general.speech_to_text.transcription.realtime_model.model_size", "tiny"
-            )
-            # Use device from new config structure, with fallback to legacy hardware_acceleration
-            realtime_device = await config_api.aget(
-                "general.speech_to_text.transcription.realtime_model.device", None
-            )
-            accurate_device = await config_api.aget(
-                "general.speech_to_text.transcription.accurate_model.device", None
-            )
-            if realtime_device is None or accurate_device is None:
-                # Fallback to legacy hardware_acceleration setting
+            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
+            transcription_cfg = stt_cfg.transcription or Transcription()
+            raw_realtime = transcription_cfg.realtime_model
+            realtime_model_cfg = raw_realtime or RealtimeModel()
+            accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
+
+            accurate_model_size = accurate_model_cfg.model_size or "base"
+            realtime_model_size = realtime_model_cfg.model_size or "tiny"
+            realtime_device = realtime_model_cfg.device
+            accurate_device = accurate_model_cfg.device
+            accurate_compute_type = accurate_model_cfg.compute_type or "int8"
+            realtime_compute_type = realtime_model_cfg.compute_type or "int8"
+
+            # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
+            if raw_realtime is not None:
                 legacy_device = get_use_hardware_acceleration("stt")
                 realtime_device = realtime_device or legacy_device
                 accurate_device = accurate_device or legacy_device
-            accurate_compute_type = await config_api.aget(
-                "general.speech_to_text.transcription.accurate_model.compute_type", "int8"
+            # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
+            from app.shared.path_utils import ensure_path_writable_or_tmp
+
+            _hf = os.environ.get("HF_HOME", "/app/data/huggingface")
+            _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
+                _hf, "whisper"
             )
-            realtime_compute_type = await config_api.aget(
-                "general.speech_to_text.transcription.realtime_model.compute_type", "int8"
-            )
-            download_root = "chat_models"  # Default download location
+            download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
 
             # Load realtime model (fast, lower accuracy)
             if self._realtime_enabled:

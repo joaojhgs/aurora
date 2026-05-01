@@ -68,8 +68,8 @@ The ACL subsystem used by Gateway, Auth, and any permission-checking code.
 ### `shared/config/` -- ConfigAPI
 
 - `interface.py` -- `ConfigAPI` singleton for bus-backed config access
-- Sync: `config_api.get("general.llm.provider")`, `config_api.get_config()`
-- Async: `await config_api.aget("general.llm.provider")`
+- Sync: `config_api.get("services.orchestrator.llm.provider")`, `config_api.get_config()`
+- Async: `await config_api.aget("services.orchestrator.llm.provider")`
 - Global instance: `from app.shared.config.interface import config_api`
 
 ### `shared/services/` -- BaseService

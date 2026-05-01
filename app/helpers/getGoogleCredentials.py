@@ -5,6 +5,8 @@ from langchain_google_community.calendar.utils import (
 )
 
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Gcalendar, Gmail, Google, Plugins, Tooling
 
 config_api = ConfigAPI()
 
@@ -24,23 +26,10 @@ def _get_scopes_sync() -> list:
     return scopes
 
 
-async def _async_get_scopes() -> list:
-    """Get scopes asynchronously from config service."""
-    scopes = []
-
-    if await config_api.aget("plugins.gmail.activate", False):
-        scopes.append("https://mail.google.com/")
-
-    if await config_api.aget("plugins.gcalendar.activate", False):
-        scopes.append("https://www.googleapis.com/auth/calendar")
-
-    return scopes
-
-
 async def async_get_google_credentials():
     """Get Google credentials asynchronously with proper config loading.
 
-    Uses await config_api.aget() to properly access config in async context.
+    Loads ``services.tooling`` as a ``Tooling`` model for Gmail/GCalendar scopes and Google client secrets path.
     Thread-safe via asyncio.Lock (created lazily so import does not require a running loop).
 
     Also updates the module-level ``google_credentials`` alias so synchronous code that
@@ -51,8 +40,18 @@ async def async_get_google_credentials():
         _credentials_lock = asyncio.Lock()
     async with _credentials_lock:
         if _google_credentials is None:
-            scopes = await _async_get_scopes()
-            credentials_file = await config_api.aget("plugins.google.credentials_file", None)
+            tooling = await config_api.aget(ConfigKeys.services.tooling, Tooling)
+            plugins = tooling.plugins or Plugins()
+            scopes = []
+            if (plugins.gmail or Gmail()).activate:
+                scopes.append("https://mail.google.com/")
+            if (plugins.gcalendar or Gcalendar()).activate:
+                scopes.append("https://www.googleapis.com/auth/calendar")
+
+            google = plugins.google or Google()
+            credentials_file = google.credentials_file
+            if credentials_file is not None and hasattr(credentials_file, "get_secret_value"):
+                credentials_file = credentials_file.get_secret_value()
             _google_credentials = get_google_credentials(
                 token_file=None,
                 scopes=scopes,

@@ -24,11 +24,11 @@ class TestFileFieldMetadata:
 
         # Verify we have the expected file fields
         expected_file_fields = [
-            "general.text_to_speech.model_file_path",
-            "general.text_to_speech.model_config_file_path",
-            "general.text_to_speech.piper_path",
-            "general.llm.local.llama_cpp.options.model_path",
-            "plugins.google.credentials_file",
+            "services.tts.model_file_path",
+            "services.tts.model_config_file_path",
+            "services.tts.piper_path",
+            "services.orchestrator.llm.local.llama_cpp.options.model_path",
+            "services.tooling.plugins.google.credentials_file",
         ]
 
         for field_path in expected_file_fields:
@@ -42,7 +42,7 @@ class TestFileFieldMetadata:
         """Test TTS model file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.model_file_path")
+        field = metadata.get("services.tts.model_file_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -55,7 +55,7 @@ class TestFileFieldMetadata:
         """Test TTS config file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.model_config_file_path")
+        field = metadata.get("services.tts.model_config_file_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -67,7 +67,7 @@ class TestFileFieldMetadata:
         """Test Piper executable field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.piper_path")
+        field = metadata.get("services.tts.piper_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -79,7 +79,7 @@ class TestFileFieldMetadata:
         """Test Llama.cpp model file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.llm.local.llama_cpp.options.model_path")
+        field = metadata.get("services.orchestrator.llm.local.llama_cpp.options.model_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -91,7 +91,7 @@ class TestFileFieldMetadata:
         """Test Google credentials file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("plugins.google.credentials_file")
+        field = metadata.get("services.tooling.plugins.google.credentials_file")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field

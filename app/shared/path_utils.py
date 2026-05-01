@@ -74,8 +74,12 @@ def resolve_path(path: str | Path, base_dir: Path | None = None) -> Path:
         return Path(path_str).resolve()
 
     # Handle paths starting with "/" that don't exist as absolute
-    # These are treated as relative to project root (legacy behavior)
+    # Legacy: "/voice_models/foo" was stored with a leading slash but meant project-relative.
+    # Docker Compose often sets absolute paths under /app (e.g. /app/models/...) that are not
+    # present at import time; those must NOT be joined to project root (would yield /app/app/...).
     if path_str.startswith("/") and not os.path.exists(path_str):
+        if path_str.startswith("/app/"):
+            return Path(path_str).resolve()
         # Remove leading "/" and resolve relative to project root
         relative_path = path_str.lstrip("/")
         resolved = base_dir / relative_path
@@ -108,3 +112,26 @@ def resolve_model_path(path: str | Path | None, default: str | None = None) -> P
         return None
 
     return resolve_path(path)
+
+
+def ensure_path_writable_or_tmp(preferred: str, *, tmp_leaf: str) -> str:
+    """Create ``preferred`` if possible and verify write access.
+
+    Bind-mounted ``./data`` on the host is often root-owned while the container runs as
+    non-root (e.g. Tilt ``working_dir: /app/host``). In that case fall back to a path
+    under the system temp directory so downloads and caches still work.
+    """
+    p = os.path.abspath(preferred)
+    try:
+        os.makedirs(p, exist_ok=True)
+        probe = os.path.join(p, ".aurora_write_probe")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return p
+    except OSError:
+        import tempfile
+
+        fb = os.path.join(tempfile.gettempdir(), "aurora", tmp_leaf)
+        os.makedirs(fb, mode=0o700, exist_ok=True)
+        return fb

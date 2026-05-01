@@ -7,36 +7,35 @@ The DB service supports two embedding modes with different Docker image sizes:
 ### 1. OpenAI Embeddings (Default)
 - **Image Size**: ~500MB
 - **Dependencies**: Minimal (aiosqlite, sqlite-vec, SQLAlchemy, langchain, langchain-community, langgraph)
-- **Configuration**: Set `general.embeddings.use_local=false` in `config.json`
+- **Configuration**: Set `services.db.embeddings.use_local=false` in `config.json`
 - **Use Case**: When you have OpenAI API access and want a smaller, faster image
 
 ### 2. Local Embeddings
 - **Image Size**: ~8GB
 - **Dependencies**: Above + langchain-huggingface + torch + transformers + sentence-transformers
-- **Configuration**: Set `general.embeddings.use_local=true` in `config.json`
+- **Configuration**: Set `services.db.embeddings.use_local=true` in `config.json`
 - **Use Case**: When you want to run embeddings locally without API calls
 
 ## Docker Usage
 
-### Using Build Args (Recommended)
+### Using Config-Driven Make Targets (Recommended)
 
 #### OpenAI Embeddings (Default)
 ```bash
-# Build with OpenAI embeddings (default)
-docker-compose -f docker-compose.process.yml build db-service
+# Build from services.db.embeddings.use_local in config.json
+make docker-db-build
 
-# Or explicitly set the mode
-DB_EMBEDDINGS_MODE=openai docker-compose -f docker-compose.process.yml build db-service
+# Or explicitly build the OpenAI variant
+make docker-db-build-openai
 ```
 
 #### Local Embeddings
 ```bash
-# Build with local embeddings using environment variable
-DB_EMBEDDINGS_MODE=local docker-compose -f docker-compose.process.yml build db-service
+# Build from services.db.embeddings.use_local in config.json
+make docker-db-build
 
-# Or set it in your shell environment
-export DB_EMBEDDINGS_MODE=local
-docker-compose -f docker-compose.process.yml build db-service
+# Or explicitly build the local variant
+make docker-db-build-local
 ```
 
 ### Using Direct Docker Build
@@ -57,17 +56,19 @@ The embedding mode is controlled by `config.json`:
 
 ```json
 {
-  "general": {
-    "embeddings": {
-      "use_local": false  // false = OpenAI, true = local
+  "services": {
+    "db": {
+      "embeddings": {
+        "use_local": false
+      }
     }
   }
 }
 ```
 
 **Important**: The Docker image must match your configuration:
-- If `use_local=false`: Use `DB_EMBEDDINGS_MODE=openai` (or default)
-- If `use_local=true`: Use `DB_EMBEDDINGS_MODE=local`
+- If `use_local=false`: `make docker-db-build` emits `DB_EMBEDDINGS_MODE=openai`
+- If `use_local=true`: `make docker-db-build` emits `DB_EMBEDDINGS_MODE=local`
 
 ## Size Comparison
 
@@ -79,14 +80,14 @@ The embedding mode is controlled by `config.json`:
 ## Switching Between Modes
 
 ### From OpenAI to Local
-1. Update `config.json`: Set `general.embeddings.use_local=true`
-2. Rebuild DB service: `DB_EMBEDDINGS_MODE=local docker-compose -f docker-compose.process.yml build db-service`
-3. Restart: `docker-compose -f docker-compose.process.yml up -d db-service`
+1. Update `config.json`: Set `services.db.embeddings.use_local=true`
+2. Rebuild DB service: `make docker-db-build`
+3. Restart: `make docker-process-up`
 
 ### From Local to OpenAI
-1. Update `config.json`: Set `general.embeddings.use_local=false`
-2. Rebuild DB service: `DB_EMBEDDINGS_MODE=openai docker-compose -f docker-compose.process.yml build db-service`
-3. Restart: `docker-compose -f docker-compose.process.yml up -d db-service`
+1. Update `config.json`: Set `services.db.embeddings.use_local=false`
+2. Rebuild DB service: `make docker-db-build`
+3. Restart: `make docker-process-up`
 
 ## Troubleshooting
 
@@ -106,15 +107,10 @@ The embedding mode is controlled by `config.json`:
    - You need offline operation
    - You have sufficient disk space and build time
 
-## Environment Variables
+## Inspect Generated Build Args
 
-You can set `DB_EMBEDDINGS_MODE` as an environment variable:
+The supported Make/scripts workflows derive `DB_EMBEDDINGS_MODE` from config:
 
 ```bash
-# In .env file or export
-export DB_EMBEDDINGS_MODE=local
-
-# Then use normally
-docker-compose -f docker-compose.process.yml up -d
+python scripts/config_to_docker_env.py --format env
 ```
-

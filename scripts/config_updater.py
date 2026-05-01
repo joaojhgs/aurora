@@ -60,7 +60,7 @@ def update_provider_config(provider_type, llm_backend=None, gpu_backend=None):
     print(f"🔧 Updating configuration for {provider_type} provider...")
 
     # Set provider type
-    config.set("llm.provider", provider_type, save=False)
+    config.set("services.orchestrator.llm.provider", provider_type, save=False)
 
     if provider_type == "openai":
         # Default OpenAI configuration
@@ -72,17 +72,31 @@ def update_provider_config(provider_type, llm_backend=None, gpu_backend=None):
 
     elif provider_type == "huggingface_pipeline":
         # Set up local HuggingFace pipeline
-        config.set("llm.provider", "huggingface_pipeline", save=False)
+        config.set("services.orchestrator.llm.provider", "huggingface_pipeline", save=False)
 
         if gpu_backend:
             # Configure device based on GPU backend
             if gpu_backend in ["cuda", "rocm"]:
-                config.set("llm.local.huggingface_pipeline.options.device", "auto", save=False)
-                config.set("llm.local.huggingface_pipeline.options.torch_dtype", "auto", save=False)
-            else:
-                config.set("llm.local.huggingface_pipeline.options.device", "cpu", save=False)
                 config.set(
-                    "llm.local.huggingface_pipeline.options.torch_dtype", "float32", save=False
+                    "services.orchestrator.llm.local.huggingface_pipeline.options.device",
+                    "auto",
+                    save=False,
+                )
+                config.set(
+                    "services.orchestrator.llm.local.huggingface_pipeline.options.torch_dtype",
+                    "auto",
+                    save=False,
+                )
+            else:
+                config.set(
+                    "services.orchestrator.llm.local.huggingface_pipeline.options.device",
+                    "cpu",
+                    save=False,
+                )
+                config.set(
+                    "services.orchestrator.llm.local.huggingface_pipeline.options.torch_dtype",
+                    "float32",
+                    save=False,
                 )
 
         print(
@@ -91,16 +105,18 @@ def update_provider_config(provider_type, llm_backend=None, gpu_backend=None):
 
     elif provider_type == "llama_cpp":
         # Set up llama-cpp-python configuration
-        config.set("llm.provider", "llama_cpp", save=False)
+        config.set("services.orchestrator.llm.provider", "llama_cpp", save=False)
 
         if gpu_backend:
             # Configure GPU layers based on backend
             if gpu_backend in ["cuda", "rocm", "metal"]:
                 config.set(
-                    "llm.local.llama_cpp.options.n_gpu_layers", 35, save=False
+                    "services.orchestrator.llm.local.llama_cpp.options.n_gpu_layers", 35, save=False
                 )  # Use most GPU layers
             else:
-                config.set("llm.local.llama_cpp.options.n_gpu_layers", 0, save=False)  # CPU only
+                config.set(
+                    "services.orchestrator.llm.local.llama_cpp.options.n_gpu_layers", 0, save=False
+                )  # CPU only
 
         print(
             f"  ✅ Configured llama-cpp with GPU layers: {config.get('llm.local.llama_cpp.options.n_gpu_layers')}"
@@ -123,7 +139,7 @@ def update_feature_config(feature_level):
         print("  ✅ UI enabled")
 
         # Enable local embeddings
-        config.set("embeddings.use_local", True, save=False)
+        config.set("services.db.embeddings.use_local", True, save=False)
         print("  ✅ Local embeddings enabled")
 
     if feature_level == "dev":
@@ -144,18 +160,18 @@ def update_hardware_config(gpu_backend, tts_gpu=False, stt_gpu=False):
 
     # Update hardware acceleration settings with all required fields
     if gpu_backend in ["cuda", "rocm"]:
-        config.set("hardware_acceleration.llm", True, save=False)
+        config.set("services.orchestrator.hardware_acceleration", True, save=False)
         print(f"  ✅ LLM GPU acceleration enabled ({gpu_backend})")
     else:
-        config.set("hardware_acceleration.llm", False, save=False)
+        config.set("services.orchestrator.hardware_acceleration", False, save=False)
         print("  ✅ LLM using CPU")
 
-    config.set("hardware_acceleration.tts", tts_gpu, save=False)
-    config.set("hardware_acceleration.stt", stt_gpu, save=False)
+    config.set("services.tts.hardware_acceleration", tts_gpu, save=False)
+    config.set("services.stt.hardware_acceleration", stt_gpu, save=False)
 
     # Ensure all required hardware acceleration fields exist
-    config.set("hardware_acceleration.ocr_bg", False, save=False)
-    config.set("hardware_acceleration.ocr_curr", False, save=False)
+    config.set("services.tooling.hardware_acceleration.ocr_bg", False, save=False)
+    config.set("services.tooling.hardware_acceleration.ocr_curr", False, save=False)
 
     # Save all changes
     config.save_config()
@@ -166,7 +182,7 @@ def setup_api_keys():
     """Prompt user to set up API keys for third-party providers"""
     config = ConfigManager()
 
-    provider = config.get("llm.provider")
+    provider = config.get("services.orchestrator.llm.provider")
 
     if provider == "openai":
         print("\n🔑 OpenAI API Key Setup")
@@ -190,8 +206,8 @@ def export_room_invite(passphrase=None):
 
     config = ConfigManager()
 
-    room = config.get("gateway.webrtc.room", "")
-    password = config.get("gateway.webrtc.password", "")
+    room = config.get("services.gateway.webrtc.room", "")
+    password = config.get("services.gateway.webrtc.password", "")
 
     if not room or room == "default":
         print("❌ Room not configured yet. Start Aurora once to auto-generate.")
@@ -199,11 +215,11 @@ def export_room_invite(passphrase=None):
 
     payload = {
         "v": 1,
-        "app_id": config.get("gateway.webrtc.app_id", "aurora"),
+        "app_id": config.get("services.gateway.webrtc.app_id", "aurora"),
         "room": room,
         "password": password,
-        "brokers": config.get("gateway.signaling_mqtt.brokers", []),
-        "topic_root": config.get("gateway.signaling_mqtt.topic_root", "aurora"),
+        "brokers": config.get("services.gateway.signaling_mqtt.brokers", []),
+        "topic_root": config.get("services.gateway.signaling_mqtt.topic_root", "aurora"),
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -236,11 +252,11 @@ def import_room_invite(invite_code, passphrase=None):
 
     config = ConfigManager()
 
-    config.set("gateway.webrtc.app_id", payload["app_id"], save=False)
-    config.set("gateway.webrtc.room", payload["room"], save=False)
-    config.set("gateway.webrtc.password", payload["password"], save=False)
-    config.set("gateway.signaling_mqtt.brokers", payload["brokers"], save=False)
-    config.set("gateway.signaling_mqtt.topic_root", payload["topic_root"], save=False)
+    config.set("services.gateway.webrtc.app_id", payload["app_id"], save=False)
+    config.set("services.gateway.webrtc.room", payload["room"], save=False)
+    config.set("services.gateway.webrtc.password", payload["password"], save=False)
+    config.set("services.gateway.signaling_mqtt.brokers", payload["brokers"], save=False)
+    config.set("services.gateway.signaling_mqtt.topic_root", payload["topic_root"], save=False)
 
     config.save_config()
 
@@ -254,11 +270,11 @@ def show_room_info():
     """Print current room configuration."""
     config = ConfigManager()
 
-    room = config.get("gateway.webrtc.room", "(not set)")
-    password = config.get("gateway.webrtc.password", "")
-    app_id = config.get("gateway.webrtc.app_id", "aurora")
-    brokers = config.get("gateway.signaling_mqtt.brokers", [])
-    topic_root = config.get("gateway.signaling_mqtt.topic_root", "aurora")
+    room = config.get("services.gateway.webrtc.room", "(not set)")
+    password = config.get("services.gateway.webrtc.password", "")
+    app_id = config.get("services.gateway.webrtc.app_id", "aurora")
+    brokers = config.get("services.gateway.signaling_mqtt.brokers", [])
+    topic_root = config.get("services.gateway.signaling_mqtt.topic_root", "aurora")
 
     print("🔗 Aurora Room Configuration:")
     print(f"  App ID:     {app_id}")
