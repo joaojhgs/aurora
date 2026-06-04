@@ -1,0 +1,266 @@
+"""
+Tests for MCP (Model Context Protocol) integration (tooling module).
+
+This module tests the MCP client functionality including:
+- Client initialization and configuration
+- Tool loading from MCP servers
+- Integration with Aurora's tool system
+- Error handling and edge cases
+"""
+
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from app.services.tooling.mcp.mcp_client import MCPClientManager, get_mcp_tools, initialize_mcp
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import Mcp, Servers, Tooling
+
+
+def _make_tooling(*, mcp_enabled=True, servers=None):
+    """Build a Tooling model for test mocking."""
+    mcp = Mcp(enabled=mcp_enabled, servers=servers or {})
+    return Tooling(mcp=mcp)
+
+
+def _make_mock_config_api(*, mcp_enabled=True, servers=None):
+    """Return a mock config_api whose aget returns typed models."""
+    tooling = _make_tooling(mcp_enabled=mcp_enabled, servers=servers)
+
+    async def mock_aget(key, model_or_default=None, **kwargs):
+        k = str(key)
+        if k == str(ConfigKeys.services.tooling.mcp.enabled):
+            return mcp_enabled
+        if k == str(ConfigKeys.services.tooling):
+            return tooling
+        if "default" in kwargs:
+            return kwargs["default"]
+        return model_or_default
+
+    mock = Mock()
+    mock.aget = AsyncMock(side_effect=mock_aget)
+    return mock
+
+
+@pytest.mark.unit
+class TestMCPClientManager:
+    """Test the MCP client manager functionality."""
+
+    @pytest.fixture
+    def mcp_manager(self):
+        """Create a fresh MCP client manager."""
+        return MCPClientManager()
+
+    @pytest.fixture
+    def mock_mcp_tools(self):
+        """Mock MCP tools for testing."""
+        mock_tools = []
+        for name, desc in [
+            ("add", "Add two numbers together."),
+            ("subtract", "Subtract the second number from the first."),
+            ("multiply", "Multiply two numbers together."),
+        ]:
+            tool = Mock()
+            tool.name = name
+            tool.description = desc
+            tool.ainvoke = AsyncMock(return_value=42.0)
+            mock_tools.append(tool)
+        return mock_tools
+
+    @pytest.mark.asyncio
+    async def test_initialize_with_disabled_mcp(self, mcp_manager):
+        """Test initialization when MCP is disabled."""
+        mock_api = _make_mock_config_api(mcp_enabled=False)
+
+        with patch("app.services.tooling.mcp.mcp_client.config_api", mock_api):
+            await mcp_manager.initialize()
+
+        assert not mcp_manager.is_initialized
+        assert len(mcp_manager.get_tools()) == 0
+
+    @pytest.mark.asyncio
+    async def test_initialize_with_no_servers(self, mcp_manager):
+        """Test initialization when no servers are configured."""
+        mock_api = _make_mock_config_api(mcp_enabled=True, servers={})
+
+        with patch("app.services.tooling.mcp.mcp_client.config_api", mock_api):
+            await mcp_manager.initialize()
+
+        assert not mcp_manager.is_initialized
+        assert len(mcp_manager.get_tools()) == 0
+
+    @pytest.mark.asyncio
+    async def test_initialize_with_stdio_server(self, mcp_manager):
+        """Test initialization with a stdio server configuration."""
+        import sys
+
+        servers = {
+            "math": Servers(
+                command="python",
+                args=["/path/to/math_server.py"],
+                transport="stdio",
+                enabled=True,
+            )
+        }
+        mock_api = _make_mock_config_api(mcp_enabled=True, servers=servers)
+
+        mock_client = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.name = "add"
+        mock_tool.description = "Add two numbers"
+        mock_client.get_tools.return_value = [mock_tool]
+
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
+        with (
+            patch("app.services.tooling.mcp.mcp_client.config_api", mock_api),
+            patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}),
+        ):
+            await mcp_manager.initialize()
+
+        assert mcp_manager.is_initialized
+        assert len(mcp_manager.get_tools()) == 1
+        assert mcp_manager.get_tools()[0].name == "add"
+
+    @pytest.mark.asyncio
+    async def test_initialize_with_http_server(self, mcp_manager):
+        """Test initialization with an HTTP server configuration."""
+        import sys
+
+        servers = {
+            "weather": Servers(
+                url="http://localhost:8000/mcp/",
+                transport="streamable_http",
+                headers={"Authorization": "Bearer test_token"},
+                enabled=True,
+            )
+        }
+        mock_api = _make_mock_config_api(mcp_enabled=True, servers=servers)
+
+        mock_client = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.name = "get_weather"
+        mock_tool.description = "Get weather information"
+        mock_client.get_tools.return_value = [mock_tool]
+
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
+        with (
+            patch("app.services.tooling.mcp.mcp_client.config_api", mock_api),
+            patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}),
+        ):
+            await mcp_manager.initialize()
+
+        assert mcp_manager.is_initialized
+        assert len(mcp_manager.get_tools()) == 1
+        assert mcp_manager.get_tools()[0].name == "get_weather"
+
+    @pytest.mark.asyncio
+    async def test_initialize_with_disabled_server(self, mcp_manager):
+        """Test that disabled servers are not loaded."""
+        servers = {
+            "math": Servers(
+                command="python",
+                args=["/path/to/math_server.py"],
+                transport="stdio",
+                enabled=False,
+            )
+        }
+        mock_api = _make_mock_config_api(mcp_enabled=True, servers=servers)
+
+        with patch("app.services.tooling.mcp.mcp_client.config_api", mock_api):
+            await mcp_manager.initialize()
+
+        assert not mcp_manager.is_initialized
+        assert len(mcp_manager.get_tools()) == 0
+
+    @pytest.mark.asyncio
+    async def test_close(self, mcp_manager):
+        """Test closing MCP client connections."""
+        # Set up a mock client
+        mock_client = AsyncMock()
+        mcp_manager._client = mock_client
+        mcp_manager._initialized = True
+        mcp_manager._tools = [Mock()]
+
+        await mcp_manager.close()
+
+        assert mcp_manager._client is None
+        assert not mcp_manager.is_initialized
+        assert len(mcp_manager._tools) == 0
+
+    @pytest.mark.asyncio
+    async def test_tool_execution(self, mcp_manager, mock_mcp_tools):
+        """Test executing MCP tools."""
+        mcp_manager._tools = mock_mcp_tools
+        mcp_manager._initialized = True
+
+        tools = mcp_manager.get_tools()
+        add_tool = next((t for t in tools if t.name == "add"), None)
+
+        assert add_tool is not None
+        result = await add_tool.ainvoke({"a": 5, "b": 3})
+        assert result == 42.0
+        add_tool.ainvoke.assert_called_once_with({"a": 5, "b": 3})
+
+    @pytest.mark.asyncio
+    async def test_client_close(self, mcp_manager):
+        """Test closing MCP client connections."""
+        mock_client = AsyncMock()
+        mock_client.close = AsyncMock()
+
+        mcp_manager._client = mock_client
+        mcp_manager._initialized = True
+        mcp_manager._tools = [Mock()]
+
+        await mcp_manager.close()
+
+        mock_client.close.assert_called_once()
+        assert mcp_manager._client is None
+        assert mcp_manager._tools == []
+        assert not mcp_manager._initialized
+
+
+@pytest.mark.unit
+class TestMCPUtilityFunctions:
+    """Test MCP utility functions."""
+
+    @pytest.mark.asyncio
+    async def test_get_mcp_tools_with_uninitialized_client(self):
+        """Test get_mcp_tools when client is not initialized."""
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+            mock_manager.is_initialized = False
+            mock_manager.initialize = AsyncMock()
+            mock_manager.get_tools.return_value = []
+
+            tools = await get_mcp_tools()
+
+            mock_manager.initialize.assert_called_once()
+            assert tools == []
+
+    @pytest.mark.asyncio
+    async def test_get_mcp_tools_with_initialized_client(self):
+        """Test get_mcp_tools when client is already initialized."""
+        mock_tools = [Mock(name="test_tool")]
+
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+            mock_manager.is_initialized = True
+            mock_manager.initialize = AsyncMock()
+            mock_manager.get_tools.return_value = mock_tools
+
+            tools = await get_mcp_tools()
+
+            mock_manager.initialize.assert_not_called()
+            assert tools == mock_tools
+
+    @pytest.mark.asyncio
+    async def test_initialize_mcp(self):
+        """Test initialize_mcp function."""
+        with patch("app.services.tooling.mcp.mcp_client.mcp_client_manager") as mock_manager:
+            mock_manager.initialize = AsyncMock()
+
+            await initialize_mcp()
+
+            mock_manager.initialize.assert_called_once()

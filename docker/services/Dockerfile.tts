@@ -1,0 +1,54 @@
+# TTS Service Dockerfile
+FROM python:3.11-slim
+
+ARG TTS_HARDWARE=cpu
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+RUN apt-get update && apt-get install -y \
+    portaudio19-dev \
+    ffmpeg \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+# Install UV
+RUN pip install uv
+
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+COPY --chown=aurora:aurora docker/services/constraints-tts-cpu.txt /tmp/constraints-tts-cpu.txt
+
+# TTS: install deps; pin torch to CPU wheels unless build-arg requests GPU (saves GB vs PyPI CUDA default).
+RUN if [ "$TTS_HARDWARE" = "cuda" ]; then \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        && uv pip install --system --no-cache --force-reinstall \
+          torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
+          --extra-index-url=https://download.pytorch.org/whl/cu124; \
+    elif [ "$TTS_HARDWARE" = "rocm" ]; then \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        && uv pip install --system --no-cache --force-reinstall \
+          torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
+    else \
+      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+        --constraint /tmp/constraints-tts-cpu.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu; \
+    fi
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.tts"]
+

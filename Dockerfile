@@ -21,15 +21,20 @@ RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements-docker.txt .
-RUN pip install --no-cache-dir -r requirements-docker.txt
+# Install UV
+RUN pip install uv
 
-# Copy application code
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml ./
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
 COPY --chown=aurora:aurora main.py .
-COPY --chown=aurora:aurora config.json .
+# Initial runtime config (same as repo defaults; user overrides via volume or ConfigService)
+COPY --chown=aurora:aurora app/services/config/config_defaults.json ./config.json
+
+# Install dependencies using pyproject.toml
+# This installs all services for threads mode (monolithic container)
+RUN uv pip install --system --no-cache -e .[all-services,mode-threads]
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/logs /app/cache && \

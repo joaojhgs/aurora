@@ -1,5 +1,19 @@
-.env*
-!.env.file
+.env
+!.env.example
+
+# Log files
+*.log
+*.log.*
+
+# Backup and temporary files
+*.backup
+*.old
+*_new.py
+*_old.py
+
+# Test files in root (should be in tests/ folder)
+/test_*.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -187,7 +201,11 @@ screenshots
 
 # Model directories (large files, user-managed)
 chat_models/
-voice_models/
+voice_models/*
+!voice_models/jarvis.onnx
+!voice_models/README.md
+
+
 
 .vscode/*
 
@@ -199,4 +217,8 @@ config.json*
 
 instructions
 
-/ambient_logs/
+/ambient_logs/*
+!/ambient_logs/tests/
+/ambient_logs/tests/test_scheduler.db
+.gitnexus
+.sisyphus/notepads/

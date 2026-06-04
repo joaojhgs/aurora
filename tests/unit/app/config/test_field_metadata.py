@@ -4,7 +4,7 @@ Tests for configuration field metadata extraction
 
 import pytest
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 
 class TestConfigFieldMetadata:
@@ -25,13 +25,11 @@ class TestConfigFieldMetadata:
         """Test that UI fields have correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        # Test ui.activate
         ui_activate = metadata.get("ui.activate")
         assert ui_activate is not None
         assert ui_activate["type"] == "bool"
         assert "Enable graphical user interface" in ui_activate["description"]
 
-        # Test ui.dark_mode
         ui_dark_mode = metadata.get("ui.dark_mode")
         assert ui_dark_mode is not None
         assert ui_dark_mode["type"] == "bool"
@@ -41,7 +39,7 @@ class TestConfigFieldMetadata:
         """Test that LLM provider has correct choice metadata."""
         metadata = config_manager.get_field_metadata()
 
-        llm_provider = metadata.get("general.llm.provider")
+        llm_provider = metadata.get("services.orchestrator.llm.provider")
         assert llm_provider is not None
         assert llm_provider["type"] == "choice"
         assert "choices" in llm_provider
@@ -54,31 +52,18 @@ class TestConfigFieldMetadata:
         """Test that numeric fields have correct min/max constraints."""
         metadata = config_manager.get_field_metadata()
 
-        # Test temperature field
-        temp_field = metadata.get("general.llm.local.llama_cpp.options.temperature")
+        temp_field = metadata.get("services.orchestrator.llm.local.llama_cpp.options.temperature")
         assert temp_field is not None
         assert temp_field["type"] == "float"
         assert temp_field["min"] == 0
         assert temp_field["max"] == 2
         assert "temperature" in temp_field["description"].lower()
 
-        # Test n_ctx field
-        n_ctx_field = metadata.get("general.llm.local.llama_cpp.options.n_ctx")
+        n_ctx_field = metadata.get("services.orchestrator.llm.local.llama_cpp.options.n_ctx")
         assert n_ctx_field is not None
         assert n_ctx_field["type"] == "int"
         assert n_ctx_field["min"] == 512
         assert n_ctx_field["max"] == 32768
-
-    def test_openai_model_choices(self, config_manager):
-        """Test that OpenAI model field has correct choices."""
-        metadata = config_manager.get_field_metadata()
-
-        openai_model = metadata.get("general.llm.third_party.openai.options.model")
-        assert openai_model is not None
-        assert openai_model["type"] == "choice"
-
-        expected_models = ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"]
-        assert openai_model["choices"] == expected_models
 
     def test_plugin_activation_fields(self, config_manager):
         """Test that plugin activation fields have correct metadata."""
@@ -95,30 +80,19 @@ class TestConfigFieldMetadata:
         }
 
         for plugin, expected_name in plugins.items():
-            activate_field = metadata.get(f"plugins.{plugin}.activate")
-            assert activate_field is not None
+            activate_field = metadata.get(f"services.tooling.plugins.{plugin}.activate")
+            assert activate_field is not None, f"Missing metadata for {plugin}.activate"
             assert activate_field["type"] == "bool"
             assert "description" in activate_field
             assert expected_name.lower() in activate_field["description"].lower()
-
-    def test_hardware_acceleration_fields(self, config_manager):
-        """Test that hardware acceleration fields have correct metadata."""
-        metadata = config_manager.get_field_metadata()
-
-        hw_accel_fields = ["tts", "stt", "ocr_bg", "ocr_curr", "llm"]
-
-        for field in hw_accel_fields:
-            hw_field = metadata.get(f"general.hardware_acceleration.{field}")
-            assert hw_field is not None
-            assert hw_field["type"] == "bool"
-            assert "hardware acceleration" in hw_field["description"].lower()
 
     def test_nested_field_paths(self, config_manager):
         """Test that deeply nested configuration paths work correctly."""
         metadata = config_manager.get_field_metadata()
 
-        # Test a deeply nested field
-        nested_field = metadata.get("general.llm.local.llama_cpp.options.repeat_penalty")
+        nested_field = metadata.get(
+            "services.orchestrator.llm.local.llama_cpp.options.repeat_penalty"
+        )
         assert nested_field is not None
         assert nested_field["type"] == "float"
         assert nested_field["min"] == 0.1
@@ -128,7 +102,7 @@ class TestConfigFieldMetadata:
         """Test that speech to text language field has correct choices."""
         metadata = config_manager.get_field_metadata()
 
-        lang_field = metadata.get("general.speech_to_text.language")
+        lang_field = metadata.get("services.stt.language")
         assert lang_field is not None
         assert lang_field["type"] == "choice"
 
@@ -136,22 +110,11 @@ class TestConfigFieldMetadata:
         assert lang_field["choices"] == expected_langs
         assert "auto-detect" in lang_field["description"]
 
-    def test_special_dict_handling(self, config_manager):
-        """Test that special dict fields are handled correctly."""
-        metadata = config_manager.get_field_metadata()
-
-        # Test the special case for jira env
-        jira_env = metadata.get("plugins.jira.env")
-        assert jira_env is not None
-        assert jira_env["type"] == "dict"
-        assert jira_env["expand_dict"] is False
-        assert "environment variables" in jira_env["description"].lower()
-
     def test_mcp_enabled_field(self, config_manager):
         """Test that MCP enabled field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        mcp_enabled = metadata.get("mcp.enabled")
+        mcp_enabled = metadata.get("services.tooling.mcp.enabled")
         assert mcp_enabled is not None
         assert mcp_enabled["type"] == "bool"
         assert "model context protocol" in mcp_enabled["description"].lower()

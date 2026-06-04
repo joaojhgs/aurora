@@ -107,23 +107,103 @@ brew link portaudio
 
 **Third-party API providers (easiest setup):**
 ```bash
+# Using UV (recommended - faster dependency resolution)
+uv sync --extra third-party
+
+# Or using pip
 pip install -e .[third-party]
 ```
 
 **Local models with CPU:**
 ```bash
+# Using UV (recommended)
+uv sync --extra local-huggingface
+
+# Or using pip
 pip install -e .[local-huggingface]
 ```
 
 **Local models with GPU:**
 ```bash
+# Using UV (recommended)
+uv sync --extra local-huggingface-gpu
+
+# Or using pip
 pip install -e .[local-huggingface-gpu]
 ```
 
 **Development environment:**
 ```bash
+# Using UV (recommended)
+uv sync --extra dev-local-gpu
+
+# Or using pip
 pip install -e .[dev-local-gpu]
 ```
+
+**See [UV Usage Guide](UV_USAGE.md) for complete UV documentation.**
+
+### Method 3: Docker Hub (Pre-built Images)
+
+**Best for:** Users who want to use pre-built Docker images without building locally
+
+Aurora provides pre-built Docker images on Docker Hub with multiple variants for different hardware configurations. This is the fastest way to get started with Docker.
+
+#### Prerequisites
+
+- Docker 20.10+ installed
+- Docker Compose 2.0+ (optional, for multi-service setup)
+
+#### Quick Start with Docker Hub
+
+1. **Pull the images you need**:
+   ```bash
+   # Example: Pull services for a basic setup
+   docker pull aurora-ai/aurora-config:latest
+   docker pull aurora-ai/aurora-db:openai-latest
+   docker pull aurora-ai/aurora-orchestrator:openai-latest
+   docker pull aurora-ai/aurora-tts:cpu-latest
+   ```
+
+2. **Use with docker-compose**:
+   ```yaml
+   # docker-compose.yml
+   services:
+     db-service:
+       image: aurora-ai/aurora-db:openai-latest
+       # ... configuration
+   ```
+
+3. **Or run directly**:
+   ```bash
+   docker run -d \
+     --name aurora-db \
+     -v $(pwd)/data:/app/data \
+     -v $(pwd)/config:/app/config \
+     aurora-ai/aurora-db:openai-latest
+   ```
+
+#### Available Variants
+
+- **DB Service**: `openai` (smaller, ~500MB) or `local` (larger, ~8GB)
+- **Orchestrator**: `openai`, `huggingface-endpoint`, `huggingface-local`, `llama-cpp-cpu`, `llama-cpp-cuda`, `llama-cpp-rocm`, `llama-cpp-metal`
+- **TTS**: `cpu`, `cuda`, `rocm`, `metal`
+- **STT Transcription**: `cpu`, `cuda`
+- **STT Wakeword**: `cpu`, `cuda`
+
+#### Model Configuration
+
+Mount your models directory and configure via environment variables:
+
+```bash
+docker run -d \
+  --name aurora-tts \
+  -v $(pwd)/models:/app/models \
+  -e AURORA_TTS_MODEL_FILE_PATH=/app/models/voice/en_US-lessac-medium.onnx \
+  aurora-ai/aurora-tts:cpu-latest
+```
+
+**For detailed Docker Hub usage, see [Docker Hub Usage Guide](docker/DOCKER-HUB-USAGE.md)**
 
 ---
 
@@ -340,7 +420,7 @@ Aurora uses a hybrid configuration system with both `config.json` and `.env` fil
 - Falls back to safe defaults if validation fails
 
 **Environment Variables (`.env`)**:
-- Clone the `.env.file` and rename it to `.env` in the root directory
+- Copy `.env.example` to `.env` in the root directory
 - Contains development settings and configuration for third party software that works with envs such as:
   - `OPENAI_API_KEY` - Your OpenAI API key for embeddings and chat models (if you decide to use any)
   - Langsmith logging and tracing for development
@@ -541,7 +621,7 @@ python scripts/wheel_installer.py --help
 ls -la .env
 
 # Copy example if needed
-cp .env.file .env
+cp .env.example .env
 
 # Edit with your API keys
 nano .env  # or your preferred editor

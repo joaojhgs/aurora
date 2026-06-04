@@ -50,7 +50,9 @@ class TestAmbientTranscriptionConstants(unittest.TestCase):
 
         def example_storage_callback(text, timestamp, chunk_id):
             """Example callback for storing ambient transcriptions"""
-            storage_results.append({"text": text, "timestamp": timestamp, "chunk_id": chunk_id, "length": len(text)})
+            storage_results.append(
+                {"text": text, "timestamp": timestamp, "chunk_id": chunk_id, "length": len(text)}
+            )
 
         # Test the callback
         test_transcription = "This is ambient audio transcription"
@@ -73,16 +75,16 @@ class TestAmbientTranscriptionPrioritySystem(unittest.TestCase):
     def test_priority_queue_ordering(self):
         """Test that priority queue orders requests correctly"""
         # Mock priority values
-        HIGH_PRIORITY = 1
-        LOW_PRIORITY = 2
+        high_priority = 1
+        low_priority = 2
 
         # Create priority queue
         priority_queue = queue.PriorityQueue()
 
         # Add requests with different priorities
-        priority_queue.put((LOW_PRIORITY, 1, "ambient_audio", "en", "ambient_001"))
-        priority_queue.put((HIGH_PRIORITY, 2, "assistant_audio", "en", "assistant_001"))
-        priority_queue.put((LOW_PRIORITY, 3, "ambient_audio_2", "en", "ambient_002"))
+        priority_queue.put((low_priority, 1, "ambient_audio", "en", "ambient_001"))
+        priority_queue.put((high_priority, 2, "assistant_audio", "en", "assistant_001"))
+        priority_queue.put((low_priority, 3, "ambient_audio_2", "en", "ambient_002"))
 
         # Get requests in priority order
         first_request = priority_queue.get()
@@ -90,14 +92,14 @@ class TestAmbientTranscriptionPrioritySystem(unittest.TestCase):
         third_request = priority_queue.get()
 
         # HIGH priority should come first
-        self.assertEqual(first_request[0], HIGH_PRIORITY)
+        self.assertEqual(first_request[0], high_priority)
         self.assertEqual(first_request[4], "assistant_001")
 
         # LOW priority requests should come after
-        self.assertEqual(second_request[0], LOW_PRIORITY)
+        self.assertEqual(second_request[0], low_priority)
         self.assertEqual(second_request[4], "ambient_001")
 
-        self.assertEqual(third_request[0], LOW_PRIORITY)
+        self.assertEqual(third_request[0], low_priority)
         self.assertEqual(third_request[4], "ambient_002")
 
     def test_ambient_pausing_logic(self):
@@ -160,9 +162,7 @@ class TestAmbientTranscriptionFiltering(unittest.TestCase):
 
         def apply_filter(text, min_length=10):
             """Apply filtering logic similar to the real implementation"""
-            if not text or len(text.strip()) < min_length:
-                return False
-            return True
+            return not (not text or len(text.strip()) < min_length)
 
         # Test filtering
         self.assertTrue(apply_filter("This is a longer transcription"))
@@ -196,9 +196,7 @@ class TestAmbientTranscriptionFiltering(unittest.TestCase):
         def is_repetitive(text):
             """Check if text is repetitive"""
             words = text.split()
-            if len(words) > 1 and len(set(words)) == 1:
-                return True
-            return False
+            return bool(len(words) > 1 and len(set(words)) == 1)
 
         # Test repetitive text detection
         self.assertTrue(is_repetitive("hello hello hello hello"))

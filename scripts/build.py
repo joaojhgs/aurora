@@ -120,6 +120,21 @@ def clean_build_dirs():
             click.echo(f"🧹 Cleaned {dir_path}")
 
 
+DEFAULT_CONFIG_SOURCE = PROJECT_ROOT / "app/services/config/config_defaults.json"
+
+
+def prepare_bundle_config_json() -> Path:
+    """Copy schema-valid defaults to build/config.json for PyInstaller bundle.
+
+    ``config.json`` is not tracked in git; bundled apps ship the same defaults
+    as :file:`app/services/config/config_defaults.json`.
+    """
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = BUILD_DIR / "config.json"
+    shutil.copy2(DEFAULT_CONFIG_SOURCE, dest)
+    return dest
+
+
 def get_platform_args():
     """Get platform-specific PyInstaller arguments"""
     system = platform.system().lower()
@@ -133,7 +148,7 @@ def get_platform_args():
         # Add data files
         f"--add-data={PROJECT_ROOT / 'app'}:app",
         f"--add-data={PROJECT_ROOT / 'modules'}:modules",
-        f"--add-data={PROJECT_ROOT / 'config.json'}:.",
+        f"--add-data={prepare_bundle_config_json()}:.",
         # Optimize
         "--optimize=2",
         "--strip",
@@ -227,7 +242,9 @@ def handle_enum34_compatibility():
     backup_paths = []
     try:
         # Check if enum34 is installed using pip
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "enum34"], capture_output=True, text=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "show", "enum34"], capture_output=True, text=True
+        )
 
         if result.returncode == 0:
             # enum34 is installed, find its location
@@ -246,7 +263,9 @@ def handle_enum34_compatibility():
                 enum_path = location_path / "enum"
                 if enum_path.exists():
                     enum_backup_path = location_path / f"enum_backup_{timestamp}"
-                    click.echo("⚠️  Found enum34 package - temporarily hiding for PyInstaller compatibility...")
+                    click.echo(
+                        "⚠️  Found enum34 package - temporarily hiding for PyInstaller compatibility..."
+                    )
                     click.echo(f"    Moving enum: {enum_path} -> {enum_backup_path}")
                     shutil.move(str(enum_path), str(enum_backup_path))
                     backup_paths.append(("enum", str(enum_backup_path)))
@@ -258,8 +277,12 @@ def handle_enum34_compatibility():
                 for dist_info_path in glob.glob(str(dist_info_pattern)):
                     dist_info_path = Path(dist_info_path)
                     if dist_info_path.exists():
-                        dist_info_backup_path = location_path / f"{dist_info_path.name}_backup_{timestamp}"
-                        click.echo(f"    Moving dist-info: {dist_info_path} -> {dist_info_backup_path}")
+                        dist_info_backup_path = (
+                            location_path / f"{dist_info_path.name}_backup_{timestamp}"
+                        )
+                        click.echo(
+                            f"    Moving dist-info: {dist_info_path} -> {dist_info_backup_path}"
+                        )
                         shutil.move(str(dist_info_path), str(dist_info_backup_path))
                         backup_paths.append(("dist-info", str(dist_info_backup_path)))
 
@@ -327,7 +350,9 @@ def handle_webrtcvad_hook():
         import site
 
         site_packages = site.getsitepackages()[0]
-        hook_path = Path(site_packages) / "_pyinstaller_hooks_contrib" / "stdhooks" / "hook-webrtcvad.py"
+        hook_path = (
+            Path(site_packages) / "_pyinstaller_hooks_contrib" / "stdhooks" / "hook-webrtcvad.py"
+        )
 
         if hook_path.exists():
             backup_path = hook_path.with_suffix(".py.backup")
@@ -437,7 +462,7 @@ COPY scripts/ scripts/
 COPY app/ app/
 COPY modules/ modules/
 COPY main.py .
-COPY config.json .
+COPY app/services/config/config_defaults.json ./config.json
 
 # Install Python dependencies using pyproject.toml
 # Use runtime dependencies with CPU torch for containers

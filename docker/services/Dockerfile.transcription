@@ -1,0 +1,49 @@
+# Transcription Service Dockerfile
+FROM python:3.11-slim
+
+ARG STT_TRANSCRIPTION_HARDWARE=cpu
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    portaudio19-dev \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+# Install UV
+RUN pip install uv
+
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+COPY --chown=aurora:aurora docker/services/constraints-stt-cpu.txt /tmp/constraints-stt-cpu.txt
+
+# Install dependencies (CPU PyTorch via constraint — avoids multi-GB CUDA wheels from PyPI)
+RUN uv pip install --system --no-cache -e .[service-stt-transcription,mode-processes] \
+    --constraint /tmp/constraints-stt-cpu.txt \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+
+# faster-whisper uses ctranslate2 (pin via pyproject; >=4.7.1 avoids glibc 2.41+ executable-stack load errors)
+# CUDA: reinstall wheel with GPU support if requested
+RUN if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
+    uv pip install --system "ctranslate2>=4.7.1,<5" --extra-index-url=https://pypi.org/simple/ || \
+    uv pip install --system "ctranslate2[cuda]>=4.7.1,<5"; \
+fi
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.stt_transcription"]
+

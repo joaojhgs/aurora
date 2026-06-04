@@ -79,6 +79,49 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
 
 ### 🚀 Quick Start
 
+#### Option 1: Docker Hub (Fastest - Pre-built Images)
+
+**Best for:** Quick setup with Docker, no local build required
+
+```bash
+# Pull pre-built images
+docker pull aurora-ai/aurora-config:latest
+docker pull aurora-ai/aurora-db:openai-latest
+docker pull aurora-ai/aurora-orchestrator:openai-latest
+docker pull aurora-ai/aurora-tts:cpu-latest
+
+# Use with docker-compose (see docker-compose.process.yml)
+docker-compose -f docker-compose.process.yml up -d
+```
+
+**See [Docker Hub Usage Guide](docs/docker/DOCKER-HUB-USAGE.md) for complete instructions.**
+
+#### Option 2: UV Installation (Fastest - Recommended)
+
+**Best for:** Developers who want fastest dependency resolution
+
+```bash
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone https://github.com/joaojhgs/aurora.git
+cd aurora
+
+# Install all dependencies (development setup)
+uv sync --extra dev-local-gpu
+
+# Or for third-party API setup (easiest)
+uv sync --extra third-party
+
+# Run Aurora
+uv run python main.py
+```
+
+**See [UV Usage Guide](docs/UV_USAGE.md) for complete instructions.**
+
+#### Option 3: Source Installation (Guided Setup)
+
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/joaojhgs/aurora.git
@@ -101,7 +144,7 @@ Aurora is an intelligent voice assistant designed to enhance productivity throug
    - ✅ Guide you through configuration
 
 3. **Configure your environment:**
-   - Copy `.env.file` to `.env` and add any API keys you want to use
+   - Copy `.env.example` to `.env` and add any API keys you want to use
    - Modify `config.json` if needed (defaults work for most users)
 
 4. **Run Aurora:**

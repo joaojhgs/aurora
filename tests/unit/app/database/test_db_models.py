@@ -5,8 +5,8 @@ Unit tests for the database models.
 import uuid
 from datetime import datetime
 
-from app.database.models import Message, MessageType
-from app.scheduler.models import CronJob, JobStatus, ScheduleType
+from app.services.db.models import MeshCredential, Message, MessageType
+from app.services.scheduler.models import CronJob, JobStatus, ScheduleType
 
 
 class TestModels:
@@ -149,3 +149,55 @@ class TestModels:
         assert JobStatus.COMPLETED.value == "completed"
         assert JobStatus.FAILED.value == "failed"
         assert JobStatus.CANCELLED.value == "cancelled"
+
+    def test_mesh_credential_creation(self):
+        """Test creating a MeshCredential object."""
+        cred_id = str(uuid.uuid4())
+        cred = MeshCredential(
+            id=cred_id,
+            room_name="test-room",
+            token="plaintext-token",
+            remote_device_id="dev-1",
+            remote_user_id="user-1",
+        )
+        assert cred.id == cred_id
+        assert cred.room_name == "test-room"
+        assert cred.token == "plaintext-token"
+        assert cred.remote_device_id == "dev-1"
+        assert cred.remote_user_id == "user-1"
+        assert cred.created_at is not None
+        assert cred.updated_at is not None
+
+    def test_mesh_credential_to_dict(self):
+        """Test converting a MeshCredential to dict."""
+        cred = MeshCredential(
+            id="cred-1",
+            room_name="room-1",
+            token="tok-abc",
+        )
+        d = cred.to_dict()
+        assert d["id"] == "cred-1"
+        assert d["room_name"] == "room-1"
+        assert d["token"] == "tok-abc"
+        assert d["remote_device_id"] is None
+        assert "created_at" in d
+        assert "updated_at" in d
+
+    def test_mesh_credential_from_dict(self):
+        """Test creating a MeshCredential from dict."""
+        now = datetime.now()
+        data = {
+            "id": "cred-2",
+            "room_name": "room-2",
+            "token": "tok-xyz",
+            "remote_device_id": "dev-2",
+            "remote_user_id": "usr-2",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        cred = MeshCredential.from_dict(data)
+        assert cred.id == "cred-2"
+        assert cred.room_name == "room-2"
+        assert cred.token == "tok-xyz"
+        assert cred.remote_device_id == "dev-2"
+        assert cred.remote_user_id == "usr-2"

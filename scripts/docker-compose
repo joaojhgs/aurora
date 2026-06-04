@@ -1,0 +1,5 @@
+#!/bin/sh
+# Docker Compose v2 is exposed as `docker compose`; Tilt's docker_compose() still
+# shells out to a `docker-compose` executable. Put this directory on PATH first, e.g.:
+#   export PATH="/path/to/aurora/scripts:$PATH"
+exec docker compose "$@"
