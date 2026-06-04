@@ -26,7 +26,7 @@ sudo apt update && sudo apt install -y portaudio19-dev python3-pip python3-venv 
 ./setup.sh  # Choose option 3 for Development
 
 # OR manually install development dependencies
-pip install -r requirements-dev.txt  # Takes 2-3 minutes, set timeout to 300 seconds
+pip install -e .[dev]  # Takes 2-3 minutes, set timeout to 300 seconds
 ```
 
 **NEVER CANCEL: Setup takes 5-10 minutes on first run. Set timeout to 900+ seconds.**
@@ -81,7 +81,7 @@ python main.py  # UI activation controlled by config.json
 ```
 
 **Configuration:**
-- Copy `.env.file` to `.env` and add API keys
+- Copy `.env.example` to `.env` and add API keys
 - Modify `config.json` for settings (defaults work for most users)
 - Model files stored in `chat_models/` and `voice_models/` directories
 
@@ -175,7 +175,8 @@ make unit    # Run unit tests
 
 **Build and setup:**
 - `setup.sh` / `setup.bat` - Guided installation scripts
-- `requirements-*.txt` - Python dependencies by category
+- `pyproject.toml` - Python dependencies (primary source of truth)
+- `requirements-*.txt` - Legacy files (kept for backward compatibility with tox.ini)
 - `.github/workflows/` - CI/CD pipeline definitions
 
 **Testing:**

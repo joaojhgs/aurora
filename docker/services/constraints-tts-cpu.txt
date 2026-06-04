@@ -1,0 +1,5 @@
+# Force CPU PyTorch wheels (PyPI default often resolves to CUDA ~3GB+).
+# Used by docker/services/Dockerfile.tts with --extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+torchaudio==2.6.0+cpu

@@ -1,0 +1,221 @@
+"""Contract IO Models for Aurora services.
+
+This package contains Pydantic models that define the input/output schemas
+for all service methods registered via @method_contract.
+
+Organization:
+- common.py: Shared/base models used across multiple services
+- tts.py: Text-to-Speech service models
+- stt.py: Speech-to-Text service models
+- config.py: Configuration service models
+- db.py: Database service models
+- orchestrator.py: Orchestrator/LLM service models
+- gateway.py: Gateway/API service models
+- auth.py: Auth service models
+"""
+
+from .auth import (
+    AuditLogRequest,
+    AuditLogResponse,
+    DeviceDeleteRequest,
+    DeviceDeleteResponse,
+    DeviceListRequest,
+    DeviceListResponse,
+    DeviceResponse,
+    LoginRequest,
+    LoginResponse,
+    LogoutRequest,
+    LogoutResponse,
+    MeshCredentialDeleteRequest,
+    MeshCredentialDeleteResponse,
+    MeshCredentialLoadRequest,
+    MeshCredentialLoadResponse,
+    MeshCredentialSaveRequest,
+    MeshCredentialSaveResponse,
+    PairingApproveRequest,
+    PairingApproveResponse,
+    PairingConnectRequest,
+    PairingConnectResponse,
+    PairingExchangeRequest,
+    PairingExchangeResponse,
+    PairingStartRequest,
+    PairingStartResponse,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
+    PermissionPatchRequest,
+    PermissionPatchResponse,
+    PermissionSetRequest,
+    PermissionSetResponse,
+    PrincipalCreateRequest,
+    PrincipalCreateResponse,
+    PrincipalDeleteRequest,
+    PrincipalDeleteResponse,
+    PrincipalGetRequest,
+    PrincipalGetResponse,
+    PrincipalListRequest,
+    PrincipalListResponse,
+    PrincipalResponse,
+    PrincipalUpdateRequest,
+    PrincipalUpdateResponse,
+    TokenCreateRequest,
+    TokenCreateResponse,
+    TokenListRequest,
+    TokenListResponse,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
+    TokenResponse,
+    TokenRevokeRequest,
+    TokenRevokeResponse,
+    TokenScopeUpdateRequest,
+    TokenScopeUpdateResponse,
+    ValidateTokenRequest,
+    ValidateTokenResponse,
+    WhoAmIRequest,
+    WhoAmIResponse,
+)
+from .common import (
+    EmptyInput,
+    EmptyOutput,
+    ErrorOutput,
+)
+from .config import (
+    ConfigGetRequest,
+    ConfigGetResponse,
+    ConfigSetRequest,
+    ConfigSetResponse,
+)
+from .db import (
+    DBGetMessagesRequest,
+    DBGetMessagesResponse,
+    DBSaveMessageRequest,
+    DBSaveMessageResponse,
+)
+from .gateway import (
+    GatewayMethods,
+    GatewayModule,
+    GetRegistryResponse,
+    GetServiceHealthRequest,
+    GetServiceHealthResponse,
+    GetServicesResponse,
+    MethodInfo,
+    ServiceAnnouncement,
+    ServiceDeparture,
+    ServiceHeartbeat,
+    ServiceInfo,
+)
+from .orchestrator import (
+    OrchestratorProcessRequest,
+    OrchestratorResponse,
+)
+from .stt import (
+    STTControl,
+    STTError,
+    STTTranscriptionRequest,
+    STTTranscriptionResult,
+)
+from .tts import (
+    TTSControl,
+    TTSError,
+    TTSRequest,
+    TTSStatus,
+)
+
+__all__ = [
+    # Common
+    "EmptyInput",
+    "EmptyOutput",
+    "ErrorOutput",
+    # TTS
+    "TTSRequest",
+    "TTSControl",
+    "TTSStatus",
+    "TTSError",
+    # STT
+    "STTTranscriptionRequest",
+    "STTTranscriptionResult",
+    "STTControl",
+    "STTError",
+    # Config
+    "ConfigGetRequest",
+    "ConfigGetResponse",
+    "ConfigSetRequest",
+    "ConfigSetResponse",
+    # DB
+    "DBSaveMessageRequest",
+    "DBSaveMessageResponse",
+    "DBGetMessagesRequest",
+    "DBGetMessagesResponse",
+    # Orchestrator
+    "OrchestratorProcessRequest",
+    "OrchestratorResponse",
+    # Gateway
+    "GatewayModule",
+    "GatewayMethods",
+    "MethodInfo",
+    "ServiceAnnouncement",
+    "ServiceDeparture",
+    "ServiceHeartbeat",
+    "GetRegistryResponse",
+    "ServiceInfo",
+    "GetServicesResponse",
+    "GetServiceHealthRequest",
+    "GetServiceHealthResponse",
+    # Auth
+    "LoginRequest",
+    "LoginResponse",
+    "LogoutRequest",
+    "LogoutResponse",
+    "ValidateTokenRequest",
+    "ValidateTokenResponse",
+    "TokenRefreshRequest",
+    "TokenRefreshResponse",
+    "WhoAmIRequest",
+    "WhoAmIResponse",
+    "PairingStartRequest",
+    "PairingStartResponse",
+    "PairingConnectRequest",
+    "PairingConnectResponse",
+    "PairingApproveRequest",
+    "PairingApproveResponse",
+    "PairingExchangeRequest",
+    "PairingExchangeResponse",
+    "PrincipalCreateRequest",
+    "PrincipalCreateResponse",
+    "PrincipalResponse",
+    "PrincipalListRequest",
+    "PrincipalListResponse",
+    "PrincipalGetRequest",
+    "PrincipalGetResponse",
+    "PrincipalUpdateRequest",
+    "PrincipalUpdateResponse",
+    "PrincipalDeleteRequest",
+    "PrincipalDeleteResponse",
+    "PermissionSetRequest",
+    "PermissionSetResponse",
+    "PermissionPatchRequest",
+    "PermissionPatchResponse",
+    "PasswordChangeRequest",
+    "PasswordChangeResponse",
+    "TokenCreateRequest",
+    "TokenCreateResponse",
+    "TokenListRequest",
+    "TokenListResponse",
+    "TokenResponse",
+    "TokenScopeUpdateRequest",
+    "TokenScopeUpdateResponse",
+    "TokenRevokeRequest",
+    "TokenRevokeResponse",
+    "DeviceListRequest",
+    "DeviceListResponse",
+    "DeviceResponse",
+    "DeviceDeleteRequest",
+    "DeviceDeleteResponse",
+    "AuditLogRequest",
+    "AuditLogResponse",
+    "MeshCredentialSaveRequest",
+    "MeshCredentialSaveResponse",
+    "MeshCredentialLoadRequest",
+    "MeshCredentialLoadResponse",
+    "MeshCredentialDeleteRequest",
+    "MeshCredentialDeleteResponse",
+]

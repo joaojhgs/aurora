@@ -1,0 +1,46 @@
+name: Test Process Mode
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-process-mode:
+    name: 🧪 Test Process Mode
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install UV
+        run: pip install uv
+
+      - name: 📦 Install dependencies
+        run: |
+          uv pip install --system -e .[dev,test,mode-processes]
+
+      - name: 🧪 Run process mode tests
+        env:
+          AURORA_ARCHITECTURE_MODE: processes
+          REDIS_URL: redis://localhost:6379
+        run: |
+          pytest tests/integration -v -m process_mode

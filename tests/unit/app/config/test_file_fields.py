@@ -4,7 +4,7 @@ Tests for file field functionality in the configuration system
 
 import pytest
 
-from app.config.config_manager import ConfigManager
+from app.services.config.config_manager import ConfigManager
 
 
 class TestFileFieldMetadata:
@@ -24,23 +24,25 @@ class TestFileFieldMetadata:
 
         # Verify we have the expected file fields
         expected_file_fields = [
-            "general.text_to_speech.model_file_path",
-            "general.text_to_speech.model_config_file_path",
-            "general.text_to_speech.piper_path",
-            "general.llm.local.llama_cpp.options.model_path",
-            "plugins.google.credentials_file",
+            "services.tts.model_file_path",
+            "services.tts.model_config_file_path",
+            "services.tts.piper_path",
+            "services.orchestrator.llm.local.llama_cpp.options.model_path",
+            "services.tooling.plugins.google.credentials_file",
         ]
 
         for field_path in expected_file_fields:
             assert field_path in file_fields, f"File field {field_path} not found"
 
-        assert len(file_fields) == len(expected_file_fields), f"Expected {len(expected_file_fields)} file fields, got {len(file_fields)}"
+        assert len(file_fields) == len(expected_file_fields), (
+            f"Expected {len(expected_file_fields)} file fields, got {len(file_fields)}"
+        )
 
     def test_tts_model_file_metadata(self, config_manager):
         """Test TTS model file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.model_file_path")
+        field = metadata.get("services.tts.model_file_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -53,7 +55,7 @@ class TestFileFieldMetadata:
         """Test TTS config file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.model_config_file_path")
+        field = metadata.get("services.tts.model_config_file_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -65,7 +67,7 @@ class TestFileFieldMetadata:
         """Test Piper executable field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.text_to_speech.piper_path")
+        field = metadata.get("services.tts.piper_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -77,7 +79,7 @@ class TestFileFieldMetadata:
         """Test Llama.cpp model file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("general.llm.local.llama_cpp.options.model_path")
+        field = metadata.get("services.orchestrator.llm.local.llama_cpp.options.model_path")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -89,7 +91,7 @@ class TestFileFieldMetadata:
         """Test Google credentials file field has correct metadata."""
         metadata = config_manager.get_field_metadata()
 
-        field = metadata.get("plugins.google.credentials_file")
+        field = metadata.get("services.tooling.plugins.google.credentials_file")
         assert field is not None
         assert field["ui_type"] == "file"
         assert "file_filter" in field
@@ -111,12 +113,18 @@ class TestFileFieldMetadata:
 
             parts = file_filter.split("|")
             assert len(parts) >= 2, f"File filter for {field_path} should have at least 2 parts"
-            assert len(parts) % 2 == 0, f"File filter for {field_path} should have even number of parts"
+            assert len(parts) % 2 == 0, (
+                f"File filter for {field_path} should have even number of parts"
+            )
 
             # Check that we have description and pattern pairs
             for i in range(0, len(parts), 2):
                 description = parts[i]
                 pattern = parts[i + 1] if i + 1 < len(parts) else ""
 
-                assert "(" in description and ")" in description, f"Description '{description}' should contain parentheses"
-                assert "*." in pattern or "*" == pattern, f"Pattern '{pattern}' should contain file extension pattern"
+                assert "(" in description and ")" in description, (
+                    f"Description '{description}' should contain parentheses"
+                )
+                assert "*." in pattern or pattern == "*", (
+                    f"Pattern '{pattern}' should contain file extension pattern"
+                )

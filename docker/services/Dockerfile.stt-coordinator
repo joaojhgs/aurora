@@ -1,0 +1,39 @@
+# STT Coordinator Service Dockerfile (captures microphone via ALSA / PortAudio)
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+# portaudio19-dev: build PyAudio; libasound2: ALSA runtime for container → host /dev/snd passthrough
+RUN apt-get update && apt-get install -y \
+    portaudio19-dev \
+    libasound2 \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+# Install UV
+RUN pip install uv
+
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+
+# Install dependencies using pyproject.toml optional groups
+# STT coordinator service needs core + service-stt-coordinator + mode-processes
+RUN uv pip install --system --no-cache -e .[service-stt-coordinator,mode-processes]
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.stt_coordinator"]
+

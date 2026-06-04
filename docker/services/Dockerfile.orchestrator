@@ -1,0 +1,98 @@
+# Orchestrator Service Dockerfile
+# Supports multiple LLM provider modes via build arg ORCHESTRATOR_LLM_MODE:
+#   - "openai" (default): Uses OpenAI API, smaller image (~200MB)
+#   - "huggingface-endpoint": Uses HuggingFace endpoint API, small image (~250MB)
+#   - "huggingface-local": Uses local HuggingFace pipeline, larger image (~7GB)
+#   - "llama-cpp": Uses llama.cpp CPU, medium image (~700MB)
+#   - "llama-cpp-cuda": Uses llama.cpp CUDA, medium image (~700MB)
+# Usage:
+#   docker build --build-arg ORCHESTRATOR_LLM_MODE=openai -f docker/services/Dockerfile.orchestrator -t aurora-orchestrator:openai .
+#   docker build --build-arg ORCHESTRATOR_LLM_MODE=huggingface-local -f docker/services/Dockerfile.orchestrator -t aurora-orchestrator:hf-local .
+FROM python:3.11-slim
+
+ARG ORCHESTRATOR_LLM_MODE=openai
+ARG ORCHESTRATOR_HARDWARE=cpu
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+WORKDIR /app
+
+# Install UV
+RUN pip install uv
+
+# Copy project files first for better caching
+COPY --chown=aurora:aurora pyproject.toml ./
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+
+# Install dependencies using pyproject.toml optional groups
+# Base orchestrator always includes: service-orchestrator + mode-processes
+# Then add optional LLM provider dependencies based on ORCHESTRATOR_LLM_MODE
+RUN case "$ORCHESTRATOR_LLM_MODE" in \
+        "openai") \
+            echo "Installing orchestrator with OpenAI (smaller - ~200MB)"; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
+            ;; \
+        "huggingface-endpoint") \
+            echo "Installing orchestrator with HuggingFace endpoint (small - ~250MB)"; \
+            uv pip install --system --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-endpoint,mode-processes]; \
+            ;; \
+        "huggingface-local") \
+            echo "Installing orchestrator with HuggingFace local pipeline (larger - ~7GB)"; \
+            uv pip install --system --no-cache -e .[service-orchestrator,service-orchestrator-huggingface-local,mode-processes]; \
+            ;; \
+        "llama-cpp"*) \
+            echo "Installing orchestrator with llama.cpp (hardware: $ORCHESTRATOR_HARDWARE)"; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
+            # Install llama-cpp-python based on hardware
+            case "$ORCHESTRATOR_HARDWARE" in \
+                cuda) \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124/ || \
+                    uv pip install --system llama-cpp-python[cuda]; \
+                    ;; \
+                rocm) \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/rocm/ || \
+                    CMAKE_ARGS="-DGGML_HIPBLAS=ON" uv pip install --system llama-cpp-python; \
+                    ;; \
+                metal) \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/metal/ || \
+                    CMAKE_ARGS="-DGGML_METAL=ON" uv pip install --system llama-cpp-python; \
+                    ;; \
+                vulkan) \
+                    CMAKE_ARGS="-DGGML_VULKAN=ON" uv pip install --system llama-cpp-python; \
+                    ;; \
+                sycl) \
+                    CMAKE_ARGS="-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" uv pip install --system llama-cpp-python; \
+                    ;; \
+                rpc) \
+                    CMAKE_ARGS="-DGGML_RPC=ON" uv pip install --system llama-cpp-python; \
+                    ;; \
+                *) \
+                    uv pip install --system llama-cpp-python --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cpu/ || \
+                    CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" uv pip install --system llama-cpp-python; \
+                    ;; \
+            esac; \
+            ;; \
+        *) \
+            echo "Unknown ORCHESTRATOR_LLM_MODE: $ORCHESTRATOR_LLM_MODE, defaulting to openai"; \
+            uv pip install --system --no-cache -e .[service-orchestrator,mode-processes]; \
+            ;; \
+    esac
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.orchestrator"]
+

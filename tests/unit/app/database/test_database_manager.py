@@ -3,6 +3,7 @@ Unit tests for the DatabaseManager.
 """
 
 import asyncio
+import contextlib
 import os
 import tempfile
 import uuid
@@ -12,8 +13,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from app.database.database_manager import DatabaseManager
-from app.database.models import Message, MessageType
+from app.services.db.manager import DatabaseManager
+from app.services.db.models import Message, MessageType
 
 
 @pytest.mark.asyncio
@@ -52,10 +53,8 @@ class TestDatabaseManager:
 
         finally:
             # Clean up the test database file
-            try:
+            with contextlib.suppress(FileNotFoundError, PermissionError):
                 os.unlink(test_db)
-            except (FileNotFoundError, PermissionError):
-                pass
 
     async def test_initialization(self, db_manager):
         """Test database initialization."""
@@ -63,7 +62,9 @@ class TestDatabaseManager:
         # Create a test connection to verify the database is accessible
         async with aiosqlite.connect(db_manager.db_path) as conn:
             # Check that the messages table exists
-            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
+            cursor = await conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
+            )
             result = await cursor.fetchone()
             assert result is not None
             assert result[0] == "messages"
@@ -87,7 +88,9 @@ class TestDatabaseManager:
         # Connect to database and check
         async with aiosqlite.connect(db_manager.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute("SELECT content, message_type FROM messages WHERE id = ?", (message_id,))
+            cursor = await conn.execute(
+                "SELECT content, message_type FROM messages WHERE id = ?", (message_id,)
+            )
             result = await cursor.fetchone()
 
         assert result is not None
@@ -222,7 +225,7 @@ class TestDatabaseManager:
         db_manager = DatabaseManager(db_path="/nonexistent/path/db.sqlite")
 
         # Initialization should fail but not crash
-        with pytest.raises(Exception):
+        with pytest.raises((OSError, ValueError, RuntimeError)):
             await db_manager.initialize()
 
     async def test_concurrent_operations(self, db_manager):

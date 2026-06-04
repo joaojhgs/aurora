@@ -75,12 +75,18 @@ if not exist "venv" (
     echo 📁 Virtual environment already exists
 )
 
+REM Check if UV is installed, install if not
+echo 📦 Checking for UV...
+where uv >nul 2>&1
+if %errorlevel% neq 0 (
+    echo 📥 Installing UV (fast Python package manager)...
+    pip install uv
+) else (
+    echo ✅ UV is already installed
+)
+
 REM Activate virtual environment
 call venv\Scripts\activate.bat
-
-REM Upgrade pip
-echo 📦 Upgrading pip...
-pip install --upgrade pip
 
 echo.
 echo ==================================================================
@@ -276,13 +282,13 @@ echo ==================================================================
 REM Install dependencies
 if "%FEATURE_LEVEL%"=="core" (
     echo 📦 Installing core third-party dependencies...
-    pip install -e .[third-party]
+    uv pip install -e .[third-party]
 ) else if "%FEATURE_LEVEL%"=="full" (
     echo 📦 Installing full third-party dependencies...
-    pip install -e .[third-party-full]
+    uv pip install -e .[third-party-full]
 ) else (
     echo 📦 Installing development third-party dependencies...
-    pip install -e .[dev-third-party]
+    uv pip install -e .[dev-third-party]
 )
 
 echo.
@@ -345,19 +351,19 @@ REM Now install main packages (without torch conflicts since llama-cpp-python is
 echo 📦 Installing main dependencies...
 if "%USE_GPU%"=="yes" (
     if "%FEATURE_LEVEL%"=="core" (
-        pip install -e .[local-llama-gpu]
+        uv pip install -e .[local-llama-gpu]
     ) else if "%FEATURE_LEVEL%"=="full" (
-        pip install -e .[full-local-llama-gpu]
+        uv pip install -e .[full-local-llama-gpu]
     ) else (
-        pip install -e .[dev-local-gpu]
+        uv pip install -e .[dev-local-gpu]
     )
 ) else (
     if "%FEATURE_LEVEL%"=="core" (
-        pip install -e .[local-llama-cpu]
+        uv pip install -e .[local-llama-cpu]
     ) else if "%FEATURE_LEVEL%"=="full" (
-        pip install -e .[full-local-llama-cpu]
+        uv pip install -e .[full-local-llama-cpu]
     ) else (
-        pip install -e .[dev-local-cpu]
+        uv pip install -e .[dev-local-cpu]
     )
 )
 
@@ -371,20 +377,20 @@ if "%USE_GPU%"=="yes" (
     
     echo 📦 Installing HuggingFace dependencies...
     if "%FEATURE_LEVEL%"=="core" (
-        pip install -e .[local-huggingface-gpu]
+        uv pip install -e .[local-huggingface-gpu]
     ) else if "%FEATURE_LEVEL%"=="full" (
-        pip install -e .[full-local-huggingface-gpu]
+        uv pip install -e .[full-local-huggingface-gpu]
     ) else (
-        pip install -e .[dev-local-gpu]
+        uv pip install -e .[dev-local-gpu]
     )
 ) else (
     echo 📦 Installing HuggingFace dependencies ^(CPU^)...
     if "%FEATURE_LEVEL%"=="core" (
-        pip install -e .[local-huggingface]
+        uv pip install -e .[local-huggingface]
     ) else if "%FEATURE_LEVEL%"=="full" (
-        pip install -e .[full-local-huggingface]
+        uv pip install -e .[full-local-huggingface]
     ) else (
-        pip install -e .[dev-local-cpu]
+        uv pip install -e .[dev-local-cpu]
     )
 )
 
@@ -526,8 +532,8 @@ if "%PROVIDER_TYPE%"=="local" (
 if "%FEATURE_LEVEL%"=="dev" (
     echo 🛠️  Development tools available:
     echo    pytest         # Run tests
-    echo    black .        # Format code
-    echo    flake8         # Lint code
+    echo    ruff check     # Lint code
+    echo    ruff format    # Format code
     echo    mypy           # Type checking
     echo.
     
@@ -536,7 +542,7 @@ if "%FEATURE_LEVEL%"=="dev" (
     
     REM Install pre-commit and commitizen ^(needed for commit validation^)
     echo 📦 Installing pre-commit and commitizen...
-    pip install pre-commit commitizen
+    uv pip install pre-commit commitizen
     
     REM Install all necessary pre-commit hook types
     echo 🔧 Installing pre-commit hook types...

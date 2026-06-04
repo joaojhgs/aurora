@@ -131,13 +131,14 @@ def install_python_dependencies(sys_info, mode):
 
     # Determine base installation command (without llama-cpp-python)
     if mode == "minimal":
-        install_cmd = ["pip", "install", "-e", ".[runtime]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime]"]
     elif mode == "minimal-cuda":
-        install_cmd = ["pip", "install", "-e", ".[runtime,cuda]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,cuda]"]
     elif mode == "minimal-rocm":
-        install_cmd = ["pip", "install", "-e", ".[runtime,rocm]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,rocm]"]
     elif mode == "all-cpu":
         install_cmd = [
+            "uv",
             "pip",
             "install",
             "-e",
@@ -145,6 +146,7 @@ def install_python_dependencies(sys_info, mode):
         ]
     elif mode == "all-cuda":
         install_cmd = [
+            "uv",
             "pip",
             "install",
             "-e",
@@ -152,28 +154,34 @@ def install_python_dependencies(sys_info, mode):
         ]
     elif mode == "all-rocm":
         install_cmd = [
+            "uv",
             "pip",
             "install",
             "-e",
             ".[runtime,rocm,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
         ]
     elif mode == "dev-cpu":
-        install_cmd = ["pip", "install", "-e", ".[runtime,dev,test,build,container]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,dev,test,build,container]"]
     elif mode == "dev-cuda":
-        install_cmd = ["pip", "install", "-e", ".[runtime,cuda,dev,test,build,container]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,cuda,dev,test,build,container]"]
     elif mode == "dev-rocm":
-        install_cmd = ["pip", "install", "-e", ".[runtime,rocm,dev,test,build,container]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,rocm,dev,test,build,container]"]
     elif mode == "server-cpu":
-        install_cmd = ["pip", "install", "-e", ".[runtime,openai,container]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,openai,container]"]
     elif mode == "server-cuda":
-        install_cmd = ["pip", "install", "-e", ".[runtime,cuda,openai,container]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime,cuda,openai,container]"]
     else:
-        install_cmd = ["pip", "install", "-e", ".[runtime]"]
+        install_cmd = ["uv", "pip", "install", "-e", ".[runtime]"]
 
     try:
-        # Upgrade pip first
-        click.echo("🔄 Upgrading pip...")
-        subprocess.run(["pip", "install", "--upgrade", "pip"], cwd=PROJECT_ROOT, check=True)
+        # Install UV if not already installed
+        click.echo("🔄 Installing UV package manager...")
+        try:
+            subprocess.run(["uv", "--version"], cwd=PROJECT_ROOT, check=True, capture_output=True)
+            click.echo("✅ UV is already installed")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            click.echo("📦 Installing UV...")
+            subprocess.run(["pip", "install", "uv"], cwd=PROJECT_ROOT, check=True)
 
         # Install base Aurora dependencies (without llama-cpp-python)
         click.echo("📦 Installing base Aurora dependencies...")
@@ -250,9 +258,15 @@ def setup_development_tools():
 
         # Install all necessary pre-commit hook types
         click.echo("🔧 Installing pre-commit hook types...")
-        subprocess.run(["pre-commit", "install", "--hook-type", "pre-commit"], cwd=PROJECT_ROOT, check=True)
-        subprocess.run(["pre-commit", "install", "--hook-type", "commit-msg"], cwd=PROJECT_ROOT, check=True)
-        subprocess.run(["pre-commit", "install", "--hook-type", "pre-push"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(
+            ["pre-commit", "install", "--hook-type", "pre-commit"], cwd=PROJECT_ROOT, check=True
+        )
+        subprocess.run(
+            ["pre-commit", "install", "--hook-type", "commit-msg"], cwd=PROJECT_ROOT, check=True
+        )
+        subprocess.run(
+            ["pre-commit", "install", "--hook-type", "pre-push"], cwd=PROJECT_ROOT, check=True
+        )
 
         # Update hooks to latest version
         click.echo("🔄 Updating pre-commit hooks to latest versions...")
