@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # TTS Service Dockerfile
 FROM python:3.11-slim
 
@@ -8,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
+ENV UV_LINK_MODE=copy
 
 RUN apt-get update && apt-get install -y \
     portaudio19-dev \
@@ -16,34 +18,47 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
 WORKDIR /app
 
 # Install UV
 RUN pip install uv
 
-# Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml ./
-COPY --chown=aurora:aurora app/ app/
-COPY --chown=aurora:aurora modules/ modules/
+# Copy only dependency manifests first so source edits do not invalidate package layers.
+COPY --chown=aurora:aurora pyproject.toml uv.lock ./
 COPY --chown=aurora:aurora docker/services/constraints-tts-cpu.txt /tmp/constraints-tts-cpu.txt
 
 # TTS: install deps; pin torch to CPU wheels unless build-arg requests GPU (saves GB vs PyPI CUDA default).
-RUN if [ "$TTS_HARDWARE" = "cuda" ]; then \
-      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
-        && uv pip install --system --no-cache --force-reinstall \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+      --extra service-tts --extra mode-processes \
+      --no-emit-package torch --no-emit-package torchaudio --no-emit-package torchvision \
+      > /tmp/requirements.txt && \
+    if [ "$TTS_HARDWARE" = "cuda" ]; then \
+      uv pip install --system -r /tmp/requirements.txt \
+        && uv pip install --system \
           torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
           --extra-index-url=https://download.pytorch.org/whl/cu124; \
     elif [ "$TTS_HARDWARE" = "rocm" ]; then \
-      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
-        && uv pip install --system --no-cache --force-reinstall \
+      uv pip install --system -r /tmp/requirements.txt \
+        && uv pip install --system \
           torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
           --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
     else \
-      uv pip install --system --no-cache -e .[service-tts,mode-processes] \
+      uv pip install --system \
+        torch==2.6.0+cpu torchaudio==2.6.0+cpu torchvision==0.21.0+cpu \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        && uv pip install --system -r /tmp/requirements.txt \
         --constraint /tmp/constraints-tts-cpu.txt \
-        --extra-index-url https://download.pytorch.org/whl/cpu; \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        --index-strategy unsafe-best-match; \
     fi
+
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+RUN uv pip install --system --no-deps -e .
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app
@@ -51,4 +66,3 @@ RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
 USER aurora
 
 CMD ["python", "-m", "app.services.tts"]
-

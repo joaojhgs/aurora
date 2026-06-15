@@ -114,6 +114,7 @@ class WakeWordService(BaseService):
 
         self._running = False
         self._enabled = False
+        self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         # Cleanup backend resources
         if self._backend:

@@ -140,9 +140,9 @@ class ConfigService(BaseService):
     async def _handle_update_config(self, cmd: UpdateConfigCommand) -> UpdateConfigResponse:
         """Handle UpdateConfig command."""
         try:
-            self.config_manager.set(cmd.key_path, cmd.value)
+            metadata = self.config_manager.set(cmd.key_path, cmd.value)
             log_info(f"Updated config: {cmd.key_path}")
-            return UpdateConfigResponse(success=True)
+            return UpdateConfigResponse(success=True, **metadata)
         except Exception as e:
             log_error(f"Error updating config: {e}")
             return UpdateConfigResponse(success=False, error=str(e))
@@ -192,11 +192,11 @@ class ConfigService(BaseService):
     ) -> UpdateConfigResponse:
         """Handle UpdatePluginStatus command."""
         try:
-            self.config_manager.set(
+            metadata = self.config_manager.set(
                 f"services.tooling.plugins.{cmd.plugin_name}.activate", cmd.active
             )
             log_info(f"Updated plugin status: {cmd.plugin_name}={cmd.active}")
-            return UpdateConfigResponse(success=True)
+            return UpdateConfigResponse(success=True, **metadata)
         except Exception as e:
             log_error(f"Error updating plugin status: {e}")
             return UpdateConfigResponse(success=False, error=str(e))
@@ -224,9 +224,6 @@ class ConfigService(BaseService):
 
         # Note: Subscriptions are now handled automatically by BaseService via @method_contract
 
-        # Subscribe to config changes for reload mechanism
-        self._subscribe_to_config_changes()
-
         self._set_started(True)
         log_info("ConfigService started")
 
@@ -242,7 +239,4 @@ class ConfigService(BaseService):
         Args:
             config_section: The configuration section that changed (None = full reload)
         """
-        log_info(f"Reloading ConfigService configuration: section={config_section}")
-        # Config service doesn't need to reload itself, but we can reload the config file
-        self.config_manager.load_config()
-        log_info("ConfigService configuration reloaded")
+        log_debug(f"Ignoring ConfigService self-reload request: section={config_section}")

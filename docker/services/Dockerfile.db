@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+# DB Service Dockerfile — SQLite, RAG, embeddings (OpenAI API or optional local embeddings)
+FROM python:3.11-slim
+
+ARG DB_EMBEDDINGS_MODE=openai
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV AURORA_ENV=production
+ENV AURORA_ARCHITECTURE_MODE=processes
+ENV REDIS_URL=redis://redis:6379
+ENV UV_LINK_MODE=copy
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
+WORKDIR /app
+
+RUN pip install uv
+
+COPY --chown=aurora:aurora pyproject.toml uv.lock ./
+
+# Local embeddings pull torch/transformers (~GB); default uses API embeddings only.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$DB_EMBEDDINGS_MODE" = "local" ]; then \
+      echo "Installing DB service dependencies with local embeddings (heavy)"; \
+      uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+        --extra service-db --extra service-db-local-embeddings --extra mode-processes \
+        > /tmp/requirements.txt; \
+    else \
+      echo "Installing DB service dependencies with API embeddings (lighter)"; \
+      uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+        --extra service-db --extra mode-processes > /tmp/requirements.txt; \
+    fi && \
+    uv pip install --system -r /tmp/requirements.txt
+
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+RUN uv pip install --system --no-deps -e .
+
+RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+    chown -R aurora:aurora /app
+
+USER aurora
+
+CMD ["python", "-m", "app.services.db"]

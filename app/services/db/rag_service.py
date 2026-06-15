@@ -13,7 +13,7 @@ from typing import Any, Optional
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Db, Embeddings
@@ -80,6 +80,8 @@ async def async_get_embeddings():
 
     # Get config value using async API
     db_cfg = await config_api.aget(ConfigKeys.services.db, Db)
+    if isinstance(db_cfg, dict):
+        db_cfg = Db.model_validate(db_cfg)
     embeddings_cfg = db_cfg.embeddings or Embeddings()
     use_local = embeddings_cfg.use_local if embeddings_cfg.use_local is not None else True
 
@@ -768,12 +770,18 @@ class RAGService:
         try:
             log_info("Initializing RAG stores for memories and tools (async)...")
 
-            # Create embeddings instance using async version
-            embeddings, model_info = await async_get_embeddings()
+            # Create embeddings instance using async version. RAG is optional for DB startup:
+            # missing local packages or API credentials should disable vector search, not
+            # take down core persistence/auth/scheduler storage.
+            try:
+                embeddings, model_info = await async_get_embeddings()
+            except Exception as exc:
+                log_warning(f"RAG stores disabled: embeddings unavailable ({exc})")
+                return
 
-            # Create separate SQLite vector stores for memories and tools in the service data folder.
-            data_dir = Path(__file__).parent.parent.parent / "data"
-            data_dir.mkdir(parents=True, exist_ok=True)
+            from app.shared.path_utils import get_data_dir
+
+            data_dir = get_data_dir()
             self._memories_store = SQLiteVecStore(
                 db_file=str(data_dir / "memories.db"), table="memories", embeddings=embeddings
             )

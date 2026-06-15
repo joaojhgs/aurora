@@ -1,10 +1,14 @@
+import contextlib
 import json
 import os
+import tempfile
 from collections.abc import Callable
+from enum import Enum
+from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.services.config.env_config import ENV_CONFIG_MAP
@@ -58,9 +62,8 @@ class ConfigManager:
 
                 # Validate the loaded configuration against AppConfig Pydantic model
                 try:
-                    self._config = AppConfig.model_validate(config_data).model_dump(
-                        exclude_unset=False
-                    )
+                    validated = AppConfig.model_validate(config_data)
+                    self._config = self._to_json_safe(validated.model_dump(exclude_unset=False))
                     log_info(f"Configuration loaded and validated from {self.config_file}")
                 except ValidationError as e:
                     log_error(f"Configuration validation failed: {e}")
@@ -75,13 +78,56 @@ class ConfigManager:
 
     def save_config(self):
         """Save current configuration to JSON file"""
+        tmp_path = None
         try:
-            # Note: Don't acquire lock here as it might be called from within a locked context
-            with open(self.config_file, "w") as f:
-                json.dump(self._config, f, indent=2)
-            log_info("Configuration saved to config.json")
+            # Note: Don't acquire lock here as it might be called from within a locked context.
+            safe_config = self._to_json_safe(self._config)
+            serialized = json.dumps(safe_config, indent=2)
+
+            config_path = os.path.abspath(self.config_file)
+            config_dir = os.path.dirname(config_path) or "."
+            os.makedirs(config_dir, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{os.path.basename(config_path)}.",
+                suffix=".tmp",
+                dir=config_dir,
+                text=True,
+            )
+            with os.fdopen(fd, "w") as f:
+                f.write(serialized)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, config_path)
+            self._config = safe_config
+            log_info(f"Configuration saved to {self.config_file}")
         except Exception as e:
+            if tmp_path and os.path.exists(tmp_path):
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
             log_error(f"Error saving config: {e}")
+            raise RuntimeError(f"Error saving config: {e}") from e
+
+    def _to_json_safe(self, value: Any) -> Any:
+        """Convert Pydantic/runtime values to JSON-safe primitives."""
+        if isinstance(value, BaseModel):
+            return self._to_json_safe(value.model_dump(exclude_unset=False))
+        if hasattr(value, "get_secret_value"):
+            return value.get_secret_value()
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, dict):
+            return {str(k): self._to_json_safe(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [self._to_json_safe(v) for v in value]
+        if hasattr(value, "unicode_string"):
+            return value.unicode_string()
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        json.dumps(value)
+        return value
 
     def _is_value_set(self, value: Any) -> bool:
         """Return True if value is considered 'set' (non-empty, config override)."""
@@ -151,7 +197,8 @@ class ConfigManager:
             # Validate the entire configuration after the change
             try:
                 self._validate_config(self._config)
-            except ValidationError as e:
+                self._validate_runtime_lifecycle_policy(self._config)
+            except (ValidationError, ValueError) as e:
                 # Rollback the change if validation fails
                 if old_value is not None:
                     config_ref[keys[-1]] = old_value
@@ -161,10 +208,30 @@ class ConfigManager:
 
             # Save to file if requested
             if save:
-                self.save_config()
+                try:
+                    self.save_config()
+                except Exception:
+                    if old_value is not None:
+                        config_ref[keys[-1]] = old_value
+                    else:
+                        del config_ref[keys[-1]]
+                    raise
 
             # Notify observers of the change
             self._notify_observers(key_path, old_value, value)
+            return {
+                "key_path": key_path,
+                "old_value": old_value,
+                "new_value": value,
+                "affected_sections": self._affected_sections_for_key(key_path),
+            }
+
+    def _affected_sections_for_key(self, key_path: str) -> list[str]:
+        """Return parent sections plus the leaf key for a dot-delimited path."""
+        if not key_path:
+            return []
+        parts = key_path.split(".")
+        return [".".join(parts[: i + 1]) for i in range(len(parts))]
 
     def update_section(self, section: str, values: dict[str, Any], save: bool = True):
         """Update an entire configuration section using dot notation"""
@@ -182,10 +249,22 @@ class ConfigManager:
             if keys[-1] not in config_ref:
                 config_ref[keys[-1]] = {}
 
+            old_section = json.loads(json.dumps(self._to_json_safe(config_ref[keys[-1]])))
             config_ref[keys[-1]].update(values)
 
+            try:
+                self._validate_config(self._config)
+                self._validate_runtime_lifecycle_policy(self._config)
+            except (ValidationError, ValueError) as e:
+                config_ref[keys[-1]] = old_section
+                raise ValueError(f"Configuration section update rejected: {e}") from e
+
             if save:
-                self.save_config()
+                try:
+                    self.save_config()
+                except Exception:
+                    config_ref[keys[-1]] = old_section
+                    raise
 
             # Notify observers for each changed value
             for key, value in values.items():
@@ -216,7 +295,7 @@ class ConfigManager:
                 return json.load(f)
         except Exception as e:
             log_error(f"Failed to load default config from {defaults_path}: {e}")
-            return AppConfig().model_dump(exclude_unset=False)
+            return self._to_json_safe(AppConfig().model_dump(exclude_unset=False))
 
     def clean_empty_strings(self, save: bool = True) -> int:
         """Remove empty string values from configuration and return count of cleaned fields"""
@@ -296,7 +375,7 @@ class ConfigManager:
     def get_config_dict(self) -> dict[str, Any]:
         """Get a copy of the entire configuration dictionary with env fallbacks resolved."""
         with self.config_lock:
-            config_copy = json.loads(json.dumps(self._config))
+            config_copy = json.loads(json.dumps(self._to_json_safe(self._config)))
         return self._resolve_env_fallbacks(config_copy)
 
     def _resolve_env_fallbacks(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -427,6 +506,16 @@ class ConfigManager:
         """
         AppConfig.model_validate(config_data)
         self._validate_json_schema(config_data)
+
+    def _validate_runtime_lifecycle_policy(self, config_data: dict[str, Any]) -> None:
+        """Validate runtime lifecycle rules that schema shape cannot express."""
+        services = config_data.get("services", {})
+        config_service = services.get("config", {})
+        if config_service.get("enabled") is False:
+            raise ValueError(
+                "services.config.enabled=false is not supported at runtime; "
+                "ConfigService must remain active as the config source of truth"
+            )
 
     def _validate_json_schema(self, config_data: dict[str, Any]) -> None:
         """Run JSON Schema validation and log constraint violations as warnings."""

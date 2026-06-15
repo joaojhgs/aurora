@@ -4,6 +4,22 @@
 
 Aurora provides an optional PyQt6-based graphical user interface that integrates with the message bus architecture. The UI runs in the main thread while Aurora services run in background threads, communicating via thread-safe Qt signals.
 
+## Future all-platform UI direction
+
+This document describes the current optional PyQt6 UI bridge. The accepted planning baseline for the next all-platform UI is documented under `.omx/specs/ui-refinement/` and keeps the current bus-first architecture while introducing a transport-independent web/Tauri client.
+
+Key decisions for future UI work:
+
+- Keep the UI behind an `AuroraClient` SDK/capability graph instead of binding screens directly to Python service classes.
+- Use the HTTP Gateway for hosted/server and thin clients.
+- Use official Tauri 2 with Rust core for desktop/mobile native shells.
+- Use desktop Tauri sidecar/loopback/IPC to reach the local Aurora Python node in standalone/offline desktop mode.
+- Use Kotlin Tauri plugins plus native Android manifest/service declarations for Android-only capabilities such as permission checks, foreground/background hooks, notification actions, and assistant-role integration.
+- Android assistant-role support is viable only when the package qualifies through Android-native components (for example a `VoiceInteractionService` declared with `android.permission.BIND_VOICE_INTERACTION`) and the user/OEM grants the role; the UI must retain fallback entrypoints such as app, notification, widget, shortcut, tile, share sheet, or mesh/server routing.
+- Use Swift plugins/App Intents/Shortcuts/widgets/share/deep links on iOS; do not claim Siri replacement.
+
+The PyQt `UIBridge` remains useful as current behavior/reference, but future web/Tauri UI planning should cite `DESIGN.md` and `.omx/specs/ui-refinement/index.md` as the product/design source of truth.
+
 ## Enabling the UI
 
 Configure in `config.json`:

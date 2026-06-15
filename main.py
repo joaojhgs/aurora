@@ -15,6 +15,7 @@ from app.helpers.aurora_logger import log_error, log_info
 from app.services.supervisor import Supervisor
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
+from app.shared.contracts.models.tts import TTSMethods, TTSRequest
 
 config_api = ConfigAPI()
 
@@ -62,7 +63,10 @@ async def main_async():
         log_info("✓ Config change subscription active")
 
         # Start OpenRecall if enabled
-        if await config_api.aget(ConfigKeys.SERVICES_TOOLING_PLUGINS_OPENRECALL_ACTIVATE, default=False):
+        if await config_api.aget(
+            ConfigKeys.services.tooling.plugins.openrecall.activate,
+            default=False,
+        ):
             log_info("Starting OpenRecall integration...")
             from threading import Thread
 
@@ -74,10 +78,8 @@ async def main_async():
 
         # Initial greeting via bus
         from app.messaging.priority_helpers import get_interactive_priority
-        from app.shared.messaging.models.tts_models import TTSRequest
-
         await supervisor.bus.publish(
-            "TTS.Request",
+            TTSMethods.REQUEST,
             TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
             event=False,
             priority=get_interactive_priority(),
@@ -199,11 +201,9 @@ def main_with_ui():
 
     # Send initial greeting
     from app.messaging.priority_helpers import get_interactive_priority
-    from app.shared.messaging.models.tts_models import TTSRequest
-
     greeting_future = asyncio.run_coroutine_threadsafe(
         supervisor.bus.publish(
-            "TTS.Request",
+            TTSMethods.REQUEST,
             TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
             event=False,
             priority=get_interactive_priority(),
@@ -249,7 +249,7 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        ui_active = config_api.get(ConfigKeys.UI_ACTIVATE, default=False)
+        ui_active = config_api.get(ConfigKeys.ui.activate, default=False)
         if ui_active:
             # UI mode - run supervisor in background thread
             main_with_ui()

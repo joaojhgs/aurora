@@ -160,6 +160,7 @@ service-db = [
     "SQLAlchemy==2.0.38",
     "langchain==0.3.25",
     "langchain-community==0.3.24",
+    "langchain-openai==0.3.18",
     "langgraph==0.4.6",
     # Note: langchain-huggingface moved to service-db-local-embeddings (only needed when use_local=true)
     # Without local embeddings, DB service is ~500MB. With local embeddings, it's ~8GB due to torch/transformers.

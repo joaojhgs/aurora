@@ -31,6 +31,10 @@ class UpdateConfigResponse(Query):
 
     success: bool
     error: str | None = None
+    key_path: str | None = None
+    old_value: Any = None
+    new_value: Any = None
+    affected_sections: list[str] | None = None
 
 
 class ValidateConfigQuery(Query):

@@ -98,11 +98,21 @@ class ToolingService(BaseService):
             config_section: The configuration section that changed (None = full reload)
         """
         log_info(f"Reloading ToolingService configuration: section={config_section}")
-        # Reload tools if MCP config changed
-        if config_section is None or config_section in ["services"]:
-            log_info("Reloading tools due to config change...")
-            await self.tools_manager.reload()
+        if config_section is None or config_section.startswith("services.tooling"):
+            log_info("Reloading MCP tools due to tooling config change...")
+            await self.tools_manager.reload_mcp_tools()
         log_info("ToolingService configuration reloaded")
+
+    async def reload_config(self, event) -> None:
+        """Reload only for Tooling-owned config changes."""
+        key_path = getattr(event, "key_path", "") or ""
+        affected_sections = getattr(event, "affected_sections", []) or []
+        if key_path.startswith("services.tooling") or any(
+            str(section).startswith("services.tooling") for section in affected_sections
+        ):
+            await self.reload(key_path)
+            return
+        log_debug(f"Ignoring unrelated config change for ToolingService: {key_path}")
 
     def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
         """Extract schema manually from tool, filtering out non-serializable fields.

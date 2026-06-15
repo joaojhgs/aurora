@@ -1,0 +1,281 @@
+{
+  "project_id": "5345dd7c-2f0b-4a4b-b636-c1db93067f0a",
+  "parent_id": "82862dea-0ae3-4d66-a893-d1e5cd636684",
+  "expected_count": 21,
+  "mesh_issue_count": 21,
+  "issues": [
+    {
+      "identifier": "PER-126",
+      "id": "82862dea-0ae3-4d66-a893-d1e5cd636684",
+      "title": "[MESH][EPIC] Mesh polishing roadmap: secure cross-peer service fabric",
+      "labels": [
+        "mesh",
+        "mesh-epic",
+        "mesh-roadmap"
+      ],
+      "parent_issue_id": null
+    },
+    {
+      "identifier": "PER-127",
+      "id": "02bcc00b-5d35-4b1c-8e93-6375374893cb",
+      "title": "[MESH][P0-T01] Establish mesh regression truth map and baseline test matrix",
+      "labels": [
+        "mesh",
+        "mesh-p0",
+        "mesh-roadmap",
+        "test-coverage"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-128",
+      "id": "3a2f1dbe-7cf8-432d-adbf-46cf107586d1",
+      "title": "[MESH][P0-T02] Add mesh status and route diagnostic surface",
+      "labels": [
+        "mesh",
+        "mesh-p0",
+        "mesh-roadmap",
+        "observability"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-129",
+      "id": "6f8e3781-bd6f-41ef-9522-0653187a0513",
+      "title": "[MESH][P1-T01] Align stable mesh identity across WebRTC, Auth, registry, and manifests",
+      "labels": [
+        "identity",
+        "mesh",
+        "mesh-p1",
+        "mesh-roadmap",
+        "webrtc"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-130",
+      "id": "523f52d3-eaae-49ed-b628-9c7469e779d1",
+      "title": "[MESH][P1-T02] Make saved WebRTC mesh tokens peer-scoped and multi-peer safe",
+      "labels": [
+        "auth",
+        "mesh",
+        "mesh-p1",
+        "mesh-roadmap",
+        "webrtc"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-131",
+      "id": "a09d32a9-fc9e-4508-9720-089ad4d44479",
+      "title": "[MESH][P1-T03] Make bilateral reverse pairing peer-specific",
+      "labels": [
+        "auth",
+        "mesh",
+        "mesh-p1",
+        "mesh-roadmap",
+        "pairing"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-132",
+      "id": "07eef164-0d04-4032-a767-cf272b80f564",
+      "title": "[MESH][P1-T04] Bring mesh sharing config schema to parity with runtime policy fields",
+      "labels": [
+        "config",
+        "mesh",
+        "mesh-p1",
+        "mesh-roadmap",
+        "security"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-133",
+      "id": "ffd12b92-4986-4b5f-8b00-de48ac9816d8",
+      "title": "[MESH][P1-T05] Clarify and test DataChannel app-layer E2EE behavior",
+      "labels": [
+        "mesh",
+        "mesh-p1",
+        "mesh-roadmap",
+        "security",
+        "webrtc"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-134",
+      "id": "cd26617b-ebdb-493e-a386-5d4757afed53",
+      "title": "[MESH][P2-T01] Design and implement mesh capability graph core models",
+      "labels": [
+        "capability-graph",
+        "contracts",
+        "mesh",
+        "mesh-p2",
+        "mesh-roadmap"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-135",
+      "id": "e2804693-3a85-4e9a-a387-9495bce721ea",
+      "title": "[MESH][P2-T02] Add hybrid addressing primitives for peer, provider, resource, and namespace selectors",
+      "labels": [
+        "addressing",
+        "contracts",
+        "mesh",
+        "mesh-p2",
+        "mesh-roadmap"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-136",
+      "id": "5b857781-1e3f-4db2-a49e-ae55a50e47a5",
+      "title": "[MESH][P2-T03] Support provider aggregation instead of one-provider-per-module routing",
+      "labels": [
+        "capability-graph",
+        "mesh",
+        "mesh-p2",
+        "mesh-roadmap",
+        "routing"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-137",
+      "id": "99a0c078-2879-4975-9722-7811eee8d890",
+      "title": "[MESH][P3-T01] Extend Tooling discovery with peer/source metadata and stable remote tool IDs",
+      "labels": [
+        "mesh",
+        "mesh-p3",
+        "mesh-roadmap",
+        "orchestrator",
+        "tooling"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-138",
+      "id": "29f802f3-7b3d-4946-958e-8b70c0b14457",
+      "title": "[MESH][P3-T02] Implement explicit remote Tooling execution routing and audit provenance",
+      "labels": [
+        "audit",
+        "mesh",
+        "mesh-p3",
+        "mesh-roadmap",
+        "security",
+        "tooling"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-139",
+      "id": "93e95a46-11fd-49c3-8573-e2baf73fa5ba",
+      "title": "[MESH][P3-T03] Teach Orchestrator to bind local plus authorized remote tools safely",
+      "labels": [
+        "mesh",
+        "mesh-p3",
+        "mesh-roadmap",
+        "orchestrator",
+        "tooling"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-140",
+      "id": "4a3e213d-618c-4f85-9782-ab7e0c1ec6bc",
+      "title": "[MESH][P4-T01] Define DB/data-sharing modes and per-domain ownership policy",
+      "labels": [
+        "data-policy",
+        "db",
+        "mesh",
+        "mesh-p4",
+        "mesh-roadmap"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-141",
+      "id": "5def65b5-5b71-446f-978c-cef901f9f84c",
+      "title": "[MESH][P4-T02] Design selective RAG/memory replication with provenance and conflict handling",
+      "labels": [
+        "db",
+        "mesh",
+        "mesh-p4",
+        "mesh-roadmap",
+        "rag",
+        "replication"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-142",
+      "id": "979345c4-87d7-49a4-a83f-bd220813d23f",
+      "title": "[MESH][P5-T01] Add explicit remote TTS/STT/audio capability boundaries",
+      "labels": [
+        "mesh",
+        "mesh-p5",
+        "mesh-roadmap",
+        "privacy",
+        "stt",
+        "tts"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-143",
+      "id": "43310d6a-892c-4cbc-b809-9e325b6402ef",
+      "title": "[MESH][P5-T02] Add namespace-aware remote Scheduler and delegated action policy",
+      "labels": [
+        "mesh",
+        "mesh-p5",
+        "mesh-roadmap",
+        "policy",
+        "scheduler"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-144",
+      "id": "1be6f7ce-90e2-4b50-90f9-96ef509abb3d",
+      "title": "[MESH][P5-T03] Define Auth and Config mesh exposure boundaries",
+      "labels": [
+        "auth",
+        "config",
+        "mesh",
+        "mesh-p5",
+        "mesh-roadmap",
+        "security"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-145",
+      "id": "5c43ddca-dc86-4aa5-a39c-2e8454d12830",
+      "title": "[MESH][P6-T01] Add distributed tracing, correlation IDs, and mesh audit views",
+      "labels": [
+        "audit",
+        "mesh",
+        "mesh-p6",
+        "mesh-roadmap",
+        "observability"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    },
+    {
+      "identifier": "PER-146",
+      "id": "c7ac07c1-1b65-40f0-bf57-f18dda0b1d93",
+      "title": "[MESH][P6-T02] Build mesh chaos and failure-mode test suite",
+      "labels": [
+        "mesh",
+        "mesh-p6",
+        "mesh-roadmap",
+        "resilience",
+        "testing"
+      ],
+      "parent_issue_id": "82862dea-0ae3-4d66-a893-d1e5cd636684"
+    }
+  ]
+}

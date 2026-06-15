@@ -57,10 +57,10 @@ class GatewayService(BaseService):
         self._mesh_latency_monitor = None
         self._mesh_announcer = None
         self._mesh_bus = None
+        self._runtime_config_lock = asyncio.Lock()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
-        self._subscribe_to_config_changes()
         await self._start_gateway()
         await self._start_webrtc()
         await self._start_mesh()
@@ -78,6 +78,27 @@ class GatewayService(BaseService):
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration."""
         if config_section in (None, "services", "gateway", "auth"):
+            async with self._runtime_config_lock:
+                await self._reload_gateway_config()
+                await self._reload_auth_config()
+                await self._reload_mesh_config()
+
+    async def reload_config(self, event) -> None:
+        """Reload Gateway only for Gateway/Auth config changes."""
+        key_path = getattr(event, "key_path", "") or ""
+        affected_sections = getattr(event, "affected_sections", []) or []
+        relevant = (
+            key_path.startswith("services.gateway")
+            or key_path.startswith("services.auth")
+            or any(
+                str(section).startswith(("services.gateway", "services.auth"))
+                for section in affected_sections
+            )
+        )
+        if not relevant:
+            log_debug(f"Ignoring unrelated config change for Gateway: {key_path}")
+            return
+        async with self._runtime_config_lock:
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
@@ -291,6 +312,10 @@ class GatewayService(BaseService):
     async def _start_webrtc(self) -> None:
         """Start the WebRTC client if enabled."""
         try:
+            if self._rtc_client:
+                log_debug("WebRTC client already initialized - skipping duplicate start")
+                return
+
             settings = await self._get_gateway_config()
 
             if not settings.webrtc.enabled:
@@ -397,9 +422,12 @@ class GatewayService(BaseService):
                 self._gateway_server.should_exit = True
 
             if self._gateway_task and not self._gateway_task.done():
-                self._gateway_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, TimeoutError):
-                    await asyncio.wait_for(self._gateway_task, timeout=5.0)
+                try:
+                    await asyncio.wait_for(asyncio.shield(self._gateway_task), timeout=5.0)
+                except TimeoutError:
+                    self._gateway_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await self._gateway_task
 
             if self._registry_aggregator:
                 await self._registry_aggregator.stop()
@@ -420,6 +448,14 @@ class GatewayService(BaseService):
                 self._rtc_client._auth_timeout = perm_settings.webrtc_auth_timeout_seconds
                 self._rtc_client._pairing_timeout = perm_settings.webrtc_pairing_timeout_seconds
                 self._rtc_client._require_auth = settings.api.auth_enabled
+
+            from app.services.gateway.auth_proxy import BusAuthProxy
+            from app.services.gateway.dependencies import get_gateway_auth
+
+            gateway_auth = get_gateway_auth()
+            gateway_auth._auth_service = BusAuthProxy(self.bus)
+            gateway_auth._api_keys = set(settings.api.api_keys or [])
+            gateway_auth.set_enabled(settings.api.auth_enabled)
 
             log_debug(
                 f"WebRTC auth config reloaded: webrtc_auth_timeout={perm_settings.webrtc_auth_timeout_seconds}s, "
@@ -647,8 +683,10 @@ class GatewayService(BaseService):
 
             self._rtc_client.set_on_token_saved(_persist_token)
 
-            # Create MeshBus wrapping the current inner bus
-            inner_bus = get_bus()
+            # Create MeshBus wrapping the current service bus. In process mode the
+            # legacy bus_runtime singleton is not initialized, but BaseService.bus
+            # already points at this service's active BullMQ bus.
+            inner_bus = self.bus
             self._mesh_bus = MeshBus(
                 inner_bus=inner_bus,
                 routing_table=self._mesh_routing_table,

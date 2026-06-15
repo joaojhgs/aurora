@@ -7,6 +7,12 @@
 # If unset, YAML uses `STT_HOST_AUDIO_GID:-29`.
 # macOS Docker Desktop: no /dev/snd — use Linux/WSL2 or an override without `devices` for that service.
 
+# Container user UID/GID must match the host user that owns ./data, ./logs, ./config.
+# Set AURORA_UID / AURORA_GID in .env (default 1000).
+x-uid-args: &uid-args
+  AURORA_UID: ${AURORA_UID:-1000}
+  AURORA_GID: ${AURORA_GID:-1000}
+
 services:
   # Redis for BullMQBus (process mode communication)
   redis:
@@ -31,6 +37,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.config
+      args:
+        <<: *uid-args
     container_name: aurora-config
     command: python -m app.services.config
     environment:
@@ -39,11 +47,12 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       # Repo bind-mount: use host config.json (not the image-baked /app/config.json).
       - AURORA_CONFIG_FILE=${AURORA_CONFIG_FILE:-/app/host/config.json}
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -59,6 +68,7 @@ services:
       context: .
       dockerfile: docker/services/Dockerfile.db
       args:
+        <<: *uid-args
         DB_EMBEDDINGS_MODE: ${DB_EMBEDDINGS_MODE:-openai}
     container_name: aurora-db
     command: python -m app.services.db
@@ -68,13 +78,14 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       # Writable hub/cache for local embeddings when services.db.embeddings.use_local=true.
       - HF_HOME=/app/cache/huggingface
       - HF_HUB_CACHE=/app/cache/huggingface/hub
       - HUGGINGFACE_HUB_CACHE=/app/cache/huggingface/hub
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -89,6 +100,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.auth
+      args:
+        <<: *uid-args
     container_name: aurora-auth
     command: python -m app.services.auth
     environment:
@@ -97,9 +110,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -116,6 +130,7 @@ services:
       context: .
       dockerfile: docker/services/Dockerfile.orchestrator
       args:
+        <<: *uid-args
         ORCHESTRATOR_LLM_MODE: ${ORCHESTRATOR_LLM_MODE:-openai}
         ORCHESTRATOR_HARDWARE: ${ORCHESTRATOR_HARDWARE:-cpu}
     container_name: aurora-orchestrator
@@ -126,11 +141,12 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       - AURORA_LLAMA_CPP_MODEL_PATH=${AURORA_LLAMA_CPP_MODEL_PATH:-/app/models/llama/model.gguf}
       - AURORA_HUGGINGFACE_MODEL_ID=${AURORA_HUGGINGFACE_MODEL_ID:-}
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
       - ./models:/app/models
@@ -139,7 +155,6 @@ services:
     depends_on:
       - config-service
       - db-service
-      - auth-service
       - tooling-service
     restart: unless-stopped
 
@@ -148,6 +163,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.gateway
+      args:
+        <<: *uid-args
     container_name: aurora-gateway
     command: python -m app.services.gateway
     ports:
@@ -158,9 +175,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -168,7 +186,6 @@ services:
     depends_on:
       - config-service
       - db-service
-      - auth-service
       - tooling-service
       - orchestrator-service
       - redis
@@ -180,6 +197,7 @@ services:
       context: .
       dockerfile: docker/services/Dockerfile.tts
       args:
+        <<: *uid-args
         TTS_HARDWARE: ${TTS_HARDWARE:-cpu}
     container_name: aurora-tts
     command: python -m app.services.tts
@@ -189,11 +207,12 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       - AURORA_TTS_MODEL_FILE_PATH=${AURORA_TTS_MODEL_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx}
       - AURORA_TTS_MODEL_CONFIG_FILE_PATH=${AURORA_TTS_MODEL_CONFIG_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx.txt}
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
       - ./models:/app/models
@@ -210,6 +229,7 @@ services:
       context: .
       dockerfile: docker/services/Dockerfile.transcription
       args:
+        <<: *uid-args
         STT_TRANSCRIPTION_HARDWARE: ${STT_TRANSCRIPTION_HARDWARE:-cpu}
     container_name: aurora-stt-transcription
     command: python -m app.services.stt_transcription
@@ -219,13 +239,14 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       # Writable hub/cache for huggingface-hub (user `aurora` cannot write under /home or cwd "chat_models")
       - HF_HOME=/app/cache/huggingface
       - HF_HUB_CACHE=/app/cache/huggingface/hub
       - HUGGINGFACE_HUB_CACHE=/app/cache/huggingface/hub
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -241,6 +262,7 @@ services:
       context: .
       dockerfile: docker/services/Dockerfile.wakeword
       args:
+        <<: *uid-args
         STT_WAKEWORD_HARDWARE: ${STT_WAKEWORD_HARDWARE:-cpu}
     container_name: aurora-stt-wakeword
     command: python -m app.services.stt_wakeword
@@ -250,13 +272,14 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
       # Optional override; if unset, WakeWordService uses services.stt.wakeword.model_path
       # from ConfigService (e.g. voice_models/jarvis.onnx under repo root /app/host).
       - AURORA_WAKE_WORD_MODEL_PATH=${AURORA_WAKE_WORD_MODEL_PATH:-}
       - AURORA_OPENWAKEWORD_MODELS_DIR=/app/data/openwakeword/models
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
       - ./models:/app/models
@@ -272,6 +295,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.scheduler
+      args:
+        <<: *uid-args
     container_name: aurora-scheduler
     command: python -m app.services.scheduler
     environment:
@@ -280,9 +305,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -290,7 +316,6 @@ services:
     depends_on:
       - config-service
       - db-service
-      - auth-service
       - redis
     restart: unless-stopped
 
@@ -299,6 +324,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.tooling
+      args:
+        <<: *uid-args
     container_name: aurora-tooling
     command: python -m app.services.tooling
     environment:
@@ -307,9 +334,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
@@ -317,7 +345,6 @@ services:
     depends_on:
       - config-service
       - db-service
-      - auth-service
       - redis
     restart: unless-stopped
 
@@ -326,6 +353,8 @@ services:
     build:
       context: .
       dockerfile: docker/services/Dockerfile.stt-coordinator
+      args:
+        <<: *uid-args
     container_name: aurora-stt-coordinator
     command: python -m app.services.stt_coordinator
     environment:
@@ -334,9 +363,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - AURORA_DATA_DIR=/app/data
     volumes:
       - .:/app/host
-      - ./data:/app/data
+      - aurora_data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
     devices:
@@ -360,4 +390,6 @@ networks:
 
 volumes:
   redis_data:
+    driver: local
+  aurora_data:
     driver: local

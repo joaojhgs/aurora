@@ -8,6 +8,7 @@ Tests the gateway components:
 """
 
 import asyncio
+from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -188,6 +189,28 @@ class TestRegistryAggregator:
         # Verify it's gone
         services = await aggregator.get_services()
         assert not any(s.module == "DepartingService" for s in services)
+
+        await aggregator.stop()
+
+    @pytest.mark.asyncio
+    async def test_prune_stale_services_removes_process_mode_routes(self, bus):
+        """Test stale process-mode services are removed from the registry."""
+        from app.services.gateway.registry_aggregator import RegistryAggregator
+
+        aggregator = RegistryAggregator(bus=bus, mode="processes", heartbeat_timeout_s=1.0)
+        await aggregator.start()
+
+        announcement = ServiceAnnouncement(module="StaleService", version="1.0.0")
+        await bus.publish(GatewayMethods.SERVICE_ANNOUNCE, announcement, event=True)
+        await asyncio.sleep(0.1)
+
+        async with aggregator._lock:
+            aggregator._last_seen["StaleService"] = datetime.utcnow() - timedelta(seconds=3)
+
+        expired = await aggregator.prune_stale_services()
+
+        assert expired == ["StaleService"]
+        assert await aggregator.get_service("StaleService") is None
 
         await aggregator.stop()
 

@@ -8,8 +8,9 @@
 #
 # Watch: /app/host/app and /app/host/modules (same sources as the single /app/host mount).
 #
-# working_dir is /app/host. Default AURORA_CONFIG_FILE to /app/host/config.json so edits to the
-# repo-root config apply without rebuilding images (ConfigService reads this path).
+# working_dir is /app/host. AURORA_CONFIG_FILE defaults to /app/host/config.json
+# so ConfigService and all other service containers share the same host-mounted
+# runtime config source of truth.
 #
 # Requires watchdog (mode-processes). Tunable: AURORA_HOT_RELOAD_DEBOUNCE_SEC (Compose-interpolated below).
 

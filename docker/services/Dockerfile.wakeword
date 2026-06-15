@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Wake Word Service Dockerfile
 FROM python:3.11-slim
 
@@ -8,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
+ENV UV_LINK_MODE=copy
 # Non-root cannot write under site-packages; backends.py respects this (see _openwakeword_feature_models_dir).
 ENV AURORA_OPENWAKEWORD_MODELS_DIR=/app/data/openwakeword/models
 
@@ -16,23 +18,28 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
 WORKDIR /app
 
 # Install UV
 RUN pip install uv
 
-# Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml ./
+# Copy only dependency manifests first so source edits do not invalidate package layers.
+COPY --chown=aurora:aurora pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+      --extra service-stt-wakeword --extra mode-processes > /tmp/requirements.txt && \
+    uv pip install --system -r /tmp/requirements.txt
+
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
-
-# Install dependencies using pyproject.toml optional groups
-# Wake word service needs core + service-stt-wakeword + mode-processes
-RUN uv pip install --system --no-cache -e .[service-stt-wakeword,mode-processes]
+RUN uv pip install --system --no-deps -e .
 
 # onnxruntime supports GPU via providers
-RUN if [ "$STT_WAKEWORD_HARDWARE" = "cuda" ]; then \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$STT_WAKEWORD_HARDWARE" = "cuda" ]; then \
     uv pip install --system onnxruntime-gpu==1.20.1; \
 else \
     uv pip install --system onnxruntime==1.20.1; \
@@ -44,4 +51,3 @@ RUN mkdir -p /app/data/openwakeword/models /app/logs /app/cache /app/config && \
 USER aurora
 
 CMD ["python", "-m", "app.services.stt_wakeword"]
-

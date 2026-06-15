@@ -195,6 +195,9 @@ class STTCoordinatorService(BaseService):
         log_info("Stopping STT coordinator service...")
         self._running = False
 
+        self.bus.unsubscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected)
+        self.bus.unsubscribe(TranscriptionMethods.RESULT, self._on_transcription_result)
+
         # Stop audio capture if active
         if self._capturing:
             await self._stop_audio_capture()
