@@ -191,6 +191,33 @@ Returns all available API routes grouped by service.
 }
 ```
 
+#### Mesh Status and Route Diagnostics
+```
+POST /api/Gateway/GetMeshStatus
+```
+Returns a read-only, redacted diagnostic snapshot of mesh state. The response includes local
+mesh identity, whether WebRTC/mesh components are started, connected peer lifecycle state,
+negotiated peer services, capacity and active calls, recent ping/latency age, compatibility
+ACK results, and per-module route decisions.
+
+The diagnostic output is designed to answer questions such as which peer provides `Tooling`,
+`DB`, or `TTS`, why a route selected local or remote delivery, and which version/capability
+checks made a peer ineligible. Credential-bearing configuration is not included; the response
+does not expose tokens, API keys, MQTT passwords, WebRTC room passwords, or raw secrets.
+
+Example:
+```bash
+curl -X POST http://localhost:8000/api/Gateway/GetMeshStatus \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Key fields:
+- `local`: local mesh enable/start state, stable peer id, node name, shared modules, and routed modules.
+- `peers`: peer status, negotiated services, service capacity, active calls, latency, and compatibility reports.
+- `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
+- `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
+
 ### Service Endpoints
 
 All service methods with `exposure="external"` or `exposure="both"` are automatically exposed as:
@@ -670,4 +697,3 @@ Gateway components are tested in `tests/unit/app/test_gateway.py`:
 - [Peer Pairing Flow](../docs/PEER_PAIRING_FLOW.md)
 - [Mesh Pairing Fix Plan](../docs/MESH_PAIRING_FIX_PLAN.md)
 - [Service Contracts](../app/shared/contracts/README.md)
-

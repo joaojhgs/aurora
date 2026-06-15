@@ -42,6 +42,7 @@ class GatewayMethods:
     GET_REGISTRY = f"{GatewayModule.NAME}.GetRegistry"
     GET_SERVICES = f"{GatewayModule.NAME}.GetServices"
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
+    GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
 
 
 # =============================================================================
@@ -163,6 +164,111 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class MeshLocalStatus(IOModel):
+    """Local mesh identity and runtime status."""
+
+    mesh_enabled: bool = False
+    mesh_started: bool = False
+    webrtc_started: bool = False
+    peer_id: str | None = None
+    node_name: str = ""
+    peer_selection: str = ""
+    version_policy: str = ""
+    shared_modules: list[str] = Field(default_factory=list)
+    routed_modules: list[str] = Field(default_factory=list)
+
+
+class MeshPeerServiceDiagnostic(IOModel):
+    """Diagnostic view of a service advertised by a mesh peer."""
+
+    module: str
+    version: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    method_names: list[str] = Field(default_factory=list)
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    digest: str = ""
+
+
+class MeshPeerCompatibilityDiagnostic(IOModel):
+    """Compatibility reports for a peer's manifest negotiation."""
+
+    local_compatible: list[str] = Field(default_factory=list)
+    local_incompatible: list[str] = Field(default_factory=list)
+    local_unused: list[str] = Field(default_factory=list)
+    remote_compatible: list[str] = Field(default_factory=list)
+    remote_incompatible: list[str] = Field(default_factory=list)
+    remote_unused: list[str] = Field(default_factory=list)
+
+
+class MeshPeerDiagnostic(IOModel):
+    """Runtime diagnostic view of one mesh peer."""
+
+    peer_id: str
+    node_name: str = ""
+    status: str = "unknown"
+    latency_ms: float | None = None
+    last_ping_age_s: float | None = None
+    last_manifest_age_s: float | None = None
+    active_calls: int = 0
+    services: list[MeshPeerServiceDiagnostic] = Field(default_factory=list)
+    compatibility: MeshPeerCompatibilityDiagnostic = Field(
+        default_factory=MeshPeerCompatibilityDiagnostic
+    )
+
+
+class MeshRouteProviderDiagnostic(IOModel):
+    """Why one peer is or is not eligible to provide a module."""
+
+    peer_id: str
+    node_name: str = ""
+    status: str = "unknown"
+    version: str = ""
+    latency_ms: float | None = None
+    active_calls: int = 0
+    max_concurrent: int = 0
+    eligible: bool = False
+    reason: str = ""
+
+
+class MeshRouteDiagnostic(IOModel):
+    """Diagnostic view of routing for one service module."""
+
+    module: str
+    configured: bool = False
+    share: bool = False
+    prefer: str = ""
+    fallback: str = ""
+    min_version: str | None = None
+    required_capabilities: list[str] = Field(default_factory=list)
+    decision_target: str = "local"
+    decision_peer_id: str | None = None
+    decision_version: str = ""
+    decision_latency_ms: float | None = None
+    reason: str = ""
+    providers: list[MeshRouteProviderDiagnostic] = Field(default_factory=list)
+
+
+class MeshCompatibilityFailure(IOModel):
+    """Flattened compatibility failure for operator scanning."""
+
+    peer_id: str
+    module: str
+    direction: str
+    reason: str = ""
+
+
+class GetMeshStatusResponse(IOModel):
+    """Read-only mesh status and route diagnostic dump."""
+
+    local: MeshLocalStatus = Field(default_factory=MeshLocalStatus)
+    peers: list[MeshPeerDiagnostic] = Field(default_factory=list)
+    routes: list[MeshRouteDiagnostic] = Field(default_factory=list)
+    compatibility_failures: list[MeshCompatibilityFailure] = Field(default_factory=list)
+    secrets_redacted: bool = True
 
 
 class ServiceCountInfo(IOModel):
