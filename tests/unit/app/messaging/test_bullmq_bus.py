@@ -109,7 +109,7 @@ class TestBullMQBusInterface:
 
     async def test_start_registers_existing_event_subscriptions(self, mock_bullmq):
         """Event handlers subscribed before start get fanout queues on start."""
-        bus = BullMQBus(validate_topics=False)
+        bus = BullMQBus(validate_topics=True)
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
@@ -123,6 +123,13 @@ class TestBullMQBusInterface:
 
         assert "Config.Updated" in bus._event_worker_queues
         mock_bullmq["Worker"].assert_called()
+
+    async def test_validation_disabled_direct_topic_uses_command_queue(self):
+        """Validation-disabled concrete topics are commands, not event fanout."""
+        bus = BullMQBus(validate_topics=False)
+
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.Ping") is False
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.*") is True
 
     async def test_subscribe_direct_topic(self, mock_bullmq):
         """Test subscribing to a direct topic (no wildcards)."""
@@ -141,7 +148,7 @@ class TestBullMQBusInterface:
 
     async def test_subscribe_event_topic(self, mock_bullmq):
         """Test subscribing to a broadcast event topic."""
-        bus = BullMQBus(validate_topics=False)
+        bus = BullMQBus(validate_topics=True)
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
