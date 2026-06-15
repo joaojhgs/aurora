@@ -232,6 +232,8 @@ service-orchestrator = [
     "langchain-core==0.3.62",
     "langchain-openai==0.3.18",  # Lightweight API client (default provider)
     "langgraph==0.4.6",
+    "langgraph-checkpoint==2.0.26",
+    "langgraph-sdk==0.1.51",
     "Jinja2==3.1.6",
     "typing-extensions>=4.10.0",
     # Note: langchain-huggingface moved to optional groups (only needed for HuggingFace providers)

@@ -334,6 +334,8 @@ all-services = [
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langgraph-checkpoint" },
+    { name = "langgraph-sdk" },
     { name = "numpy" },
     { name = "onnxruntime" },
     { name = "openwakeword" },
@@ -1380,6 +1382,8 @@ service-orchestrator = [
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langgraph-checkpoint" },
+    { name = "langgraph-sdk" },
     { name = "typing-extensions" },
 ]
 service-orchestrator-huggingface-endpoint = [
@@ -1758,7 +1762,9 @@ requires-dist = [
     { name = "langgraph", marker = "extra == 'service-orchestrator'", specifier = "==0.4.6" },
     { name = "langgraph", marker = "extra == 'service-tooling'", specifier = "==0.4.6" },
     { name = "langgraph-checkpoint", marker = "extra == 'runtime'", specifier = "==2.0.26" },
+    { name = "langgraph-checkpoint", marker = "extra == 'service-orchestrator'", specifier = "==2.0.26" },
     { name = "langgraph-sdk", marker = "extra == 'runtime'", specifier = "==0.1.51" },
+    { name = "langgraph-sdk", marker = "extra == 'service-orchestrator'", specifier = "==0.1.51" },
     { name = "langsmith", marker = "extra == 'runtime'", specifier = "==0.3.8" },
     { name = "locust", marker = "extra == 'test-performance'" },
     { name = "markdown", marker = "extra == 'ui'", specifier = "==3.8" },
