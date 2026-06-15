@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "createdAt": "2026-06-15T23:46:39.753Z",
+  "updatedAt": "2026-06-15T23:46:50.293Z",
+  "briefPath": ".omx/ultragoal/brief.md",
+  "goalsPath": ".omx/ultragoal/goals.json",
+  "ledgerPath": ".omx/ultragoal/ledger.jsonl",
+  "codexGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-multica-issue-per-129-and-empty-comm",
+      "title": "Multica issue PER-129 and empty comment history.",
+      "objective": "Multica issue PER-129 and empty comment history.",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:50.293Z",
+      "startedAt": "2026-06-15T23:46:50.293Z"
+    },
+    {
+      "id": "G002-read-only-context-from-origin-main-o",
+      "title": "Read-only context from `origin/main:.omx/multica/mesh-roadmap-tasks/0...",
+      "objective": "Read-only context from `origin/main:.omx/multica/mesh-roadmap-tasks/03-meshp1-t01-align-stable-mesh-identity-across-webrtc-auth-registry-and-manifests.md`.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G003-read-only-context-from-origin-main-o",
+      "title": "Read-only context from `origin/main:.omx/specs/deep-interview-mesh-di...",
+      "objective": "Read-only context from `origin/main:.omx/specs/deep-interview-mesh-distributed-integration.md`.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G004-repo-guidance-root-services-gateway",
+      "title": "Repo guidance: root, services, gateway, auth, messaging, shared, cont...",
+      "objective": "Repo guidance: root, services, gateway, auth, messaging, shared, contracts, tests AGENTS.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G005-code-paths-app-services-gateway-webr",
+      "title": "Code paths: `app/services/gateway/webrtc/rtc_client.py`, `app/service...",
+      "objective": "Code paths: `app/services/gateway/webrtc/rtc_client.py`, `app/services/gateway/service.py`, `app/services/gateway/mesh/*`, `app/services/auth/*`, `app/shared/contracts/models/mesh.py`, gateway/auth tests.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G006-keep-webrtc-signaling-session-ids-se",
+      "title": "Keep WebRTC signaling/session IDs separate from stable mesh peer IDs.",
+      "objective": "Keep WebRTC signaling/session IDs separate from stable mesh peer IDs.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G007-use-stable-mesh-ids-for-manifests-pe",
+      "title": "Use stable mesh IDs for manifests, peer registry records, saved inbou...",
+      "objective": "Use stable mesh IDs for manifests, peer registry records, saved inbound credential lookup/persistence, ACL/policy-facing diagnostics, and reconnect flows.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G008-keep-session-ids-for-mqtt-signaling",
+      "title": "Keep session IDs for MQTT signaling and DataChannel transport address...",
+      "objective": "Keep session IDs for MQTT signaling and DataChannel transport addressing.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G009-preserve-backward-compatibility-for",
+      "title": "Preserve backward compatibility for existing single-token or session-...",
+      "objective": "Preserve backward compatibility for existing single-token or session-keyed saved credentials.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G010-add-explicit-local-stable-identity-s",
+      "title": "Add explicit local stable identity support to `RTCClient`: retain `_p...",
+      "objective": "Add explicit local stable identity support to `RTCClient`: retain `_peer_id` as signaling ID, add stable mesh peer ID/node name setters/getters, and helper mapping from session ID to stable ID.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G011-update-auth-pairing-manifest-registr",
+      "title": "Update auth, pairing, manifest, registry, ping/pong, capacity, discon...",
+      "objective": "Update auth, pairing, manifest, registry, ping/pong, capacity, disconnect, and diagnostic paths to use stable peer IDs for mesh state while using session IDs for DataChannel sends.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G012-make-saved-token-lookup-prefer-known",
+      "title": "Make saved-token lookup prefer known remote stable ID, fall back to `...",
+      "objective": "Make saved-token lookup prefer known remote stable ID, fall back to `_default`/single legacy token/session-keyed values, and migrate learned stable IDs into `_saved_auth_tokens`.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G013-ensure-incoming-manifest-peer-id-dri",
+      "title": "Ensure incoming manifest `peer_id` drives the stable ID mapping and r...",
+      "objective": "Ensure incoming manifest `peer_id` drives the stable ID mapping and registry update, including distinct session-vs-stable reconnect behavior.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G014-add-focused-unit-tests-covering-stab",
+      "title": "Add focused unit tests covering stable local manifest ID, distinct se...",
+      "objective": "Add focused unit tests covering stable local manifest ID, distinct session/stable remote registration, and saved-token fallback/rekey on reconnect.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    },
+    {
+      "id": "G015-run-targeted-gateway-tests-and-the-m",
+      "title": "Run targeted gateway tests and the mesh baseline subset that fits the...",
+      "objective": "Run targeted gateway tests and the mesh baseline subset that fits the changed surface.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-15T23:46:39.753Z",
+      "updatedAt": "2026-06-15T23:46:39.753Z"
+    }
+  ],
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "activeGoalId": "G001-multica-issue-per-129-and-empty-comm"
+}

@@ -162,6 +162,16 @@ The mesh layer adds two additional tables that track this instance's stable iden
 - **Peer records never expire.** Even if a pairing code times out, the `mesh_peers` row persists with `outbound_status = 'pending'`. An admin can always approve later via the Peer Management API.
 - **`mesh_identity`** ensures a stable `peer_id` across restarts, preventing tie-breaker instability.
 
+### Stable Identity vs Signaling Session IDs
+
+WebRTC signaling peers also have a per-session MQTT/WebRTC identifier used for
+presence, SDP, ICE, and DataChannel transport addressing. That value is allowed
+to change on reconnect and is not a trust or policy identity. Mesh manifests,
+`mesh_peers` rows, saved inbound credentials, peer permissions, and diagnostics
+use the stable `mesh_identity.peer_id` instead. `RTCClient` keeps a runtime
+mapping from active signaling session ID to stable peer ID so routed mesh calls
+can use stable peer IDs while DataChannel sends still target the live session.
+
 ---
 
 ## Pairing Flow (Step-by-Step)

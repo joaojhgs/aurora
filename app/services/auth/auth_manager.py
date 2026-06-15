@@ -701,9 +701,11 @@ class AuthManager:
         # Include our stable mesh peer_id so the initiator can key
         # the saved credential by stable ID (not the transient signaling ID).
         local_peer_id = ""
+        local_node_name = ""
         try:
             identity = await self.load_mesh_identity()
             local_peer_id = identity.get("peer_id", "") or ""
+            local_node_name = identity.get("node_name", "") or ""
         except Exception:
             pass  # Non-fatal — initiator falls back to signaling ID
 
@@ -714,6 +716,7 @@ class AuthManager:
             "permissions": granted_perms,
             "token_id": token_id,
             "peer_id": local_peer_id,
+            "node_name": local_node_name,
         }
 
     def update_permission_defaults(self, default_perms: list[str]) -> None:
