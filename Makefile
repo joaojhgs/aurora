@@ -113,11 +113,11 @@ clean:
 
 # Config codegen: regenerate Pydantic models, ConfigKeys, and defaults from config_schema.json
 generate-config:
-	uv run python scripts/generate_config_artifacts.py
+	uv run --extra dev python scripts/generate_config_artifacts.py
 
 check-config-generated:
 	@echo "Checking generated config artifacts are current..."
-	@uv run python scripts/generate_config_artifacts.py --check
+	@uv run --extra dev python scripts/generate_config_artifacts.py --check
 	@echo "Generated config artifacts are current."
 
 

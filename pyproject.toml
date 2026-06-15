@@ -492,6 +492,10 @@ test = [
     "pytest-timeout",
     "pytest-benchmark",
     "passlib[argon2]>=1.7.4",
+    # Root tests/conftest.py imports DB helpers during collection.
+    "aiosqlite>=0.19.0",
+    # STT unit tests mock hardware backends but import NumPy-backed audio helpers.
+    "numpy==1.26.4",
 ]
 
 # Dependencies for unit tests

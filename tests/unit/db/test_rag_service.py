@@ -1,6 +1,8 @@
 """Unit tests for RAGService."""
 
+import sys
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -59,10 +61,12 @@ class TestRAGServiceCore:
     async def test_get_embeddings_local(self, mock_config):
         """Test getting local embeddings."""
         mock_config.aget = AsyncMock(return_value={"embeddings": {"use_local": True}})
+        mock_hf = MagicMock()
+        fake_hf_module = types.SimpleNamespace(HuggingFaceEmbeddings=mock_hf)
 
         with (
             patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
-            patch("langchain_huggingface.HuggingFaceEmbeddings") as mock_hf,
+            patch.dict(sys.modules, {"langchain_huggingface": fake_hf_module}),
         ):
             mock_emb = MagicMock()
             mock_hf.return_value = mock_emb

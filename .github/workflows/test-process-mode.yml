@@ -36,7 +36,7 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          uv pip install --system -e .[dev,test,mode-processes]
+          uv pip install --system -e .[dev,test,mode-processes,service-db,service-scheduler,service-tooling,service-orchestrator,gateway]
 
       - name: 🧪 Run process mode tests
         env:
