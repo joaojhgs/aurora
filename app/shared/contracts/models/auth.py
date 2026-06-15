@@ -213,6 +213,8 @@ class PairingExchangeResponse(BaseModel):
     user_id: str
     permissions: list[Permission] = Field(default_factory=list)
     token_id: str = ""  # Internal token row ID (for mesh_peers FK)
+    peer_id: str = ""  # Stable mesh peer_id of the issuer, when available
+    node_name: str = ""  # Human-readable mesh node name of the issuer
 
 
 # ── Principal CRUD ───────────────────────────────────────────────────────
