@@ -115,7 +115,10 @@ class Supervisor(BaseService):
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-        self._bus = BullMQBus(redis_url=redis_url)
+        # In process mode each process has a partial local contract registry.
+        # Cross-service RPC must be allowed even when this process only imported
+        # supervisor contracts.
+        self._bus = BullMQBus(redis_url=redis_url, validate_topics=False)
         await self._bus.start()
         log_info("BullMQBus initialized")
 
@@ -140,7 +143,6 @@ class Supervisor(BaseService):
         from app.services.orchestrator import OrchestratorService
         from app.services.scheduler import SchedulerService
         from app.services.tooling import ToolingService
-        from app.services.tts import TTSService
 
         log_info("Service imports complete")
 
@@ -153,7 +155,6 @@ class Supervisor(BaseService):
         auth_service = AuthService()
         tooling_service = ToolingService()
         scheduler_service = SchedulerService()
-        tts_service = TTSService()
         orchestrator_service = OrchestratorService()
         gateway_service = GatewayService()
 
@@ -208,19 +209,27 @@ class Supervisor(BaseService):
             log_error(f"Failed to start Scheduler service: {e}")
             raise
 
-        # Use new modular streaming STT architecture
-        log_info(">>> Starting streaming STT architecture (modular) <<<")
+        # Use new modular streaming STT architecture only when enabled. Optional
+        # STT dependencies should not be imported when the services are inactive.
+        log_info(">>> Starting streaming STT architecture (modular) if enabled <<<")
         await self._start_streaming_stt_services()
-        log_info("STT services started")
 
-        # Start remaining services (TTS, Orchestrator, Gateway)
+        # Start remaining services (TTS if enabled, Orchestrator, Gateway)
         try:
-            log_info("Starting TTS, Orchestrator, and Gateway services...")
-            await asyncio.gather(
-                tts_service.start(), orchestrator_service.start(), gateway_service.start()
-            )
-            self.services.extend([tts_service, orchestrator_service, gateway_service])
-            log_info("TTS, Orchestrator and Gateway started")
+            log_info("Starting optional TTS, Orchestrator, and Gateway services...")
+            services_to_start = [orchestrator_service, gateway_service]
+            from app.shared.config.keys import ConfigKeys
+
+            if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=False):
+                from app.services.tts import TTSService
+
+                services_to_start.insert(0, TTSService())
+            else:
+                log_info("TTS service disabled; skipping optional TTS import/start")
+
+            await asyncio.gather(*(service.start() for service in services_to_start))
+            self.services.extend(services_to_start)
+            log_info("Optional TTS, Orchestrator and Gateway startup completed")
         except Exception as e:
             log_error(f"Failed to start services: {e}")
             raise
@@ -235,6 +244,8 @@ class Supervisor(BaseService):
 
         self.process_launcher = ProcessLauncher()
 
+        from app.shared.config.keys import ConfigKeys
+
         # Service definitions: (service_name, module_path)
         services = [
             ("ConfigService", "app.services.config"),
@@ -242,19 +253,23 @@ class Supervisor(BaseService):
             ("AuthService", "app.services.auth"),
             ("ToolingService", "app.services.tooling"),
             ("SchedulerService", "app.services.scheduler"),
-            ("TTSService", "app.services.tts"),
             ("OrchestratorService", "app.services.orchestrator"),
             ("GatewayService", "app.services.gateway"),
         ]
 
-        # Always start STT services (speech_to_text cannot be disabled via config)
-        stt_services = [
-            # Note: AudioInputService merged into STTCoordinatorService
-            ("WakeWordService", "app.services.stt_wakeword"),
-            ("TranscriptionService", "app.services.stt_transcription"),
-            ("STTCoordinatorService", "app.services.stt_coordinator"),
-        ]
-        services.extend(stt_services)
+        if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=False):
+            services.append(("TTSService", "app.services.tts"))
+        else:
+            log_info("TTS service disabled; skipping optional TTS process")
+
+        if await self._get_config_bool(ConfigKeys.services.stt.wakeword.enabled, default=False):
+            services.append(("WakeWordService", "app.services.stt_wakeword"))
+        if await self._get_config_bool(
+            ConfigKeys.services.stt.transcription.enabled, default=False
+        ):
+            services.append(("TranscriptionService", "app.services.stt_transcription"))
+        if await self._get_config_bool(ConfigKeys.services.stt.coordinator.enabled, default=False):
+            services.append(("STTCoordinatorService", "app.services.stt_coordinator"))
 
         # Start services in order
         for service_name, module_path in services:
@@ -275,41 +290,75 @@ class Supervisor(BaseService):
         Note: AudioInputService has been merged into STTCoordinatorService.
         Audio capture is now handled internally by the coordinator.
         """
-        from app.services.stt_coordinator import STTCoordinatorService
-        from app.services.stt_transcription import TranscriptionService
-        from app.services.stt_wakeword import WakeWordService
+        from app.shared.config.keys import ConfigKeys
+
+        wake_enabled = await self._get_config_bool(
+            ConfigKeys.services.stt.wakeword.enabled, default=False
+        )
+        transcription_enabled = await self._get_config_bool(
+            ConfigKeys.services.stt.transcription.enabled, default=False
+        )
+        coordinator_enabled = await self._get_config_bool(
+            ConfigKeys.services.stt.coordinator.enabled, default=False
+        )
+
+        if not (wake_enabled or transcription_enabled or coordinator_enabled):
+            log_info("All STT services disabled; skipping optional STT imports/start")
+            return
 
         log_info(
             "Starting streaming STT services (Wake Word, Transcription, Coordinator with audio)..."
         )
 
-        # Create service instances
-        wake_word = WakeWordService()
-        transcription = TranscriptionService()
-        coordinator = STTCoordinatorService()  # Now includes audio capture
-
-        # Start services in order:
-        # 1. Wake Word & Transcription (can start in parallel, will consume audio from coordinator)
-        # 2. Coordinator (starts audio capture and orchestrates the workflow)
-
         try:
-            # Start wake word and transcription in parallel
-            log_info("Starting Wake Word and Transcription services...")
-            await asyncio.gather(wake_word.start(), transcription.start())
-            self.services.extend([wake_word, transcription])
-            log_info("Wake Word and Transcription services started")
+            first_phase = []
+            if wake_enabled:
+                from app.services.stt_wakeword import WakeWordService
 
-            # Start coordinator last (includes audio capture)
-            log_info("Starting STT Coordinator service (with audio capture)...")
-            await coordinator.start()
-            self.services.append(coordinator)
-            log_info("STT Coordinator service started")
+                first_phase.append(WakeWordService())
+            if transcription_enabled:
+                from app.services.stt_transcription import TranscriptionService
+
+                first_phase.append(TranscriptionService())
+
+            if first_phase:
+                log_info("Starting enabled Wake Word and Transcription services...")
+                await asyncio.gather(*(service.start() for service in first_phase))
+                self.services.extend(first_phase)
+                log_info("Enabled Wake Word and Transcription services started")
+
+            if coordinator_enabled:
+                from app.services.stt_coordinator import STTCoordinatorService
+
+                log_info("Starting STT Coordinator service (with audio capture)...")
+                coordinator = STTCoordinatorService()
+                await coordinator.start()
+                self.services.append(coordinator)
+                log_info("STT Coordinator service started")
 
             log_info("All streaming STT services started successfully")
 
         except Exception as e:
             log_error(f"Failed to start streaming STT services: {e}")
             raise
+
+    async def _get_config_bool(self, key_path: str, default: bool) -> bool:
+        """Read a boolean config value after ConfigService is available."""
+        try:
+            from app.services.config.config_manager import ConfigManager
+
+            return bool(ConfigManager().get(str(key_path), default))
+        except Exception as e:
+            log_warning(f"Could not read {key_path} from local config: {e}")
+
+        try:
+            from app.shared.config.interface import ConfigAPI
+
+            value = await ConfigAPI().aget(key_path, default=default, config_timeout=20.0)
+            return bool(value)
+        except Exception as e:
+            log_warning(f"Could not read {key_path} from ConfigService; using {default}: {e}")
+            return default
 
     async def run(self) -> None:
         """Run the supervisor (blocks until shutdown signal)."""

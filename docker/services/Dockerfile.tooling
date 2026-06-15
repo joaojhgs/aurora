@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Tooling Service Dockerfile
 FROM python:3.11-slim
 
@@ -6,26 +7,31 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
+ENV UV_LINK_MODE=copy
 
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
 WORKDIR /app
 
 # Install UV
 RUN pip install uv
 
-# Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml ./
+# Copy only dependency manifests first so source edits do not invalidate package layers.
+COPY --chown=aurora:aurora pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+      --extra service-tooling --extra mode-processes > /tmp/requirements.txt && \
+    uv pip install --system -r /tmp/requirements.txt
+
 COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
-
-# Install dependencies using pyproject.toml optional groups
-# Tooling service needs core + service-tooling + mode-processes
-RUN uv pip install --system --no-cache -e .[service-tooling,mode-processes]
+RUN uv pip install --system --no-deps -e .
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app
@@ -33,4 +39,3 @@ RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
 USER aurora
 
 CMD ["python", "-m", "app.services.tooling"]
-

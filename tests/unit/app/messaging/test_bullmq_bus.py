@@ -26,6 +26,20 @@ class SampleResponse(BaseModel):
     data: str
 
 
+class FakeRedis:
+    """Minimal Redis async client for BullMQ event fanout tests."""
+
+    def __init__(self, subscribers=None):
+        self.subscribers = subscribers or set()
+        self.published = []
+
+    async def smembers(self, key):
+        return self.subscribers
+
+    async def publish(self, topic, payload):
+        self.published.append((topic, payload))
+
+
 @pytest.fixture
 def mock_bullmq():
     """Mock BullMQ dependencies."""
@@ -93,12 +107,30 @@ class TestBullMQBusInterface:
         await bus.stop()
         assert bus._started is False
 
+    async def test_start_registers_existing_event_subscriptions(self, mock_bullmq):
+        """Event handlers subscribed before start get fanout queues on start."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._async_register_event_queue = AsyncMock()
+
+        handler = AsyncMock()
+        bus.subscribe("Config.Updated", handler)
+        assert "Config.Updated" not in bus._event_worker_queues
+
+        await bus.start()
+
+        assert "Config.Updated" in bus._event_worker_queues
+        mock_bullmq["Worker"].assert_called()
+
     async def test_subscribe_direct_topic(self, mock_bullmq):
         """Test subscribing to a direct topic (no wildcards)."""
         bus = BullMQBus(validate_topics=False)
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
+        bus._is_event_topic = MagicMock(return_value=False)
 
         handler = AsyncMock()
         bus.subscribe("TTS.Request", handler)
@@ -107,12 +139,27 @@ class TestBullMQBusInterface:
         assert handler in bus._handlers["TTS.Request"]
         assert "TTS.Request" in bus._workers
 
+    async def test_subscribe_event_topic(self, mock_bullmq):
+        """Test subscribing to a broadcast event topic."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        handler = AsyncMock()
+        bus.subscribe("Config.Updated", handler)
+
+        assert "Config.Updated" in bus._event_handlers
+        assert handler in bus._event_handlers["Config.Updated"]
+        assert "Config.Updated" not in bus._handlers
+
     async def test_subscribe_wildcard_topic(self, mock_bullmq):
         """Test subscribing to a wildcard topic pattern."""
         bus = BullMQBus(validate_topics=False)
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
+        bus._is_event_topic = MagicMock(return_value=False)
 
         handler = AsyncMock()
         bus.subscribe("TTS.*", handler)
@@ -148,7 +195,7 @@ class TestBullMQBusInterface:
         await bus.publish(
             "TTS.Request",
             message,
-            event=True,
+            event=False,
             priority=10,
             origin="test",
             reliable=True,
@@ -158,6 +205,23 @@ class TestBullMQBusInterface:
 
         assert bus._stats["published"] == 1
         mock_bullmq["queue_instance"].add.assert_called_once()
+
+    async def test_publish_event_fanout(self, mock_bullmq):
+        """Broadcast events are copied to each durable subscriber queue."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._redis = FakeRedis(
+            subscribers={b"event.Config.Updated.worker1", "event.Config.Updated.worker2"}
+        )
+
+        message = SampleMessage(content="test")
+
+        await bus.publish("Config.Updated", message, event=True)
+
+        assert bus._stats["published"] == 1
+        assert mock_bullmq["queue_instance"].add.call_count == 2
 
     async def test_publish_with_reply_to(self, mock_bullmq):
         """Test publishing with reply_to parameter."""
@@ -171,6 +235,7 @@ class TestBullMQBusInterface:
         await bus.publish(
             "TTS.Request",
             message,
+            event=False,
             reply_to="reply.TTS.123",
         )
 
@@ -320,10 +385,10 @@ class TestBullMQBusInterface:
 
         message = SampleMessage(content="test")
 
-        await bus.publish("TTS.Request", message)
+        await bus.publish("TTS.Request", message, event=False)
         assert bus._stats["published"] == 1
 
-        await bus.publish("TTS.Request", message)
+        await bus.publish("TTS.Request", message, event=False)
         assert bus._stats["published"] == 2
 
     async def test_multiple_handlers_same_topic(self, mock_bullmq):
@@ -332,6 +397,7 @@ class TestBullMQBusInterface:
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
+        bus._is_event_topic = MagicMock(return_value=False)
 
         handler1 = AsyncMock()
         handler2 = AsyncMock()
@@ -349,6 +415,7 @@ class TestBullMQBusInterface:
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
+        bus._is_event_topic = MagicMock(return_value=False)
 
         direct_handler = AsyncMock()
         wildcard_handler = AsyncMock()

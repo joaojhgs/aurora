@@ -414,3 +414,7 @@ class MeshBus:
             handler: Async function to handle messages
         """
         self._inner.subscribe(topic, handler)
+
+    def unsubscribe(self, topic: str, handler: Handler) -> None:
+        """Unsubscribe from the inner local bus."""
+        self._inner.unsubscribe(topic, handler)

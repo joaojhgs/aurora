@@ -72,6 +72,7 @@ class OrchestratorService(BaseService):
     async def on_stop(self) -> None:
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
+        self.bus.unsubscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -81,12 +82,23 @@ class OrchestratorService(BaseService):
         """
         log_info(f"Reloading OrchestratorService configuration: section={config_section}")
         # Reload orchestrator if LLM config changed
-        if config_section is None or config_section in ["services", "services.orchestrator"]:
+        if config_section is None or str(config_section).startswith("services.orchestrator"):
             log_info("Reloading orchestrator due to LLM config change...")
             # Reinitialize orchestrator with new config
             await self.stop()
             await self.start()
         log_info("OrchestratorService configuration reloaded")
+
+    async def reload_config(self, event) -> None:
+        """Reload only for Orchestrator-owned config changes."""
+        key_path = getattr(event, "key_path", "") or ""
+        affected_sections = getattr(event, "affected_sections", []) or []
+        if key_path.startswith("services.orchestrator") or any(
+            str(section).startswith("services.orchestrator") for section in affected_sections
+        ):
+            await self.reload(key_path)
+            return
+        log_debug(f"Ignoring unrelated config change for OrchestratorService: {key_path}")
 
     async def _on_transcription(self, env: Envelope) -> None:
         """Handle STT transcription event.

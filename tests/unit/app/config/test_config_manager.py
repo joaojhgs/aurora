@@ -58,35 +58,23 @@ class TestConfigManager:
             # Clean up the temporary file
             os.unlink(temp_file_path)
 
-    def test_default_config_generation(self):
+    def test_default_config_generation(self, tmp_path):
         """Test generation of default configuration when file doesn't exist."""
         # Reset the singleton instance
         ConfigManager._instance = None
 
         # Use a non-existent file path
-        non_existent_path = "/tmp/nonexistent_config.json"
+        non_existent_path = tmp_path / "nonexistent_config.json"
 
-        with patch("app.services.config.config_manager.os.path.exists", return_value=False):
-            # First create the instance
-            cm = ConfigManager()
-            # Then patch the instance attribute
-            cm.config_file = non_existent_path
+        cm = ConfigManager()
+        cm.config_file = str(non_existent_path)
 
-            # Mock the open function for writing the default config
-            mock_file = mock_open()
-            with (
-                patch("builtins.open", mock_file),
-                patch.object(ConfigManager, "_get_default_config") as mock_default,
-            ):
-                mock_default.return_value = {"app": {"name": "Aurora"}}
-                # Force a reload of the configuration
-                cm.load_config()
+        with patch.object(ConfigManager, "_get_default_config") as mock_default:
+            mock_default.return_value = {"app": {"name": "Aurora"}}
+            cm.load_config()
 
-                # The instance should have been initialized with the default config
-                assert cm._config is not None
-
-                # Check that the file was opened for writing
-                mock_file.assert_called_with(non_existent_path, "w")
+        assert cm._config == {"app": {"name": "Aurora"}}
+        assert json.loads(non_existent_path.read_text()) == {"app": {"name": "Aurora"}}
 
     @pytest.mark.parametrize(
         "invalid_config",

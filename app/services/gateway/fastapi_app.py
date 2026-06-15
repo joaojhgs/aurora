@@ -110,21 +110,20 @@ def create_gateway_app(
         allow_headers=["*"],
     )
 
-    # Add authentication middleware if enabled
-    if auth_enabled:
-        from app.services.gateway.auth import GatewayAuth, create_auth_middleware
-        from app.services.gateway.auth_proxy import BusAuthProxy
-        from app.services.gateway.dependencies import set_gateway_auth
+    # Always install auth middleware so runtime config can enable/disable it.
+    from app.services.gateway.auth import GatewayAuth, create_auth_middleware
+    from app.services.gateway.auth_proxy import BusAuthProxy
+    from app.services.gateway.dependencies import set_gateway_auth
 
-        gateway_auth = GatewayAuth(
-            auth_service=BusAuthProxy(bus),
-            enabled=True,
-            api_keys=auth_api_keys or [],
-        )
-        set_gateway_auth(gateway_auth)
-        auth_middleware = create_auth_middleware(gateway_auth)
-        app.middleware("http")(auth_middleware)
-        log_info("Gateway authentication enabled")
+    gateway_auth = GatewayAuth(
+        auth_service=BusAuthProxy(bus),
+        enabled=auth_enabled,
+        api_keys=auth_api_keys or [],
+    )
+    set_gateway_auth(gateway_auth)
+    auth_middleware = create_auth_middleware(gateway_auth)
+    app.middleware("http")(auth_middleware)
+    log_info(f"Gateway authentication {'enabled' if auth_enabled else 'disabled'}")
 
     # Create route generator
     route_generator = RouteGenerator(

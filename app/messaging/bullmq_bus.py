@@ -12,6 +12,8 @@ This implementation uses Redis and BullMQ for distributed message processing:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import json
 import uuid as uuid_lib
 from collections import defaultdict
 
@@ -60,6 +62,14 @@ class BullMQBus:
         self._workers: dict[str, Worker] = {}
         self._handlers: dict[str, list[Handler]] = defaultdict(list)
         self._wildcard_patterns: dict[str, list[Handler]] = defaultdict(list)
+        self._event_handlers: dict[str, list[Handler]] = defaultdict(list)
+        self._event_wildcard_patterns: dict[str, list[Handler]] = defaultdict(list)
+        self._event_channels: set[str] = set()
+        self._event_patterns: set[str] = set()
+        self._event_worker_queues: dict[str, str] = {}
+        self._redis = None
+        self._pubsub = None
+        self._pubsub_task: asyncio.Task | None = None
         self._started = False
         self._validate_topics = validate_topics
 
@@ -93,6 +103,10 @@ class BullMQBus:
             raise RuntimeError("BullMQ not available. Install with: pip install bullmq")
 
         self._started = True
+        for topic in list(self._event_handlers):
+            self._ensure_event_subscription(topic, pattern=False)
+        for pattern in list(self._event_wildcard_patterns):
+            self._ensure_event_subscription(pattern, pattern=True)
         log_info(f"BullMQBus started with Redis at {self.redis_url}")
 
     async def stop(self) -> None:
@@ -114,6 +128,31 @@ class BullMQBus:
                 log_debug(f"Closed queue for topic: {topic}")
             except Exception as e:
                 log_error(f"Error closing queue for {topic}: {e}")
+
+        if self._pubsub_task:
+            self._pubsub_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._pubsub_task
+            self._pubsub_task = None
+
+        if self._pubsub is not None:
+            try:
+                await self._pubsub.close()
+            except Exception as e:
+                log_debug(f"Error closing Redis pubsub: {e}")
+            self._pubsub = None
+
+        if self._redis is not None:
+            for topic, queue_name in list(self._event_worker_queues.items()):
+                try:
+                    await self._redis.srem(self._event_subscriber_key(topic), queue_name)
+                except Exception as e:
+                    log_debug(f"Error unregistering event subscriber {queue_name}: {e}")
+            try:
+                await self._redis.close()
+            except Exception as e:
+                log_debug(f"Error closing Redis client: {e}")
+            self._redis = None
 
         self._started = False
         log_info("BullMQBus stopped")
@@ -138,6 +177,16 @@ class BullMQBus:
         # Only callable methods (queries/commands) need @method_contract decorators.
         # We don't validate subscriptions because services may subscribe to events
         # that are published by other services without contracts.
+
+        if self._is_event_topic(topic):
+            if "*" in topic:
+                self._event_wildcard_patterns[topic].append(handler)
+                self._ensure_event_subscription(topic, pattern=True)
+            else:
+                self._event_handlers[topic].append(handler)
+                self._ensure_event_subscription(topic, pattern=False)
+            log_debug(f"Subscribed event handler to topic: {topic}")
+            return
 
         # Check if topic has wildcard
         if "*" in topic:
@@ -166,6 +215,14 @@ class BullMQBus:
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
         if "*" in topic:
+            event_handlers = self._event_wildcard_patterns.get(topic)
+            if event_handlers:
+                try:
+                    event_handlers.remove(handler)
+                    log_debug(f"Unsubscribed event wildcard handler from pattern: {topic}")
+                except ValueError:
+                    pass
+                return
             handlers = self._wildcard_patterns.get(topic)
             if handlers:
                 try:
@@ -174,6 +231,14 @@ class BullMQBus:
                 except ValueError:
                     pass
             return
+        event_handlers = self._event_handlers.get(topic)
+        if event_handlers:
+            try:
+                event_handlers.remove(handler)
+                log_debug(f"Unsubscribed event handler from topic: {topic}")
+            except ValueError:
+                pass
+            return
         handlers = self._handlers.get(topic)
         if handlers:
             try:
@@ -181,6 +246,125 @@ class BullMQBus:
                 log_debug(f"Unsubscribed handler from topic: {topic}")
             except ValueError:
                 pass
+
+    def _is_event_topic(self, topic: str) -> bool:
+        """Return True when a subscription should use broadcast fanout."""
+        if topic.startswith("reply."):
+            return False
+        if "*" in topic:
+            return True
+        contracts = all_contracts()
+        return not any(topic == (c.bus_topic or c.name) for c in contracts.values())
+
+    def _ensure_event_subscription(self, topic: str, *, pattern: bool) -> None:
+        """Create a per-process fanout queue for an event topic or pattern."""
+        if not self._started:
+            return
+        if not pattern:
+            if topic in self._event_worker_queues:
+                return
+            queue_name = f"event.{topic}.{uuid_lib.uuid4()}"
+            self._event_worker_queues[topic] = queue_name
+            self._create_worker(queue_name)
+            asyncio.create_task(self._async_register_event_queue(topic, queue_name))
+            return
+
+        if pattern:
+            if topic in self._event_patterns:
+                return
+            self._event_patterns.add(topic)
+        else:
+            if topic in self._event_channels:
+                return
+            self._event_channels.add(topic)
+
+        asyncio.create_task(self._async_subscribe_event_topic(topic, pattern=pattern))
+
+    @staticmethod
+    def _event_subscriber_key(topic: str) -> str:
+        return f"aurora:event-subscribers:{topic}"
+
+    async def _async_register_event_queue(self, topic: str, queue_name: str) -> None:
+        try:
+            redis = await self._get_redis()
+            await redis.sadd(self._event_subscriber_key(topic), queue_name)
+            log_info(f"Registered BullMQ event fanout queue: {topic} -> {queue_name}")
+        except Exception as e:
+            log_error(f"Error registering event fanout queue {queue_name}: {e}", exc_info=True)
+
+    async def _get_redis(self):
+        if self._redis is None:
+            from redis.asyncio import from_url
+
+            self._redis = from_url(self.redis_url)
+        return self._redis
+
+    async def _ensure_pubsub(self):
+        if self._pubsub is None:
+            redis = await self._get_redis()
+            self._pubsub = redis.pubsub()
+            self._pubsub_task = asyncio.create_task(self._pubsub_listener())
+        return self._pubsub
+
+    async def _async_subscribe_event_topic(self, topic: str, *, pattern: bool) -> None:
+        try:
+            pubsub = await self._ensure_pubsub()
+            if pattern:
+                await pubsub.psubscribe(topic)
+            else:
+                await pubsub.subscribe(topic)
+            log_info(f"Subscribed Redis pub/sub event channel: {topic}")
+        except Exception as e:
+            log_error(f"Error subscribing to event channel {topic}: {e}", exc_info=True)
+
+    async def _pubsub_listener(self) -> None:
+        """Redis pub/sub listener for broadcast events."""
+        try:
+            async for message in self._pubsub.listen():
+                if message.get("type") not in {"message", "pmessage"}:
+                    continue
+                try:
+                    raw = message.get("data")
+                    if isinstance(raw, bytes):
+                        raw = raw.decode("utf-8")
+                    data = json.loads(raw)
+                    actual_topic = data.get("type")
+                    if not actual_topic:
+                        continue
+
+                    env = Envelope(
+                        id=data.get("id"),
+                        type=actual_topic,
+                        payload=data.get("payload", {}),
+                        origin=data.get("origin", "system"),
+                        priority=data.get("priority", 50),
+                        attempts=data.get("attempts", 0),
+                        max_attempts=data.get("max_attempts", 1),
+                        reply_to=data.get("reply_to"),
+                        correlation_id=data.get("correlation_id"),
+                        principal_id=data.get("principal_id"),
+                    )
+                    await self._deliver_event(actual_topic, env)
+                except Exception as e:
+                    log_error(f"Error handling Redis pub/sub event: {e}", exc_info=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log_error(f"Redis pub/sub listener stopped unexpectedly: {e}", exc_info=True)
+
+    async def _deliver_event(self, topic: str, env: Envelope) -> None:
+        matching_handlers: list[Handler] = []
+        matching_handlers.extend(self._event_handlers.get(topic, []))
+        for pattern, handlers in self._event_wildcard_patterns.items():
+            if self._topic_matches(topic, pattern):
+                matching_handlers.extend(handlers)
+
+        if not matching_handlers:
+            log_debug(f"No event handlers for topic: {topic}")
+            return
+
+        await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
+        self._stats["delivered"] += len(matching_handlers)
 
     def _create_worker(self, queue_name: str) -> None:
         """Create a BullMQ worker for a queue.
@@ -214,9 +398,13 @@ class BullMQBus:
 
                 # Direct handlers
                 matching_handlers.extend(self._handlers.get(actual_topic, []))
+                matching_handlers.extend(self._event_handlers.get(actual_topic, []))
 
                 # Wildcard handlers
                 for pattern, handlers in self._wildcard_patterns.items():
+                    if self._topic_matches(actual_topic, pattern):
+                        matching_handlers.extend(handlers)
+                for pattern, handlers in self._event_wildcard_patterns.items():
                     if self._topic_matches(actual_topic, pattern):
                         matching_handlers.extend(handlers)
 
@@ -392,6 +580,58 @@ class BullMQBus:
                 error_msg = f"Topic '{topic}' is not registered in the contract registry.\n  Available topics: {', '.join(available_topics)}"
                 log_error(error_msg)
                 raise ValueError(error_msg)
+
+        # Broadcast events are copied to one durable per-subscriber queue.
+        # A single BullMQ topic queue is point-to-point and would load-balance
+        # lifecycle/config events across subscribers instead of broadcasting.
+        if event:
+            redis = await self._get_redis()
+            subscriber_queues = await redis.smembers(self._event_subscriber_key(topic))
+            job_id = str(uuid_lib.uuid4())
+            job_data = {
+                "id": job_id,
+                "type": topic,
+                "payload": message.model_dump(mode="json")
+                if hasattr(message, "model_dump")
+                else message,
+                "origin": origin,
+                "reply_to": reply_to,
+                "principal_id": principal_id,
+                "correlation_id": correlation_id,
+                "priority": priority,
+                "attempts": 0,
+                "max_attempts": max_attempts if reliable else 1,
+            }
+            job_opts = {
+                "priority": priority,
+                "attempts": max_attempts if reliable else 1,
+                "backoff": {
+                    "type": "exponential",
+                    "delay": 250,
+                },
+                "removeOnComplete": True,
+                "removeOnFail": False,
+            }
+            if ttl_ms:
+                job_opts["ttl"] = ttl_ms
+
+            for raw_queue_name in subscriber_queues:
+                queue_name = (
+                    raw_queue_name.decode("utf-8")
+                    if isinstance(raw_queue_name, bytes)
+                    else raw_queue_name
+                )
+                if queue_name not in self._queues:
+                    self._queues[queue_name] = self._Queue(
+                        queue_name,
+                        {"connection": self.redis_url},
+                    )
+                await self._queues[queue_name].add(queue_name, job_data, job_opts)
+            if self._event_patterns:
+                await redis.publish(topic, json.dumps(job_data))
+            self._stats["published"] += 1
+            log_debug(f"Published event {topic} to {len(subscriber_queues)} subscriber queue(s)")
+            return
 
         # Determine target queue (for wildcards, use base queue)
         queue_name = topic

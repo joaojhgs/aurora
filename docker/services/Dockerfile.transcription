@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Transcription Service Dockerfile
 FROM python:3.11-slim
 
@@ -8,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
+ENV UV_LINK_MODE=copy
 
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -16,29 +18,43 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
 WORKDIR /app
 
 # Install UV
 RUN pip install uv
 
-# Copy project files first for better caching
-COPY --chown=aurora:aurora pyproject.toml ./
-COPY --chown=aurora:aurora app/ app/
-COPY --chown=aurora:aurora modules/ modules/
+# Copy only dependency manifests first so source edits do not invalidate package layers.
+COPY --chown=aurora:aurora pyproject.toml uv.lock ./
 COPY --chown=aurora:aurora docker/services/constraints-stt-cpu.txt /tmp/constraints-stt-cpu.txt
 
 # Install dependencies (CPU PyTorch via constraint — avoids multi-GB CUDA wheels from PyPI)
-RUN uv pip install --system --no-cache -e .[service-stt-transcription,mode-processes] \
-    --constraint /tmp/constraints-stt-cpu.txt \
-    --extra-index-url https://download.pytorch.org/whl/cpu
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+      --extra service-stt-transcription --extra mode-processes \
+      --no-emit-package torch --no-emit-package torchaudio --no-emit-package torchvision \
+      > /tmp/requirements.txt && \
+    uv pip install --system \
+      torch==2.6.0+cpu torchaudio==2.6.0+cpu torchvision==0.21.0+cpu \
+      --extra-index-url https://download.pytorch.org/whl/cpu && \
+    uv pip install --system -r /tmp/requirements.txt \
+      --constraint /tmp/constraints-stt-cpu.txt \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      --index-strategy unsafe-best-match
 
 # faster-whisper uses ctranslate2 (pin via pyproject; >=4.7.1 avoids glibc 2.41+ executable-stack load errors)
 # CUDA: reinstall wheel with GPU support if requested
-RUN if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$STT_TRANSCRIPTION_HARDWARE" = "cuda" ]; then \
     uv pip install --system "ctranslate2>=4.7.1,<5" --extra-index-url=https://pypi.org/simple/ || \
     uv pip install --system "ctranslate2[cuda]>=4.7.1,<5"; \
 fi
+
+COPY --chown=aurora:aurora app/ app/
+COPY --chown=aurora:aurora modules/ modules/
+RUN uv pip install --system --no-deps -e .
 
 RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
     chown -R aurora:aurora /app
@@ -46,4 +62,3 @@ RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
 USER aurora
 
 CMD ["python", "-m", "app.services.stt_transcription"]
-

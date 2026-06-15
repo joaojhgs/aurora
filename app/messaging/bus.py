@@ -175,3 +175,12 @@ class MessageBus(Protocol):
             handler: Async function to handle messages
         """
         ...
+
+    def unsubscribe(self, topic: str, handler: Handler) -> None:
+        """Remove a previously registered topic handler.
+
+        Args:
+            topic: Topic pattern used during subscription
+            handler: Handler function originally passed to subscribe
+        """
+        ...

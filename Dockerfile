@@ -15,8 +15,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app user
-RUN groupadd -r aurora && useradd -r -g aurora -s /bin/bash aurora
+# Create app user (UID/GID should match the host user that owns ./data volume)
+ARG AURORA_UID=1000
+ARG AURORA_GID=1000
+RUN groupadd -g ${AURORA_GID} aurora && useradd -u ${AURORA_UID} -g aurora -m -s /bin/bash aurora
 
 # Set working directory
 WORKDIR /app

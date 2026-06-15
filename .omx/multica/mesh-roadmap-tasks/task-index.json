@@ -1,0 +1,275 @@
+[
+  {
+    "title": "[MESH][EPIC] Mesh polishing roadmap: secure cross-peer service fabric",
+    "phase": "EPIC",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-epic"
+    ],
+    "summary": "Parent task for polishing Aurora mesh into a secure, observable, hybrid-addressed cross-peer service fabric.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/00-meshepic-mesh-polishing-roadmap-secure-cross-peer-service-fabric.md"
+  },
+  {
+    "title": "[MESH][P0-T01] Establish mesh regression truth map and baseline test matrix",
+    "phase": "P0",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p0",
+      "test-coverage"
+    ],
+    "summary": "Convert the current passing mesh state into an explicit regression matrix and documented truth map.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/01-meshp0-t01-establish-mesh-regression-truth-map-and-baseline-test-matrix.md"
+  },
+  {
+    "title": "[MESH][P0-T02] Add mesh status and route diagnostic surface",
+    "phase": "P0",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p0",
+      "observability"
+    ],
+    "summary": "Expose a concise mesh status/debug view for identity, peers, manifests, routing, failures, and active calls.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/02-meshp0-t02-add-mesh-status-and-route-diagnostic-surface.md"
+  },
+  {
+    "title": "[MESH][P1-T01] Align stable mesh identity across WebRTC, Auth, registry, and manifests",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p1",
+      "identity",
+      "webrtc"
+    ],
+    "summary": "Ensure the same stable peer identity is used consistently across signaling/auth/registry/manifest paths.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/03-meshp1-t01-align-stable-mesh-identity-across-webrtc-auth-registry-and-manifests.md"
+  },
+  {
+    "title": "[MESH][P1-T02] Make saved WebRTC mesh tokens peer-scoped and multi-peer safe",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p1",
+      "auth",
+      "webrtc"
+    ],
+    "summary": "Replace global saved-token shortcuts with peer-specific token selection and re-auth behavior.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/04-meshp1-t02-make-saved-webrtc-mesh-tokens-peer-scoped-and-multi-peer-safe.md"
+  },
+  {
+    "title": "[MESH][P1-T03] Make bilateral reverse pairing peer-specific",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p1",
+      "auth",
+      "pairing"
+    ],
+    "summary": "Fix reverse pairing skip logic so one saved token does not suppress pairing for unrelated peers.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/05-meshp1-t03-make-bilateral-reverse-pairing-peer-specific.md"
+  },
+  {
+    "title": "[MESH][P1-T04] Bring mesh sharing config schema to parity with runtime policy fields",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p1",
+      "config",
+      "security"
+    ],
+    "summary": "Expose or intentionally remove advanced mesh policy fields so config schema/defaults match runtime behavior.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/06-meshp1-t04-bring-mesh-sharing-config-schema-to-parity-with-runtime-policy-fields.md"
+  },
+  {
+    "title": "[MESH][P1-T05] Clarify and test DataChannel app-layer E2EE behavior",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p1",
+      "security",
+      "webrtc"
+    ],
+    "summary": "Determine whether DataChannel RPC uses app-layer E2EE or WebRTC DTLS only, then align code/docs/tests.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/07-meshp1-t05-clarify-and-test-datachannel-app-layer-e2ee-behavior.md"
+  },
+  {
+    "title": "[MESH][P2-T01] Design and implement mesh capability graph core models",
+    "phase": "P2",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p2",
+      "capability-graph",
+      "contracts"
+    ],
+    "summary": "Create first-class models for peers, services, methods, tools, resources, trust tiers, policies, and provider metadata.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/08-meshp2-t01-design-and-implement-mesh-capability-graph-core-models.md"
+  },
+  {
+    "title": "[MESH][P2-T02] Add hybrid addressing primitives for peer, provider, resource, and namespace selectors",
+    "phase": "P2",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p2",
+      "addressing",
+      "contracts"
+    ],
+    "summary": "Add typed selectors so sensitive operations can target explicit peer/resource identities while low-risk routing stays transparent.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/09-meshp2-t02-add-hybrid-addressing-primitives-for-peer-provider-resource-and-namespace-selectors.md"
+  },
+  {
+    "title": "[MESH][P2-T03] Support provider aggregation instead of one-provider-per-module routing",
+    "phase": "P2",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p2",
+      "routing",
+      "capability-graph"
+    ],
+    "summary": "Allow discovery and planning across multiple providers of the same service rather than selecting only one module provider.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/10-meshp2-t03-support-provider-aggregation-instead-of-one-provider-per-module-routing.md"
+  },
+  {
+    "title": "[MESH][P3-T01] Extend Tooling discovery with peer/source metadata and stable remote tool IDs",
+    "phase": "P3",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p3",
+      "tooling",
+      "orchestrator"
+    ],
+    "summary": "Make local and remote tools distinguishable, stable, policy-aware, and safe for Orchestrator binding.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/11-meshp3-t01-extend-tooling-discovery-with-peersource-metadata-and-stable-remote-tool-ids.md"
+  },
+  {
+    "title": "[MESH][P3-T02] Implement explicit remote Tooling execution routing and audit provenance",
+    "phase": "P3",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p3",
+      "tooling",
+      "audit",
+      "security"
+    ],
+    "summary": "Execute selected remote tools by explicit provider/tool ID with full audit trail and policy checks.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/12-meshp3-t02-implement-explicit-remote-tooling-execution-routing-and-audit-provenance.md"
+  },
+  {
+    "title": "[MESH][P3-T03] Teach Orchestrator to bind local plus authorized remote tools safely",
+    "phase": "P3",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p3",
+      "orchestrator",
+      "tooling"
+    ],
+    "summary": "Expose authorized remote tools to Orchestrator with provenance, collision handling, and safety prompts where required.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/13-meshp3-t03-teach-orchestrator-to-bind-local-plus-authorized-remote-tools-safely.md"
+  },
+  {
+    "title": "[MESH][P4-T01] Define DB/data-sharing modes and per-domain ownership policy",
+    "phase": "P4",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p4",
+      "db",
+      "data-policy"
+    ],
+    "summary": "Classify chat, memory/RAG, scheduler, auth/audit, mesh credentials, and config data into safe sharing modes.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/14-meshp4-t01-define-dbdata-sharing-modes-and-per-domain-ownership-policy.md"
+  },
+  {
+    "title": "[MESH][P4-T02] Design selective RAG/memory replication with provenance and conflict handling",
+    "phase": "P4",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p4",
+      "db",
+      "rag",
+      "replication"
+    ],
+    "summary": "Plan and then implement selective cross-peer memory/RAG sync with namespaces, tombstones, conflicts, and privacy controls.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/15-meshp4-t02-design-selective-ragmemory-replication-with-provenance-and-conflict-handling.md"
+  },
+  {
+    "title": "[MESH][P5-T01] Add explicit remote TTS/STT/audio capability boundaries",
+    "phase": "P5",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p5",
+      "tts",
+      "stt",
+      "privacy"
+    ],
+    "summary": "Define and implement safe remote audio semantics for synthesize, playback, transcription, wakeword, and streaming boundaries.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/16-meshp5-t01-add-explicit-remote-ttssttaudio-capability-boundaries.md"
+  },
+  {
+    "title": "[MESH][P5-T02] Add namespace-aware remote Scheduler and delegated action policy",
+    "phase": "P5",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p5",
+      "scheduler",
+      "policy"
+    ],
+    "summary": "Make remote scheduling explicit about owner namespace, target peer, and delegated tool/action permissions.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/17-meshp5-t02-add-namespace-aware-remote-scheduler-and-delegated-action-policy.md"
+  },
+  {
+    "title": "[MESH][P5-T03] Define Auth and Config mesh exposure boundaries",
+    "phase": "P5",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p5",
+      "auth",
+      "config",
+      "security"
+    ],
+    "summary": "Separate required pairing/peer-management RPC from broad Auth/Config service sharing and document safe exposure rules.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/18-meshp5-t03-define-auth-and-config-mesh-exposure-boundaries.md"
+  },
+  {
+    "title": "[MESH][P6-T01] Add distributed tracing, correlation IDs, and mesh audit views",
+    "phase": "P6",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p6",
+      "observability",
+      "audit"
+    ],
+    "summary": "Make cross-peer requests traceable from caller through routing, WebRTC RPC, remote service execution, and response.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/19-meshp6-t01-add-distributed-tracing-correlation-ids-and-mesh-audit-views.md"
+  },
+  {
+    "title": "[MESH][P6-T02] Build mesh chaos and failure-mode test suite",
+    "phase": "P6",
+    "labels": [
+      "mesh",
+      "mesh-roadmap",
+      "mesh-p6",
+      "testing",
+      "resilience"
+    ],
+    "summary": "Add hostile tests for disconnects, stale manifests, service restart, capacity, latency, token expiry, denied permissions, and fallback routing.",
+    "description_file": ".omx/multica/mesh-roadmap-tasks/20-meshp6-t02-build-mesh-chaos-and-failure-mode-test-suite.md"
+  }
+]

@@ -23,6 +23,25 @@ host_gid = str(local('getent group audio 2>/dev/null | cut -d: -f3 || echo 29'))
 if host_gid:
     os.environ['STT_HOST_AUDIO_GID'] = host_gid
 
+docker_host_config_path = '/run/host' + main_dir + '/config.json'
+docker_host_config_kind = str(
+    local(
+        'if [ -f '
+        + docker_host_config_path
+        + ' ]; then echo file; elif [ -d '
+        + docker_host_config_path
+        + ' ]; then echo directory; else echo missing; fi'
+    )
+).strip()
+if docker_host_config_kind == 'directory':
+    # In containerized dev shells, Docker may see a stale host-side project
+    # directory while Tilt's build context sees the live workspace. In that case
+    # /app/host/config.json is a directory, so use the config baked from Tilt's
+    # live build context instead of falling back at runtime.
+    os.environ['AURORA_CONFIG_FILE'] = '/app/config.json'
+else:
+    os.environ.setdefault('AURORA_CONFIG_FILE', '/app/host/config.json')
+
 watch_file('config.json')
 watch_file('app/services/config/config_defaults.json')
 
@@ -74,6 +93,7 @@ docker_compose(
 )
 
 enabled_services = []
+if services_cfg.get('auth', {}).get('enabled', False): enabled_services.append('auth')
 if services_cfg.get('gateway', {}).get('enabled', False): enabled_services.append('gateway')
 if services_cfg.get('tts', {}).get('enabled', False): enabled_services.append('tts')
 if services_cfg.get('scheduler', {}).get('enabled', True): enabled_services.append('scheduler')
@@ -83,6 +103,7 @@ if stt_cfg.get('wakeword', {}).get('enabled', False): enabled_services.append('s
 if stt_cfg.get('transcription', {}).get('enabled', False): enabled_services.append('stt_transcription')
 
 SERVICE_MAP = {
+    'auth': ['auth-service'],
     'gateway': ['gateway-service'],
     'tts': ['tts-service'],
     'scheduler': ['scheduler-service'],
@@ -100,7 +121,14 @@ for svc in disabled_compose_services:
     # Avoid initializing disabled services automatically in Tilt
     dc_resource(svc, auto_init=False)
 
-
+if disabled_compose_services:
+    # Dev-only convenience: if config.json disables a service while Tilt is
+    # running, stop its Compose container on Tiltfile reload. Runtime lifecycle
+    # still belongs to ConfigService; this only keeps the local dev stack tidy.
+    local(
+        'docker compose -p aurora-process -f docker-compose.process.yml -f docker-compose.tilt.yml stop '
+        + ' '.join(disabled_compose_services)
+    )
 
 script = main_dir + '/scripts/tilt-set-service-log-level.sh'
 

@@ -114,6 +114,36 @@ def resolve_model_path(path: str | Path | None, default: str | None = None) -> P
     return resolve_path(path)
 
 
+def get_data_dir() -> Path:
+    """Return the writable data directory for persistent DB and cache files.
+
+    Resolution order:
+    1. ``AURORA_DATA_DIR`` env var (set explicitly in Docker Compose)
+    2. ``get_project_root() / "data"``
+
+    The directory is created if it doesn't exist. A write probe verifies the
+    process can actually create files there — if not, a clear ``RuntimeError``
+    is raised so operators see the permission mismatch immediately.
+    """
+    env_dir = os.environ.get("AURORA_DATA_DIR")
+    data_dir = Path(env_dir) if env_dir else get_project_root() / "data"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    probe = data_dir / ".aurora_write_probe"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        raise RuntimeError(
+            f"Data directory {data_dir} is not writable by UID {os.getuid()}. "
+            f"Set AURORA_DATA_DIR to a writable path or fix volume mount permissions. "
+            f"Original error: {exc}"
+        ) from exc
+
+    return data_dir
+
+
 def ensure_path_writable_or_tmp(preferred: str, *, tmp_leaf: str) -> str:
     """Create ``preferred`` if possible and verify write access.
 

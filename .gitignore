@@ -31,6 +31,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!modules/ui-mock-reference/lib/
+!modules/ui-mock-reference/lib/**
 lib64/
 parts/
 sdist/
@@ -211,6 +213,7 @@ voice_models/*
 
 *.db
 !/tests/*.db
+!docker/services/Dockerfile.db
 
 # Local configuration files
 config.json*
@@ -222,3 +225,18 @@ instructions
 /ambient_logs/tests/test_scheduler.db
 .gitnexus
 .sisyphus/notepads/
+
+# Track durable OMX planning/spec artifacts while keeping runtime state local.
+!.omx/
+.omx/*
+!.omx/ROADMAP.md
+!.omx/specs/
+!.omx/specs/**
+!.omx/multica/
+!.omx/multica/**
+.omx/state/
+.omx/logs/
+.omx/tmp/
+.omx/cache/
+.omx/notepad.md
+.omx/project-memory.json

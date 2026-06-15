@@ -11,6 +11,7 @@ It provides:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import uuid
 from abc import ABC, abstractmethod
@@ -43,6 +44,10 @@ class BaseService(ABC):
         # For backward compatibility with logging/bus_init, we can use self.module
         self._bus = None
         self._config_observers: list[Any] = []
+        self._gateway_announcement_task: asyncio.Task | None = None
+        self._config_change_subscription: tuple[str, Any] | None = None
+        self._contract_subscriptions: list[tuple[str, Any]] = []
+        self._runtime_state = "created"
         self._started = False
 
         # Unique instance ID for this service instance (for multiple instances)
@@ -127,9 +132,9 @@ class BaseService(ABC):
 
         This method:
         1. Initializes the bus (if needed)
-        2. Auto-subscribes to registered contracts
-        3. Calls the service-specific on_start() hook
-        4. Sets started state to True
+        2. Subscribes to config updates for runtime lifecycle changes
+        3. Activates the service if its enabled path is true
+        4. Leaves the service inactive, but alive, if disabled by config
         """
         if self._started:
             return
@@ -137,37 +142,103 @@ class BaseService(ABC):
         # Ensure bus is initialized
         _ = self.bus
 
-        # Auto-subscribe to registered contracts
-        await self._subscribe_registered_contracts()
+        self._runtime_state = "starting"
+        self._set_started(True)
+        self._subscribe_to_config_changes()
 
-        # Call service-specific startup logic
-        await self.on_start()
+        if await self._is_runtime_enabled():
+            await self.activate(reason="startup")
+        else:
+            self._runtime_state = "inactive"
+            log_info(f"{self.module} inactive because its enabled config is false")
+
+    async def activate(self, reason: str = "config_enabled") -> None:
+        """Activate this service's runtime contract surface."""
+        if self._runtime_state == "active":
+            return
+
+        self._runtime_state = "starting"
+        try:
+            await self._subscribe_registered_contracts()
+            await self.on_start()
+        except Exception:
+            self._unsubscribe_registered_contracts()
+            self._runtime_state = "failed"
+            self._set_started(False)
+            raise
 
         self._set_started(True)
-        log_info(f"{self.module} started")
+        self._runtime_state = "active"
+        log_info(f"{self.module} active ({reason})")
 
-        # Announce to gateway (for service discovery)
         await self._publish_service_announcement()
+        self._start_gateway_announcement_loop()
+
+    async def deactivate(self, reason: str = "config_disabled") -> None:
+        """Deactivate this service without exiting the hosting process/container."""
+        if self._runtime_state != "active":
+            if self._started:
+                self._runtime_state = "inactive"
+            return
+
+        self._runtime_state = "stopping"
+        self._stop_gateway_announcement_loop()
+        await self._publish_service_departure(reason=reason)
+        self._unsubscribe_registered_contracts()
+        try:
+            await self.on_deactivate()
+        except Exception as e:
+            log_error(f"{self.module} deactivation hook failed: {e}", exc_info=True)
+        self._set_started(True)
+        self._runtime_state = "inactive"
+        log_info(f"{self.module} inactive ({reason})")
 
     async def stop(self) -> None:
         """Stop the service.
 
         This method:
-        1. Announces departure to gateway
-        2. Calls the service-specific on_stop() hook
-        3. Sets started state to False
+        1. Deactivates the runtime contract surface when active
+        2. Unsubscribes config listeners
+        3. Marks the service process lifecycle stopped
         """
         if not self._started:
             return
 
-        # Announce departure to gateway
-        await self._publish_service_departure()
+        if self._runtime_state == "active":
+            await self.deactivate(reason="shutdown")
+        elif self._runtime_state in ("created", "starting", "failed"):
+            await self.on_stop()
+        else:
+            self._stop_gateway_announcement_loop()
+            self._unsubscribe_registered_contracts()
 
-        # Call service-specific shutdown logic
-        await self.on_stop()
-
+        self._unsubscribe_from_config_changes()
+        self._runtime_state = "stopped"
         self._set_started(False)
         log_info(f"{self.module} stopped")
+
+    def _start_gateway_announcement_loop(self) -> None:
+        """Periodically re-announce service metadata for gateway restarts."""
+        if not self._announce_to_gateway or self.module == "Gateway":
+            return
+        if self._gateway_announcement_task and not self._gateway_announcement_task.done():
+            return
+        self._gateway_announcement_task = asyncio.create_task(self._gateway_announcement_loop())
+
+    def _stop_gateway_announcement_loop(self) -> None:
+        """Stop the periodic gateway announcement task."""
+        if self._gateway_announcement_task:
+            self._gateway_announcement_task.cancel()
+            self._gateway_announcement_task = None
+
+    async def _gateway_announcement_loop(self) -> None:
+        """Keep service discovery warm when Gateway restarts independently."""
+        try:
+            while self._runtime_state == "active":
+                await asyncio.sleep(30)
+                await self._publish_service_announcement()
+        except asyncio.CancelledError:
+            pass
 
     @abstractmethod
     async def on_start(self) -> None:
@@ -190,6 +261,15 @@ class BaseService(ABC):
         - Remove config observers
         """
         pass
+
+    async def on_deactivate(self) -> None:
+        """Service-specific runtime deactivation hook.
+
+        The default deactivation path reuses the full stop hook. Services that
+        need lighter config-driven dormancy can override this without changing
+        process shutdown behavior.
+        """
+        await self.on_stop()
 
     @abstractmethod
     async def reload(self, config_section: str | None = None) -> None:
@@ -248,34 +328,124 @@ class BaseService(ABC):
 
         This method subscribes to Config.Changed events and calls reload() when config changes.
         """
+        if self.module == "Config":
+            return
+        if self._config_change_subscription is not None:
+            return
         try:
             from app.shared.contracts.models.config import ConfigMethods
 
             async def on_config_changed(envelope: Any) -> None:
                 """Handle config change event."""
-                payload = envelope.payload
-                affected_sections = getattr(payload, "affected_sections", [])
-                key_path = getattr(payload, "key_path", None)
-
-                log_info(
-                    f"{self.module} received config change: {key_path} (sections: {affected_sections})"
-                )
-
-                # Determine which section changed
-                config_section = None
-                if key_path:
-                    # Extract section from key_path (e.g., "services.orchestrator.llm.provider" -> "services")
-                    parts = key_path.split(".")
-                    if len(parts) > 0:
-                        config_section = parts[0]
-
-                # Reload service configuration
-                await self.reload(config_section)
+                await self._handle_config_changed(envelope.payload)
 
             self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
+            self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
             log_debug(f"{self.module} subscribed to config changes")
         except Exception as e:
             log_error(f"Failed to subscribe to config changes: {e}")
+
+    def _unsubscribe_from_config_changes(self) -> None:
+        """Remove the config change subscription when the process is stopping."""
+        if self._config_change_subscription is None:
+            return
+        topic, handler = self._config_change_subscription
+        try:
+            self.bus.unsubscribe(topic, handler)
+        except Exception as e:
+            log_error(f"Failed to unsubscribe {self.module} from config changes: {e}")
+        self._config_change_subscription = None
+
+    async def _handle_config_changed(self, payload: Any) -> None:
+        """Normalize and apply a Config.Updated payload."""
+        try:
+            from app.services.config.messages import ConfigChangedEvent
+
+            if isinstance(payload, ConfigChangedEvent):
+                event = payload
+            elif isinstance(payload, dict):
+                event = ConfigChangedEvent.model_validate(payload)
+            elif hasattr(payload, "model_dump"):
+                event = ConfigChangedEvent.model_validate(payload.model_dump())
+            else:
+                event = ConfigChangedEvent.model_validate(payload)
+        except Exception as e:
+            log_error(f"{self.module} could not decode config change payload: {e}")
+            return
+
+        log_info(
+            f"{self.module} received config change: "
+            f"{event.key_path} (sections: {event.affected_sections})"
+        )
+
+        enabled_path = self._enabled_config_path()
+        if enabled_path and self._event_matches_enabled_path(event.key_path, enabled_path):
+            enabled = await self._is_runtime_enabled()
+            if enabled:
+                await self.activate(reason="config_enabled")
+            else:
+                await self.deactivate(reason="config_disabled")
+            return
+
+        if self._runtime_state == "active":
+            await self.reload_config(event)
+        else:
+            log_debug(f"{self.module} ignored config reload while {self._runtime_state}")
+
+    async def reload_config(self, event: Any) -> None:
+        """Reload service config from a full ConfigChangedEvent.
+
+        Kept separate from reload(config_section) so services can override with
+        exact key-path behavior while existing reload implementations continue
+        to work.
+        """
+        section = event.affected_sections[0] if event.affected_sections else None
+        if section is None and event.key_path:
+            section = event.key_path.split(".", 1)[0]
+        await self.reload(section)
+
+    def _event_matches_enabled_path(self, key_path: str, enabled_path: str) -> bool:
+        if key_path == enabled_path:
+            return True
+        return enabled_path.startswith(f"{key_path}.")
+
+    def _enabled_config_path(self) -> str | None:
+        """Return the lifecycle-authoritative enabled config path for this module."""
+        if self.module == "Config":
+            return None
+        from app.shared.config.keys import ConfigKeys
+
+        paths = {
+            "Auth": ConfigKeys.services.auth.enabled,
+            "DB": ConfigKeys.services.db.enabled,
+            "Gateway": ConfigKeys.services.gateway.enabled,
+            "Orchestrator": ConfigKeys.services.orchestrator.enabled,
+            "Scheduler": ConfigKeys.services.scheduler.enabled,
+            "STTCoordinator": ConfigKeys.services.stt.coordinator.enabled,
+            "Tooling": ConfigKeys.services.tooling.enabled,
+            "Transcription": ConfigKeys.services.stt.transcription.enabled,
+            "TTS": ConfigKeys.services.tts.enabled,
+            "WakeWord": ConfigKeys.services.stt.wakeword.enabled,
+        }
+        path = paths.get(self.module)
+        return str(path) if path is not None else None
+
+    async def _is_runtime_enabled(self) -> bool:
+        """Read this service's enabled flag from ConfigService."""
+        enabled_path = self._enabled_config_path()
+        if enabled_path is None:
+            return True
+        try:
+            from app.shared.config.interface import ConfigAPI
+
+            enabled = await ConfigAPI().aget(enabled_path, default=True, config_timeout=20.0)
+            return bool(enabled)
+        except Exception as e:
+            log_error(
+                f"Failed to read enabled config for {self.module} at {enabled_path}: {e}; "
+                "defaulting to enabled"
+            )
+            return True
 
     def _is_started(self) -> bool:
         """Check if service is started.
@@ -315,6 +485,9 @@ class BaseService(ABC):
                 return "envelope" in sig.parameters
             except (ValueError, TypeError):
                 return False
+
+        if self._contract_subscriptions:
+            return
 
         for attr_name in dir(self):
             try:
@@ -435,10 +608,21 @@ class BaseService(ABC):
                         # Subscribe with the wrapper
                         handler = await create_wrapper()
                         self.bus.subscribe(topic, handler)
+                        self._contract_subscriptions.append((topic, handler))
                         log_info(f"Auto-subscribed {attr_name} to {topic}")
 
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    def _unsubscribe_registered_contracts(self) -> None:
+        """Unsubscribe all auto-registered method contracts."""
+        for topic, handler in list(self._contract_subscriptions):
+            try:
+                self.bus.unsubscribe(topic, handler)
+                log_debug(f"Unsubscribed {self.module} contract from {topic}")
+            except Exception as e:
+                log_error(f"Error unsubscribing {self.module} from {topic}: {e}")
+        self._contract_subscriptions.clear()
 
     async def health_check(self) -> dict[str, Any]:
         """Perform health check for the service.
@@ -496,7 +680,7 @@ class BaseService(ABC):
         Called automatically after on_start() completes.
         Publishes service metadata including all exposed methods.
         """
-        if not self._announce_to_gateway:
+        if not self._announce_to_gateway or self._runtime_state != "active":
             return
 
         # Skip announcement for Gateway itself
@@ -576,7 +760,7 @@ class BaseService(ABC):
             # Don't fail service startup if announcement fails
             log_error(f"Failed to announce {self.module} to gateway: {e}")
 
-    async def _publish_service_departure(self) -> None:
+    async def _publish_service_departure(self, reason: str = "shutdown") -> None:
         """Announce service departure to the gateway.
 
         Called automatically before on_stop().
@@ -597,7 +781,7 @@ class BaseService(ABC):
             departure = ServiceDeparture(
                 module=self.module,
                 instance_id=self._instance_id,
-                reason="shutdown",
+                reason=reason,
             )
 
             await self.bus.publish(
@@ -619,7 +803,7 @@ class BaseService(ABC):
         Services can call this periodically to indicate they're still alive.
         Not called automatically - services must implement their own heartbeat logic if needed.
         """
-        if not self._announce_to_gateway or not self._started:
+        if not self._announce_to_gateway or self._runtime_state != "active":
             return
 
         try:

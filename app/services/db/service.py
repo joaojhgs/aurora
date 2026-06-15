@@ -391,6 +391,9 @@ class DBService(BaseService):
         """Handle RAG store command."""
         try:
             log_debug(f"Storing RAG item: {cmd.namespace}/{cmd.key}")
+            if not self.rag_service.is_initialized:
+                log_debug("Skipping RAG store because RAG stores are disabled or unavailable")
+                return EmptyOutput()
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -422,6 +425,9 @@ class DBService(BaseService):
         """Handle RAG delete command."""
         try:
             log_debug(f"Deleting RAG item: {cmd.namespace}/{cmd.key}")
+            if not self.rag_service.is_initialized:
+                log_debug("Skipping RAG delete because RAG stores are disabled or unavailable")
+                return EmptyOutput()
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -455,6 +461,11 @@ class DBService(BaseService):
             log_debug(
                 f"Searching RAG store: namespace={query.namespace}, query='{query.query}', limit={query.limit}"
             )
+            if not self.rag_service.is_initialized:
+                log_debug(
+                    "Returning empty RAG search because RAG stores are disabled or unavailable"
+                )
+                return DBRAGListResponse(items=[])
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -508,6 +519,9 @@ class DBService(BaseService):
         """Handle RAG get query."""
         try:
             log_debug(f"Getting RAG item: {query.namespace}/{query.key}")
+            if not self.rag_service.is_initialized:
+                log_debug("Returning no RAG item because RAG stores are disabled or unavailable")
+                return None
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats
@@ -550,6 +564,9 @@ class DBService(BaseService):
             log_debug(
                 f"Listing RAG items: namespace={query.namespace}, limit={query.limit}, offset={query.offset}"
             )
+            if not self.rag_service.is_initialized:
+                log_debug("Returning empty RAG list because RAG stores are disabled or unavailable")
+                return DBRAGListResponse(items=[])
 
             # Convert string namespace to tuple (store expects tuple)
             # Support both "tools" and "main.memories" formats

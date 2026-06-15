@@ -20,11 +20,9 @@ class DatabaseManager:
 
     def __init__(self, db_path: str | None = None):
         if db_path is None:
-            # Default to data directory in project root
-            project_root = Path(__file__).parent.parent.parent
-            data_dir = project_root / "data"
-            data_dir.mkdir(exist_ok=True)
-            db_path = str(data_dir / "aurora.db")
+            from app.shared.path_utils import get_data_dir
+
+            db_path = str(get_data_dir() / "aurora.db")
 
         self.db_path = db_path
 

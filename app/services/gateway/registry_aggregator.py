@@ -63,6 +63,7 @@ class RegistryAggregator:
 
         # Whether we've subscribed to announcements
         self._subscribed = False
+        self._expiry_task: asyncio.Task | None = None
 
         # Callback for registry changes (used by route generator)
         self._on_change_callbacks: list[Callable] = []
@@ -86,9 +87,20 @@ class RegistryAggregator:
         # In thread mode, also load from in-process registry
         if self._mode == "threads":
             await self._load_from_local_registry()
+        else:
+            self._expiry_task = asyncio.create_task(self._stale_expiry_loop())
 
     async def stop(self) -> None:
         """Stop the registry aggregator."""
+        if self._subscribed:
+            self._bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, self._on_service_announce)
+            self._bus.unsubscribe(GatewayMethods.SERVICE_DEPART, self._on_service_depart)
+            self._bus.unsubscribe(GatewayMethods.SERVICE_HEARTBEAT, self._on_service_heartbeat)
+        if self._expiry_task:
+            self._expiry_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._expiry_task
+            self._expiry_task = None
         self._subscribed = False
         log_info("RegistryAggregator stopped")
 
@@ -246,6 +258,36 @@ class RegistryAggregator:
 
         except Exception as e:
             log_error(f"Error handling heartbeat: {e}")
+
+    async def _stale_expiry_loop(self) -> None:
+        """Periodically remove services that stopped announcing without departure."""
+        interval = max(5.0, self._heartbeat_timeout.total_seconds() / 3)
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                await self.prune_stale_services()
+        except asyncio.CancelledError:
+            pass
+
+    async def prune_stale_services(self) -> list[str]:
+        """Remove services older than twice the heartbeat timeout."""
+        if self._mode == "threads":
+            return []
+
+        now = datetime.utcnow()
+        expired: list[str] = []
+
+        async with self._lock:
+            for module_name, last_seen in list(self._last_seen.items()):
+                if now - last_seen >= self._heartbeat_timeout * 2:
+                    expired.append(module_name)
+                    self._last_seen.pop(module_name, None)
+                    self._services.pop(module_name, None)
+
+        if expired:
+            log_warning(f"Expired stale service registrations: {', '.join(sorted(expired))}")
+            await self._notify_change()
+        return expired
 
     async def get_services(self) -> list[ServiceInfo]:
         """Get list of known services with their status.

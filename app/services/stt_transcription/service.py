@@ -186,6 +186,7 @@ class TranscriptionService(BaseService):
         log_info("Stopping transcription service...")
         self._running = False
         self._transcribing = False
+        self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         # Wait for processing thread to finish
         if self._process_thread and self._process_thread.is_alive():
