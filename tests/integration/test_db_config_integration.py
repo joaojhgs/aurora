@@ -249,14 +249,24 @@ class TestConfigIntegration:
             # Need to set the config_file path on the instance directly
             config_manager.config_file = temp_config_file
 
-            # Save with mocked file operations
+            # Save with mocked atomic-write operations.
             save_mock = mock_open()
-            with patch("builtins.open", save_mock) as mock_file:
+            save_mock.return_value.fileno.return_value = 123
+            tmp_path = f"{temp_config_file}.tmp"
+            with (
+                patch("tempfile.mkstemp", return_value=(123, tmp_path)) as mock_mkstemp,
+                patch("os.fdopen", save_mock) as mock_fdopen,
+                patch("os.fsync") as mock_fsync,
+                patch("os.replace") as mock_replace,
+            ):
                 config_manager.save_config()
 
-                # Verify file was written with updated config
-                mock_file.assert_called_once_with(temp_config_file, "w")
-                handle = mock_file()
+                # Verify config was written via temp file and atomically replaced.
+                mock_mkstemp.assert_called_once()
+                mock_fdopen.assert_called_once_with(123, "w")
+                mock_fsync.assert_called_once_with(123)
+                mock_replace.assert_called_once_with(tmp_path, os.path.abspath(temp_config_file))
+                handle = save_mock()
 
                 # Check that json.dump was called
                 # We can't verify the exact content because of the way mock_open works
