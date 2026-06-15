@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 import os
+import time
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
@@ -18,6 +20,19 @@ from app.shared.config.models import (
     MeshSharing,
 )
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.gateway import (
+    GatewayMethods,
+    GetMeshStatusResponse,
+    MeshCompatibilityFailure,
+    MeshLocalStatus,
+    MeshPeerCompatibilityDiagnostic,
+    MeshPeerDiagnostic,
+    MeshPeerServiceDiagnostic,
+    MeshRouteDiagnostic,
+    MeshRouteProviderDiagnostic,
+)
+from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
 
@@ -27,6 +42,98 @@ def _config_secret_plain(val: Any) -> Any:
     if hasattr(val, "get_secret_value"):
         return val.get_secret_value()
     return val
+
+
+def _finite_float(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _age_seconds(now: float, timestamp: float | None) -> float | None:
+    if not timestamp or timestamp <= 0:
+        return None
+    return max(now - timestamp, 0.0)
+
+
+def _peer_service(peer: Any, module: str) -> Any | None:
+    manifest = getattr(peer, "manifest", None)
+    if not manifest:
+        return None
+    for svc in manifest.shared_services:
+        if svc.module == module:
+            return svc
+    return None
+
+
+def _provider_eligibility(
+    peer: Any,
+    service: Any,
+    routing_config: Any | None,
+    mesh_config: Any,
+) -> tuple[bool, str]:
+    if routing_config is None:
+        return False, "no local routing config for this module"
+    if peer.status != "negotiated":
+        return False, f"peer status is {peer.status}"
+    if (
+        routing_config.allowed_peers is not None
+        and peer.peer_id not in routing_config.allowed_peers
+    ):
+        return False, "peer is not in allowed_peers"
+    if routing_config.min_version:
+        from app.services.gateway.mesh.version_compat import is_compatible
+
+        if not is_compatible(
+            routing_config.min_version,
+            service.version,
+            mesh_config.version_policy,
+            routing_config.min_version,
+        ):
+            return False, (
+                f"version {service.version} does not satisfy "
+                f"{routing_config.min_version} under {mesh_config.version_policy} policy"
+            )
+    missing_caps = [
+        cap for cap in routing_config.required_capabilities if cap not in service.capabilities
+    ]
+    if missing_caps:
+        return False, f"missing capabilities: {', '.join(missing_caps)}"
+    if service.max_concurrent > 0 and peer.active_calls >= service.max_concurrent:
+        return False, "peer service is at capacity"
+    return True, "eligible"
+
+
+def _route_reason(
+    *,
+    module: str,
+    config: Any | None,
+    decision_target: str,
+    providers: list[MeshRouteProviderDiagnostic],
+    selected_peer_id: str | None,
+    peer_selection: str,
+) -> str:
+    if config is None:
+        return "no mesh routing config; local delivery is used"
+    if config.prefer == "local_only":
+        return "configured local_only"
+    if config.prefer == "local":
+        return "configured local preference"
+    if decision_target == "remote" and selected_peer_id:
+        return f"selected peer {selected_peer_id} using {peer_selection} policy"
+    if decision_target == "local":
+        if not providers:
+            return f"no peer advertises {module}; fallback={config.fallback} selected local"
+        rejected = [p.reason for p in providers if not p.eligible]
+        detail = "; ".join(sorted(set(rejected))) if rejected else "no eligible remote provider"
+        return f"{detail}; fallback={config.fallback} selected local"
+    if decision_target == "error":
+        return "no eligible remote provider and fallback=error"
+    if decision_target == "none":
+        return "no eligible remote provider and local fallback is disabled"
+    return f"route target is {decision_target}"
 
 
 class GatewayService(BaseService):
@@ -57,6 +164,7 @@ class GatewayService(BaseService):
         self._mesh_latency_monitor = None
         self._mesh_announcer = None
         self._mesh_bus = None
+        self._mesh_peer_id = None
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
@@ -81,6 +189,194 @@ class GatewayService(BaseService):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
+
+    @method_contract(
+        method_id=GatewayMethods.GET_MESH_STATUS,
+        summary="Get read-only mesh status and routing diagnostics",
+        input_model=EmptyInput,
+        output_model=GetMeshStatusResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_mesh_status(self, data: EmptyInput) -> GetMeshStatusResponse:
+        """Return a redacted diagnostic snapshot of mesh state and routing."""
+        settings = await self._get_gateway_config()
+        mesh_config = settings.mesh
+        registry = self._mesh_peer_registry
+        routing_table = self._mesh_routing_table
+
+        shared_modules = sorted(
+            module for module, service in mesh_config.services.items() if service.share
+        )
+        routed_modules = sorted(
+            module
+            for module, service in mesh_config.services.items()
+            if service.prefer not in ("local", "local_only")
+        )
+
+        peers = registry.get_all_peers() if registry else []
+        local = MeshLocalStatus(
+            mesh_enabled=mesh_config.enabled,
+            mesh_started=self._mesh_bus is not None,
+            webrtc_started=self._rtc_client is not None,
+            peer_id=self._mesh_peer_id,
+            node_name=mesh_config.node_name,
+            peer_selection=mesh_config.peer_selection,
+            version_policy=mesh_config.version_policy,
+            shared_modules=shared_modules,
+            routed_modules=routed_modules,
+        )
+
+        peer_diagnostics = [
+            self._build_peer_diagnostic(peer, mesh_config)
+            for peer in sorted(peers, key=lambda p: p.peer_id)
+        ]
+
+        route_modules = set(mesh_config.services.keys())
+        for peer in peers:
+            if peer.manifest:
+                route_modules.update(svc.module for svc in peer.manifest.shared_services)
+
+        route_diagnostics = [
+            self._build_route_diagnostic(module, mesh_config, registry, routing_table)
+            for module in sorted(route_modules)
+        ]
+
+        compatibility_failures: list[MeshCompatibilityFailure] = []
+        for peer in peer_diagnostics:
+            for module in peer.compatibility.local_incompatible:
+                compatibility_failures.append(
+                    MeshCompatibilityFailure(
+                        peer_id=peer.peer_id,
+                        module=module,
+                        direction="local_view_of_remote",
+                        reason="remote service failed local version/capability requirements",
+                    )
+                )
+            for module in peer.compatibility.remote_incompatible:
+                compatibility_failures.append(
+                    MeshCompatibilityFailure(
+                        peer_id=peer.peer_id,
+                        module=module,
+                        direction="remote_view_of_local",
+                        reason="local service failed remote version/capability requirements",
+                    )
+                )
+
+        return GetMeshStatusResponse(
+            local=local,
+            peers=peer_diagnostics,
+            routes=route_diagnostics,
+            compatibility_failures=compatibility_failures,
+            secrets_redacted=True,
+        )
+
+    def _build_peer_diagnostic(self, peer: Any, mesh_config: Any) -> MeshPeerDiagnostic:
+        """Serialize peer state without credential-bearing fields."""
+        from app.services.gateway.mesh.negotiation import generate_manifest_ack
+
+        now = time.monotonic()
+        manifest = peer.manifest
+        local_ack = generate_manifest_ack(manifest, mesh_config) if manifest else None
+
+        services: list[MeshPeerServiceDiagnostic] = []
+        if manifest:
+            for svc in manifest.shared_services:
+                available_capacity = None
+                if svc.max_concurrent > 0:
+                    available_capacity = max(svc.max_concurrent - peer.active_calls, 0)
+                services.append(
+                    MeshPeerServiceDiagnostic(
+                        module=svc.module,
+                        version=svc.version,
+                        capabilities=list(svc.capabilities),
+                        method_names=sorted(m.name for m in svc.methods),
+                        max_concurrent=svc.max_concurrent,
+                        active_calls=peer.active_calls,
+                        available_capacity=available_capacity,
+                        digest=svc.digest,
+                    )
+                )
+
+        return MeshPeerDiagnostic(
+            peer_id=peer.peer_id,
+            node_name=peer.node_name,
+            status=peer.status,
+            latency_ms=_finite_float(peer.latency_ms),
+            last_ping_age_s=_age_seconds(now, peer.last_ping),
+            last_manifest_age_s=_age_seconds(now, peer.last_manifest),
+            active_calls=peer.active_calls,
+            services=services,
+            compatibility=MeshPeerCompatibilityDiagnostic(
+                local_compatible=list(local_ack.compatible_services) if local_ack else [],
+                local_incompatible=list(local_ack.incompatible_services) if local_ack else [],
+                local_unused=list(local_ack.unused_services) if local_ack else [],
+                remote_compatible=list(peer.remote_compatible),
+                remote_incompatible=list(peer.remote_incompatible),
+                remote_unused=list(peer.remote_unused),
+            ),
+        )
+
+    def _build_route_diagnostic(
+        self,
+        module: str,
+        mesh_config: Any,
+        registry: Any,
+        routing_table: Any,
+    ) -> MeshRouteDiagnostic:
+        """Explain the current route decision and peer eligibility for a module."""
+        config = mesh_config.services.get(module)
+        route = None
+        if routing_table:
+            route = routing_table.resolve(f"{module}.Diagnostic")
+
+        providers: list[MeshRouteProviderDiagnostic] = []
+        if registry:
+            for peer in sorted(registry.get_all_peers(), key=lambda p: p.peer_id):
+                svc = _peer_service(peer, module)
+                if not svc:
+                    continue
+                eligible, reason = _provider_eligibility(peer, svc, config, mesh_config)
+                providers.append(
+                    MeshRouteProviderDiagnostic(
+                        peer_id=peer.peer_id,
+                        node_name=peer.node_name,
+                        status=peer.status,
+                        version=svc.version,
+                        latency_ms=_finite_float(peer.latency_ms),
+                        active_calls=peer.active_calls,
+                        max_concurrent=svc.max_concurrent,
+                        eligible=eligible,
+                        reason=reason,
+                    )
+                )
+
+        decision_target = route.target if route else "local"
+        reason = _route_reason(
+            module=module,
+            config=config,
+            decision_target=decision_target,
+            providers=providers,
+            selected_peer_id=route.peer_id if route else None,
+            peer_selection=mesh_config.peer_selection,
+        )
+
+        return MeshRouteDiagnostic(
+            module=module,
+            configured=config is not None,
+            share=bool(config.share) if config else False,
+            prefer=config.prefer if config else "",
+            fallback=config.fallback if config else "",
+            min_version=config.min_version if config else None,
+            required_capabilities=list(config.required_capabilities) if config else [],
+            decision_target=decision_target,
+            decision_peer_id=route.peer_id if route else None,
+            decision_version=route.version if route else "",
+            decision_latency_ms=_finite_float(route.latency_ms) if route else None,
+            reason=reason,
+            providers=providers,
+        )
 
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
@@ -488,6 +784,7 @@ class GatewayService(BaseService):
 
             # ── Fix 1: Stable peer_id from DB ────────────────────────────
             peer_id = await self._get_or_create_peer_id(mesh_config)
+            self._mesh_peer_id = peer_id
 
             # Create mesh components
             self._mesh_peer_registry = PeerRegistry(mesh_config)
@@ -762,6 +1059,7 @@ class GatewayService(BaseService):
                 set_bus(inner)
                 set_shared_bus(inner)
                 self._mesh_bus = None
+                self._mesh_peer_id = None
 
             # Stop background tasks
             if self._mesh_announcer:
