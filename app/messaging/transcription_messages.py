@@ -8,14 +8,14 @@ This module defines message types for speech-to-text transcription:
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import Field
 
 from .bus import Command, Event
 
 
-class TranscriptionType(str, Enum):
+class TranscriptionType(StrEnum):
     """Type of transcription result."""
 
     PARTIAL = "partial"  # Partial/interim result (low latency)

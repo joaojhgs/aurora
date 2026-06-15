@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import Field
 
 from app.messaging import Command, Event
 
 
-class STTState(str, Enum):
+class STTState(StrEnum):
     """States for STT coordinator state machine."""
 
     IDLE = "idle"  # Waiting for wake word

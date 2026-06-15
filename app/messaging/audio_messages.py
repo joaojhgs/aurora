@@ -9,7 +9,7 @@ This module defines message types for streaming audio data between services:
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -18,7 +18,7 @@ from .bus import Command, Event
 # typing imports removed
 
 
-class AudioEncoding(str, Enum):
+class AudioEncoding(StrEnum):
     """Audio encoding formats supported by Aurora."""
 
     PCM_S16LE = "pcm_s16le"  # 16-bit signed little-endian PCM (most common)
@@ -95,7 +95,7 @@ class AudioChunk(Event):
         return (frames / self.format.sample_rate) * 1000
 
 
-class AudioStreamState(str, Enum):
+class AudioStreamState(StrEnum):
     """States for audio stream control."""
 
     START = "start"  # Stream is starting
