@@ -253,6 +253,8 @@ class BullMQBus:
             return False
         if "*" in topic:
             return True
+        if not self._validate_topics:
+            return False
         contracts = all_contracts()
         return not any(topic == (c.bus_topic or c.name) for c in contracts.values())
 

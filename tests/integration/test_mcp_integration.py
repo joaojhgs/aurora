@@ -20,6 +20,7 @@ import pytest
 
 from app.services.config.config_manager import config_manager
 from app.services.tooling.mcp.mcp_client import MCPClientManager
+from app.shared.config.models import Mcp, Servers, Tooling
 
 # Set dummy OpenAI API key BEFORE any imports that might initialize OpenAI
 os.environ.setdefault("OPENAI_API_KEY", "test-key-dummy-integration")
@@ -75,9 +76,17 @@ class TestMCPToolIntegration:
 
         # Patch the config_api inside the initialize method
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            tooling_config = Tooling(
+                mcp=Mcp(
+                    enabled=True,
+                    servers={name: Servers(**config) for name, config in servers_config.items()},
+                )
+            )
 
             async def mock_aget(key, *args, **kwargs):
                 k = str(key).lower()
+                if k == "services.tooling":
+                    return tooling_config
                 if "enabled" in k:
                     return True
                 if "servers" in k:
@@ -111,9 +120,17 @@ class TestMCPToolIntegration:
 
         # Test initialization
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            tooling_config = Tooling(
+                mcp=Mcp(
+                    enabled=True,
+                    servers={name: Servers(**config) for name, config in servers_config.items()},
+                )
+            )
 
             async def mock_aget(key, *args, **kwargs):
                 k = str(key).lower()
+                if k == "services.tooling":
+                    return tooling_config
                 if "enabled" in k:
                     return True
                 if "servers" in k:
@@ -192,9 +209,17 @@ class TestMCPConfigurationIntegration:
         mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
 
         with patch("app.services.tooling.mcp.mcp_client.config_api") as mock_config:
+            tooling_config = Tooling(
+                mcp=Mcp(
+                    enabled=True,
+                    servers={name: Servers(**config) for name, config in servers_config.items()},
+                )
+            )
 
             async def mock_aget(key, *args, **kwargs):
                 k = str(key).lower()
+                if k == "services.tooling":
+                    return tooling_config
                 if "enabled" in k:
                     return True
                 if "servers" in k:

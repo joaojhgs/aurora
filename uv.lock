@@ -334,6 +334,8 @@ all-services = [
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langgraph-checkpoint" },
+    { name = "langgraph-sdk" },
     { name = "numpy" },
     { name = "onnxruntime" },
     { name = "openwakeword" },
@@ -1380,6 +1382,8 @@ service-orchestrator = [
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langgraph-checkpoint" },
+    { name = "langgraph-sdk" },
     { name = "typing-extensions" },
 ]
 service-orchestrator-huggingface-endpoint = [
@@ -1441,7 +1445,9 @@ sycl = [
     { name = "torchvision" },
 ]
 test = [
+    { name = "aiosqlite" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1456,6 +1462,7 @@ test-all = [
     { name = "freezegun" },
     { name = "httpx" },
     { name = "locust" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "psutil" },
     { name = "pytest" },
@@ -1469,9 +1476,11 @@ test-all = [
     { name = "selenium" },
 ]
 test-e2e = [
+    { name = "aiosqlite" },
     { name = "faker" },
     { name = "freezegun" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1487,6 +1496,7 @@ test-integration = [
     { name = "faker" },
     { name = "freezegun" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1497,8 +1507,10 @@ test-integration = [
     { name = "pytest-timeout" },
 ]
 test-performance = [
+    { name = "aiosqlite" },
     { name = "httpx" },
     { name = "locust" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "psutil" },
     { name = "pytest" },
@@ -1509,9 +1521,11 @@ test-performance = [
     { name = "pytest-timeout" },
 ]
 test-unit = [
+    { name = "aiosqlite" },
     { name = "faker" },
     { name = "freezegun" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "passlib", extra = ["argon2"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1661,6 +1675,7 @@ requires-dist = [
     { name = "aiosqlite", marker = "extra == 'service-db'", specifier = ">=0.19.0" },
     { name = "aiosqlite", marker = "extra == 'service-scheduler'", specifier = ">=0.19.0" },
     { name = "aiosqlite", marker = "extra == 'service-tooling'", specifier = ">=0.19.0" },
+    { name = "aiosqlite", marker = "extra == 'test'", specifier = ">=0.19.0" },
     { name = "aiosqlite", marker = "extra == 'test-integration'", specifier = ">=0.19.0" },
     { name = "atlassian-python-api", marker = "extra == 'jira'" },
     { name = "aurora", extras = ["full-llama-cuda"], marker = "extra == 'all'" },
@@ -1747,7 +1762,9 @@ requires-dist = [
     { name = "langgraph", marker = "extra == 'service-orchestrator'", specifier = "==0.4.6" },
     { name = "langgraph", marker = "extra == 'service-tooling'", specifier = "==0.4.6" },
     { name = "langgraph-checkpoint", marker = "extra == 'runtime'", specifier = "==2.0.26" },
+    { name = "langgraph-checkpoint", marker = "extra == 'service-orchestrator'", specifier = "==2.0.26" },
     { name = "langgraph-sdk", marker = "extra == 'runtime'", specifier = "==0.1.51" },
+    { name = "langgraph-sdk", marker = "extra == 'service-orchestrator'", specifier = "==0.1.51" },
     { name = "langsmith", marker = "extra == 'runtime'", specifier = "==0.3.8" },
     { name = "locust", marker = "extra == 'test-performance'" },
     { name = "markdown", marker = "extra == 'ui'", specifier = "==3.8" },
@@ -1757,6 +1774,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'runtime'", specifier = "==1.26.4" },
     { name = "numpy", marker = "extra == 'service-stt-transcription'", specifier = "==1.26.4" },
     { name = "numpy", marker = "extra == 'service-stt-wakeword'", specifier = "==1.26.4" },
+    { name = "numpy", marker = "extra == 'test'", specifier = "==1.26.4" },
     { name = "onnxruntime", marker = "extra == 'metal'" },
     { name = "onnxruntime", marker = "extra == 'rocm'" },
     { name = "onnxruntime", marker = "extra == 'rpc'" },

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import Field
 
 from app.messaging import Command, Event
 
 
-class WakeWordBackendType(str, Enum):
+class WakeWordBackendType(StrEnum):
     """Supported wake word detection backends."""
 
     OPENWAKEWORD = "oww"
