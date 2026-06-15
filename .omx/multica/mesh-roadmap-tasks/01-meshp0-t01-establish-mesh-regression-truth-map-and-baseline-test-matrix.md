@@ -1,6 +1,8 @@
 ## Objective
 Capture the current working mesh state as a regression truth map before making additional changes. This prevents later polishing work from accidentally regressing WebRTC pairing, manifest negotiation, mesh routing, service announcements, or permission gates.
 
+Truth map artifact: `.omx/plans/PER-127-mesh-regression-truth-map.md`.
+
 ## Context
 This task is part of the Aurora mesh-polishing roadmap derived from `.omx/specs/deep-interview-mesh-distributed-integration.md`.
 
