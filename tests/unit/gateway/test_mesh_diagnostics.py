@@ -121,9 +121,11 @@ async def test_mesh_status_reports_route_provider_capacity_and_compatibility():
 
     providers = {provider.peer_id: provider for provider in tooling_route.providers}
     assert providers["peer-good"].eligible is True
+    assert providers["peer-good"].reason_code == "eligible"
     assert providers["peer-good"].active_calls == 1
     assert providers["peer-good"].max_concurrent == 4
     assert providers["peer-old"].eligible is False
+    assert providers["peer-old"].reason_code == "incompatible_version"
     assert "does not satisfy" in providers["peer-old"].reason
 
     good_peer = next(peer for peer in response.peers if peer.peer_id == "peer-good")
