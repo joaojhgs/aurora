@@ -154,6 +154,53 @@ class RTCClient:
             self._peer_names[session_peer_id] = node_name
         return stable
 
+    def _saved_auth_token_for_peer(self, peer: str) -> str | None:
+        """Return a saved token only when it can be scoped to this peer.
+
+        Per-peer credentials are keyed by stable mesh peer ID. A session-keyed
+        token is accepted for migration from older runtime state. The legacy
+        ``_default`` credential is only accepted when it is the sole saved
+        credential for the room; once peer-scoped credentials exist, using a
+        default token for an unknown peer is ambiguous and must fail safe.
+        """
+        stable_peer_id = self._stable_peer_id_for_session(peer)
+        candidate_keys = [stable_peer_id]
+        if peer != stable_peer_id:
+            candidate_keys.append(peer)
+
+        for key in candidate_keys:
+            token = self._saved_auth_tokens.get(key)
+            if token:
+                log_debug(
+                    f"Saved WebRTC token lookup hit for peer {peer[:8]}… "
+                    f"using credential key {key[:8]}…"
+                )
+                return token
+
+        peer_scoped_keys = [key for key in self._saved_auth_tokens if key != "_default"]
+        default_token = self._saved_auth_tokens.get("_default")
+        if default_token and not peer_scoped_keys:
+            log_info(
+                f"Using legacy default saved WebRTC token for peer {peer[:8]}…; "
+                "no peer-scoped credentials are loaded"
+            )
+            return default_token
+
+        if default_token and peer_scoped_keys:
+            log_warning(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); refusing legacy default because "
+                "peer-scoped credentials are loaded"
+            )
+        elif peer_scoped_keys:
+            log_info(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); pairing is required"
+            )
+        else:
+            log_debug(f"No saved WebRTC token available for peer {peer[:8]}…")
+        return None
+
     def set_saved_auth_token(self, token: str | None) -> None:
         """Set a single saved auth token (legacy/fallback).
 
@@ -391,12 +438,68 @@ class RTCClient:
 
     # ── Mesh P2P helpers ─────────────────────────────────────────────────
 
+    def _encode_datachannel_message(self, text: str) -> str | bytes:
+        """Encode an outbound DataChannel JSON message for the configured mode."""
+        if not self._settings.webrtc.enable_app_layer_e2ee:
+            return text
+
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("DataChannel E2EE messages must be JSON objects") from exc
+        if not isinstance(obj, dict):
+            raise ValueError("DataChannel E2EE messages must be JSON objects")
+        return aead_seal(self._keys.k_data, obj)
+
+    def _decode_datachannel_message(
+        self,
+        peer: str,
+        message: str | bytes | bytearray | memoryview,
+    ) -> str | None:
+        """Decode an inbound DataChannel message according to the configured mode."""
+        e2ee_enabled = self._settings.webrtc.enable_app_layer_e2ee
+
+        if isinstance(message, str):
+            if e2ee_enabled:
+                log_warning(
+                    "RTCClient: Dropping plaintext DataChannel message from "
+                    f"{peer}; app-layer E2EE is enabled"
+                )
+                return None
+            return message
+
+        if isinstance(message, (bytes, bytearray, memoryview)):
+            payload = bytes(message)
+            try:
+                if e2ee_enabled:
+                    obj = aead_open(self._keys.k_data, payload)
+                    return json.dumps(obj)
+                return payload.decode()
+            except Exception as e:
+                mode = "decrypt" if e2ee_enabled else "decode"
+                log_error(f"Failed to {mode} DataChannel message from {peer}: {e}")
+                return None
+
+        log_warning(
+            "RTCClient: Dropping unsupported DataChannel message from "
+            f"{peer}: {type(message).__name__}"
+        )
+        return None
+
+    def _send_channel_text(self, channel: Any, text: str) -> bool:
+        """Send JSON text on a DataChannel after applying configured encoding."""
+        if channel.readyState != "open":
+            return False
+        channel.send(self._encode_datachannel_message(text))
+        return True
+
     def send_to_peer(self, peer_id: str, text: str) -> bool:
         """Send a text message to a specific peer via their DataChannel.
 
         Args:
             peer_id: Target peer identifier
-            text: JSON string to send
+            text: JSON string to send. When app-layer E2EE is enabled this
+                is sealed and sent as binary AEAD payload.
 
         Returns:
             True if the message was sent, False if peer not connected or send failed
@@ -893,7 +996,7 @@ class RTCClient:
                 "signaling_peer_id": self._peer_id,
                 "token": token,
             }
-            chan.send(json.dumps(auth_msg))
+            self._send_channel_text(chan, json.dumps(auth_msg))
 
             # Register in mesh and exchange manifests (non-blocking)
             if self._mesh_enabled and self._peer_registry:
@@ -942,7 +1045,7 @@ class RTCClient:
         # stable peer. A legacy/default token or another peer's token must not
         # suppress reverse pairing for a newly authenticated peer.
         stable_peer_id = self._stable_peer_id_for_session(peer)
-        if stable_peer_id in self._saved_auth_tokens:
+        if self._saved_auth_tokens.get(stable_peer_id):
             log_debug(
                 f"Reverse pairing skipped for {peer[:8]}… — "
                 f"saved token exists for stable peer {stable_peer_id}"
@@ -985,8 +1088,7 @@ class RTCClient:
 
         def send_fn(text: str) -> None:
             try:
-                if channel.readyState == "open":
-                    channel.send(text)
+                self._send_channel_text(channel, text)
             except Exception:
                 log_debug(f"RTCClient: Failed to send to peer {peer} (channel closed)")
 
@@ -1028,14 +1130,7 @@ class RTCClient:
                 if self._require_auth:
                     # If we have a saved token from a previous pairing exchange,
                     # send it immediately to authenticate as a returning peer.
-                    stable_peer_id = self._stable_peer_id_for_session(peer)
-                    saved_token = (
-                        self._saved_auth_tokens.get(stable_peer_id)
-                        or self._saved_auth_tokens.get(peer)
-                        or self._saved_auth_tokens.get("_default")
-                    )
-                    if not saved_token and len(self._saved_auth_tokens) == 1:
-                        saved_token = next(iter(self._saved_auth_tokens.values()), None)
+                    saved_token = self._saved_auth_token_for_peer(peer)
                     if saved_token:
                         auth_msg = {
                             "type": "auth",
@@ -1044,7 +1139,7 @@ class RTCClient:
                             "signaling_peer_id": self._peer_id,
                             "token": saved_token,
                         }
-                        chan.send(json.dumps(auth_msg))
+                        self._send_channel_text(chan, json.dumps(auth_msg))
                         log_info(
                             f"Sent saved pairing token to peer {peer} "
                             "(returning peer — previously paired)"
@@ -1129,28 +1224,9 @@ class RTCClient:
 
             @chan.on("message")
             def on_message(message: str | bytes | bytearray | memoryview) -> None:
-                if isinstance(message, bytes):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, message)
-                            text = json.dumps(obj)
-                        else:
-                            text = message.decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                elif isinstance(message, (bytearray, memoryview)):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, bytes(message))
-                            text = json.dumps(obj)
-                        else:
-                            text = bytes(message).decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                else:
-                    text = message
+                text = self._decode_datachannel_message(peer, message)
+                if text is None:
+                    return
 
                 try:
                     obj = json.loads(text)

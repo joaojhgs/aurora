@@ -1242,7 +1242,7 @@ Paired Device            MQTT Broker              RTCClient (Gateway)
 | `webrtc.room` | WebRTC room name. If set to `"default"` or empty, a random room name is auto-generated on startup and persisted to config. |
 | `webrtc.password` | Shared secret used to derive AEAD keys for signaling encryption. If empty and auth is enabled, startup is blocked with an error. If empty and auth is disabled, a warning is logged. Auto-generated if empty on startup. |
 | `webrtc.encrypt_signaling` | When `true`, MQTT presence announcements are AEAD-encrypted using room key derivatives. Receivers fall back to plaintext if decryption fails. |
-| `webrtc.enable_app_layer_e2ee` | When `true`, DataChannel messages are additionally encrypted with AEAD. |
+| `webrtc.enable_app_layer_e2ee` | When `true`, all Aurora DataChannel JSON messages are additionally sealed with AEAD and sent as binary frames. Both peers must enable it and derive the same room data key; plaintext messages are dropped rather than downgraded. When `false`, DataChannel messages are JSON text protected by WebRTC DTLS. |
 
 ---
 
