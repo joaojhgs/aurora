@@ -22,6 +22,7 @@ from app.shared.config.models import (
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.gateway import (
+    CapabilityGraph,
     GatewayMethods,
     GetMeshStatusResponse,
     MeshCompatibilityFailure,
@@ -291,6 +292,32 @@ class GatewayService(BaseService):
             routes=route_diagnostics,
             compatibility_failures=compatibility_failures,
             secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_CAPABILITY_GRAPH,
+        summary="Get a redacted mesh capability graph",
+        input_model=EmptyInput,
+        output_model=CapabilityGraph,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_capability_graph(self, data: EmptyInput) -> CapabilityGraph:
+        """Return a first-class capability graph without credential-bearing fields."""
+        from app.services.gateway.mesh.capability_graph import build_capability_graph
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        peers = self._mesh_peer_registry.get_all_peers() if self._mesh_peer_registry else []
+        return build_capability_graph(
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            peers=peers,
+            local_peer_id=self._mesh_peer_id,
         )
 
     def _build_peer_diagnostic(self, peer: Any, mesh_config: Any) -> MeshPeerDiagnostic:
@@ -925,9 +952,7 @@ class GatewayService(BaseService):
                         MeshCredentialLoadRequest(room_name=room_name),
                         timeout=5.0,
                     )
-                    legacy_data = (
-                        legacy_resp.data if hasattr(legacy_resp, "data") else legacy_resp
-                    )
+                    legacy_data = legacy_resp.data if hasattr(legacy_resp, "data") else legacy_resp
                     legacy_token = (
                         legacy_data.get("token")
                         if isinstance(legacy_data, dict)
