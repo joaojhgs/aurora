@@ -7,6 +7,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.messaging import Command, Event, Query
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.tooling import ToolingToolInfo
 
 
 class ToolsInitialized(Event):
@@ -27,12 +29,13 @@ class GetToolsQuery(Query):
 
     query: str | None = None
     top_k: int = 10
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class GetToolsResponse(BaseModel):
     """Response for GetToolsQuery."""
 
-    tools: list[dict[str, Any]] = Field(default_factory=list)
+    tools: list[ToolingToolInfo] = Field(default_factory=list)
     count: int = 0
 
 
@@ -40,6 +43,7 @@ class GetToolByNameQuery(Query):
     """Query to get a specific tool by name."""
 
     name: str
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ReloadMCPToolsCommand(Command):
@@ -76,6 +80,7 @@ class ExecuteToolCommand(Command):
 
     tool_name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ExecuteToolResponse(BaseModel):

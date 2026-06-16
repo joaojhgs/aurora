@@ -9,12 +9,11 @@ This service:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from pydantic import BaseModel
-
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import Envelope, MessageBus
+from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
 from app.shared.contracts.models.common import EmptyOutput
@@ -32,6 +31,8 @@ from app.shared.contracts.models.tooling import (
     ToolingMethods,
     ToolingModule,
     ToolingReloadMCPRequest,
+    ToolingToolInfo,
+    ToolingToolProvenance,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.tooling_models import (
@@ -39,6 +40,10 @@ from app.shared.messaging.models.tooling_models import (
     ToolsReloaded,
 )
 from app.shared.services.base_service import BaseService
+
+ToolingDiscoveryRequest = (
+    ToolingGetToolsRequest | ToolingGetToolByNameRequest | ToolingExecuteToolRequest
+)
 
 
 # Service implementation
@@ -103,6 +108,187 @@ class ToolingService(BaseService):
             log_info("Reloading tools due to config change...")
             await self.tools_manager.reload()
         log_info("ToolingService configuration reloaded")
+
+    @staticmethod
+    def _tool_source(tool: Any) -> str:
+        """Best-effort source classification for a loaded tool."""
+
+        if getattr(tool, "_is_mcp_tool", False):
+            return "mcp"
+        module_name = getattr(tool, "__module__", "") or tool.__class__.__module__
+        if ".plugins." in module_name or module_name.endswith("_toolkit"):
+            return "plugin"
+        if module_name.startswith("app.services.tooling.tools"):
+            return "core"
+        return "unknown"
+
+    @staticmethod
+    def _safe_identifier(value: str) -> str:
+        """Return a LangChain/OpenAI-friendly stable identifier segment."""
+
+        safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", value.strip())
+        safe = re.sub(r"_+", "_", safe).strip("_")
+        return safe or "unnamed"
+
+    @classmethod
+    def _provider_context(
+        cls, request: ToolingDiscoveryRequest
+    ) -> tuple[str, str, str, str]:
+        """Return provider peer, service instance, source type, and namespace."""
+
+        selector = request.mesh_selector
+        if selector and (
+            selector.peer_id or selector.provider_id or selector.service_instance_id
+        ):
+            provider_peer_id = selector.peer_id or selector.provider_id or "remote"
+            provider_service_instance_id = (
+                selector.service_instance_id or f"remote:{provider_peer_id}:Tooling"
+            )
+            source_type = "mesh_peer"
+            namespace = cls._safe_identifier(provider_peer_id)
+        else:
+            provider_peer_id = "local"
+            provider_service_instance_id = "local:Tooling"
+            source_type = "local"
+            namespace = "local"
+
+        return provider_peer_id, provider_service_instance_id, source_type, namespace
+
+    @classmethod
+    def _global_tool_id(
+        cls, provider_peer_id: str, service_instance_id: str, local_name: str
+    ) -> str:
+        """Build a stable global tool identifier for a provider-local tool."""
+
+        return (
+            f"{cls._safe_identifier(provider_peer_id)}:"
+            f"{cls._safe_identifier(service_instance_id)}:"
+            f"tool:{cls._safe_identifier(local_name)}"
+        )
+
+    @classmethod
+    def _namespaced_tool_name(cls, namespace: str, local_name: str) -> str:
+        """Build the bindable namespaced tool name used for remote providers."""
+
+        return f"{cls._safe_identifier(namespace)}_{cls._safe_identifier(local_name)}"
+
+    def _serialize_tool_schema(self, tool: Any) -> dict[str, Any]:
+        """Serialize the tool argument schema for LLM binding."""
+
+        if not hasattr(tool, "args_schema") or not tool.args_schema:
+            return {"type": "object", "properties": {}}
+
+        try:
+            full_schema = tool.args_schema.model_json_schema()
+        except Exception as json_schema_error:
+            log_debug(
+                "Direct schema generation failed for "
+                f"{tool.name}, attempting manual extraction: {json_schema_error}"
+            )
+            return self._extract_schema_manually(tool)
+
+        if "properties" not in full_schema:
+            return {"type": "object", "properties": {}}
+
+        filtered_properties = {
+            prop_name: prop_value
+            for prop_name, prop_value in full_schema["properties"].items()
+            if prop_name not in ["bus", "store"]
+        }
+        args_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": filtered_properties,
+        }
+
+        if "required" in full_schema:
+            filtered_required = [
+                field for field in full_schema["required"] if field not in ["bus", "store"]
+            ]
+            if filtered_required:
+                args_schema["required"] = filtered_required
+
+        return args_schema
+
+    def _serialize_tool(
+        self, tool: Any, request: ToolingGetToolsRequest | ToolingGetToolByNameRequest
+    ) -> ToolingToolInfo:
+        """Serialize a loaded tool with stable mesh-aware discovery metadata."""
+
+        provider_peer_id, service_instance_id, source_type, namespace = self._provider_context(
+            request
+        )
+        local_name = tool.name
+        global_tool_id = self._global_tool_id(provider_peer_id, service_instance_id, local_name)
+        is_remote = source_type == "mesh_peer"
+        bindable_name = (
+            self._namespaced_tool_name(namespace, local_name) if is_remote else local_name
+        )
+        display_name = f"{namespace}.{local_name}" if is_remote else local_name
+        args_schema = self._serialize_tool_schema(tool)
+        required_permissions = getattr(tool, "required_permissions", None) or [
+            ToolingMethods.EXECUTE_TOOL
+        ]
+
+        return ToolingToolInfo(
+            name=bindable_name,
+            local_name=local_name,
+            global_tool_id=global_tool_id,
+            provider_peer_id=provider_peer_id,
+            provider_service_instance_id=service_instance_id,
+            namespace=namespace,
+            display_name=display_name,
+            aliases=[local_name] if bindable_name != local_name else [],
+            description=getattr(tool, "description", "") or "",
+            args_schema=args_schema,
+            schema=args_schema,
+            source_type=source_type,
+            execution_location="remote" if is_remote else "local",
+            safety_class=self._safe_metadata_value(
+                getattr(tool, "safety_class", "standard"),
+                {"standard", "sensitive", "dangerous"},
+                "standard",
+            ),
+            required_permissions=list(required_permissions),
+            confirmation_required=bool(getattr(tool, "confirmation_required", False)),
+            rate_limit_hints=getattr(tool, "rate_limit_hints", None),
+            provenance=ToolingToolProvenance(
+                provider_peer_id=provider_peer_id,
+                provider_service_instance_id=service_instance_id,
+                provider_kind=source_type,
+                source=self._safe_metadata_value(
+                    self._tool_source(tool), {"core", "plugin", "mcp", "unknown"}, "unknown"
+                ),
+                advertised_name=local_name,
+            ),
+        )
+
+    @staticmethod
+    def _safe_metadata_value(value: Any, allowed: set[str], fallback: str) -> str:
+        """Return value if allowed, otherwise a stable fallback."""
+
+        return value if isinstance(value, str) and value in allowed else fallback
+
+    def _resolve_tool_name(self, request: ToolingExecuteToolRequest) -> str:
+        """Resolve discovery IDs or namespaced names back to provider-local names."""
+
+        provider_peer_id, service_instance_id, source_type, namespace = self._provider_context(
+            request
+        )
+        requested_name = request.tool_name
+
+        for local_name in self.tools_manager.get_all_tool_names():
+            if requested_name == local_name:
+                return local_name
+            if requested_name == self._global_tool_id(
+                provider_peer_id, service_instance_id, local_name
+            ):
+                return local_name
+            if source_type == "mesh_peer" and requested_name == self._namespaced_tool_name(
+                namespace, local_name
+            ):
+                return local_name
+
+        return requested_name
 
     def _extract_schema_manually(self, tool: Any) -> dict[str, Any]:
         """Extract schema manually from tool, filtering out non-serializable fields.
@@ -202,7 +388,8 @@ class ToolingService(BaseService):
     async def _on_get_tools(self, request: ToolingGetToolsRequest) -> ToolingGetToolsResponse:
         """Handle get tools query.
 
-        Serializes tools to send through the bus (name, description, and argument descriptions only).
+        Serializes tools to send through the bus with bindable schemas,
+        stable identity, and provenance metadata.
         The bus remains agnostic - it just transports the serialized data.
 
         Args:
@@ -249,75 +436,11 @@ class ToolingService(BaseService):
                 # No query, return all tools
                 tools = self.tools_manager.get_tools(None, request.top_k)
 
-            # Serialize tools to send through bus (only name, description, and argument descriptions)
+            # Serialize tools to send through bus with stable identity and provenance metadata.
             serialized_tools = []
             for tool in tools:
                 try:
-                    # Extract tool schema information - only what's needed for LLM binding
-                    tool_schema = {
-                        "name": tool.name,
-                        "description": tool.description or "",
-                    }
-
-                    # Get the args schema if available
-                    if hasattr(tool, "args_schema") and tool.args_schema:
-                        try:
-                            # Get the full JSON schema
-                            # Some schemas may contain non-serializable types (e.g., BaseStore)
-                            # We'll catch the error and filter out problematic fields
-                            try:
-                                full_schema = tool.args_schema.model_json_schema()
-                            except Exception as json_schema_error:
-                                # If schema generation fails due to non-serializable types,
-                                # use helper method to manually build a schema excluding problematic fields
-                                log_debug(
-                                    f"Direct schema generation failed for {tool.name}, attempting manual extraction: {json_schema_error}"
-                                )
-                                tool_schema["args_schema"] = self._extract_schema_manually(tool)
-
-                                # Skip the rest of the schema processing
-                                serialized_tools.append(tool_schema)
-                                continue
-
-                            # Extract only properties and required fields (filter out injected params)
-                            if "properties" in full_schema:
-                                filtered_properties = {}
-                                for prop_name, prop_value in full_schema["properties"].items():
-                                    # Skip runtime-injected parameters (bus, store, etc.)
-                                    # These are injected at execution time and shouldn't be in the LLM schema
-                                    if prop_name not in ["bus", "store"]:
-                                        filtered_properties[prop_name] = prop_value
-
-                                # Build minimal args_schema with type, properties, and required fields
-                                args_schema = {
-                                    "type": "object",
-                                    "properties": filtered_properties,
-                                }
-
-                                # Include required fields if they exist and filter out injected params
-                                if "required" in full_schema:
-                                    filtered_required = [
-                                        r
-                                        for r in full_schema["required"]
-                                        if r not in ["bus", "store"]
-                                    ]
-                                    if filtered_required:
-                                        args_schema["required"] = filtered_required
-
-                                tool_schema["args_schema"] = args_schema
-                            else:
-                                # No properties - use empty object schema
-                                tool_schema["args_schema"] = {"type": "object", "properties": {}}
-                        except Exception as schema_error:
-                            log_warning(
-                                f"Failed to generate JSON schema for {tool.name}: {schema_error}"
-                            )
-                            tool_schema["args_schema"] = {"type": "object", "properties": {}}
-                    else:
-                        # No arguments schema available - use empty object schema
-                        tool_schema["args_schema"] = {"type": "object", "properties": {}}
-
-                    serialized_tools.append(tool_schema)
+                    serialized_tools.append(self._serialize_tool(tool, request))
 
                 except Exception as tool_error:
                     log_warning(f"Failed to serialize tool {tool.name}: {tool_error}")
@@ -476,15 +599,16 @@ class ToolingService(BaseService):
             log_debug(f"Executing tool: {request.tool_name} with args: {request.arguments}")
 
             # Get the tool
-            tool = self.tools_manager.get_tool_by_name(request.tool_name)
+            local_tool_name = self._resolve_tool_name(request)
+            tool = self.tools_manager.get_tool_by_name(local_tool_name)
             if not tool:
                 # Try to find similar tool names (case-insensitive, partial match)
                 all_tool_names = self.tools_manager.get_all_tool_names()
                 similar_tools = [
                     name
                     for name in all_tool_names
-                    if request.tool_name.lower() in name.lower()
-                    or name.lower() in request.tool_name.lower()
+                    if local_tool_name.lower() in name.lower()
+                    or name.lower() in local_tool_name.lower()
                 ]
 
                 error_msg = f"Tool not found: '{request.tool_name}'"
@@ -516,7 +640,7 @@ class ToolingService(BaseService):
                     if hasattr(tool, "ainvoke")
                     else tool.invoke(tool_args)
                 )
-                log_debug(f"Tool {request.tool_name} executed successfully: {result}")
+                log_debug(f"Tool {local_tool_name} executed successfully: {result}")
 
                 # Return response
                 return ToolingExecuteToolResponse(ok=True, data=result, error=None)
