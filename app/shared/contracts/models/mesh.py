@@ -7,7 +7,7 @@ violating the "no cross-service imports" rule.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.shared.auth.permissions import Permission
 
@@ -21,6 +21,47 @@ class MeshEvents:
 
     PEER_APPROVED = "Mesh.PeerApproved"
     PEER_PERMISSIONS_UPDATED = "Mesh.PeerPermissionsUpdated"
+
+
+# ── Hybrid addressing selectors ─────────────────────────────────────────
+
+
+class MeshAddressSelector(BaseModel):
+    """Explicit mesh target selector for safety-sensitive remote calls.
+
+    The selector is optional on bus payloads so transparent module routing
+    remains backward compatible. When present, routing treats peer/provider
+    fields as binding hints and validates them before falling back to module
+    selection.
+    """
+
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = None
+    tool_id: str | None = None
+    hardware_target: str | None = None
+    data_scope: str | None = None
+
+    @field_validator(
+        "peer_id",
+        "provider_id",
+        "service_instance_id",
+        "resource_namespace",
+        "tool_id",
+        "hardware_target",
+        "data_scope",
+    )
+    @classmethod
+    def _non_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("selector values must not be blank")
+        return value
+
+    def has_routing_target(self) -> bool:
+        """Return True when this selector names a routeable provider."""
+
+        return bool(self.peer_id or self.provider_id or self.service_instance_id)
 
 
 # ── Peer Info (returned by queries) ──────────────────────────────────────

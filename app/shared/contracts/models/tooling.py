@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 
@@ -32,6 +33,7 @@ class ToolingGetToolsRequest(IOModel):
 
     query: str | None = None
     top_k: int = 100
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ToolingGetToolsResponse(IOModel):
@@ -45,6 +47,7 @@ class ToolingGetToolByNameRequest(IOModel):
     """Request to get a specific tool by name."""
 
     name: str
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ToolingGetToolByNameResponse(IOModel):
@@ -95,6 +98,7 @@ class ToolingExecuteToolRequest(IOModel):
 
     tool_name: str
     arguments: dict[str, Any]
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ToolingExecuteToolResponse(IOModel):

@@ -25,6 +25,8 @@ class MeshServiceConfig(BaseModel):
         fallback: Fallback strategy ("local" | "network" | "error" | "none")
         min_version: Minimum required version (semver) for remote service
         required_capabilities: Capabilities the remote service must have
+        require_explicit_selector: Require callers to provide a peer/provider
+            selector before routing this module remotely
     """
 
     share: bool = False
@@ -34,6 +36,7 @@ class MeshServiceConfig(BaseModel):
     fallback: str = "local"
     min_version: str | None = None
     required_capabilities: list[str] = Field(default_factory=list)
+    require_explicit_selector: bool = False
 
 
 # Backward-compatible aliases

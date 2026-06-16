@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import Field
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 
@@ -88,6 +89,7 @@ class DBGetMessagesRequest(IOModel):
     offset: int = 0
     role: str | None = None
     message_type: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBGetMessagesResponse(IOModel):
@@ -148,6 +150,7 @@ class DBRAGStoreRequest(IOModel):
     key: str
     value: Any
     index: bool = True
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBRAGDeleteRequest(IOModel):
@@ -155,6 +158,7 @@ class DBRAGDeleteRequest(IOModel):
 
     namespace: str
     key: str
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBRAGSearchRequest(IOModel):
@@ -164,6 +168,7 @@ class DBRAGSearchRequest(IOModel):
     query: str
     limit: int = 10
     offset: int = 0
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBRAGGetRequest(IOModel):
@@ -171,6 +176,7 @@ class DBRAGGetRequest(IOModel):
 
     namespace: str
     key: str
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBRAGListRequest(IOModel):
@@ -179,6 +185,7 @@ class DBRAGListRequest(IOModel):
     namespace: str
     limit: int = 100
     offset: int = 0
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBRAGItemResponse(IOModel):
@@ -450,6 +457,7 @@ class DBExecuteSQLRequest(IOModel):
 
     sql: str
     params: list[Any] | None = None
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class DBExecuteSQLResponse(IOModel):

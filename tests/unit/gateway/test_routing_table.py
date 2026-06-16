@@ -6,6 +6,7 @@ from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState, RouteDecision
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 
 class TestExtractModule:
@@ -31,6 +32,7 @@ def mesh_config():
             "DB": MeshServiceConfig(prefer="local"),
             "STT": MeshServiceConfig(prefer="network_only", fallback="error"),
             "Scheduler": MeshServiceConfig(prefer="local_only"),
+            "Tooling": MeshServiceConfig(prefer="local", require_explicit_selector=True),
         },
     )
 
@@ -111,6 +113,64 @@ class TestRoutingTableResolve:
         route = routing_table.resolve("TTS.Request", exclude=["peer-1"])
         # Peer excluded, no other peers → fallback
         assert route.target == "local"
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_overrides_local_preference(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("peer-1", ["DB"], latency_ms=15.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        await peer_registry.update_latency("peer-1", 15.0)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1", resource_namespace="journal"),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "peer-1"
+        assert route.selector.resource_namespace == "journal"
+
+    @pytest.mark.asyncio
+    async def test_explicit_missing_peer_returns_actionable_error(self, routing_table):
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="missing-peer"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_not_found"
+        assert "missing-peer" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_not_allowed_returns_unauthorized(self, mesh_config, peer_registry):
+        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", allowed_peers=["peer-2"])
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(provider_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_unauthorized"
+
+    def test_policy_can_require_explicit_selector(self, routing_table):
+        route = routing_table.resolve("Tooling.ExecuteTool")
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_conflicting_explicit_selectors_return_error(self, routing_table):
+        route = routing_table.resolve(
+            "Tooling.ExecuteTool",
+            selector=MeshAddressSelector(peer_id="peer-1", provider_id="peer-2"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_conflict"
 
 
 class TestRoutingTableResolveFallback:
