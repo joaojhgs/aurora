@@ -110,7 +110,13 @@ class MQTTSignaling:
             f"MQTTSignaling: failed to connect to any of the {len(self._brokers)} brokers: {self._brokers}"
         )
 
-    async def join_room(self, app_id: str, room: str, peer_id: str) -> None:
+    async def join_room(
+        self,
+        app_id: str,
+        room: str,
+        peer_id: str,
+        metadata: dict | None = None,
+    ) -> None:
         self._app_id = app_id
         self._room = room
         self._peer_id = peer_id
@@ -128,7 +134,13 @@ class MQTTSignaling:
 
         self._subscribed = True
 
-        presence_msg = {"type": "presence", "app_id": app_id, "room": room, "peer_id": peer_id}
+        presence_msg = {
+            "type": "presence",
+            "app_id": app_id,
+            "room": room,
+            "peer_id": peer_id,
+            **(metadata or {}),
+        }
 
         if self._encrypt_presence and self._sig_key:
             from app.services.gateway.utils.crypto import aead_seal

@@ -850,6 +850,10 @@ class GatewayService(BaseService):
             self._mesh_peer_registry.on_peer_status_changed = _on_peer_status_changed
 
             # Configure RTCClient for mesh
+            self._rtc_client.set_mesh_identity(
+                peer_id=peer_id,
+                node_name=mesh_config.node_name or "",
+            )
             self._rtc_client.configure_mesh(
                 mesh_config=mesh_config,
                 peer_registry=self._mesh_peer_registry,
@@ -878,8 +882,27 @@ class GatewayService(BaseService):
                     log_info(f"Loaded {len(creds)} inbound credential(s) for room '{room_name}'")
                 else:
                     log_debug(f"No inbound credentials for room '{room_name}'")
+                    from app.shared.contracts.models.auth import MeshCredentialLoadRequest
+
+                    legacy_resp = await self.bus.request(
+                        AuthMethods.LOAD_MESH_CREDENTIAL,
+                        MeshCredentialLoadRequest(room_name=room_name),
+                        timeout=5.0,
+                    )
+                    legacy_data = (
+                        legacy_resp.data if hasattr(legacy_resp, "data") else legacy_resp
+                    )
+                    legacy_token = (
+                        legacy_data.get("token")
+                        if isinstance(legacy_data, dict)
+                        else getattr(legacy_data, "token", None)
+                    )
+                    if legacy_token:
+                        self._rtc_client.set_saved_auth_token(legacy_token)
+                        log_info(f"Loaded legacy mesh credential for room '{room_name}'")
             except Exception as e:
                 log_warning(f"Could not load mesh credentials: {e}")
+            await self._rtc_client.refresh_presence()
 
             # ── Fix 3: Per-peer persist callback ─────────────────────────
             bus_ref = self.bus  # capture for closure
