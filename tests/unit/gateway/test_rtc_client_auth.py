@@ -48,6 +48,7 @@ def mock_deps():
     settings.webrtc.stun_servers = ["stun:stun.l.google.com:19302"]
     settings.webrtc.turn_servers = []
     settings.webrtc.enable_app_layer_e2ee = False
+    settings.webrtc.encrypt_signaling = False
 
     bus = MagicMock()
     registry = MagicMock()
@@ -108,6 +109,57 @@ async def test_rtc_client_sends_stable_mesh_identity_in_saved_token_auth(mock_de
         assert msg["peer_id"] == "stable-local-peer"
         assert msg["peer_name"] == "local-node"
         assert msg["signaling_peer_id"] == client._peer_id
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_presence_identity_selects_saved_token_for_new_session(mock_deps):
+    """Presence stable ID lets a new signaling session reuse the right peer token."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "local-node")
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "stable-remote-peer-a": "token-for-remote-a",
+        "stable-remote-peer-b": "token-for-remote-b",
+    }
+    client.connect_to = AsyncMock()
+
+    remote_session = "new-session-peer"
+    assert remote_session not in client._peer_stable_ids
+
+    await client._on_presence(
+        json.dumps(
+            {
+                "type": "presence",
+                "app_id": settings.webrtc.app_id,
+                "room": settings.webrtc.room,
+                "peer_id": remote_session,
+                "stable_peer_id": "stable-remote-peer-a",
+                "node_name": "remote-node-a",
+            }
+        ).encode()
+    )
+
+    assert client._peer_stable_ids[remote_session] == "stable-remote-peer-a"
+    client.connect_to.assert_awaited_once_with(remote_session)
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc(remote_session, is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert remote_session not in client._pairing_tasks
+        assert len(mock_channel.sent_messages) == 1
+        msg = json.loads(mock_channel.sent_messages[0])
+        assert msg["type"] == "auth"
+        assert msg["token"] == "token-for-remote-a"
+        assert msg["peer_id"] == "stable-local-peer"
+        assert msg["peer_name"] == "local-node"
+        assert msg["signaling_peer_id"] == "local-session"
 
 
 @pytest.mark.asyncio
