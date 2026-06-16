@@ -1,2 +1,2 @@
-{"ts":"2026-06-15T23:46:39.753Z","event":"plan_created","message":"15 goal(s) created"}
-{"ts":"2026-06-15T23:46:50.293Z","event":"goal_started","goalId":"G001-multica-issue-per-129-and-empty-comm","status":"in_progress","message":"Attempt 1"}
+{"ts":"2026-06-16T02:06:50.407Z","event":"plan_created","message":"17 goal(s) created"}
+{"ts":"2026-06-16T02:06:57.009Z","event":"goal_started","goalId":"G001-source-of-truth-multica-issue-per-13","status":"in_progress","message":"Attempt 1"}

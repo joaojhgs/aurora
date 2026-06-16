@@ -604,6 +604,10 @@ class MeshSharing(BaseConfigModel):
     """
     Maximum concurrent remote calls
     """
+    allowed_peers: list[str] | None = None
+    """
+    Specific stable mesh peer IDs allowed to call this shared service. Null allows any authenticated peer.
+    """
     prefer: Literal["local", "network", "network_only", "local_only"] | None = "local"
     """
     Routing preference
@@ -611,6 +615,14 @@ class MeshSharing(BaseConfigModel):
     fallback: Literal["local", "network", "error", "none"] | None = "local"
     """
     Fallback strategy
+    """
+    min_version: str | None = None
+    """
+    Minimum compatible remote service version required when routing to this service.
+    """
+    required_capabilities: list[str] | None = []
+    """
+    Remote service capabilities required before this service may be selected as a mesh provider.
     """
 
 

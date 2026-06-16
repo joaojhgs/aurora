@@ -58,8 +58,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       },
       "api_keys": [],
       "token_expiry_days": 365,
@@ -77,8 +80,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       },
       "hardware_acceleration": false,
       "model_file_path": "voice_models/en_US-lessac-medium.onnx",
@@ -93,8 +99,11 @@
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
+          "allowed_peers": null,
           "prefer": "local",
-          "fallback": "local"
+          "fallback": "local",
+          "min_version": null,
+          "required_capabilities": []
         },
         "session_timeout_s": 10.0,
         "multi_turn_enabled": false,
@@ -119,8 +128,11 @@
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
+          "allowed_peers": null,
           "prefer": "local",
-          "fallback": "local"
+          "fallback": "local",
+          "min_version": null,
+          "required_capabilities": []
         },
         "backend": "oww",
         "model_path": null,
@@ -132,8 +144,11 @@
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
+          "allowed_peers": null,
           "prefer": "local",
-          "fallback": "local"
+          "fallback": "local",
+          "min_version": null,
+          "required_capabilities": []
         },
         "vad_enabled": true,
         "vad_threshold": 0.5,
@@ -159,8 +174,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       },
       "hardware_acceleration": false,
       "llm": {
@@ -217,8 +235,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       },
       "embeddings": {
         "use_local": true
@@ -229,8 +250,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       },
       "hardware_acceleration": {
         "ocr_bg": false,
@@ -280,8 +304,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       }
     },
     "config": {
@@ -289,8 +316,11 @@
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
+        "allowed_peers": null,
         "prefer": "local",
-        "fallback": "local"
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
       }
     }
   }
