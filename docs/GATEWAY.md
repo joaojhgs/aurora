@@ -103,6 +103,7 @@ The gateway is configured in `config.json`:
 - **webrtc.room**: Room name (auto-generated if `"default"` or empty)
 - **webrtc.password**: Room password (auto-generated if empty; required when auth is enabled)
 - **webrtc.encrypt_signaling**: Encrypt MQTT presence with AEAD (default: `false`)
+- **webrtc.enable_app_layer_e2ee**: Encrypt WebRTC DataChannel JSON messages with AEAD in addition to WebRTC DTLS (default: `false`). When enabled, both peers must enable it and share the same room password-derived data key; plaintext DataChannel messages are dropped instead of downgraded.
 
 ### Dynamic Configuration
 
@@ -478,6 +479,15 @@ When `api.auth_enabled` is `true`, the RTCClient enforces a strict auth gate:
 When `api.auth_enabled` is `false`:
 - Peers receive the `OPEN_PEER` identity immediately (full permissions).
 - No auth message is sent, no timeout, no auth gate.
+
+### DataChannel Encryption Modes
+
+WebRTC DataChannels are protected in transit by WebRTC DTLS. Aurora can also add an optional application-layer encryption step for every JSON message sent through the `aurora-rpc` DataChannel:
+
+- `webrtc.enable_app_layer_e2ee=false` (default): auth messages, JSON-RPC calls/responses, manifests, ping/pong, capacity updates, and mesh events are sent as JSON text over the DTLS-protected DataChannel.
+- `webrtc.enable_app_layer_e2ee=true`: those same JSON messages are sealed with AES-GCM using the room password-derived DataChannel key and sent as binary frames.
+
+The mode is strict. A peer with app-layer E2EE enabled drops plaintext DataChannel messages, and a peer with it disabled cannot decode encrypted binary frames. This avoids silent downgrade behavior; paired peers must use matching `enable_app_layer_e2ee`, `webrtc.app_id`, `webrtc.room`, and `webrtc.password` values.
 
 ### Bilateral Mesh Pairing
 
