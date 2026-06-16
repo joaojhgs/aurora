@@ -154,6 +154,53 @@ class RTCClient:
             self._peer_names[session_peer_id] = node_name
         return stable
 
+    def _saved_auth_token_for_peer(self, peer: str) -> str | None:
+        """Return a saved token only when it can be scoped to this peer.
+
+        Per-peer credentials are keyed by stable mesh peer ID. A session-keyed
+        token is accepted for migration from older runtime state. The legacy
+        ``_default`` credential is only accepted when it is the sole saved
+        credential for the room; once peer-scoped credentials exist, using a
+        default token for an unknown peer is ambiguous and must fail safe.
+        """
+        stable_peer_id = self._stable_peer_id_for_session(peer)
+        candidate_keys = [stable_peer_id]
+        if peer != stable_peer_id:
+            candidate_keys.append(peer)
+
+        for key in candidate_keys:
+            token = self._saved_auth_tokens.get(key)
+            if token:
+                log_debug(
+                    f"Saved WebRTC token lookup hit for peer {peer[:8]}… "
+                    f"using credential key {key[:8]}…"
+                )
+                return token
+
+        peer_scoped_keys = [key for key in self._saved_auth_tokens if key != "_default"]
+        default_token = self._saved_auth_tokens.get("_default")
+        if default_token and not peer_scoped_keys:
+            log_info(
+                f"Using legacy default saved WebRTC token for peer {peer[:8]}…; "
+                "no peer-scoped credentials are loaded"
+            )
+            return default_token
+
+        if default_token and peer_scoped_keys:
+            log_warning(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); refusing legacy default because "
+                "peer-scoped credentials are loaded"
+            )
+        elif peer_scoped_keys:
+            log_info(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); pairing is required"
+            )
+        else:
+            log_debug(f"No saved WebRTC token available for peer {peer[:8]}…")
+        return None
+
     def set_saved_auth_token(self, token: str | None) -> None:
         """Set a single saved auth token (legacy/fallback).
 
@@ -1028,14 +1075,7 @@ class RTCClient:
                 if self._require_auth:
                     # If we have a saved token from a previous pairing exchange,
                     # send it immediately to authenticate as a returning peer.
-                    stable_peer_id = self._stable_peer_id_for_session(peer)
-                    saved_token = (
-                        self._saved_auth_tokens.get(stable_peer_id)
-                        or self._saved_auth_tokens.get(peer)
-                        or self._saved_auth_tokens.get("_default")
-                    )
-                    if not saved_token and len(self._saved_auth_tokens) == 1:
-                        saved_token = next(iter(self._saved_auth_tokens.values()), None)
+                    saved_token = self._saved_auth_token_for_peer(peer)
                     if saved_token:
                         auth_msg = {
                             "type": "auth",

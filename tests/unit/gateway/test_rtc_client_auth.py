@@ -199,6 +199,75 @@ async def test_reverse_pairing_starts_for_new_peer_despite_other_saved_tokens(mo
     client._initiate_pairing.assert_awaited_once_with("session-peer-b", channel)
 
 
+async def test_rtc_client_unknown_peer_does_not_receive_unrelated_saved_token(mock_deps):
+    """Unknown sessions fail safe when multiple peer-scoped tokens are loaded."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "stable-remote-peer-a": "token-for-remote-a",
+        "stable-remote-peer-b": "token-for-remote-b",
+    }
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert mock_channel.sent_messages == []
+        assert "unknown-session-peer" in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_legacy_default_token_used_only_when_unambiguous(mock_deps):
+    """A sole legacy `_default` token remains usable for single-peer migration."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {"_default": "legacy-room-token"}
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert len(mock_channel.sent_messages) == 1
+        msg = json.loads(mock_channel.sent_messages[0])
+        assert msg["type"] == "auth"
+        assert msg["token"] == "legacy-room-token"
+        assert "unknown-session-peer" not in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_default_token_not_used_when_peer_tokens_exist(mock_deps):
+    """A legacy default plus peer tokens is ambiguous without an exact peer hit."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "_default": "legacy-room-token",
+        "stable-remote-peer-a": "token-for-remote-a",
+    }
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert mock_channel.sent_messages == []
+        assert "unknown-session-peer" in client._pairing_tasks
+
+
+
 @pytest.mark.asyncio
 async def test_rtc_client_manifest_uses_stable_local_identity(mock_deps):
     """Manifest exchange exposes stable local mesh identity."""
