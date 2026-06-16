@@ -193,7 +193,7 @@
                 },
                 "enable_app_layer_e2ee": {
                   "type": "boolean",
-                  "description": "Enable application-layer end-to-end encryption",
+                  "description": "When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.",
                   "default": false
                 },
                 "stun_servers": {
