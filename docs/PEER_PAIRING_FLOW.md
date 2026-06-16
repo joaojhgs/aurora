@@ -430,7 +430,7 @@ Phase 2 (`_reverse_pairing`) is automatically triggered inside `validate_peer()`
 2. `validate_peer()` validates the token, builds an `Identity`, and stores it in `_peer_acl`.
 3. If mesh is enabled, the peer is registered in `PeerRegistry` and manifests are exchanged.
 4. `_reverse_pairing(peer)` is called as an `asyncio.create_task()`.
-5. `_reverse_pairing()` checks if we already have an auth token (meaning we initiated the forward pairing). If so, it skips — the reverse direction is not needed because we already hold a token.
+5. `_reverse_pairing()` checks if we already have an auth token for that remote peer's stable `peer_id` (meaning we initiated the forward pairing with this same peer). If so, it skips — the reverse direction is not needed because we already hold a peer-specific token. Legacy/default tokens or tokens for other peers do not suppress reverse pairing for this peer.
 6. If we don't have a token, it calls `_initiate_pairing(peer, chan)` which runs the standard 4-phase flow (PairingStart → PairingConnect → PairingExchange) on the **remote peer's** auth service via DataChannel RPC.
 
 ### Partial Completion
