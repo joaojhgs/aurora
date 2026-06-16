@@ -163,6 +163,43 @@ async def test_rtc_client_presence_identity_selects_saved_token_for_new_session(
 
 
 @pytest.mark.asyncio
+async def test_reverse_pairing_skips_only_current_stable_peer_token(mock_deps):
+    """Reverse pairing skip is scoped to the authenticated remote stable peer."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    channel = MockDataChannel()
+    client._peer_data_channels["session-peer-a"] = channel
+    client._remember_stable_peer_id("session-peer-a", "stable-peer-a")
+    client._saved_auth_tokens["stable-peer-a"] = "token-for-peer-a"
+    client._initiate_pairing = AsyncMock()
+
+    await client._reverse_pairing("session-peer-a")
+
+    client._initiate_pairing.assert_not_awaited()
+    assert "session-peer-a" not in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_reverse_pairing_starts_for_new_peer_despite_other_saved_tokens(mock_deps):
+    """A saved/default token for peer A must not suppress reverse pairing for peer B."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    channel = MockDataChannel()
+    client._peer_data_channels["session-peer-b"] = channel
+    client._remember_stable_peer_id("session-peer-a", "stable-peer-a")
+    client._remember_stable_peer_id("session-peer-b", "stable-peer-b")
+    client._saved_auth_tokens["stable-peer-a"] = "token-for-peer-a"
+    client._saved_auth_tokens["_default"] = "legacy-default-token"
+    client._initiate_pairing = AsyncMock()
+
+    await client._reverse_pairing("session-peer-b")
+
+    task = client._pairing_tasks["session-peer-b"]
+    await task
+    client._initiate_pairing.assert_awaited_once_with("session-peer-b", channel)
+
+
+@pytest.mark.asyncio
 async def test_rtc_client_manifest_uses_stable_local_identity(mock_deps):
     """Manifest exchange exposes stable local mesh identity."""
     settings, bus, registry, auth_service = mock_deps
