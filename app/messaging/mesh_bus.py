@@ -35,6 +35,7 @@ from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, QueryResult
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
@@ -155,7 +156,8 @@ class MeshBus:
             return
 
         # For commands, check routing
-        route = self._routing_table.resolve(topic)
+        selector = _extract_mesh_selector(message)
+        route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
             f"MeshBus: Routing command {topic} → target={route.target}, "
             f"peer={route.peer_id or 'n/a'}, module={route.module}"
@@ -203,7 +205,15 @@ class MeshBus:
             fallback = self._routing_table.resolve_fallback(
                 topic,
                 failed_peer_id=route.peer_id,
+                selector=selector,
             )
+            if fallback.target == "error":
+                raise RuntimeError(
+                    fallback.error_message or f"No fallback route available for {topic}"
+                )
+            if fallback.target == "none":
+                log_warning(f"MeshBus: No fallback route for {topic} (target=none)")
+                return
             if fallback.target == "local":
                 await self._inner.publish(
                     topic,
@@ -257,7 +267,7 @@ class MeshBus:
                 return
 
         if route.target == "error":
-            raise RuntimeError(f"No remote peer available for {topic} and fallback=error")
+            raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
 
         if route.target == "none":
             log_warning(f"MeshBus: No route for {topic} (target=none), dropping command")
@@ -308,7 +318,8 @@ class MeshBus:
         Returns:
             QueryResult containing the response data or error
         """
-        route = self._routing_table.resolve(topic)
+        selector = _extract_mesh_selector(message)
+        route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
             f"MeshBus: Routing request {topic} → target={route.target}, "
             f"peer={route.peer_id or 'n/a'}, module={route.module}"
@@ -348,7 +359,15 @@ class MeshBus:
             fallback = self._routing_table.resolve_fallback(
                 topic,
                 failed_peer_id=route.peer_id,
+                selector=selector,
             )
+            if fallback.target == "error":
+                return QueryResult(
+                    ok=False,
+                    error=fallback.error_message or f"No fallback route available for {topic}",
+                )
+            if fallback.target == "none":
+                return QueryResult(ok=False, error=f"No fallback route available for {topic}")
             if fallback.target == "local":
                 log_debug(f"MeshBus: Falling back to local for {topic}")
                 return await self._inner.request(
@@ -384,7 +403,10 @@ class MeshBus:
                     )
 
         if route.target == "error":
-            return QueryResult(ok=False, error=f"No remote peer available for {topic}")
+            return QueryResult(
+                ok=False,
+                error=route.error_message or f"No remote peer available for {topic}",
+            )
 
         if route.target == "none":
             return QueryResult(ok=False, error=f"No route available for {topic}")
@@ -415,6 +437,19 @@ class MeshBus:
         """
         self._inner.subscribe(topic, handler)
 
+<<<<<<< HEAD
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Unsubscribe from the inner local bus."""
         self._inner.unsubscribe(topic, handler)
+=======
+
+def _extract_mesh_selector(message: BaseModel) -> MeshAddressSelector | None:
+    """Return a typed mesh selector from a bus payload when present."""
+
+    selector = getattr(message, "mesh_selector", None)
+    if isinstance(selector, MeshAddressSelector):
+        return selector
+    if isinstance(selector, dict):
+        return MeshAddressSelector.model_validate(selector)
+    return None
+>>>>>>> 686ca75 (feat(mesh): add PER-135 hybrid addressing selectors)

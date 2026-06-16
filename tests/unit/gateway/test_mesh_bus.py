@@ -10,10 +10,12 @@ from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
 from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import RouteDecision
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 
 class FakePayload(BaseModel):
     text: str = "hello"
+    mesh_selector: MeshAddressSelector | None = None
 
 
 @pytest.fixture
@@ -172,6 +174,12 @@ class TestMeshBusPublish:
         inner_bus.publish.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_command_passes_selector_to_routing(self, mesh_bus, routing_table):
+        selector = MeshAddressSelector(peer_id="peer-1")
+        await mesh_bus.publish("TTS.Request", FakePayload(mesh_selector=selector), event=False)
+        routing_table.resolve.assert_called_once_with("TTS.Request", selector=selector)
+
+    @pytest.mark.asyncio
     async def test_command_remote_route(self, mesh_bus, inner_bus, routing_table, peer_bridge):
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-1", module="TTS"
@@ -236,6 +244,29 @@ class TestMeshBusRequest:
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is True
         inner_bus.request.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_explicit_remote_request_failure_does_not_fallback_local(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        selector = MeshAddressSelector(peer_id="peer-1")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="peer-1", module="TTS", selector=selector
+        )
+        peer_bridge.call.side_effect = Exception("timeout")
+        routing_table.resolve_fallback.return_value = RouteDecision(
+            target="error",
+            module="TTS",
+            selector=selector,
+            error_code="selector_target_failed",
+            error_message="TTS explicit selector target failed; transparent fallback skipped",
+        )
+
+        result = await mesh_bus.request("TTS.Request", FakePayload(mesh_selector=selector))
+
+        assert result.ok is False
+        assert "transparent fallback skipped" in result.error
+        inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_remote_error_result_triggers_fallback(

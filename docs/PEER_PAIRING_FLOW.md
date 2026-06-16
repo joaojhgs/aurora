@@ -1360,6 +1360,19 @@ Peer selection among multiple providers uses the configured `peer_selection` str
 - `round_robin`: Rotate among available peers.
 - `random`: Random selection.
 
+### Hybrid Addressing
+
+Mesh routing supports two addressing modes:
+
+- **Transparent module routing** remains the default for low-risk, local-like service dependencies. Existing callers that publish or request `TTS.Request`, `Orchestrator.UserInput`, or similar module topics without a selector continue to use the module's `prefer`, `fallback`, version, capability, latency, and capacity policy.
+- **Explicit selector routing** is used when a caller must choose the remote authority or resource. Typed payloads can include `mesh_selector` with `peer_id`, `provider_id`, `service_instance_id`, `resource_namespace`, `tool_id`, `hardware_target`, or `data_scope`. `peer_id`, `provider_id`, and `service_instance_id` are binding route targets; `resource_namespace`, `tool_id`, `hardware_target`, and `data_scope` preserve the caller's resource intent for policy and audit surfaces.
+
+When an explicit selector names a peer/provider, `RoutingTable.resolve()` validates that the peer exists, is negotiated, is allowed by per-service policy, shares the requested module, satisfies version/capability requirements, and has capacity. Selector failures return actionable error codes such as `selector_peer_not_found`, `selector_peer_unauthorized`, `selector_peer_stale`, `selector_service_missing`, or `selector_incompatible_capabilities`.
+
+Per-service mesh config can set `require_explicit_selector: true` for safety-sensitive categories. This is intended for tools, DB/data namespaces, hardware controls, scheduler ownership, remote playback, and privacy-sensitive data. Transparent routing is still appropriate for low-risk module dependencies where any compatible provider can satisfy the request.
+
+Explicit selector routes do not silently fall back to a different peer or local service after selector validation or target transport failure. A caller that chooses a specific tool/resource/provider receives an error if that target cannot satisfy the call.
+
 ### Event Forwarding
 
 #### The Problem

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 from .models import RouteDecision
 
@@ -37,6 +38,7 @@ class RoutingTable:
         topic: str,
         routing_config: MeshServiceConfig | None = None,
         exclude: list[str] | None = None,
+        selector: MeshAddressSelector | None = None,
     ) -> RouteDecision:
         """Determine where to route a message.
 
@@ -51,6 +53,7 @@ class RoutingTable:
             topic: Bus topic (e.g., "TTS.Request")
             routing_config: Override routing config (if None, uses mesh config)
             exclude: Peer IDs to exclude from selection
+            selector: Optional explicit peer/provider/resource selector
 
         Returns:
             RouteDecision indicating where to deliver the message
@@ -61,9 +64,24 @@ class RoutingTable:
         if routing_config is None:
             routing_config = self._config.services.get(module)
 
+        if selector and selector.has_routing_target():
+            return self._resolve_explicit_selector(
+                module=module,
+                routing_config=routing_config,
+                selector=selector,
+            )
+
         # No routing config or mesh disabled → always local
         if not routing_config:
             return RouteDecision(target="local", module=module)
+
+        if routing_config.require_explicit_selector:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_required",
+                message=f"{module} requires an explicit mesh selector",
+            )
 
         prefer = routing_config.prefer
 
@@ -127,11 +145,128 @@ class RoutingTable:
         """
         return self._registry.get_negotiated_peers()
 
+    def _resolve_explicit_selector(
+        self,
+        module: str,
+        routing_config: MeshServiceConfig | None,
+        selector: MeshAddressSelector,
+    ) -> RouteDecision:
+        peer_id, conflict_error = _selector_peer_id(selector, module)
+        if conflict_error:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_conflict",
+                message=conflict_error,
+            )
+        if not peer_id:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_missing_provider",
+                message=f"{module} selector does not name a peer/provider/service instance",
+            )
+
+        peer = self._registry.get_peer(peer_id)
+        if not peer:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_peer_not_found",
+                message=f"{module} selector peer/provider '{peer_id}' is not connected",
+            )
+        if peer.status != "negotiated":
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_peer_stale" if peer.status == "stale" else "selector_peer_not_ready",
+                message=(
+                    f"{module} selector peer/provider '{peer_id}' is {peer.status}, "
+                    "not negotiated"
+                ),
+            )
+
+        if (
+            routing_config
+            and routing_config.allowed_peers is not None
+            and peer_id not in routing_config.allowed_peers
+        ):
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_peer_unauthorized",
+                message=f"{module} selector peer/provider '{peer_id}' is not allowed by policy",
+            )
+
+        svc = self._registry.get_peer_service(peer_id, module)
+        if not svc:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_service_missing",
+                message=f"{module} is not shared by selector peer/provider '{peer_id}'",
+            )
+
+        if routing_config and routing_config.min_version:
+            from .version_compat import is_compatible
+
+            if not is_compatible(
+                routing_config.min_version,
+                svc.version,
+                self._config.version_policy,
+                routing_config.min_version,
+            ):
+                return _route_error(
+                    module=module,
+                    selector=selector,
+                    code="selector_incompatible_version",
+                    message=(
+                        f"{module} selector peer/provider '{peer_id}' version {svc.version} "
+                        f"does not satisfy {routing_config.min_version}"
+                    ),
+                )
+
+        if (
+            routing_config
+            and routing_config.required_capabilities
+            and not all(cap in svc.capabilities for cap in routing_config.required_capabilities)
+        ):
+            missing = [
+                cap for cap in routing_config.required_capabilities if cap not in svc.capabilities
+            ]
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_incompatible_capabilities",
+                message=(
+                    f"{module} selector peer/provider '{peer_id}' lacks required "
+                    f"capabilities: {', '.join(missing)}"
+                ),
+            )
+
+        if svc.max_concurrent > 0 and peer.active_calls >= svc.max_concurrent:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_provider_at_capacity",
+                message=f"{module} selector peer/provider '{peer_id}' is at capacity",
+            )
+
+        return RouteDecision(
+            target="remote",
+            peer_id=peer_id,
+            module=module,
+            version=svc.version,
+            latency_ms=peer.latency_ms,
+            selector=selector,
+        )
+
     def resolve_fallback(
         self,
         topic: str,
         routing_config: MeshServiceConfig | None = None,
         failed_peer_id: str | None = None,
+        selector: MeshAddressSelector | None = None,
     ) -> RouteDecision:
         """Resolve a fallback route after a primary route failure.
 
@@ -139,11 +274,21 @@ class RoutingTable:
             topic: Bus topic
             routing_config: Routing configuration
             failed_peer_id: The peer that failed (to exclude)
+            selector: Optional explicit selector. Explicit routes do not
+                transparently fall back to another target.
 
         Returns:
             RouteDecision for the fallback target
         """
         module = _extract_module(topic)
+
+        if selector and selector.has_routing_target():
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_target_failed",
+                message=f"{module} explicit selector target failed; transparent fallback skipped",
+            )
 
         if routing_config is None:
             routing_config = self._config.services.get(module)
@@ -198,3 +343,44 @@ def _extract_module(topic: str) -> str:
     if "." in topic:
         return topic.split(".")[0]
     return topic
+
+
+def _selector_peer_id(selector: MeshAddressSelector, module: str) -> tuple[str | None, str | None]:
+    """Resolve selector peer aliases into a single peer id."""
+
+    peer_ids: list[str] = []
+    for value in (selector.peer_id, selector.provider_id):
+        if value and value not in peer_ids:
+            peer_ids.append(value)
+
+    if selector.service_instance_id:
+        service_peer = selector.service_instance_id
+        if ":" in service_peer:
+            service_peer, service_module = service_peer.split(":", 1)
+            if service_module and service_module != module:
+                return None, (
+                    f"service_instance_id '{selector.service_instance_id}' targets "
+                    f"{service_module}, not {module}"
+                )
+        if service_peer and service_peer not in peer_ids:
+            peer_ids.append(service_peer)
+
+    if len(peer_ids) > 1:
+        return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}"
+    return (peer_ids[0], None) if peer_ids else (None, None)
+
+
+def _route_error(
+    *,
+    module: str,
+    selector: MeshAddressSelector | None,
+    code: str,
+    message: str,
+) -> RouteDecision:
+    return RouteDecision(
+        target="error",
+        module=module,
+        selector=selector,
+        error_code=code,
+        error_message=message,
+    )
