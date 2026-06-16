@@ -938,13 +938,14 @@ class RTCClient:
         This makes the mesh truly bilateral — each side has a token
         (and therefore a principal) on the other side.
         """
-        # Skip if we already have tokens from a prior pairing exchange
-        # (we initiated pairing earlier, so both sides already trust each other).
+        # Skip only if we already have a saved credential for this remote
+        # stable peer. A legacy/default token or another peer's token must not
+        # suppress reverse pairing for a newly authenticated peer.
         stable_peer_id = self._stable_peer_id_for_session(peer)
-        if stable_peer_id in self._saved_auth_tokens or "_default" in self._saved_auth_tokens:
+        if stable_peer_id in self._saved_auth_tokens:
             log_debug(
                 f"Reverse pairing skipped for {peer[:8]}… — "
-                "we already hold a saved token for this peer"
+                f"saved token exists for stable peer {stable_peer_id}"
             )
             return
 
@@ -960,7 +961,8 @@ class RTCClient:
 
         log_info(
             f"Phase 2: Initiating reverse pairing with peer {peer[:8]}… "
-            f"(they authenticated to us, now we authenticate to them)"
+            f"(stable_peer_id={stable_peer_id}; "
+            "they authenticated to us, now we authenticate to them)"
         )
 
         # Reuse the standard pairing flow — it will call PairingStart on the
