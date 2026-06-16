@@ -43,6 +43,7 @@ class GatewayMethods:
     GET_SERVICES = f"{GatewayModule.NAME}.GetServices"
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
     GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
+    GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
 
 
 # =============================================================================
@@ -268,6 +269,140 @@ class GetMeshStatusResponse(IOModel):
     peers: list[MeshPeerDiagnostic] = Field(default_factory=list)
     routes: list[MeshRouteDiagnostic] = Field(default_factory=list)
     compatibility_failures: list[MeshCompatibilityFailure] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
+class CapabilityPolicyInfo(IOModel):
+    """Policy metadata attached to a capability graph node.
+
+    The graph is diagnostic and planning-oriented. Policy fields explain
+    constraints without embedding credentials or executable policy state.
+    """
+
+    trust_tier: str = "unknown"
+    safety_class: str = "standard"
+    required_perms: list[str] = Field(default_factory=list)
+    allowed_peers: list[str] | None = None
+    explicit_selector_required: bool = False
+    confirmation_required: bool = False
+    rate_limit_key: str | None = None
+    mesh_visible: bool = False
+    local_only: bool = False
+
+
+class CapabilityAddressInfo(IOModel):
+    """Stable selector fields callers can use to address a capability."""
+
+    peer_id: str
+    module: str | None = None
+    service_instance_id: str | None = None
+    method: str | None = None
+    tool_id: str | None = None
+    resource_id: str | None = None
+    namespace: str | None = None
+
+
+class CapabilityProvenanceInfo(IOModel):
+    """Where graph data came from and how fresh it is."""
+
+    source: str = "unknown"
+    peer_id: str | None = None
+    manifest_timestamp: str | None = None
+    registry_digest: str = ""
+
+
+class CapabilityMethodInfo(IOModel):
+    """A callable method exposed by a service instance."""
+
+    method_id: str
+    module: str
+    name: str
+    bus_topic: str | None = None
+    exposure: str = "internal"
+    method_type: str = "use"
+    summary: str = ""
+    input_model: str | None = None
+    output_model: str | None = None
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityResourceInfo(IOModel):
+    """Explicitly addressable resource placeholder for future graph producers."""
+
+    resource_id: str
+    resource_type: str
+    owner_peer_id: str
+    service_instance_id: str | None = None
+    namespace: str | None = None
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityServiceInfo(IOModel):
+    """A service instance provided by the local node or a remote peer."""
+
+    service_instance_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    module: str
+    version: str = ""
+    summary: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    method_count: int = 0
+    methods: list[CapabilityMethodInfo] = Field(default_factory=list)
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    latency_ms: float | None = None
+    digest: str = ""
+    share: bool = False
+    routable: bool = False
+    route_blockers: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityPeerInfo(IOModel):
+    """Peer node in the capability graph."""
+
+    peer_id: str
+    node_name: str = ""
+    provider_kind: str = "remote"
+    status: str = "unknown"
+    latency_ms: float | None = None
+    service_instance_ids: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityGraph(IOModel):
+    """Read-only graph of mesh peers and addressable capabilities."""
+
+    local_peer_id: str | None = None
+    local_node_name: str = ""
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    peers: list[CapabilityPeerInfo] = Field(default_factory=list)
+    services: list[CapabilityServiceInfo] = Field(default_factory=list)
+    resources: list[CapabilityResourceInfo] = Field(default_factory=list)
+    provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    candidate_provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    selector_kinds: list[str] = Field(
+        default_factory=lambda: [
+            "peer_id",
+            "service_instance_id",
+            "module",
+            "method",
+            "tool_id",
+            "resource_id",
+            "namespace",
+        ]
+    )
     secrets_redacted: bool = True
 
 

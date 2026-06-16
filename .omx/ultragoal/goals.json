@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "createdAt": "2026-06-16T02:06:50.407Z",
-  "updatedAt": "2026-06-16T02:06:57.009Z",
+  "createdAt": "2026-06-16T05:06:22.052Z",
+  "updatedAt": "2026-06-16T05:34:39.363Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -9,159 +9,147 @@
   "goals": [
     {
       "id": "G001-source-of-truth-multica-issue-per-13",
-      "title": "Source of truth: Multica issue PER-132, plus available repo guidance...",
-      "objective": "Source of truth: Multica issue PER-132, plus available repo guidance in `AGENTS.md`, `app/services/AGENTS.md`, `app/services/gateway/AGENTS.md`, `app/shared/AGENTS.md`, `tests/AGENTS.md`, and `docs/CONFIG_SERVICE_PATTERN.md`.",
-      "status": "in_progress",
+      "title": "Source of truth: Multica issue PER-134, plus the task/spec content re...",
+      "objective": "Source of truth: Multica issue PER-134, plus the task/spec content read from `origin/main` because the checked-out base branch does not contain `.omx/multica/mesh-roadmap-tasks/` or `.omx/specs/deep-interview-mesh-distributed-integration.md`.",
+      "status": "complete",
       "attempt": 1,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:57.009Z",
-      "startedAt": "2026-06-16T02:06:57.009Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:14:41.058Z",
+      "startedAt": "2026-06-16T05:06:32.821Z",
+      "completedAt": "2026-06-16T05:14:41.058Z",
+      "evidence": "Read Multica PER-134, issue metadata/comments, repo AGENTS, origin/main mesh task/spec, and wrote .omx/plans/PER-134-mesh-capability-graph-core.md."
     },
     {
-      "id": "G002-missing-context-the-issue-references",
-      "title": "Missing context: the issue references `.omx/specs/deep-interview-mesh...",
-      "objective": "Missing context: the issue references `.omx/specs/deep-interview-mesh-distributed-integration.md` and `.omx/multica/mesh-roadmap-tasks/`, but this checkout of `feat/migration-to-modular-services-architecture` does not contain those paths.",
-      "status": "pending",
+      "id": "G002-preserve-existing-module-level-mesh",
+      "title": "Preserve existing module-level mesh routing in `app/services/gateway/...",
+      "objective": "Preserve existing module-level mesh routing in `app/services/gateway/mesh/peer_registry.py`, `app/services/gateway/mesh/routing_table.py`, and `app/messaging/mesh_bus.py`.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:14:50.014Z",
+      "completedAt": "2026-06-16T05:14:50.014Z",
+      "evidence": "No routing table, MeshBus, negotiation route behavior, or PeerRegistry selection behavior changed; existing gateway routing/registry tests pass."
     },
     {
-      "id": "G003-runtime-anchor-app-services-gateway",
-      "title": "Runtime anchor: `app/services/gateway/config.py` has `MeshServiceConf...",
-      "objective": "Runtime anchor: `app/services/gateway/config.py` has `MeshServiceConfig.allowed_peers`, `min_version`, and `required_capabilities`.",
-      "status": "pending",
+      "id": "G003-add-a-first-class-read-only-capabili",
+      "title": "Add a first-class, read-only capability graph that represents local a...",
+      "objective": "Add a first-class, read-only capability graph that represents local and remote peers, service instances, methods, tools/resources for future expansion, policy/trust metadata, latency/capacity, version/capabilities, and provenance.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:14:58.633Z",
+      "completedAt": "2026-06-16T05:14:58.633Z",
+      "evidence": "Added CapabilityGraph/peer/service/method/resource/policy/address/provenance models and a read-only builder projection."
     },
     {
-      "id": "G004-schema-anchor-app-services-config-co",
-      "title": "Schema anchor: `app/services/config/config_schema.json` currently def...",
-      "objective": "Schema anchor: `app/services/config/config_schema.json` currently defines `mesh_sharing` with only `share`, `max_concurrent`, `prefer`, and `fallback`.",
-      "status": "pending",
+      "id": "G004-keep-graph-state-in-gateway-runtime",
+      "title": "Keep graph state in Gateway/runtime memory for this slice. Do not add...",
+      "objective": "Keep graph state in Gateway/runtime memory for this slice. Do not add Auth/DB persistence or change mesh routing behavior.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:06.152Z",
+      "completedAt": "2026-06-16T05:15:06.152Z",
+      "evidence": "Graph is generated from Gateway runtime snapshots only; no Auth/DB persistence or mesh routing mutation added."
     },
     {
-      "id": "G005-acceptance-target-runtime-config-sch",
-      "title": "Acceptance target: runtime config, schema, generated defaults, genera...",
-      "objective": "Acceptance target: runtime config, schema, generated defaults, generated config models, generated keys, docs, and validation tests agree.",
-      "status": "pending",
+      "id": "G005-expose-graph-output-through-a-redact",
+      "title": "Expose graph output through a redacted Gateway query for diagnostics...",
+      "objective": "Expose graph output through a redacted Gateway query for diagnostics and future Orchestrator use.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:13.530Z",
+      "completedAt": "2026-06-16T05:15:13.530Z",
+      "evidence": "Added Gateway.GetCapabilityGraph external manage method returning CapabilityGraph with secrets_redacted=True."
     },
     {
-      "id": "G006-treat-allowed-peers-min-version-and",
-      "title": "Treat `allowed_peers`, `min_version`, and `required_capabilities` as...",
-      "objective": "Treat `allowed_peers`, `min_version`, and `required_capabilities` as supported operator-facing fields because they already exist in runtime policy and mesh negotiation/routing tests.",
-      "status": "pending",
+      "id": "G006-add-capability-graph-pydantic-models",
+      "title": "Add capability graph Pydantic models and a `GatewayMethods.GET_CAPABI...",
+      "objective": "Add capability graph Pydantic models and a `GatewayMethods.GET_CAPABILITY_GRAPH` topic in `app/shared/contracts/models/gateway.py`.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:22.064Z",
+      "completedAt": "2026-06-16T05:15:22.064Z",
+      "evidence": "Added GatewayMethods.GET_CAPABILITY_GRAPH and capability graph Pydantic models in app/shared/contracts/models/gateway.py."
     },
     {
-      "id": "G007-add-these-fields-to-defs-mesh-sharin",
-      "title": "Add these fields to `$defs.mesh_sharing` in `app/services/config/conf...",
-      "objective": "Add these fields to `$defs.mesh_sharing` in `app/services/config/config_schema.json` with safe defaults:\n`allowed_peers`: `null` or string array, default `null`, meaning any authenticated peer may use a shared service.\n`min_version`: `null` or string, default `null`, deferring to global mesh version policy unless set.\n`required_capabilities`: string array, default `[]`, meaning no extra capability requirement.",
-      "status": "pending",
+      "id": "G007-add-a-pure-graph-builder-under-app-s",
+      "title": "Add a pure graph builder under `app/services/gateway/mesh/` that acce...",
+      "objective": "Add a pure graph builder under `app/services/gateway/mesh/` that accepts mesh config, local registry snapshots, peer registry snapshots, and local peer identity, then returns a redacted `CapabilityGraph`.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:30.123Z",
+      "completedAt": "2026-06-16T05:15:30.123Z",
+      "evidence": "Added app/services/gateway/mesh/capability_graph.py pure builder using mesh config, registry snapshots, peer snapshots, and local peer id."
     },
     {
-      "id": "G008-run-make-generate-config-so-app-shar",
-      "title": "Run `make generate-config` so `app/shared/config/models.py`, `app/sha...",
-      "objective": "Run `make generate-config` so `app/shared/config/models.py`, `app/shared/config/keys.py`, and `app/services/config/config_defaults.json` are generated from the schema.",
-      "status": "pending",
+      "id": "G008-wire-gatewayservice-get-capability-g",
+      "title": "Wire `GatewayService.get_capability_graph()` as an external manage me...",
+      "objective": "Wire `GatewayService.get_capability_graph()` as an external manage method using `EmptyInput`, without changing transparent routing.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:37.984Z",
+      "completedAt": "2026-06-16T05:15:37.984Z",
+      "evidence": "GatewayService.get_capability_graph() is registered as external/manage with EmptyInput and CapabilityGraph output."
     },
     {
-      "id": "G009-add-a-focused-config-test-asserting",
-      "title": "Add a focused config test asserting runtime `MeshServiceConfig` field...",
-      "objective": "Add a focused config test asserting runtime `MeshServiceConfig` fields are present in the schema, generated model, generated keys, and defaults.",
-      "status": "pending",
+      "id": "G009-add-focused-unit-tests-in-tests-unit",
+      "title": "Add focused unit tests in `tests/unit/gateway/` for graph models, loc...",
+      "objective": "Add focused unit tests in `tests/unit/gateway/` for graph models, local/remote provider aggregation, explicit resource placeholders, policy/trust defaults, capacity/latency redaction, and no-secret output.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:45.972Z",
+      "completedAt": "2026-06-16T05:15:45.972Z",
+      "evidence": "Added tests/unit/gateway/test_capability_graph.py covering aggregation, explicit resource selectors, policy defaults, capacity/latency, and redacted output."
     },
     {
-      "id": "G010-update-docs-config-service-pattern-m",
-      "title": "Update `docs/CONFIG_SERVICE_PATTERN.md` with concise examples for hom...",
-      "objective": "Update `docs/CONFIG_SERVICE_PATTERN.md` with concise examples for home LAN, process-cluster, and internet-crossing trust tiers.",
-      "status": "pending",
+      "id": "G010-run-targeted-tests-then-the-existing",
+      "title": "Run targeted tests, then the existing mesh diagnostics/routing tests...",
+      "objective": "Run targeted tests, then the existing mesh diagnostics/routing tests affected by shared models.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:15:54.065Z",
+      "completedAt": "2026-06-16T05:15:54.065Z",
+      "evidence": "ruff check changed files passed; uv run pytest graph/mesh/diagnostics/negotiation/routing_table/peer_registry suite passed: 81 passed, 3 warnings."
     },
     {
-      "id": "G011-make-generate-config",
-      "title": "`make generate-config`",
-      "objective": "`make generate-config`",
-      "status": "pending",
+      "id": "G011-risk-graph-models-become-too-specula",
+      "title": "Risk: graph models become too speculative. Mitigation: keep future to...",
+      "objective": "Risk: graph models become too speculative. Mitigation: keep future tool/resource descriptors generic but typed, and populate only service/method facts from current manifests.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:16:03.905Z",
+      "completedAt": "2026-06-16T05:16:03.905Z",
+      "evidence": "Tool/resource descriptors are typed placeholders; builder populates concrete service/method facts only from current local registry and remote manifests."
     },
     {
-      "id": "G012-uv-run-pytest-tests-unit-app-config",
-      "title": "`uv run pytest tests/unit/app/config/test_mesh_sharing_schema.py -q`",
-      "objective": "`uv run pytest tests/unit/app/config/test_mesh_sharing_schema.py -q`",
-      "status": "pending",
+      "id": "G012-risk-route-behavior-changes-accident",
+      "title": "Risk: route behavior changes accidentally. Mitigation: no routing tab...",
+      "objective": "Risk: route behavior changes accidentally. Mitigation: no routing table changes; tests include existing routing/diagnostic coverage.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:16:11.689Z",
+      "completedAt": "2026-06-16T05:16:11.689Z",
+      "evidence": "No routing-table changes; final gateway suite including test_routing_table.py and test_peer_registry.py passed."
     },
     {
-      "id": "G013-make-check-config-generated",
-      "title": "`make check-config-generated`",
-      "objective": "`make check-config-generated`",
-      "status": "pending",
+      "id": "G013-risk-diagnostic-output-leaks-sensiti",
+      "title": "Risk: diagnostic output leaks sensitive strings. Mitigation: model fi...",
+      "objective": "Risk: diagnostic output leaks sensitive strings. Mitigation: model field names avoid credential terms and tests assert JSON output excludes common secret field names.",
+      "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
-    },
-    {
-      "id": "G014-a-targeted-gateway-mesh-config-test",
-      "title": "A targeted gateway mesh/config test if affected by generated models.",
-      "objective": "A targeted gateway mesh/config test if affected by generated models.",
-      "status": "pending",
-      "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
-    },
-    {
-      "id": "G015-generated-artifacts-may-reorder-or-f",
-      "title": "Generated artifacts may reorder or format unrelated config code. Miti...",
-      "objective": "Generated artifacts may reorder or format unrelated config code. Mitigation: inspect diff and keep schema edits minimal.",
-      "status": "pending",
-      "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
-    },
-    {
-      "id": "G016-defaults-could-accidentally-broaden",
-      "title": "Defaults could accidentally broaden exposure. Mitigation: preserve `s...",
-      "objective": "Defaults could accidentally broaden exposure. Mitigation: preserve `share: false`; new lists are empty and allowlist is `null` only meaningful after explicit sharing.",
-      "status": "pending",
-      "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
-    },
-    {
-      "id": "G017-per-132-is-ready-for-qa-when-schema",
-      "title": "PER-132 is ready for QA when schema/runtime parity is tested, docs ar...",
-      "objective": "PER-132 is ready for QA when schema/runtime parity is tested, docs are updated, generated files are clean, a commit is pushed, and a PR is opened.",
-      "status": "pending",
-      "attempt": 0,
-      "createdAt": "2026-06-16T02:06:50.407Z",
-      "updatedAt": "2026-06-16T02:06:50.407Z"
+      "createdAt": "2026-06-16T05:06:22.052Z",
+      "updatedAt": "2026-06-16T05:34:39.363Z",
+      "completedAt": "2026-06-16T05:34:39.363Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G001-source-of-truth-multica-issue-per-13"
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
 }
