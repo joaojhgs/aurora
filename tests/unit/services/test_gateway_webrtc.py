@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -87,7 +87,10 @@ async def test_rtc_client_initialization_and_signaling_config(mock_bus, mock_set
 
         mock_mqtt_signaling.connect.assert_called_once()
         mock_mqtt_signaling.join_room.assert_called_once_with(
-            mock_settings.webrtc.app_id, mock_settings.webrtc.room, client._peer_id
+            mock_settings.webrtc.app_id,
+            mock_settings.webrtc.room,
+            client._peer_id,
+            metadata=ANY,
         )
 
 

@@ -938,6 +938,7 @@ class GatewayService(BaseService):
                         log_info(f"Loaded legacy mesh credential for room '{room_name}'")
             except Exception as e:
                 log_warning(f"Could not load mesh credentials: {e}")
+            await self._rtc_client.refresh_presence()
 
             # ── Fix 3: Per-peer persist callback ─────────────────────────
             bus_ref = self.bus  # capture for closure

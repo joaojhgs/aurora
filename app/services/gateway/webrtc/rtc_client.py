@@ -111,6 +111,30 @@ class RTCClient:
     def _local_mesh_node_name(self) -> str:
         return self._mesh_node_name or self._local_mesh_peer_id()
 
+    def _presence_metadata(self) -> dict[str, str]:
+        stable_peer_id = self._local_mesh_peer_id()
+        metadata = {
+            "stable_peer_id": stable_peer_id,
+            "mesh_peer_id": stable_peer_id,
+        }
+        node_name = self._local_mesh_node_name()
+        if node_name:
+            metadata["node_name"] = node_name
+            metadata["mesh_node_name"] = node_name
+        return metadata
+
+    async def refresh_presence(self) -> None:
+        """Re-publish retained signaling presence with current stable mesh identity."""
+        if not self._adapter:
+            return
+        s = self._settings
+        await self._adapter.join_room(
+            s.webrtc.app_id,
+            s.webrtc.room,
+            self._peer_id,
+            metadata=self._presence_metadata(),
+        )
+
     def _stable_peer_id_for_session(self, peer: str) -> str:
         return self._peer_stable_ids.get(peer, peer)
 
@@ -216,7 +240,12 @@ class RTCClient:
         self._adapter.on_message("candidate", self._on_candidate)
         self._adapter.on_message("broadcast", self._on_broadcast)
 
-        await self._adapter.join_room(s.webrtc.app_id, s.webrtc.room, self._peer_id)
+        await self._adapter.join_room(
+            s.webrtc.app_id,
+            s.webrtc.room,
+            self._peer_id,
+            metadata=self._presence_metadata(),
+        )
         log_info(f"RTCClient joined room {s.webrtc.room} as {self._peer_id}")
 
     async def close(self) -> None:
@@ -655,6 +684,18 @@ class RTCClient:
         remote_peer = msg.get("peer_id")
         if not remote_peer or remote_peer == self._peer_id:
             return  # Ignore our own presence
+
+        remote_stable_peer_id = (
+            msg.get("stable_peer_id") or msg.get("mesh_peer_id") or msg.get("peer_stable_id")
+        )
+        remote_node_name = msg.get("node_name") or msg.get("mesh_node_name") or ""
+        if remote_stable_peer_id == self._local_mesh_peer_id():
+            log_debug(
+                f"RTCClient: Ignoring stale self-presence from signaling peer {remote_peer}"
+            )
+            return
+        if remote_stable_peer_id:
+            self._remember_stable_peer_id(remote_peer, remote_stable_peer_id, remote_node_name)
 
         # Skip peers we already have a connection to
         if remote_peer in self._pcs:

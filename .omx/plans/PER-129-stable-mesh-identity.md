@@ -31,4 +31,3 @@
 ## Risks
 - Transport sends still require session IDs; changing all peer keys to stable IDs would break DataChannel routing. Mitigation: maintain mapping helpers and only translate at mesh/policy boundaries.
 - Remote stable ID is unknown before auth/manifest. Mitigation: use session ID until learned, then re-register/update stable mesh state and preserve legacy fallback token lookup.
-
