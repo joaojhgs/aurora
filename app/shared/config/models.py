@@ -128,7 +128,7 @@ class Webrtc(BaseConfigModel):
     """
     enable_app_layer_e2ee: bool | None = False
     """
-    Enable application-layer end-to-end encryption
+    When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.
     """
     stun_servers: list[str] | None = ["stun:stun.l.google.com:19302"]
     """

@@ -438,12 +438,68 @@ class RTCClient:
 
     # ── Mesh P2P helpers ─────────────────────────────────────────────────
 
+    def _encode_datachannel_message(self, text: str) -> str | bytes:
+        """Encode an outbound DataChannel JSON message for the configured mode."""
+        if not self._settings.webrtc.enable_app_layer_e2ee:
+            return text
+
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("DataChannel E2EE messages must be JSON objects") from exc
+        if not isinstance(obj, dict):
+            raise ValueError("DataChannel E2EE messages must be JSON objects")
+        return aead_seal(self._keys.k_data, obj)
+
+    def _decode_datachannel_message(
+        self,
+        peer: str,
+        message: str | bytes | bytearray | memoryview,
+    ) -> str | None:
+        """Decode an inbound DataChannel message according to the configured mode."""
+        e2ee_enabled = self._settings.webrtc.enable_app_layer_e2ee
+
+        if isinstance(message, str):
+            if e2ee_enabled:
+                log_warning(
+                    "RTCClient: Dropping plaintext DataChannel message from "
+                    f"{peer}; app-layer E2EE is enabled"
+                )
+                return None
+            return message
+
+        if isinstance(message, (bytes, bytearray, memoryview)):
+            payload = bytes(message)
+            try:
+                if e2ee_enabled:
+                    obj = aead_open(self._keys.k_data, payload)
+                    return json.dumps(obj)
+                return payload.decode()
+            except Exception as e:
+                mode = "decrypt" if e2ee_enabled else "decode"
+                log_error(f"Failed to {mode} DataChannel message from {peer}: {e}")
+                return None
+
+        log_warning(
+            "RTCClient: Dropping unsupported DataChannel message from "
+            f"{peer}: {type(message).__name__}"
+        )
+        return None
+
+    def _send_channel_text(self, channel: Any, text: str) -> bool:
+        """Send JSON text on a DataChannel after applying configured encoding."""
+        if channel.readyState != "open":
+            return False
+        channel.send(self._encode_datachannel_message(text))
+        return True
+
     def send_to_peer(self, peer_id: str, text: str) -> bool:
         """Send a text message to a specific peer via their DataChannel.
 
         Args:
             peer_id: Target peer identifier
-            text: JSON string to send
+            text: JSON string to send. When app-layer E2EE is enabled this
+                is sealed and sent as binary AEAD payload.
 
         Returns:
             True if the message was sent, False if peer not connected or send failed
@@ -940,7 +996,7 @@ class RTCClient:
                 "signaling_peer_id": self._peer_id,
                 "token": token,
             }
-            chan.send(json.dumps(auth_msg))
+            self._send_channel_text(chan, json.dumps(auth_msg))
 
             # Register in mesh and exchange manifests (non-blocking)
             if self._mesh_enabled and self._peer_registry:
@@ -1032,8 +1088,7 @@ class RTCClient:
 
         def send_fn(text: str) -> None:
             try:
-                if channel.readyState == "open":
-                    channel.send(text)
+                self._send_channel_text(channel, text)
             except Exception:
                 log_debug(f"RTCClient: Failed to send to peer {peer} (channel closed)")
 
@@ -1084,7 +1139,7 @@ class RTCClient:
                             "signaling_peer_id": self._peer_id,
                             "token": saved_token,
                         }
-                        chan.send(json.dumps(auth_msg))
+                        self._send_channel_text(chan, json.dumps(auth_msg))
                         log_info(
                             f"Sent saved pairing token to peer {peer} "
                             "(returning peer — previously paired)"
@@ -1169,28 +1224,9 @@ class RTCClient:
 
             @chan.on("message")
             def on_message(message: str | bytes | bytearray | memoryview) -> None:
-                if isinstance(message, bytes):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, message)
-                            text = json.dumps(obj)
-                        else:
-                            text = message.decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                elif isinstance(message, (bytearray, memoryview)):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, bytes(message))
-                            text = json.dumps(obj)
-                        else:
-                            text = bytes(message).decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                else:
-                    text = message
+                text = self._decode_datachannel_message(peer, message)
+                if text is None:
+                    return
 
                 try:
                     obj = json.loads(text)
