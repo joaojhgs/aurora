@@ -1,149 +1,167 @@
 {
   "version": 1,
-  "createdAt": "2026-06-15T23:46:39.753Z",
-  "updatedAt": "2026-06-15T23:46:50.293Z",
+  "createdAt": "2026-06-16T02:06:50.407Z",
+  "updatedAt": "2026-06-16T02:06:57.009Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
   "codexGoalMode": "aggregate",
   "goals": [
     {
-      "id": "G001-multica-issue-per-129-and-empty-comm",
-      "title": "Multica issue PER-129 and empty comment history.",
-      "objective": "Multica issue PER-129 and empty comment history.",
+      "id": "G001-source-of-truth-multica-issue-per-13",
+      "title": "Source of truth: Multica issue PER-132, plus available repo guidance...",
+      "objective": "Source of truth: Multica issue PER-132, plus available repo guidance in `AGENTS.md`, `app/services/AGENTS.md`, `app/services/gateway/AGENTS.md`, `app/shared/AGENTS.md`, `tests/AGENTS.md`, and `docs/CONFIG_SERVICE_PATTERN.md`.",
       "status": "in_progress",
       "attempt": 1,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:50.293Z",
-      "startedAt": "2026-06-15T23:46:50.293Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:57.009Z",
+      "startedAt": "2026-06-16T02:06:57.009Z"
     },
     {
-      "id": "G002-read-only-context-from-origin-main-o",
-      "title": "Read-only context from `origin/main:.omx/multica/mesh-roadmap-tasks/0...",
-      "objective": "Read-only context from `origin/main:.omx/multica/mesh-roadmap-tasks/03-meshp1-t01-align-stable-mesh-identity-across-webrtc-auth-registry-and-manifests.md`.",
+      "id": "G002-missing-context-the-issue-references",
+      "title": "Missing context: the issue references `.omx/specs/deep-interview-mesh...",
+      "objective": "Missing context: the issue references `.omx/specs/deep-interview-mesh-distributed-integration.md` and `.omx/multica/mesh-roadmap-tasks/`, but this checkout of `feat/migration-to-modular-services-architecture` does not contain those paths.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G003-read-only-context-from-origin-main-o",
-      "title": "Read-only context from `origin/main:.omx/specs/deep-interview-mesh-di...",
-      "objective": "Read-only context from `origin/main:.omx/specs/deep-interview-mesh-distributed-integration.md`.",
+      "id": "G003-runtime-anchor-app-services-gateway",
+      "title": "Runtime anchor: `app/services/gateway/config.py` has `MeshServiceConf...",
+      "objective": "Runtime anchor: `app/services/gateway/config.py` has `MeshServiceConfig.allowed_peers`, `min_version`, and `required_capabilities`.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G004-repo-guidance-root-services-gateway",
-      "title": "Repo guidance: root, services, gateway, auth, messaging, shared, cont...",
-      "objective": "Repo guidance: root, services, gateway, auth, messaging, shared, contracts, tests AGENTS.",
+      "id": "G004-schema-anchor-app-services-config-co",
+      "title": "Schema anchor: `app/services/config/config_schema.json` currently def...",
+      "objective": "Schema anchor: `app/services/config/config_schema.json` currently defines `mesh_sharing` with only `share`, `max_concurrent`, `prefer`, and `fallback`.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G005-code-paths-app-services-gateway-webr",
-      "title": "Code paths: `app/services/gateway/webrtc/rtc_client.py`, `app/service...",
-      "objective": "Code paths: `app/services/gateway/webrtc/rtc_client.py`, `app/services/gateway/service.py`, `app/services/gateway/mesh/*`, `app/services/auth/*`, `app/shared/contracts/models/mesh.py`, gateway/auth tests.",
+      "id": "G005-acceptance-target-runtime-config-sch",
+      "title": "Acceptance target: runtime config, schema, generated defaults, genera...",
+      "objective": "Acceptance target: runtime config, schema, generated defaults, generated config models, generated keys, docs, and validation tests agree.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G006-keep-webrtc-signaling-session-ids-se",
-      "title": "Keep WebRTC signaling/session IDs separate from stable mesh peer IDs.",
-      "objective": "Keep WebRTC signaling/session IDs separate from stable mesh peer IDs.",
+      "id": "G006-treat-allowed-peers-min-version-and",
+      "title": "Treat `allowed_peers`, `min_version`, and `required_capabilities` as...",
+      "objective": "Treat `allowed_peers`, `min_version`, and `required_capabilities` as supported operator-facing fields because they already exist in runtime policy and mesh negotiation/routing tests.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G007-use-stable-mesh-ids-for-manifests-pe",
-      "title": "Use stable mesh IDs for manifests, peer registry records, saved inbou...",
-      "objective": "Use stable mesh IDs for manifests, peer registry records, saved inbound credential lookup/persistence, ACL/policy-facing diagnostics, and reconnect flows.",
+      "id": "G007-add-these-fields-to-defs-mesh-sharin",
+      "title": "Add these fields to `$defs.mesh_sharing` in `app/services/config/conf...",
+      "objective": "Add these fields to `$defs.mesh_sharing` in `app/services/config/config_schema.json` with safe defaults:\n`allowed_peers`: `null` or string array, default `null`, meaning any authenticated peer may use a shared service.\n`min_version`: `null` or string, default `null`, deferring to global mesh version policy unless set.\n`required_capabilities`: string array, default `[]`, meaning no extra capability requirement.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G008-keep-session-ids-for-mqtt-signaling",
-      "title": "Keep session IDs for MQTT signaling and DataChannel transport address...",
-      "objective": "Keep session IDs for MQTT signaling and DataChannel transport addressing.",
+      "id": "G008-run-make-generate-config-so-app-shar",
+      "title": "Run `make generate-config` so `app/shared/config/models.py`, `app/sha...",
+      "objective": "Run `make generate-config` so `app/shared/config/models.py`, `app/shared/config/keys.py`, and `app/services/config/config_defaults.json` are generated from the schema.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G009-preserve-backward-compatibility-for",
-      "title": "Preserve backward compatibility for existing single-token or session-...",
-      "objective": "Preserve backward compatibility for existing single-token or session-keyed saved credentials.",
+      "id": "G009-add-a-focused-config-test-asserting",
+      "title": "Add a focused config test asserting runtime `MeshServiceConfig` field...",
+      "objective": "Add a focused config test asserting runtime `MeshServiceConfig` fields are present in the schema, generated model, generated keys, and defaults.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G010-add-explicit-local-stable-identity-s",
-      "title": "Add explicit local stable identity support to `RTCClient`: retain `_p...",
-      "objective": "Add explicit local stable identity support to `RTCClient`: retain `_peer_id` as signaling ID, add stable mesh peer ID/node name setters/getters, and helper mapping from session ID to stable ID.",
+      "id": "G010-update-docs-config-service-pattern-m",
+      "title": "Update `docs/CONFIG_SERVICE_PATTERN.md` with concise examples for hom...",
+      "objective": "Update `docs/CONFIG_SERVICE_PATTERN.md` with concise examples for home LAN, process-cluster, and internet-crossing trust tiers.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G011-update-auth-pairing-manifest-registr",
-      "title": "Update auth, pairing, manifest, registry, ping/pong, capacity, discon...",
-      "objective": "Update auth, pairing, manifest, registry, ping/pong, capacity, disconnect, and diagnostic paths to use stable peer IDs for mesh state while using session IDs for DataChannel sends.",
+      "id": "G011-make-generate-config",
+      "title": "`make generate-config`",
+      "objective": "`make generate-config`",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G012-make-saved-token-lookup-prefer-known",
-      "title": "Make saved-token lookup prefer known remote stable ID, fall back to `...",
-      "objective": "Make saved-token lookup prefer known remote stable ID, fall back to `_default`/single legacy token/session-keyed values, and migrate learned stable IDs into `_saved_auth_tokens`.",
+      "id": "G012-uv-run-pytest-tests-unit-app-config",
+      "title": "`uv run pytest tests/unit/app/config/test_mesh_sharing_schema.py -q`",
+      "objective": "`uv run pytest tests/unit/app/config/test_mesh_sharing_schema.py -q`",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G013-ensure-incoming-manifest-peer-id-dri",
-      "title": "Ensure incoming manifest `peer_id` drives the stable ID mapping and r...",
-      "objective": "Ensure incoming manifest `peer_id` drives the stable ID mapping and registry update, including distinct session-vs-stable reconnect behavior.",
+      "id": "G013-make-check-config-generated",
+      "title": "`make check-config-generated`",
+      "objective": "`make check-config-generated`",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G014-add-focused-unit-tests-covering-stab",
-      "title": "Add focused unit tests covering stable local manifest ID, distinct se...",
-      "objective": "Add focused unit tests covering stable local manifest ID, distinct session/stable remote registration, and saved-token fallback/rekey on reconnect.",
+      "id": "G014-a-targeted-gateway-mesh-config-test",
+      "title": "A targeted gateway mesh/config test if affected by generated models.",
+      "objective": "A targeted gateway mesh/config test if affected by generated models.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     },
     {
-      "id": "G015-run-targeted-gateway-tests-and-the-m",
-      "title": "Run targeted gateway tests and the mesh baseline subset that fits the...",
-      "objective": "Run targeted gateway tests and the mesh baseline subset that fits the changed surface.",
+      "id": "G015-generated-artifacts-may-reorder-or-f",
+      "title": "Generated artifacts may reorder or format unrelated config code. Miti...",
+      "objective": "Generated artifacts may reorder or format unrelated config code. Mitigation: inspect diff and keep schema edits minimal.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-06-15T23:46:39.753Z",
-      "updatedAt": "2026-06-15T23:46:39.753Z"
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
+    },
+    {
+      "id": "G016-defaults-could-accidentally-broaden",
+      "title": "Defaults could accidentally broaden exposure. Mitigation: preserve `s...",
+      "objective": "Defaults could accidentally broaden exposure. Mitigation: preserve `share: false`; new lists are empty and allowlist is `null` only meaningful after explicit sharing.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
+    },
+    {
+      "id": "G017-per-132-is-ready-for-qa-when-schema",
+      "title": "PER-132 is ready for QA when schema/runtime parity is tested, docs ar...",
+      "objective": "PER-132 is ready for QA when schema/runtime parity is tested, docs are updated, generated files are clean, a commit is pushed, and a PR is opened.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-16T02:06:50.407Z",
+      "updatedAt": "2026-06-16T02:06:50.407Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G001-multica-issue-per-129-and-empty-comm"
+  "activeGoalId": "G001-source-of-truth-multica-issue-per-13"
 }

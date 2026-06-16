@@ -109,6 +109,80 @@ CI enforces sync: `make generate-config && git diff --exit-code` fails if genera
 
 ---
 
+## Mesh sharing policy examples
+
+Per-service `mesh_sharing` combines sharing and routing policy. Defaults are privacy-first:
+`share=false`, local routing is preferred, no version floor is set, and no extra remote
+capabilities are required. `allowed_peers=null` means any authenticated peer may use the
+service only after that service is explicitly shared.
+
+Home LAN / VPN: share a low-risk local service with authenticated peers, but keep local
+execution preferred and fall back locally if the peer is unavailable.
+
+```json
+{
+  "services": {
+    "tts": {
+      "mesh_sharing": {
+        "share": true,
+        "max_concurrent": 2,
+        "allowed_peers": null,
+        "prefer": "local",
+        "fallback": "local",
+        "min_version": null,
+        "required_capabilities": []
+      }
+    }
+  }
+}
+```
+
+Process cluster: prefer a known provider for a service that is safe to route inside the
+cluster, while allowing local fallback during rolling restarts.
+
+```json
+{
+  "services": {
+    "orchestrator": {
+      "mesh_sharing": {
+        "share": false,
+        "max_concurrent": 4,
+        "allowed_peers": ["peer-gpu-node-01"],
+        "prefer": "network",
+        "fallback": "local",
+        "min_version": "1.0.0",
+        "required_capabilities": ["llm"]
+      }
+    }
+  }
+}
+```
+
+Internet-crossing peers: require explicit stable peer IDs, version policy, and capabilities.
+Use `network_only` only when the local node should not satisfy the call itself; otherwise
+prefer `network` with `fallback=error` so failures are visible instead of silently routing
+to an unintended provider.
+
+```json
+{
+  "services": {
+    "tooling": {
+      "mesh_sharing": {
+        "share": true,
+        "max_concurrent": 1,
+        "allowed_peers": ["peer-admin-laptop"],
+        "prefer": "network",
+        "fallback": "error",
+        "min_version": "1.0.0",
+        "required_capabilities": ["tools"]
+      }
+    }
+  }
+}
+```
+
+---
+
 ## See also
 
 - **app/shared/config/interface.py** -- ConfigAPI implementation.
