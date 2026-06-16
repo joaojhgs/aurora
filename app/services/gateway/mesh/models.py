@@ -108,6 +108,22 @@ class PeerState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class ProviderCandidate(BaseModel):
+    """PeerRegistry provider eligibility result for one peer/service pair.
+
+    This model is intentionally runtime-local. Public Gateway diagnostics
+    project it into contract models after redacting/normalizing values.
+    """
+
+    peer: PeerState
+    service: PeerServiceInfo
+    eligible: bool = False
+    reason_code: str = ""
+    reason: str = ""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 class RouteDecision(BaseModel):
     """Result of a routing table lookup.
 

@@ -232,6 +232,7 @@ class MeshRouteProviderDiagnostic(IOModel):
     active_calls: int = 0
     max_concurrent: int = 0
     eligible: bool = False
+    reason_code: str = ""
     reason: str = ""
 
 

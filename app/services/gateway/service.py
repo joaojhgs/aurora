@@ -69,44 +69,6 @@ def _peer_service(peer: Any, module: str) -> Any | None:
     return None
 
 
-def _provider_eligibility(
-    peer: Any,
-    service: Any,
-    routing_config: Any | None,
-    mesh_config: Any,
-) -> tuple[bool, str]:
-    if routing_config is None:
-        return False, "no local routing config for this module"
-    if peer.status != "negotiated":
-        return False, f"peer status is {peer.status}"
-    if (
-        routing_config.allowed_peers is not None
-        and peer.peer_id not in routing_config.allowed_peers
-    ):
-        return False, "peer is not in allowed_peers"
-    if routing_config.min_version:
-        from app.services.gateway.mesh.version_compat import is_compatible
-
-        if not is_compatible(
-            routing_config.min_version,
-            service.version,
-            mesh_config.version_policy,
-            routing_config.min_version,
-        ):
-            return False, (
-                f"version {service.version} does not satisfy "
-                f"{routing_config.min_version} under {mesh_config.version_policy} policy"
-            )
-    missing_caps = [
-        cap for cap in routing_config.required_capabilities if cap not in service.capabilities
-    ]
-    if missing_caps:
-        return False, f"missing capabilities: {', '.join(missing_caps)}"
-    if service.max_concurrent > 0 and peer.active_calls >= service.max_concurrent:
-        return False, "peer service is at capacity"
-    return True, "eligible"
-
-
 def _route_reason(
     *,
     module: str,
@@ -381,22 +343,25 @@ class GatewayService(BaseService):
 
         providers: list[MeshRouteProviderDiagnostic] = []
         if registry:
-            for peer in sorted(registry.get_all_peers(), key=lambda p: p.peer_id):
-                svc = _peer_service(peer, module)
-                if not svc:
-                    continue
-                eligible, reason = _provider_eligibility(peer, svc, config, mesh_config)
+            candidates = registry.get_provider_candidates(
+                module=module,
+                routing_config=config,
+                version_policy=mesh_config.version_policy,
+                include_ineligible=True,
+            )
+            for candidate in sorted(candidates, key=lambda c: c.peer.peer_id):
                 providers.append(
                     MeshRouteProviderDiagnostic(
-                        peer_id=peer.peer_id,
-                        node_name=peer.node_name,
-                        status=peer.status,
-                        version=svc.version,
-                        latency_ms=_finite_float(peer.latency_ms),
-                        active_calls=peer.active_calls,
-                        max_concurrent=svc.max_concurrent,
-                        eligible=eligible,
-                        reason=reason,
+                        peer_id=candidate.peer.peer_id,
+                        node_name=candidate.peer.node_name,
+                        status=candidate.peer.status,
+                        version=candidate.service.version,
+                        latency_ms=_finite_float(candidate.peer.latency_ms),
+                        active_calls=candidate.peer.active_calls,
+                        max_concurrent=candidate.service.max_concurrent,
+                        eligible=candidate.eligible,
+                        reason_code=candidate.reason_code,
+                        reason=candidate.reason,
                     )
                 )
 
