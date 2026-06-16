@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 
 class PeerServiceInfo(BaseModel):
@@ -113,18 +114,24 @@ class RouteDecision(BaseModel):
     Tells the MeshBus whether to deliver a message locally or remotely.
 
     Attributes:
-        target: "local" or "remote"
+        target: "local", "remote", "none", or "error"
         peer_id: Target peer ID (only if target == "remote")
         module: Service module name
         version: Remote service version (only if remote)
         latency_ms: Expected latency (only if remote)
+        selector: Explicit selector that influenced this decision
+        error_code: Machine-readable failure reason for target="error"
+        error_message: Human-readable failure detail
     """
 
-    target: str  # "local" | "remote"
+    target: str  # "local" | "remote" | "none" | "error"
     peer_id: str | None = None
     module: str = ""
     version: str = ""
     latency_ms: float = 0.0
+    selector: MeshAddressSelector | None = None
+    error_code: str | None = None
+    error_message: str | None = None
 
 
 class CapacityUpdate(BaseModel):
