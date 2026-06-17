@@ -17,6 +17,7 @@ from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.agents.chatbot import chatbot
 from app.services.orchestrator.state import State
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.messaging.models.tts_models import TTSRequest
@@ -99,12 +100,15 @@ class GraphOrchestrator:
             return {"messages": []}
 
         tool_messages = []
+        tool_bindings = state.get("tool_bindings", {})
 
         # Execute each tool call via bus
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
+            binding = tool_bindings.get(tool_name, {}) if isinstance(tool_bindings, dict) else {}
+            request = self._tool_execution_request(tool_name, tool_args, binding)
 
             log_debug(f"Executing tool via bus: {tool_name} with args: {tool_args}")
 
@@ -112,7 +116,7 @@ class GraphOrchestrator:
                 # Send tool execution command via bus and wait for response
                 result = await self.bus.request(
                     ToolingMethods.EXECUTE_TOOL,
-                    ToolingExecuteToolRequest(tool_name=tool_name, arguments=tool_args),
+                    request,
                     timeout=30.0,  # 30 second timeout for tool execution
                     priority=get_interactive_priority(),
                 )
@@ -149,6 +153,26 @@ class GraphOrchestrator:
                 )
 
         return {"messages": tool_messages}
+
+    @staticmethod
+    def _tool_execution_request(
+        tool_name: str, tool_args: dict[str, Any], binding: dict[str, Any]
+    ) -> ToolingExecuteToolRequest:
+        """Build a Tooling execution request from hidden binding metadata."""
+
+        request_tool_name = binding.get("tool_name") or tool_name
+        mesh_selector_data = binding.get("mesh_selector")
+        mesh_selector = None
+        if isinstance(mesh_selector_data, dict):
+            mesh_selector = MeshAddressSelector(
+                **{key: value for key, value in mesh_selector_data.items() if value is not None}
+            )
+
+        return ToolingExecuteToolRequest(
+            tool_name=request_tool_name,
+            arguments=tool_args,
+            mesh_selector=mesh_selector,
+        )
 
     def _tools_end_condition(
         self,
