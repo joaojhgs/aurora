@@ -15,6 +15,7 @@ This document provides a comprehensive reference of all service methods in Auror
 - [Orchestrator Service](#orchestrator-service)
 - [Scheduler Service](#scheduler-service)
 - [DB Service](#db-service)
+- [DB/Data Sharing Policy](#dbdata-sharing-policy)
 - [Tooling Service](#tooling-service)
 - [Config Service](#config-service)
 - [Gateway Service](#gateway-service)
@@ -388,6 +389,18 @@ Database operations for messages and RAG storage.
 
 - **Write operations** (`SaveMessage`, `RAGStore`, etc.): Internal services control data integrity
 - **Read operations** (`GetMessages`, `RAGSearch`): Safe for external read access
+
+### DB/Data Sharing Policy
+
+Mesh DB/data sharing is governed by [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md).
+Current `both` DB methods are query surfaces, not replication contracts. Raw SQL
+through `DB.ExecuteSQL` is internal-only and must not be exposed through mesh RPC,
+export/import, or sync features.
+
+Scheduler `both` methods are similarly ownership-sensitive: remote scheduling,
+canceling, and listing must use explicit peer/resource selection and policy. DB
+cron-job persistence remains internal scheduler storage, not a cross-peer data
+sharing mechanism.
 
 ---
 
