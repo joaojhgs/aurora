@@ -9,13 +9,17 @@ This service:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import uuid
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.tooling import (
     ToolingExecuteToolRequest,
@@ -44,6 +48,16 @@ from app.shared.services.base_service import BaseService
 ToolingDiscoveryRequest = (
     ToolingGetToolsRequest | ToolingGetToolByNameRequest | ToolingExecuteToolRequest
 )
+
+_ARG_REDACT_KEYS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer",
+    "password",
+    "secret",
+    "token",
+}
 
 
 # Service implementation
@@ -267,6 +281,200 @@ class ToolingService(BaseService):
         """Return value if allowed, otherwise a stable fallback."""
 
         return value if isinstance(value, str) and value in allowed else fallback
+
+    @staticmethod
+    def _redact_arguments(value: Any) -> Any:
+        """Return arguments with secret-like keys replaced before hashing/auditing."""
+
+        if isinstance(value, dict):
+            redacted = {}
+            for key, nested in value.items():
+                if any(secret_key in str(key).lower() for secret_key in _ARG_REDACT_KEYS):
+                    redacted[key] = "<redacted>"
+                else:
+                    redacted[key] = ToolingService._redact_arguments(nested)
+            return redacted
+        if isinstance(value, list):
+            return [ToolingService._redact_arguments(item) for item in value]
+        return value
+
+    @classmethod
+    def _arguments_fingerprint(cls, arguments: dict[str, Any]) -> str:
+        """Hash redacted arguments so audit can correlate calls without leaking values."""
+
+        redacted = cls._redact_arguments(arguments)
+        serialized = json.dumps(redacted, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _selector_target_peer(request: ToolingExecuteToolRequest) -> str | None:
+        selector = request.mesh_selector
+        if not selector:
+            return None
+        return selector.peer_id or selector.provider_id
+
+    @staticmethod
+    def _request_has_resource_selector(request: ToolingExecuteToolRequest) -> bool:
+        resource_selector = request.resource_selector
+        if resource_selector and resource_selector.has_resource():
+            return True
+        selector = request.mesh_selector
+        return bool(
+            selector
+            and (
+                selector.resource_namespace
+                or selector.hardware_target
+                or selector.data_scope
+                or selector.tool_id
+            )
+        )
+
+    def _tool_safety_class(self, tool: Any) -> str:
+        return self._safe_metadata_value(
+            getattr(tool, "safety_class", "standard"),
+            {"standard", "sensitive", "dangerous"},
+            "standard",
+        )
+
+    def _tool_requires_confirmation(self, tool: Any, safety_class: str) -> bool:
+        explicit_confirmation = getattr(tool, "confirmation_required", False)
+        return explicit_confirmation is True or safety_class in {"sensitive", "dangerous"}
+
+    async def _audit_tool_execution(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        local_tool_name: str,
+        global_tool_id: str,
+        provider_peer_id: str,
+        safety_class: str,
+        status: str,
+        error_code: str | None = None,
+        denial_reason: str | None = None,
+    ) -> None:
+        """Persist an audit event for a Tooling execution attempt."""
+
+        details = {
+            "caller_peer_id": request.caller_peer_id,
+            "caller_principal_id": request.caller_principal_id,
+            "target_peer_id": self._selector_target_peer(request) or provider_peer_id,
+            "provider_peer_id": provider_peer_id,
+            "tool_name": request.tool_name,
+            "local_tool_name": local_tool_name,
+            "global_tool_id": global_tool_id,
+            "resource_selector": (
+                request.resource_selector.model_dump(mode="json", exclude_none=True)
+                if request.resource_selector
+                else None
+            ),
+            "mesh_selector": (
+                request.mesh_selector.model_dump(mode="json", exclude_none=True)
+                if request.mesh_selector
+                else None
+            ),
+            "argument_hash": self._arguments_fingerprint(request.arguments),
+            "safety_class": safety_class,
+            "confirmed": request.confirmed,
+            "dry_run": request.dry_run,
+            "status": status,
+            "error_code": error_code,
+            "denial_reason": denial_reason,
+            "correlation_id": request.correlation_id,
+        }
+
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event="tooling.execute",
+                    principal_id=request.caller_principal_id,
+                    details=json.dumps(details, sort_keys=True, default=str),
+                ),
+                timeout=5.0,
+                priority=get_system_priority(),
+            )
+        except Exception as audit_error:
+            log_warning(f"Failed to audit tool execution: {audit_error}")
+
+    async def _deny_tool_execution(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        local_tool_name: str,
+        global_tool_id: str,
+        provider_peer_id: str,
+        safety_class: str,
+        error_code: str,
+        message: str,
+    ) -> ToolingExecuteToolResponse:
+        await self._audit_tool_execution(
+            request,
+            local_tool_name=local_tool_name,
+            global_tool_id=global_tool_id,
+            provider_peer_id=provider_peer_id,
+            safety_class=safety_class,
+            status="denied",
+            error_code=error_code,
+            denial_reason=message,
+        )
+        return ToolingExecuteToolResponse(
+            ok=False,
+            data=None,
+            error=message,
+            status="denied",
+            error_code=error_code,
+            correlation_id=request.correlation_id,
+            provider_peer_id=provider_peer_id,
+            global_tool_id=global_tool_id,
+        )
+
+    async def _enforce_execution_policy(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        tool: Any,
+        local_tool_name: str,
+        global_tool_id: str,
+        provider_peer_id: str,
+    ) -> ToolingExecuteToolResponse | None:
+        """Return a denial response when execution policy blocks the request."""
+
+        safety_class = self._tool_safety_class(tool)
+        remote_context = bool(request.caller_peer_id or request.mesh_selector)
+
+        if not remote_context:
+            return None
+
+        if safety_class in {"sensitive", "dangerous"} and not self._request_has_resource_selector(
+            request
+        ):
+            return await self._deny_tool_execution(
+                request,
+                local_tool_name=local_tool_name,
+                global_tool_id=global_tool_id,
+                provider_peer_id=provider_peer_id,
+                safety_class=safety_class,
+                error_code="resource_selector_required",
+                message=(
+                    f"Remote {safety_class} tool '{local_tool_name}' requires an "
+                    "explicit resource selector"
+                ),
+            )
+
+        if self._tool_requires_confirmation(tool, safety_class) and not (
+            request.confirmed or request.dry_run
+        ):
+            return await self._deny_tool_execution(
+                request,
+                local_tool_name=local_tool_name,
+                global_tool_id=global_tool_id,
+                provider_peer_id=provider_peer_id,
+                safety_class=safety_class,
+                error_code="confirmation_required",
+                message=f"Remote tool '{local_tool_name}' requires confirmation",
+            )
+
+        return None
 
     def _resolve_tool_name(self, request: ToolingExecuteToolRequest) -> str:
         """Resolve discovery IDs or namespaced names back to provider-local names."""
@@ -586,6 +794,7 @@ class ToolingService(BaseService):
         output_model=ToolingExecuteToolResponse,
         exposure="both",
         method_type="use",
+        required_perms=[ToolingMethods.EXECUTE_TOOL],
     )
     async def _on_execute_tool(
         self, request: ToolingExecuteToolRequest
@@ -596,10 +805,16 @@ class ToolingService(BaseService):
             request: Request containing tool name and arguments
         """
         try:
+            if not request.correlation_id:
+                request.correlation_id = uuid.uuid4().hex
             log_debug(f"Executing tool: {request.tool_name} with args: {request.arguments}")
 
             # Get the tool
             local_tool_name = self._resolve_tool_name(request)
+            provider_peer_id, service_instance_id, _, _ = self._provider_context(request)
+            global_tool_id = self._global_tool_id(
+                provider_peer_id, service_instance_id, local_tool_name
+            )
             tool = self.tools_manager.get_tool_by_name(local_tool_name)
             if not tool:
                 # Try to find similar tool names (case-insensitive, partial match)
@@ -624,8 +839,61 @@ class ToolingService(BaseService):
 
                 log_error(error_msg)
                 log_debug(f"Tool lookup contains: {list(self.tools_manager.tool_lookup.keys())}")
+                await self._audit_tool_execution(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    safety_class="unknown",
+                    status="not_found",
+                    error_code="tool_not_found",
+                    denial_reason=error_msg,
+                )
 
-                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
+                return ToolingExecuteToolResponse(
+                    ok=False,
+                    error=error_msg,
+                    data=None,
+                    status="not_found",
+                    error_code="tool_not_found",
+                    correlation_id=request.correlation_id,
+                    provider_peer_id=provider_peer_id,
+                    global_tool_id=global_tool_id,
+                )
+
+            denied = await self._enforce_execution_policy(
+                request,
+                tool=tool,
+                local_tool_name=local_tool_name,
+                global_tool_id=global_tool_id,
+                provider_peer_id=provider_peer_id,
+            )
+            if denied:
+                return denied
+
+            safety_class = self._tool_safety_class(tool)
+            if request.dry_run:
+                await self._audit_tool_execution(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    safety_class=safety_class,
+                    status="dry_run",
+                )
+                return ToolingExecuteToolResponse(
+                    ok=True,
+                    data={
+                        "dry_run": True,
+                        "tool_name": local_tool_name,
+                        "global_tool_id": global_tool_id,
+                    },
+                    error=None,
+                    status="dry_run",
+                    correlation_id=request.correlation_id,
+                    provider_peer_id=provider_peer_id,
+                    global_tool_id=global_tool_id,
+                )
 
             # Execute the tool
             try:
@@ -641,15 +909,57 @@ class ToolingService(BaseService):
                     else tool.invoke(tool_args)
                 )
                 log_debug(f"Tool {local_tool_name} executed successfully: {result}")
+                await self._audit_tool_execution(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    safety_class=safety_class,
+                    status="success",
+                )
 
                 # Return response
-                return ToolingExecuteToolResponse(ok=True, data=result, error=None)
+                return ToolingExecuteToolResponse(
+                    ok=True,
+                    data=result,
+                    error=None,
+                    status="success",
+                    correlation_id=request.correlation_id,
+                    provider_peer_id=provider_peer_id,
+                    global_tool_id=global_tool_id,
+                )
 
             except Exception as tool_error:
                 error_msg = f"Tool execution failed: {str(tool_error)}"
                 log_error(error_msg, exc_info=True)
-                return ToolingExecuteToolResponse(ok=False, error=error_msg, data=None)
+                await self._audit_tool_execution(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    safety_class=safety_class,
+                    status="failed",
+                    error_code="tool_execution_failed",
+                    denial_reason=error_msg,
+                )
+                return ToolingExecuteToolResponse(
+                    ok=False,
+                    error=error_msg,
+                    data=None,
+                    status="failed",
+                    error_code="tool_execution_failed",
+                    correlation_id=request.correlation_id,
+                    provider_peer_id=provider_peer_id,
+                    global_tool_id=global_tool_id,
+                )
 
         except Exception as e:
             log_error(f"Error handling execute tool command: {e}", exc_info=True)
-            return ToolingExecuteToolResponse(ok=False, error=str(e), data=None)
+            return ToolingExecuteToolResponse(
+                ok=False,
+                error=str(e),
+                data=None,
+                status="failed",
+                error_code="tooling_internal_error",
+                correlation_id=request.correlation_id,
+            )

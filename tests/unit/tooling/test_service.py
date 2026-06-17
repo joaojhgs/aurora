@@ -1,11 +1,13 @@
 """Unit tests for ToolingService."""
 
+import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from app.messaging import Envelope, MessageBus
 from app.services.tooling.service import ToolingService
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.messaging.models.tooling_models import (
@@ -321,6 +323,117 @@ class TestToolingServiceToolExecution:
         assert response is not None
         assert isinstance(response, ToolingExecuteToolResponse)
         assert response.ok is True
+        assert response.status == "success"
+
+    @pytest.mark.asyncio
+    async def test_remote_dangerous_tool_requires_resource_before_invocation(
+        self, tooling_service, mock_bus
+    ):
+        """Remote dangerous tools are denied before invocation without a resource."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.safety_class = "dangerous"
+        mock_tool.confirmation_required = False
+        mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
+
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            confirmed=True,
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+            correlation_id="rpc-123",
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is False
+        assert response.status == "denied"
+        assert response.error_code == "resource_selector_required"
+        mock_tool.ainvoke.assert_not_called()
+        assert mock_bus.request.await_args.args[0] == AuthMethods.STORE_AUDIT_EVENT
+        audit_request = mock_bus.request.await_args.args[1]
+        details = json.loads(audit_request.details)
+        assert details["caller_peer_id"] == "workstation"
+        assert details["caller_principal_id"] == "peer-principal"
+        assert details["target_peer_id"] == "raspi-lab"
+        assert details["status"] == "denied"
+        assert details["error_code"] == "resource_selector_required"
+
+    @pytest.mark.asyncio
+    async def test_remote_sensitive_tool_dry_run_audits_without_invocation(
+        self, tooling_service, mock_bus
+    ):
+        """Dry-run remote execution records intent without invoking the tool."""
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingResourceSelector,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.safety_class = "sensitive"
+        mock_tool.confirmation_required = True
+        mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
+
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+            dry_run=True,
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is True
+        assert response.status == "dry_run"
+        assert response.data["dry_run"] is True
+        mock_tool.ainvoke.assert_not_called()
+        audit_request = mock_bus.request.await_args.args[1]
+        details = json.loads(audit_request.details)
+        assert details["status"] == "dry_run"
+        assert details["resource_selector"]["hardware_target"] == "lamp"
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_audit_redacts_argument_values(self, tooling_service, mock_bus):
+        """Audit records carry argument hashes without raw secret values."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.ainvoke = AsyncMock(return_value="ok")
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["test_tool"])
+
+        request = ToolingExecuteToolRequest(
+            tool_name="test_tool",
+            arguments={"input": "hello", "api_key": "super-secret"},
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is True
+        audit_request = mock_bus.request.await_args.args[1]
+        details_text = audit_request.details
+        details = json.loads(details_text)
+        assert "super-secret" not in details_text
+        assert details["argument_hash"]
+        assert details["status"] == "success"
 
     @pytest.mark.asyncio
     async def test_execute_tool_accepts_remote_namespaced_discovery_name(
