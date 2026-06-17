@@ -433,50 +433,6 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
         return self
 
 
-class _ServicesAuthMeshSharingConfigPath(ConfigPath):
-    allowed_peers: ConfigPath
-    fallback: ConfigPath
-    max_concurrent: ConfigPath
-    min_version: ConfigPath
-    prefer: ConfigPath
-    required_capabilities: ConfigPath
-    share: ConfigPath
-
-    def __new__(cls) -> _ServicesAuthMeshSharingConfigPath:
-        self = super().__new__(cls, "services.auth.mesh_sharing")
-        self.allowed_peers = ConfigPath("services.auth.mesh_sharing.allowed_peers")
-        self.fallback = ConfigPath("services.auth.mesh_sharing.fallback")
-        self.max_concurrent = ConfigPath("services.auth.mesh_sharing.max_concurrent")
-        self.min_version = ConfigPath("services.auth.mesh_sharing.min_version")
-        self.prefer = ConfigPath("services.auth.mesh_sharing.prefer")
-        self.required_capabilities = ConfigPath("services.auth.mesh_sharing.required_capabilities")
-        self.share = ConfigPath("services.auth.mesh_sharing.share")
-        return self
-
-
-class _ServicesConfigMeshSharingConfigPath(ConfigPath):
-    allowed_peers: ConfigPath
-    fallback: ConfigPath
-    max_concurrent: ConfigPath
-    min_version: ConfigPath
-    prefer: ConfigPath
-    required_capabilities: ConfigPath
-    share: ConfigPath
-
-    def __new__(cls) -> _ServicesConfigMeshSharingConfigPath:
-        self = super().__new__(cls, "services.config.mesh_sharing")
-        self.allowed_peers = ConfigPath("services.config.mesh_sharing.allowed_peers")
-        self.fallback = ConfigPath("services.config.mesh_sharing.fallback")
-        self.max_concurrent = ConfigPath("services.config.mesh_sharing.max_concurrent")
-        self.min_version = ConfigPath("services.config.mesh_sharing.min_version")
-        self.prefer = ConfigPath("services.config.mesh_sharing.prefer")
-        self.required_capabilities = ConfigPath(
-            "services.config.mesh_sharing.required_capabilities"
-        )
-        self.share = ConfigPath("services.config.mesh_sharing.share")
-        return self
-
-
 class _ServicesDbEmbeddingsConfigPath(ConfigPath):
     use_local: ConfigPath
 
@@ -802,7 +758,6 @@ class _ServicesAuthConfigPath(ConfigPath):
     audit_retention_days: ConfigPath
     default_pairing_permissions: ConfigPath
     enabled: ConfigPath
-    mesh_sharing: _ServicesAuthMeshSharingConfigPath
     pairing_code_expiry_minutes: ConfigPath
     pairing_max_attempts_per_ip: ConfigPath
     session_token_expiry_hours: ConfigPath
@@ -817,7 +772,6 @@ class _ServicesAuthConfigPath(ConfigPath):
         self.audit_retention_days = ConfigPath("services.auth.audit_retention_days")
         self.default_pairing_permissions = ConfigPath("services.auth.default_pairing_permissions")
         self.enabled = ConfigPath("services.auth.enabled")
-        self.mesh_sharing = _ServicesAuthMeshSharingConfigPath()
         self.pairing_code_expiry_minutes = ConfigPath("services.auth.pairing_code_expiry_minutes")
         self.pairing_max_attempts_per_ip = ConfigPath("services.auth.pairing_max_attempts_per_ip")
         self.session_token_expiry_hours = ConfigPath("services.auth.session_token_expiry_hours")
@@ -831,12 +785,10 @@ class _ServicesAuthConfigPath(ConfigPath):
 
 class _ServicesConfigConfigPath(ConfigPath):
     enabled: ConfigPath
-    mesh_sharing: _ServicesConfigMeshSharingConfigPath
 
     def __new__(cls) -> _ServicesConfigConfigPath:
         self = super().__new__(cls, "services.config")
         self.enabled = ConfigPath("services.config.enabled")
-        self.mesh_sharing = _ServicesConfigMeshSharingConfigPath()
         return self
 
 

@@ -174,6 +174,29 @@ can use stable peer IDs while DataChannel sends still target the live session.
 
 ---
 
+## Auth and Config Mesh Exposure Boundaries
+
+Auth and Config are not ordinary transparent mesh providers. Gateway does not wire
+`services.auth` or `services.config` into `gateway.mesh.services`, and the config
+schema intentionally does not expose `services.auth.mesh_sharing` or
+`services.config.mesh_sharing`.
+
+Exposure categories:
+
+| Category | Methods / data | Mesh behavior |
+|----------|----------------|---------------|
+| Pairing/login infrastructure | `Auth.PairingStart`, `Auth.PairingConnect`, `Auth.PairingExchange`, `Auth.Login` | Allowed through the WebRTC RPC infrastructure bypass so unauthenticated peers can pair or authenticate. |
+| Local peer administration | Auth mesh peer list/get/approve/deny/update/remove contracts | Local admin surface with normal permissions; not advertised as a shareable mesh provider by default. |
+| Broad Auth administration | Principals, tokens, permissions, devices, audit log, password changes | Not transparently routed by default. |
+| Config diagnostics and mutation | Config get/validate/plugin reads, Config set/plugin writes | Not transparently routed by default. |
+| Secrets and credentials | API keys, token hashes, inbound mesh tokens, raw credential material | Never shared as mesh data or ordinary RPC payloads. |
+
+If a future remote-admin policy intentionally exposes any Auth or Config surface,
+it must be explicit, peer-scoped, permission-checked, and audited. A generic
+service-sharing toggle is not enough to make Auth or Config safe to route.
+
+---
+
 ## Pairing Flow (Step-by-Step)
 
 The pairing process is a **4-phase handshake** between the new device, the Gateway, and an admin user.
