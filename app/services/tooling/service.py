@@ -306,6 +306,44 @@ class ToolingService(BaseService):
         serialized = json.dumps(redacted, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
+    @classmethod
+    def _execution_log_context(
+        cls,
+        request: ToolingExecuteToolRequest,
+        *,
+        local_tool_name: str | None = None,
+        global_tool_id: str | None = None,
+        provider_peer_id: str | None = None,
+        status: str,
+        error_code: str | None = None,
+        error_type: str | None = None,
+        result_present: bool | None = None,
+    ) -> dict[str, Any]:
+        """Build privacy-preserving Tooling execution log fields."""
+
+        sensitive_key_count = sum(
+            1
+            for key in request.arguments
+            if any(secret_key in str(key).lower() for secret_key in _ARG_REDACT_KEYS)
+        )
+        return {
+            "tool_name": request.tool_name,
+            "local_tool_name": local_tool_name,
+            "global_tool_id": global_tool_id,
+            "provider_peer_id": provider_peer_id,
+            "target_peer_id": cls._selector_target_peer(request) or provider_peer_id,
+            "caller_peer_id": request.caller_peer_id,
+            "caller_principal_id": request.caller_principal_id,
+            "correlation_id": request.correlation_id,
+            "status": status,
+            "argument_hash": cls._arguments_fingerprint(request.arguments),
+            "argument_count": len(request.arguments),
+            "sensitive_argument_key_count": sensitive_key_count,
+            "error_code": error_code,
+            "error_type": error_type,
+            "result_present": result_present,
+        }
+
     @staticmethod
     def _selector_target_peer(request: ToolingExecuteToolRequest) -> str | None:
         selector = request.mesh_selector
@@ -407,6 +445,15 @@ class ToolingService(BaseService):
         error_code: str,
         message: str,
     ) -> ToolingExecuteToolResponse:
+        log_context = self._execution_log_context(
+            request,
+            local_tool_name=local_tool_name,
+            global_tool_id=global_tool_id,
+            provider_peer_id=provider_peer_id,
+            status="denied",
+            error_code=error_code,
+        )
+        log_debug(f"Tool execution denied: {log_context}")
         await self._audit_tool_execution(
             request,
             local_tool_name=local_tool_name,
@@ -807,7 +854,6 @@ class ToolingService(BaseService):
         try:
             if not request.correlation_id:
                 request.correlation_id = uuid.uuid4().hex
-            log_debug(f"Executing tool: {request.tool_name} with args: {request.arguments}")
 
             # Get the tool
             local_tool_name = self._resolve_tool_name(request)
@@ -815,6 +861,14 @@ class ToolingService(BaseService):
             global_tool_id = self._global_tool_id(
                 provider_peer_id, service_instance_id, local_tool_name
             )
+            log_context = self._execution_log_context(
+                request,
+                local_tool_name=local_tool_name,
+                global_tool_id=global_tool_id,
+                provider_peer_id=provider_peer_id,
+                status="requested",
+            )
+            log_debug(f"Tool execution requested: {log_context}")
             tool = self.tools_manager.get_tool_by_name(local_tool_name)
             if not tool:
                 # Try to find similar tool names (case-insensitive, partial match)
@@ -908,7 +962,15 @@ class ToolingService(BaseService):
                     if hasattr(tool, "ainvoke")
                     else tool.invoke(tool_args)
                 )
-                log_debug(f"Tool {local_tool_name} executed successfully: {result}")
+                log_context = self._execution_log_context(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    status="success",
+                    result_present=result is not None,
+                )
+                log_debug(f"Tool execution completed: {log_context}")
                 await self._audit_tool_execution(
                     request,
                     local_tool_name=local_tool_name,
@@ -930,8 +992,18 @@ class ToolingService(BaseService):
                 )
 
             except Exception as tool_error:
-                error_msg = f"Tool execution failed: {str(tool_error)}"
-                log_error(error_msg, exc_info=True)
+                error_type = type(tool_error).__name__
+                error_msg = f"Tool execution failed: {error_type}"
+                log_context = self._execution_log_context(
+                    request,
+                    local_tool_name=local_tool_name,
+                    global_tool_id=global_tool_id,
+                    provider_peer_id=provider_peer_id,
+                    status="failed",
+                    error_code="tool_execution_failed",
+                    error_type=error_type,
+                )
+                log_error(f"Tool execution failed: {log_context}")
                 await self._audit_tool_execution(
                     request,
                     local_tool_name=local_tool_name,
