@@ -26,9 +26,8 @@ from app.shared.config.models import (
     ThirdParty,
 )
 from app.shared.contracts.models.db import DBMethods
-from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tooling import ToolingGetToolsRequest, ToolingMethods
 from app.shared.messaging.models.db_models import RAGSearchQuery
-from app.shared.messaging.models.tooling_models import GetToolsQuery
 
 config_api = ConfigAPI()
 
@@ -479,7 +478,7 @@ async def chatbot(state: State, bus: MessageBus):
     # Request tools from ToolingService via bus
     result = await bus.request(
         ToolingMethods.GET_TOOLS,
-        GetToolsQuery(query=state["messages"][-1].content, top_k=10),
+        ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
         timeout=5.0,
         priority=get_interactive_priority(),
     )

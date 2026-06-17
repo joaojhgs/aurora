@@ -6,12 +6,9 @@ import pytest
 
 from app.messaging import Envelope, MessageBus
 from app.services.tooling.service import ToolingService
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.messaging.models.tooling_models import (
-    ExecuteToolCommand,
-    GetToolByNameQuery,
-    GetToolsQuery,
-    GetToolStatsQuery,
     ToolsInitialized,
 )
 
@@ -38,6 +35,7 @@ def tooling_service(mock_bus):
         mock_manager.get_stats = Mock(return_value={"total_tools": 5, "mcp_tools_loaded": False})
         mock_manager.get_tools = Mock(return_value=[])
         mock_manager.get_tool_by_name = Mock(return_value=None)
+        mock_manager.get_all_tool_names = Mock(return_value=[])
         mock_tools_mgr.return_value = mock_manager
 
         service = ToolingService()
@@ -126,6 +124,86 @@ class TestToolingServiceQueries:
         # Verify response was returned (contract methods return directly now)
         assert response is not None
         assert hasattr(response, "tools")
+
+    @pytest.mark.asyncio
+    async def test_get_tools_preserves_local_tool_name_with_metadata(self, tooling_service):
+        """Test local discovery remains backward compatible while adding metadata."""
+        from langchain_core.tools import tool
+
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest, ToolingToolInfo
+
+        @tool
+        def test_tool(input: str):
+            """Test tool."""
+            return input
+
+        tooling_service.tools_manager.get_tools = Mock(return_value=[test_tool])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query=None, top_k=10)
+        )
+
+        assert response.count == 1
+        tool_info = response.tools[0]
+        assert isinstance(tool_info, ToolingToolInfo)
+        assert tool_info.name == "test_tool"
+        assert tool_info.local_name == "test_tool"
+        assert tool_info.provider_peer_id == "local"
+        assert tool_info.source_type == "local"
+        assert tool_info.execution_location == "local"
+        assert tool_info.global_tool_id == "local:local_Tooling:tool:test_tool"
+        assert tool_info.provenance.advertised_name == "test_tool"
+        assert "input" in tool_info.args_schema["properties"]
+
+    @pytest.mark.asyncio
+    async def test_get_tools_namespaces_remote_provider_collisions(self, tooling_service):
+        """Test remote providers with colliding local tool names get distinct IDs."""
+        from langchain_core.tools import tool
+
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        @tool
+        def switch_on(target: str):
+            """Switch on a target."""
+            return target
+
+        tooling_service.tools_manager.get_tools = Mock(return_value=[switch_on])
+
+        lab_response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(
+                query=None,
+                top_k=10,
+                mesh_selector=MeshAddressSelector(
+                    peer_id="raspi-lab",
+                    service_instance_id="remote:raspi-lab:Tooling",
+                ),
+            )
+        )
+        workstation_response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(
+                query=None,
+                top_k=10,
+                mesh_selector=MeshAddressSelector(
+                    peer_id="workstation",
+                    service_instance_id="remote:workstation:Tooling",
+                ),
+            )
+        )
+
+        lab_tool = lab_response.tools[0]
+        workstation_tool = workstation_response.tools[0]
+
+        assert lab_tool.local_name == workstation_tool.local_name == "switch_on"
+        assert lab_tool.name == "raspi-lab_switch_on"
+        assert workstation_tool.name == "workstation_switch_on"
+        assert lab_tool.name != workstation_tool.name
+        assert lab_tool.display_name == "raspi-lab.switch_on"
+        assert workstation_tool.display_name == "workstation.switch_on"
+        assert lab_tool.global_tool_id != workstation_tool.global_tool_id
+        assert lab_tool.provider_peer_id == "raspi-lab"
+        assert workstation_tool.provider_peer_id == "workstation"
+        assert lab_tool.source_type == "mesh_peer"
+        assert lab_tool.execution_location == "remote"
 
     @pytest.mark.asyncio
     async def test_get_tools_with_query(self, tooling_service, mock_bus):
@@ -232,6 +310,7 @@ class TestToolingServiceToolExecution:
         mock_tool.ainvoke = AsyncMock(return_value="Result: test")
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["test_tool"])
 
         # Contract methods receive the request model directly
         request = ToolingExecuteToolRequest(tool_name="test_tool", arguments={"input": "test"})
@@ -242,6 +321,58 @@ class TestToolingServiceToolExecution:
         assert response is not None
         assert isinstance(response, ToolingExecuteToolResponse)
         assert response.ok is True
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_accepts_remote_namespaced_discovery_name(
+        self, tooling_service, mock_bus
+    ):
+        """Test namespaced discovery names resolve to provider-local tool names."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_tool = Mock()
+        mock_tool.ainvoke = AsyncMock(return_value="ok")
+
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="raspi-lab_switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(
+                peer_id="raspi-lab",
+                service_instance_id="remote:raspi-lab:Tooling",
+            ),
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is True
+        tooling_service.tools_manager.get_tool_by_name.assert_called_once_with("switch_on")
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_accepts_global_tool_id(self, tooling_service, mock_bus):
+        """Test stable global tool IDs resolve to provider-local tool names."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_tool = Mock()
+        mock_tool.ainvoke = AsyncMock(return_value="ok")
+
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(
+                peer_id="raspi-lab",
+                service_instance_id="remote:raspi-lab:Tooling",
+            ),
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is True
+        tooling_service.tools_manager.get_tool_by_name.assert_called_once_with("switch_on")
 
     @pytest.mark.asyncio
     async def test_execute_tool_not_found(self, tooling_service, mock_bus):

@@ -404,6 +404,38 @@ Tool management and execution.
 | `Tooling.ReloadMCP` | Reload MCP tools | `ToolingReloadMCPRequest` | `EmptyOutput` | **internal** |
 | `Tooling.ExecuteTool` | Execute a tool | `ToolingExecuteToolRequest` | `ToolingExecuteToolResponse` | **both** |
 
+### Method Details
+
+#### `Tooling.GetTools` (Both)
+**Purpose**: Return bindable tool schemas with stable local/mesh identity metadata.
+
+```python
+# Output item
+ToolingToolInfo(
+    name="raspi-lab_switch_on",                 # Bindable, collision-safe name
+    local_name="switch_on",                     # Provider-local tool name
+    global_tool_id="raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+    provider_peer_id="raspi-lab",
+    provider_service_instance_id="remote:raspi-lab:Tooling",
+    namespace="raspi-lab",
+    display_name="raspi-lab.switch_on",         # Human-facing name
+    aliases=["switch_on"],
+    description="Switch on a target.",
+    args_schema={"type": "object", "properties": {...}},
+    source_type="mesh_peer",                    # "local" | "mesh_peer"
+    execution_location="remote",                # "local" | "remote"
+    safety_class="standard",
+    required_permissions=["Tooling.ExecuteTool"],
+    confirmation_required=False,
+    provenance={...},
+)
+```
+
+Local-only discovery remains backward compatible: `name` is still the local
+tool name. Provider-selected mesh discovery namespaces `name`, for example
+`raspi-lab_switch_on` and `workstation_switch_on`, while `display_name` keeps
+the user-facing `raspi-lab.switch_on` / `workstation.switch_on` form.
+
 ---
 
 ## Config Service
