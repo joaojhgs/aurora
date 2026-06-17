@@ -1,19 +1,24 @@
 """Unit tests for RAGService."""
 
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
 from app.services.db.rag_service import (
+    RAG_SYNC_METADATA_KEY,
     CombinedSQLiteVecStore,
     RAGService,
     SQLiteVecStore,
     async_get_embeddings,
     check_and_update_embedding_model,
     get_embedding_model_signature,
+    make_rag_tombstone,
+    normalize_rag_namespace,
 )
+from app.shared.contracts.models.db import DBRAGReplicatedItem
 
 
 @pytest.fixture
@@ -54,30 +59,40 @@ class TestRAGServiceCore:
         signature = get_embedding_model_signature(model_info)
         assert signature == "openai:text-embedding-3-small:openai"
 
+    def test_normalize_namespace_supports_legacy_pipe_separator(self):
+        """Test RAG namespace normalization for existing callers."""
+        assert normalize_rag_namespace("main|memories") == ("main", "memories")
+        assert normalize_rag_namespace("main.memories") == ("main", "memories")
+
     @patch("app.services.db.rag_service.config_api")
     @pytest.mark.asyncio
     async def test_get_embeddings_local(self, mock_config):
         """Test getting local embeddings."""
-        mock_config.aget = AsyncMock(return_value={"embeddings": {"use_local": True}})
+        mock_config.aget = AsyncMock(
+            return_value=types.SimpleNamespace(embeddings=types.SimpleNamespace(use_local=True))
+        )
+        mock_emb = MagicMock()
+        mock_hf_module = types.SimpleNamespace(HuggingFaceEmbeddings=Mock(return_value=mock_emb))
 
         with (
             patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
-            patch("langchain_huggingface.HuggingFaceEmbeddings") as mock_hf,
+            patch.dict("sys.modules", {"langchain_huggingface": mock_hf_module}),
         ):
-            mock_emb = MagicMock()
-            mock_hf.return_value = mock_emb
-
             embeddings, model_info = await async_get_embeddings()
 
             assert model_info["type"] == "huggingface"
             assert model_info["model_name"] == "all-MiniLM-L6-v2"
-            mock_hf.assert_called_once_with(model_name="all-MiniLM-L6-v2")
+            mock_hf_module.HuggingFaceEmbeddings.assert_called_once_with(
+                model_name="all-MiniLM-L6-v2"
+            )
 
     @patch("app.services.db.rag_service.config_api")
     @pytest.mark.asyncio
     async def test_get_embeddings_openai(self, mock_config):
         """Test getting OpenAI embeddings."""
-        mock_config.aget = AsyncMock(return_value={"embeddings": {"use_local": False}})
+        mock_config.aget = AsyncMock(
+            return_value=types.SimpleNamespace(embeddings=types.SimpleNamespace(use_local=False))
+        )
 
         with (
             patch("app.services.db.rag_service._async_wait_for_config_service", return_value=True),
@@ -328,3 +343,190 @@ class TestEmbeddingModelManagement:
             result = check_and_update_embedding_model(mock_store, model_info, embeddings=mock_emb)
 
             assert result is True  # Re-embedding was performed
+
+
+class TestRAGReplication:
+    """Test namespace-scoped RAG replication semantics."""
+
+    def test_last_writer_wins_conflict_resolution(self):
+        """Newer replicated items win; older items are skipped."""
+        local = DBRAGReplicatedItem(
+            namespace="main.memories",
+            key="k1",
+            value={"text": "local"},
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            created_at="2026-06-17T10:00:00Z",
+            updated_at="2026-06-17T10:10:00Z",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+        incoming = DBRAGReplicatedItem(
+            namespace="main.memories",
+            key="k1",
+            value={"text": "remote"},
+            source_peer_id="peer-b",
+            owner_peer_id="peer-a",
+            created_at="2026-06-17T10:00:00Z",
+            updated_at="2026-06-17T10:11:00Z",
+            policy_decision_id="policy-2",
+            correlation_id="corr-2",
+            sync_operation_id="sync-2",
+        )
+
+        winner = RAGService.resolve_replication_conflict(
+            local=local, incoming=incoming, conflict_mode="last_writer_wins"
+        )
+
+        assert winner is incoming
+
+    def test_reject_on_conflict_preserves_local_item(self):
+        """Strict conflict mode inserts only missing records."""
+        local = DBRAGReplicatedItem(
+            namespace="main.memories",
+            key="k1",
+            value={"text": "local"},
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            created_at="2026-06-17T10:00:00Z",
+            updated_at="2026-06-17T10:10:00Z",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+        incoming = local.model_copy(update={"source_peer_id": "peer-b"})
+
+        winner = RAGService.resolve_replication_conflict(
+            local=local, incoming=incoming, conflict_mode="reject_on_conflict"
+        )
+
+        assert winner is None
+
+    def test_make_rag_tombstone_represents_delete_semantics(self):
+        """Tombstones carry delete provenance instead of raw table deletes."""
+        tombstone = make_rag_tombstone(
+            namespace="main.memories",
+            key="forgotten",
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            origin_principal_id="user-1",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+            deleted_by="user-1",
+            reason="forget_request",
+        )
+
+        assert tombstone.tombstone is not None
+        assert tombstone.value is None
+        assert tombstone.tombstone.reason == "forget_request"
+
+    def test_import_namespace_stores_tombstone_with_metadata(self):
+        """Importing a tombstone preserves provenance in stored value metadata."""
+        service = RAGService()
+        service._initialized = True
+        mock_store = MagicMock()
+        mock_store.get.return_value = None
+        service._combined_store = mock_store
+        tombstone = make_rag_tombstone(
+            namespace="main.memories",
+            key="forgotten",
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            origin_principal_id="user-1",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+            deleted_by="user-1",
+        )
+
+        response = service.import_namespace(namespace="main.memories", items=[tombstone])
+
+        assert response.tombstoned == 1
+        stored_value = mock_store.put.call_args.args[2]
+        assert stored_value[RAG_SYNC_METADATA_KEY]["tombstone"]["deleted_by"] == "user-1"
+
+    def test_export_namespace_skips_sensitive_values(self):
+        """Export refuses obvious credential-bearing memory values."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        service = RAGService()
+        service._initialized = True
+        mock_store = MagicMock()
+        mock_store.retrieve_items.return_value = [
+            Item(
+                value={"text": "ok"},
+                key="safe",
+                namespace=("main", "memories"),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            ),
+            Item(
+                value={"text": "bad", "token": "secret"},
+                key="unsafe",
+                namespace=("main", "memories"),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            ),
+        ]
+        service._combined_store = mock_store
+
+        snapshot = service.export_namespace(
+            namespace="main.memories",
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            origin_principal_id="user-1",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+
+        assert [item.key for item in snapshot] == ["safe"]
+        assert snapshot[0].source_peer_id == "peer-a"
+
+    def test_mocked_two_peer_export_import_flow(self):
+        """A peer can export a namespace snapshot that another peer imports."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        source = RAGService()
+        source._initialized = True
+        source_store = MagicMock()
+        source_store.retrieve_items.return_value = [
+            Item(
+                value={"text": "portable memory"},
+                key="memory-1",
+                namespace=("main", "memories"),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            )
+        ]
+        source._combined_store = source_store
+
+        snapshot = source.export_namespace(
+            namespace="main.memories",
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            origin_principal_id="user-1",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+
+        target = RAGService()
+        target._initialized = True
+        target_store = MagicMock()
+        target_store.get.return_value = None
+        target._combined_store = target_store
+
+        response = target.import_namespace(namespace="main.memories", items=snapshot)
+
+        assert response.imported == 1
+        target_store.put.assert_called_once()
+        stored_value = target_store.put.call_args.args[2]
+        assert stored_value["text"] == "portable memory"
+        assert stored_value[RAG_SYNC_METADATA_KEY]["source_peer_id"] == "peer-a"

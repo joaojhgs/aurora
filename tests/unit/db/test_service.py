@@ -296,3 +296,80 @@ class TestDBServiceRAGOperations:
         # Verify response
         assert isinstance(response, DBRAGListResponse)
         assert len(response.items) == 1
+
+    @pytest.mark.asyncio
+    async def test_rag_export_namespace(self, db_service):
+        """Test RAG namespace export contract method."""
+        from app.shared.contracts.models.db import (
+            DBRAGExportNamespaceRequest,
+            DBRAGReplicatedItem,
+            DBRAGSnapshotResponse,
+        )
+
+        replicated_item = DBRAGReplicatedItem(
+            namespace="main.memories",
+            key="memory-1",
+            value={"text": "Test memory"},
+            source_peer_id="peer-a",
+            owner_peer_id="peer-a",
+            created_at="2026-06-17T10:00:00Z",
+            updated_at="2026-06-17T10:00:00Z",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+        db_service.rag_service.export_namespace = Mock(return_value=[replicated_item])
+
+        response = await db_service.rag_export_namespace(
+            DBRAGExportNamespaceRequest(
+                namespace="main.memories",
+                source_peer_id="peer-a",
+                owner_peer_id="peer-a",
+                policy_decision_id="policy-1",
+                correlation_id="corr-1",
+                sync_operation_id="sync-1",
+            )
+        )
+
+        assert isinstance(response, DBRAGSnapshotResponse)
+        assert response.items[0].key == "memory-1"
+        db_service.rag_service.export_namespace.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rag_import_namespace(self, db_service):
+        """Test RAG namespace import contract method."""
+        from app.shared.contracts.models.db import (
+            DBRAGImportNamespaceRequest,
+            DBRAGImportNamespaceResponse,
+            DBRAGReplicatedItem,
+        )
+
+        replicated_item = DBRAGReplicatedItem(
+            namespace="main.memories",
+            key="memory-1",
+            value={"text": "Remote memory"},
+            source_peer_id="peer-b",
+            owner_peer_id="peer-b",
+            created_at="2026-06-17T10:00:00Z",
+            updated_at="2026-06-17T10:00:00Z",
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            sync_operation_id="sync-1",
+        )
+        db_service.rag_service.import_namespace = Mock(
+            return_value=DBRAGImportNamespaceResponse(imported=1)
+        )
+
+        response = await db_service.rag_import_namespace(
+            DBRAGImportNamespaceRequest(
+                namespace="main.memories",
+                importing_peer_id="peer-a",
+                policy_decision_id="policy-1",
+                correlation_id="corr-1",
+                sync_operation_id="sync-1",
+                items=[replicated_item],
+            )
+        )
+
+        assert response.imported == 1
+        db_service.rag_service.import_namespace.assert_called_once()
