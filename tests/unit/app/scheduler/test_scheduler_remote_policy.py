@@ -175,4 +175,5 @@ async def test_fire_job_emits_delegated_context_on_events():
     assert fired_event.delegated_permissions == ["Tooling.ExecuteTool"]
     assert fired_event.policy_decision_id == "policy-1"
     assert completed_topic == SchedulerMethods.JOB_COMPLETED
+    assert completed_event.delegated_permissions == ["Tooling.ExecuteTool"]
     assert completed_event.correlation_id == "corr-1"

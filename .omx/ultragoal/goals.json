@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-16T13:46:59.355Z",
-  "updatedAt": "2026-06-17T20:53:08.745Z",
+  "updatedAt": "2026-06-17T21:04:02.939Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -319,7 +319,19 @@
       "evidence": "PER-143 implemented namespace-aware remote Scheduler delegation policy; commit 0a93cbd; verification: ruff scheduler files passed, scheduler unit suite 15 passed, scheduler integration suite 6 passed, git diff --check clean.",
       "startedAt": "2026-06-17T20:41:06.504Z",
       "completedAt": "2026-06-17T20:53:08.745Z"
+    },
+    {
+      "id": "G029-per-143-qa-provenance-fix",
+      "title": "PER-143 QA provenance fix",
+      "objective": "Address QA rejection for PER-143 by injecting trusted WebRTC caller provenance into Scheduler schedule/list/cancel RPC requests, preserving delegated permissions on completed events, adding regression coverage, verifying, pushing PR #41, and handing back to QA.",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-06-17T21:03:55.220Z",
+      "updatedAt": "2026-06-17T21:04:02.939Z",
+      "evidence": "QA rejection ea2b4bdb-dbe0-42c2-b298-9549be6c2143 identified spoofable Scheduler caller provenance at app/services/gateway/webrtc/rpc.py and missing delegated_permissions on SchedulerJobCompletedEvent.",
+      "startedAt": "2026-06-17T21:04:02.939Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "activeGoalId": "G029-per-143-qa-provenance-fix"
 }

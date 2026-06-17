@@ -7,6 +7,12 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.scheduler import (
+    SchedulerCancelJobRequest,
+    SchedulerListJobsRequest,
+    SchedulerMethods,
+    SchedulerScheduleJobRequest,
+)
 from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
 
 
@@ -163,6 +169,92 @@ async def test_handle_tooling_execute_injects_trusted_remote_provenance(
     assert typed_request.caller_peer_id == "remote-peer"
     assert typed_request.caller_principal_id == "peer-user"
     assert typed_request.correlation_id == "rpc-123"
+
+
+@pytest.mark.parametrize(
+    ("topic", "method_name", "input_model", "params"),
+    [
+        (
+            SchedulerMethods.SCHEDULE,
+            "Schedule",
+            SchedulerScheduleJobRequest,
+            {
+                "name": "spoof schedule",
+                "action": "noop",
+                "schedule": "* * * * *",
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+                "correlation_id": "spoofed-correlation",
+            },
+        ),
+        (
+            SchedulerMethods.CANCEL,
+            "Cancel",
+            SchedulerCancelJobRequest,
+            {
+                "job_id": "job-1",
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+            },
+        ),
+        (
+            SchedulerMethods.LIST_JOBS,
+            "ListJobs",
+            SchedulerListJobsRequest,
+            {
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    topic,
+    method_name,
+    input_model,
+    params,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = method_name
+    method_info.bus_topic = topic
+    method_info.input_model = input_model
+    method_info.required_perms = []
+    method_info.method_type = "use"
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Scheduler", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="real-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-456",
+                "method": topic,
+                "params": params,
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    typed_request = mock_bus.request.call_args.args[1]
+    assert isinstance(typed_request, input_model)
+    assert typed_request.caller_peer_id == "real-peer"
+    assert typed_request.caller_principal_id == "peer-user"
+    if topic == SchedulerMethods.SCHEDULE:
+        assert typed_request.correlation_id == "rpc-456"
 
 
 @pytest.mark.asyncio

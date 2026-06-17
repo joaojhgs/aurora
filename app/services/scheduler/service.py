@@ -662,6 +662,7 @@ class SchedulerService(BaseService):
                     owner_peer_id=context["owner_peer_id"],
                     owner_principal_id=context["owner_principal_id"],
                     target_peer_id=context.get("target_peer_id"),
+                    delegated_permissions=context["delegated_permissions"],
                     policy_decision_id=context.get("policy_decision_id"),
                     correlation_id=context.get("correlation_id"),
                 ),
@@ -693,6 +694,7 @@ class SchedulerService(BaseService):
                         "owner_principal_id", DEFAULT_SCHEDULER_OWNER_PRINCIPAL
                     ),
                     target_peer_id=context.get("target_peer_id"),
+                    delegated_permissions=context.get("delegated_permissions") or [],
                     policy_decision_id=context.get("policy_decision_id"),
                     correlation_id=context.get("correlation_id"),
                 ),

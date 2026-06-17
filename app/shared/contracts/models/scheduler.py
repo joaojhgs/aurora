@@ -136,5 +136,6 @@ class SchedulerJobCompletedEvent(IOModel):
     owner_peer_id: str = "local"
     owner_principal_id: str = "system"
     target_peer_id: str | None = None
+    delegated_permissions: list[str] = Field(default_factory=list)
     policy_decision_id: str | None = None
     correlation_id: str | None = None
