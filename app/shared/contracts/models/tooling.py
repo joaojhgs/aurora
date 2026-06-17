@@ -144,12 +144,39 @@ class ToolingReloadMCPRequest(IOModel):
     pass  # No parameters needed
 
 
+class ToolingResourceSelector(IOModel):
+    """Explicit resource selector for safety-sensitive tool execution."""
+
+    resource_namespace: str | None = None
+    resource_id: str | None = None
+    resource_type: str | None = None
+    hardware_target: str | None = None
+    data_scope: str | None = None
+
+    def has_resource(self) -> bool:
+        """Return True when the selector identifies a concrete resource/scope."""
+
+        return bool(
+            self.resource_namespace
+            or self.resource_id
+            or self.resource_type
+            or self.hardware_target
+            or self.data_scope
+        )
+
+
 class ToolingExecuteToolRequest(IOModel):
     """Request to execute a tool."""
 
     tool_name: str
     arguments: dict[str, Any]
     mesh_selector: MeshAddressSelector | None = None
+    resource_selector: ToolingResourceSelector | None = None
+    confirmed: bool = False
+    dry_run: bool = False
+    correlation_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class ToolingExecuteToolResponse(IOModel):
@@ -158,6 +185,11 @@ class ToolingExecuteToolResponse(IOModel):
     ok: bool
     data: Any | None = None
     error: str | None = None
+    status: Literal["success", "denied", "not_found", "failed", "dry_run"] | None = None
+    error_code: str | None = None
+    correlation_id: str | None = None
+    provider_peer_id: str | None = None
+    global_tool_id: str | None = None
 
 
 class ToolingToolsInitializedEvent(IOModel):

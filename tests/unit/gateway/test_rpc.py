@@ -7,6 +7,7 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
 
 
 @pytest.fixture
@@ -113,6 +114,55 @@ async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
     assert response["type"] == "result"
     assert response["id"] == "req-123"
     assert response["result"] == {"greeting": "hello"}
+
+
+@pytest.mark.asyncio
+async def test_handle_tooling_execute_injects_trusted_remote_provenance(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "ExecuteTool"
+    method_info.bus_topic = ToolingMethods.EXECUTE_TOOL
+    method_info.input_model = ToolingExecuteToolRequest
+    method_info.required_perms = []
+    method_info.method_type = "use"
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-123",
+                "method": ToolingMethods.EXECUTE_TOOL,
+                "params": {
+                    "tool_name": "switch_on",
+                    "arguments": {"target": "lamp"},
+                    "caller_peer_id": "spoofed",
+                    "caller_principal_id": "spoofed-principal",
+                },
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    typed_request = mock_bus.request.call_args.args[1]
+    assert isinstance(typed_request, ToolingExecuteToolRequest)
+    assert typed_request.caller_peer_id == "remote-peer"
+    assert typed_request.caller_principal_id == "peer-user"
+    assert typed_request.correlation_id == "rpc-123"
 
 
 @pytest.mark.asyncio
