@@ -45,6 +45,12 @@ def tooling_service(mock_bus):
         yield service
 
 
+def _mock_call_text(*mocks: Mock) -> str:
+    """Flatten mock calls so tests can assert logs omit sensitive values."""
+
+    return "\n".join(str(call) for mock in mocks for call in mock.call_args_list)
+
+
 class TestToolingServiceInitialization:
     """Test ToolingService initialization."""
 
@@ -434,6 +440,117 @@ class TestToolingServiceToolExecution:
         assert "super-secret" not in details_text
         assert details["argument_hash"]
         assert details["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_success_logs_redacted_context(self, tooling_service, mock_bus):
+        """Success execution logs omit raw arguments and raw result values."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_tool = Mock()
+        mock_tool.ainvoke = AsyncMock(return_value={"token": "secret-result-value"})
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["test_tool"])
+
+        request = ToolingExecuteToolRequest(
+            tool_name="test_tool",
+            arguments={"api_key": "super-secret-argument", "input": "hello"},
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+            correlation_id="corr-success",
+        )
+
+        with (
+            patch("app.services.tooling.service.log_debug") as log_debug,
+            patch("app.services.tooling.service.log_error") as log_error,
+        ):
+            response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is True
+        logged_text = _mock_call_text(log_debug, log_error)
+        assert "super-secret-argument" not in logged_text
+        assert "secret-result-value" not in logged_text
+        assert "argument_hash" in logged_text
+        assert "corr-success" in logged_text
+
+    @pytest.mark.asyncio
+    async def test_policy_denial_logs_do_not_include_secret_arguments(
+        self, tooling_service, mock_bus
+    ):
+        """Policy denial logs omit raw secret-like argument values."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.safety_class = "dangerous"
+        mock_tool.confirmation_required = False
+        mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
+
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="switch_on",
+            arguments={"api_key": "denied-secret-argument", "target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            confirmed=True,
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+            correlation_id="corr-denied",
+        )
+
+        with (
+            patch("app.services.tooling.service.log_debug") as log_debug,
+            patch("app.services.tooling.service.log_error") as log_error,
+        ):
+            response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is False
+        assert response.status == "denied"
+        mock_tool.ainvoke.assert_not_called()
+        logged_text = _mock_call_text(log_debug, log_error)
+        assert "denied-secret-argument" not in logged_text
+        assert "argument_hash" in logged_text
+        assert "corr-denied" in logged_text
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_failure_logs_type_without_secret_values(
+        self, tooling_service, mock_bus
+    ):
+        """Execution failure logs omit raw args and exception text that may echo args."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_tool = Mock()
+        mock_tool.ainvoke = AsyncMock(
+            side_effect=ValueError("failure echoed failure-secret-argument")
+        )
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["failing_tool"])
+
+        request = ToolingExecuteToolRequest(
+            tool_name="failing_tool",
+            arguments={"api_key": "failure-secret-argument", "input": "hello"},
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+            correlation_id="corr-failed",
+        )
+
+        with (
+            patch("app.services.tooling.service.log_debug") as log_debug,
+            patch("app.services.tooling.service.log_error") as log_error,
+        ):
+            response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is False
+        assert response.status == "failed"
+        assert response.error == "Tool execution failed: ValueError"
+        assert "failure-secret-argument" not in response.error
+        logged_text = _mock_call_text(log_debug, log_error)
+        assert "failure-secret-argument" not in logged_text
+        assert "argument_hash" in logged_text
+        assert "ValueError" in logged_text
+        assert "corr-failed" in logged_text
 
     @pytest.mark.asyncio
     async def test_execute_tool_accepts_remote_namespaced_discovery_name(
