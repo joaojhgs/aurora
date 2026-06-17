@@ -90,7 +90,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             # Update the mock response for this specific test
             import app.services.orchestrator.agents.chatbot as chatbot_module
@@ -124,7 +124,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -142,7 +142,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -157,7 +157,6 @@ class TestChatbotToolRetrieval:
     async def test_chatbot_get_tools_success(self, mock_bus, mock_state):
         """Test successful tool retrieval via bus."""
         from app.messaging import QueryResult
-        from app.shared.messaging.models.tooling_models import GetToolsQuery  # noqa: F401
 
         # Mock memory search (first call)
         # Mock tool retrieval (second call)
@@ -180,7 +179,7 @@ class TestChatbotToolRetrieval:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods") as mock_topics,
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             mock_topics.GET_TOOLS = "Tooling.GetTools"
             result = await chatbot(mock_state, bus=mock_bus)
@@ -205,7 +204,7 @@ class TestChatbotToolRetrieval:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -256,7 +255,7 @@ class TestChatbotLLMIntegration:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
             patch(
                 "app.services.orchestrator.agents.chatbot._deserialize_tools"
             ) as mock_deserialize,
@@ -287,7 +286,7 @@ class TestChatbotLLMIntegration:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 

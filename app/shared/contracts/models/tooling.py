@@ -1,6 +1,8 @@
 """Tooling service contract models."""
 
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import Field
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
@@ -36,10 +38,59 @@ class ToolingGetToolsRequest(IOModel):
     mesh_selector: MeshAddressSelector | None = None
 
 
+class ToolingRateLimitHints(IOModel):
+    """Optional rate-limit hints for a discovered tool provider."""
+
+    max_calls: int | None = None
+    window_seconds: int | None = None
+    policy: str | None = None
+
+
+class ToolingToolProvenance(IOModel):
+    """Provenance carried with a discovered tool."""
+
+    provider_peer_id: str
+    provider_service_instance_id: str
+    provider_kind: Literal["local", "mesh_peer"] = "local"
+    source: Literal["core", "plugin", "mcp", "unknown"] = "unknown"
+    advertised_name: str
+
+
+class ToolingToolInfo(IOModel):
+    """Typed metadata for a discovered tool.
+
+    ``name`` remains the bindable tool name expected by existing
+    orchestrator code. For local-only discovery it is the provider-local
+    name; for provider-selected mesh discovery it is namespaced to avoid
+    collisions.
+    """
+
+    name: str
+    local_name: str
+    global_tool_id: str
+    provider_peer_id: str
+    provider_service_instance_id: str
+    namespace: str
+    display_name: str
+    aliases: list[str] = Field(default_factory=list)
+    description: str = ""
+    args_schema: dict[str, Any] = Field(
+        default_factory=lambda: {"type": "object", "properties": {}}
+    )
+    schema: dict[str, Any] = Field(default_factory=lambda: {"type": "object", "properties": {}})
+    source_type: Literal["local", "mesh_peer"] = "local"
+    execution_location: Literal["local", "remote"] = "local"
+    safety_class: Literal["standard", "sensitive", "dangerous"] = "standard"
+    required_permissions: list[str] = Field(default_factory=list)
+    confirmation_required: bool = False
+    rate_limit_hints: ToolingRateLimitHints | None = None
+    provenance: ToolingToolProvenance
+
+
 class ToolingGetToolsResponse(IOModel):
     """Response with available tools."""
 
-    tools: list[dict[str, Any]]
+    tools: list[ToolingToolInfo]
     count: int
 
 

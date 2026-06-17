@@ -17,9 +17,8 @@ from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.agents.chatbot import chatbot
 from app.services.orchestrator.state import State
-from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
-from app.shared.messaging.models.tooling_models import ExecuteToolCommand
 from app.shared.messaging.models.tts_models import TTSRequest
 
 
@@ -113,7 +112,7 @@ class GraphOrchestrator:
                 # Send tool execution command via bus and wait for response
                 result = await self.bus.request(
                     ToolingMethods.EXECUTE_TOOL,
-                    ExecuteToolCommand(tool_name=tool_name, arguments=tool_args),
+                    ToolingExecuteToolRequest(tool_name=tool_name, arguments=tool_args),
                     timeout=30.0,  # 30 second timeout for tool execution
                     priority=get_interactive_priority(),
                 )
