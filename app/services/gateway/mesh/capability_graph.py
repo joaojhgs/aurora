@@ -47,6 +47,24 @@ _HARDWARE_OR_AUDIO_MODULES = {
     "TTS",
 }
 
+_LOW_RISK_AUDIO_METHODS = {
+    ("TTS", "Synthesize"): ("batch_synthesize", "generated_audio"),
+    ("Transcription", "Transcribe"): ("batch_transcription", "submitted_audio"),
+}
+
+_EXPLICIT_AUDIO_METHODS = {
+    ("TTS", "Request"): ("remote_playback", "output_device"),
+    ("TTS", "Stop"): ("remote_playback_control", "output_device"),
+    ("TTS", "Pause"): ("remote_playback_control", "output_device"),
+    ("TTS", "Resume"): ("remote_playback_control", "output_device"),
+    ("STTCoordinator", "Listen"): ("microphone_capture", "microphone"),
+    ("STTCoordinator", "StopListening"): ("microphone_capture_control", "microphone"),
+    ("STTCoordinator", "Audio"): ("audio_streaming", "microphone"),
+    ("WakeWord", "ProcessAudio"): ("wakeword_streaming", "microphone"),
+    ("WakeWord", "Detect"): ("wakeword_detection", "submitted_audio"),
+    ("Transcription", "ProcessAudio"): ("transcription_streaming", "microphone"),
+}
+
 
 def build_capability_graph(
     *,
@@ -301,7 +319,28 @@ def _policy_for_method(
 ) -> CapabilityPolicyInfo:
     policy = _policy_for_module(module, sharing_config, provider_kind=provider_kind)
     policy.required_perms = list(method.required_perms)
-    policy.safety_class = _safety_class(module, method.method_type)
+    policy.safety_class = _safety_class(module, method.method_type, method.name)
+
+    low_risk_audio = _LOW_RISK_AUDIO_METHODS.get((module, method.name))
+    if low_risk_audio:
+        policy.operation_class, policy.resource_scope = low_risk_audio
+        policy.explicit_selector_required = False
+        policy.confirmation_required = False
+        policy.consent_required = False
+        policy.privacy_indicator_required = False
+        policy.bandwidth_check_required = False
+        return policy
+
+    explicit_audio = _EXPLICIT_AUDIO_METHODS.get((module, method.name))
+    if explicit_audio:
+        policy.operation_class, policy.resource_scope = explicit_audio
+        policy.explicit_selector_required = True
+        policy.consent_required = True
+        policy.privacy_indicator_required = True
+        policy.confirmation_required = provider_kind == "remote"
+        policy.bandwidth_check_required = "streaming" in policy.operation_class
+        return policy
+
     if method.method_type == "manage":
         policy.explicit_selector_required = True
         policy.confirmation_required = provider_kind == "remote"
@@ -328,6 +367,11 @@ def _policy_for_module(
         explicit_selector_required=explicit_required,
         confirmation_required=provider_kind == "remote"
         and safety_class in {"hardware", "data", "admin"},
+        consent_required=module in _HARDWARE_OR_AUDIO_MODULES,
+        privacy_indicator_required=module in _HARDWARE_OR_AUDIO_MODULES,
+        bandwidth_check_required=module in {"AudioInput", "STTCoordinator", "WakeWord", "Transcription"},
+        operation_class="audio_service" if module in _HARDWARE_OR_AUDIO_MODULES else None,
+        resource_scope="audio" if module in _HARDWARE_OR_AUDIO_MODULES else None,
         mesh_visible=bool(sharing_config.share) if sharing_config else provider_kind == "remote",
         local_only=provider_kind == "local" and not (sharing_config and sharing_config.share),
     )
@@ -381,13 +425,15 @@ def _remote_route_blockers(
     return blockers
 
 
-def _safety_class(module: str, method_type: str = "use") -> str:
+def _safety_class(module: str, method_type: str = "use", method_name: str | None = None) -> str:
     if method_type == "manage" or module in {"Auth", "Config"}:
         return "admin"
     if module == "DB":
         return "data"
     if module in {"Scheduler", "Tooling"}:
         return "delegated_action"
+    if (module, method_name or "") in _LOW_RISK_AUDIO_METHODS:
+        return "standard"
     if module in _HARDWARE_OR_AUDIO_MODULES:
         return "hardware"
     return "standard"
