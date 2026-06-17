@@ -6,19 +6,149 @@ using SQLiteVec for vector storage and semantic search of memories and tools.
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Optional
 
 from langchain_community.vectorstores import SQLiteVec
 from langgraph.store.base import BaseStore, Item
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Db, Embeddings
+from app.shared.contracts.models.db import (
+    DBRAGImportNamespaceResponse,
+    DBRAGReplicatedItem,
+    DBRAGTombstone,
+)
 
 config_api = ConfigAPI()
+
+RAG_SYNC_METADATA_KEY = "_aurora_rag_sync"
+_SENSITIVE_REPLICATION_KEYS = {
+    "api_key",
+    "auth_token",
+    "credential",
+    "credentials",
+    "mesh_secret",
+    "password",
+    "password_hash",
+    "private_key",
+    "room_secret",
+    "secret",
+    "token",
+    "token_hash",
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def normalize_rag_namespace(namespace: str | tuple[str, ...]) -> tuple[str, ...]:
+    """Normalize supported RAG namespace spellings to a tuple."""
+    if isinstance(namespace, tuple):
+        return namespace
+    separator = "|" if "|" in namespace else "."
+    return tuple(part for part in namespace.split(separator) if part)
+
+
+def stringify_rag_namespace(namespace: str | tuple[str, ...]) -> str:
+    """Return the contract-facing namespace spelling."""
+    if isinstance(namespace, str):
+        return namespace.replace("|", ".")
+    return ".".join(namespace)
+
+
+def _has_sensitive_replication_value(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if str(key).lower() in _SENSITIVE_REPLICATION_KEYS:
+                return True
+            if _has_sensitive_replication_value(nested):
+                return True
+    elif isinstance(value, list):
+        return any(_has_sensitive_replication_value(item) for item in value)
+    return False
+
+
+def _get_sync_metadata(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict) and isinstance(value.get(RAG_SYNC_METADATA_KEY), dict):
+        return value[RAG_SYNC_METADATA_KEY]
+    return {}
+
+
+def is_rag_tombstone_value(value: Any) -> bool:
+    """Return true when a stored RAG value represents a replicated delete."""
+    metadata = _get_sync_metadata(value)
+    return bool(metadata.get("tombstone"))
+
+
+def _strip_sync_metadata(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    stripped = dict(value)
+    stripped.pop(RAG_SYNC_METADATA_KEY, None)
+    return stripped
+
+
+def _value_with_sync_metadata(item: DBRAGReplicatedItem) -> dict[str, Any]:
+    if item.value is None:
+        value: dict[str, Any] = {}
+    elif isinstance(item.value, dict):
+        value = dict(item.value)
+    else:
+        value = {"value": item.value}
+
+    metadata = item.model_dump(exclude={"value"})
+    value[RAG_SYNC_METADATA_KEY] = metadata
+    return value
+
+
+def _parse_item_updated_at(item: DBRAGReplicatedItem | None) -> datetime:
+    if item is None:
+        return datetime.min.replace(tzinfo=UTC)
+    return _parse_sync_timestamp(item.updated_at)
+
+
+def _parse_sync_timestamp(value: str) -> datetime:
+    raw = value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(raw)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def make_rag_tombstone(
+    *,
+    namespace: str,
+    key: str,
+    source_peer_id: str,
+    owner_peer_id: str,
+    origin_principal_id: str,
+    policy_decision_id: str,
+    correlation_id: str,
+    sync_operation_id: str,
+    deleted_by: str,
+    reason: str = "user_delete",
+) -> DBRAGReplicatedItem:
+    """Build a replicated tombstone for delete/forget propagation."""
+    now = _utc_now_iso()
+    return DBRAGReplicatedItem(
+        namespace=stringify_rag_namespace(namespace),
+        key=key,
+        value=None,
+        source_peer_id=source_peer_id,
+        owner_peer_id=owner_peer_id,
+        origin_principal_id=origin_principal_id,
+        created_at=now,
+        updated_at=now,
+        policy_decision_id=policy_decision_id,
+        correlation_id=correlation_id,
+        sync_operation_id=sync_operation_id,
+        tombstone=DBRAGTombstone(deleted_at=now, deleted_by=deleted_by, reason=reason),
+    )
 
 
 async def _async_wait_for_config_service(max_retries: int = 45, retry_delay: float = 1.0) -> bool:
@@ -831,3 +961,176 @@ class RAGService:
         """Get the combined store."""
         self._ensure_initialized()
         return self._combined_store
+
+    def export_namespace(
+        self,
+        *,
+        namespace: str,
+        source_peer_id: str,
+        owner_peer_id: str,
+        origin_principal_id: str,
+        policy_decision_id: str,
+        correlation_id: str,
+        sync_operation_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        include_tombstones: bool = True,
+        since: str | None = None,
+    ) -> list[DBRAGReplicatedItem]:
+        """Export a namespace-scoped RAG snapshot with provenance."""
+        namespace_tuple = normalize_rag_namespace(namespace)
+        store = self.combined_store
+        items = store.retrieve_items(namespace_tuple, limit=limit, offset=offset)
+        exported: list[DBRAGReplicatedItem] = []
+        since_dt = _parse_sync_timestamp(since) if since else None
+
+        for item in items:
+            metadata = _get_sync_metadata(item.value)
+            if metadata.get("tombstone") and not include_tombstones:
+                continue
+            value = _strip_sync_metadata(item.value)
+            if _has_sensitive_replication_value(value):
+                log_warning(f"Skipping sensitive RAG item during export: {namespace}/{item.key}")
+                continue
+
+            created_at = metadata.get("created_at") or _utc_now_iso()
+            updated_at = metadata.get("updated_at") or _utc_now_iso()
+            if since_dt:
+                parsed_updated = _parse_sync_timestamp(updated_at)
+                if parsed_updated <= since_dt:
+                    continue
+
+            exported.append(
+                DBRAGReplicatedItem(
+                    namespace=stringify_rag_namespace(item.namespace),
+                    key=item.key,
+                    value=value,
+                    source_peer_id=metadata.get("source_peer_id", source_peer_id),
+                    owner_peer_id=metadata.get("owner_peer_id", owner_peer_id),
+                    origin_principal_id=metadata.get("origin_principal_id", origin_principal_id),
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    schema_version=metadata.get("schema_version", 1),
+                    version=metadata.get("version", 1),
+                    policy_decision_id=metadata.get("policy_decision_id", policy_decision_id),
+                    correlation_id=metadata.get("correlation_id", correlation_id),
+                    sync_operation_id=metadata.get("sync_operation_id", sync_operation_id),
+                    visibility=metadata.get("visibility", "private"),
+                    encrypted=metadata.get("encrypted", False),
+                    redacted=metadata.get("redacted", False),
+                    tombstone=metadata.get("tombstone"),
+                )
+            )
+
+        return exported
+
+    def import_namespace(
+        self,
+        *,
+        namespace: str,
+        items: list[DBRAGReplicatedItem],
+        conflict_mode: str = "last_writer_wins",
+    ) -> DBRAGImportNamespaceResponse:
+        """Import replicated RAG items using deterministic conflict handling."""
+        namespace_tuple = normalize_rag_namespace(namespace)
+        namespace_str = stringify_rag_namespace(namespace_tuple)
+        store = self.combined_store
+        response = DBRAGImportNamespaceResponse()
+
+        for incoming in items:
+            if stringify_rag_namespace(incoming.namespace) != namespace_str:
+                response.skipped += 1
+                response.conflicts.append(
+                    {
+                        "key": incoming.key,
+                        "reason": "namespace_mismatch",
+                        "incoming_namespace": incoming.namespace,
+                        "target_namespace": namespace_str,
+                    }
+                )
+                continue
+
+            if incoming.value is not None and _has_sensitive_replication_value(incoming.value):
+                response.skipped += 1
+                response.conflicts.append({"key": incoming.key, "reason": "sensitive_value"})
+                continue
+
+            local_item = store.get(namespace_tuple, incoming.key)
+            local = self._replicated_item_from_local(namespace_tuple, local_item)
+            winner = self.resolve_replication_conflict(
+                local=local, incoming=incoming, conflict_mode=conflict_mode
+            )
+
+            if winner is None:
+                response.skipped += 1
+                response.conflicts.append(
+                    {
+                        "key": incoming.key,
+                        "reason": "local_newer_or_conflict_rejected",
+                        "local_updated_at": local.updated_at if local else None,
+                        "incoming_updated_at": incoming.updated_at,
+                    }
+                )
+                continue
+
+            store.put(namespace_tuple, incoming.key, _value_with_sync_metadata(winner))
+            if incoming.tombstone:
+                response.tombstoned += 1
+            elif local is None:
+                response.imported += 1
+            else:
+                response.updated += 1
+
+        return response
+
+    def _replicated_item_from_local(
+        self, namespace: tuple[str, ...], item: Item | None
+    ) -> DBRAGReplicatedItem | None:
+        if item is None:
+            return None
+
+        metadata = _get_sync_metadata(item.value)
+        now = _utc_now_iso()
+        return DBRAGReplicatedItem(
+            namespace=stringify_rag_namespace(namespace),
+            key=item.key,
+            value=_strip_sync_metadata(item.value),
+            source_peer_id=metadata.get("source_peer_id", "local"),
+            owner_peer_id=metadata.get("owner_peer_id", "local"),
+            origin_principal_id=metadata.get("origin_principal_id", "unknown"),
+            created_at=metadata.get("created_at", now),
+            updated_at=metadata.get("updated_at", now),
+            schema_version=metadata.get("schema_version", 1),
+            version=metadata.get("version", 1),
+            policy_decision_id=metadata.get("policy_decision_id", "local"),
+            correlation_id=metadata.get("correlation_id", "local"),
+            sync_operation_id=metadata.get("sync_operation_id", "local"),
+            visibility=metadata.get("visibility", "private"),
+            encrypted=metadata.get("encrypted", False),
+            redacted=metadata.get("redacted", False),
+            tombstone=metadata.get("tombstone"),
+        )
+
+    @staticmethod
+    def resolve_replication_conflict(
+        *,
+        local: DBRAGReplicatedItem | None,
+        incoming: DBRAGReplicatedItem,
+        conflict_mode: str = "last_writer_wins",
+    ) -> DBRAGReplicatedItem | None:
+        """Resolve a RAG replication conflict.
+
+        Supported modes:
+        - ``last_writer_wins``: newer ``updated_at`` wins.
+        - ``remote_wins``: incoming always wins.
+        - ``reject_on_conflict``: only inserts missing local items.
+        """
+        if local is None or conflict_mode == "remote_wins":
+            return incoming
+        if conflict_mode == "reject_on_conflict":
+            return None
+        if conflict_mode != "last_writer_wins":
+            raise ValueError(f"Unsupported RAG replication conflict mode: {conflict_mode}")
+        if _parse_item_updated_at(incoming) >= _parse_item_updated_at(local):
+            return incoming
+        return None

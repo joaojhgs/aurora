@@ -29,6 +29,9 @@ class DBMethods:
     RAG_DELETE = f"{DBModule.NAME}.RAGDelete"
     RAG_GET = f"{DBModule.NAME}.RAGGet"
     RAG_LIST = f"{DBModule.NAME}.RAGList"
+    RAG_EXPORT_NAMESPACE = f"{DBModule.NAME}.RAGExportNamespace"
+    RAG_IMPORT_NAMESPACE = f"{DBModule.NAME}.RAGImportNamespace"
+    RAG_LIST_CHANGES = f"{DBModule.NAME}.RAGListChanges"
     SAVE_CRON_JOB = f"{DBModule.NAME}.SaveCronJob"
     GET_CRON_JOBS = f"{DBModule.NAME}.GetCronJobs"
     DELETE_CRON_JOB = f"{DBModule.NAME}.DeleteCronJob"
@@ -201,6 +204,99 @@ class DBRAGListResponse(IOModel):
     """Response for RAG list/search."""
 
     items: list[DBRAGItemResponse]
+
+
+class DBRAGTombstone(IOModel):
+    """Deletion marker for replicated RAG data."""
+
+    deleted_at: str
+    deleted_by: str
+    reason: str = "user_delete"
+
+
+class DBRAGReplicatedItem(IOModel):
+    """RAG item with replication provenance and conflict metadata."""
+
+    namespace: str
+    key: str
+    value: Any | None = None
+    source_peer_id: str
+    owner_peer_id: str
+    origin_principal_id: str = "unknown"
+    created_at: str
+    updated_at: str
+    schema_version: int = 1
+    version: int = 1
+    policy_decision_id: str
+    correlation_id: str
+    sync_operation_id: str
+    visibility: str = "private"
+    encrypted: bool = False
+    redacted: bool = False
+    tombstone: DBRAGTombstone | None = None
+
+
+class DBRAGExportNamespaceRequest(IOModel):
+    """Request to export an opt-in RAG namespace snapshot."""
+
+    namespace: str
+    source_peer_id: str
+    owner_peer_id: str
+    origin_principal_id: str = "unknown"
+    policy_decision_id: str
+    correlation_id: str
+    sync_operation_id: str
+    limit: int = 100
+    offset: int = 0
+    include_tombstones: bool = True
+
+
+class DBRAGSnapshotResponse(IOModel):
+    """Namespace-scoped RAG replication snapshot."""
+
+    namespace: str
+    owner_peer_id: str
+    source_peer_id: str
+    schema_version: int = 1
+    items: list[DBRAGReplicatedItem]
+
+
+class DBRAGImportNamespaceRequest(IOModel):
+    """Request to import a bounded RAG namespace snapshot."""
+
+    namespace: str
+    importing_peer_id: str
+    policy_decision_id: str
+    correlation_id: str
+    sync_operation_id: str
+    items: list[DBRAGReplicatedItem]
+    conflict_mode: str = "last_writer_wins"
+
+
+class DBRAGImportNamespaceResponse(IOModel):
+    """Result of importing RAG replication items."""
+
+    imported: int = 0
+    updated: int = 0
+    skipped: int = 0
+    tombstoned: int = 0
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DBRAGListChangesRequest(IOModel):
+    """Request to list namespace-scoped RAG replication changes."""
+
+    namespace: str
+    source_peer_id: str
+    owner_peer_id: str
+    origin_principal_id: str = "unknown"
+    policy_decision_id: str
+    correlation_id: str
+    sync_operation_id: str
+    since: str | None = None
+    limit: int = 100
+    offset: int = 0
+    include_tombstones: bool = True
 
 
 # ── Shared response types ────────────────────────────────────────────────

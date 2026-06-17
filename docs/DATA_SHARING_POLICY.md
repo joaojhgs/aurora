@@ -87,14 +87,50 @@ implementation:
 - Auth principal/token/device management and mesh peer management are controlled
   through Auth contracts. The underlying DB rows are not DB/data-sharing domains.
 
+## RAG/Memory Replication Model
+
+Aurora supports a narrow RAG/memory sync model for explicitly approved
+namespaces. The initial contract surface is internal-only:
+
+- `DB.RAGExportNamespace` creates a bounded snapshot for one namespace.
+- `DB.RAGImportNamespace` imports a bounded snapshot into the same namespace.
+- `DB.RAGListChanges` lists namespace changes after an optional timestamp for
+  one-way sync.
+
+These methods are not raw mesh RPC permissions. A gateway, orchestrator, or
+future sync worker must first make a policy decision and pass the resulting
+`policy_decision_id`, `correlation_id`, peer IDs, and sync operation ID into the
+DB contract. The namespace remains the unit of opt-in sharing.
+
+Every replicated RAG item carries:
+
+- namespace and stable key
+- `source_peer_id` and `owner_peer_id`
+- redacted or known `origin_principal_id`
+- `created_at`, `updated_at`, schema version, and item version
+- policy decision ID, correlation ID, and sync operation ID
+- visibility plus encrypted/redacted flags
+- optional tombstone metadata with `deleted_at`, `deleted_by`, and reason
+
+Conflict handling is deterministic and intentionally conservative:
+
+- Default: `last_writer_wins`, comparing item `updated_at` timestamps.
+- `remote_wins` may be used for one-way authoritative published namespaces.
+- `reject_on_conflict` inserts missing local records only and reports conflicts.
+
+Deletes are represented as tombstones rather than raw table deletes. Normal RAG
+search/list responses filter tombstones from live results; change-list/export
+surfaces can include tombstones so peers can evaluate forget propagation. Values
+containing obvious credential or secret fields are skipped during export/import.
+
 ## Follow-up Gates
 
 Before implementing P4 data sync or replication work, create explicit follow-up
 contracts/specs for:
 
-1. RAG namespace export/import with provenance and namespace ownership.
-2. RAG one-way published namespace replication with tombstones.
-3. Chat history export/import with user-scoped redaction and delete handling.
-4. Scheduler migration/import that creates new local jobs unless ownership
+1. Mesh sync orchestration for RAG namespace export/import and one-way
+   published namespace replication.
+2. Chat history export/import with user-scoped redaction and delete handling.
+3. Scheduler migration/import that creates new local jobs unless ownership
    transfer is explicitly approved.
-5. Redacted cross-peer audit query/export for diagnostics.
+4. Redacted cross-peer audit query/export for diagnostics.

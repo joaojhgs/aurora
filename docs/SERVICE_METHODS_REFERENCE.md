@@ -384,6 +384,9 @@ Database operations for messages and RAG storage.
 | `DB.RAGSearch` | Search RAG store | `DBRAGSearchRequest` | `DBRAGListResponse` | **both** |
 | `DB.RAGGet` | Get RAG item | `DBRAGGetRequest` | `DBRAGItemResponse` | **internal** |
 | `DB.RAGList` | List RAG items | `DBRAGListRequest` | `DBRAGListResponse` | **internal** |
+| `DB.RAGExportNamespace` | Export opt-in RAG namespace snapshot | `DBRAGExportNamespaceRequest` | `DBRAGSnapshotResponse` | **internal** |
+| `DB.RAGImportNamespace` | Import opt-in RAG namespace snapshot | `DBRAGImportNamespaceRequest` | `DBRAGImportNamespaceResponse` | **internal** |
+| `DB.RAGListChanges` | List opt-in RAG namespace changes | `DBRAGListChangesRequest` | `DBRAGSnapshotResponse` | **internal** |
 
 ### Why Some Are Internal
 
@@ -396,6 +399,12 @@ Mesh DB/data sharing is governed by [DATA_SHARING_POLICY.md](./DATA_SHARING_POLI
 Current `both` DB methods are query surfaces, not replication contracts. Raw SQL
 through `DB.ExecuteSQL` is internal-only and must not be exposed through mesh RPC,
 export/import, or sync features.
+
+RAG replication primitives are namespace-scoped and internal-only. They require
+caller-provided provenance (`source_peer_id`, `owner_peer_id`,
+`origin_principal_id`), policy decision ID, correlation ID, sync operation ID,
+and tombstone metadata for delete propagation. The default conflict model is
+last-writer-wins by `updated_at`; stricter imports can use reject-on-conflict.
 
 Scheduler `both` methods are similarly ownership-sensitive: remote scheduling,
 canceling, and listing must use explicit peer/resource selection and policy. DB

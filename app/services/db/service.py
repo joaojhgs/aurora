@@ -15,7 +15,11 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.messaging import Envelope, QueryResult
 from app.services.db.manager import DatabaseManager
 from app.services.db.models import CronJob, JobStatus, Message, ScheduleType
-from app.services.db.rag_service import RAGService
+from app.services.db.rag_service import (
+    RAGService,
+    is_rag_tombstone_value,
+    normalize_rag_namespace,
+)
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.db import (
@@ -54,11 +58,16 @@ from app.shared.contracts.models.db import (
     DBMethods,
     DBModule,
     DBRAGDeleteRequest,
+    DBRAGExportNamespaceRequest,
     DBRAGGetRequest,
+    DBRAGImportNamespaceRequest,
+    DBRAGImportNamespaceResponse,
     DBRAGItemResponse,
+    DBRAGListChangesRequest,
     DBRAGListRequest,
     DBRAGListResponse,
     DBRAGSearchRequest,
+    DBRAGSnapshotResponse,
     DBRAGStoreRequest,
     DBRevokeTokenRequest,
     DBSaveMeshCredentialRequest,
@@ -392,12 +401,7 @@ class DBService(BaseService):
         try:
             log_debug(f"Storing RAG item: {cmd.namespace}/{cmd.key}")
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(cmd.namespace, str):
-                namespace_tuple = tuple(cmd.namespace.split("."))
-            else:
-                namespace_tuple = cmd.namespace
+            namespace_tuple = normalize_rag_namespace(cmd.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -423,12 +427,7 @@ class DBService(BaseService):
         try:
             log_debug(f"Deleting RAG item: {cmd.namespace}/{cmd.key}")
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(cmd.namespace, str):
-                namespace_tuple = tuple(cmd.namespace.split("."))
-            else:
-                namespace_tuple = cmd.namespace
+            namespace_tuple = normalize_rag_namespace(cmd.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -456,12 +455,7 @@ class DBService(BaseService):
                 f"Searching RAG store: namespace={query.namespace}, query='{query.query}', limit={query.limit}"
             )
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = normalize_rag_namespace(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -472,6 +466,8 @@ class DBService(BaseService):
             # Convert items to response format
             rag_items = []
             for item in items:
+                if is_rag_tombstone_value(item.value):
+                    continue
                 search_score = None
                 if isinstance(item.value, dict) and "_search_score" in item.value:
                     search_score = item.value.pop("_search_score")
@@ -509,12 +505,7 @@ class DBService(BaseService):
         try:
             log_debug(f"Getting RAG item: {query.namespace}/{query.key}")
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = normalize_rag_namespace(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -551,12 +542,7 @@ class DBService(BaseService):
                 f"Listing RAG items: namespace={query.namespace}, limit={query.limit}, offset={query.offset}"
             )
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = normalize_rag_namespace(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -565,6 +551,8 @@ class DBService(BaseService):
             # Convert items to response format
             rag_items = []
             for item in items:
+                if is_rag_tombstone_value(item.value):
+                    continue
                 # Convert tuple namespace to string (contract expects string)
                 namespace_str = (
                     ".".join(item.namespace)
@@ -582,6 +570,109 @@ class DBService(BaseService):
         except Exception as e:
             log_error(f"Error listing RAG items: {e}", exc_info=True)
             return DBRAGListResponse(items=[])
+
+    @method_contract(
+        method_id=DBMethods.RAG_EXPORT_NAMESPACE,
+        input_model=DBRAGExportNamespaceRequest,
+        output_model=DBRAGSnapshotResponse,
+        summary="Export opt-in RAG namespace snapshot",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def rag_export_namespace(
+        self, query: DBRAGExportNamespaceRequest
+    ) -> DBRAGSnapshotResponse:
+        """Export a namespace-scoped RAG snapshot with provenance."""
+        try:
+            items = self.rag_service.export_namespace(
+                namespace=query.namespace,
+                source_peer_id=query.source_peer_id,
+                owner_peer_id=query.owner_peer_id,
+                origin_principal_id=query.origin_principal_id,
+                policy_decision_id=query.policy_decision_id,
+                correlation_id=query.correlation_id,
+                sync_operation_id=query.sync_operation_id,
+                limit=query.limit,
+                offset=query.offset,
+                include_tombstones=query.include_tombstones,
+            )
+            return DBRAGSnapshotResponse(
+                namespace=query.namespace,
+                owner_peer_id=query.owner_peer_id,
+                source_peer_id=query.source_peer_id,
+                items=items,
+            )
+        except Exception as e:
+            log_error(f"Error exporting RAG namespace: {e}", exc_info=True)
+            return DBRAGSnapshotResponse(
+                namespace=query.namespace,
+                owner_peer_id=query.owner_peer_id,
+                source_peer_id=query.source_peer_id,
+                items=[],
+            )
+
+    @method_contract(
+        method_id=DBMethods.RAG_IMPORT_NAMESPACE,
+        input_model=DBRAGImportNamespaceRequest,
+        output_model=DBRAGImportNamespaceResponse,
+        summary="Import opt-in RAG namespace snapshot",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def rag_import_namespace(
+        self, cmd: DBRAGImportNamespaceRequest
+    ) -> DBRAGImportNamespaceResponse:
+        """Import namespace-scoped RAG items using the conflict policy."""
+        try:
+            return self.rag_service.import_namespace(
+                namespace=cmd.namespace,
+                items=cmd.items,
+                conflict_mode=cmd.conflict_mode,
+            )
+        except Exception as e:
+            log_error(f"Error importing RAG namespace: {e}", exc_info=True)
+            return DBRAGImportNamespaceResponse(
+                skipped=len(cmd.items), conflicts=[{"reason": str(e)}]
+            )
+
+    @method_contract(
+        method_id=DBMethods.RAG_LIST_CHANGES,
+        input_model=DBRAGListChangesRequest,
+        output_model=DBRAGSnapshotResponse,
+        summary="List opt-in RAG namespace changes",
+        exposure="internal",
+        method_type="use",
+    )
+    async def rag_list_changes(self, query: DBRAGListChangesRequest) -> DBRAGSnapshotResponse:
+        """List namespace-scoped RAG changes after an optional timestamp."""
+        try:
+            items = self.rag_service.export_namespace(
+                namespace=query.namespace,
+                source_peer_id=query.source_peer_id,
+                owner_peer_id=query.owner_peer_id,
+                origin_principal_id=query.origin_principal_id,
+                policy_decision_id=query.policy_decision_id,
+                correlation_id=query.correlation_id,
+                sync_operation_id=query.sync_operation_id,
+                limit=query.limit,
+                offset=query.offset,
+                include_tombstones=query.include_tombstones,
+                since=query.since,
+            )
+            return DBRAGSnapshotResponse(
+                namespace=query.namespace,
+                owner_peer_id=query.owner_peer_id,
+                source_peer_id=query.source_peer_id,
+                items=items,
+            )
+        except Exception as e:
+            log_error(f"Error listing RAG changes: {e}", exc_info=True)
+            return DBRAGSnapshotResponse(
+                namespace=query.namespace,
+                owner_peer_id=query.owner_peer_id,
+                source_peer_id=query.source_peer_id,
+                items=[],
+            )
 
     # ── User CRUD ────────────────────────────────────────────────────────
 
