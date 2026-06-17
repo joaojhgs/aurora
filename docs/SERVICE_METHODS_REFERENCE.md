@@ -436,6 +436,31 @@ tool name. Provider-selected mesh discovery namespaces `name`, for example
 `raspi-lab_switch_on` and `workstation_switch_on`, while `display_name` keeps
 the user-facing `raspi-lab.switch_on` / `workstation.switch_on` form.
 
+#### `Tooling.ExecuteTool` (Both)
+**Purpose**: Execute a provider-local or explicitly selected remote tool with
+policy checks and audit provenance.
+
+```python
+ToolingExecuteToolRequest(
+    tool_name="raspi-lab_switch_on",            # local name, namespaced name, or global_tool_id
+    arguments={"target": "lamp"},
+    mesh_selector=MeshAddressSelector(peer_id="raspi-lab", tool_id="..."),
+    resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+    confirmed=True,
+    dry_run=False,
+    correlation_id="rpc-123",
+    caller_peer_id="workstation",              # injected by WebRTC RPC for remote callers
+    caller_principal_id="peer-principal",      # injected by WebRTC RPC for remote callers
+)
+```
+
+Remote sensitive/dangerous tools require an explicit resource selector and
+confirmation before invocation. `dry_run=True` records the requested execution
+without invoking the tool. Every outcome writes an `Auth.StoreAuditEvent`
+record containing caller peer/principal, target/provider peer, tool identity,
+resource selector, correlation ID, status/error code, and a redacted argument
+hash rather than raw argument values.
+
 ---
 
 ## Config Service
