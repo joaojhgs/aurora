@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-16T13:46:59.355Z",
-  "updatedAt": "2026-06-17T20:41:06.504Z",
+  "updatedAt": "2026-06-17T20:53:08.745Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -312,14 +312,14 @@
       "id": "G028-per-143-mesh-scheduler-delegation-po",
       "title": "PER-143 mesh scheduler delegation policy",
       "objective": "Implement PER-143 from .omx/plans/PER-143-mesh-scheduler-delegation-policy.md with namespace-aware scheduler ownership, delegated action context, audit logs, tests, PR, and QA handoff.",
-      "status": "in_progress",
+      "status": "complete",
       "attempt": 1,
       "createdAt": "2026-06-17T20:40:55.027Z",
-      "updatedAt": "2026-06-17T20:41:06.504Z",
-      "evidence": "PER-143 assigned issue and plan artifact .omx/plans/PER-143-mesh-scheduler-delegation-policy.md",
-      "startedAt": "2026-06-17T20:41:06.504Z"
+      "updatedAt": "2026-06-17T20:53:08.745Z",
+      "evidence": "PER-143 implemented namespace-aware remote Scheduler delegation policy; commit 0a93cbd; verification: ruff scheduler files passed, scheduler unit suite 15 passed, scheduler integration suite 6 passed, git diff --check clean.",
+      "startedAt": "2026-06-17T20:41:06.504Z",
+      "completedAt": "2026-06-17T20:53:08.745Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G028-per-143-mesh-scheduler-delegation-po"
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
 }
