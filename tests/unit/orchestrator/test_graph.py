@@ -120,11 +120,61 @@ class TestGraphOrchestratorToolExecution:
 
         # Verify tool was executed via bus
         mock_bus.request.assert_called_once()
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "test_tool"
+        assert request.mesh_selector is None
 
         # Verify result contains tool messages
         assert "messages" in result
         assert len(result["messages"]) == 1
         assert isinstance(result["messages"][0], ToolMessage)
+
+    @pytest.mark.asyncio
+    async def test_execute_remote_tool_uses_hidden_provider_binding(
+        self, graph_orchestrator, mock_bus
+    ):
+        """Remote tool selections execute with global ID and mesh selector."""
+        from langchain_core.messages import AIMessage
+
+        from app.messaging import QueryResult
+
+        mock_bus.request.return_value = QueryResult(ok=True, data="remote result")
+
+        ai_message = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "raspi-lab_switch_on",
+                    "args": {"target": "lamp"},
+                    "id": "tool_remote",
+                }
+            ],
+        )
+        state = State(
+            messages=[ai_message],
+            tool_bindings={
+                "raspi-lab_switch_on": {
+                    "tool_name": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    "global_tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    "mesh_selector": {
+                        "peer_id": "raspi-lab",
+                        "provider_id": "raspi-lab",
+                        "service_instance_id": "remote:raspi-lab:Tooling",
+                        "tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    },
+                }
+            },
+        )
+
+        result = await graph_orchestrator._execute_tools_via_bus(state)
+
+        mock_bus.request.assert_called_once()
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on"
+        assert request.mesh_selector.peer_id == "raspi-lab"
+        assert request.mesh_selector.service_instance_id == "remote:raspi-lab:Tooling"
+        assert request.mesh_selector.tool_id == request.tool_name
+        assert result["messages"][0].content == "remote result"
 
     @pytest.mark.asyncio
     async def test_execute_tools_no_tool_calls(self, graph_orchestrator):

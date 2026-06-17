@@ -436,6 +436,16 @@ tool name. Provider-selected mesh discovery namespaces `name`, for example
 `raspi-lab_switch_on` and `workstation_switch_on`, while `display_name` keeps
 the user-facing `raspi-lab.switch_on` / `workstation.switch_on` form.
 
+The Orchestrator binds local tools and remote tools marked
+`execution_location="remote"`, `safety_class="standard"`, and
+`confirmation_required=False` into the same LLM planning context. Remote
+sensitive, dangerous, or confirmation-required tools are hidden from automatic
+model selection until an explicit confirmation flow is available. For bound
+remote tools, the LLM-visible name remains the collision-safe `name`, but the
+graph stores hidden binding metadata and executes with the tool's
+`global_tool_id` plus a `MeshAddressSelector` containing provider peer,
+service instance, and tool ID.
+
 #### `Tooling.ExecuteTool` (Both)
 **Purpose**: Execute a provider-local or explicitly selected remote tool with
 policy checks and audit provenance.
