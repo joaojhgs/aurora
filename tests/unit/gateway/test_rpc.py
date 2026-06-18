@@ -113,7 +113,12 @@ async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
     )
 
     mock_bus.request.assert_called_once_with(
-        "Svc.Greet", {"name": "Alice"}, timeout=30.0, origin="external", principal_id="peer-user"
+        "Svc.Greet",
+        {"name": "Alice"},
+        timeout=30.0,
+        origin="external",
+        principal_id="peer-user",
+        correlation_id="req-123",
     )
 
     response = json.loads(rpc_handler._send.call_args[0][0])
@@ -169,6 +174,36 @@ async def test_handle_tooling_execute_injects_trusted_remote_provenance(
     assert typed_request.caller_peer_id == "remote-peer"
     assert typed_request.caller_principal_id == "peer-user"
     assert typed_request.correlation_id == "rpc-123"
+    assert mock_bus.request.call_args.kwargs["correlation_id"] == "rpc-123"
+
+
+@pytest.mark.asyncio
+async def test_handle_call_uses_explicit_correlation_id(
+    rpc_handler,
+    mock_registry,
+    mock_bus,
+):
+    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"greeting": "hello"})
+
+    await rpc_handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-transport-id",
+                "correlation_id": "trace-abc",
+                "method": "Svc.Greet",
+                "params": {"name": "Alice"},
+            }
+        )
+    )
+
+    assert mock_bus.request.call_args.kwargs["correlation_id"] == "trace-abc"
+    response = json.loads(rpc_handler._send.call_args[0][0])
+    assert response["id"] == "rpc-transport-id"
 
 
 @pytest.mark.parametrize(
@@ -271,6 +306,7 @@ async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
     assert response["error"]["message"] == "Something went wrong"
+    assert response["correlation_id"] == "1"
 
 
 @pytest.mark.asyncio
@@ -287,6 +323,51 @@ async def test_handle_call_timeout(rpc_handler, mock_registry, mock_bus):
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
     assert response["error"]["code"] == 504
+    assert response["correlation_id"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_handle_call_forbidden_audits_redacted_correlation(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    audit_fn = AsyncMock()
+    method_info = MethodInfo(name="Secret", required_perms=["admin"])
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        audit_fn=audit_fn,
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-1",
+                "correlation_id": "trace-denied",
+                "method": "Svc.Secret",
+                "params": {"api_key": "super-secret", "safe": "value"},
+            }
+        )
+    )
+
+    audit_fn.assert_awaited_once()
+    event, principal_id, details = audit_fn.await_args.args
+    assert event == "access.denied.rpc"
+    assert principal_id == "peer-user"
+    assert details["peer_id"] == "remote-peer"
+    assert details["correlation_id"] == "trace-denied"
+    assert details["reason"] == "permission_denied"
+    assert details["details"]["params"]["api_key"]["redacted"] is True
+    assert details["details"]["params"]["safe"] == "value"
 
 
 @pytest.mark.asyncio

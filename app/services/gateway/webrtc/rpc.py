@@ -7,7 +7,6 @@ after validating permissions against the aggregated registry and the peer's
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import Callable
 from datetime import datetime
@@ -16,6 +15,11 @@ from typing import TYPE_CHECKING, Any
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.shared.contracts.models.scheduler import SchedulerMethods
 from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.mesh.tracing import (
+    audit_details_hash,
+    ensure_correlation_id,
+    redacted_copy,
+)
 
 
 def _json_default(obj: object) -> str:
@@ -98,6 +102,7 @@ class RPCHandler:
         """
         topic = msg.get("topic")
         params = msg.get("params") or {}
+        correlation_id = msg.get("correlation_id")
 
         if not topic:
             log_debug("RPCHandler: Received event with no topic")
@@ -109,7 +114,10 @@ class RPCHandler:
             log_warning(f"RPCHandler: Blocked event {topic} from ANONYMOUS peer")
             return
 
-        log_debug(f"RPCHandler: Received forwarded event {topic}")
+        log_debug(
+            f"RPCHandler: Received forwarded event {topic} "
+            f"correlation_id={correlation_id or 'n/a'}"
+        )
         try:
             payload: Any = params
             if isinstance(params, dict) and self._registry:
@@ -121,6 +129,7 @@ class RPCHandler:
                 event=True,
                 origin="mesh_forwarded",
                 principal_id=identity.principal_id,
+                correlation_id=correlation_id,
             )
         except Exception as e:
             log_error(f"RPCHandler: Error publishing forwarded event {topic}: {e}")
@@ -140,9 +149,13 @@ class RPCHandler:
         method_name = msg.get("method")
         params = msg.get("params") or {}
         req_id = msg.get("id")
+        correlation_id = ensure_correlation_id(
+            params,
+            msg.get("correlation_id") or (str(req_id) if req_id is not None else None),
+        )
 
         if not method_name:
-            self._send_error(req_id, 400, "Missing method")
+            self._send_error(req_id, 400, "Missing method", correlation_id=correlation_id)
             return
 
         # Extract method short name for infrastructure checks
@@ -161,17 +174,39 @@ class RPCHandler:
 
             sharing = self._mesh_config.services.get(module_name)
             if not sharing or not sharing.share:
-                self._send_error(req_id, 403, f"Service {module_name} is not shared")
+                await self._audit_rpc_event(
+                    "access.denied.rpc",
+                    method_name=method_name,
+                    correlation_id=correlation_id,
+                    status="denied",
+                    reason="service_not_shared",
+                    details={"module": module_name, "params": params},
+                )
+                self._send_error(
+                    req_id,
+                    403,
+                    f"Service {module_name} is not shared",
+                    correlation_id=correlation_id,
+                )
                 return
 
             # Allowed-peers check (None = open to all authenticated peers)
             if sharing.allowed_peers is not None and (
                 not self._peer_id or self._peer_id not in sharing.allowed_peers
             ):
+                await self._audit_rpc_event(
+                    "access.denied.rpc",
+                    method_name=method_name,
+                    correlation_id=correlation_id,
+                    status="denied",
+                    reason="peer_not_allowed",
+                    details={"module": module_name, "params": params},
+                )
                 self._send_error(
                     req_id,
                     403,
                     f"Peer not allowed to access service {module_name}",
+                    correlation_id=correlation_id,
                 )
                 return
 
@@ -179,12 +214,25 @@ class RPCHandler:
             if sharing.max_concurrent > 0:
                 active = self._active_remote_calls.get(module_name, 0)
                 if active >= sharing.max_concurrent:
-                    self._send_error(req_id, 429, f"Service {module_name} at capacity")
+                    await self._audit_rpc_event(
+                        "access.denied.rpc",
+                        method_name=method_name,
+                        correlation_id=correlation_id,
+                        status="denied",
+                        reason="service_at_capacity",
+                        details={"module": module_name, "active": active},
+                    )
+                    self._send_error(
+                        req_id,
+                        429,
+                        f"Service {module_name} at capacity",
+                        correlation_id=correlation_id,
+                    )
                     return
 
         result = await self._find_method(method_name)
         if not result:
-            self._send_error(req_id, 404, "Method not found")
+            self._send_error(req_id, 404, "Method not found", correlation_id=correlation_id)
             return
 
         svc_name, meta = result
@@ -196,7 +244,21 @@ class RPCHandler:
         # Gap 2C: Block ANONYMOUS from all methods except pairing/auth
         if identity.principal_id == "anonymous" and meta.name not in self._ANON_ALLOWED_METHODS:
             log_warning(f"RPCHandler: Blocked call to {method_name} from ANONYMOUS peer")
-            self._send_error(req_id, 401, "Authentication required")
+            await self._audit_rpc_event(
+                "access.denied.rpc",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="denied",
+                reason="authentication_required",
+                principal_id=identity.principal_id,
+                details={"params": params},
+            )
+            self._send_error(
+                req_id,
+                401,
+                "Authentication required",
+                correlation_id=correlation_id,
+            )
             return
 
         if perms_needed and not identity.can(*perms_needed, method_type=meta.method_type):
@@ -206,24 +268,21 @@ class RPCHandler:
                 f"have {list(identity.effective_perms)})"
             )
 
-            # Audit: WebRTC RPC access denied
-            if self._audit_fn:
-                import contextlib
+            await self._audit_rpc_event(
+                "access.denied.rpc",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="denied",
+                reason="permission_denied",
+                principal_id=identity.principal_id,
+                details={
+                    "required": perms_needed,
+                    "effective": list(identity.effective_perms),
+                    "params": params,
+                },
+            )
 
-                with contextlib.suppress(Exception):
-                    asyncio.create_task(
-                        self._audit_fn(
-                            "access.denied.rpc",
-                            identity.principal_id,
-                            {
-                                "method": method_name,
-                                "required": perms_needed,
-                                "effective": list(identity.effective_perms),
-                            },
-                        )
-                    )
-
-            self._send_error(req_id, 403, "Forbidden")
+            self._send_error(req_id, 403, "Forbidden", correlation_id=correlation_id)
             return
 
         topic = meta.bus_topic or f"{svc_name}.{meta.name}"
@@ -243,7 +302,9 @@ class RPCHandler:
                     module_for_capacity, max_concurrent - active, max_concurrent
                 )
         try:
-            log_debug(f"RPCHandler: Executing {topic} via bus")
+            log_debug(
+                f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}"
+            )
             typed_params = params
             if isinstance(params, dict):
                 if topic == ToolingMethods.EXECUTE_TOOL:
@@ -251,7 +312,7 @@ class RPCHandler:
                         **params,
                         "caller_peer_id": self._peer_id,
                         "caller_principal_id": identity.principal_id,
-                        "correlation_id": str(req_id) if req_id is not None else None,
+                        "correlation_id": correlation_id,
                     }
                     typed_params = params
                 elif topic in {
@@ -265,7 +326,7 @@ class RPCHandler:
                         "caller_principal_id": identity.principal_id,
                     }
                     if topic == SchedulerMethods.SCHEDULE:
-                        params["correlation_id"] = str(req_id) if req_id is not None else None
+                        params["correlation_id"] = correlation_id
                     typed_params = params
             if meta.input_model and isinstance(params, dict) and callable(meta.input_model):
                 try:
@@ -282,6 +343,7 @@ class RPCHandler:
                 timeout=30.0,
                 origin="external",
                 principal_id=identity.principal_id,
+                correlation_id=correlation_id,
             )
 
             if res.ok:
@@ -305,7 +367,12 @@ class RPCHandler:
                         self._send(json.dumps({"type": "eof", "id": req_id}))
                     except Exception as e:
                         log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
-                        self._send_error(req_id, 500, f"Stream error: {e}")
+                        self._send_error(
+                            req_id,
+                            500,
+                            f"Stream error: {e}",
+                            correlation_id=correlation_id,
+                        )
                 else:
                     result_data = res.data
                     if hasattr(res.data, "model_dump"):
@@ -318,13 +385,50 @@ class RPCHandler:
                         )
                     )
             else:
-                self._send_error(req_id, 500, res.error or "Service request failed")
+                await self._audit_rpc_event(
+                    "mesh.rpc.error",
+                    method_name=method_name,
+                    correlation_id=correlation_id,
+                    status="error",
+                    principal_id=identity.principal_id,
+                    details={"error": res.error, "params": params},
+                )
+                self._send_error(
+                    req_id,
+                    500,
+                    res.error or "Service request failed",
+                    correlation_id=correlation_id,
+                )
 
         except TimeoutError:
-            self._send_error(req_id, 504, "Service request timed out")
+            await self._audit_rpc_event(
+                "mesh.rpc.timeout",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="timeout",
+                principal_id=identity.principal_id,
+                details={"params": params},
+            )
+            self._send_error(
+                req_id,
+                504,
+                "Service request timed out",
+                correlation_id=correlation_id,
+            )
         except Exception as e:
-            log_error(f"RPCHandler: Error executing RPC {method_name}: {e}")
-            self._send_error(req_id, 500, str(e))
+            log_error(
+                f"RPCHandler: Error executing RPC {method_name}: {e} "
+                f"correlation_id={correlation_id}"
+            )
+            await self._audit_rpc_event(
+                "mesh.rpc.error",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="exception",
+                principal_id=identity.principal_id,
+                details={"error": str(e), "params": params},
+            )
+            self._send_error(req_id, 500, str(e), correlation_id=correlation_id)
         finally:
             # Decrement active remote call count for capacity tracking
             if self._mesh_config and self._mesh_config.enabled:
@@ -358,7 +462,49 @@ class RPCHandler:
 
         return None
 
-    def _send_error(self, req_id: Any, code: int, message: str) -> None:
+    async def _audit_rpc_event(
+        self,
+        event: str,
+        *,
+        method_name: str,
+        correlation_id: str,
+        status: str,
+        reason: str | None = None,
+        principal_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        if not self._audit_fn:
+            return
+        import contextlib
+
+        safe_details = redacted_copy(details or {})
+        audit_details = {
+            "method": method_name,
+            "peer_id": self._peer_id,
+            "correlation_id": correlation_id,
+            "status": status,
+            "reason": reason,
+            "details": safe_details,
+            "details_sha256": audit_details_hash(safe_details),
+        }
+        with contextlib.suppress(Exception):
+            await self._audit_fn(event, principal_id, audit_details)
+
+    def _send_error(
+        self,
+        req_id: Any,
+        code: int,
+        message: str,
+        *,
+        correlation_id: str | None = None,
+    ) -> None:
         self._send(
-            json.dumps({"type": "error", "id": req_id, "error": {"code": code, "message": message}})
+            json.dumps(
+                {
+                    "type": "error",
+                    "id": req_id,
+                    "correlation_id": correlation_id,
+                    "error": {"code": code, "message": message},
+                }
+            )
         )

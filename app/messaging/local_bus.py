@@ -364,6 +364,7 @@ class LocalBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
@@ -381,9 +382,11 @@ class LocalBus:
         """
         import uuid as uuid_lib
 
+        request_correlation_id = correlation_id or str(uuid_lib.uuid4())
+
         # Create a future for the response
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
-        reply_topic = f"reply.{message.__class__.__name__}.{uuid_lib.uuid4()}"
+        reply_topic = f"reply.{message.__class__.__name__}.{request_correlation_id}"
 
         # Subscribe to reply topic (skip validation for dynamic reply topics)
         async def _on_reply(env: Envelope) -> None:
@@ -441,6 +444,7 @@ class LocalBus:
                 max_attempts=max_attempts,
                 reply_to=reply_topic,
                 principal_id=principal_id,
+                correlation_id=request_correlation_id,
             )
 
             # Wait for response

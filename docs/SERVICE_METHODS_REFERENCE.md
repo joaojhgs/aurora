@@ -505,6 +505,26 @@ record containing caller peer/principal, target/provider peer, tool identity,
 resource selector, correlation ID, status/error code, and a redacted argument
 hash rather than raw argument values.
 
+### Mesh Correlation Debugging
+
+Mesh-routed requests carry a single `correlation_id` from local route
+resolution through PeerBridge JSON-RPC, the receiving RPC handler, the remote
+bus envelope, service execution, audit records, and the response/error path.
+If a remote action fails, search logs for that ID, then query the audit log:
+
+```python
+AuditLogRequest(
+    event="access.denied.rpc",      # or "mesh.rpc.timeout" / "mesh.rpc.error"
+    correlation_id="trace-123",
+    peer_id="remote-peer",
+)
+```
+
+Audit entries include method, peer, status/reason, correlation ID, and redacted
+diagnostic details. Secret-like parameter keys are replaced with hashes so
+operators can correlate repeated failures without exposing tokens, credentials,
+passwords, cookies, or API keys.
+
 ---
 
 ## Config Service

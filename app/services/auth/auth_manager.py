@@ -8,6 +8,7 @@ so the Auth service never directly imports from the DB service.
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -932,7 +933,29 @@ class AuthManager:
         offset: int = 0,
         principal_id: str | None = None,
         event: str | None = None,
+        correlation_id: str | None = None,
+        peer_id: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
+        if correlation_id or peer_id:
+            # Diagnostic mesh trace view: audit details are JSON strings stored in
+            # the audit_log table, so filter after retrieving a bounded window.
+            events = await self._get_audit_log(
+                limit=max(limit + offset, 1000),
+                offset=0,
+                principal_id=principal_id,
+                event=event,
+            )
+            filtered = [
+                audit_event
+                for audit_event in events
+                if _audit_event_matches_trace(
+                    audit_event,
+                    correlation_id=correlation_id,
+                    peer_id=peer_id,
+                )
+            ]
+            return filtered[offset : offset + limit], len(filtered)
+
         events = await self._get_audit_log(
             limit=limit, offset=offset, principal_id=principal_id, event=event
         )
@@ -1413,3 +1436,23 @@ class _MeshSQL:
             ),
             params=[token_id, device_id, user_id, peer_id],
         )
+
+
+def _audit_event_matches_trace(
+    audit_event: dict[str, Any],
+    *,
+    correlation_id: str | None = None,
+    peer_id: str | None = None,
+) -> bool:
+    details = audit_event.get("details")
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except json.JSONDecodeError:
+            details = {}
+    if not isinstance(details, dict):
+        details = {}
+
+    if correlation_id and details.get("correlation_id") != correlation_id:
+        return False
+    return not (peer_id and details.get("peer_id") != peer_id)
