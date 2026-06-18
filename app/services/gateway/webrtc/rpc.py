@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
+from app.shared.contracts.models.scheduler import SchedulerMethods
 from app.shared.contracts.models.tooling import ToolingMethods
 
 
@@ -244,14 +245,28 @@ class RPCHandler:
         try:
             log_debug(f"RPCHandler: Executing {topic} via bus")
             typed_params = params
-            if topic == ToolingMethods.EXECUTE_TOOL and isinstance(params, dict):
-                params = {
-                    **params,
-                    "caller_peer_id": self._peer_id,
-                    "caller_principal_id": identity.principal_id,
-                    "correlation_id": str(req_id) if req_id is not None else None,
-                }
-                typed_params = params
+            if isinstance(params, dict):
+                if topic == ToolingMethods.EXECUTE_TOOL:
+                    params = {
+                        **params,
+                        "caller_peer_id": self._peer_id,
+                        "caller_principal_id": identity.principal_id,
+                        "correlation_id": str(req_id) if req_id is not None else None,
+                    }
+                    typed_params = params
+                elif topic in {
+                    SchedulerMethods.SCHEDULE,
+                    SchedulerMethods.CANCEL,
+                    SchedulerMethods.LIST_JOBS,
+                }:
+                    params = {
+                        **params,
+                        "caller_peer_id": self._peer_id,
+                        "caller_principal_id": identity.principal_id,
+                    }
+                    if topic == SchedulerMethods.SCHEDULE:
+                        params["correlation_id"] = str(req_id) if req_id is not None else None
+                    typed_params = params
             if meta.input_model and isinstance(params, dict) and callable(meta.input_model):
                 try:
                     typed_params = meta.input_model(**params)
