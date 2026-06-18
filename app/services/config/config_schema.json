@@ -243,7 +243,6 @@
               "description": "Enable authentication service",
               "default": false
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
             "api_keys": {
               "type": "array",
               "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
@@ -1187,8 +1186,7 @@
               "type": "boolean",
               "description": "Enable config service",
               "default": true
-            },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" }
+            }
           }
         }
       }

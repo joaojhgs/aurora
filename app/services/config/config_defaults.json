@@ -55,15 +55,6 @@
     },
     "auth": {
       "enabled": false,
-      "mesh_sharing": {
-        "share": false,
-        "max_concurrent": 10,
-        "allowed_peers": null,
-        "prefer": "local",
-        "fallback": "local",
-        "min_version": null,
-        "required_capabilities": []
-      },
       "api_keys": [],
       "token_expiry_days": 365,
       "session_token_expiry_hours": 24,
@@ -312,16 +303,7 @@
       }
     },
     "config": {
-      "enabled": true,
-      "mesh_sharing": {
-        "share": false,
-        "max_concurrent": 10,
-        "allowed_peers": null,
-        "prefer": "local",
-        "fallback": "local",
-        "min_version": null,
-        "required_capabilities": []
-      }
+      "enabled": true
     }
   }
 }
