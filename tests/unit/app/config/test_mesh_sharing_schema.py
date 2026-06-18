@@ -56,3 +56,17 @@ def test_generated_config_keys_include_mesh_policy_leaf_paths() -> None:
         mesh_keys.required_capabilities
         == "services.tts.mesh_sharing.required_capabilities"
     )
+
+
+@pytest.mark.unit
+def test_auth_and_config_do_not_advertise_mesh_sharing() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text())
+    services = schema["properties"]["services"]["properties"]
+    defaults = json.loads(DEFAULTS_PATH.read_text())["services"]
+
+    assert "mesh_sharing" not in services["auth"]["properties"]
+    assert "mesh_sharing" not in services["config"]["properties"]
+    assert "mesh_sharing" not in defaults["auth"]
+    assert "mesh_sharing" not in defaults["config"]
+    assert not hasattr(ConfigKeys.services.auth, "mesh_sharing")
+    assert not hasattr(ConfigKeys.services.config, "mesh_sharing")

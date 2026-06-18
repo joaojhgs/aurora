@@ -116,6 +116,11 @@ Per-service `mesh_sharing` combines sharing and routing policy. Defaults are pri
 capabilities are required. `allowed_peers=null` means any authenticated peer may use the
 service only after that service is explicitly shared.
 
+Auth and Config do not expose operator-facing `mesh_sharing` blocks. Pairing/login
+infrastructure is handled by the WebRTC RPC auth gate, and local Auth peer management
+or Config mutation remains local-admin behavior. Do not model broad remote Auth admin
+or Config writes as ordinary transparent mesh service sharing.
+
 Home LAN / VPN: share a low-risk local service with authenticated peers, but keep local
 execution preferred and fall back locally if the peer is unavailable.
 

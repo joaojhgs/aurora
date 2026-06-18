@@ -177,6 +177,53 @@ class Gateway(BaseConfigModel):
     """
 
 
+class Auth(BaseConfigModel):
+    enabled: bool | None = False
+    """
+    Enable authentication service
+    """
+    api_keys: list[SecretStr] | None = []
+    """
+    List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)
+    """
+    token_expiry_days: int | None = Field(365, ge=1)
+    """
+    Default token expiry in days
+    """
+    session_token_expiry_hours: int | None = Field(24, ge=1)
+    """
+    Session token expiry in hours (for login)
+    """
+    pairing_code_expiry_minutes: int | None = Field(5, ge=1)
+    """
+    Pairing code expiry in minutes
+    """
+    pairing_max_attempts_per_ip: int | None = Field(5, ge=1)
+    """
+    Max pairing attempts per IP before rate limiting
+    """
+    default_pairing_permissions: list[str] | None = []
+    """
+    Default permissions assigned to new devices during pairing
+    """
+    webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
+    """
+    Timeout in seconds for WebRTC peer authentication
+    """
+    webrtc_pairing_timeout_seconds: float | None = Field(300.0, ge=10.0)
+    """
+    Timeout in seconds for peers in the pairing flow (awaiting human approval)
+    """
+    audit_enabled: bool | None = True
+    """
+    Enable audit logging of security events
+    """
+    audit_retention_days: int | None = Field(90, ge=1)
+    """
+    Audit log retention period in days
+    """
+
+
 class AmbientTranscription(BaseConfigModel):
     enable: bool | None = False
     """
@@ -595,6 +642,13 @@ class Plugins(BaseConfigModel):
     gcalendar: Gcalendar | None = None
 
 
+class Config(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable config service
+    """
+
+
 class MeshSharing(BaseConfigModel):
     share: bool | None = False
     """
@@ -623,54 +677,6 @@ class MeshSharing(BaseConfigModel):
     required_capabilities: list[str] | None = []
     """
     Remote service capabilities required before this service may be selected as a mesh provider.
-    """
-
-
-class Auth(BaseConfigModel):
-    enabled: bool | None = False
-    """
-    Enable authentication service
-    """
-    mesh_sharing: MeshSharing | None = None
-    api_keys: list[SecretStr] | None = []
-    """
-    List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)
-    """
-    token_expiry_days: int | None = Field(365, ge=1)
-    """
-    Default token expiry in days
-    """
-    session_token_expiry_hours: int | None = Field(24, ge=1)
-    """
-    Session token expiry in hours (for login)
-    """
-    pairing_code_expiry_minutes: int | None = Field(5, ge=1)
-    """
-    Pairing code expiry in minutes
-    """
-    pairing_max_attempts_per_ip: int | None = Field(5, ge=1)
-    """
-    Max pairing attempts per IP before rate limiting
-    """
-    default_pairing_permissions: list[str] | None = []
-    """
-    Default permissions assigned to new devices during pairing
-    """
-    webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
-    """
-    Timeout in seconds for WebRTC peer authentication
-    """
-    webrtc_pairing_timeout_seconds: float | None = Field(300.0, ge=10.0)
-    """
-    Timeout in seconds for peers in the pairing flow (awaiting human approval)
-    """
-    audit_enabled: bool | None = True
-    """
-    Enable audit logging of security events
-    """
-    audit_retention_days: int | None = Field(90, ge=1)
-    """
-    Audit log retention period in days
     """
 
 
@@ -861,14 +867,6 @@ class Scheduler(BaseConfigModel):
     enabled: bool | None = True
     """
     Enable scheduler service
-    """
-    mesh_sharing: MeshSharing | None = None
-
-
-class Config(BaseConfigModel):
-    enabled: bool | None = True
-    """
-    Enable config service
     """
     mesh_sharing: MeshSharing | None = None
 
