@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pydantic import Field
+
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 
@@ -31,12 +34,26 @@ class SchedulerScheduleJobRequest(IOModel):
     schedule: str  # Cron expression
     action: str
     enabled: bool = True
+    namespace: str | None = None
+    owner_peer_id: str | None = None
+    owner_principal_id: str | None = None
+    target_selector: MeshAddressSelector | None = None
+    delegated_permissions: list[str] = Field(default_factory=list)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class SchedulerCancelJobRequest(IOModel):
     """Request to cancel a scheduled job."""
 
     job_id: int | str
+    namespace: str | None = None
+    owner_peer_id: str | None = None
+    owner_principal_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class SchedulerPauseJobRequest(IOModel):
@@ -57,6 +74,11 @@ class SchedulerListJobsRequest(IOModel):
     enabled_only: bool = False
     limit: int = 100
     offset: int = 0
+    namespace: str | None = None
+    owner_peer_id: str | None = None
+    owner_principal_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class SchedulerJobInfo(IOModel):
@@ -70,6 +92,14 @@ class SchedulerJobInfo(IOModel):
     next_run: str | None = None
     last_run: str | None = None
     status: str | None = None  # "pending" | "running" | "completed" | "failed"
+    namespace: str = "local"
+    owner_peer_id: str = "local"
+    owner_principal_id: str = "system"
+    target_peer_id: str | None = None
+    target_resource_namespace: str | None = None
+    delegated_permissions: list[str] = Field(default_factory=list)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
 
 
 class SchedulerListJobsResponse(IOModel):
@@ -86,6 +116,13 @@ class SchedulerJobFiredEvent(IOModel):
     job_name: str
     action: str
     scheduled_time: str
+    namespace: str = "local"
+    owner_peer_id: str = "local"
+    owner_principal_id: str = "system"
+    target_peer_id: str | None = None
+    delegated_permissions: list[str] = Field(default_factory=list)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
 
 
 class SchedulerJobCompletedEvent(IOModel):
@@ -95,3 +132,10 @@ class SchedulerJobCompletedEvent(IOModel):
     job_name: str
     success: bool
     error: str | None = None
+    namespace: str = "local"
+    owner_peer_id: str = "local"
+    owner_principal_id: str = "system"
+    target_peer_id: str | None = None
+    delegated_permissions: list[str] = Field(default_factory=list)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None

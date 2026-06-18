@@ -342,10 +342,19 @@ Job scheduling using cron expressions.
 ```python
 # Input
 SchedulerScheduleJobRequest(
-    name: str,           # Job name
-    schedule: str,       # Cron expression (e.g., "0 9 * * *")
-    action: str,         # Action to execute
-    enabled: bool = True # Whether job is active
+    name: str,                         # Job name
+    schedule: str,                     # Cron expression (e.g., "0 9 * * *")
+    action: str,                       # Action to execute
+    enabled: bool = True,              # Whether job is active
+    namespace: str | None = None,      # Owner/resource namespace, defaults to local
+    owner_peer_id: str | None = None,  # Peer that owns the job
+    owner_principal_id: str | None = None,  # Principal that owns the job
+    target_selector: MeshAddressSelector | None = None,  # Explicit remote target/resource
+    delegated_permissions: list[str] = [],
+    policy_decision_id: str | None = None,
+    correlation_id: str | None = None,
+    caller_peer_id: str | None = None,       # Injected for mesh callers
+    caller_principal_id: str | None = None   # Injected for mesh callers
 )
 ```
 
@@ -355,7 +364,12 @@ SchedulerScheduleJobRequest(
 SchedulerListJobsRequest(
     enabled_only: bool = False,  # Filter by active jobs
     limit: int = 100,            # Max results
-    offset: int = 0              # Pagination offset
+    offset: int = 0,             # Pagination offset
+    namespace: str | None = None,
+    owner_peer_id: str | None = None,
+    owner_principal_id: str | None = None,
+    caller_peer_id: str | None = None,
+    caller_principal_id: str | None = None
 )
 
 # Output
@@ -364,6 +378,13 @@ SchedulerListJobsResponse(
     total: int                      # Total count
 )
 ```
+
+Remote scheduler calls are ownership-scoped. Mesh callers may only list or
+cancel jobs owned by their injected `caller_peer_id`/`caller_principal_id`;
+local callers can still list local jobs and may apply explicit filters.
+Scheduler jobs carry namespace, owner, target selector, delegated permissions,
+policy decision ID, and correlation ID through creation, listing, job-fired
+events, completion events, and audit records.
 
 ---
 

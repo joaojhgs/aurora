@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-16T13:46:59.355Z",
-  "updatedAt": "2026-06-17T01:52:44.140Z",
+  "updatedAt": "2026-06-17T21:04:40.743Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -307,6 +307,30 @@
       "startedAt": "2026-06-17T01:42:16.792Z",
       "failedAt": "2026-06-17T01:52:44.140Z",
       "failureReason": "Checkpoint blocked after implementation because existing .omx/ultragoal/goals.json retains the prior aggregate Codex objective while this session has an active PER-138 Codex goal; implementation and verification are complete and will be preserved in commit/PR/Multica handoff."
+    },
+    {
+      "id": "G028-per-143-mesh-scheduler-delegation-po",
+      "title": "PER-143 mesh scheduler delegation policy",
+      "objective": "Implement PER-143 from .omx/plans/PER-143-mesh-scheduler-delegation-policy.md with namespace-aware scheduler ownership, delegated action context, audit logs, tests, PR, and QA handoff.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-17T20:40:55.027Z",
+      "updatedAt": "2026-06-17T20:53:08.745Z",
+      "evidence": "PER-143 implemented namespace-aware remote Scheduler delegation policy; commit 0a93cbd; verification: ruff scheduler files passed, scheduler unit suite 15 passed, scheduler integration suite 6 passed, git diff --check clean.",
+      "startedAt": "2026-06-17T20:41:06.504Z",
+      "completedAt": "2026-06-17T20:53:08.745Z"
+    },
+    {
+      "id": "G029-per-143-qa-provenance-fix",
+      "title": "PER-143 QA provenance fix",
+      "objective": "Address QA rejection for PER-143 by injecting trusted WebRTC caller provenance into Scheduler schedule/list/cancel RPC requests, preserving delegated permissions on completed events, adding regression coverage, verifying, pushing PR #41, and handing back to QA.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-17T21:03:55.220Z",
+      "updatedAt": "2026-06-17T21:04:40.743Z",
+      "evidence": "PER-143 QA rejection fixed in commit eaa8f6a: Scheduler Schedule/ListJobs/Cancel RPC requests now receive trusted WebRTC caller provenance before typed model construction; SchedulerJobCompletedEvent preserves delegated_permissions. Verification: ruff changed scheduler/rpc files passed; scheduler unit suite 15 passed; gateway RPC suite 19 passed; scheduler integration suite 6 passed; git diff --check clean.",
+      "startedAt": "2026-06-17T21:04:02.939Z",
+      "completedAt": "2026-06-17T21:04:40.743Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
