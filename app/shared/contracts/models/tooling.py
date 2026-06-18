@@ -20,6 +20,7 @@ class ToolingMethods:
     """Full method identifiers for Tooling service."""
 
     GET_TOOLS = f"{ToolingModule.NAME}.GetTools"
+    GET_TOOL_CATALOG = f"{ToolingModule.NAME}.GetToolCatalog"
     GET_TOOL_BY_NAME = f"{ToolingModule.NAME}.GetToolByName"
     GET_STATS = f"{ToolingModule.NAME}.GetStats"
     GET_MCP_STATUS = f"{ToolingModule.NAME}.GetMCPStatus"
@@ -92,6 +93,51 @@ class ToolingGetToolsResponse(IOModel):
 
     tools: list[ToolingToolInfo]
     count: int
+
+
+class ToolingGetToolCatalogRequest(IOModel):
+    """Request an aggregate local-plus-remote tool catalog."""
+
+    query: str | None = None
+    top_k: int = 100
+    include_unavailable: bool = True
+    include_blocked_tools: bool = True
+    cache_ttl_seconds: float = 10.0
+    provider_timeout_seconds: float = 1.5
+    caller_permissions: list[str] | None = None
+
+
+class ToolingCatalogProviderInfo(IOModel):
+    """One local or remote Tooling provider considered for catalog fanout."""
+
+    provider_peer_id: str
+    provider_service_instance_id: str
+    provider_kind: Literal["local", "mesh_peer"] = "mesh_peer"
+    eligible: bool = False
+    reason_code: str = ""
+    reason: str = ""
+    cache_status: Literal["local", "hit", "miss", "failed", "blocked"] = "blocked"
+
+
+class ToolingBlockedToolInfo(IOModel):
+    """Tool intentionally omitted from the bindable catalog with an explanation."""
+
+    tool: ToolingToolInfo
+    reason_code: str
+    reason: str
+
+
+class ToolingGetToolCatalogResponse(IOModel):
+    """Aggregate catalog with bindable tools and blocked provider/tool details."""
+
+    tools: list[ToolingToolInfo] = Field(default_factory=list)
+    blocked_tools: list[ToolingBlockedToolInfo] = Field(default_factory=list)
+    providers: list[ToolingCatalogProviderInfo] = Field(default_factory=list)
+    count: int = 0
+    blocked_count: int = 0
+    generated_at: str
+    cache_ttl_seconds: float = 10.0
+    secrets_redacted: bool = True
 
 
 class ToolingGetToolByNameRequest(IOModel):

@@ -9,19 +9,29 @@ This service:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
+import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
-from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.auth import (
+    AuthMethods,
+    PrincipalGetRequest,
+    StoreAuditEventRequest,
+)
 from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
+    ToolingBlockedToolInfo,
+    ToolingCatalogProviderInfo,
     ToolingExecuteToolRequest,
     ToolingExecuteToolResponse,
     ToolingGetMCPStatusRequest,
@@ -30,6 +40,8 @@ from app.shared.contracts.models.tooling import (
     ToolingGetStatsResponse,
     ToolingGetToolByNameRequest,
     ToolingGetToolByNameResponse,
+    ToolingGetToolCatalogRequest,
+    ToolingGetToolCatalogResponse,
     ToolingGetToolsRequest,
     ToolingGetToolsResponse,
     ToolingMethods,
@@ -79,6 +91,7 @@ class ToolingService(BaseService):
             capabilities=["tool_discovery", "tool_execution", "mcp_integration"],
         )
         self.tools_manager = ToolsManager(self.bus)
+        self._catalog_cache: dict[str, tuple[float, ToolingGetToolsResponse]] = {}
 
     async def on_start(self) -> None:
         """Start the tooling service and initialize tools."""
@@ -121,6 +134,7 @@ class ToolingService(BaseService):
         if config_section is None or config_section in ["services"]:
             log_info("Reloading tools due to config change...")
             await self.tools_manager.reload()
+            self._catalog_cache.clear()
         log_info("ToolingService configuration reloaded")
 
     @staticmethod
@@ -145,15 +159,11 @@ class ToolingService(BaseService):
         return safe or "unnamed"
 
     @classmethod
-    def _provider_context(
-        cls, request: ToolingDiscoveryRequest
-    ) -> tuple[str, str, str, str]:
+    def _provider_context(cls, request: ToolingDiscoveryRequest) -> tuple[str, str, str, str]:
         """Return provider peer, service instance, source type, and namespace."""
 
         selector = request.mesh_selector
-        if selector and (
-            selector.peer_id or selector.provider_id or selector.service_instance_id
-        ):
+        if selector and (selector.peer_id or selector.provider_id or selector.service_instance_id):
             provider_peer_id = selector.peer_id or selector.provider_id or "remote"
             provider_service_instance_id = (
                 selector.service_instance_id or f"remote:{provider_peer_id}:Tooling"
@@ -377,6 +387,293 @@ class ToolingService(BaseService):
     def _tool_requires_confirmation(self, tool: Any, safety_class: str) -> bool:
         explicit_confirmation = getattr(tool, "confirmation_required", False)
         return explicit_confirmation is True or safety_class in {"sensitive", "dangerous"}
+
+    @staticmethod
+    def _has_required_permissions(
+        required_permissions: list[str], caller_permissions: list[str] | None
+    ) -> bool:
+        """Return whether caller permissions satisfy a tool's declared requirements."""
+
+        if caller_permissions is None:
+            return not any(
+                permission != ToolingMethods.EXECUTE_TOOL for permission in required_permissions
+            )
+        granted = set(caller_permissions)
+        if "*" in granted:
+            return True
+        for permission in required_permissions:
+            module = permission.split(".", 1)[0]
+            if permission in granted or f"{module}.*" in granted or f"{module}.use" in granted:
+                continue
+            return False
+        return True
+
+    @staticmethod
+    def _catalog_tool_block_reason(
+        tool: ToolingToolInfo, caller_permissions: list[str] | None
+    ) -> tuple[str, str] | None:
+        """Return why a discovered tool must not be bound directly to the LLM."""
+
+        if not ToolingService._has_required_permissions(
+            tool.required_permissions, caller_permissions
+        ):
+            return (
+                "permission_denied",
+                "caller principal lacks required tool permissions",
+            )
+        if tool.safety_class in {"sensitive", "dangerous"}:
+            return (
+                "unsafe_safety_class",
+                f"{tool.safety_class} tools require explicit selection and approval",
+            )
+        if tool.confirmation_required:
+            return (
+                "confirmation_required",
+                "tool requires approval before it can be model-bound",
+            )
+        return None
+
+    async def _catalog_caller_permissions(
+        self,
+        request: ToolingGetToolCatalogRequest,
+        envelope: Any | None,
+    ) -> list[str] | None:
+        """Resolve catalog permissions from authenticated bus context.
+
+        The request field is accepted only for direct/internal calls where no
+        envelope exists. External callers must not be able to grant themselves
+        catalog permissions by payload.
+        """
+
+        if envelope is None:
+            return request.caller_permissions
+
+        principal_id = getattr(envelope, "principal_id", None)
+        if not principal_id:
+            return None
+
+        try:
+            result = await self.bus.request(
+                AuthMethods.GET_PRINCIPAL,
+                PrincipalGetRequest(user_id=principal_id),
+                timeout=3.0,
+                priority=get_system_priority(),
+            )
+        except Exception as error:
+            log_warning(f"Failed to resolve catalog caller permissions: {error}")
+            return []
+
+        if not result.ok or result.data is None:
+            log_warning(f"Catalog caller principal lookup failed: {result.error}")
+            return []
+
+        data = (
+            result.data.model_dump(mode="json")
+            if hasattr(result.data, "model_dump")
+            else result.data
+        )
+        if not isinstance(data, dict):
+            return []
+        permissions = data.get("permissions") or []
+        return [str(permission) for permission in permissions]
+
+    @staticmethod
+    def _provider_service_instance_id(peer_id: str) -> str:
+        return f"remote:{peer_id}:Tooling"
+
+    def _remote_tooling_candidates(self) -> list[Any]:
+        """Return all remote Tooling provider candidates when running behind MeshBus."""
+
+        bus = self.bus
+        routing_table = getattr(bus, "_routing_table", None)
+        registry = getattr(routing_table, "_registry", None)
+        mesh_config = getattr(bus, "_config", None)
+        if not registry:
+            return []
+
+        routing_config = None
+        version_policy = "compatible"
+        if mesh_config:
+            routing_config = getattr(mesh_config, "services", {}).get(ToolingModule.NAME)
+            version_policy = getattr(mesh_config, "version_policy", version_policy)
+
+        try:
+            return list(
+                registry.get_provider_candidates(
+                    module=ToolingModule.NAME,
+                    routing_config=routing_config,
+                    version_policy=version_policy,
+                    include_ineligible=True,
+                )
+            )
+        except Exception as error:
+            log_warning(f"Failed to enumerate remote Tooling providers: {error}")
+            return []
+
+    @staticmethod
+    def _candidate_provider_info(
+        candidate: Any, *, cache_status: str
+    ) -> ToolingCatalogProviderInfo:
+        peer_id = candidate.peer.peer_id
+        service_instance_id = ToolingService._provider_service_instance_id(peer_id)
+        return ToolingCatalogProviderInfo(
+            provider_peer_id=peer_id,
+            provider_service_instance_id=service_instance_id,
+            provider_kind="mesh_peer",
+            eligible=bool(candidate.eligible),
+            reason_code=candidate.reason_code or ("eligible" if candidate.eligible else "blocked"),
+            reason=candidate.reason
+            or ("eligible provider" if candidate.eligible else "provider blocked"),
+            cache_status=cache_status,
+        )
+
+    @staticmethod
+    def _catalog_cache_key(
+        *,
+        peer_id: str,
+        service_instance_id: str,
+        query: str | None,
+        top_k: int,
+        last_manifest: float,
+    ) -> str:
+        return json.dumps(
+            {
+                "peer_id": peer_id,
+                "service_instance_id": service_instance_id,
+                "query": query,
+                "top_k": top_k,
+                "last_manifest": last_manifest,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    async def _get_remote_provider_tools(
+        self,
+        candidate: Any,
+        request: ToolingGetToolCatalogRequest,
+    ) -> tuple[ToolingCatalogProviderInfo, list[ToolingToolInfo]]:
+        """Fetch one eligible remote provider's tools with a short per-peer cache."""
+
+        peer_id = candidate.peer.peer_id
+        service_instance_id = self._provider_service_instance_id(peer_id)
+        cache_key = self._catalog_cache_key(
+            peer_id=peer_id,
+            service_instance_id=service_instance_id,
+            query=request.query,
+            top_k=request.top_k,
+            last_manifest=getattr(candidate.peer, "last_manifest", 0.0),
+        )
+        now = time.monotonic()
+        cached = self._catalog_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return (
+                self._candidate_provider_info(candidate, cache_status="hit"),
+                list(cached[1].tools),
+            )
+
+        selector = MeshAddressSelector(
+            peer_id=peer_id,
+            provider_id=service_instance_id,
+            service_instance_id=service_instance_id,
+        )
+        remote_request = ToolingGetToolsRequest(
+            query=request.query,
+            top_k=request.top_k,
+            mesh_selector=selector,
+        )
+        try:
+            result = await self.bus.request(
+                ToolingMethods.GET_TOOLS,
+                remote_request,
+                timeout=max(0.1, min(request.provider_timeout_seconds, 3.0)),
+                priority=get_interactive_priority(),
+            )
+        except TimeoutError:
+            return (
+                ToolingCatalogProviderInfo(
+                    provider_peer_id=peer_id,
+                    provider_service_instance_id=service_instance_id,
+                    provider_kind="mesh_peer",
+                    eligible=False,
+                    reason_code="provider_timeout",
+                    reason="remote Tooling.GetTools request timed out",
+                    cache_status="failed",
+                ),
+                [],
+            )
+        except Exception as error:
+            return (
+                ToolingCatalogProviderInfo(
+                    provider_peer_id=peer_id,
+                    provider_service_instance_id=service_instance_id,
+                    provider_kind="mesh_peer",
+                    eligible=False,
+                    reason_code="provider_request_failed",
+                    reason=f"remote Tooling.GetTools request failed: {type(error).__name__}",
+                    cache_status="failed",
+                ),
+                [],
+            )
+        if not result.ok:
+            return (
+                ToolingCatalogProviderInfo(
+                    provider_peer_id=peer_id,
+                    provider_service_instance_id=service_instance_id,
+                    provider_kind="mesh_peer",
+                    eligible=False,
+                    reason_code="provider_request_failed",
+                    reason=result.error or "remote Tooling.GetTools request failed",
+                    cache_status="failed",
+                ),
+                [],
+            )
+
+        try:
+            if isinstance(result.data, ToolingGetToolsResponse):
+                response = result.data
+            else:
+                response = ToolingGetToolsResponse.model_validate(result.data)
+        except Exception as error:
+            return (
+                ToolingCatalogProviderInfo(
+                    provider_peer_id=peer_id,
+                    provider_service_instance_id=service_instance_id,
+                    provider_kind="mesh_peer",
+                    eligible=False,
+                    reason_code="provider_response_invalid",
+                    reason=f"remote Tooling.GetTools response was invalid: {type(error).__name__}",
+                    cache_status="failed",
+                ),
+                [],
+            )
+
+        ttl = max(0.0, request.cache_ttl_seconds)
+        if ttl > 0:
+            self._catalog_cache[cache_key] = (now + ttl, response)
+        return self._candidate_provider_info(candidate, cache_status="miss"), list(response.tools)
+
+    def _append_catalog_tool(
+        self,
+        *,
+        tool: ToolingToolInfo,
+        caller_permissions: list[str] | None,
+        tools: list[ToolingToolInfo],
+        blocked_tools: list[ToolingBlockedToolInfo],
+        include_blocked_tools: bool,
+    ) -> None:
+        block_reason = self._catalog_tool_block_reason(tool, caller_permissions)
+        if block_reason:
+            if include_blocked_tools:
+                blocked_tools.append(
+                    ToolingBlockedToolInfo(
+                        tool=tool,
+                        reason_code=block_reason[0],
+                        reason=block_reason[1],
+                    )
+                )
+            return
+        tools.append(tool)
 
     async def _audit_tool_execution(
         self,
@@ -707,6 +1004,111 @@ class ToolingService(BaseService):
         except Exception as e:
             log_error(f"Error handling get tools query: {e}", exc_info=True)
             return ToolingGetToolsResponse(tools=[], count=0)
+
+    @method_contract(
+        method_id=ToolingMethods.GET_TOOL_CATALOG,
+        summary="Get aggregate local and remote Tooling catalog",
+        input_model=ToolingGetToolCatalogRequest,
+        output_model=ToolingGetToolCatalogResponse,
+        exposure="both",
+        method_type="use",
+    )
+    async def _on_get_tool_catalog(
+        self, request: ToolingGetToolCatalogRequest, envelope: Any | None = None
+    ) -> ToolingGetToolCatalogResponse:
+        """Return a safe bindable aggregate catalog plus blocked provider/tool details."""
+
+        tools: list[ToolingToolInfo] = []
+        blocked_tools: list[ToolingBlockedToolInfo] = []
+        providers: list[ToolingCatalogProviderInfo] = [
+            ToolingCatalogProviderInfo(
+                provider_peer_id="local",
+                provider_service_instance_id="local:Tooling",
+                provider_kind="local",
+                eligible=True,
+                reason_code="eligible",
+                reason="local Tooling provider",
+                cache_status="local",
+            )
+        ]
+
+        try:
+            caller_permissions = await self._catalog_caller_permissions(request, envelope)
+            local_response = await self._on_get_tools(
+                ToolingGetToolsRequest(query=request.query, top_k=request.top_k)
+            )
+            for tool in local_response.tools:
+                self._append_catalog_tool(
+                    tool=tool,
+                    caller_permissions=caller_permissions,
+                    tools=tools,
+                    blocked_tools=blocked_tools,
+                    include_blocked_tools=request.include_blocked_tools,
+                )
+
+            eligible_candidates = []
+            for candidate in self._remote_tooling_candidates():
+                if not candidate.eligible:
+                    if request.include_unavailable:
+                        providers.append(
+                            self._candidate_provider_info(candidate, cache_status="blocked")
+                        )
+                    continue
+                eligible_candidates.append(candidate)
+
+            remote_results = await asyncio.gather(
+                *[
+                    self._get_remote_provider_tools(candidate, request)
+                    for candidate in eligible_candidates
+                ],
+                return_exceptions=True,
+            )
+            for candidate, result in zip(eligible_candidates, remote_results, strict=False):
+                if isinstance(result, Exception):
+                    peer_id = candidate.peer.peer_id
+                    service_instance_id = self._provider_service_instance_id(peer_id)
+                    provider = ToolingCatalogProviderInfo(
+                        provider_peer_id=peer_id,
+                        provider_service_instance_id=service_instance_id,
+                        provider_kind="mesh_peer",
+                        eligible=False,
+                        reason_code="provider_request_failed",
+                        reason=f"remote Tooling.GetTools request failed: {type(result).__name__}",
+                        cache_status="failed",
+                    )
+                    remote_tools = []
+                else:
+                    provider, remote_tools = result
+
+                if request.include_unavailable or provider.eligible:
+                    providers.append(provider)
+                for tool in remote_tools:
+                    self._append_catalog_tool(
+                        tool=tool,
+                        caller_permissions=caller_permissions,
+                        tools=tools,
+                        blocked_tools=blocked_tools,
+                        include_blocked_tools=request.include_blocked_tools,
+                    )
+
+        except Exception as error:
+            log_error(f"Error handling tool catalog query: {error}", exc_info=True)
+
+        tools = sorted(tools, key=lambda item: item.name)
+        blocked_tools = sorted(blocked_tools, key=lambda item: item.tool.name)
+        providers = sorted(
+            providers,
+            key=lambda item: (item.provider_kind != "local", item.provider_peer_id),
+        )
+        return ToolingGetToolCatalogResponse(
+            tools=tools,
+            blocked_tools=blocked_tools,
+            providers=providers,
+            count=len(tools),
+            blocked_count=len(blocked_tools),
+            generated_at=datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - Python 3.10
+            cache_ttl_seconds=request.cache_ttl_seconds,
+        )
 
     @method_contract(
         method_id=ToolingMethods.GET_TOOL_BY_NAME,
