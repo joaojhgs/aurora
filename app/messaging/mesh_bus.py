@@ -29,24 +29,72 @@ services work without any modification.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
-from app.messaging.bus import Handler, QueryResult
-from app.services.gateway.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
+from app.messaging.bus import Handler, MessageBus, QueryResult
 from app.shared.contracts.models.mesh import MeshAddressSelector
-
-if TYPE_CHECKING:
-    from app.messaging.bus import MessageBus
-    from app.services.gateway.config import MeshConfig
-    from app.services.gateway.mesh.peer_bridge import PeerBridge
-    from app.services.gateway.mesh.routing_table import RoutingTable
-
+from app.shared.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
 
 # Default remote call timeout in seconds (used when mesh_config has no override)
 _DEFAULT_REMOTE_TIMEOUT: float = 30.0
+
+
+class _RouteLike(Protocol):
+    target: str
+    peer_id: str | None
+    module: str
+    error_message: str | None
+
+
+class _PeerLike(Protocol):
+    peer_id: str
+
+
+class _RoutingTableLike(Protocol):
+    def resolve(
+        self,
+        topic: str,
+        *,
+        selector: MeshAddressSelector | None = None,
+    ) -> _RouteLike: ...
+
+    def resolve_fallback(
+        self,
+        topic: str,
+        *,
+        failed_peer_id: str,
+        selector: MeshAddressSelector | None = None,
+    ) -> _RouteLike: ...
+
+    def get_negotiated_peers(self) -> list[_PeerLike]: ...
+
+
+class _PeerBridgeLike(Protocol):
+    async def call(
+        self,
+        peer_id: str,
+        method: str,
+        params: BaseModel,
+        *,
+        timeout: float,
+        correlation_id: str | None = None,
+    ) -> QueryResult: ...
+
+    def fire_event(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: BaseModel,
+        *,
+        correlation_id: str | None = None,
+    ) -> None: ...
+
+
+class _MeshConfigLike(Protocol):
+    services: dict[str, Any]
 
 
 class MeshBus:
@@ -60,9 +108,9 @@ class MeshBus:
     def __init__(
         self,
         inner_bus: MessageBus,
-        routing_table: RoutingTable,
-        peer_bridge: PeerBridge | None,
-        mesh_config: MeshConfig,
+        routing_table: _RoutingTableLike,
+        peer_bridge: _PeerBridgeLike | None,
+        mesh_config: _MeshConfigLike,
     ) -> None:
         self._inner = inner_bus
         self._routing_table = routing_table
