@@ -13,13 +13,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
-from app.services.gateway.mesh.tracing import (
+from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.mesh.tracing import (
     audit_details_hash,
     ensure_correlation_id,
     redacted_copy,
 )
-from app.shared.contracts.models.scheduler import SchedulerMethods
-from app.shared.contracts.models.tooling import ToolingMethods
 
 
 def _json_default(obj: object) -> str:
