@@ -44,6 +44,8 @@ class GatewayMethods:
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
     GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
+    GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
+    EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
 
 
 # =============================================================================
@@ -329,6 +331,8 @@ class CapabilityMethodInfo(IOModel):
     summary: str = ""
     input_model: str | None = None
     output_model: str | None = None
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
     policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
     address: CapabilityAddressInfo
     provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
@@ -409,6 +413,185 @@ class CapabilityGraph(IOModel):
             "namespace",
         ]
     )
+    secrets_redacted: bool = True
+
+
+class CapabilityFreshnessInfo(IOModel):
+    """Source and staleness metadata for catalog entries."""
+
+    source: str = "unknown"
+    manifest_time: str | None = None
+    last_probe_age_s: float | None = None
+    ttl_s: float | None = None
+    stale: bool = False
+    registry_digest: str = ""
+
+
+class CapabilityPolicyDecisionInfo(IOModel):
+    """Policy facts needed by SDK/UI bindability decisions."""
+
+    required_permissions: list[str] = Field(default_factory=list)
+    trust_tier: str = "unknown"
+    safety_class: str = "standard"
+    explicit_selector_required: bool = False
+    consent_required: bool = False
+    privacy_indicator_required: bool = False
+    bandwidth_check_required: bool = False
+    approval_required: bool = False
+    selector_required: bool = False
+    mesh_visible: bool = False
+    local_only: bool = False
+    allowed_peers: list[str] | None = None
+    operation_class: str | None = None
+    resource_scope: str | None = None
+    denial_reasons: list[str] = Field(default_factory=list)
+
+
+class CapabilityProviderInfo(IOModel):
+    """One local or remote provider for a capability module."""
+
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    node_name: str = ""
+    status: str = "unknown"
+    service_instance_id: str
+    module: str
+    version: str = ""
+    latency_ms: float | None = None
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    eligible: bool = False
+    reason_code: str = ""
+    reason: str = ""
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityActionInfo(IOModel):
+    """Executable or explainable capability action for SDK/UI consumers."""
+
+    action_id: str
+    module: str
+    method: str
+    topic: str | None = None
+    tool_id: str | None = None
+    resource_id: str | None = None
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    service_instance_id: str
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any
+    bindability: str = "unavailable"
+    sdk_operation_kind: str = "bus_method"
+    route_hints: list[str] = Field(default_factory=list)
+    route_blockers: list[str] = Field(default_factory=list)
+    summary: str = ""
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityCatalogResourceInfo(IOModel):
+    """Addressable resource advertised through the capability catalog."""
+
+    resource_id: str
+    resource_type: str
+    owner_peer_id: str
+    service_instance_id: str | None = None
+    namespace: str | None = None
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityCatalogRequest(IOModel):
+    """Request a canonical executable capability catalog."""
+
+    modules: list[str] | None = None
+    include_unavailable: bool = True
+    include_internal: bool = False
+    include_schemas: bool = True
+
+
+class CapabilityCatalogResponse(IOModel):
+    """Canonical SDK/UI capability catalog."""
+
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    local_peer_id: str | None = None
+    local_node_name: str = ""
+    providers: list[CapabilityProviderInfo] = Field(default_factory=list)
+    actions: list[CapabilityActionInfo] = Field(default_factory=list)
+    resources: list[CapabilityCatalogResourceInfo] = Field(default_factory=list)
+    provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    action_index: dict[str, list[str]] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
+class RouteBlockerInfo(IOModel):
+    """Route blocker or selector validation problem."""
+
+    code: str
+    message: str
+    severity: str = "error"
+    provider_id: str | None = None
+    peer_id: str | None = None
+    security_privacy: bool = False
+
+
+class RouteCandidateDecision(IOModel):
+    """Eligibility and selection decision for one route candidate."""
+
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    service_instance_id: str
+    module: str
+    version: str = ""
+    included: bool = False
+    selected: bool = False
+    reason_code: str = ""
+    reason: str = ""
+    latency_ms: float | None = None
+    active_calls: int = 0
+    max_concurrent: int = 0
+    available_capacity: int | None = None
+    blockers: list[RouteBlockerInfo] = Field(default_factory=list)
+
+
+class RouteExplainRequest(IOModel):
+    """Explain how Gateway would route a topic/module selector."""
+
+    topic: str | None = None
+    module: str | None = None
+    method: str | None = None
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any | None = None
+    include_candidates: bool = True
+
+
+class RouteExplainResponse(IOModel):
+    """Route selection explanation for SDK route sheets."""
+
+    topic: str
+    module: str
+    selected_target: str = "local"
+    selected_peer_id: str | None = None
+    selected_service_instance_id: str | None = None
+    selected_provider_id: str | None = None
+    selector_valid: bool = True
+    selector_validation_code: str = ""
+    selector_validation_message: str = ""
+    fallback_behavior: str = ""
+    candidates: list[RouteCandidateDecision] = Field(default_factory=list)
+    blockers: list[RouteBlockerInfo] = Field(default_factory=list)
+    security_privacy_blockers: list[RouteBlockerInfo] = Field(default_factory=list)
     secrets_redacted: bool = True
 
 

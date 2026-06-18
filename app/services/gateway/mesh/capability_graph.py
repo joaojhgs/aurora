@@ -300,6 +300,8 @@ def _method_to_graph(
         summary=method.summary,
         input_model=method.input_model,
         output_model=method.output_model,
+        input_schema=method.input_schema,
+        output_schema=method.output_schema,
         policy=policy,
         address=CapabilityAddressInfo(
             peer_id=peer_id,
@@ -358,7 +360,7 @@ def _policy_for_module(
         or module in _HARDWARE_OR_AUDIO_MODULES
         or safety_class != "standard"
     )
-    return CapabilityPolicyInfo(
+    policy = CapabilityPolicyInfo(
         trust_tier="local" if provider_kind == "local" else "mesh_peer",
         safety_class=safety_class,
         allowed_peers=list(sharing_config.allowed_peers)
@@ -369,12 +371,16 @@ def _policy_for_module(
         and safety_class in {"hardware", "data", "admin"},
         consent_required=module in _HARDWARE_OR_AUDIO_MODULES,
         privacy_indicator_required=module in _HARDWARE_OR_AUDIO_MODULES,
-        bandwidth_check_required=module in {"AudioInput", "STTCoordinator", "WakeWord", "Transcription"},
+        bandwidth_check_required=module
+        in {"AudioInput", "STTCoordinator", "WakeWord", "Transcription"},
         operation_class="audio_service" if module in _HARDWARE_OR_AUDIO_MODULES else None,
         resource_scope="audio" if module in _HARDWARE_OR_AUDIO_MODULES else None,
         mesh_visible=bool(sharing_config.share) if sharing_config else provider_kind == "remote",
         local_only=provider_kind == "local" and not (sharing_config and sharing_config.share),
     )
+    if provider_kind == "remote" and safety_class == "delegated_action":
+        policy.confirmation_required = True
+    return policy
 
 
 def _remote_route_blockers(

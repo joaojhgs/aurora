@@ -78,10 +78,10 @@ class RoutingTable:
         if not routing_config:
             return RouteDecision(target="local", module=module)
 
-        if (
-            _requires_explicit_audio_selector(topic)
-            and routing_config.prefer in {"network", "network_only"}
-        ):
+        if _requires_explicit_audio_selector(topic) and routing_config.prefer in {
+            "network",
+            "network_only",
+        }:
             return _route_error(
                 module=module,
                 selector=selector,
@@ -195,8 +195,7 @@ class RoutingTable:
                 selector=selector,
                 code="selector_peer_stale" if peer.status == "stale" else "selector_peer_not_ready",
                 message=(
-                    f"{module} selector peer/provider '{peer_id}' is {peer.status}, "
-                    "not negotiated"
+                    f"{module} selector peer/provider '{peer_id}' is {peer.status}, not negotiated"
                 ),
             )
 
@@ -397,7 +396,11 @@ def _selector_peer_id(selector: MeshAddressSelector, module: str) -> tuple[str |
     if selector.service_instance_id:
         service_peer = selector.service_instance_id
         if ":" in service_peer:
-            service_peer, service_module = service_peer.split(":", 1)
+            parts = service_peer.split(":")
+            if len(parts) == 3 and parts[0] in {"local", "remote"}:
+                _, service_peer, service_module = parts
+            else:
+                service_peer, service_module = service_peer.split(":", 1)
             if service_module and service_module != module:
                 return None, (
                     f"service_instance_id '{selector.service_instance_id}' targets "
