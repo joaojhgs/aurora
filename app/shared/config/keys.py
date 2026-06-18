@@ -252,6 +252,7 @@ class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -262,6 +263,9 @@ class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.stt.coordinator.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.stt.coordinator.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.coordinator.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.coordinator.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.stt.coordinator.mesh_sharing.required_capabilities"
         )
@@ -290,6 +294,7 @@ class _ServicesSttTranscriptionMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -300,6 +305,9 @@ class _ServicesSttTranscriptionMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.stt.transcription.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.stt.transcription.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.transcription.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.transcription.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.stt.transcription.mesh_sharing.required_capabilities"
         )
@@ -328,6 +336,7 @@ class _ServicesSttWakewordMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -338,6 +347,9 @@ class _ServicesSttWakewordMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.stt.wakeword.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.stt.wakeword.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.wakeword.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.wakeword.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.stt.wakeword.mesh_sharing.required_capabilities"
         )
@@ -448,6 +460,7 @@ class _ServicesDbMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -458,6 +471,9 @@ class _ServicesDbMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.db.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.db.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.db.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.db.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath("services.db.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.db.mesh_sharing.share")
         return self
@@ -560,6 +576,7 @@ class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -570,6 +587,9 @@ class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.orchestrator.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.orchestrator.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.orchestrator.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.orchestrator.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.orchestrator.mesh_sharing.required_capabilities"
         )
@@ -583,6 +603,7 @@ class _ServicesSchedulerMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -593,6 +614,9 @@ class _ServicesSchedulerMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.scheduler.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.scheduler.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.scheduler.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.scheduler.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.scheduler.mesh_sharing.required_capabilities"
         )
@@ -691,6 +715,7 @@ class _ServicesToolingMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -701,6 +726,9 @@ class _ServicesToolingMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.tooling.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.tooling.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.tooling.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tooling.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath(
             "services.tooling.mesh_sharing.required_capabilities"
         )
@@ -737,6 +765,7 @@ class _ServicesTtsMeshSharingConfigPath(ConfigPath):
     max_concurrent: ConfigPath
     min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
 
@@ -747,6 +776,9 @@ class _ServicesTtsMeshSharingConfigPath(ConfigPath):
         self.max_concurrent = ConfigPath("services.tts.mesh_sharing.max_concurrent")
         self.min_version = ConfigPath("services.tts.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.tts.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tts.mesh_sharing.require_explicit_selector"
+        )
         self.required_capabilities = ConfigPath("services.tts.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.tts.mesh_sharing.share")
         return self

@@ -1237,6 +1237,11 @@
           "items": { "type": "string" },
           "description": "Remote service capabilities required before this service may be selected as a mesh provider.",
           "default": []
+        },
+        "require_explicit_selector": {
+          "type": "boolean",
+          "description": "Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.",
+          "default": false
         }
       }
     }

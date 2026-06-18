@@ -75,7 +75,8 @@
         "prefer": "local",
         "fallback": "local",
         "min_version": null,
-        "required_capabilities": []
+        "required_capabilities": [],
+        "require_explicit_selector": false
       },
       "hardware_acceleration": false,
       "model_file_path": "voice_models/en_US-lessac-medium.onnx",
@@ -94,7 +95,8 @@
           "prefer": "local",
           "fallback": "local",
           "min_version": null,
-          "required_capabilities": []
+          "required_capabilities": [],
+          "require_explicit_selector": false
         },
         "session_timeout_s": 10.0,
         "multi_turn_enabled": false,
@@ -123,7 +125,8 @@
           "prefer": "local",
           "fallback": "local",
           "min_version": null,
-          "required_capabilities": []
+          "required_capabilities": [],
+          "require_explicit_selector": false
         },
         "backend": "oww",
         "model_path": null,
@@ -139,7 +142,8 @@
           "prefer": "local",
           "fallback": "local",
           "min_version": null,
-          "required_capabilities": []
+          "required_capabilities": [],
+          "require_explicit_selector": false
         },
         "vad_enabled": true,
         "vad_threshold": 0.5,
@@ -169,7 +173,8 @@
         "prefer": "local",
         "fallback": "local",
         "min_version": null,
-        "required_capabilities": []
+        "required_capabilities": [],
+        "require_explicit_selector": false
       },
       "hardware_acceleration": false,
       "llm": {
@@ -230,7 +235,8 @@
         "prefer": "local",
         "fallback": "local",
         "min_version": null,
-        "required_capabilities": []
+        "required_capabilities": [],
+        "require_explicit_selector": false
       },
       "embeddings": {
         "use_local": true
@@ -245,7 +251,8 @@
         "prefer": "local",
         "fallback": "local",
         "min_version": null,
-        "required_capabilities": []
+        "required_capabilities": [],
+        "require_explicit_selector": false
       },
       "hardware_acceleration": {
         "ocr_bg": false,
@@ -299,7 +306,8 @@
         "prefer": "local",
         "fallback": "local",
         "min_version": null,
-        "required_capabilities": []
+        "required_capabilities": [],
+        "require_explicit_selector": false
       }
     },
     "config": {

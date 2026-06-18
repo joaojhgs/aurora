@@ -50,9 +50,11 @@ def routing_table(mesh_config, peer_registry):
     return RoutingTable(mesh_config, peer_registry)
 
 
-def _make_negotiated_peer(peer_id, modules, latency_ms=50.0):
+def _make_negotiated_peer(peer_id, modules, latency_ms=50.0, *, max_concurrent=10):
     """Create a negotiated PeerState with given modules."""
-    services = [PeerServiceInfo(module=m, version="1.0.0") for m in modules]
+    services = [
+        PeerServiceInfo(module=m, version="1.0.0", max_concurrent=max_concurrent) for m in modules
+    ]
     manifest = PeerManifest(peer_id=peer_id, shared_services=services)
     return PeerState(
         peer_id=peer_id,
@@ -159,6 +161,60 @@ class TestRoutingTableResolve:
 
         assert route.target == "error"
         assert route.error_code == "selector_peer_unauthorized"
+
+    @pytest.mark.asyncio
+    async def test_explicit_stale_peer_returns_actionable_error(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        peer_registry.get_peer("peer-1").status = "stale"
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_stale"
+        assert "not negotiated" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_version_mismatch_returns_actionable_error(
+        self, mesh_config, peer_registry
+    ):
+        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", min_version="2.0.0")
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_incompatible_version"
+        assert "2.0.0" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_capacity_returns_actionable_error(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("peer-1", ["DB"], max_concurrent=1)
+        peer.active_calls = 1
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        peer_registry.get_peer("peer-1").active_calls = 1
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_provider_at_capacity"
+        assert "at capacity" in route.error_message
 
     def test_policy_can_require_explicit_selector(self, routing_table):
         route = routing_table.resolve("Tooling.ExecuteTool")
