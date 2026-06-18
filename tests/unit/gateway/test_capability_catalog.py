@@ -139,6 +139,8 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
 
     peer_a_action = next(action for action in catalog.actions if action.peer_id == "peer-a")
     assert peer_a_action.selector.peer_id == "peer-a"
+    assert peer_a_action.selector.provider_id == "remote:peer-a:Tooling"
+    assert peer_a_action.selector.service_instance_id == peer_a_action.service_instance_id
     assert peer_a_action.service_instance_id == "remote:peer-a:Tooling"
     assert peer_a_action.bindability == "approval-required"
     assert peer_a_action.policy.safety_class == "delegated_action"
@@ -152,6 +154,9 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
     assert peer_c_provider.reason_code == "peer_not_allowed"
 
     local_action = next(action for action in catalog.actions if action.peer_id == "local-peer")
+    assert local_action.service_instance_id == "local:local-peer:Tooling"
+    assert local_action.selector.provider_id == "local:local-peer:Tooling"
+    assert local_action.selector.service_instance_id == local_action.service_instance_id
     assert local_action.input_schema["properties"]["query"]["type"] == "string"
     assert local_action.input_schema["properties"]["api_token"]["description"] == "redacted"
     assert local_action.input_schema["properties"]["file_path"]["description"] == "redacted"
@@ -224,6 +229,133 @@ async def test_route_explain_reports_selected_remote_stale_denied_and_local_cand
     assert by_peer["peer-denied"].reason_code == "peer_not_allowed"
     assert by_peer["peer-denied"].blockers[0].security_privacy is True
     assert by_peer["peer-stale"].reason_code == "peer_stale"
+
+
+@pytest.mark.asyncio
+async def test_catalog_selectors_round_trip_through_route_explain():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        peer_selection="lowest_latency",
+        services={
+            "Tooling": MeshServiceConfig(
+                share=True,
+                prefer="network",
+                fallback="local",
+                allowed_peers=["peer-a", "peer-stale"],
+                required_capabilities=["tools"],
+            ),
+        },
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+
+    await registry.register_peer("peer-a", "alpha")
+    await registry.update_manifest(
+        "peer-a",
+        PeerManifest(peer_id="peer-a", shared_services=[_remote_service("Tooling", "1.0.0")]),
+    )
+    await registry.update_latency("peer-a", 5.0)
+
+    await registry.register_peer("peer-denied", "denied")
+    await registry.update_manifest(
+        "peer-denied",
+        PeerManifest(
+            peer_id="peer-denied",
+            shared_services=[_remote_service("Tooling", "1.0.0")],
+        ),
+    )
+
+    await registry.register_peer("peer-stale", "stale")
+    await registry.update_manifest(
+        "peer-stale",
+        PeerManifest(
+            peer_id="peer-stale",
+            shared_services=[_remote_service("Tooling", "1.0.0")],
+        ),
+    )
+    registry.get_peer("peer-stale").status = "stale"
+
+    local_services = {
+        "Tooling": ServiceAnnouncement(
+            module="Tooling",
+            version="local",
+            methods=[_method("Tooling")],
+        )
+    }
+    catalog = build_capability_catalog(
+        request=CapabilityCatalogRequest(modules=["Tooling"]),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        peers=registry.get_all_peers(),
+        local_peer_id="local-peer",
+    )
+    actions_by_peer = {action.peer_id: action for action in catalog.actions}
+
+    local_response = explain_route(
+        request=RouteExplainRequest(
+            topic="Tooling.Execute",
+            selector=actions_by_peer["local-peer"].selector,
+        ),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+    assert local_response.selected_target == "local"
+    assert local_response.selector_valid is True
+    assert local_response.selected_service_instance_id == "local:local-peer:Tooling"
+    assert local_response.selected_provider_id == "local:local-peer:Tooling"
+
+    remote_response = explain_route(
+        request=RouteExplainRequest(
+            topic="Tooling.Execute",
+            selector=actions_by_peer["peer-a"].selector,
+        ),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+    assert remote_response.selected_target == "remote"
+    assert remote_response.selected_peer_id == "peer-a"
+    assert remote_response.selector_valid is True
+    assert remote_response.selected_service_instance_id == "remote:peer-a:Tooling"
+    assert remote_response.selected_provider_id == "remote:peer-a:Tooling"
+
+    denied_response = explain_route(
+        request=RouteExplainRequest(
+            topic="Tooling.Execute",
+            selector=actions_by_peer["peer-denied"].selector,
+        ),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+    assert denied_response.selected_target == "error"
+    assert denied_response.selector_valid is False
+    assert denied_response.selector_validation_code == "selector_peer_unauthorized"
+    assert any(blocker.code == "peer_not_allowed" for blocker in denied_response.blockers)
+
+    stale_response = explain_route(
+        request=RouteExplainRequest(
+            topic="Tooling.Execute",
+            selector=actions_by_peer["peer-stale"].selector,
+        ),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+    assert stale_response.selected_target == "error"
+    assert stale_response.selector_valid is False
+    assert stale_response.selector_validation_code == "selector_peer_stale"
+    assert any(blocker.code == "peer_stale" for blocker in stale_response.blockers)
 
 
 @pytest.mark.asyncio

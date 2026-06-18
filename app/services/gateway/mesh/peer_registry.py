@@ -579,22 +579,38 @@ def _selector_peer_id(
         return None, None
 
     peer_ids: list[str] = []
-    for value in (selector.peer_id, selector.provider_id):
-        if value and value not in peer_ids:
-            peer_ids.append(value)
-
-    if selector.service_instance_id:
-        service_peer = selector.service_instance_id
-        if ":" in service_peer:
-            service_peer, service_module = service_peer.split(":", 1)
-            if service_module and service_module != module:
-                return None, (
-                    f"service_instance_id '{selector.service_instance_id}' targets "
-                    f"{service_module}, not {module}"
-                )
-        if service_peer and service_peer not in peer_ids:
-            peer_ids.append(service_peer)
+    for value, field_name in (
+        (selector.peer_id, "peer_id"),
+        (selector.provider_id, "provider_id"),
+        (selector.service_instance_id, "service_instance_id"),
+    ):
+        peer_id, error = _parse_selector_peer_id(value, field_name, module)
+        if error:
+            return None, error
+        if peer_id and peer_id not in peer_ids:
+            peer_ids.append(peer_id)
 
     if len(peer_ids) > 1:
         return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}"
     return (peer_ids[0], None) if peer_ids else (None, None)
+
+
+def _parse_selector_peer_id(
+    value: str | None,
+    field_name: str,
+    module: str,
+) -> tuple[str | None, str | None]:
+    if not value:
+        return None, None
+    if ":" not in value:
+        return value, None
+
+    parts = value.split(":")
+    if len(parts) == 3 and parts[0] in {"local", "remote"}:
+        _, peer_id, service_module = parts
+    else:
+        peer_id, service_module = value.split(":", 1)
+
+    if service_module and service_module != module:
+        return None, f"{field_name} '{value}' targets {service_module}, not {module}"
+    return peer_id, None

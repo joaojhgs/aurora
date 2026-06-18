@@ -217,8 +217,8 @@ def _action_from_method(
     policy = _policy_decision(method.policy, service.route_blockers)
     selector = MeshAddressSelector(
         peer_id=service.peer_id,
-        provider_id=service.peer_id,
-        service_instance_id=f"{service.peer_id}:{service.module}",
+        provider_id=service.service_instance_id,
+        service_instance_id=service.service_instance_id,
     )
     return CapabilityActionInfo(
         action_id=method.method_id,
