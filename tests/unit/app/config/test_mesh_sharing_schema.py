@@ -21,7 +21,19 @@ MESH_POLICY_FIELDS = {
     "fallback": "local",
     "min_version": None,
     "required_capabilities": [],
+    "require_explicit_selector": False,
 }
+
+MESH_SHAREABLE_SERVICE_PATHS = (
+    ("stt", "coordinator"),
+    ("stt", "transcription"),
+    ("stt", "wakeword"),
+    ("db",),
+    ("orchestrator",),
+    ("scheduler",),
+    ("tooling",),
+    ("tts",),
+)
 
 
 @pytest.mark.unit
@@ -44,6 +56,7 @@ def test_generated_mesh_sharing_model_and_defaults_include_policy_fields() -> No
     assert default_mesh_sharing == MESH_POLICY_FIELDS
     assert set(MESH_POLICY_FIELDS) <= set(MeshSharing.model_fields)
     assert MeshSharing().required_capabilities == []
+    assert MeshSharing().require_explicit_selector is False
 
 
 @pytest.mark.unit
@@ -53,9 +66,28 @@ def test_generated_config_keys_include_mesh_policy_leaf_paths() -> None:
     assert mesh_keys.allowed_peers == "services.tts.mesh_sharing.allowed_peers"
     assert mesh_keys.min_version == "services.tts.mesh_sharing.min_version"
     assert (
-        mesh_keys.required_capabilities
-        == "services.tts.mesh_sharing.required_capabilities"
+        mesh_keys.require_explicit_selector == "services.tts.mesh_sharing.require_explicit_selector"
     )
+    assert mesh_keys.required_capabilities == "services.tts.mesh_sharing.required_capabilities"
+
+
+@pytest.mark.unit
+def test_all_mesh_shareable_services_expose_complete_mesh_policy_artifacts() -> None:
+    defaults = json.loads(DEFAULTS_PATH.read_text())["services"]
+
+    for path in MESH_SHAREABLE_SERVICE_PATHS:
+        default_node = defaults
+        key_node = ConfigKeys.services
+        for part in path:
+            default_node = default_node[part]
+            key_node = getattr(key_node, part)
+
+        assert default_node["mesh_sharing"] == MESH_POLICY_FIELDS
+
+        mesh_keys = key_node.mesh_sharing
+        for field_name in MESH_POLICY_FIELDS:
+            expected_path = f"services.{'.'.join(path)}.mesh_sharing.{field_name}"
+            assert getattr(mesh_keys, field_name) == expected_path
 
 
 @pytest.mark.unit

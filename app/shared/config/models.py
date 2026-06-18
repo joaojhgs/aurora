@@ -678,6 +678,10 @@ class MeshSharing(BaseConfigModel):
     """
     Remote service capabilities required before this service may be selected as a mesh provider.
     """
+    require_explicit_selector: bool | None = False
+    """
+    Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
+    """
 
 
 class Tts(BaseConfigModel):
