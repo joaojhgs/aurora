@@ -20,10 +20,14 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority
 from app.orchestrator import UserInput
+from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.stt import STTMethods
 from app.shared.contracts.models.tts import TTSMethods
+from app.ui.mesh_diagnostics import build_mesh_diagnostics_surface
+from app.ui.sdk import normalize_capability_graph, normalize_mesh_status
 
 
 class UIBridge(QObject):
@@ -39,6 +43,7 @@ class UIBridge(QObject):
     tts_started = pyqtSignal(str)  # TTS playback started
     tts_stopped = pyqtSignal()  # TTS playback stopped
     status_changed = pyqtSignal(str)  # General status updates
+    mesh_diagnostics_updated = pyqtSignal(dict)  # Mesh diagnostics/status surface
 
     def __init__(self, bus: MessageBus, ui_window):
         """Initialize UI bridge.
@@ -86,6 +91,12 @@ class UIBridge(QObject):
 
         # Register callback for stop TTS button
         self.ui_window._stop_tts_callback = self._on_stop_tts_request
+
+        if hasattr(self.ui_window, "request_mesh_diagnostics_signal"):
+            self.ui_window.request_mesh_diagnostics_signal.connect(
+                self._on_mesh_diagnostics_request
+            )
+        self.ui_window._refresh_mesh_diagnostics_callback = self._on_mesh_diagnostics_request
 
     async def _load_today_messages(self):
         """Load today's messages from database via bus.request()."""
@@ -171,6 +182,51 @@ class UIBridge(QObject):
             ),
             self._loop,  # Command  # High priority
         )
+
+    def _on_mesh_diagnostics_request(self):
+        """Handle UI request for the read-only mesh diagnostics surface."""
+
+        asyncio.run_coroutine_threadsafe(self.refresh_mesh_diagnostics(), self._loop)
+
+    async def refresh_mesh_diagnostics(self) -> dict:
+        """Fetch Gateway mesh diagnostics and emit a UI-safe status surface."""
+
+        try:
+            mesh_result = await self.bus.request(
+                GatewayMethods.GET_MESH_STATUS,
+                EmptyInput(),
+                timeout=10.0,
+            )
+            graph_result = await self.bus.request(
+                GatewayMethods.GET_CAPABILITY_GRAPH,
+                EmptyInput(),
+                timeout=10.0,
+            )
+
+            mesh_view = (
+                normalize_mesh_status(mesh_result.data)
+                if mesh_result and mesh_result.ok and mesh_result.data
+                else None
+            )
+            graph_view = (
+                normalize_capability_graph(graph_result.data)
+                if graph_result and graph_result.ok and graph_result.data
+                else None
+            )
+            surface = build_mesh_diagnostics_surface(mesh_view, graph_view)
+            payload = surface.model_dump()
+            self.mesh_diagnostics_updated.emit(payload)
+            if hasattr(self.ui_window, "signals") and hasattr(
+                self.ui_window.signals, "mesh_diagnostics_updated"
+            ):
+                self.ui_window.signals.mesh_diagnostics_updated.emit(payload)
+            return payload
+        except Exception as e:
+            log_error(f"Error refreshing mesh diagnostics: {e}", exc_info=True)
+            surface = build_mesh_diagnostics_surface(None)
+            payload = surface.model_dump()
+            self.mesh_diagnostics_updated.emit(payload)
+            return payload
 
     async def _on_llm_response(self, env: Envelope) -> None:
         """Handle LLM response event.
