@@ -404,6 +404,8 @@ class AuditLogRequest(BaseModel):
     offset: int = 0
     principal_id: str | None = None
     event: str | None = None
+    correlation_id: str | None = None
+    peer_id: str | None = None
 
 
 class AuditLogResponse(BaseModel):

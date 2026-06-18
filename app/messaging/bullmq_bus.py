@@ -464,6 +464,7 @@ class BullMQBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
@@ -487,18 +488,18 @@ class BullMQBus:
         if not self._available:
             raise RuntimeError("BullMQ not available")
 
-        # Generate unique correlation ID
-        correlation_id = str(uuid_lib.uuid4())
-        reply_topic = f"reply.{message.__class__.__name__}.{correlation_id}"
+        # Generate or propagate a unique correlation ID
+        request_correlation_id = correlation_id or str(uuid_lib.uuid4())
+        reply_topic = f"reply.{message.__class__.__name__}.{request_correlation_id}"
 
         # Create future for response
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
-        self._response_futures[correlation_id] = fut
+        self._response_futures[request_correlation_id] = fut
 
         # Subscribe to reply topic (one-time handler)
         async def _on_reply(env: Envelope) -> None:
             """Handle reply message; match LocalBus logic + correlation_id."""
-            if env.correlation_id != correlation_id or fut.done():
+            if env.correlation_id != request_correlation_id or fut.done():
                 return
 
             if hasattr(env.payload, "model_dump"):
@@ -524,7 +525,7 @@ class BullMQBus:
         # Subscribe to reply topic (publish already exempts reply.* from contract validation)
         self.subscribe(reply_topic, _on_reply)
 
-        log_debug(f"Sent request to {topic} with correlation_id {correlation_id}")
+        log_debug(f"Sent request to {topic} with correlation_id {request_correlation_id}")
 
         try:
             await self.publish(
@@ -539,18 +540,18 @@ class BullMQBus:
                 max_attempts=max_attempts,
                 reply_to=reply_topic,
                 principal_id=principal_id,
-                correlation_id=correlation_id,
+                correlation_id=request_correlation_id,
             )
 
             try:
                 result = await asyncio.wait_for(fut, timeout)
-                log_debug(f"Received response for correlation_id {correlation_id}")
+                log_debug(f"Received response for correlation_id {request_correlation_id}")
                 return result
             except TimeoutError:
                 log_error(f"Request to {topic} timed out after {timeout}s")
                 return QueryResult(ok=False, error=f"Request timeout after {timeout}s")
         finally:
-            self._response_futures.pop(correlation_id, None)
+            self._response_futures.pop(request_correlation_id, None)
             self.unsubscribe(reply_topic, _on_reply)
             await self._async_teardown_topic(reply_topic)
 

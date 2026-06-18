@@ -63,6 +63,7 @@ class PeerBridge:
         topic: str,
         payload: BaseModel | dict,
         timeout: float = 30.0,
+        correlation_id: str | None = None,
     ) -> QueryResult:
         """Send an RPC call to a remote peer and wait for the response.
 
@@ -75,7 +76,7 @@ class PeerBridge:
         Returns:
             QueryResult with the response data or error
         """
-        req_id = uuid.uuid4().hex[:12]
+        req_id = correlation_id or uuid.uuid4().hex[:12]
 
         # Serialize payload
         if isinstance(payload, BaseModel):
@@ -89,6 +90,7 @@ class PeerBridge:
         msg = {
             "type": "call",
             "id": req_id,
+            "correlation_id": req_id,
             "method": topic,
             "params": params,
         }
@@ -112,7 +114,10 @@ class PeerBridge:
                     error=f"Cannot send to peer {peer_id} (not connected)",
                 )
 
-            log_debug(f"PeerBridge: Sent call {req_id} to {peer_id} topic={topic}")
+            log_debug(
+                f"PeerBridge: Sent call {req_id} to {peer_id} topic={topic} "
+                f"correlation_id={req_id}"
+            )
 
             # Wait for response with timeout
             result = await asyncio.wait_for(fut, timeout)
@@ -120,7 +125,10 @@ class PeerBridge:
 
         except TimeoutError:
             self._pending_calls.pop(req_id, None)
-            log_warning(f"PeerBridge: Call {req_id} to {peer_id} timed out ({timeout}s)")
+            log_warning(
+                f"PeerBridge: Call {req_id} to {peer_id} timed out ({timeout}s) "
+                f"correlation_id={req_id}"
+            )
             return QueryResult(
                 ok=False,
                 error=f"Remote call to {peer_id} timed out after {timeout}s",
@@ -199,6 +207,7 @@ class PeerBridge:
         peer_id: str,
         topic: str,
         payload: BaseModel | dict,
+        correlation_id: str | None = None,
     ) -> None:
         """Forward an event to a remote peer (fire-and-forget).
 
@@ -221,6 +230,7 @@ class PeerBridge:
             "type": "event",
             "topic": topic,
             "params": params,
+            "correlation_id": correlation_id,
         }
 
         sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
