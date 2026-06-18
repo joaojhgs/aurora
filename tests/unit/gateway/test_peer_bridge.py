@@ -67,14 +67,26 @@ class TestPeerBridgeCall:
 
     @pytest.mark.asyncio
     async def test_call_timeout(self, bridge, mock_rtc_client):
-        result = await bridge.call("peer-1", "TTS.Request", FakePayload(), timeout=0.1)
+        result = await bridge.call(
+            "peer-1",
+            "TTS.Request",
+            FakePayload(),
+            timeout=0.1,
+            correlation_id="trace-timeout",
+        )
         assert result.ok is False
         assert "timed out" in result.error
+        assert "trace-timeout" not in bridge._pending_calls
 
     @pytest.mark.asyncio
     async def test_call_send_failure(self, bridge, mock_rtc_client):
         mock_rtc_client.send_to_peer.return_value = False
-        result = await bridge.call("peer-1", "TTS.Request", FakePayload())
+        result = await bridge.call(
+            "peer-1",
+            "TTS.Request",
+            FakePayload(),
+            correlation_id="trace-send-failure",
+        )
         assert result.ok is False
         assert "not connected" in result.error
 
@@ -96,6 +108,34 @@ class TestPeerBridgeCall:
         task = asyncio.create_task(simulate_response())
         result = await bridge.call("peer-1", "TTS.Request", {"text": "hi"}, timeout=5.0)
         await task
+        assert result.ok is True
+
+    @pytest.mark.asyncio
+    async def test_call_sends_correlation_id(self, bridge, mock_rtc_client):
+        async def simulate_response():
+            await asyncio.sleep(0.05)
+            bridge.on_response(
+                "peer-1",
+                {
+                    "type": "result",
+                    "id": "trace-123",
+                    "result": {"ok": True},
+                },
+            )
+
+        task = asyncio.create_task(simulate_response())
+        result = await bridge.call(
+            "peer-1",
+            "TTS.Request",
+            FakePayload(),
+            timeout=5.0,
+            correlation_id="trace-123",
+        )
+        await task
+
+        sent = json.loads(mock_rtc_client.send_to_peer.call_args.args[1])
+        assert sent["id"] == "trace-123"
+        assert sent["correlation_id"] == "trace-123"
         assert result.ok is True
 
 

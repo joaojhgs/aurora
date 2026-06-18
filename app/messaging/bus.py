@@ -150,6 +150,7 @@ class MessageBus(Protocol):
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
 
@@ -161,6 +162,7 @@ class MessageBus(Protocol):
             timeout: Response timeout in seconds
             ttl_ms: Time-to-live in milliseconds
             max_attempts: Maximum retry attempts
+            correlation_id: Optional caller-supplied trace correlation ID
 
         Returns:
             QueryResult containing the response data or error

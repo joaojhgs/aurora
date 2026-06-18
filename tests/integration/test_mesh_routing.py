@@ -117,12 +117,18 @@ class TestMeshRoutingEndToEnd:
                     )
 
         task = asyncio.create_task(simulate_remote_response())
-        result = await mesh_bus.request("Orchestrator.Query", TTSRequest(text="What is 6*7?"))
+        result = await mesh_bus.request(
+            "Orchestrator.Query",
+            TTSRequest(text="What is 6*7?"),
+            correlation_id="trace-route",
+        )
         await task
 
         assert result.ok is True
         assert result.data["source"] == "remote"
         mock_rtc_client.send_to_peer.assert_called_once()
+        sent = mock_rtc_client.send_to_peer.call_args.args[1]
+        assert "trace-route" in sent
 
     @pytest.mark.asyncio
     async def test_network_route_falls_back_to_local_when_no_peer(self, mesh_bus, inner_bus):

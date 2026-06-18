@@ -731,6 +731,8 @@ class AuthService(BaseService):
             offset=data.offset,
             principal_id=data.principal_id,
             event=data.event,
+            correlation_id=data.correlation_id,
+            peer_id=data.peer_id,
         )
         return AuditLogResponse(events=events, total=total)
 
