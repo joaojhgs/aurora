@@ -1,9 +1,17 @@
 """UI service module for Aurora.
 
-This module handles UI bridge functionality for connecting
-the core application with optional UI components.
+The PyQt bridge is optional; keep package imports lightweight so headless SDK
+and backend tests do not require PyQt6.
 """
 
-from app.ui.bridge_service import UIBridge
+from typing import Any
 
 __all__ = ["UIBridge"]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "UIBridge":
+        from app.ui.bridge_service import UIBridge
+
+        return UIBridge
+    raise AttributeError(name)
