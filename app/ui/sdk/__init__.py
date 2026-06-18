@@ -1,5 +1,13 @@
 """Typed UI SDK adapters over Aurora backend contract models."""
 
+from app.ui.mesh_diagnostics import (
+    MeshDiagnosticsAction,
+    MeshDiagnosticsSection,
+    MeshDiagnosticsSurface,
+    ProviderStatusSummary,
+    build_loading_mesh_diagnostics,
+    build_mesh_diagnostics_surface,
+)
 from app.ui.sdk.adapters import (
     normalize_audit_events,
     normalize_auth_peers,
@@ -38,6 +46,12 @@ __all__ = [
     "SchedulerJobSummary",
     "ToolExecutionSummary",
     "ToolSummary",
+    "MeshDiagnosticsAction",
+    "MeshDiagnosticsSection",
+    "MeshDiagnosticsSurface",
+    "ProviderStatusSummary",
+    "build_loading_mesh_diagnostics",
+    "build_mesh_diagnostics_surface",
     "normalize_audit_events",
     "normalize_auth_peers",
     "normalize_capability_graph",
