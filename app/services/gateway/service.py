@@ -22,6 +22,8 @@ from app.shared.config.models import (
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.gateway import (
+    CapabilityCatalogRequest,
+    CapabilityCatalogResponse,
     CapabilityGraph,
     GatewayMethods,
     GetMeshStatusResponse,
@@ -32,6 +34,8 @@ from app.shared.contracts.models.gateway import (
     MeshPeerServiceDiagnostic,
     MeshRouteDiagnostic,
     MeshRouteProviderDiagnostic,
+    RouteExplainRequest,
+    RouteExplainResponse,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
@@ -279,6 +283,63 @@ class GatewayService(BaseService):
             mesh_config=settings.mesh,
             local_services=local_services,
             peers=peers,
+            local_peer_id=self._mesh_peer_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_CAPABILITY_CATALOG,
+        summary="Get canonical executable capability catalog",
+        input_model=CapabilityCatalogRequest,
+        output_model=CapabilityCatalogResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_capability_catalog(
+        self,
+        data: CapabilityCatalogRequest,
+    ) -> CapabilityCatalogResponse:
+        """Return a product-facing local + remote capability catalog."""
+        from app.services.gateway.mesh.capability_catalog import build_capability_catalog
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        peers = self._mesh_peer_registry.get_all_peers() if self._mesh_peer_registry else []
+        return build_capability_catalog(
+            request=data,
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            peers=peers,
+            local_peer_id=self._mesh_peer_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.EXPLAIN_ROUTE,
+        summary="Explain mesh route selection and provider eligibility",
+        input_model=RouteExplainRequest,
+        output_model=RouteExplainResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def explain_route(self, data: RouteExplainRequest) -> RouteExplainResponse:
+        """Return selected target, candidates, and route blockers for a selector."""
+        from app.services.gateway.mesh.capability_catalog import explain_route
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        return explain_route(
+            request=data,
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            registry=self._mesh_peer_registry,
+            routing_table=self._mesh_routing_table,
             local_peer_id=self._mesh_peer_id,
         )
 

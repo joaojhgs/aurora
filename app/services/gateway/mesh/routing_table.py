@@ -78,10 +78,10 @@ class RoutingTable:
         if not routing_config:
             return RouteDecision(target="local", module=module)
 
-        if (
-            _requires_explicit_audio_selector(topic)
-            and routing_config.prefer in {"network", "network_only"}
-        ):
+        if _requires_explicit_audio_selector(topic) and routing_config.prefer in {
+            "network",
+            "network_only",
+        }:
             return _route_error(
                 module=module,
                 selector=selector,
@@ -165,7 +165,7 @@ class RoutingTable:
         routing_config: MeshServiceConfig | None,
         selector: MeshAddressSelector,
     ) -> RouteDecision:
-        peer_id, conflict_error = _selector_peer_id(selector, module)
+        peer_id, conflict_error, provider_kind = _selector_target(selector, module)
         if conflict_error:
             return _route_error(
                 module=module,
@@ -181,6 +181,9 @@ class RoutingTable:
                 message=f"{module} selector does not name a peer/provider/service instance",
             )
 
+        if provider_kind == "local":
+            return RouteDecision(target="local", module=module, selector=selector)
+
         peer = self._registry.get_peer(peer_id)
         if not peer:
             return _route_error(
@@ -195,8 +198,7 @@ class RoutingTable:
                 selector=selector,
                 code="selector_peer_stale" if peer.status == "stale" else "selector_peer_not_ready",
                 message=(
-                    f"{module} selector peer/provider '{peer_id}' is {peer.status}, "
-                    "not negotiated"
+                    f"{module} selector peer/provider '{peer_id}' is {peer.status}, not negotiated"
                 ),
             )
 
@@ -386,29 +388,62 @@ def _requires_explicit_audio_selector(topic: str) -> bool:
     return topic in _EXPLICIT_AUDIO_TOPICS
 
 
-def _selector_peer_id(selector: MeshAddressSelector, module: str) -> tuple[str | None, str | None]:
-    """Resolve selector peer aliases into a single peer id."""
+def _selector_target(
+    selector: MeshAddressSelector,
+    module: str,
+) -> tuple[str | None, str | None, str | None]:
+    """Resolve selector provider aliases into a peer id and provider kind."""
 
     peer_ids: list[str] = []
-    for value in (selector.peer_id, selector.provider_id):
-        if value and value not in peer_ids:
-            peer_ids.append(value)
-
-    if selector.service_instance_id:
-        service_peer = selector.service_instance_id
-        if ":" in service_peer:
-            service_peer, service_module = service_peer.split(":", 1)
-            if service_module and service_module != module:
-                return None, (
-                    f"service_instance_id '{selector.service_instance_id}' targets "
-                    f"{service_module}, not {module}"
-                )
-        if service_peer and service_peer not in peer_ids:
-            peer_ids.append(service_peer)
+    provider_kinds: list[str] = []
+    for value, field_name in (
+        (selector.peer_id, "peer_id"),
+        (selector.provider_id, "provider_id"),
+        (selector.service_instance_id, "service_instance_id"),
+    ):
+        peer_id, error, provider_kind = _parse_selector_target(value, field_name, module)
+        if error:
+            return None, error, None
+        if peer_id and peer_id not in peer_ids:
+            peer_ids.append(peer_id)
+        if provider_kind and provider_kind not in provider_kinds:
+            provider_kinds.append(provider_kind)
 
     if len(peer_ids) > 1:
-        return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}"
-    return (peer_ids[0], None) if peer_ids else (None, None)
+        return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}", None
+    if len(provider_kinds) > 1:
+        return None, (
+            f"selector names multiple provider kinds: {', '.join(provider_kinds)}"
+        ), None
+    return (peer_ids[0], None, provider_kinds[0] if provider_kinds else None) if peer_ids else (
+        None,
+        None,
+        None,
+    )
+
+
+def _parse_selector_target(
+    value: str | None,
+    field_name: str,
+    module: str,
+) -> tuple[str | None, str | None, str | None]:
+    if not value:
+        return None, None, None
+    if ":" not in value:
+        return value, None, None
+
+    parts = value.split(":")
+    if len(parts) == 3 and parts[0] in {"local", "remote"}:
+        provider_kind, peer_id, service_module = parts
+    else:
+        provider_kind = None
+        peer_id, service_module = value.split(":", 1)
+
+    if service_module and service_module != module:
+        return None, (
+            f"{field_name} '{value}' targets {service_module}, not {module}"
+        ), None
+    return peer_id, None, provider_kind
 
 
 def _route_error(
