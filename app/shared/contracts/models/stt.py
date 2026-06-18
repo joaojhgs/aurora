@@ -2,6 +2,7 @@
 
 from pydantic import Field
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 
@@ -127,6 +128,7 @@ class STTAudioChunk(IOModel):
     channels: int
     format: str = "pcm_s16le"
     sample_width: int | None = None  # Bytes per sample (derived from format if not provided)
+    mesh_selector: MeshAddressSelector | None = None
 
 
 # ============================================================================
@@ -146,6 +148,7 @@ class TranscribeAudioRequest(IOModel):
     channels: int = 1
     language: str | None = None  # ISO language code or None for auto-detect
     model: str = "realtime"  # "realtime" | "accurate"
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class TranscribeAudioResponse(IOModel):
@@ -168,6 +171,7 @@ class WakeWordDetectRequest(IOModel):
     sample_rate: int = 16000
     channels: int = 1
     format: str = "raw"  # "raw" (PCM 16-bit) | "wav"
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class WakeWordDetectResponse(IOModel):

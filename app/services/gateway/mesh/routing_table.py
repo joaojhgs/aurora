@@ -12,7 +12,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug
+from app.messaging.audio_messages import AudioTopics
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.stt import STTMethods, TranscriptionMethods, WakeWordMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 from .models import RouteDecision
 
@@ -74,6 +77,17 @@ class RoutingTable:
         # No routing config or mesh disabled → always local
         if not routing_config:
             return RouteDecision(target="local", module=module)
+
+        if (
+            _requires_explicit_audio_selector(topic)
+            and routing_config.prefer in {"network", "network_only"}
+        ):
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_required",
+                message=f"{topic} requires an explicit mesh selector",
+            )
 
         if routing_config.require_explicit_selector:
             return _route_error(
@@ -343,6 +357,33 @@ def _extract_module(topic: str) -> str:
     if "." in topic:
         return topic.split(".")[0]
     return topic
+
+
+_EXPLICIT_AUDIO_TOPICS = {
+    TTSMethods.REQUEST,
+    TTSMethods.STOP,
+    TTSMethods.PAUSE,
+    TTSMethods.RESUME,
+    STTMethods.LISTEN,
+    STTMethods.STOP_LISTENING,
+    STTMethods.AUDIO,
+    STTMethods.CONTROL,
+    WakeWordMethods.PROCESS_AUDIO,
+    WakeWordMethods.DETECT,
+    WakeWordMethods.CONTROL,
+    TranscriptionMethods.PROCESS_AUDIO,
+    TranscriptionMethods.CONTROL,
+    AudioTopics.STREAM_MICROPHONE,
+    AudioTopics.STREAM_WEBSOCKET,
+    AudioTopics.STREAM_GENERIC,
+    AudioTopics.CONTROL,
+}
+
+
+def _requires_explicit_audio_selector(topic: str) -> bool:
+    """Return True for audio operations that must name a target peer/device."""
+
+    return topic in _EXPLICIT_AUDIO_TOPICS
 
 
 def _selector_peer_id(selector: MeshAddressSelector, module: str) -> tuple[str | None, str | None]:
