@@ -291,6 +291,8 @@ async def test_catalog_selectors_round_trip_through_route_explain():
         local_peer_id="local-peer",
     )
     actions_by_peer = {action.peer_id: action for action in catalog.actions}
+    for action in actions_by_peer.values():
+        assert action.selector.service_instance_id == action.service_instance_id
 
     local_response = explain_route(
         request=RouteExplainRequest(
@@ -307,6 +309,12 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert local_response.selector_valid is True
     assert local_response.selected_service_instance_id == "local:local-peer:Tooling"
     assert local_response.selected_provider_id == "local:local-peer:Tooling"
+    local_route = routing_table.resolve(
+        "Tooling.Execute",
+        routing_config=mesh_config.services["Tooling"],
+        selector=actions_by_peer["local-peer"].selector,
+    )
+    assert local_route.target == "local"
 
     remote_response = explain_route(
         request=RouteExplainRequest(
@@ -324,6 +332,13 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert remote_response.selector_valid is True
     assert remote_response.selected_service_instance_id == "remote:peer-a:Tooling"
     assert remote_response.selected_provider_id == "remote:peer-a:Tooling"
+    remote_route = routing_table.resolve(
+        "Tooling.Execute",
+        routing_config=mesh_config.services["Tooling"],
+        selector=actions_by_peer["peer-a"].selector,
+    )
+    assert remote_route.target == "remote"
+    assert remote_route.peer_id == "peer-a"
 
     denied_response = explain_route(
         request=RouteExplainRequest(
@@ -340,6 +355,13 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert denied_response.selector_valid is False
     assert denied_response.selector_validation_code == "selector_peer_unauthorized"
     assert any(blocker.code == "peer_not_allowed" for blocker in denied_response.blockers)
+    denied_route = routing_table.resolve(
+        "Tooling.Execute",
+        routing_config=mesh_config.services["Tooling"],
+        selector=actions_by_peer["peer-denied"].selector,
+    )
+    assert denied_route.target == "error"
+    assert denied_route.error_code == "selector_peer_unauthorized"
 
     stale_response = explain_route(
         request=RouteExplainRequest(
@@ -356,6 +378,13 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert stale_response.selector_valid is False
     assert stale_response.selector_validation_code == "selector_peer_stale"
     assert any(blocker.code == "peer_stale" for blocker in stale_response.blockers)
+    stale_route = routing_table.resolve(
+        "Tooling.Execute",
+        routing_config=mesh_config.services["Tooling"],
+        selector=actions_by_peer["peer-stale"].selector,
+    )
+    assert stale_route.target == "error"
+    assert stale_route.error_code == "selector_peer_stale"
 
 
 @pytest.mark.asyncio
@@ -400,4 +429,63 @@ def test_gateway_service_registers_capability_catalog_and_explain_contracts():
     assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].exposure == "external"
     assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].method_type == "manage"
     assert methods[GatewayMethods.EXPLAIN_ROUTE].required_perms == ["Gateway.manage"]
+    clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_gateway_openapi_exposes_capability_catalog_and_explain_routes():
+    fastapi = pytest.importorskip("fastapi")
+
+    from app.services.gateway.route_generator import RouteGenerator
+
+    clear_registry()
+    GatewayService()
+    gateway = list_modules()["Gateway"]
+
+    class _GatewayRegistry:
+        def on_registry_change(self, _callback):
+            return None
+
+        async def get_external_methods(self):
+            methods = []
+            for method in gateway.methods:
+                if method.exposure not in {"external", "both"}:
+                    continue
+                input_schema = (
+                    method.input_model.model_json_schema() if method.input_model else None
+                )
+                output_schema = (
+                    method.output_model.model_json_schema() if method.output_model else None
+                )
+                methods.append(
+                    (
+                        "Gateway",
+                        MethodInfo(
+                            name=method.name,
+                            summary=method.summary,
+                            bus_topic=method.bus_topic,
+                            exposure=method.exposure,
+                            input_model=method.input_model.__name__ if method.input_model else None,
+                            output_model=method.output_model.__name__
+                            if method.output_model
+                            else None,
+                            required_perms=method.required_perms,
+                            method_type=method.method_type,
+                            input_schema=input_schema,
+                            output_schema=output_schema,
+                        ),
+                    )
+                )
+            return methods
+
+    app = fastapi.FastAPI()
+    router = fastapi.APIRouter()
+    generator = RouteGenerator(bus=object(), registry=_GatewayRegistry())
+    generator.set_router(router)
+    await generator.start()
+    app.include_router(router)
+
+    openapi_paths = app.openapi()["paths"]
+    assert "/api/Gateway/GetCapabilityCatalog" in openapi_paths
+    assert "/api/Gateway/ExplainRoute" in openapi_paths
     clear_registry()
