@@ -7,6 +7,8 @@ from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, Peer
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 
 class TestExtractModule:
@@ -31,6 +33,7 @@ def mesh_config():
             "TTS": MeshServiceConfig(prefer="network", fallback="local"),
             "DB": MeshServiceConfig(prefer="local"),
             "STT": MeshServiceConfig(prefer="network_only", fallback="error"),
+            "Transcription": MeshServiceConfig(prefer="network", fallback="local"),
             "Scheduler": MeshServiceConfig(prefer="local_only"),
             "Tooling": MeshServiceConfig(prefer="local", require_explicit_selector=True),
         },
@@ -80,7 +83,7 @@ class TestRoutingTableResolve:
     @pytest.mark.asyncio
     async def test_prefer_network_no_peer_falls_back_to_local(self, routing_table):
         """No peers registered, so network preference falls back."""
-        route = routing_table.resolve("TTS.Request")
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
         assert route.target == "local"
         assert route.module == "TTS"
 
@@ -91,7 +94,7 @@ class TestRoutingTableResolve:
         await peer_registry.update_manifest("peer-1", peer.manifest)
         await peer_registry.update_latency("peer-1", 20.0)
 
-        route = routing_table.resolve("TTS.Request")
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
         assert route.target == "remote"
         assert route.peer_id == "peer-1"
         assert route.module == "TTS"
@@ -110,7 +113,7 @@ class TestRoutingTableResolve:
         await peer_registry.register_peer("peer-1")
         await peer_registry.update_manifest("peer-1", peer.manifest)
 
-        route = routing_table.resolve("TTS.Request", exclude=["peer-1"])
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE, exclude=["peer-1"])
         # Peer excluded, no other peers → fallback
         assert route.target == "local"
 
@@ -163,6 +166,50 @@ class TestRoutingTableResolve:
         assert route.target == "error"
         assert route.error_code == "selector_required"
 
+    def test_remote_playback_requires_explicit_selector(self, routing_table):
+        route = routing_table.resolve(TTSMethods.REQUEST)
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_batch_synthesize_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
+
+        assert route.target == "local"
+        assert route.module == "TTS"
+
+    def test_streaming_transcription_requires_explicit_selector(self, routing_table):
+        route = routing_table.resolve(TranscriptionMethods.PROCESS_AUDIO)
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_batch_transcription_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(TranscriptionMethods.TRANSCRIBE)
+
+        assert route.target == "local"
+        assert route.module == "Transcription"
+
+    @pytest.mark.asyncio
+    async def test_explicit_audio_selector_routes_to_selected_peer(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("speaker-peer", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("speaker-peer")
+        await peer_registry.update_manifest("speaker-peer", peer.manifest)
+
+        route = routing_table.resolve(
+            TTSMethods.REQUEST,
+            selector=MeshAddressSelector(
+                peer_id="speaker-peer",
+                hardware_target="living-room-speaker",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "speaker-peer"
+        assert route.selector.hardware_target == "living-room-speaker"
+
     def test_conflicting_explicit_selectors_return_error(self, routing_table):
         route = routing_table.resolve(
             "Tooling.ExecuteTool",
@@ -177,7 +224,7 @@ class TestRoutingTableResolveFallback:
     """Tests for RoutingTable.resolve_fallback()."""
 
     def test_fallback_local(self, routing_table):
-        route = routing_table.resolve_fallback("TTS.Request", failed_peer_id="peer-1")
+        route = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
         assert route.target == "local"
 
     @pytest.mark.asyncio
@@ -195,7 +242,7 @@ class TestRoutingTableResolveFallback:
             await peer_registry.update_manifest(pid, manifest)
             await peer_registry.update_latency(pid, lat)
 
-        fallback = routing_table.resolve_fallback("TTS.Request", failed_peer_id="peer-1")
+        fallback = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
         assert fallback.target == "remote"
         assert fallback.peer_id == "peer-2"
 

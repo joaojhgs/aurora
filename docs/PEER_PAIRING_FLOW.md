@@ -1396,6 +1396,18 @@ Per-service mesh config can set `require_explicit_selector: true` for safety-sen
 
 Explicit selector routes do not silently fall back to a different peer or local service after selector validation or target transport failure. A caller that chooses a specific tool/resource/provider receives an error if that target cannot satisfy the call.
 
+#### Audio Sharing Boundaries
+
+Audio capabilities use narrower defaults than generic module routing:
+
+- `TTS.Synthesize` can be shared as a lower-risk batch operation because it returns generated audio data to the caller and does not play sound on the provider device.
+- `Transcription.Transcribe` can be shared as a lower-risk batch operation because the caller submits a bounded audio payload and receives text.
+- `TTS.Request` and playback controls target a provider's physical output device, so network-preferred routing requires an explicit selector such as `peer_id` plus `hardware_target`.
+- Live microphone, wakeword, and streaming transcription paths require an explicit selector, local consent, visible privacy indicators, and bandwidth/capacity checks before they are enabled for remote use.
+- Raw microphone or wakeword streaming should remain local-only unless an operator explicitly configures mesh sharing and a UI flow obtains target-device consent.
+
+Capability graph policy metadata exposes these boundaries with `operation_class`, `resource_scope`, `explicit_selector_required`, `consent_required`, `privacy_indicator_required`, and `bandwidth_check_required` fields. These fields are diagnostic and client-facing; routing enforcement still depends on explicit selectors and per-service mesh policy.
+
 ### Event Forwarding
 
 #### The Problem

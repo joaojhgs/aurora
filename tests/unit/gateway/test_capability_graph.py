@@ -16,6 +16,8 @@ from app.shared.contracts.models.gateway import (
     MethodInfo,
     ServiceAnnouncement,
 )
+from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 
 def _method(module: str, name: str = "Execute", method_type: str = "use") -> MethodInfo:
@@ -29,6 +31,11 @@ def _method(module: str, name: str = "Execute", method_type: str = "use") -> Met
         input_model=f"{name}Request",
         output_model=f"{name}Response",
     )
+
+
+def _method_from_topic(topic: str) -> MethodInfo:
+    module, name = topic.split(".", 1)
+    return _method(module, name)
 
 
 def _remote_service(module: str, version: str, max_concurrent: int = 4) -> PeerServiceInfo:
@@ -191,6 +198,83 @@ def test_capability_graph_models_support_explicit_resource_selectors():
     data = resource.model_dump()
     assert data["namespace"] == "memories/home"
     assert data["address"]["resource_id"] == "db:memories:home"
+
+
+def test_capability_graph_classifies_audio_boundaries():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={
+            "TTS": MeshServiceConfig(share=True, prefer="network"),
+            "Transcription": MeshServiceConfig(share=True, prefer="network"),
+            "WakeWord": MeshServiceConfig(share=True, prefer="network"),
+        },
+    )
+    local_services = {
+        "TTS": ServiceAnnouncement(
+            module="TTS",
+            version="1.0.0",
+            methods=[
+                _method_from_topic(TTSMethods.REQUEST),
+                _method_from_topic(TTSMethods.SYNTHESIZE),
+            ],
+        ),
+        "Transcription": ServiceAnnouncement(
+            module="Transcription",
+            version="1.0.0",
+            methods=[
+                _method_from_topic(TranscriptionMethods.PROCESS_AUDIO),
+                _method_from_topic(TranscriptionMethods.TRANSCRIBE),
+            ],
+        ),
+        "WakeWord": ServiceAnnouncement(
+            module="WakeWord",
+            version="1.0.0",
+            methods=[_method_from_topic(WakeWordMethods.PROCESS_AUDIO)],
+        ),
+    }
+
+    graph = build_capability_graph(
+        mesh_config=mesh_config,
+        local_services=local_services,
+        local_peer_id="local-peer",
+    )
+
+    methods = {
+        method.bus_topic: method
+        for service in graph.services
+        for method in service.methods
+    }
+
+    synthesize = methods[TTSMethods.SYNTHESIZE]
+    assert synthesize.policy.safety_class == "standard"
+    assert synthesize.policy.operation_class == "batch_synthesize"
+    assert synthesize.policy.explicit_selector_required is False
+    assert synthesize.policy.consent_required is False
+    assert synthesize.policy.privacy_indicator_required is False
+
+    playback = methods[TTSMethods.REQUEST]
+    assert playback.policy.safety_class == "hardware"
+    assert playback.policy.operation_class == "remote_playback"
+    assert playback.policy.resource_scope == "output_device"
+    assert playback.policy.explicit_selector_required is True
+    assert playback.policy.consent_required is True
+    assert playback.policy.privacy_indicator_required is True
+
+    batch_transcribe = methods[TranscriptionMethods.TRANSCRIBE]
+    assert batch_transcribe.policy.safety_class == "standard"
+    assert batch_transcribe.policy.operation_class == "batch_transcription"
+    assert batch_transcribe.policy.explicit_selector_required is False
+
+    stream_transcribe = methods[TranscriptionMethods.PROCESS_AUDIO]
+    assert stream_transcribe.policy.operation_class == "transcription_streaming"
+    assert stream_transcribe.policy.explicit_selector_required is True
+    assert stream_transcribe.policy.bandwidth_check_required is True
+
+    wakeword = methods[WakeWordMethods.PROCESS_AUDIO]
+    assert wakeword.policy.operation_class == "wakeword_streaming"
+    assert wakeword.policy.explicit_selector_required is True
+    assert wakeword.policy.privacy_indicator_required is True
 
 
 @pytest.mark.asyncio

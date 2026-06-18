@@ -1,5 +1,6 @@
 """TTS (Text-to-Speech) service contract models."""
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 
@@ -34,6 +35,7 @@ class TTSRequest(IOModel):
     voice: str | None = None
     speed: float = 1.0
     interrupt: bool = True  # Interrupt current playback
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class TTSSynthesizeRequest(IOModel):
@@ -44,6 +46,7 @@ class TTSSynthesizeRequest(IOModel):
     speed: float = 1.0
     format: str = "wav"  # "wav" | "raw"
     sample_rate: int | None = None  # None = use model default
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class TTSSynthesizeResponse(IOModel):
@@ -61,6 +64,7 @@ class TTSControl(IOModel):
     """Control TTS playback (stop, pause, resume)."""
 
     action: str  # "stop" | "pause" | "resume"
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class TTSStatus(IOModel):

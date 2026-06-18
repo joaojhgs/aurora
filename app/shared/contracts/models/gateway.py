@@ -286,6 +286,11 @@ class CapabilityPolicyInfo(IOModel):
     allowed_peers: list[str] | None = None
     explicit_selector_required: bool = False
     confirmation_required: bool = False
+    consent_required: bool = False
+    privacy_indicator_required: bool = False
+    bandwidth_check_required: bool = False
+    operation_class: str | None = None
+    resource_scope: str | None = None
     rate_limit_key: str | None = None
     mesh_visible: bool = False
     local_only: bool = False
