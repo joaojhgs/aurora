@@ -1,5 +1,14 @@
 # UIA-004 — Wire voice PTT, wake, transcription, and TTS playback per mode
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P7 — Assistant UI production wiring
@@ -73,3 +82,20 @@ User can understand and use local capture, remote transcription, native playback
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This task is expanded by `MESH-GAP-008` for cross-peer audio boundaries.
+
+Additional requirements:
+
+- Show explicit session consent before sending microphone/audio frames to a remote peer for STT, wake, or TTS-related routing.
+- Display local capture vs remote processing vs local playback as separate state chips.
+- RouteSheet must expose audio privacy class, peer/provider, transport, retention policy, session TTL, and cancel/revoke control.
+- Event stream UI must handle partial transcription, final transcription, timeout, cancelled, remote denial, peer disconnect, and local permission loss.
+- Remote playback/TTS must not silently target a peer's hardware without explicit selector and consent.
+
+Additional acceptance criteria:
+
+- Component tests cover local STT, remote STT, remote denied, consent revoked mid-session, peer disconnect, and mobile foreground-only limitations.

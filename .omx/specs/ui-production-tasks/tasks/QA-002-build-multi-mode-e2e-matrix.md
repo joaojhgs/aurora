@@ -1,5 +1,14 @@
 # QA-002 — Build multi-mode E2E matrix
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P10 — Quality, security, release, and operations
@@ -68,3 +77,14 @@ Server web, desktop thin, desktop local, mesh shell, Android thin, iOS thin smok
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This QA task must include the two-peer production harness from `MESH-GAP-011`.
+
+Additional requirements:
+
+- Add E2E scenarios for local-only tool, remote-only tool, duplicated local+remote tool with explicit provider selector, dangerous local tool approval, dangerous remote tool approval, approve-all session, expired approval, and denied replay.
+- Include remote RAG namespace search/export/import preview, remote STT session consent/event streaming, scheduler remote delegation, route explain, and diagnostics/audit support bundle.
+- Run across thread/local, process/Redis, HTTP server, Tauri local, and mesh/WebRTC modes where each feature is supported.

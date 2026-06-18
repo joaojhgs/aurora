@@ -1,5 +1,14 @@
 # QA-008 — Build thread/process/mesh transport parity gate
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P10 — Quality, security, release, and operations
@@ -80,3 +89,14 @@ Production readiness cannot pass by testing only one deployment topology.
 ## Handoff notes
 
 - Added by full coverage review to make previously implicit process-mode, deployment-topology, and legacy UI migration coverage explicit.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+Transport parity must prove capability catalog and approval behavior, not only connectivity.
+
+Additional requirements:
+
+- In every supported transport row, verify capability catalog ingestion, route explain, local+remote aggregate tools where applicable, local/internal approval, remote mesh approval where applicable, AdminAction composition, event stream, diagnostics, and audit receipt.
+- The mesh row must use the two-peer harness from `MESH-GAP-011`; mock mesh is insufficient for final pass.
+- The HTTP thin-client row must prove unsupported local/native-only features are degraded through capability graph rather than hidden or incorrectly enabled.

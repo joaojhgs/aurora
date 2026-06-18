@@ -1,5 +1,14 @@
 # ADM-009 — Wire diagnostics probes and redacted support bundle
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
@@ -72,3 +81,14 @@ Show probes, native/sidecar/gateway/mesh logs, redaction preview, export bundle 
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+Diagnostics must include `MESH-GAP-010` artifacts.
+
+Additional requirements:
+
+- Include mesh route explain snapshots, capability catalog snapshot, peer/session status, WebRTC/ICE/data-channel diagnostics, approval policy state, audit correlation summary, and config parity checks.
+- Redaction preview must cover tokens, peer secrets, Redis URLs, host paths, model paths, tool args, RAG content, and audio/session metadata.
+- Support bundle generation remains AdminAction-gated and must produce an audit receipt.

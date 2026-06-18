@@ -1,43 +1,56 @@
-# UI Backend Gap Crosswalk
+# Backend/API Gap Crosswalk for UI Production Tasks
 
-## Purpose
+Date: 2026-06-14
+Purpose: maps backend gaps discovered from code/spec/mock review to the individual backend and downstream UI/SDK tasks.
 
-This file lists what UI can rely on now and what must remain blocked or deferred until backend contracts exist.
+| Gap | Current code evidence | Primary task | Downstream tasks unblocked |
+|---|---|---|---|
+| AdminAction server-enforced draft/confirm/audit envelope missing | Manage contracts exist across `Auth`, `Config`, `Supervisor`, mesh, but generated routes do not enforce confirmation nonce/digest/reason. Audit primitives exist at `Auth.StoreAuditEvent`/`Auth.AuditLog`. | `BE-004` | `SDK-013`, `ADM-003`, `ADM-004`, `ADM-005`, `ADM-006`, `ADM-008`, `ADM-010`, `MESH-001` |
+| Streaming/events missing as unified public contract | `Orchestrator.Response` is an event; `Config.Updated` exists; gateway dynamic routes are request/response. | `BE-003` | `SDK-011`, `UIA-002`, `BE-012`, health/activity rails |
+| Orchestrator cancel/interrupt missing | `app/shared/contracts/models/orchestrator.py` has UserInput/ExternalUserInput/ToolResult/Response but no Cancel. | `BE-009` | `UIA-002`, `UIA-004`, QA resilience |
+| Attachment/context ingestion missing | DB RAG and Orchestrator input exist, but no file/share/context contract. | `BE-008` | `UIA-005`, `AND-006`, `IOS-004` |
+| Tool risk taxonomy/approval metadata incomplete | `Tooling.GetTools` serializes tool name/description/schema; no risk/egress/approval hints. | `BE-011` | `UIA-003`, `ADM-007`, security tests |
+| Mesh route policy/explain missing | MeshBus/routing/peer registry exist; user-facing policy persistence/explain does not. | `BE-013` | `SDK-010`, `SDK-012`, `MESH-003`, route sheet |
+| Mesh diagnostics missing | WebRTC client/RPC/latency exist; no UI-safe diagnostics endpoint/events. | `BE-014` | `MESH-004`, `ADM-009`, QA E2E |
+| Config diff/rollback/reload-impact missing | `Config.Get`, `Set`, `Validate`, plugin methods exist; no version/diff/rollback contract. | `BE-010` | `ADM-006`, backup/release runbooks |
+| Supervisor control overclaimed by constants/mock | `SupervisorMethods` declares Start/Stop/Restart; service implements status and placeholder restart only. | `BE-015` | `ADM-002`, AdminAction service controls |
+| Pairing queue/list missing | Pairing start/connect/approve/exchange and event exist; no admin queue endpoint for pending requests. | `BE-012` | `ADM-011`, `MESH-001`, onboarding |
+| Diagnostics export missing | Logs/registry/status exist separately; no redacted bundle contract. | `BE-005` | `ADM-009`, QA/release support workflows |
+| Backup/restore missing | Config/DB/RAG data exist; no backup lifecycle contracts. | `BE-006` | `ADM-010`, release runbooks |
+| Model provider catalog/runtime missing | Orchestrator has runtime logic but no UI-safe provider catalog/import/download/benchmark abstraction. | `BE-007` | `UIA-007`, `AND-008`, `IOS-007` |
+| Gateway route/exposure inventory not machine-frozen | `MethodInfo` has fields; static gateway built-ins and dynamic bus routes are separate. | `P0-002` | `SDK-002`, `ADM-002`, contract explorer, capability graph |
 
-## Backend-Proven Now
+## Coverage review additions — runtime/deployment topology and legacy UI migration
 
-| Area | Proven surface | UI can build |
-|---|---|---|
-| Mesh diagnostics | `Gateway.GetMeshStatus` | Status, route, peer lifecycle, compatibility, provider eligibility, capacity, stale/degraded diagnostics. |
-| Capability topology | `Gateway.GetCapabilityGraph` | Capability explorer, policy flag display, provider/service/method/resource graph. |
-| Stable peer identity | Auth mesh identity and peer records | Peer identity, node name, inbound/outbound trust state, peer-specific credential state after backend auth. |
-| Hybrid addressing | `MeshAddressSelector` on typed payloads | Explicit peer/provider/service/resource/tool/data-scope preflight. |
-| Provider aggregation | PeerRegistry diagnostics projected through Gateway | Candidate vs eligible provider views with reason codes. |
-| Remote tools | Tooling discovery/execution models | Standard remote tools, safe execution status, provider provenance, correlation/audit references. |
-| Orchestrator remote tools | Tooling metadata plus Orchestrator binding semantics | Display which safe remote tools are eligible for assistant planning. |
-| Data policy | `docs/DATA_SHARING_POLICY.md`, DB query contracts | Remote-query-only language, policy education, disabled replication/raw SQL controls. |
-| Scheduler delegation | Scheduler ownership/delegation fields | Namespace/owner/target/delegated-permission/correlation display. |
-| Audio boundaries | Capability graph policy metadata and typed audio selectors | Batch operation availability and explicit privacy/consent requirements. |
-| Auth/Config boundaries | Auth/Config docs and schema defaults | Local peer-admin and local config language; no broad remote sharing. |
-| Tracing/audit | `correlation_id`, Auth audit details | Copyable diagnostics, redacted failure explanations. |
-| Failure behavior | PER-146 chaos expectations and tests | Fallback vs hard-failure state language. |
+| Gap | Current evidence | New/updated task coverage | Downstream UI/SDK coverage |
+| --- | --- | --- | --- |
+| Process-mode deployment topology and Redis/BullMQ health were only implicit in QA wording. The UI needs a first-class, typed way to distinguish thread mode, process mode, desktop sidecar local mode, server thin mode, and mesh peer shell. | `docker-compose.process.yml` defines per-service process deployment with `AURORA_ARCHITECTURE_MODE=processes` and `REDIS_URL`; `README.process-mode.md` documents Redis/process operations; `app/messaging/local_bus.py`, `app/messaging/bullmq_bus.py`, and `app/messaging/bus_runtime.py` represent bus selection surfaces. | `BE-016` adds a read-only deployment topology/bus health contract; `QA-008` adds explicit transport/mode parity gate. | `ADM-013` wires topology dashboard; `SDK-014`/`QA-008` enforce SDK parity across HTTP, Tauri local, mesh, LocalBus, and BullMQBus. |
+| Existing PyQt `UIBridge` behavior was not explicitly mapped to the new Tauri/SDK event model. | `app/ui/bridge_service.py` still bridges STT/TTS/orchestrator/history events via PyQt signals and bus topics. | `TAURI-007` creates the compatibility/deprecation mapping and tests before production Tauri migration can remove or replace PyQt paths. | `UIA-001`, `UIA-002`, `UIA-004`, `SDK-011`, and `TAURI-004` must cover legacy-equivalent chat, STT/TTS, status, and event flows. |
+| Memory/RAG provenance, export, and delete governance were too implicit. `BE-006` covers backup/restore, but UIA memory screens need item-level provenance/delete/export contracts. | `app/services/db/service.py` exposes `RAG_SEARCH` as both, while `RAG_STORE`, `RAG_DELETE`, and `RAG_GET` are internal; current UI cannot safely promise delete/export/provenance without a contract. | `BE-017` adds explicit Memory/RAG provenance/export/delete contracts or capability-gated unsupported states. | `UIA-006` now depends on `BE-017`; `ADM-010` remains backup/restore. |
+| Scheduler admin UI promised pause/resume but current backend marks those methods internal. | `app/services/scheduler/service.py` has `SchedulerMethods.PAUSE` and `RESUME` with `exposure="internal"`; list/schedule/cancel/pause/resume need permission/audit semantics before admin UI can enable them. | `BE-018` adds scheduler management exposure/AdminAction contract or explicit unsupported capability states. | `ADM-012` now depends on `BE-018`; UI must keep pause/resume disabled until capability exists. |
 
-## Blocked Or Deferred Claims
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production E2E gap crosswalk addendum
 
-| Claim | Status | Required backend evidence before UI enables it |
-|---|---|---|
-| Raw SQL across peers | Blocked | This is explicitly prohibited by data-sharing policy. |
-| Bidirectional chat/RAG/scheduler sync | Deferred | Domain sync contracts with namespaces, conflict/delete/tombstone semantics, provenance, and tests. |
-| Remote Auth/Config transparent admin | Blocked by current policy | Explicit remote-admin policy and permission model. |
-| Remote microphone/live listening | Deferred/privacy-blocked | Consent contract, privacy indicator events, bandwidth/capacity checks, backend stream state. |
-| Remote playback/control without target | Privacy-blocked | Explicit peer/device selector, confirmation, backend playback state. |
-| Dangerous remote tool auto-binding | Blocked | Explicit confirmation/resource approval flow and backend decision event. |
-| Peer pairing success from presence alone | Blocked | Authenticated, bilateral trust, manifest negotiation, and stable peer identity evidence. |
-| Tauri E2E from browser tests | Blocked | Native Tauri shell plus backend/native/WebRTC verification harness. |
-| UI mock as production source | Deferred | Restored `modules/ui-mock-reference/` and an issue explicitly authorizing production UI implementation. |
+Additional mesh production tasks live in `.omx/multica/mesh-production-gap-tasks/` and should be treated as the backend prerequisite layer for final UI implementation.
 
-## Current Missing Artifacts
+| Gap | Required task(s) | Downstream UI/SDK tasks |
+| --- | --- | --- |
+| Generated config/runtime mesh policy mismatch and explicit selector enforcement | MESH-GAP-002 | SDK-012, MESH-003, QA-003, QA-008 |
+| No typed executable capability catalog/route explain contract | MESH-GAP-003 | SDK-006, SDK-012, ADM-001, MESH-003, QA-008 |
+| Tooling currently lacks local+all-remote aggregate catalog | MESH-GAP-004 | SDK-006, UIA-003, ADM-007, QA-002 |
+| Tool approval/confirmation is primitive and not token-bound; local tools also need approval | MESH-GAP-005 | SDK-013, UIA-003, ADM-007, QA-003 |
+| Orchestrator/SDK do not yet bind aggregate tools with approval interrupts | MESH-GAP-006 | SDK-006, SDK-012, SDK-013, UIA-001/003 |
+| DB/RAG remote access lacks namespace/export/provenance product contract | MESH-GAP-007 | BE-017, UIA-006, QA-002 |
+| Audio/STT/TTS remote sessions need explicit consent/event contract | MESH-GAP-008 | UIA-004, QA-002, QA-003 |
+| Scheduler/Auth/Config boundaries need production delegation/admin hardening | MESH-GAP-009 | ADM-003/004/006/012, QA-003 |
+| Unified mesh events/audit/diagnostics/support bundle gaps | MESH-GAP-010 | ADM-008, ADM-009, QA-008 |
+| No production two-peer E2E proof of the capability fabric | MESH-GAP-011 | QA-002, QA-003, QA-008 |
 
-- `.omx/specs/ui-refinement/*` and `.omx/specs/ui-production-tasks/*` were absent before PER-148 and are recreated in this branch.
-- `modules/ui-mock-reference/` is absent in this checkout, so no component inventory was performed.
-- `.omx/specs/deep-interview-mesh-distributed-integration.md` and `.omx/multica/mesh-roadmap-tasks/*` are absent in this checkout; PER-128 through PER-146 plan files, current docs, and committed code contracts were used as evidence.
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.

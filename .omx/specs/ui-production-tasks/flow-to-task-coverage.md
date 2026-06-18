@@ -1,6 +1,6 @@
 # Aurora UI Flow-to-Task Coverage Crosswalk
 
-Date: 2026-06-14  
+Date: 2026-06-14
 Purpose: maps product/user flows, current mock references, missing visual/runtime states, and production task IDs. This is the task-board bridge between UI/UX specs, the mock reference, backend gaps, and isolated implementation cards.
 
 ## Rule
@@ -43,3 +43,24 @@ If a future task implements one of these flows, it must link both the flow row h
 | Transport parity release gate | The same core assistant/admin flows must pass or provide a justified skip across LocalBus thread mode, BullMQ/Redis process mode, HTTP Gateway thin mode, Tauri local mode, and Mesh/WebRTC mode. | `modules/ui-mock-reference/README.md`, `modules/ui-mock-reference/lib/aurora/data.ts`, `modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx` | `QA-008`, `QA-002`, `SDK-014`, `MESH-004`, `BE-016` |
 | Memory/RAG governance: provenance, delete, export, retention | User can inspect where memory/RAG context came from, delete/export only when authorized, and see unsupported states where backend does not expose item-level governance. | `modules/ui-mock-reference/app/(cockpit)/memory/page.tsx`, `modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx` | `BE-017`, `UIA-006`, `SDK-006`, `QA-003` |
 | Scheduler admin management | Admin can list jobs and only use schedule/cancel/pause/resume actions that backend exposes with AdminAction/audit. Internal-only pause/resume remain disabled with explanation. | `modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx`, `modules/ui-mock-reference/components/aurora/admin/services-view.tsx`, `modules/ui-mock-reference/app/(cockpit)/admin/page.tsx` | `BE-018`, `ADM-012`, `SDK-013`, `QA-003` |
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production E2E flow addendum
+
+The following flows must be explicitly covered before UI production wiring is considered complete:
+
+- User asks assistant to run a tool that exists locally and on a peer: UI shows provider candidates, route explain, explicit selector if required, approval card if needed, and provider-specific result/audit receipt.
+- User asks assistant to run a dangerous internal/local tool: same approval harness as mesh tools, including approve once/approve-all/session/dry-run/deny.
+- User searches memory across a remote RAG namespace: UI shows namespace selector, provenance, policy/permission state, and export/import approval if requested.
+- User starts remote STT: UI asks consent, shows local capture vs remote processing, streams partial/final events, and supports revoke/cancel.
+- Admin configures tool sharing: UI sets per-tool/per-peer policy, approval mode, TTL, and audit expectations.
+- Admin explains a route: UI displays selected/rejected provider candidates with backend reasons.
+- QA runs two-peer harness: tests verify aggregate catalog, approval token binding, route explain, RAG provenance, audio consent, scheduler delegation, and diagnostics/audit.
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.

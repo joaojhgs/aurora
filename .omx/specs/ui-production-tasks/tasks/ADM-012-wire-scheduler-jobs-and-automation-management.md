@@ -1,5 +1,14 @@
 # ADM-012 — Wire scheduler jobs and automation management
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
@@ -74,3 +83,15 @@ List/schedule/cancel/pause/resume jobs with permission and audit handling.
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+Scheduler UI must include remote delegation semantics from `MESH-GAP-009`.
+
+Additional requirements:
+
+- Show local jobs, remote-delegated jobs owned by this node, and jobs running on a remote peer as distinct ownership states.
+- Job create/edit must include target peer/provider selector when remote execution or remote tool use is selected.
+- Display delegated permission context, approval policy for scheduled tool executions, next approval requirement, and audit receipt.
+- Cancellation/listing must respect owner namespace and permission; UI must show denied/foreign namespace clearly.

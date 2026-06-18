@@ -1,5 +1,14 @@
 # SDK-006 — Implement capability graph engine
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P1 — Transport-independent SDK and capability graph foundation
@@ -79,3 +88,25 @@ Navigation and every surface render available/degraded/blocked states from one e
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This task is now downstream of `.omx/multica/mesh-production-gap-tasks/03-mesh-gap-003-mesh-gap-p1-define-typed-capability-catalog-and-route-explain-backend-contracts.md` and must treat the mesh capability catalog as a first-class source, not as a diagnostics-only graph.
+
+Additional requirements:
+
+- Consume the backend typed capability catalog once `Gateway.GetCapabilityCatalog` / equivalent lands, including local node, remote peer, transport, service, method, tool, model, audio, scheduler, and data/RAG capabilities.
+- Merge capability facts from local HTTP Gateway, Tauri native manifest, mobile native manifest, persisted peers, live WebRTC sessions, and policy results into one deterministic feature-state graph.
+- Preserve provider identity in feature states: `local`, `remote:<peer_id>`, `native:<platform>`, `cloud`, `unavailable`, and `blocked` must be distinguishable.
+- Include freshness, trust tier, routeability, selected provider, alternate providers, disabled reason, and required user/admin action in graph nodes.
+- Represent aggregate tool inventory as local-plus-remote candidates. The graph must not collapse multiple providers of the same tool into one anonymous capability.
+- Surface explicit selector requirements from `MESH-GAP-002`; safety-sensitive features must show "choose a peer/provider" rather than silently fallback.
+- Include approval policy capabilities from `MESH-GAP-005`: internal/local tools and mesh tools can both require approval; approval modes include deny-all, ask-each-time, allow-once, allow-until-expiry, approve-all-for-session, approve-all-for-peer, approve-all-local-safe, and dry-run-only.
+- Unit fixtures must include at least one local-only tool, one remote-only tool, one duplicated local+remote tool, one disabled-by-policy remote tool, one stale peer capability, and one native-mobile-only capability.
+
+Additional acceptance criteria:
+
+- UI tasks can ask `AuroraClient.capabilities.explain(featureId)` and receive a stable explanation with provider candidates and next repair action.
+- Capability graph tests prove that local and remote tool providers coexist and remain separately selectable.
+- Capability graph tests prove explicit selector policy blocks unsafe fallback.

@@ -1,5 +1,14 @@
 # ADM-008 — Wire audit log details and export
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
@@ -72,3 +81,15 @@ Search/filter audit, inspect event details/reasons/receipts/redacted payload, an
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+Audit UI must include mesh production events from `MESH-GAP-005`, `MESH-GAP-007`, `MESH-GAP-008`, `MESH-GAP-009`, and `MESH-GAP-010`.
+
+Additional requirements:
+
+- Add filters for peer/provider, route path, approval mode, tool id, data namespace, audio session id, scheduler job id, correlation id, and denial reason.
+- Show approval lifecycle events: requested, approved, denied, approve-all scope created, token expired, replay rejected, executed, and dry-run.
+- Show redacted payload previews with hashes, not raw secrets/audio/data.
+- Export must preserve redaction and include support-bundle correlation IDs.

@@ -1,5 +1,14 @@
 # UIA-003 — Wire tool approval cards and tool-result display
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P7 — Assistant UI production wiring
@@ -73,3 +82,29 @@ User sees tool risk, inputs, data-egress, approval/deny reason, progress, result
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This UI must support the production approval harness from `MESH-GAP-005` and the aggregate tool catalog from `MESH-GAP-004`. It is not only for mesh tools: internal/local tools can require the same approval flow.
+
+Additional requirements:
+
+- Show provider choice when a tool exists locally and on one or more peers. Default selection must follow route/privacy policy and explicit selector requirements.
+- Render approval cards for local/internal tools, remote mesh tools, MCP/plugin tools, and cloud/external tools using one visual grammar.
+- Show risk class, data egress, mutating/admin flags, peer/provider, trust tier, transport, args diff/hash, dry-run preview, requested approval scope, TTL, and audit destination.
+- Support deny, approve once, approve until expiry, approve all for session, approve all for peer, approve all local safe tools, dry-run, and policy-managed disabled states.
+- Approval card submission must call the SDK approval controller/AdminAction composition, not direct backend endpoints.
+- Tool result cards must include provider, correlation ID, audit receipt, route path, duration, redaction status, and retry/fallback eligibility.
+- If approval is blocked because explicit selector is missing, show a provider selector instead of an approve button.
+
+Additional mock/component references:
+
+- `modules/ui-mock-reference/components/aurora/assistant/tool-call-card.tsx`
+- `modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx`
+- `modules/ui-mock-reference/components/aurora/admin-confirm-dialog.tsx`
+- `modules/ui-mock-reference/app/(cockpit)/tools/page.tsx`
+
+Additional acceptance criteria:
+
+- Component tests cover local dangerous tool, remote dangerous tool, duplicated local+remote tool, approve-all session, approve-all peer, dry-run-only, denied, expired approval, replay rejection, and service unavailable.

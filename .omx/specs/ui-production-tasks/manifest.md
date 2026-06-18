@@ -99,3 +99,26 @@
 | QA-006 | P10 | qa-release | TAURI-006, AND-009, IOS-008, ADM-009 | `tasks/QA-006-build-release-packaging-and-operator-runbooks.md` |
 | QA-007 | P10 | qa-release | QA-001, QA-002, QA-003, QA-004, QA-005, QA-006 | `tasks/QA-007-final-production-readiness-audit-and-task-board-closure.md` |
 | QA-008 | P10 | qa-release | QA-002, BE-016, SDK-014, MESH-004 | `tasks/QA-008-build-thread-process-mesh-transport-parity-gate.md` |
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap dependency addendum
+
+Before final production execution of the UI task manifest, import or link the task set under `.omx/multica/mesh-production-gap-tasks/`.
+
+The critical dependency inserts are:
+
+- `MESH-GAP-003` before `SDK-006`, `SDK-012`, `BE-013`, `MESH-003`, `ADM-001`, and `QA-008`.
+- `MESH-GAP-004` before `UIA-003` and `ADM-007` production wiring.
+- `MESH-GAP-005` before `SDK-013`, `UIA-003`, `ADM-007`, `QA-003`, and any approval UI.
+- `MESH-GAP-007` before remote memory/RAG production wiring in `BE-017` and `UIA-006`.
+- `MESH-GAP-008` before remote audio/STT/TTS production wiring in `UIA-004`.
+- `MESH-GAP-010` before final audit/diagnostics UI in `ADM-008` and `ADM-009`.
+- `MESH-GAP-011` before final release parity gates `QA-002`, `QA-003`, and `QA-008`.
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
