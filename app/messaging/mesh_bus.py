@@ -501,11 +501,10 @@ class MeshBus:
         """
         self._inner.subscribe(topic, handler)
 
-<<<<<<< HEAD
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Unsubscribe from the inner local bus."""
         self._inner.unsubscribe(topic, handler)
-=======
+
 
 def _extract_mesh_selector(message: BaseModel) -> MeshAddressSelector | None:
     """Return a typed mesh selector from a bus payload when present."""
@@ -516,4 +515,3 @@ def _extract_mesh_selector(message: BaseModel) -> MeshAddressSelector | None:
     if isinstance(selector, dict):
         return MeshAddressSelector.model_validate(selector)
     return None
->>>>>>> 686ca75 (feat(mesh): add PER-135 hybrid addressing selectors)
