@@ -651,6 +651,382 @@ class TestToolingServiceToolExecution:
         assert "error" in response.error.lower()
 
 
+class TestToolingSharingPolicyAndApproval:
+    """Test Tooling sharing policy and approval-token execution."""
+
+    def _mock_tool(
+        self,
+        *,
+        safety_class: str = "standard",
+        confirmation_required: bool = False,
+        result: str = "ok",
+    ) -> Mock:
+        mock_tool = Mock()
+        mock_tool.safety_class = safety_class
+        mock_tool.confirmation_required = confirmation_required
+        mock_tool.ainvoke = AsyncMock(return_value=result)
+        return mock_tool
+
+    async def _set_single_rule_policy(
+        self,
+        tooling_service,
+        *,
+        approval_mode: str,
+        tool_name: str = "safe_tool",
+        share: bool = True,
+        safety_class: str | None = None,
+        execution_location: str | None = None,
+        token_ttl_seconds: int = 300,
+    ):
+        from app.shared.contracts.models.tooling import (
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+            ToolingSharingPolicyRule,
+        )
+
+        await tooling_service._on_set_sharing_policy(
+            ToolingSetSharingPolicyRequest(
+                actor_principal_id="admin",
+                policy=ToolingSharingPolicy(
+                    rules=[
+                        ToolingSharingPolicyRule(
+                            rule_id="rule-1",
+                            tool_name=tool_name,
+                            share=share,
+                            approval_mode=approval_mode,
+                            safety_class=safety_class,
+                            execution_location=execution_location,
+                            token_ttl_seconds=token_ttl_seconds,
+                        )
+                    ]
+                ),
+            )
+        )
+
+    async def _approved_token(self, tooling_service, request):
+        from app.shared.contracts.models.tooling import ToolingConfirmExecutionRequest
+
+        approval = await tooling_service._on_request_approval(request)
+        assert approval.ok is True
+        assert approval.approval_request_id
+        confirmed = await tooling_service._on_confirm_execution(
+            ToolingConfirmExecutionRequest(
+                approval_request_id=approval.approval_request_id,
+                approver_principal_id="admin",
+            )
+        )
+        assert confirmed.ok is True
+        assert confirmed.approval_token
+        return confirmed.approval_token
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "approval_mode",
+        ["ask_each_time", "allow_once", "allow_until_expiry"],
+    )
+    async def test_token_approval_modes_issue_bound_token(
+        self, tooling_service, mock_bus, approval_mode
+    ):
+        """Approval-required modes issue a token that authorizes one matching execution."""
+        from app.shared.contracts.models.tooling import ToolingRequestApprovalRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["safe_tool"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        await self._set_single_rule_policy(
+            tooling_service, approval_mode=approval_mode, tool_name="safe_tool"
+        )
+
+        request = ToolingRequestApprovalRequest(
+            tool_name="safe_tool",
+            arguments={"value": "one"},
+            caller_principal_id="principal-1",
+        )
+        token = await self._approved_token(tooling_service, request)
+        execute_request = request.model_copy(update={"approval_token": token})
+
+        response = await tooling_service._on_execute_tool(execute_request)
+
+        assert response.ok is True
+        assert response.status == "success"
+        mock_tool.ainvoke.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_raw_confirmed_does_not_bypass_approval_token(
+        self, tooling_service, mock_bus
+    ):
+        """Raw confirmed=true is denied for approval-required remote tools."""
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingResourceSelector,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(safety_class="dangerous", confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingExecuteToolRequest(
+            tool_name="switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+            confirmed=True,
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+        )
+
+        response = await tooling_service._on_execute_tool(request)
+
+        assert response.ok is False
+        assert response.status == "denied"
+        assert response.error_code == "approval_token_required"
+        mock_tool.ainvoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remote_dangerous_tool_executes_with_approval_token(
+        self, tooling_service, mock_bus
+    ):
+        """Remote dangerous tools execute only with a valid bound approval token."""
+        from app.shared.contracts.models.tooling import (
+            ToolingRequestApprovalRequest,
+            ToolingResourceSelector,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(safety_class="dangerous", confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingRequestApprovalRequest(
+            tool_name="switch_on",
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+        )
+        token = await self._approved_token(tooling_service, request)
+
+        response = await tooling_service._on_execute_tool(
+            request.model_copy(update={"approval_token": token})
+        )
+
+        assert response.ok is True
+        assert response.status == "success"
+
+    @pytest.mark.asyncio
+    async def test_token_replay_is_denied(self, tooling_service, mock_bus):
+        """Approval tokens are single use."""
+        from app.shared.contracts.models.tooling import ToolingRequestApprovalRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["safe_tool"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingRequestApprovalRequest(
+            tool_name="safe_tool",
+            arguments={"value": "one"},
+            caller_principal_id="principal-1",
+        )
+        token = await self._approved_token(tooling_service, request)
+        execute_request = request.model_copy(update={"approval_token": token})
+
+        first = await tooling_service._on_execute_tool(execute_request)
+        second = await tooling_service._on_execute_tool(execute_request)
+
+        assert first.ok is True
+        assert second.ok is False
+        assert second.error_code == "approval_token_replayed"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("field", "update", "expected_error"),
+        [
+            ("arguments", {"arguments": {"value": "two"}}, "approval_token_args_hash_mismatch"),
+            (
+                "caller_peer_id",
+                {"caller_peer_id": "other-peer"},
+                "approval_token_caller_peer_id_mismatch",
+            ),
+            ("tool_name", {"tool_name": "other_tool"}, "approval_token_tool_name_mismatch"),
+        ],
+    )
+    async def test_token_binding_mismatches_are_denied(
+        self, tooling_service, mock_bus, field, update, expected_error
+    ):
+        """Changed args, peer, or tool invalidate the approval token."""
+        from app.shared.contracts.models.tooling import ToolingRequestApprovalRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(
+            return_value=["safe_tool", "other_tool"]
+        )
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingRequestApprovalRequest(
+            tool_name="safe_tool",
+            arguments={"value": "one"},
+            caller_peer_id="peer-1",
+            caller_principal_id="principal-1",
+        )
+        token = await self._approved_token(tooling_service, request)
+
+        response = await tooling_service._on_execute_tool(
+            request.model_copy(update={"approval_token": token, **update})
+        )
+
+        assert field
+        assert response.ok is False
+        assert response.error_code == expected_error
+
+    @pytest.mark.asyncio
+    async def test_token_resource_mismatch_and_expiry_are_denied(
+        self, tooling_service, mock_bus
+    ):
+        """Resource selector changes and expired tokens fail closed."""
+        from app.shared.contracts.models.tooling import (
+            ToolingRequestApprovalRequest,
+            ToolingResourceSelector,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(safety_class="dangerous", confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        request = ToolingRequestApprovalRequest(
+            tool_name="switch_on",
+            arguments={"target": "lamp"},
+            resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+            caller_principal_id="principal-1",
+        )
+        mismatch_token = await self._approved_token(tooling_service, request)
+        mismatch_response = await tooling_service._on_execute_tool(
+            request.model_copy(
+                update={
+                    "approval_token": mismatch_token,
+                    "resource_selector": ToolingResourceSelector(hardware_target="fan"),
+                }
+            )
+        )
+
+        expiry_token = await self._approved_token(tooling_service, request)
+        tooling_service._approval_tokens[expiry_token]["expires_at"] = 0
+        expired_response = await tooling_service._on_execute_tool(
+            request.model_copy(update={"approval_token": expiry_token})
+        )
+
+        assert mismatch_response.ok is False
+        assert mismatch_response.error_code == "approval_token_resource_selector_hash_mismatch"
+        assert expired_response.ok is False
+        assert expired_response.error_code == "approval_token_expired"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("approval_mode", "request_kwargs", "expected_ok", "expected_status"),
+        [
+            ("deny_all", {}, False, "denied"),
+            ("dry_run_only", {}, False, "denied"),
+            ("dry_run_only", {"dry_run": True}, True, "dry_run"),
+            ("approve_all_for_session", {}, True, "success"),
+            ("approve_all_for_peer", {"caller_peer_id": "peer-1"}, True, "success"),
+            ("approve_all_for_peer", {}, False, "denied"),
+            ("approve_all_local_safe", {}, True, "success"),
+        ],
+    )
+    async def test_approve_all_and_deny_modes(
+        self,
+        tooling_service,
+        mock_bus,
+        approval_mode,
+        request_kwargs,
+        expected_ok,
+        expected_status,
+    ):
+        """Non-token approval modes are enforced and auditable."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["safe_tool"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        await self._set_single_rule_policy(
+            tooling_service, approval_mode=approval_mode, tool_name="safe_tool"
+        )
+
+        response = await tooling_service._on_execute_tool(
+            ToolingExecuteToolRequest(
+                tool_name="safe_tool",
+                arguments={"value": "one"},
+                caller_principal_id="principal-1",
+                **request_kwargs,
+            )
+        )
+
+        assert response.ok is expected_ok
+        assert response.status == expected_status
+
+    @pytest.mark.asyncio
+    async def test_sharing_policy_hides_tools_from_discovery(self, tooling_service, mock_bus):
+        """Per-tool sharing policy can hide tools independent of service sharing."""
+        from langchain_core.tools import tool
+
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        @tool
+        def visible_tool(value: str):
+            """Visible test tool."""
+            return value
+
+        @tool
+        def hidden_tool(value: str):
+            """Hidden test tool."""
+            return value
+
+        tooling_service.tools_manager.get_tools = Mock(return_value=[visible_tool, hidden_tool])
+        await self._set_single_rule_policy(
+            tooling_service,
+            approval_mode="deny_all",
+            tool_name="hidden_tool",
+            share=False,
+        )
+
+        response = await tooling_service._on_get_tools(ToolingGetToolsRequest())
+
+        assert [tool_info.local_name for tool_info in response.tools] == ["visible_tool"]
+
+    @pytest.mark.asyncio
+    async def test_policy_and_approval_events_are_audited(self, tooling_service, mock_bus):
+        """Policy changes and approval flow emit Auth audit events."""
+        from app.shared.contracts.models.tooling import ToolingRequestApprovalRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool(confirmation_required=True)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["safe_tool"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        await self._set_single_rule_policy(
+            tooling_service, approval_mode="ask_each_time", tool_name="safe_tool"
+        )
+        request = ToolingRequestApprovalRequest(
+            tool_name="safe_tool",
+            arguments={"value": "one"},
+            caller_principal_id="principal-1",
+        )
+        token = await self._approved_token(tooling_service, request)
+        await tooling_service._on_execute_tool(request.model_copy(update={"approval_token": token}))
+
+        event_names = [call.args[1].event for call in mock_bus.request.await_args_list]
+        assert "tooling.policy.set" in event_names
+        assert "tooling.approval.requested" in event_names
+        assert "tooling.approval.approved" in event_names
+        assert "tooling.execute" in event_names
+
+
 class TestToolingServiceMCPReload:
     """Test ToolingService MCP reload."""
 

@@ -23,11 +23,37 @@ class ToolingMethods:
     GET_TOOL_BY_NAME = f"{ToolingModule.NAME}.GetToolByName"
     GET_STATS = f"{ToolingModule.NAME}.GetStats"
     GET_MCP_STATUS = f"{ToolingModule.NAME}.GetMCPStatus"
+    GET_SHARING_POLICY = f"{ToolingModule.NAME}.GetSharingPolicy"
+    SET_SHARING_POLICY = f"{ToolingModule.NAME}.SetSharingPolicy"
+    TEST_SHARING_POLICY = f"{ToolingModule.NAME}.TestSharingPolicy"
+    PREPARE_EXECUTION = f"{ToolingModule.NAME}.PrepareExecution"
+    REQUEST_APPROVAL = f"{ToolingModule.NAME}.RequestApproval"
+    CONFIRM_EXECUTION = f"{ToolingModule.NAME}.ConfirmExecution"
     EXECUTE_TOOL = f"{ToolingModule.NAME}.ExecuteTool"
     RELOAD_MCP_TOOLS = f"{ToolingModule.NAME}.ReloadMCPTools"
     HEALTH_CHECK = f"{ToolingModule.NAME}.HealthCheck"
     TOOLS_INITIALIZED = f"{ToolingModule.NAME}.ToolsInitialized"
     TOOLS_RELOADED = f"{ToolingModule.NAME}.ToolsReloaded"
+
+
+ToolingApprovalMode = Literal[
+    "deny_all",
+    "ask_each_time",
+    "allow_once",
+    "allow_until_expiry",
+    "approve_all_for_session",
+    "approve_all_for_peer",
+    "approve_all_local_safe",
+    "dry_run_only",
+]
+
+ToolingOperationClass = Literal["read", "write", "external", "admin", "hardware", "data-egress"]
+
+ToolingSourceClass = Literal["core", "plugin", "mcp", "toolkit", "unknown"]
+
+ToolingExecutionLocation = Literal["local", "remote"]
+
+ToolingSafetyClass = Literal["standard", "sensitive", "dangerous"]
 
 
 class ToolingGetToolsRequest(IOModel):
@@ -79,8 +105,8 @@ class ToolingToolInfo(IOModel):
     )
     schema: dict[str, Any] = Field(default_factory=lambda: {"type": "object", "properties": {}})
     source_type: Literal["local", "mesh_peer"] = "local"
-    execution_location: Literal["local", "remote"] = "local"
-    safety_class: Literal["standard", "sensitive", "dangerous"] = "standard"
+    execution_location: ToolingExecutionLocation = "local"
+    safety_class: ToolingSafetyClass = "standard"
     required_permissions: list[str] = Field(default_factory=list)
     confirmation_required: bool = False
     rate_limit_hints: ToolingRateLimitHints | None = None
@@ -165,6 +191,84 @@ class ToolingResourceSelector(IOModel):
         )
 
 
+class ToolingSharingPolicyRule(IOModel):
+    """A scoped Tooling sharing and approval rule.
+
+    Fields left unset act as wildcards. The first matching rule wins.
+    """
+
+    rule_id: str
+    share: bool = True
+    approval_mode: ToolingApprovalMode = "ask_each_time"
+    tool_name: str | None = None
+    global_tool_id: str | None = None
+    execution_location: ToolingExecutionLocation | None = None
+    source_type: ToolingSourceClass | None = None
+    toolkit_name: str | None = None
+    safety_class: ToolingSafetyClass | None = None
+    operation_class: ToolingOperationClass | None = None
+    resource_namespace: str | None = None
+    hardware_target: str | None = None
+    data_scope: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
+    caller_device_id: str | None = None
+    provider_peer_id: str | None = None
+    provider_service_instance_id: str | None = None
+    route_privacy_class: str | None = None
+    token_ttl_seconds: int = 300
+
+
+class ToolingSharingPolicy(IOModel):
+    """Tooling sharing policy visible to admin clients."""
+
+    default_share: bool = True
+    default_approval_mode: ToolingApprovalMode = "ask_each_time"
+    default_token_ttl_seconds: int = 300
+    rules: list[ToolingSharingPolicyRule] = Field(default_factory=list)
+
+
+class ToolingPolicyDecision(IOModel):
+    """Result of evaluating Tooling sharing and approval policy."""
+
+    allowed: bool
+    share: bool
+    approval_required: bool
+    approval_mode: ToolingApprovalMode
+    decision_id: str
+    policy_rule_id: str | None = None
+    reason: str | None = None
+    token_ttl_seconds: int = 300
+
+
+class ToolingGetSharingPolicyRequest(IOModel):
+    """Request the current Tooling sharing policy."""
+
+    pass
+
+
+class ToolingGetSharingPolicyResponse(IOModel):
+    """Current Tooling sharing policy."""
+
+    policy: ToolingSharingPolicy
+
+
+class ToolingSetSharingPolicyRequest(IOModel):
+    """Replace the Tooling sharing policy."""
+
+    policy: ToolingSharingPolicy
+    actor_principal_id: str | None = None
+    correlation_id: str | None = None
+
+
+class ToolingSetSharingPolicyResponse(IOModel):
+    """Policy update result."""
+
+    ok: bool
+    policy: ToolingSharingPolicy
+    correlation_id: str | None = None
+
+
 class ToolingExecuteToolRequest(IOModel):
     """Request to execute a tool."""
 
@@ -173,10 +277,12 @@ class ToolingExecuteToolRequest(IOModel):
     mesh_selector: MeshAddressSelector | None = None
     resource_selector: ToolingResourceSelector | None = None
     confirmed: bool = False
+    approval_token: str | None = None
     dry_run: bool = False
     correlation_id: str | None = None
     caller_peer_id: str | None = None
     caller_principal_id: str | None = None
+    caller_device_id: str | None = None
 
 
 class ToolingExecuteToolResponse(IOModel):
@@ -190,6 +296,78 @@ class ToolingExecuteToolResponse(IOModel):
     correlation_id: str | None = None
     provider_peer_id: str | None = None
     global_tool_id: str | None = None
+    policy_decision_id: str | None = None
+
+
+class ToolingPrepareExecutionRequest(ToolingExecuteToolRequest):
+    """Request a policy decision and argument binding before execution."""
+
+    pass
+
+
+class ToolingPrepareExecutionResponse(IOModel):
+    """Execution preparation details."""
+
+    ok: bool
+    policy_decision: ToolingPolicyDecision
+    args_hash: str
+    resource_selector_hash: str
+    route_decision_id: str
+    correlation_id: str
+    provider_peer_id: str
+    provider_service_instance_id: str
+    global_tool_id: str
+    local_tool_name: str
+
+
+class ToolingTestSharingPolicyRequest(ToolingPrepareExecutionRequest):
+    """Evaluate sharing policy without creating an approval request."""
+
+    pass
+
+
+class ToolingTestSharingPolicyResponse(ToolingPrepareExecutionResponse):
+    """Sharing-policy evaluation response."""
+
+    pass
+
+
+class ToolingRequestApprovalRequest(ToolingPrepareExecutionRequest):
+    """Create an approval request for a prepared execution."""
+
+    requested_by_principal_id: str | None = None
+
+
+class ToolingRequestApprovalResponse(IOModel):
+    """Approval request state."""
+
+    ok: bool
+    approval_request_id: str | None = None
+    policy_decision: ToolingPolicyDecision
+    expires_at: float | None = None
+    correlation_id: str
+    error: str | None = None
+
+
+class ToolingConfirmExecutionRequest(IOModel):
+    """Approve an execution request and receive a bound approval token."""
+
+    approval_request_id: str
+    approver_principal_id: str
+    approve: bool = True
+    reason: str | None = None
+    correlation_id: str | None = None
+
+
+class ToolingConfirmExecutionResponse(IOModel):
+    """Execution confirmation result."""
+
+    ok: bool
+    approval_token: str | None = None
+    expires_at: float | None = None
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    error: str | None = None
 
 
 class ToolingToolsInitializedEvent(IOModel):
