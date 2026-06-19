@@ -6,7 +6,10 @@ from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.state import State
-from app.services.orchestrator.tool_bindings import build_tool_bindings
+from app.services.orchestrator.tool_bindings import (
+    build_tool_approval_candidates,
+    build_tool_bindings,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
@@ -388,6 +391,7 @@ async def chatbot(state: State, bus: MessageBus):
         )
 
     tool_bindings = {}
+    approval_candidates = {}
     if not result.ok:
         log_error(f"Failed to get tools from ToolingService: {result.error}")
         tools = []
@@ -403,6 +407,9 @@ async def chatbot(state: State, bus: MessageBus):
             if not tool_schemas:
                 log_warning("No tools returned from ToolingService")
             tools, tool_bindings = build_tool_bindings(tool_schemas)
+            approval_candidates = build_tool_approval_candidates(
+                result.data.get("blocked_tools", [])
+            )
             log_debug(f"Loaded {len(tools)} tools for LLM binding")
         else:
             log_error(f"Unexpected result.data type: {type(result.data)}")
@@ -435,4 +442,5 @@ async def chatbot(state: State, bus: MessageBus):
             )
         ],
         "tool_bindings": tool_bindings,
+        "approval_candidates": approval_candidates,
     }

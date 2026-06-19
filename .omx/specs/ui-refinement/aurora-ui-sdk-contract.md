@@ -29,7 +29,16 @@ The SDK should normalize backend responses into small view models without discar
 - `RouteSummary`: module, decision target, provider peer, reason, fallback, provider candidates, error code.
 - `CapabilitySummary`: service instance, provider peer, method/resource, selector address, policy flags, routable/blockers.
 - `RemoteActionPreflight`: target selector, policy flags, required confirmation/consent/resource fields, expected audit/correlation fields.
+- `ToolApprovalRequest`: approval request ID, correlation ID, policy decision ID, global tool ID, provider peer/service IDs, mesh/resource selectors, args schema/hash, approval mode, expiry, status, denial reason, and required follow-up action.
 - `AuditReference`: correlation ID, event kind, peer, method/tool/resource, status, redacted detail availability.
+
+Required high-level client namespaces once `@aurora/client` is implemented:
+
+- `client.capabilities.listCatalog()` over `Gateway.GetCapabilityCatalog`.
+- `client.routes.explain()` over `Gateway.ExplainRoute`.
+- `client.tools.listCatalog()` over `Tooling.GetToolCatalog`.
+- `client.tools.prepareExecution()`, `client.tools.requestApproval()`, `client.tools.confirmExecution()`, and `client.tools.execute()` over the matching Tooling contracts.
+- Approval/tool execution events for requested, approved, denied, executed, and failed states, correlated by backend IDs.
 
 ## Privacy And Redaction
 

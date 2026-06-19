@@ -90,6 +90,13 @@ This UI must support the production approval harness from `MESH-GAP-005` and the
 
 Additional requirements:
 
+- Render orchestrator approval interrupts with payload type `tool_approval_request` as first-class tool cards. Required fields are `approval_request_id`, `correlation_id`, `policy_decision_id`, `global_tool_id`, `provider_peer_id`, `provider_service_instance_id`, `mesh_selector`, `arguments`, `args_schema`, `approval_mode`, `expires_at`, `safety_class`, `execution_location`, `reason_code`, and `reason`.
+- Approval cards must call SDK methods only:
+  - request/preflight state through `client.tools.prepareExecution()` or the orchestrator-provided interrupt payload,
+  - approval through `client.tools.requestApproval()` when the card is created outside orchestrator,
+  - admin/user decision through `client.tools.confirmExecution()`,
+  - final execution through `client.tools.execute()` with the returned approval token.
+- Subscribe to the SDK event stream for `tool.approval.requested`, `tool.approval.approved`, `tool.approval.denied`, `tool.execution.executed`, and `tool.execution.failed`; events must be correlated by `correlation_id` and `approval_request_id`.
 - Show provider choice when a tool exists locally and on one or more peers. Default selection must follow route/privacy policy and explicit selector requirements.
 - Render approval cards for local/internal tools, remote mesh tools, MCP/plugin tools, and cloud/external tools using one visual grammar.
 - Show risk class, data egress, mutating/admin flags, peer/provider, trust tier, transport, args diff/hash, dry-run preview, requested approval scope, TTL, and audit destination.
@@ -108,3 +115,4 @@ Additional mock/component references:
 Additional acceptance criteria:
 
 - Component tests cover local dangerous tool, remote dangerous tool, duplicated local+remote tool, approve-all session, approve-all peer, dry-run-only, denied, expired approval, replay rejection, and service unavailable.
+- Component tests verify orchestrator `tool_approval_request` payloads render without a direct backend fetch and preserve hidden provider metadata for the follow-up SDK calls.

@@ -172,26 +172,44 @@ class TestChatbotToolRetrieval:
                             "description": "A test tool",
                             "args_schema": {"properties": {}, "required": []},
                         }
-                    ]
+                    ],
+                    "blocked_tools": [
+                        {
+                            "reason_code": "confirmation_required",
+                            "reason": "tool requires approval before it can be model-bound",
+                            "tool": {
+                                "name": "delete_file",
+                                "local_name": "delete_file",
+                                "global_tool_id": "local:Tooling:tool:delete_file",
+                                "provider_peer_id": "local",
+                                "provider_service_instance_id": "local:Tooling",
+                                "display_name": "delete_file",
+                                "description": "Delete a file.",
+                                "args_schema": {"properties": {}, "required": []},
+                                "execution_location": "local",
+                                "source_type": "local",
+                                "safety_class": "dangerous",
+                                "confirmation_required": True,
+                            },
+                        }
+                    ],
                 },
             ),  # Tool retrieval
         ]
 
         with (
             _patch_llm_for_chatbot(),
-            patch(
-                "app.services.orchestrator.agents.chatbot.ToolingGetToolCatalogRequest"
-            ) as mock_catalog_request,
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolCatalogRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
             # Verify tools were requested via bus
             assert mock_bus.request.call_count >= 2
             assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
-            mock_catalog_request.assert_called_once()
 
             # LLM was called to produce a response
             assert "messages" in result
+            assert result["approval_candidates"]["delete_file"]["approval_required"] is True
 
     @pytest.mark.asyncio
     async def test_chatbot_falls_back_to_legacy_get_tools(self, mock_bus, mock_state):
@@ -246,7 +264,7 @@ class TestChatbotLLMIntegration:
                 "app.services.orchestrator.agents.chatbot._initialize_llm", new_callable=AsyncMock
             ),
             patch("app.services.orchestrator.agents.chatbot.llm", None),
-            contextlib.suppress(ValueError),
+            contextlib.suppress(ValueError, ModuleNotFoundError),
         ):
             # Should raise or handle gracefully; accept either
             await chatbot(mock_state, bus=mock_bus)

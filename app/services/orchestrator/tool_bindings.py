@@ -7,8 +7,8 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 from pydantic import Field, create_model
 
-
 ToolBinding = dict[str, Any]
+ApprovalCandidate = dict[str, Any]
 
 
 def build_tool_bindings(
@@ -43,16 +43,61 @@ def build_tool_bindings(
     return tools, bindings
 
 
+def build_tool_approval_candidates(
+    blocked_tool_schemas: list[dict[str, Any]],
+) -> dict[str, ApprovalCandidate]:
+    """Build UI/session approval candidates from non-bindable catalog tools."""
+
+    candidates: dict[str, ApprovalCandidate] = {}
+    for blocked in blocked_tool_schemas:
+        tool_schema = blocked.get("tool") if isinstance(blocked, dict) else None
+        if not isinstance(tool_schema, dict) or not _requires_approval_interrupt(
+            tool_schema, blocked
+        ):
+            continue
+
+        candidate_name = _unique_tool_name(
+            str(tool_schema.get("name") or tool_schema.get("local_name") or "approval_tool"),
+            candidates,
+        )
+        candidates[candidate_name] = {
+            **_execution_binding(tool_schema, candidate_name),
+            "approval_required": True,
+            "reason_code": blocked.get("reason_code"),
+            "reason": blocked.get("reason"),
+            "display_name": tool_schema.get("display_name") or candidate_name,
+            "description": tool_schema.get("description") or "",
+            "args_schema": tool_schema.get("args_schema") or tool_schema.get("schema") or {},
+            "required_permissions": list(tool_schema.get("required_permissions") or []),
+        }
+
+    return candidates
+
+
 def _is_safe_to_bind(schema: dict[str, Any]) -> bool:
     """Return whether a discovered tool may be advertised to the LLM."""
-
-    is_remote = _is_remote_tool(schema)
-    if not is_remote:
-        return True
 
     safety_class = schema.get("safety_class") or "standard"
     confirmation_required = bool(schema.get("confirmation_required"))
     return safety_class == "standard" and not confirmation_required
+
+
+def _requires_approval_interrupt(
+    schema: dict[str, Any], blocked_metadata: dict[str, Any]
+) -> bool:
+    """Return whether a blocked catalog tool should surface as an approval card."""
+
+    safety_class = schema.get("safety_class") or "standard"
+    reason_code = blocked_metadata.get("reason_code")
+    return bool(schema.get("confirmation_required")) or safety_class in {
+        "sensitive",
+        "dangerous",
+    } or reason_code in {
+        "confirmation_required",
+        "safety_class_sensitive",
+        "safety_class_dangerous",
+        "approval_required",
+    }
 
 
 def _is_remote_tool(schema: dict[str, Any]) -> bool:
