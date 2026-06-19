@@ -13,7 +13,7 @@
 
 - **Phase:** P1 — Transport-independent SDK and capability graph foundation
 - **Lane:** sdk
-- **Depends on:** SDK-001
+- **Depends on:** SDK-001, MESH-GAP-002, MESH-GAP-003, MESH-GAP-005
 - **Parallelizable with:** None
 - **Coverage matrix rows:** sdk.transport.client, gateway.method_exposure_matrix
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -33,7 +33,7 @@ RouteSheet and tool approvals show why a route is allowed or blocked.
 
 ## SDK integration details
 
-- Export `AuroraClient`, transport interfaces, generated method descriptors, capability graph, auth/session helpers, and test utilities.
+- Export `AuroraClient`, transport interfaces, generated method descriptors, executable capability catalog/graph projections, auth/session helpers, and test utilities.
 - Use strict TypeScript and no React dependency in the core package.
 
 ## Tauri/native integration details

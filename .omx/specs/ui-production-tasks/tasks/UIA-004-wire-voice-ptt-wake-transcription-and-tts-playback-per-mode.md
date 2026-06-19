@@ -13,7 +13,7 @@
 
 - **Phase:** P7 — Assistant UI production wiring
 - **Lane:** assistant-voice
-- **Depends on:** UIA-001, UI-004, SDK-006
+- **Depends on:** UIA-001, UI-004, SDK-006, MESH-GAP-008
 - **Parallelizable with:** AND-005, IOS-006, TAURI-005
 - **Coverage matrix rows:** voice.audio.mode_matrix
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ User can understand and use local capture, remote transcription, native playback
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 
@@ -91,6 +91,7 @@ This task is expanded by `MESH-GAP-008` for cross-peer audio boundaries.
 Additional requirements:
 
 - Show explicit session consent before sending microphone/audio frames to a remote peer for STT, wake, or TTS-related routing.
+- Distinguish batch transcription/synthesis from remote microphone, wakeword streaming, live transcription, and remote playback/control. Batch remote operations may use capability catalog route decisions; live/streaming or hardware-targeting operations require audio session prepare/consent/start/status/stop contracts.
 - Display local capture vs remote processing vs local playback as separate state chips.
 - RouteSheet must expose audio privacy class, peer/provider, transport, retention policy, session TTL, and cancel/revoke control.
 - Event stream UI must handle partial transcription, final transcription, timeout, cancelled, remote denial, peer disconnect, and local permission loss.

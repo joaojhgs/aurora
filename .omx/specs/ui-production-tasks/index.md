@@ -12,7 +12,7 @@ This directory decomposes the full Aurora UI/product plan into individually impl
 - Production screens must call `AuroraClient`; never direct `fetch`, Tauri `invoke`, Python service objects, or raw WebRTC APIs from screen components.
 - Backend service-to-service communication remains bus-only with typed topic constants and Pydantic/IOModel payloads.
 - `method_type="manage"` and admin-critical operations must go through AdminAction draft/confirm/audit once BE-004 exists.
-- Capability graph owns feature availability; UI must explain disabled/degraded states instead of hiding ambiguity.
+- Capability catalog owns executable feature availability; diagnostic graph data may explain topology, but UI must not execute from graph-only assumptions.
 - Official Tauri 2/Rust shell is the production native runtime. Python-backed Tauri forks remain prototype-only.
 - Android assistant role is conditional: Tauri/Kotlin can support plugins/manifest/service declarations, but OS role grant requires package qualification plus user/OEM/profile support.
 - iOS integrates through App Intents, Shortcuts, widgets, share extensions, file/deep links, and in-app voice; it must not claim Siri replacement.
@@ -50,21 +50,21 @@ The critical path is: P0 baseline → SDK core/contract inventory → backend ga
 - [ ] [P0-003 — Establish frontend package lint/type/build/test baseline](tasks/P0-003-establish-frontend-package-lint-type-build-test-baseline.md) _(lane: frontend/readiness; deps: None)_
 - [ ] [P0-004 — Create monorepo/package layout decision for SDK, UI, Tauri, and native plugins](tasks/P0-004-create-monorepo-package-layout-decision-for-sdk-ui-tauri-and-native-plugins.md) _(lane: architecture; deps: P0-001)_
 
-### P1 — Transport-independent SDK and capability graph foundation
+### P1 — Transport-independent SDK and capability catalog foundation
 
 - [ ] [SDK-001 — Scaffold `@aurora/client` TypeScript SDK package and public API](tasks/SDK-001-scaffold-@aurora-client-typescript-sdk-package-and-public-api.md) _(lane: sdk; deps: P0-004)_
 - [ ] [SDK-002 — Implement generated backend type ingestion from registry/OpenAPI](tasks/SDK-002-implement-generated-backend-type-ingestion-from-registry-openapi.md) _(lane: sdk; deps: SDK-001, P0-002)_
 - [ ] [SDK-003 — Define normalized envelopes, results, errors, and audit metadata](tasks/SDK-003-define-normalized-envelopes-results-errors-and-audit-metadata.md) _(lane: sdk; deps: SDK-001)_
 - [ ] [SDK-004 — Implement AuthSession state machine](tasks/SDK-004-implement-authsession-state-machine.md) _(lane: sdk; deps: SDK-001)_
 - [ ] [SDK-005 — Implement canonical permission catalog and effective-permission helpers](tasks/SDK-005-implement-canonical-permission-catalog-and-effective-permission-helpers.md) _(lane: sdk; deps: SDK-001)_
-- [ ] [SDK-006 — Implement capability graph engine](tasks/SDK-006-implement-capability-graph-engine.md) _(lane: sdk; deps: SDK-001, SDK-002, SDK-004, SDK-005)_
+- [ ] [SDK-006 — Implement capability graph engine](tasks/SDK-006-implement-capability-graph-engine.md) _(lane: sdk; deps: SDK-001, SDK-002, SDK-004, SDK-005, MESH-GAP-003, MESH-GAP-004, MESH-GAP-005)_
 - [ ] [SDK-007 — Implement HTTP Gateway transport adapter](tasks/SDK-007-implement-http-gateway-transport-adapter.md) _(lane: sdk; deps: SDK-001, P0-002)_
 - [ ] [SDK-008 — Implement mock transport and contract fixtures](tasks/SDK-008-implement-mock-transport-and-contract-fixtures.md) _(lane: sdk; deps: SDK-001)_
 - [ ] [SDK-009 — Implement Tauri local/native transport interface](tasks/SDK-009-implement-tauri-local-native-transport-interface.md) _(lane: sdk; deps: SDK-001)_
 - [ ] [SDK-010 — Implement mesh/P2P transport interface](tasks/SDK-010-implement-mesh-p2p-transport-interface.md) _(lane: sdk; deps: SDK-001)_
 - [ ] [SDK-011 — Implement event stream abstraction](tasks/SDK-011-implement-event-stream-abstraction.md) _(lane: sdk; deps: SDK-001, SDK-003)_
-- [ ] [SDK-012 — Implement route/privacy policy engine](tasks/SDK-012-implement-route-privacy-policy-engine.md) _(lane: sdk; deps: SDK-001)_
-- [ ] [SDK-013 — Implement AdminAction client controller](tasks/SDK-013-implement-adminaction-client-controller.md) _(lane: sdk; deps: SDK-001, SDK-003, BE-004)_
+- [ ] [SDK-012 — Implement route/privacy policy engine](tasks/SDK-012-implement-route-privacy-policy-engine.md) _(lane: sdk; deps: SDK-001, MESH-GAP-002, MESH-GAP-003, MESH-GAP-005)_
+- [ ] [SDK-013 — Implement AdminAction client controller](tasks/SDK-013-implement-adminaction-client-controller.md) _(lane: sdk; deps: SDK-001, SDK-003, BE-004, MESH-GAP-005)_
 - [ ] [SDK-014 — Implement SDK conformance test suite across transports](tasks/SDK-014-implement-sdk-conformance-test-suite-across-transports.md) _(lane: sdk; deps: SDK-001, SDK-007, SDK-008, SDK-009, SDK-010, SDK-011, SDK-013)_
 
 ### P2 — Backend contract and gateway/API gaps
@@ -79,14 +79,14 @@ The critical path is: P0 baseline → SDK core/contract inventory → backend ga
 - [ ] [BE-008 — Add attachment/context ingestion contracts](tasks/BE-008-add-attachment-context-ingestion-contracts.md) _(lane: backend/assistant; deps: P0-002)_
 - [ ] [BE-009 — Add Orchestrator cancellation/interrupt contract](tasks/BE-009-add-orchestrator-cancellation-interrupt-contract.md) _(lane: backend/orchestrator; deps: P0-002)_
 - [ ] [BE-010 — Add config schema metadata, diff, rollback, and reload-impact preview](tasks/BE-010-add-config-schema-metadata-diff-rollback-and-reload-impact-preview.md) _(lane: backend/config; deps: BE-004)_
-- [ ] [BE-011 — Add tool risk taxonomy and approval hints](tasks/BE-011-add-tool-risk-taxonomy-and-approval-hints.md) _(lane: backend/tools; deps: P0-002)_
+- [ ] [BE-011 — Add tool risk taxonomy and approval hints](tasks/BE-011-add-tool-risk-taxonomy-and-approval-hints.md) _(lane: backend/tools; deps: P0-002, MESH-GAP-005)_
 - [ ] [BE-012 — Add pending pairing queue/list/event contract](tasks/BE-012-add-pending-pairing-queue-list-event-contract.md) _(lane: backend/auth-mesh; deps: BE-003)_
-- [ ] [BE-013 — Add peer capability manifest and mesh route explain contracts](tasks/BE-013-add-peer-capability-manifest-and-mesh-route-explain-contracts.md) _(lane: backend/mesh; deps: BE-002)_
+- [ ] [BE-013 — Add peer capability manifest and mesh route explain contracts](tasks/BE-013-add-peer-capability-manifest-and-mesh-route-explain-contracts.md) _(lane: backend/mesh; deps: BE-002, MESH-GAP-003)_
 - [ ] [BE-014 — Add WebRTC/ICE/data-channel diagnostics endpoints/events](tasks/BE-014-add-webrtc-ice-data-channel-diagnostics-endpoints-events.md) _(lane: backend/mesh; deps: BE-003)_
 - [ ] [BE-015 — Implement or explicitly gate Supervisor service controls](tasks/BE-015-implement-or-explicitly-gate-supervisor-service-controls.md) _(lane: backend/supervisor; deps: BE-004)_
 - [ ] [BE-016 — Add deployment topology, bus health, and process-mode contract](tasks/BE-016-add-deployment-topology-bus-health-and-process-mode-contract.md) _(lane: backend/operations; deps: P0-002, BE-002)_
-- [ ] [BE-017 — Add memory/RAG provenance, export, and delete contracts](tasks/BE-017-add-memory-rag-provenance-export-delete-contracts.md) _(lane: backend/db-rag; deps: P0-002, BE-004)_
-- [ ] [BE-018 — Add scheduler management exposure and AdminAction contract](tasks/BE-018-add-scheduler-management-exposure-and-adminaction-contract.md) _(lane: backend/scheduler; deps: P0-002, BE-004)_
+- [ ] [BE-017 — Add memory/RAG provenance, export, and delete contracts](tasks/BE-017-add-memory-rag-provenance-export-delete-contracts.md) _(lane: backend/db-rag; deps: P0-002, BE-004, MESH-GAP-007)_
+- [ ] [BE-018 — Add scheduler management exposure and AdminAction contract](tasks/BE-018-add-scheduler-management-exposure-and-adminaction-contract.md) _(lane: backend/scheduler; deps: P0-002, BE-004, MESH-GAP-009)_
 
 ### P3 — Tauri desktop/native shell foundation
 
@@ -133,10 +133,10 @@ The critical path is: P0 baseline → SDK core/contract inventory → backend ga
 
 - [ ] [UIA-001 — Wire assistant text chat send/receive](tasks/UIA-001-wire-assistant-text-chat-send-receive.md) _(lane: assistant; deps: UI-001, UI-005, SDK-007)_
 - [ ] [UIA-002 — Wire assistant streaming, cancellation, retry, and transport-loss states](tasks/UIA-002-wire-assistant-streaming-cancellation-retry-and-transport-loss-states.md) _(lane: assistant; deps: UIA-001, SDK-011, BE-003, BE-009)_
-- [ ] [UIA-003 — Wire tool approval cards and tool-result display](tasks/UIA-003-wire-tool-approval-cards-and-tool-result-display.md) _(lane: assistant-tools; deps: UIA-001, SDK-013, BE-011)_
-- [ ] [UIA-004 — Wire voice PTT, wake, transcription, and TTS playback per mode](tasks/UIA-004-wire-voice-ptt-wake-transcription-and-tts-playback-per-mode.md) _(lane: assistant-voice; deps: UIA-001, UI-004, SDK-006)_
+- [ ] [UIA-003 — Wire tool approval cards and tool-result display](tasks/UIA-003-wire-tool-approval-cards-and-tool-result-display.md) _(lane: assistant-tools; deps: UIA-001, SDK-013, BE-011, MESH-GAP-004, MESH-GAP-005, MESH-GAP-006)_
+- [ ] [UIA-004 — Wire voice PTT, wake, transcription, and TTS playback per mode](tasks/UIA-004-wire-voice-ptt-wake-transcription-and-tts-playback-per-mode.md) _(lane: assistant-voice; deps: UIA-001, UI-004, SDK-006, MESH-GAP-008)_
 - [ ] [UIA-005 — Wire attachments and mobile share-intake UI](tasks/UIA-005-wire-attachments-and-mobile-share-intake-ui.md) _(lane: assistant-context; deps: UIA-001, BE-008, SDK-006)_
-- [ ] [UIA-006 — Wire conversation history, memory, and RAG provenance UI](tasks/UIA-006-wire-conversation-history-memory-and-rag-provenance-ui.md) _(lane: assistant-memory; deps: UIA-001, SDK-007, BE-017)_
+- [ ] [UIA-006 — Wire conversation history, memory, and RAG provenance UI](tasks/UIA-006-wire-conversation-history-memory-and-rag-provenance-ui.md) _(lane: assistant-memory; deps: UIA-001, SDK-007, BE-017, MESH-GAP-007)_
 - [ ] [UIA-007 — Wire models/runtime selection and provider capability UI](tasks/UIA-007-wire-models-runtime-selection-and-provider-capability-ui.md) _(lane: assistant-models; deps: UIA-001, BE-007)_
 
 ### P8 — Admin/operator dashboard production wiring
@@ -147,31 +147,31 @@ The critical path is: P0 baseline → SDK core/contract inventory → backend ga
 - [ ] [ADM-004 — Wire token lifecycle management](tasks/ADM-004-wire-token-lifecycle-management.md) _(lane: admin; deps: SDK-005, SDK-013, BE-004)_
 - [ ] [ADM-005 — Wire device/session management](tasks/ADM-005-wire-device-session-management.md) _(lane: admin; deps: SDK-004, SDK-013, BE-004)_
 - [ ] [ADM-006 — Wire config editor, validation, diff, rollback, reload impact](tasks/ADM-006-wire-config-editor-validation-diff-rollback-reload-impact.md) _(lane: admin; deps: SDK-013, BE-010)_
-- [ ] [ADM-007 — Wire plugins, MCP, tools and reload/install states](tasks/ADM-007-wire-plugins-mcp-tools-and-reload-install-states.md) _(lane: admin; deps: SDK-007, BE-011)_
-- [ ] [ADM-008 — Wire audit log details and export](tasks/ADM-008-wire-audit-log-details-and-export.md) _(lane: admin; deps: SDK-007, BE-004)_
-- [ ] [ADM-009 — Wire diagnostics probes and redacted support bundle](tasks/ADM-009-wire-diagnostics-probes-and-redacted-support-bundle.md) _(lane: admin; deps: SDK-013, BE-005)_
+- [ ] [ADM-007 — Wire plugins, MCP, tools and reload/install states](tasks/ADM-007-wire-plugins-mcp-tools-and-reload-install-states.md) _(lane: admin; deps: SDK-007, BE-011, MESH-GAP-004, MESH-GAP-005)_
+- [ ] [ADM-008 — Wire audit log details and export](tasks/ADM-008-wire-audit-log-details-and-export.md) _(lane: admin; deps: SDK-007, BE-004, MESH-GAP-010)_
+- [ ] [ADM-009 — Wire diagnostics probes and redacted support bundle](tasks/ADM-009-wire-diagnostics-probes-and-redacted-support-bundle.md) _(lane: admin; deps: SDK-013, BE-005, MESH-GAP-010)_
 - [ ] [ADM-010 — Wire backup/restore dashboard](tasks/ADM-010-wire-backup-restore-dashboard.md) _(lane: admin; deps: SDK-013, BE-006)_
 - [ ] [ADM-011 — Wire pairing queue and pending device/peer review](tasks/ADM-011-wire-pairing-queue-and-pending-device-peer-review.md) _(lane: admin; deps: SDK-004, BE-012)_
-- [ ] [ADM-012 — Wire scheduler jobs and automation management](tasks/ADM-012-wire-scheduler-jobs-and-automation-management.md) _(lane: admin; deps: SDK-007, SDK-013, BE-018)_
+- [ ] [ADM-012 — Wire scheduler jobs and automation management](tasks/ADM-012-wire-scheduler-jobs-and-automation-management.md) _(lane: admin; deps: SDK-007, SDK-013, BE-018, MESH-GAP-009)_
 - [ ] [ADM-013 — Wire deployment topology and process-mode operations dashboard](tasks/ADM-013-wire-deployment-topology-and-process-mode-operations-dashboard.md) _(lane: admin; deps: ADM-001, BE-016, SDK-006)_
 
 ### P9 — Mesh/WebRTC UI and route policy
 
 - [ ] [MESH-001 — Wire mesh pairing and persisted peer lifecycle](tasks/MESH-001-wire-mesh-pairing-and-persisted-peer-lifecycle.md) _(lane: mesh; deps: ADM-011, BE-013)_
 - [ ] [MESH-002 — Wire live sessions vs persisted peers view](tasks/MESH-002-wire-live-sessions-vs-persisted-peers-view.md) _(lane: mesh; deps: MESH-001, BE-014)_
-- [ ] [MESH-003 — Wire route policy editor and route explain UI](tasks/MESH-003-wire-route-policy-editor-and-route-explain-ui.md) _(lane: mesh; deps: MESH-001, BE-013, SDK-012)_
+- [ ] [MESH-003 — Wire route policy editor and route explain UI](tasks/MESH-003-wire-route-policy-editor-and-route-explain-ui.md) _(lane: mesh; deps: MESH-001, BE-013, SDK-012, MESH-GAP-002, MESH-GAP-003)_
 - [ ] [MESH-004 — Wire WebRTC/ICE diagnostics UI](tasks/MESH-004-wire-webrtc-ice-diagnostics-ui.md) _(lane: mesh; deps: MESH-002, BE-014)_
 
 ### P10 — Quality, security, release, and operations
 
 - [ ] [QA-001 — Build SDK/backend contract conformance CI](tasks/QA-001-build-sdk-backend-contract-conformance-ci.md) _(lane: qa-release; deps: SDK-014, P0-002)_
-- [ ] [QA-002 — Build multi-mode E2E matrix](tasks/QA-002-build-multi-mode-e2e-matrix.md) _(lane: qa-release; deps: UIA-001, ADM-001, TAURI-004, AND-001, IOS-001)_
-- [ ] [QA-003 — Build security/privacy regression suite](tasks/QA-003-build-security-privacy-regression-suite.md) _(lane: qa-release; deps: BE-004, SDK-012, ADM-008)_
+- [ ] [QA-002 — Build multi-mode E2E matrix](tasks/QA-002-build-multi-mode-e2e-matrix.md) _(lane: qa-release; deps: UIA-001, ADM-001, TAURI-004, AND-001, IOS-001, MESH-GAP-011)_
+- [ ] [QA-003 — Build security/privacy regression suite](tasks/QA-003-build-security-privacy-regression-suite.md) _(lane: qa-release; deps: BE-004, SDK-012, ADM-008, MESH-GAP-005, MESH-GAP-011)_
 - [ ] [QA-004 — Build accessibility, responsive, visual regression suite](tasks/QA-004-build-accessibility-responsive-visual-regression-suite.md) _(lane: qa-release; deps: UI-001, UIA-001, ADM-001)_
 - [ ] [QA-005 — Build performance/offline/resilience suite](tasks/QA-005-build-performance-offline-resilience-suite.md) _(lane: qa-release; deps: UIA-002, SDK-011, TAURI-002)_
 - [ ] [QA-006 — Build release packaging and operator runbooks](tasks/QA-006-build-release-packaging-and-operator-runbooks.md) _(lane: qa-release; deps: TAURI-006, AND-009, IOS-008, ADM-009)_
 - [ ] [QA-007 — Final production readiness audit and task-board closure](tasks/QA-007-final-production-readiness-audit-and-task-board-closure.md) _(lane: qa-release; deps: QA-001, QA-002, QA-003, QA-004, QA-005, QA-006)_
-- [ ] [QA-008 — Build thread/process/mesh transport parity gate](tasks/QA-008-build-thread-process-mesh-transport-parity-gate.md) _(lane: qa-release; deps: QA-002, BE-016, SDK-014, MESH-004)_
+- [ ] [QA-008 — Build thread/process/mesh transport parity gate](tasks/QA-008-build-thread-process-mesh-transport-parity-gate.md) _(lane: qa-release; deps: QA-002, BE-016, SDK-014, MESH-004, MESH-GAP-011)_
 
 ## Dependency notes for maximizing parallelism
 

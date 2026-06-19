@@ -13,7 +13,7 @@
 
 - **Phase:** P7 — Assistant UI production wiring
 - **Lane:** assistant-tools
-- **Depends on:** UIA-001, SDK-013, BE-011
+- **Depends on:** UIA-001, SDK-013, BE-011, MESH-GAP-004, MESH-GAP-005, MESH-GAP-006
 - **Parallelizable with:** None
 - **Coverage matrix rows:** assistant.tool.approval
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ User sees tool risk, inputs, data-egress, approval/deny reason, progress, result
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 
@@ -90,7 +90,7 @@ This UI must support the production approval harness from `MESH-GAP-005` and the
 
 Additional requirements:
 
-- Render orchestrator approval interrupts with payload type `tool_approval_request` as first-class tool cards. Required fields are `approval_request_id`, `correlation_id`, `policy_decision_id`, `global_tool_id`, `provider_peer_id`, `provider_service_instance_id`, `mesh_selector`, `arguments`, `args_schema`, `approval_mode`, `expires_at`, `safety_class`, `execution_location`, `reason_code`, and `reason`.
+- Render orchestrator approval interrupts with payload type `tool_approval_request` as first-class tool cards. Required fields are `approval_request_id`, `correlation_id`, `policy_decision_id`, `global_tool_id`, `provider_peer_id`, `provider_service_instance_id`, `mesh_selector`, `arguments`, `args_schema`, `approval_mode`, `expires_at`, `safety_class`, `execution_location`, `reason_code`, and `reason`. Raw `confirmed=true` is not a production approval and must never be sent as the only authorization.
 - Approval cards must call SDK methods only:
   - request/preflight state through `client.tools.prepareExecution()` or the orchestrator-provided interrupt payload,
   - approval through `client.tools.requestApproval()` when the card is created outside orchestrator,
@@ -100,7 +100,7 @@ Additional requirements:
 - Show provider choice when a tool exists locally and on one or more peers. Default selection must follow route/privacy policy and explicit selector requirements.
 - Render approval cards for local/internal tools, remote mesh tools, MCP/plugin tools, and cloud/external tools using one visual grammar.
 - Show risk class, data egress, mutating/admin flags, peer/provider, trust tier, transport, args diff/hash, dry-run preview, requested approval scope, TTL, and audit destination.
-- Support deny, approve once, approve until expiry, approve all for session, approve all for peer, approve all local safe tools, dry-run, and policy-managed disabled states.
+- Support deny, approve once, approve until expiry, approve all for session, approve all for trusted peer, approve all local safe tools, dry-run, and policy-managed disabled states.
 - Approval card submission must call the SDK approval controller/AdminAction composition, not direct backend endpoints.
 - Tool result cards must include provider, correlation ID, audit receipt, route path, duration, redaction status, and retry/fallback eligibility.
 - If approval is blocked because explicit selector is missing, show a provider selector instead of an approve button.

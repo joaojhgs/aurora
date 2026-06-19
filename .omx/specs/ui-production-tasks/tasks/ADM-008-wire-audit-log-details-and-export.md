@@ -13,7 +13,7 @@
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
 - **Lane:** admin
-- **Depends on:** SDK-007, BE-004
+- **Depends on:** SDK-007, BE-004, MESH-GAP-010
 - **Parallelizable with:** None
 - **Coverage matrix rows:** admin.audit
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ Search/filter audit, inspect event details/reasons/receipts/redacted payload, an
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 

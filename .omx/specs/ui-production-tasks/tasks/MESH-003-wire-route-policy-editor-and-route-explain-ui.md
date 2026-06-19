@@ -13,7 +13,7 @@
 
 - **Phase:** P9 — Mesh/WebRTC UI and route policy
 - **Lane:** mesh
-- **Depends on:** MESH-001, BE-013, SDK-012
+- **Depends on:** MESH-001, BE-013, SDK-012, MESH-GAP-002, MESH-GAP-003
 - **Parallelizable with:** None
 - **Coverage matrix rows:** mesh.route.policy
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ Users/admins can define/explain peer fallback policy with privacy/trust/latency 
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` route explain APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 

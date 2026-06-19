@@ -13,7 +13,7 @@
 
 - **Phase:** P2 — Backend contract and gateway/API gaps
 - **Lane:** backend/scheduler
-- **Depends on:** P0-002, BE-004
+- **Depends on:** P0-002, BE-004, MESH-GAP-009
 - **Parallelizable with:** ADM-012
 - **Coverage matrix rows:** admin.scheduler
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -31,13 +31,15 @@ Operators can manage scheduled jobs only through typed, permissioned, audited ba
 - Inventory current `SchedulerMethods` contracts and exposure levels, especially `PAUSE` and `RESUME` currently internal.
 - Decide which operations are public/admin-manage: list, schedule, cancel, pause, resume, run-now if added, and job history/status.
 - All mutating operations must require AdminAction confirmation/audit and scheduler-specific permissions.
+- Remote/delegated jobs must carry namespace, owner peer/principal, executing peer, target selector/resource, delegated permission context, approval/policy decision ID, and audit correlation ID.
+- Jobs that invoke tools/orchestrator flows must use delegated approval tokens from the production approval protocol; do not persist ambient user permission as future execution authority.
 - Return explicit unsupported/degraded states for pause/resume if CronService cannot guarantee safe resume semantics.
 - Include next-run, last-run, owner/principal, source, timezone, failure count, and privacy class where available.
 
 ## SDK integration details
 
 - Add scheduler method descriptors and normalized SDK helpers for list/schedule/cancel/pause/resume/degraded states.
-- Capability graph must allow ADM-012 to disable pause/resume while leaving list/read-only views available.
+- Capability catalog must allow ADM-012 to disable pause/resume while leaving list/read-only views available.
 
 ## Tauri/native integration details
 
@@ -70,6 +72,7 @@ Operators can manage scheduled jobs only through typed, permissioned, audited ba
 ## Acceptance criteria
 
 - Scheduler list/read methods and each mutation have explicit exposure, permission, and audit behavior.
+- Remote scheduler operations are namespace/owner scoped and preserve delegated approval/provenance through create/execute/cancel/deny audit events.
 - Pause/resume are either fully implemented and tested or capability-gated as unsupported.
 - ADM-012 can wire all visible job actions through SDK without direct gateway fetches or fake success.
 
