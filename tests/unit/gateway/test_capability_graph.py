@@ -230,7 +230,10 @@ def test_capability_graph_classifies_audio_boundaries():
         "WakeWord": ServiceAnnouncement(
             module="WakeWord",
             version="1.0.0",
-            methods=[_method_from_topic(WakeWordMethods.PROCESS_AUDIO)],
+            methods=[
+                _method_from_topic(WakeWordMethods.PROCESS_AUDIO),
+                _method_from_topic(WakeWordMethods.DETECT),
+            ],
         ),
     }
 
@@ -275,6 +278,14 @@ def test_capability_graph_classifies_audio_boundaries():
     assert wakeword.policy.operation_class == "wakeword_streaming"
     assert wakeword.policy.explicit_selector_required is True
     assert wakeword.policy.privacy_indicator_required is True
+    assert wakeword.policy.consent_required is True
+
+    wakeword_detect = methods[WakeWordMethods.DETECT]
+    assert wakeword_detect.policy.safety_class == "standard"
+    assert wakeword_detect.policy.operation_class == "wakeword_detection"
+    assert wakeword_detect.policy.resource_scope == "submitted_audio"
+    assert wakeword_detect.policy.explicit_selector_required is False
+    assert wakeword_detect.policy.consent_required is False
 
 
 @pytest.mark.asyncio

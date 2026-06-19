@@ -371,7 +371,6 @@ _EXPLICIT_AUDIO_TOPICS = {
     STTMethods.AUDIO,
     STTMethods.CONTROL,
     WakeWordMethods.PROCESS_AUDIO,
-    WakeWordMethods.DETECT,
     WakeWordMethods.CONTROL,
     TranscriptionMethods.PROCESS_AUDIO,
     TranscriptionMethods.CONTROL,

@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.stt import (
+    AudioSessionMethods,
+    TranscriptionMethods,
+    WakeWordMethods,
+)
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.mesh.tracing import (
     audit_details_hash,
@@ -307,7 +312,11 @@ class RPCHandler:
             )
             typed_params = params
             if isinstance(params, dict):
-                if topic == ToolingMethods.EXECUTE_TOOL:
+                if topic in {
+                    AudioSessionMethods.PREPARE,
+                    TranscriptionMethods.PROCESS_AUDIO,
+                    WakeWordMethods.PROCESS_AUDIO,
+                } or topic == ToolingMethods.EXECUTE_TOOL:
                     params = {
                         **params,
                         "caller_peer_id": self._peer_id,

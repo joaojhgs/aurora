@@ -7,7 +7,7 @@ from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, Peer
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
 from app.shared.contracts.models.mesh import MeshAddressSelector
-from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
 from app.shared.contracts.models.tts import TTSMethods
 
 
@@ -245,6 +245,12 @@ class TestRoutingTableResolve:
 
         assert route.target == "local"
         assert route.module == "Transcription"
+
+    def test_batch_wakeword_detect_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(WakeWordMethods.DETECT)
+
+        assert route.target == "local"
+        assert route.module == "WakeWord"
 
     @pytest.mark.asyncio
     async def test_explicit_audio_selector_routes_to_selected_peer(

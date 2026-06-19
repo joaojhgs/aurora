@@ -16,6 +16,7 @@ from app.shared.contracts.models.gateway import (
     ServiceAnnouncement,
 )
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.stt import AudioSessionMethods, WakeWordMethods
 from app.shared.contracts.registry import clear_registry, list_modules
 
 
@@ -48,6 +49,11 @@ def _remote_service(module: str, version: str, max_concurrent: int = 4) -> PeerS
         max_concurrent=max_concurrent,
         digest=f"digest-{module}-{version}",
     )
+
+
+def _method_from_topic(topic: str) -> MethodInfo:
+    module, name = topic.split(".", 1)
+    return _method(module, name)
 
 
 @pytest.mark.asyncio
@@ -387,6 +393,43 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert stale_route.error_code == "selector_peer_stale"
 
 
+def test_catalog_exposes_audio_streaming_as_consent_required_and_batch_detect_invokable():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"WakeWord": MeshServiceConfig(share=True, prefer="network")},
+    )
+    local_services = {
+        "WakeWord": ServiceAnnouncement(
+            module="WakeWord",
+            version="1.0.0",
+            methods=[
+                _method_from_topic(WakeWordMethods.PROCESS_AUDIO),
+                _method_from_topic(WakeWordMethods.DETECT),
+            ],
+        )
+    }
+
+    catalog = build_capability_catalog(
+        request=CapabilityCatalogRequest(modules=["WakeWord"]),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        local_peer_id="local-peer",
+    )
+
+    actions = {action.topic: action for action in catalog.actions}
+    streaming = actions[WakeWordMethods.PROCESS_AUDIO]
+    assert streaming.policy.consent_required is True
+    assert streaming.policy.privacy_indicator_required is True
+    assert streaming.policy.operation_class == "wakeword_streaming"
+    assert streaming.bindability == "approval-required"
+
+    batch_detect = actions[WakeWordMethods.DETECT]
+    assert batch_detect.policy.consent_required is False
+    assert batch_detect.policy.operation_class == "wakeword_detection"
+    assert batch_detect.bindability == "model-bindable"
+
+
 @pytest.mark.asyncio
 async def test_route_explain_reports_selector_validation_failure():
     mesh_config = MeshConfig(
@@ -422,12 +465,19 @@ def test_gateway_service_registers_capability_catalog_and_explain_contracts():
     clear_registry()
     GatewayService()
     gateway = list_modules()["Gateway"]
+    audio_session = list_modules()["AudioSession"]
     methods = {method.bus_topic: method for method in gateway.methods}
+    audio_methods = {method.bus_topic: method for method in audio_session.methods}
 
     assert GatewayMethods.GET_CAPABILITY_CATALOG in methods
     assert GatewayMethods.EXPLAIN_ROUTE in methods
+    assert AudioSessionMethods.PREPARE in audio_methods
+    assert AudioSessionMethods.LIST_EVENTS in audio_methods
     assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].exposure == "external"
     assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].method_type == "manage"
+    assert audio_methods[AudioSessionMethods.PREPARE].required_perms == [
+        "AudioSession.manage"
+    ]
     assert methods[GatewayMethods.EXPLAIN_ROUTE].required_perms == ["Gateway.manage"]
     clear_registry()
 

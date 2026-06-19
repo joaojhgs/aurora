@@ -111,6 +111,8 @@ class GatewayService(BaseService):
 
     def __init__(self):
         """Initialize the gateway service."""
+        from app.services.gateway.audio_session import AudioSessionService
+
         super().__init__(
             module="Gateway",
             summary="HTTP API Gateway for Aurora services",
@@ -133,9 +135,11 @@ class GatewayService(BaseService):
         self._mesh_bus = None
         self._mesh_peer_id = None
         self._runtime_config_lock = asyncio.Lock()
+        self._audio_session_service = AudioSessionService()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
+        await self._audio_session_service.start()
         await self._start_gateway()
         await self._start_webrtc()
         await self._start_mesh()
@@ -145,6 +149,7 @@ class GatewayService(BaseService):
         await self._stop_mesh()
         await self._stop_webrtc()
         await self._stop_gateway()
+        await self._audio_session_service.stop()
         # Ensure registry aggregator is stopped if it was created
         if self._registry_aggregator:
             await self._registry_aggregator.stop()

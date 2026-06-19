@@ -47,6 +47,10 @@ from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
+    AudioSessionEvent,
+    AudioSessionMethods,
+    AudioSessionSampleLimits,
+    AudioSessionStartRequest,
     STTAudioChunk,
     STTControl,
     TranscribeAudioRequest,
@@ -686,6 +690,8 @@ class TranscriptionService(BaseService):
         Returns:
             EmptyOutput on success
         """
+        await self._validate_streaming_audio_session(chunk)
+
         # Convert STT format to internal AudioFormat
         # Derive bits_per_sample and encoding from format string
         format_lower = chunk.format.lower()
@@ -716,8 +722,91 @@ class TranscriptionService(BaseService):
         await self._process_audio_data(
             chunk.data, audio_format, stream_id="external", source="external"
         )
+        await self._publish_audio_session_event(
+            chunk,
+            "transcription_audio_accepted",
+            status="active",
+            payload={"bytes": len(chunk.data), "sample_rate": chunk.sample_rate},
+        )
 
         return EmptyOutput()
+
+    async def _validate_streaming_audio_session(self, chunk: STTAudioChunk) -> None:
+        """Require selector and Gateway-issued consent for streaming audio."""
+        if not chunk.mesh_selector or not chunk.mesh_selector.has_routing_target():
+            await self._publish_audio_session_event(
+                chunk,
+                "stream_denied",
+                status="denied",
+                payload={"reason": "selector_required"},
+            )
+            raise PermissionError("Transcription.ProcessAudio requires an explicit mesh selector")
+        if not chunk.session_id or not chunk.consent_token:
+            await self._publish_audio_session_event(
+                chunk,
+                "stream_denied",
+                status="denied",
+                payload={"reason": "consent_token_required"},
+            )
+            raise PermissionError("Transcription.ProcessAudio requires an audio session consent token")
+
+        self._validate_streaming_audio_sample(chunk)
+        result = await self.bus.request(
+            AudioSessionMethods.START,
+            AudioSessionStartRequest(
+                session_id=chunk.session_id,
+                consent_token=chunk.consent_token,
+            ),
+            timeout=5.0,
+        )
+        if not result.ok:
+            await self._publish_audio_session_event(
+                chunk,
+                "stream_denied",
+                status="denied",
+                payload={"reason": result.error or "audio_session_denied"},
+            )
+            raise PermissionError(result.error or "audio session consent denied")
+
+    def _validate_streaming_audio_sample(self, chunk: STTAudioChunk) -> None:
+        limits = AudioSessionSampleLimits()
+        if chunk.sample_rate < limits.min_sample_rate or chunk.sample_rate > limits.max_sample_rate:
+            raise ValueError("audio sample_rate is outside session limits")
+        if chunk.channels < 1 or chunk.channels > limits.max_channels:
+            raise ValueError("audio channels are outside session limits")
+        if chunk.format.lower() not in limits.allowed_formats:
+            raise ValueError("audio format is outside session limits")
+        if len(chunk.data) > limits.max_chunk_bytes:
+            raise ValueError("audio chunk exceeds session limits")
+
+    async def _publish_audio_session_event(
+        self,
+        chunk: STTAudioChunk,
+        event_type: str,
+        *,
+        status: str,
+        payload: dict[str, object],
+    ) -> None:
+        if not chunk.session_id:
+            return
+        await self.bus.publish(
+            AudioSessionMethods.EVENTS,
+            AudioSessionEvent(
+                session_id=chunk.session_id,
+                event_type=event_type,
+                status=status,
+                source_peer_id=chunk.caller_peer_id,
+                target_peer_id=chunk.target_peer_id
+                or (chunk.mesh_selector.peer_id if chunk.mesh_selector else None),
+                privacy_class=chunk.privacy_class,
+                redacted=True,
+                correlation_id=chunk.correlation_id,
+                payload=payload,
+            ),
+            event=True,
+            mesh=True,
+            origin="internal",
+        )
 
     @method_contract(
         method_id=TranscriptionMethods.CONTROL,
