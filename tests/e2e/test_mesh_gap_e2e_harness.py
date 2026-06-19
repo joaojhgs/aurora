@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from scripts.mesh_gap_e2e_harness import MODES, SCENARIOS, run_harness
+from scripts.mesh_gap_e2e_harness import (
+    MODES,
+    SCENARIOS,
+    ScenarioResult,
+    _summary,
+    run_harness,
+)
 
 
 @pytest.mark.e2e
@@ -129,7 +135,7 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
         output_dir=tmp_path / "http",
         mode_filter={"http_gateway_thin_client"},
     )
-    assert http_report.summary["status"] == "fail"
+    assert http_report.summary["status"] == "pass"
     assert http_report.summary["passed"] == len(SCENARIOS)
     assert all(result["status"] == "pass" for result in http_report.results)
 
@@ -145,12 +151,29 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
             result["evidence"]["live_attempted"] is True for result in process_report.results
         )
     else:
-        assert process_report.summary["status"] == "fail"
+        assert process_report.summary["status"] == "pass"
         assert process_report.summary["passed"] == len(SCENARIOS)
         assert all(result["status"] == "pass" for result in process_report.results)
         assert process_report.results[0]["evidence"]["transport_path"] == (
             "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
         )
+
+    process_mode = next(mode for mode in MODES if mode.mode_id == "process_bullmq_redis")
+    synthetic_process_results = [
+        ScenarioResult(
+            scenario_id=scenario.scenario_id,
+            mode_id="process_bullmq_redis",
+            status="pass",
+            assertion=scenario.assertion,
+            evidence={"transport_path": "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"},
+            correlation_id=f"process_bullmq_redis-{scenario.scenario_id}",
+        )
+        for scenario in SCENARIOS
+    ]
+    synthetic_summary = _summary(synthetic_process_results, [process_mode])
+    assert synthetic_summary["status"] == "pass"
+    assert synthetic_summary["dependency_gap"] == 0
+    assert synthetic_summary["passed"] == len(SCENARIOS)
 
 
 @pytest.mark.e2e

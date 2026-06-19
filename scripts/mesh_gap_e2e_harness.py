@@ -1672,9 +1672,14 @@ def _summary(results: list[ScenarioResult], modes: list[HarnessMode]) -> dict[st
     )
     component_modes = [mode.mode_id for mode in modes if mode.execution == "component"]
     dependency_gaps = statuses.count("dependency_gap")
-    status = "pass" if final_mesh_passed and "fail" not in statuses else "fail"
+    has_failures = "fail" in statuses
+    final_mesh_required = any(mode.final_mesh_proof for mode in modes)
     if dependency_gaps:
         status = "blocked"
+    elif has_failures or (final_mesh_required and not final_mesh_passed):
+        status = "fail"
+    else:
+        status = "pass"
     return {
         "status": status,
         "passed": statuses.count("pass"),
@@ -1697,7 +1702,7 @@ def _summary(results: list[ScenarioResult], modes: list[HarnessMode]) -> dict[st
             )
             for scenario in SCENARIOS
         ),
-        "final_mesh_mode_included": any(mode.final_mesh_proof for mode in modes),
+        "final_mesh_mode_included": final_mesh_required,
         "final_mesh_mode_status": "pass" if final_mesh_passed else "fail",
         "preflight_not_counted_as_final_proof": True,
     }
