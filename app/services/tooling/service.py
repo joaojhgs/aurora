@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import re
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
@@ -32,10 +33,14 @@ from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
     ToolingBlockedToolInfo,
     ToolingCatalogProviderInfo,
+    ToolingConfirmExecutionRequest,
+    ToolingConfirmExecutionResponse,
     ToolingExecuteToolRequest,
     ToolingExecuteToolResponse,
     ToolingGetMCPStatusRequest,
     ToolingGetMCPStatusResponse,
+    ToolingGetSharingPolicyRequest,
+    ToolingGetSharingPolicyResponse,
     ToolingGetStatsRequest,
     ToolingGetStatsResponse,
     ToolingGetToolByNameRequest,
@@ -46,7 +51,18 @@ from app.shared.contracts.models.tooling import (
     ToolingGetToolsResponse,
     ToolingMethods,
     ToolingModule,
+    ToolingPolicyDecision,
+    ToolingPrepareExecutionRequest,
+    ToolingPrepareExecutionResponse,
     ToolingReloadMCPRequest,
+    ToolingRequestApprovalRequest,
+    ToolingRequestApprovalResponse,
+    ToolingSetSharingPolicyRequest,
+    ToolingSetSharingPolicyResponse,
+    ToolingSharingPolicy,
+    ToolingSharingPolicyRule,
+    ToolingTestSharingPolicyRequest,
+    ToolingTestSharingPolicyResponse,
     ToolingToolInfo,
     ToolingToolProvenance,
 )
@@ -92,6 +108,9 @@ class ToolingService(BaseService):
         )
         self.tools_manager = ToolsManager(self.bus)
         self._catalog_cache: dict[str, tuple[float, ToolingGetToolsResponse]] = {}
+        self._sharing_policy = ToolingSharingPolicy()
+        self._approval_requests: dict[str, dict[str, Any]] = {}
+        self._approval_tokens: dict[str, dict[str, Any]] = {}
 
     async def on_start(self) -> None:
         """Start the tooling service and initialize tools."""
@@ -376,6 +395,46 @@ class ToolingService(BaseService):
                 or selector.tool_id
             )
         )
+
+    @staticmethod
+    def _resource_selector_fingerprint(request: ToolingExecuteToolRequest) -> str:
+        resource_selector = (
+            request.resource_selector.model_dump(mode="json", exclude_none=True)
+            if request.resource_selector
+            else {}
+        )
+        mesh_selector = (
+            request.mesh_selector.model_dump(mode="json", exclude_none=True)
+            if request.mesh_selector
+            else {}
+        )
+        selector_fields = {
+            "resource_selector": resource_selector,
+            "mesh_resource_namespace": mesh_selector.get("resource_namespace"),
+            "mesh_hardware_target": mesh_selector.get("hardware_target"),
+            "mesh_data_scope": mesh_selector.get("data_scope"),
+            "mesh_tool_id": mesh_selector.get("tool_id"),
+        }
+        serialized = json.dumps(
+            selector_fields, sort_keys=True, default=str, separators=(",", ":")
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _route_decision_id(
+        cls,
+        request: ToolingExecuteToolRequest,
+        *,
+        provider_peer_id: str,
+        service_instance_id: str,
+    ) -> str:
+        route_fields = {
+            "provider_peer_id": provider_peer_id,
+            "service_instance_id": service_instance_id,
+            "target_peer_id": cls._selector_target_peer(request),
+        }
+        serialized = json.dumps(route_fields, sort_keys=True, default=str)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     def _tool_safety_class(self, tool: Any) -> str:
         return self._safe_metadata_value(
@@ -671,9 +730,298 @@ class ToolingService(BaseService):
                         reason_code=block_reason[0],
                         reason=block_reason[1],
                     )
-                )
+            )
             return
         tools.append(tool)
+
+    async def _audit_tooling_event(
+        self,
+        event: str,
+        *,
+        principal_id: str | None,
+        details: dict[str, Any],
+    ) -> None:
+        """Persist a Tooling policy/approval audit event."""
+
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=event,
+                    principal_id=principal_id,
+                    details=json.dumps(details, sort_keys=True, default=str),
+                ),
+                timeout=5.0,
+                priority=get_system_priority(),
+            )
+        except Exception as audit_error:
+            log_warning(f"Failed to audit {event}: {audit_error}")
+
+    def _operation_class(self, tool: Any, safety_class: str) -> str:
+        operation_class = getattr(tool, "operation_class", None)
+        if operation_class in {"read", "write", "external", "admin", "hardware", "data-egress"}:
+            return operation_class
+        if safety_class == "dangerous":
+            return "hardware"
+        if safety_class == "sensitive":
+            return "data-egress"
+        return "read"
+
+    def _toolkit_name(self, tool: Any) -> str | None:
+        return (
+            getattr(tool, "toolkit_name", None)
+            or getattr(tool, "mcp_server_name", None)
+            or getattr(tool, "server_name", None)
+        )
+
+    def _policy_context(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        tool: Any,
+        local_tool_name: str,
+        global_tool_id: str,
+        provider_peer_id: str,
+        service_instance_id: str,
+    ) -> dict[str, Any]:
+        safety_class = self._tool_safety_class(tool)
+        execution_location = "remote" if provider_peer_id != "local" else "local"
+        resource_selector = request.resource_selector
+        mesh_selector = request.mesh_selector
+        return {
+            "tool_name": local_tool_name,
+            "global_tool_id": global_tool_id,
+            "execution_location": execution_location,
+            "source_type": self._tool_source(tool),
+            "toolkit_name": self._toolkit_name(tool),
+            "safety_class": safety_class,
+            "operation_class": self._operation_class(tool, safety_class),
+            "resource_namespace": (
+                (resource_selector.resource_namespace if resource_selector else None)
+                or (mesh_selector.resource_namespace if mesh_selector else None)
+            ),
+            "hardware_target": (
+                (resource_selector.hardware_target if resource_selector else None)
+                or (mesh_selector.hardware_target if mesh_selector else None)
+            ),
+            "data_scope": (
+                (resource_selector.data_scope if resource_selector else None)
+                or (mesh_selector.data_scope if mesh_selector else None)
+            ),
+            "caller_peer_id": request.caller_peer_id,
+            "caller_principal_id": request.caller_principal_id,
+            "caller_device_id": request.caller_device_id,
+            "provider_peer_id": provider_peer_id,
+            "provider_service_instance_id": service_instance_id,
+            "route_privacy_class": getattr(tool, "route_privacy_class", None),
+        }
+
+    @staticmethod
+    def _policy_rule_matches(rule: ToolingSharingPolicyRule, context: dict[str, Any]) -> bool:
+        rule_fields = rule.model_dump(
+            exclude={"share", "approval_mode", "token_ttl_seconds"}
+        )
+        for field_name, rule_value in rule_fields.items():
+            if field_name == "rule_id" or rule_value is None:
+                continue
+            if context.get(field_name) != rule_value:
+                return False
+        return True
+
+    def _evaluate_sharing_policy(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        tool: Any,
+        local_tool_name: str,
+        global_tool_id: str,
+        provider_peer_id: str,
+        service_instance_id: str,
+    ) -> ToolingPolicyDecision:
+        context = self._policy_context(
+            request,
+            tool=tool,
+            local_tool_name=local_tool_name,
+            global_tool_id=global_tool_id,
+            provider_peer_id=provider_peer_id,
+            service_instance_id=service_instance_id,
+        )
+        policy = self._sharing_policy
+        matched_rule = next(
+            (rule for rule in policy.rules if self._policy_rule_matches(rule, context)),
+            None,
+        )
+        share = matched_rule.share if matched_rule else policy.default_share
+        mode = matched_rule.approval_mode if matched_rule else policy.default_approval_mode
+        token_ttl_seconds = (
+            matched_rule.token_ttl_seconds if matched_rule else policy.default_token_ttl_seconds
+        )
+        safety_class = context["safety_class"]
+        requires_tool_approval = self._tool_requires_confirmation(tool, safety_class)
+        is_local_safe = (
+            context["execution_location"] == "local"
+            and safety_class == "standard"
+            and not getattr(tool, "confirmation_required", False)
+        )
+        approval_required = requires_tool_approval or bool(
+            matched_rule
+            and mode
+            in {
+                "ask_each_time",
+                "allow_once",
+                "allow_until_expiry",
+                "dry_run_only",
+                "deny_all",
+            }
+        )
+        allowed = share and mode != "deny_all"
+        reason = None
+
+        if not share:
+            allowed = False
+            reason = "tool_not_shared"
+        elif mode == "deny_all":
+            reason = "policy_denied"
+        elif mode == "dry_run_only" and not request.dry_run:
+            allowed = False
+            reason = "dry_run_only"
+        elif mode == "approve_all_for_peer" and not request.caller_peer_id:
+            allowed = False
+            reason = "peer_required_for_approve_all"
+        elif mode == "approve_all_local_safe":
+            if is_local_safe:
+                approval_required = False
+            elif requires_tool_approval:
+                approval_required = True
+            else:
+                approval_required = False
+
+        if request.dry_run and share and mode != "deny_all":
+            allowed = True
+            reason = None
+
+        if mode in {"approve_all_for_session", "approve_all_for_peer"} and allowed:
+            approval_required = False
+
+        return ToolingPolicyDecision(
+            allowed=allowed,
+            share=share,
+            approval_required=approval_required,
+            approval_mode=mode,
+            decision_id=uuid.uuid4().hex,
+            policy_rule_id=matched_rule.rule_id if matched_rule else None,
+            reason=reason,
+            token_ttl_seconds=token_ttl_seconds,
+        )
+
+    def _prepared_execution(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        tool: Any,
+        local_tool_name: str,
+        provider_peer_id: str,
+        service_instance_id: str,
+        global_tool_id: str,
+    ) -> ToolingPrepareExecutionResponse:
+        if not request.correlation_id:
+            request.correlation_id = uuid.uuid4().hex
+        decision = self._evaluate_sharing_policy(
+            request,
+            tool=tool,
+            local_tool_name=local_tool_name,
+            global_tool_id=global_tool_id,
+            provider_peer_id=provider_peer_id,
+            service_instance_id=service_instance_id,
+        )
+        return ToolingPrepareExecutionResponse(
+            ok=decision.allowed,
+            policy_decision=decision,
+            args_hash=self._arguments_fingerprint(request.arguments),
+            resource_selector_hash=self._resource_selector_fingerprint(request),
+            route_decision_id=self._route_decision_id(
+                request,
+                provider_peer_id=provider_peer_id,
+                service_instance_id=service_instance_id,
+            ),
+            correlation_id=request.correlation_id,
+            provider_peer_id=provider_peer_id,
+            provider_service_instance_id=service_instance_id,
+            global_tool_id=global_tool_id,
+            local_tool_name=local_tool_name,
+        )
+
+    def _resolve_execution_context(
+        self, request: ToolingExecuteToolRequest
+    ) -> tuple[Any | None, str, str, str, str]:
+        local_tool_name = self._resolve_tool_name(request)
+        provider_peer_id, service_instance_id, _, _ = self._provider_context(request)
+        global_tool_id = self._global_tool_id(
+            provider_peer_id, service_instance_id, local_tool_name
+        )
+        tool = self.tools_manager.get_tool_by_name(local_tool_name)
+        return tool, local_tool_name, provider_peer_id, service_instance_id, global_tool_id
+
+    def _approval_token_claims(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        prepared: ToolingPrepareExecutionResponse,
+        approver_principal_id: str,
+    ) -> dict[str, Any]:
+        return {
+            "caller_principal_id": request.caller_principal_id,
+            "caller_peer_id": request.caller_peer_id,
+            "caller_device_id": request.caller_device_id,
+            "provider_peer_id": prepared.provider_peer_id,
+            "provider_service_instance_id": prepared.provider_service_instance_id,
+            "tool_name": prepared.local_tool_name,
+            "global_tool_id": prepared.global_tool_id,
+            "args_hash": prepared.args_hash,
+            "resource_selector_hash": prepared.resource_selector_hash,
+            "route_decision_id": prepared.route_decision_id,
+            "expires_at": time.time() + prepared.policy_decision.token_ttl_seconds,
+            "nonce": uuid.uuid4().hex,
+            "approver_principal_id": approver_principal_id,
+            "policy_decision_id": prepared.policy_decision.decision_id,
+            "approval_mode": prepared.policy_decision.approval_mode,
+            "used": False,
+        }
+
+    def _validate_approval_token(
+        self,
+        request: ToolingExecuteToolRequest,
+        *,
+        prepared: ToolingPrepareExecutionResponse,
+    ) -> tuple[bool, str | None]:
+        token = request.approval_token
+        if not token:
+            return False, "approval_token_required"
+        claims = self._approval_tokens.get(token)
+        if not claims:
+            return False, "approval_token_invalid"
+        if claims.get("used"):
+            return False, "approval_token_replayed"
+        if float(claims.get("expires_at", 0)) <= time.time():
+            return False, "approval_token_expired"
+
+        expected = {
+            "caller_principal_id": request.caller_principal_id,
+            "caller_peer_id": request.caller_peer_id,
+            "caller_device_id": request.caller_device_id,
+            "provider_peer_id": prepared.provider_peer_id,
+            "provider_service_instance_id": prepared.provider_service_instance_id,
+            "tool_name": prepared.local_tool_name,
+            "global_tool_id": prepared.global_tool_id,
+            "args_hash": prepared.args_hash,
+            "resource_selector_hash": prepared.resource_selector_hash,
+            "route_decision_id": prepared.route_decision_id,
+        }
+        for field_name, expected_value in expected.items():
+            if claims.get(field_name) != expected_value:
+                return False, f"approval_token_{field_name}_mismatch"
+        claims["used"] = True
+        return True, None
 
     async def _audit_tool_execution(
         self,
@@ -686,6 +1034,7 @@ class ToolingService(BaseService):
         status: str,
         error_code: str | None = None,
         denial_reason: str | None = None,
+        policy_decision: ToolingPolicyDecision | None = None,
     ) -> None:
         """Persist an audit event for a Tooling execution attempt."""
 
@@ -710,6 +1059,9 @@ class ToolingService(BaseService):
             "argument_hash": self._arguments_fingerprint(request.arguments),
             "safety_class": safety_class,
             "confirmed": request.confirmed,
+            "approval_token_present": bool(request.approval_token),
+            "policy_decision_id": policy_decision.decision_id if policy_decision else None,
+            "approval_mode": policy_decision.approval_mode if policy_decision else None,
             "dry_run": request.dry_run,
             "status": status,
             "error_code": error_code,
@@ -741,6 +1093,7 @@ class ToolingService(BaseService):
         safety_class: str,
         error_code: str,
         message: str,
+        policy_decision: ToolingPolicyDecision | None = None,
     ) -> ToolingExecuteToolResponse:
         log_context = self._execution_log_context(
             request,
@@ -760,6 +1113,7 @@ class ToolingService(BaseService):
             status="denied",
             error_code=error_code,
             denial_reason=message,
+            policy_decision=policy_decision,
         )
         return ToolingExecuteToolResponse(
             ok=False,
@@ -770,6 +1124,7 @@ class ToolingService(BaseService):
             correlation_id=request.correlation_id,
             provider_peer_id=provider_peer_id,
             global_tool_id=global_tool_id,
+            policy_decision_id=policy_decision.decision_id if policy_decision else None,
         )
 
     async def _enforce_execution_policy(
@@ -780,14 +1135,32 @@ class ToolingService(BaseService):
         local_tool_name: str,
         global_tool_id: str,
         provider_peer_id: str,
+        service_instance_id: str,
     ) -> ToolingExecuteToolResponse | None:
         """Return a denial response when execution policy blocks the request."""
 
         safety_class = self._tool_safety_class(tool)
-        remote_context = bool(request.caller_peer_id or request.mesh_selector)
+        prepared = self._prepared_execution(
+            request,
+            tool=tool,
+            local_tool_name=local_tool_name,
+            provider_peer_id=provider_peer_id,
+            service_instance_id=service_instance_id,
+            global_tool_id=global_tool_id,
+        )
+        decision = prepared.policy_decision
 
-        if not remote_context:
-            return None
+        if not decision.allowed:
+            return await self._deny_tool_execution(
+                request,
+                local_tool_name=local_tool_name,
+                global_tool_id=global_tool_id,
+                provider_peer_id=provider_peer_id,
+                safety_class=safety_class,
+                error_code=decision.reason or "policy_denied",
+                message=decision.reason or "Tool execution denied by sharing policy",
+                policy_decision=decision,
+            )
 
         if safety_class in {"sensitive", "dangerous"} and not self._request_has_resource_selector(
             request
@@ -803,19 +1176,48 @@ class ToolingService(BaseService):
                     f"Remote {safety_class} tool '{local_tool_name}' requires an "
                     "explicit resource selector"
                 ),
+                policy_decision=decision,
             )
 
-        if self._tool_requires_confirmation(tool, safety_class) and not (
-            request.confirmed or request.dry_run
-        ):
+        if request.dry_run:
+            return None
+
+        if decision.approval_required:
+            token_ok, token_error = self._validate_approval_token(request, prepared=prepared)
+            if token_ok:
+                await self._audit_tooling_event(
+                    "tooling.approval.token_accepted",
+                    principal_id=request.caller_principal_id,
+                    details={
+                        "correlation_id": request.correlation_id,
+                        "decision_id": decision.decision_id,
+                        "global_tool_id": global_tool_id,
+                        "provider_peer_id": provider_peer_id,
+                    },
+                )
+                return None
+
+            await self._audit_tooling_event(
+                "tooling.approval.token_rejected",
+                principal_id=request.caller_principal_id,
+                details={
+                    "correlation_id": request.correlation_id,
+                    "decision_id": decision.decision_id,
+                    "global_tool_id": global_tool_id,
+                    "provider_peer_id": provider_peer_id,
+                    "error_code": token_error,
+                    "confirmed": request.confirmed,
+                },
+            )
             return await self._deny_tool_execution(
                 request,
                 local_tool_name=local_tool_name,
                 global_tool_id=global_tool_id,
                 provider_peer_id=provider_peer_id,
                 safety_class=safety_class,
-                error_code="confirmation_required",
-                message=f"Remote tool '{local_tool_name}' requires confirmation",
+                error_code=token_error or "approval_token_required",
+                message=f"Tool '{local_tool_name}' requires a valid approval token",
+                policy_decision=decision,
             )
 
         return None
@@ -992,7 +1394,22 @@ class ToolingService(BaseService):
             serialized_tools = []
             for tool in tools:
                 try:
-                    serialized_tools.append(self._serialize_tool(tool, request))
+                    tool_info = self._serialize_tool(tool, request)
+                    policy_request = ToolingExecuteToolRequest(
+                        tool_name=tool_info.name,
+                        arguments={},
+                        mesh_selector=request.mesh_selector,
+                    )
+                    decision = self._evaluate_sharing_policy(
+                        policy_request,
+                        tool=tool,
+                        local_tool_name=tool_info.local_name,
+                        global_tool_id=tool_info.global_tool_id,
+                        provider_peer_id=tool_info.provider_peer_id,
+                        service_instance_id=tool_info.provider_service_instance_id,
+                    )
+                    if decision.share:
+                        serialized_tools.append(tool_info)
 
                 except Exception as tool_error:
                     log_warning(f"Failed to serialize tool {tool.name}: {tool_error}")
@@ -1174,6 +1591,300 @@ class ToolingService(BaseService):
             return ToolingGetStatsResponse(total_tools=0, mcp_tools_loaded=0)
 
     @method_contract(
+        method_id=ToolingMethods.GET_SHARING_POLICY,
+        summary="Get Tooling sharing policy",
+        input_model=ToolingGetSharingPolicyRequest,
+        output_model=ToolingGetSharingPolicyResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Tooling.manage"],
+    )
+    async def _on_get_sharing_policy(
+        self, request: ToolingGetSharingPolicyRequest
+    ) -> ToolingGetSharingPolicyResponse:
+        """Return the current in-memory Tooling sharing policy."""
+
+        return ToolingGetSharingPolicyResponse(policy=self._sharing_policy)
+
+    @method_contract(
+        method_id=ToolingMethods.SET_SHARING_POLICY,
+        summary="Set Tooling sharing policy",
+        input_model=ToolingSetSharingPolicyRequest,
+        output_model=ToolingSetSharingPolicyResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Tooling.manage"],
+    )
+    async def _on_set_sharing_policy(
+        self, request: ToolingSetSharingPolicyRequest
+    ) -> ToolingSetSharingPolicyResponse:
+        """Replace the current in-memory Tooling sharing policy."""
+
+        self._sharing_policy = request.policy
+        await self._audit_tooling_event(
+            "tooling.policy.set",
+            principal_id=request.actor_principal_id,
+            details={
+                "correlation_id": request.correlation_id,
+                "default_share": request.policy.default_share,
+                "default_approval_mode": request.policy.default_approval_mode,
+                "rule_count": len(request.policy.rules),
+            },
+        )
+        return ToolingSetSharingPolicyResponse(
+            ok=True,
+            policy=self._sharing_policy,
+            correlation_id=request.correlation_id,
+        )
+
+    async def _prepare_execution_response(
+        self, request: ToolingExecuteToolRequest
+    ) -> ToolingPrepareExecutionResponse:
+        tool, local_tool_name, provider_peer_id, service_instance_id, global_tool_id = (
+            self._resolve_execution_context(request)
+        )
+        if not tool:
+            decision = ToolingPolicyDecision(
+                allowed=False,
+                share=False,
+                approval_required=False,
+                approval_mode=self._sharing_policy.default_approval_mode,
+                decision_id=uuid.uuid4().hex,
+                reason="tool_not_found",
+            )
+            return ToolingPrepareExecutionResponse(
+                ok=False,
+                policy_decision=decision,
+                args_hash=self._arguments_fingerprint(request.arguments),
+                resource_selector_hash=self._resource_selector_fingerprint(request),
+                route_decision_id=self._route_decision_id(
+                    request,
+                    provider_peer_id=provider_peer_id,
+                    service_instance_id=service_instance_id,
+                ),
+                correlation_id=request.correlation_id or uuid.uuid4().hex,
+                provider_peer_id=provider_peer_id,
+                provider_service_instance_id=service_instance_id,
+                global_tool_id=global_tool_id,
+                local_tool_name=local_tool_name,
+            )
+        return self._prepared_execution(
+            request,
+            tool=tool,
+            local_tool_name=local_tool_name,
+            provider_peer_id=provider_peer_id,
+            service_instance_id=service_instance_id,
+            global_tool_id=global_tool_id,
+        )
+
+    @method_contract(
+        method_id=ToolingMethods.TEST_SHARING_POLICY,
+        summary="Test Tooling sharing policy for an execution",
+        input_model=ToolingTestSharingPolicyRequest,
+        output_model=ToolingTestSharingPolicyResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Tooling.manage"],
+    )
+    async def _on_test_sharing_policy(
+        self, request: ToolingTestSharingPolicyRequest
+    ) -> ToolingTestSharingPolicyResponse:
+        """Evaluate Tooling sharing policy without creating approval state."""
+
+        prepared = await self._prepare_execution_response(request)
+        return ToolingTestSharingPolicyResponse(**prepared.model_dump())
+
+    @method_contract(
+        method_id=ToolingMethods.PREPARE_EXECUTION,
+        summary="Prepare a Tooling execution and return policy binding",
+        input_model=ToolingPrepareExecutionRequest,
+        output_model=ToolingPrepareExecutionResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ToolingMethods.EXECUTE_TOOL],
+    )
+    async def _on_prepare_execution(
+        self, request: ToolingPrepareExecutionRequest
+    ) -> ToolingPrepareExecutionResponse:
+        """Prepare execution and emit an audit record for the decision."""
+
+        prepared = await self._prepare_execution_response(request)
+        await self._audit_tooling_event(
+            "tooling.execution.prepare",
+            principal_id=request.caller_principal_id,
+            details={
+                "correlation_id": prepared.correlation_id,
+                "decision_id": prepared.policy_decision.decision_id,
+                "approval_required": prepared.policy_decision.approval_required,
+                "approval_mode": prepared.policy_decision.approval_mode,
+                "allowed": prepared.policy_decision.allowed,
+                "global_tool_id": prepared.global_tool_id,
+                "provider_peer_id": prepared.provider_peer_id,
+            },
+        )
+        return prepared
+
+    @method_contract(
+        method_id=ToolingMethods.REQUEST_APPROVAL,
+        summary="Request Tooling execution approval",
+        input_model=ToolingRequestApprovalRequest,
+        output_model=ToolingRequestApprovalResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ToolingMethods.EXECUTE_TOOL],
+    )
+    async def _on_request_approval(
+        self, request: ToolingRequestApprovalRequest
+    ) -> ToolingRequestApprovalResponse:
+        """Create a pending approval request for an approval-required execution."""
+
+        prepared = await self._prepare_execution_response(request)
+        decision = prepared.policy_decision
+        if not decision.allowed:
+            await self._audit_tooling_event(
+                "tooling.approval.denied",
+                principal_id=request.caller_principal_id,
+                details={
+                    "correlation_id": prepared.correlation_id,
+                    "decision_id": decision.decision_id,
+                    "reason": decision.reason,
+                    "global_tool_id": prepared.global_tool_id,
+                },
+            )
+            return ToolingRequestApprovalResponse(
+                ok=False,
+                policy_decision=decision,
+                correlation_id=prepared.correlation_id,
+                error=decision.reason or "policy_denied",
+            )
+        if not decision.approval_required:
+            return ToolingRequestApprovalResponse(
+                ok=True,
+                approval_request_id=None,
+                policy_decision=decision,
+                expires_at=None,
+                correlation_id=prepared.correlation_id,
+            )
+
+        approval_request_id = uuid.uuid4().hex
+        expires_at = time.time() + decision.token_ttl_seconds
+        self._approval_requests[approval_request_id] = {
+            "request": request.model_copy(deep=True),
+            "prepared": prepared.model_copy(deep=True),
+            "expires_at": expires_at,
+            "used": False,
+        }
+        await self._audit_tooling_event(
+            "tooling.approval.requested",
+            principal_id=request.caller_principal_id,
+            details={
+                "approval_request_id": approval_request_id,
+                "correlation_id": prepared.correlation_id,
+                "decision_id": decision.decision_id,
+                "global_tool_id": prepared.global_tool_id,
+                "provider_peer_id": prepared.provider_peer_id,
+            },
+        )
+        return ToolingRequestApprovalResponse(
+            ok=True,
+            approval_request_id=approval_request_id,
+            policy_decision=decision,
+            expires_at=expires_at,
+            correlation_id=prepared.correlation_id,
+        )
+
+    @method_contract(
+        method_id=ToolingMethods.CONFIRM_EXECUTION,
+        summary="Confirm Tooling execution and issue an approval token",
+        input_model=ToolingConfirmExecutionRequest,
+        output_model=ToolingConfirmExecutionResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Tooling.manage"],
+    )
+    async def _on_confirm_execution(
+        self, request: ToolingConfirmExecutionRequest
+    ) -> ToolingConfirmExecutionResponse:
+        """Approve or deny a pending execution request."""
+
+        pending = self._approval_requests.get(request.approval_request_id)
+        if not pending:
+            return ToolingConfirmExecutionResponse(
+                ok=False,
+                correlation_id=request.correlation_id,
+                error="approval_request_not_found",
+            )
+        prepared: ToolingPrepareExecutionResponse = pending["prepared"]
+        original_request: ToolingExecuteToolRequest = pending["request"]
+        correlation_id = request.correlation_id or prepared.correlation_id
+        if pending["used"]:
+            return ToolingConfirmExecutionResponse(
+                ok=False,
+                correlation_id=correlation_id,
+                error="approval_request_replayed",
+            )
+        if float(pending["expires_at"]) <= time.time():
+            await self._audit_tooling_event(
+                "tooling.approval.expired",
+                principal_id=request.approver_principal_id,
+                details={
+                    "approval_request_id": request.approval_request_id,
+                    "correlation_id": correlation_id,
+                    "decision_id": prepared.policy_decision.decision_id,
+                },
+            )
+            return ToolingConfirmExecutionResponse(
+                ok=False,
+                correlation_id=correlation_id,
+                error="approval_request_expired",
+            )
+        pending["used"] = True
+        if not request.approve:
+            await self._audit_tooling_event(
+                "tooling.approval.denied",
+                principal_id=request.approver_principal_id,
+                details={
+                    "approval_request_id": request.approval_request_id,
+                    "correlation_id": correlation_id,
+                    "decision_id": prepared.policy_decision.decision_id,
+                    "reason": request.reason,
+                },
+            )
+            return ToolingConfirmExecutionResponse(
+                ok=False,
+                correlation_id=correlation_id,
+                policy_decision_id=prepared.policy_decision.decision_id,
+                error="approval_denied",
+            )
+
+        token = secrets.token_urlsafe(32)
+        claims = self._approval_token_claims(
+            original_request,
+            prepared=prepared,
+            approver_principal_id=request.approver_principal_id,
+        )
+        self._approval_tokens[token] = claims
+        await self._audit_tooling_event(
+            "tooling.approval.approved",
+            principal_id=request.approver_principal_id,
+            details={
+                "approval_request_id": request.approval_request_id,
+                "correlation_id": correlation_id,
+                "decision_id": prepared.policy_decision.decision_id,
+                "global_tool_id": prepared.global_tool_id,
+                "provider_peer_id": prepared.provider_peer_id,
+                "expires_at": claims["expires_at"],
+            },
+        )
+        return ToolingConfirmExecutionResponse(
+            ok=True,
+            approval_token=token,
+            expires_at=claims["expires_at"],
+            policy_decision_id=prepared.policy_decision.decision_id,
+            correlation_id=correlation_id,
+        )
+
+    @method_contract(
         method_id=ToolingMethods.GET_MCP_STATUS,
         summary="Get MCP server status",
         input_model=ToolingGetMCPStatusRequest,
@@ -1323,11 +2034,20 @@ class ToolingService(BaseService):
                 local_tool_name=local_tool_name,
                 global_tool_id=global_tool_id,
                 provider_peer_id=provider_peer_id,
+                service_instance_id=service_instance_id,
             )
             if denied:
                 return denied
 
             safety_class = self._tool_safety_class(tool)
+            prepared_for_audit = self._prepared_execution(
+                request,
+                tool=tool,
+                local_tool_name=local_tool_name,
+                provider_peer_id=provider_peer_id,
+                service_instance_id=service_instance_id,
+                global_tool_id=global_tool_id,
+            )
             if request.dry_run:
                 await self._audit_tool_execution(
                     request,
@@ -1336,6 +2056,7 @@ class ToolingService(BaseService):
                     provider_peer_id=provider_peer_id,
                     safety_class=safety_class,
                     status="dry_run",
+                    policy_decision=prepared_for_audit.policy_decision,
                 )
                 return ToolingExecuteToolResponse(
                     ok=True,
@@ -1349,6 +2070,7 @@ class ToolingService(BaseService):
                     correlation_id=request.correlation_id,
                     provider_peer_id=provider_peer_id,
                     global_tool_id=global_tool_id,
+                    policy_decision_id=prepared_for_audit.policy_decision.decision_id,
                 )
 
             # Execute the tool
@@ -1380,6 +2102,7 @@ class ToolingService(BaseService):
                     provider_peer_id=provider_peer_id,
                     safety_class=safety_class,
                     status="success",
+                    policy_decision=prepared_for_audit.policy_decision,
                 )
 
                 # Return response
@@ -1391,6 +2114,7 @@ class ToolingService(BaseService):
                     correlation_id=request.correlation_id,
                     provider_peer_id=provider_peer_id,
                     global_tool_id=global_tool_id,
+                    policy_decision_id=prepared_for_audit.policy_decision.decision_id,
                 )
 
             except Exception as tool_error:
@@ -1415,6 +2139,7 @@ class ToolingService(BaseService):
                     status="failed",
                     error_code="tool_execution_failed",
                     denial_reason=error_msg,
+                    policy_decision=prepared_for_audit.policy_decision,
                 )
                 return ToolingExecuteToolResponse(
                     ok=False,
@@ -1425,6 +2150,7 @@ class ToolingService(BaseService):
                     correlation_id=request.correlation_id,
                     provider_peer_id=provider_peer_id,
                     global_tool_id=global_tool_id,
+                    policy_decision_id=prepared_for_audit.policy_decision.decision_id,
                 )
 
         except Exception as e:

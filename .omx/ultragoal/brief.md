@@ -35,3 +35,8 @@
 
 - `uv run pytest tests/unit/tooling/test_service.py tests/unit/orchestrator/test_chatbot.py tests/integration/test_mesh_routing.py -q`
 - If dependency extras are missing, rerun with the minimal documented extras for gateway/tooling/orchestrator integration.
+
+## Merge Recovery Context
+
+- This PR was refreshed on top of PER-157 / MESH-GAP-005 so `Tooling.GetToolCatalog` fanout and Tooling approval-token policy coexist in `app/services/tooling/service.py`.
+- Companion PER-157 plan context is preserved in `.omx/plans/PER-157-tool-sharing-approval.md`.
