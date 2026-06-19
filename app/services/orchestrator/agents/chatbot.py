@@ -24,7 +24,11 @@ from app.shared.config.models import (
     ThirdParty,
 )
 from app.shared.contracts.models.db import DBMethods
-from app.shared.contracts.models.tooling import ToolingGetToolsRequest, ToolingMethods
+from app.shared.contracts.models.tooling import (
+    ToolingGetToolCatalogRequest,
+    ToolingGetToolsRequest,
+    ToolingMethods,
+)
 from app.shared.messaging.models.db_models import RAGSearchQuery
 
 config_api = ConfigAPI()
@@ -364,15 +368,24 @@ async def chatbot(state: State, bus: MessageBus):
     # It might need adjusting depending on how much plugins you are using as
     # well, +plugins = +tools to load
 
-    # Get tools via message bus (from ToolingService)
-
-    # Request tools from ToolingService via bus
+    # Request safe aggregate tools from ToolingService via bus.
     result = await bus.request(
-        ToolingMethods.GET_TOOLS,
-        ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
+        ToolingMethods.GET_TOOL_CATALOG,
+        ToolingGetToolCatalogRequest(query=state["messages"][-1].content, top_k=10),
         timeout=5.0,
         priority=get_interactive_priority(),
     )
+    if not result.ok:
+        log_warning(
+            "Tool catalog retrieval failed; falling back to legacy Tooling.GetTools: "
+            f"{result.error}"
+        )
+        result = await bus.request(
+            ToolingMethods.GET_TOOLS,
+            ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
+            timeout=5.0,
+            priority=get_interactive_priority(),
+        )
 
     tool_bindings = {}
     if not result.ok:

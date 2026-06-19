@@ -157,6 +157,7 @@ class TestChatbotToolRetrieval:
     async def test_chatbot_get_tools_success(self, mock_bus, mock_state):
         """Test successful tool retrieval via bus."""
         from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
 
         # Mock memory search (first call)
         # Mock tool retrieval (second call)
@@ -178,17 +179,38 @@ class TestChatbotToolRetrieval:
 
         with (
             _patch_llm_for_chatbot(),
-            patch("app.services.orchestrator.agents.chatbot.ToolingMethods") as mock_topics,
-            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
+            patch(
+                "app.services.orchestrator.agents.chatbot.ToolingGetToolCatalogRequest"
+            ) as mock_catalog_request,
         ):
-            mock_topics.GET_TOOLS = "Tooling.GetTools"
             result = await chatbot(mock_state, bus=mock_bus)
 
             # Verify tools were requested via bus
             assert mock_bus.request.call_count >= 2
+            assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
+            mock_catalog_request.assert_called_once()
 
             # LLM was called to produce a response
             assert "messages" in result
+
+    @pytest.mark.asyncio
+    async def test_chatbot_falls_back_to_legacy_get_tools(self, mock_bus, mock_state):
+        """Chatbot falls back when aggregate catalog is unavailable."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        mock_bus.request.side_effect = [
+            QueryResult(ok=True, data={"items": []}),
+            QueryResult(ok=False, error="unknown method"),
+            QueryResult(ok=True, data={"tools": []}),
+        ]
+
+        with _patch_llm_for_chatbot():
+            result = await chatbot(mock_state, bus=mock_bus)
+
+        assert "messages" in result
+        assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
+        assert mock_bus.request.call_args_list[2][0][0] == ToolingMethods.GET_TOOLS
 
     @pytest.mark.asyncio
     async def test_chatbot_get_tools_failure(self, mock_bus, mock_state):
@@ -198,7 +220,8 @@ class TestChatbotToolRetrieval:
         # Mock memory search success, tool retrieval failure
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),  # Memory search
-            QueryResult(ok=False, error="Tool retrieval failed"),  # Tool retrieval
+            QueryResult(ok=False, error="Tool catalog failed"),  # Catalog retrieval
+            QueryResult(ok=False, error="Tool retrieval failed"),  # Legacy tool retrieval
         ]
 
         with (

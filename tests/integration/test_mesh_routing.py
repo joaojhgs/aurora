@@ -17,6 +17,8 @@ from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.tooling import ToolingGetToolsRequest, ToolingMethods
 
 
 class TTSRequest(BaseModel):
@@ -137,6 +139,63 @@ class TestMeshRoutingEndToEnd:
         assert result.ok is True
         assert result.data["source"] == "local"
         inner_bus.request.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_explicit_tooling_provider_fanout_uses_peer_bridge(
+        self, mesh_bus, peer_registry, peer_bridge, mock_rtc_client, mesh_config
+    ):
+        """Explicit Tooling provider discovery routes over MeshBus/PeerBridge."""
+        mesh_config.services["Tooling"] = MeshServiceConfig(
+            share=True,
+            max_concurrent=5,
+            prefer="local",
+            fallback="error",
+        )
+        await peer_registry.register_peer("remote-tools", "remote-node")
+        manifest = PeerManifest(
+            peer_id="remote-tools",
+            node_name="remote-node",
+            shared_services=[
+                PeerServiceInfo(module="Tooling", version="1.0.0", max_concurrent=5),
+            ],
+        )
+        await peer_registry.update_manifest("remote-tools", manifest)
+
+        async def simulate_remote_response():
+            await asyncio.sleep(0.05)
+            for req_id, fut in list(peer_bridge._pending_calls.items()):
+                if not fut.done():
+                    peer_bridge.on_response(
+                        "remote-tools",
+                        {
+                            "type": "result",
+                            "id": req_id,
+                            "result": {"tools": [], "count": 0},
+                        },
+                    )
+
+        task = asyncio.create_task(simulate_remote_response())
+        result = await mesh_bus.request(
+            ToolingMethods.GET_TOOLS,
+            ToolingGetToolsRequest(
+                query=None,
+                top_k=10,
+                mesh_selector=MeshAddressSelector(
+                    peer_id="remote-tools",
+                    service_instance_id="remote:remote-tools:Tooling",
+                ),
+            ),
+            correlation_id="trace-tooling-catalog",
+        )
+        await task
+
+        assert result.ok is True
+        assert result.data == {"tools": [], "count": 0}
+        mock_rtc_client.send_to_peer.assert_called_once()
+        assert mock_rtc_client.send_to_peer.call_args.args[0] == "remote-tools"
+        sent = mock_rtc_client.send_to_peer.call_args.args[1]
+        assert ToolingMethods.GET_TOOLS in sent
+        assert "trace-tooling-catalog" in sent
 
     @pytest.mark.asyncio
     async def test_event_always_goes_local(self, mesh_bus, inner_bus, peer_registry):
