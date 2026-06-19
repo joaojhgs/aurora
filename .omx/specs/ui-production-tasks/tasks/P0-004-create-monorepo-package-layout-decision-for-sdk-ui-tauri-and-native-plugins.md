@@ -61,6 +61,7 @@ Task owners can implement in isolation without arguing file layout.
 - Documented package names, build ownership, import direction, and forbidden dependencies.
 - No production UI imports from `modules/ui-mock-reference` after migration except copied components with attribution/review.
 - Tauri/native code has platform-specific directories and CI ownership.
+- Accepted decision artifacts live at `.omx/specs/ui-production-tasks/package-layout-decision.md` and `.omx/specs/ui-production-tasks/package-layout-workspace-graph.json`.
 
 ## Verification commands / evidence
 

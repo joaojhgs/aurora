@@ -115,6 +115,11 @@ The critical path is: P0 baseline → SDK core/contract inventory → backend ga
 - [ ] [P0-003 — Establish frontend package lint/type/build/test baseline](tasks/P0-003-establish-frontend-package-lint-type-build-test-baseline.md) _(lane: frontend/readiness; deps: None)_
 - [ ] [P0-004 — Create monorepo/package layout decision for SDK, UI, Tauri, and native plugins](tasks/P0-004-create-monorepo-package-layout-decision-for-sdk-ui-tauri-and-native-plugins.md) _(lane: architecture; deps: P0-001)_
 
+P0-004 accepted decision artifacts:
+
+- [Package layout decision](package-layout-decision.md)
+- [Static workspace graph](package-layout-workspace-graph.json)
+
 ### P1 — Transport-independent SDK and capability catalog foundation
 
 - [ ] [SDK-001 — Scaffold `@aurora/client` TypeScript SDK package and public API](tasks/SDK-001-scaffold-@aurora-client-typescript-sdk-package-and-public-api.md) _(lane: sdk; deps: P0-004)_
