@@ -39,8 +39,8 @@ future data-sync contracts.
 | Mesh identity and credentials | Auth mesh identity/peer credential contracts; DB mesh credential storage is internal. | Never share by DB/data sync. | Local Auth/Gateway own stable peer ID, outbound/inbound credentials, room material, and trust status. | Local delete/revoke only, with explicit peer-deny/remove flows for trust changes. | Mesh secrets are local-authoritative even when a paired peer knows its own reciprocal credential. |
 | Mesh peer registry and trust state | Auth `MeshListPeers`, `MeshGetPeer`, `MeshApprovePeer`, `MeshDenyPeer`, `MeshUpdatePeerPermissions`, `MeshRemovePeer`. | Remote query only for redacted peer status; never replicate trust tables. | Each node owns its view of remote peers, approvals, permissions, connection state, and inbound grants. | Removal/deny applies to the local trust store; reciprocal cleanup requires peer-side action. | Query responses must redact stored tokens and credential material. |
 | Audit log | Auth `StoreAuditEvent` internal write; `AuditLog` manage read. | Remote query only, or export/import for support bundles. | Event owner is the peer that observed and stored the event. | Audit events are append-only unless a local retention/erasure policy explicitly removes them. | Cross-peer audit views must preserve source peer and correlation ID. |
-| Chat/message history | DB `SaveMessage` internal write; `GetMessages` and `GetMessagesForDate` are currently `both`. | Remote query only by default; export/import for user-approved history moves. Bidirectional sync is deferred. | Owner is the peer/session that captured the conversation. Shared namespace must include source peer and session/user scope. | User forget/delete must create a tombstone or remain local-only. Imported copies must retain origin metadata so deletes can be evaluated. | External read exposure is acceptable only as filtered history retrieval, not replication. |
-| RAG/memory user knowledge | DB `RAGSearch` is `both`; `RAGStore`, `RAGDelete`, `RAGGet`, and `RAGList` are internal. | Remote query only by default; export/import for curated namespaces; one-way replication allowed for explicitly published namespaces; bidirectional sync deferred. | Namespace owner is the peer that created the namespace. Shared namespace format should include `peer_id`, data domain, and user/project scope. | Deletes require tombstones per key/namespace before replication. Export/import snapshots must record source and import time. | Existing `mesh_selector` fields support explicit peer/namespace intent, but no sync contract exists yet. |
+| Chat/message history | DB `SaveMessage` internal write; `GetMessages` and `GetMessagesForDate` remain filtered read contracts when externally enabled by policy. | Remote query only by default; export/import for user-approved history moves. Bidirectional sync is deferred. | Owner is the peer/session that captured the conversation. Shared namespace must include source peer and session/user scope. | User forget/delete must create a tombstone or remain local-only. Imported copies must retain origin metadata so deletes can be evaluated. | External read exposure is acceptable only as filtered history retrieval, not replication. |
+| RAG/memory user knowledge | Legacy/raw DB `RAGSearch`, `RAGStore`, `RAGDelete`, `RAGGet`, and `RAGList` are internal. `DB.RAGSearchRemote` is the remote-safe query path. | Remote query only by default; export/import for curated namespaces; one-way replication allowed for explicitly published namespaces; bidirectional sync deferred. | Namespace owner is the peer that created the namespace. Shared namespace format should include `peer_id`, data domain, and user/project scope. | Deletes require tombstones per key/namespace before replication. Export/import snapshots must record source and import time. | Remote-safe RAG search requires an explicit matching `mesh_selector.resource_namespace` or `mesh_selector.data_scope`; absent or non-matching selectors deny. No sync contract exists yet. |
 | Tool index RAG namespace | Tooling writes `main.tools`-style RAG data via DB internal RAG contracts. | One-way replication from the tool provider, or remote query only. | Tool provider peer owns its advertised tool index. | Provider withdrawal or tool deletion must invalidate subscriber copies. | This is derived metadata; never treat it as a source for executing a tool without Tooling policy. |
 | Scheduler jobs and ownership | Scheduler `Schedule`, `Cancel`, `ListJobs` are `both`; DB cron-job persistence is internal. | Remote query only for listing. Export/import is allowed for user migration. One-way replication is allowed only for passive calendar/reminder mirrors. | Job owner is the peer that will execute the job. Resource namespace must include executing peer and job ID. | Cancel/delete belongs to the executing peer. Imported jobs are new local jobs with new IDs unless a future scheduler sync contract defines ownership transfer. | Remote scheduling must use explicit target peer/resource selection and policy, not transparent routing. |
 | Config values and feature flags | Config has external get/set/validate contracts. | Never share by DB/data sync. Remote query/manage only through Config contracts and permissions. | Local Config service owns local settings. | Local set/delete/reset semantics only. | Config mutation is administrative and outside DB replication scope. |
@@ -72,10 +72,25 @@ implementation:
 
 - `DB.ExecuteSQL` is `internal` and `manage`; it must remain internal-only and
   must not be mesh-shareable.
-- `DB.GetMessages`, `DB.GetMessagesForDate`, and `DB.RAGSearch` are `both`.
-  These are read/query surfaces and are compatible with remote-query-only policy
-  when protected by peer permissions and explicit selectors for remote DB/data
-  access.
+- Legacy/raw `DB.RAGSearch` is `internal`; it is not mesh-advertised and must
+  not be used as the remote-safe RAG path because it returns raw RAG values
+  without provenance/redaction wrapping.
+- `DB.GetMessages` and `DB.GetMessagesForDate` are message-history read
+  surfaces, not RAG namespace-sharing contracts. Treat any external use as
+  filtered history retrieval governed by chat-history policy, not replication.
+- `DB.RAGListNamespaces` is `both` and returns a policy-aware namespace catalog:
+  availability, source/owner peer, allowed operations, privacy class, explicit
+  selector requirement, and export/import support.
+- `DB.RAGSearchRemote` is `both` and enforces explicit remote namespace intent.
+  Sensitive remote-capable RAG search requires
+  `mesh_selector.resource_namespace` or `mesh_selector.data_scope` matching the
+  requested namespace. Absent selectors and non-matching selectors return a
+  typed policy denial instead of falling back to another namespace/provider.
+- `DB.RAGGetProvenance` is `both` and returns record provenance without exposing
+  internal RAG metadata.
+- `DB.RAGExportNamespace` and `DB.RAGImportNamespace` are `both`/`manage` with
+  `DB.manage` permission. They implement bounded export/import snapshots, not
+  continuous replication.
 - `DB.RAGStore`, `DB.RAGDelete`, `DB.RAGGet`, `DB.RAGList`, and DB cron-job
   persistence methods are internal. They are not current replication contracts.
 - RAG request models already include optional `mesh_selector`; this preserves
@@ -87,14 +102,43 @@ implementation:
 - Auth principal/token/device management and mesh peer management are controlled
   through Auth contracts. The underlying DB rows are not DB/data-sharing domains.
 
+## Implemented RAG Namespace Contracts
+
+The implemented RAG namespace contracts use schema version
+`rag-provenance.v1` for records and `rag-export.v1` for namespace snapshots.
+Each exported/imported or remote-search result carries:
+
+- `source_peer_id`
+- `owner_peer_id`
+- `namespace`
+- `record_id`
+- `origin_principal_id`, using `redacted` when no safe principal can be exposed
+- `created_at` and `updated_at`
+- `schema_version`
+- `policy_decision_id`
+- `correlation_id`
+- tombstone fields when a delete marker is present
+
+Search and export responses redact raw embeddings, vector fields, secrets,
+credential material, tokens/passwords, internal Aurora metadata, and private
+filesystem path fields before returning records to a peer or UI.
+
+Import preserves the source and owner provenance while writing into the target
+namespace with an `import_operation_id` and `imported_at` timestamp. It refuses
+to write into a non-empty target namespace unless the caller explicitly sets the
+overwrite flag, preventing silent owner-namespace replacement.
+
+One-way and bidirectional sync remain deferred. Future sync contracts must add
+source authority, subscription, conflict resolution, delete propagation, and
+retention semantics before copying data continuously across peers.
+
 ## Follow-up Gates
 
 Before implementing P4 data sync or replication work, create explicit follow-up
 contracts/specs for:
 
-1. RAG namespace export/import with provenance and namespace ownership.
-2. RAG one-way published namespace replication with tombstones.
-3. Chat history export/import with user-scoped redaction and delete handling.
-4. Scheduler migration/import that creates new local jobs unless ownership
+1. RAG one-way published namespace replication with tombstones.
+2. Chat history export/import with user-scoped redaction and delete handling.
+3. Scheduler migration/import that creates new local jobs unless ownership
    transfer is explicitly approved.
-5. Redacted cross-peer audit query/export for diagnostics.
+4. Redacted cross-peer audit query/export for diagnostics.

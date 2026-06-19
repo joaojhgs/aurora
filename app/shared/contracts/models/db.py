@@ -1,6 +1,6 @@
 """DB (Database) service contract models."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -29,6 +29,11 @@ class DBMethods:
     RAG_DELETE = f"{DBModule.NAME}.RAGDelete"
     RAG_GET = f"{DBModule.NAME}.RAGGet"
     RAG_LIST = f"{DBModule.NAME}.RAGList"
+    RAG_LIST_NAMESPACES = f"{DBModule.NAME}.RAGListNamespaces"
+    RAG_SEARCH_REMOTE = f"{DBModule.NAME}.RAGSearchRemote"
+    RAG_GET_PROVENANCE = f"{DBModule.NAME}.RAGGetProvenance"
+    RAG_EXPORT_NAMESPACE = f"{DBModule.NAME}.RAGExportNamespace"
+    RAG_IMPORT_NAMESPACE = f"{DBModule.NAME}.RAGImportNamespace"
     SAVE_CRON_JOB = f"{DBModule.NAME}.SaveCronJob"
     GET_CRON_JOBS = f"{DBModule.NAME}.GetCronJobs"
     DELETE_CRON_JOB = f"{DBModule.NAME}.DeleteCronJob"
@@ -201,6 +206,194 @@ class DBRAGListResponse(IOModel):
     """Response for RAG list/search."""
 
     items: list[DBRAGItemResponse]
+
+
+RAGPolicyDecision = Literal["allowed", "denied", "unavailable", "conflict"]
+RAGPrivacyClass = Literal["public", "internal", "personal", "sensitive", "secret"]
+
+
+class DBRAGNamespacePolicy(IOModel):
+    """Policy and capability metadata for a RAG namespace."""
+
+    sharing_mode: Literal["remote_query", "export_import", "one_way_sync", "never"] = "remote_query"
+    privacy_class: RAGPrivacyClass = "personal"
+    allowed_operations: list[str] = Field(default_factory=list)
+    explicit_selector_required: bool = True
+    export_supported: bool = False
+    import_supported: bool = False
+    delete_supported: bool = False
+    requires_admin_approval: bool = False
+    denial_reason: str | None = None
+
+
+class DBRAGNamespaceInfo(IOModel):
+    """Namespace catalog entry for local or remote RAG data."""
+
+    namespace: str
+    source_peer_id: str
+    owner_peer_id: str
+    provider_peer_id: str | None = None
+    availability: Literal["available", "unavailable", "stale", "denied"] = "available"
+    policy: DBRAGNamespacePolicy
+    record_count: int | None = None
+    embedding_model: str | None = None
+    schema_version: str = "rag-provenance.v1"
+    freshness: str | None = None
+
+
+class DBRAGListNamespacesRequest(IOModel):
+    """Request a policy-aware catalog of RAG namespaces."""
+
+    include_remote: bool = True
+    include_unavailable: bool = True
+    namespace_prefix: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
+
+
+class DBRAGListNamespacesResponse(IOModel):
+    """Policy-aware RAG namespace catalog."""
+
+    namespaces: list[DBRAGNamespaceInfo] = Field(default_factory=list)
+
+
+class DBRAGProvenance(IOModel):
+    """Provenance attached to an exported/imported or remote-search RAG record."""
+
+    source_peer_id: str
+    owner_peer_id: str
+    namespace: str
+    record_id: str
+    origin_principal_id: str
+    created_at: str
+    updated_at: str
+    schema_version: str = "rag-provenance.v1"
+    policy_decision_id: str
+    correlation_id: str
+    imported_at: str | None = None
+    import_operation_id: str | None = None
+    tombstone: bool = False
+    deleted_at: str | None = None
+    deleted_by: str | None = None
+    delete_reason: str | None = None
+
+
+class DBRAGProvenanceItem(IOModel):
+    """RAG item with provenance and redaction status."""
+
+    key: str
+    value: Any
+    namespace: str
+    search_score: float | None = None
+    provenance: DBRAGProvenance
+    redacted: bool = False
+    redaction_reasons: list[str] = Field(default_factory=list)
+
+
+class DBRAGSearchRemoteRequest(IOModel):
+    """Policy-enforced remote-capable RAG search request."""
+
+    namespace: str
+    query: str
+    limit: int = 10
+    offset: int = 0
+    mesh_selector: MeshAddressSelector | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+
+
+class DBRAGSearchRemoteResponse(IOModel):
+    """Remote-capable RAG search response with policy status."""
+
+    decision: RAGPolicyDecision
+    items: list[DBRAGProvenanceItem] = Field(default_factory=list)
+    denial_reason: str | None = None
+    policy_decision_id: str
+    correlation_id: str
+
+
+class DBRAGGetProvenanceRequest(IOModel):
+    """Request provenance for one RAG record."""
+
+    namespace: str
+    key: str
+    mesh_selector: MeshAddressSelector | None = None
+    correlation_id: str | None = None
+
+
+class DBRAGGetProvenanceResponse(IOModel):
+    """Response containing provenance for one RAG record."""
+
+    provenance: DBRAGProvenance | None = None
+    decision: RAGPolicyDecision = "allowed"
+    denial_reason: str | None = None
+
+
+class DBRAGExportRecord(IOModel):
+    """One record in a RAG namespace export snapshot."""
+
+    key: str
+    value: Any
+    provenance: DBRAGProvenance
+    redacted: bool = False
+    redaction_reasons: list[str] = Field(default_factory=list)
+
+
+class DBRAGExportNamespaceRequest(IOModel):
+    """Export a bounded RAG namespace snapshot."""
+
+    namespace: str
+    limit: int = 100
+    offset: int = 0
+    include_tombstones: bool = True
+    caller_principal_id: str | None = None
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
+
+
+class DBRAGExportNamespaceResponse(IOModel):
+    """Exported RAG namespace snapshot."""
+
+    decision: RAGPolicyDecision
+    namespace: str
+    source_peer_id: str
+    owner_peer_id: str
+    schema_version: str = "rag-export.v1"
+    records: list[DBRAGExportRecord] = Field(default_factory=list)
+    tombstone_count: int = 0
+    denial_reason: str | None = None
+    policy_decision_id: str
+    correlation_id: str
+
+
+class DBRAGImportNamespaceRequest(IOModel):
+    """Import a RAG namespace snapshot into a local namespace."""
+
+    source_namespace: str
+    target_namespace: str
+    records: list[DBRAGExportRecord]
+    source_peer_id: str
+    owner_peer_id: str
+    allow_owner_overwrite: bool = False
+    caller_principal_id: str | None = None
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
+
+
+class DBRAGImportNamespaceResponse(IOModel):
+    """Result of importing a RAG namespace snapshot."""
+
+    decision: RAGPolicyDecision
+    imported_count: int = 0
+    skipped_count: int = 0
+    target_namespace: str
+    import_operation_id: str
+    denial_reason: str | None = None
+    policy_decision_id: str
+    correlation_id: str
 
 
 # ── Shared response types ────────────────────────────────────────────────
