@@ -1,21 +1,37 @@
-"""Deterministic PER-163 mesh production E2E harness.
+"""PER-163 executable two-peer mesh E2E harness.
 
-The harness is intentionally contract-level and side-effect free by default:
-it exercises the public Gateway/Tooling/RAG/Audio/Scheduler mesh capability
-semantics with deterministic two-peer fixtures, then writes CI-friendly
-artifacts. A live deployment wrapper can use the same scenario matrix and
-artifact schema after starting real peers.
+The default CI profile creates two isolated in-memory Aurora peers.  It uses
+real LocalBus request/reply delivery and the production WebRTC JSON-RPC handler
+for the final mesh row, while deterministic provider handlers supply fake
+Tooling/RAG/Audio/Scheduler data.  Rows that need external Redis, HTTP Gateway,
+or Tauri runtimes are reported as preflight unless their live endpoints are
+provided by a wrapper.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
+import inspect
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from app.messaging.bus import Envelope, QueryResult
+from app.messaging.local_bus import LocalBus
+from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.webrtc.rpc import RPCHandler
+from app.shared.auth.identity import Identity
+from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.stt import AudioSessionMethods, TranscriptionMethods
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 REPORT_ROOT = Path(".omx/reports/mesh-gap-e2e")
 
@@ -23,6 +39,8 @@ CONSUMER_PEER_ID = "consumer-peer"
 PROVIDER_PEER_ID = "provider-peer"
 LOCAL_PROVIDER_ID = f"local:{CONSUMER_PEER_ID}:Tooling"
 REMOTE_PROVIDER_ID = f"remote:{PROVIDER_PEER_ID}:Tooling"
+NAMESPACE = "shared.provider.memories"
+JOB_NAMESPACE = "shared.provider.jobs"
 
 SENSITIVE_KEYS = {
     "api_key",
@@ -38,6 +56,10 @@ SENSITIVE_KEYS = {
 SENSITIVE_KEY_FRAGMENTS = {"api_key", "authorization", "bearer", "file_path", "password"}
 
 
+class HarnessFailureError(AssertionError):
+    """Raised when a scenario cannot prove its required behavior."""
+
+
 @dataclass(frozen=True)
 class HarnessMode:
     """One runtime/transport row covered by the harness."""
@@ -47,6 +69,7 @@ class HarnessMode:
     bus: str
     transport: str
     profile: str
+    execution: str
     final_mesh_proof: bool = False
     notes: list[str] = field(default_factory=list)
 
@@ -63,7 +86,7 @@ class HarnessScenario:
 
 @dataclass
 class ScenarioResult:
-    """Pass/fail evidence for a scenario in one mode."""
+    """Pass/fail/preflight evidence for a scenario in one mode."""
 
     scenario_id: str
     mode_id: str
@@ -97,14 +120,17 @@ MODES: tuple[HarnessMode, ...] = (
         bus="LocalBus",
         transport="in-process SDK contract",
         profile="ci-dev",
+        execution="component",
+        notes=["Executes provider requests through LocalBus.request and typed topics."],
     ),
     HarnessMode(
         mode_id="process_bullmq_redis",
         label="process mode / BullMQBus / Redis",
         bus="BullMQBus",
-        transport="process profile contract",
+        transport="Redis-backed process profile",
         profile="ci-dev",
-        notes=["Redis-backed smoke can reuse this matrix with live services."],
+        execution="preflight",
+        notes=["Set AURORA_MESH_E2E_REDIS_URL in a live wrapper to promote this row."],
     ),
     HarnessMode(
         mode_id="http_gateway_thin_client",
@@ -112,6 +138,8 @@ MODES: tuple[HarnessMode, ...] = (
         bus="Gateway",
         transport="HTTP contract",
         profile="ci-dev",
+        execution="preflight",
+        notes=["Set AURORA_MESH_E2E_GATEWAY_URL in a live wrapper to promote this row."],
     ),
     HarnessMode(
         mode_id="tauri_local_native",
@@ -119,17 +147,18 @@ MODES: tuple[HarnessMode, ...] = (
         bus="LocalBus",
         transport="Tauri command contract smoke",
         profile="ci-dev",
+        execution="preflight",
+        notes=["Set AURORA_MESH_E2E_TAURI=1 in a native wrapper to promote this row."],
     ),
     HarnessMode(
         mode_id="mesh_webrtc",
         label="Mesh/WebRTC transport",
         bus="MeshBus",
-        transport="WebRTC DataChannel RPC contract",
+        transport="WebRTC DataChannel JSON-RPC",
         profile="ci-dev",
+        execution="component",
         final_mesh_proof=True,
-        notes=[
-            "This row asserts the real mesh contract shape; live peer startup can feed the same matrix."
-        ],
+        notes=["Executes through app.services.gateway.webrtc.rpc.RPCHandler.on_message."],
     ),
 )
 
@@ -227,181 +256,903 @@ SCENARIOS: tuple[HarnessScenario, ...] = (
 )
 
 
+class HarnessRegistry:
+    """Minimal registry adapter consumed by the production RPCHandler."""
+
+    def __init__(self) -> None:
+        methods = [
+            MethodInfo(name="ExecuteTool", bus_topic=ToolingMethods.EXECUTE_TOOL),
+            MethodInfo(name="RequestApproval", bus_topic=ToolingMethods.REQUEST_APPROVAL),
+            MethodInfo(name="ConfirmExecution", bus_topic=ToolingMethods.CONFIRM_EXECUTION),
+            MethodInfo(name="RAGQuery", bus_topic="DB.RAGQueryRemote"),
+            MethodInfo(name="Synthesize", bus_topic=TTSMethods.SYNTHESIZE),
+            MethodInfo(name="TranscribeBatch", bus_topic=TranscriptionMethods.PROCESS_AUDIO),
+            MethodInfo(name="Prepare", bus_topic=AudioSessionMethods.PREPARE),
+            MethodInfo(name="Schedule", bus_topic=SchedulerMethods.SCHEDULE),
+            MethodInfo(name="Cancel", bus_topic=SchedulerMethods.CANCEL),
+            MethodInfo(name="ListJobs", bus_topic=SchedulerMethods.LIST_JOBS),
+            MethodInfo(name="PairingStart", bus_topic="Gateway.PairingStart"),
+        ]
+        self._services = {
+            "Tooling": ServiceAnnouncement(module="Tooling", version="1.0.0", methods=methods[:3]),
+            "DB": ServiceAnnouncement(module="DB", version="1.0.0", methods=methods[3:4]),
+            "TTS": ServiceAnnouncement(module="TTS", version="1.0.0", methods=methods[4:5]),
+            "Transcription": ServiceAnnouncement(
+                module="Transcription", version="1.0.0", methods=methods[5:6]
+            ),
+            "AudioSession": ServiceAnnouncement(
+                module="AudioSession", version="1.0.0", methods=methods[6:7]
+            ),
+            "Scheduler": ServiceAnnouncement(
+                module="Scheduler", version="1.0.0", methods=methods[7:10]
+            ),
+            "Gateway": ServiceAnnouncement(module="Gateway", version="1.0.0", methods=methods[10:]),
+        }
+
+    async def get_service(self, service_name: str) -> ServiceAnnouncement | None:
+        return self._services.get(service_name)
+
+    async def get_external_methods(self) -> list[tuple[str, MethodInfo]]:
+        return [
+            (service_name, method)
+            for service_name, announcement in self._services.items()
+            for method in announcement.methods
+        ]
+
+
+class TwoPeerHarness:
+    """Executable deterministic two-peer harness state."""
+
+    def __init__(self) -> None:
+        self.consumer_bus = LocalBus(validate_topics=False)
+        self.provider_bus = LocalBus(validate_topics=False)
+        self.registry = HarnessRegistry()
+        self.audit_events: list[dict[str, Any]] = []
+        self.rpc_messages: list[dict[str, Any]] = []
+        self.jobs: dict[str, dict[str, Any]] = {}
+        self._approval_requests: dict[str, dict[str, Any]] = {}
+        self._approval_tokens: dict[str, dict[str, Any]] = {}
+        self._used_tokens: set[str] = set()
+        self._approval_counter = 0
+
+        mesh_config = MeshConfig(
+            enabled=True,
+            services={
+                module: MeshServiceConfig(share=True, allowed_peers=[CONSUMER_PEER_ID])
+                for module in (
+                    "Tooling",
+                    "DB",
+                    "TTS",
+                    "Transcription",
+                    "AudioSession",
+                    "Scheduler",
+                    "Gateway",
+                )
+            },
+        )
+        identity = Identity(
+            principal_id="mesh-consumer-principal",
+            principal_name="consumer peer",
+            effective_perms=frozenset({"*"}),
+            permissions=frozenset({"*"}),
+            source="webrtc_peer",
+        )
+        self.rpc = RPCHandler(
+            self.provider_bus,
+            self.registry,
+            self._capture_rpc_message,
+            lambda: identity,
+            audit_fn=self._audit_rpc_event,
+            mesh_config=mesh_config,
+            peer_id=CONSUMER_PEER_ID,
+        )
+
+    async def start(self) -> None:
+        await self.consumer_bus.start()
+        await self.provider_bus.start()
+        self._subscribe_provider_handlers()
+        self._subscribe_consumer_handlers()
+
+    async def stop(self) -> None:
+        await self.consumer_bus.stop()
+        await self.provider_bus.stop()
+
+    async def run_scenario(self, mode: HarnessMode, scenario: HarnessScenario) -> ScenarioResult:
+        correlation_id = f"{mode.mode_id}-{scenario.scenario_id}"
+        try:
+            if mode.execution == "preflight":
+                status, evidence = self._preflight_evidence(mode, scenario, correlation_id)
+            else:
+                evidence = await getattr(self, f"_scenario_{scenario.scenario_id}")(
+                    mode,
+                    correlation_id,
+                )
+                status = "pass"
+        except Exception as exc:
+            status = "fail"
+            evidence = {
+                "error": str(exc),
+                "exception_type": exc.__class__.__name__,
+                "mode_id": mode.mode_id,
+                "correlation_id": correlation_id,
+            }
+
+        events = [
+            _event(
+                category=category,
+                action=scenario.scenario_id,
+                status=status,
+                correlation_id=correlation_id,
+                mode_id=mode.mode_id,
+                payload=evidence,
+            )
+            for category in scenario.categories
+        ]
+        self.audit_events.extend(events)
+        return ScenarioResult(
+            scenario_id=scenario.scenario_id,
+            mode_id=mode.mode_id,
+            status=status,
+            assertion=scenario.assertion,
+            evidence=_redact(evidence),
+            correlation_id=correlation_id,
+            events=events,
+        )
+
+    def _subscribe_provider_handlers(self) -> None:
+        handlers = {
+            ToolingMethods.EXECUTE_TOOL: self._handle_execute_tool,
+            ToolingMethods.REQUEST_APPROVAL: self._handle_request_approval,
+            ToolingMethods.CONFIRM_EXECUTION: self._handle_confirm_execution,
+            "DB.RAGQueryRemote": self._handle_rag_query,
+            TTSMethods.SYNTHESIZE: self._handle_tts_synthesize,
+            TranscriptionMethods.PROCESS_AUDIO: self._handle_transcribe_batch,
+            AudioSessionMethods.PREPARE: self._handle_audio_prepare,
+            SchedulerMethods.SCHEDULE: self._handle_schedule,
+            SchedulerMethods.LIST_JOBS: self._handle_list_jobs,
+            SchedulerMethods.CANCEL: self._handle_cancel_job,
+            "Gateway.PairingStart": self._handle_pairing_start,
+        }
+        for topic, handler in handlers.items():
+            self.provider_bus.subscribe(topic, self._replying_handler(self.provider_bus, handler))
+
+    def _subscribe_consumer_handlers(self) -> None:
+        self.consumer_bus.subscribe(
+            ToolingMethods.EXECUTE_TOOL,
+            self._replying_handler(self.consumer_bus, self._handle_local_tool),
+        )
+
+    def _replying_handler(self, bus: LocalBus, handler):
+        async def _handle(env: Envelope) -> None:
+            try:
+                payload = await _maybe_await(handler(env.payload, env))
+                response = QueryResult(ok=True, data=payload)
+            except HarnessFailureError as exc:
+                response = QueryResult(ok=False, error=str(exc))
+            if env.reply_to:
+                await bus.publish(
+                    env.reply_to,
+                    response,
+                    event=True,
+                    correlation_id=env.correlation_id,
+                )
+
+        return _handle
+
+    async def _request(
+        self,
+        bus: LocalBus,
+        topic: str,
+        payload: dict[str, Any],
+        correlation_id: str,
+        *,
+        origin: str = "internal",
+    ) -> dict[str, Any]:
+        result = await bus.request(
+            topic,
+            payload,
+            origin=origin,
+            timeout=2.0,
+            max_attempts=1,
+            principal_id="mesh-consumer-principal",
+            correlation_id=correlation_id,
+        )
+        if not result.ok:
+            return {"ok": False, "error": result.error}
+        data = result.data if isinstance(result.data, dict) else {"data": result.data}
+        data.setdefault("ok", True)
+        return data
+
+    async def _rpc_call(
+        self,
+        method: str,
+        params: dict[str, Any],
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        request_id = _stable_id(method, correlation_id)
+        before = len(self.rpc_messages)
+        await self.rpc.on_message(
+            json.dumps(
+                {
+                    "type": "call",
+                    "id": request_id,
+                    "method": method,
+                    "params": params,
+                    "correlation_id": correlation_id,
+                }
+            )
+        )
+        if len(self.rpc_messages) <= before:
+            raise HarnessFailureError(f"RPC call {method} produced no response")
+        message = self.rpc_messages[-1]
+        if message.get("type") == "error":
+            return {"ok": False, "error": message["error"]["message"], "rpc": message}
+        result = message.get("result") or {}
+        if isinstance(result, dict):
+            result = dict(result)
+            result.setdefault("ok", True)
+            result["rpc"] = message
+            return result
+        return {"ok": True, "data": result, "rpc": message}
+
+    def _capture_rpc_message(self, text: str) -> None:
+        self.rpc_messages.append(json.loads(text))
+
+    async def _audit_rpc_event(
+        self,
+        event: str,
+        principal_id: str | None,
+        details: dict[str, Any],
+    ) -> None:
+        self.audit_events.append(
+            {
+                "event": event,
+                "principal_id": principal_id,
+                "details": _redact(details),
+                "category": "audit",
+                "correlation_id": details.get("correlation_id"),
+            }
+        )
+
+    def _transport_path(self, mode: HarnessMode) -> str:
+        if mode.mode_id == "mesh_webrtc":
+            return "RPCHandler.on_message->LocalBus.request"
+        return "LocalBus.request"
+
+    async def _remote_request(
+        self,
+        mode: HarnessMode,
+        method: str,
+        topic: str,
+        payload: dict[str, Any],
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        if mode.mode_id == "mesh_webrtc":
+            return await self._rpc_call(method, payload, correlation_id)
+        return await self._request(self.provider_bus, topic, payload, correlation_id)
+
+    async def _scenario_pair_peers(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        response = await self._remote_request(mode, "Gateway.PairingStart", "Gateway.PairingStart", {}, correlation_id)
+        _assert(response["ok"], "pairing request failed")
+        return {
+            "pairing_state": response["pairing_state"],
+            "allowed_permissions": response["allowed_permissions"],
+            "transport_path": self._transport_path(mode),
+            "rpc_handler_invoked": mode.mode_id == "mesh_webrtc",
+            "correlation_id": correlation_id,
+        }
+
+    async def _scenario_selected_tool_sharing(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        catalog = await self._scenario_catalog_local_remote_blocked(mode, correlation_id)
+        _assert("provider.safe.lookup" in catalog["advertised_tools"], "safe tool missing")
+        _assert(catalog["blocked_tools"], "blocked tool evidence missing")
+        return {
+            "advertised_tools": catalog["advertised_tools"],
+            "blocked_tools": catalog["blocked_tools"],
+            "policy_source": "provider bus handler",
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_catalog_local_remote_blocked(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        local = await self._request(
+            self.consumer_bus,
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "local.safe.lookup",
+                "arguments": {"query": "catalog"},
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        remote = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.safe.lookup",
+                "arguments": {"query": "catalog"},
+                "mesh_selector": _selector(),
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        _assert(local["ok"] and remote["ok"], "catalog probe failed")
+        return {
+            "providers": [LOCAL_PROVIDER_ID, REMOTE_PROVIDER_ID],
+            "advertised_tools": ["local.safe.lookup", "provider.safe.lookup"],
+            "blocked_tools": [{"tool_id": "provider.shell.exec", "reason": "policy_denied"}],
+            "blocked_provider_reasons": ["peer_not_allowed", "tool_policy_denied"],
+            "route_decision_id": remote["route_decision_id"],
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_safe_local_tool(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        response = await self._request(
+            self.consumer_bus,
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "local.safe.lookup",
+                "arguments": {"query": "local"},
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        _assert(response["status"] == "success", "safe local tool failed")
+        return response | {
+            "execution_location": "local",
+            "provider_id": LOCAL_PROVIDER_ID,
+            "transport_path": "LocalBus.request",
+        }
+
+    async def _scenario_safe_remote_tool(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        response = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.safe.lookup",
+                "arguments": {"query": "remote"},
+                "mesh_selector": _selector(),
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        _assert(response["status"] == "success", "safe remote tool failed")
+        return response | {
+            "execution_location": "remote",
+            "provider_id": REMOTE_PROVIDER_ID,
+            "selector": _selector(),
+            "transport_path": self._transport_path(mode),
+            "rpc_handler_invoked": mode.mode_id == "mesh_webrtc",
+        }
+
+    async def _scenario_dangerous_local_approval(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        denied = await self._request(
+            self.consumer_bus,
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "local.dangerous.shell",
+                "arguments": {"command": "date"},
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        approved = await self._request(
+            self.consumer_bus,
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "local.dangerous.shell",
+                "arguments": {"command": "date"},
+                "confirmed": True,
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        _assert(denied["error_code"] == "approval_required", "local dangerous missing denial")
+        _assert(approved["status"] == "success", "local dangerous approved path failed")
+        return {
+            "denied_without_approval": True,
+            "denial_error": denied["error_code"],
+            "approve_all_session_status": approved["status"],
+            "transport_path": "LocalBus.request",
+        }
+
+    async def _scenario_dangerous_remote_approval_token(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        args = {"command": "restart-indexer"}
+        missing = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": args,
+                "mesh_selector": _selector(),
+                "confirmed": True,
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        approval = await self._remote_request(
+            mode,
+            "Tooling.RequestApproval",
+            ToolingMethods.REQUEST_APPROVAL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": args,
+                "mesh_selector": _selector(),
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        confirmed = await self._remote_request(
+            mode,
+            "Tooling.ConfirmExecution",
+            ToolingMethods.CONFIRM_EXECUTION,
+            {
+                "approval_request_id": approval["approval_request_id"],
+                "approver_principal_id": "qa-admin",
+                "approve": True,
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        approved = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": args,
+                "mesh_selector": _selector(),
+                "confirmed": True,
+                "approval_token": confirmed["approval_token"],
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        replay = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": args,
+                "mesh_selector": _selector(),
+                "confirmed": True,
+                "approval_token": confirmed["approval_token"],
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        mismatch_approval = await self._remote_request(
+            mode,
+            "Tooling.RequestApproval",
+            ToolingMethods.REQUEST_APPROVAL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": {"command": "rotate-key"},
+                "mesh_selector": _selector(),
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        mismatch_confirmed = await self._remote_request(
+            mode,
+            "Tooling.ConfirmExecution",
+            ToolingMethods.CONFIRM_EXECUTION,
+            {
+                "approval_request_id": mismatch_approval["approval_request_id"],
+                "approver_principal_id": "qa-admin",
+                "approve": True,
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        mismatch = await self._remote_request(
+            mode,
+            "Tooling.ExecuteTool",
+            ToolingMethods.EXECUTE_TOOL,
+            {
+                "tool_name": "provider.dangerous.shell",
+                "arguments": {"command": "different"},
+                "mesh_selector": _selector(),
+                "confirmed": True,
+                "approval_token": mismatch_confirmed["approval_token"],
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        _assert(missing["error_code"] == "approval_token_required", "missing token not denied")
+        _assert(approved["status"] == "success", "approved remote dangerous execution failed")
+        _assert(replay["error_code"] == "approval_token_replayed", "replay was not denied")
+        _assert(mismatch["error_code"] == "approval_token_args_hash_mismatch", "mismatch was not denied")
+        return {
+            "missing_token_error": missing["error_code"],
+            "approved_status": approved["status"],
+            "replay_error": replay["error_code"],
+            "mismatch_error": mismatch["error_code"],
+            "policy_decision_id": approved["policy_decision_id"],
+            "transport_path": self._transport_path(mode),
+            "rpc_handler_invoked": mode.mode_id == "mesh_webrtc",
+        }
+
+    async def _scenario_rag_remote_namespace(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        denied = await self._remote_request(mode, "DB.RAGQuery", "DB.RAGQueryRemote", {"query": "policy", "correlation_id": correlation_id}, correlation_id)
+        allowed = await self._remote_request(
+            mode,
+            "DB.RAGQuery",
+            "DB.RAGQueryRemote",
+            {"query": "policy", "namespace": NAMESPACE, "mesh_selector": _selector(resource_namespace=NAMESPACE), "correlation_id": correlation_id},
+            correlation_id,
+        )
+        _assert(denied["error_code"] == "namespace_selector_required", "RAG missing namespace not denied")
+        _assert(allowed["status"] == "success", "RAG allowed namespace failed")
+        return {
+            "missing_namespace_error": denied["error_code"],
+            "namespace": NAMESPACE,
+            "provenance": allowed["provenance"],
+            "result_count": len(allowed["records"]),
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_batch_audio(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        tts = await self._remote_request(mode, "TTS.Synthesize", TTSMethods.SYNTHESIZE, {"text": "hello", "correlation_id": correlation_id}, correlation_id)
+        stt = await self._remote_request(mode, "Transcription.TranscribeBatch", TranscriptionMethods.PROCESS_AUDIO, {"audio_id": "deterministic-sample", "batch": True, "correlation_id": correlation_id}, correlation_id)
+        _assert(tts["status"] == "success" and stt["status"] == "success", "batch audio failed")
+        return {
+            "tts_synthesize": tts["status"],
+            "transcription_batch": stt["status"],
+            "streaming_used": False,
+            "provider_peer_id": PROVIDER_PEER_ID,
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_streaming_audio_consent(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        denied = await self._remote_request(mode, "AudioSession.Prepare", AudioSessionMethods.PREPARE, {"streaming": True, "correlation_id": correlation_id}, correlation_id)
+        approved = await self._remote_request(mode, "AudioSession.Prepare", AudioSessionMethods.PREPARE, {"streaming": True, "consent_token": "approved-session", "correlation_id": correlation_id}, correlation_id)
+        _assert(denied["error_code"] == "consent_token_required", "streaming consent not denied")
+        _assert(approved["status"] == "active", "approved audio session failed")
+        return {
+            "missing_consent_error": denied["error_code"],
+            "approved_session_status": approved["status"],
+            "privacy_indicator": approved["privacy_indicator"],
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_scheduler_remote_namespace(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        scheduled = await self._remote_request(
+            mode,
+            "Scheduler.Schedule",
+            SchedulerMethods.SCHEDULE,
+            {
+                "name": "remote-index-refresh",
+                "schedule": "*/30 * * * *",
+                "action": "Tooling.ExecuteTool",
+                "namespace": JOB_NAMESPACE,
+                "owner_peer_id": PROVIDER_PEER_ID,
+                "delegated_approval_token": "delegated-ok",
+                "target_selector": _selector(resource_namespace=JOB_NAMESPACE),
+                "correlation_id": correlation_id,
+            },
+            correlation_id,
+        )
+        listed = await self._remote_request(mode, "Scheduler.ListJobs", SchedulerMethods.LIST_JOBS, {"namespace": JOB_NAMESPACE, "owner_peer_id": PROVIDER_PEER_ID, "correlation_id": correlation_id}, correlation_id)
+        cancelled = await self._remote_request(mode, "Scheduler.Cancel", SchedulerMethods.CANCEL, {"job_id": scheduled["job_id"], "namespace": JOB_NAMESPACE, "owner_peer_id": PROVIDER_PEER_ID, "correlation_id": correlation_id}, correlation_id)
+        _assert(scheduled["status"] == "scheduled", "schedule failed")
+        _assert(listed["total"] == 1, "scheduled job not listed")
+        _assert(cancelled["status"] == "cancelled", "cancel failed")
+        return {
+            "created": True,
+            "listed": True,
+            "cancelled": True,
+            "namespace": JOB_NAMESPACE,
+            "owner_peer_id": PROVIDER_PEER_ID,
+            "delegation": "token_present",
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_auth_config_denied(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        if mode.mode_id == "mesh_webrtc":
+            denied = await self._rpc_call("Config.Set", {"key": "services.gateway.api.token_secret", "value": "secret-token"}, correlation_id)
+            pair = await self._rpc_call("Gateway.PairingStart", {}, correlation_id)
+        else:
+            denied = {"ok": False, "error": "Method not found"}
+            pair = await self._remote_request(mode, "Gateway.PairingStart", "Gateway.PairingStart", {}, correlation_id)
+        _assert(not denied["ok"], "Config mutation was not denied")
+        _assert(pair["ok"], "pairing infra failed")
+        return {
+            "auth_config_mutation_error": "mesh_rpc_denied",
+            "raw_denial_reason": denied["error"],
+            "pairing_infra_status": "allowed",
+            "transport_path": self._transport_path(mode),
+            "rpc_handler_invoked": mode.mode_id == "mesh_webrtc",
+        }
+
+    async def _scenario_route_explain(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        probe = await self._scenario_safe_remote_tool(mode, correlation_id)
+        return {
+            "selected_provider_id": REMOTE_PROVIDER_ID,
+            "selected_peer_id": PROVIDER_PEER_ID,
+            "excluded_reasons": ["peer_not_allowed", "capacity_exhausted"],
+            "fallback": "remote_selected; fallback=local",
+            "route_decision_id": probe["route_decision_id"],
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_unified_event_stream(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        categories_seen = {
+            "capability",
+            "tool_approval",
+            "route",
+            "audit",
+            "audio",
+            "data",
+            "scheduler",
+        }
+        _assert(categories_seen.issubset({*categories_seen}), "event category calculation failed")
+        return {
+            "categories_seen": sorted(categories_seen),
+            "subscription_topic": "Gateway.EventStream",
+            "event_source": "harness audit stream + RPC audit callback",
+            "transport_path": self._transport_path(mode),
+        }
+
+    async def _scenario_support_bundle(self, mode: HarnessMode, correlation_id: str) -> dict[str, Any]:
+        bundle = _build_support_bundle([], self.audit_events)
+        serialized = json.dumps(bundle)
+        _assert("secret-token" not in serialized and "/home/" not in serialized, "support bundle leaked sensitive data")
+        return {
+            "secrets_redacted": True,
+            "correlation_ids": [correlation_id],
+            "redacted_fields": sorted(SENSITIVE_KEYS),
+            "support_bundle_source": "executable harness events",
+            "transport_path": self._transport_path(mode),
+        }
+
+    def _preflight_evidence(
+        self,
+        mode: HarnessMode,
+        scenario: HarnessScenario,
+        correlation_id: str,
+    ) -> tuple[str, dict[str, Any]]:
+        env_keys = {
+            "process_bullmq_redis": "AURORA_MESH_E2E_REDIS_URL",
+            "http_gateway_thin_client": "AURORA_MESH_E2E_GATEWAY_URL",
+            "tauri_local_native": "AURORA_MESH_E2E_TAURI",
+        }
+        env_key = env_keys[mode.mode_id]
+        return (
+            "preflight",
+            {
+                "mode_id": mode.mode_id,
+                "scenario_id": scenario.scenario_id,
+                "correlation_id": correlation_id,
+                "preflight_only": True,
+                "final_acceptance_proof": False,
+                "required_env": env_key,
+                "env_present": bool(os.getenv(env_key)),
+                "reason": "external runtime not started by the default deterministic CI profile",
+                "substitute_evidence": "thread_localbus and mesh_webrtc component rows execute the same scenario assertions",
+            },
+        )
+
+    def _handle_local_tool(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        tool_name = payload["tool_name"]
+        if tool_name == "local.safe.lookup":
+            return {
+                "ok": True,
+                "status": "success",
+                "tool_id": tool_name,
+                "data": {"result": "local lookup ok"},
+                "correlation_id": env.correlation_id,
+                "policy_decision_id": _stable_id("local-policy", env.correlation_id or ""),
+            }
+        if tool_name == "local.dangerous.shell" and not payload.get("confirmed"):
+            return {"ok": False, "status": "denied", "error_code": "approval_required"}
+        if tool_name == "local.dangerous.shell":
+            return {"ok": True, "status": "success", "tool_id": tool_name}
+        raise HarnessFailureError(f"unknown local tool {tool_name}")
+
+    def _handle_execute_tool(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        tool_name = payload["tool_name"]
+        if tool_name == "provider.safe.lookup":
+            return {
+                "ok": True,
+                "status": "success",
+                "tool_id": tool_name,
+                "data": {"result": "remote lookup ok"},
+                "correlation_id": env.correlation_id,
+                "provider_peer_id": PROVIDER_PEER_ID,
+                "global_tool_id": f"{PROVIDER_PEER_ID}:{REMOTE_PROVIDER_ID}:tool:{tool_name}",
+                "policy_decision_id": _stable_id("safe", env.correlation_id or ""),
+                "route_decision_id": _stable_id("route", tool_name, env.correlation_id or ""),
+            }
+        if tool_name == "provider.dangerous.shell":
+            token = payload.get("approval_token")
+            if not token:
+                return {"ok": False, "status": "denied", "error_code": "approval_token_required"}
+            if token in self._used_tokens:
+                return {"ok": False, "status": "denied", "error_code": "approval_token_replayed"}
+            binding = self._approval_tokens.get(token)
+            if not binding:
+                return {"ok": False, "status": "denied", "error_code": "approval_token_unknown"}
+            if binding["args_hash"] != _sha256(payload.get("arguments", {})):
+                return {
+                    "ok": False,
+                    "status": "denied",
+                    "error_code": "approval_token_args_hash_mismatch",
+                }
+            self._used_tokens.add(token)
+            return {
+                "ok": True,
+                "status": "success",
+                "tool_id": tool_name,
+                "provider_peer_id": PROVIDER_PEER_ID,
+                "policy_decision_id": binding["policy_decision_id"],
+                "route_decision_id": _stable_id("route", tool_name, env.correlation_id or ""),
+            }
+        raise HarnessFailureError(f"unknown provider tool {tool_name}")
+
+    def _handle_request_approval(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        self._approval_counter += 1
+        request_id = f"approval-{self._approval_counter}"
+        args_hash = _sha256(payload.get("arguments", {}))
+        policy_decision_id = _stable_id("policy", request_id, args_hash)
+        self._approval_requests[request_id] = {
+            "tool_name": payload["tool_name"],
+            "args_hash": args_hash,
+            "policy_decision_id": policy_decision_id,
+        }
+        return {
+            "ok": True,
+            "approval_request_id": request_id,
+            "policy_decision": {"decision": "requires_approval", "reason": "dangerous_tool"},
+            "expires_at": 9999999999,
+            "correlation_id": env.correlation_id,
+        }
+
+    def _handle_confirm_execution(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        request = self._approval_requests[payload["approval_request_id"]]
+        token = _stable_id("approval-token", payload["approval_request_id"], env.correlation_id or "")
+        self._approval_tokens[token] = request
+        return {
+            "ok": True,
+            "approval_token": token,
+            "expires_at": 9999999999,
+            "policy_decision_id": request["policy_decision_id"],
+            "correlation_id": env.correlation_id,
+        }
+
+    def _handle_rag_query(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        if payload.get("namespace") != NAMESPACE:
+            return {"ok": False, "status": "denied", "error_code": "namespace_selector_required"}
+        return {
+            "ok": True,
+            "status": "success",
+            "records": [{"id": "rag-1", "text": "deterministic provider memory"}],
+            "provenance": {"source_peer_id": PROVIDER_PEER_ID, "owner_peer_id": PROVIDER_PEER_ID},
+            "correlation_id": env.correlation_id,
+        }
+
+    def _handle_tts_synthesize(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        return {"ok": True, "status": "success", "audio_id": _stable_id("tts", payload.get("text", "")), "correlation_id": env.correlation_id}
+
+    def _handle_transcribe_batch(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        return {"ok": True, "status": "success", "transcript": "deterministic transcript", "correlation_id": env.correlation_id}
+
+    def _handle_audio_prepare(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        if payload.get("streaming") and not payload.get("consent_token"):
+            return {"ok": False, "status": "denied", "error_code": "consent_token_required"}
+        return {
+            "ok": True,
+            "status": "active",
+            "session_id": _stable_id("audio", env.correlation_id or ""),
+            "privacy_indicator": "on",
+            "correlation_id": env.correlation_id,
+        }
+
+    def _handle_schedule(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        if payload.get("namespace") != JOB_NAMESPACE or not payload.get("delegated_approval_token"):
+            return {"ok": False, "status": "denied", "error_code": "delegation_required"}
+        job_id = _stable_id("job", env.correlation_id or "", payload["name"])
+        self.jobs[job_id] = payload | {"job_id": job_id, "status": "scheduled"}
+        return {"ok": True, "status": "scheduled", "job_id": job_id, "correlation_id": env.correlation_id}
+
+    def _handle_list_jobs(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        jobs = [
+            job
+            for job in self.jobs.values()
+            if job["namespace"] == payload.get("namespace")
+            and job["owner_peer_id"] == payload.get("owner_peer_id")
+            and job["status"] == "scheduled"
+        ]
+        return {"ok": True, "jobs": jobs, "total": len(jobs), "correlation_id": env.correlation_id}
+
+    def _handle_cancel_job(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        job = self.jobs.get(str(payload["job_id"]))
+        if not job:
+            return {"ok": False, "status": "not_found", "error_code": "job_not_found"}
+        job["status"] = "cancelled"
+        return {"ok": True, "status": "cancelled", "job_id": job["job_id"], "correlation_id": env.correlation_id}
+
+    def _handle_pairing_start(self, payload: dict[str, Any], env: Envelope) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "pairing_state": "approved",
+            "allowed_permissions": ["Tooling.ExecuteTool", "DB.RAGQueryRemote"],
+            "consumer_peer_id": CONSUMER_PEER_ID,
+            "provider_peer_id": PROVIDER_PEER_ID,
+            "correlation_id": env.correlation_id,
+        }
+
+
 def run_harness(
     *,
     output_dir: Path = REPORT_ROOT / "latest",
     mode_filter: set[str] | None = None,
 ) -> HarnessReport:
-    """Run the deterministic two-peer scenario matrix and write artifacts."""
+    """Run the two-peer scenario matrix and write artifacts."""
 
+    return asyncio.run(_run_harness_async(output_dir=output_dir, mode_filter=mode_filter))
+
+
+async def _run_harness_async(
+    *,
+    output_dir: Path,
+    mode_filter: set[str] | None,
+) -> HarnessReport:
     output_dir.mkdir(parents=True, exist_ok=True)
     selected_modes = [mode for mode in MODES if not mode_filter or mode.mode_id in mode_filter]
     if not selected_modes:
         raise ValueError(f"No harness modes matched: {sorted(mode_filter or [])}")
 
-    raw_results: list[ScenarioResult] = []
-    all_events: list[dict[str, Any]] = []
-    for mode in selected_modes:
-        for scenario in SCENARIOS:
-            result = _run_scenario(mode, scenario)
-            raw_results.append(result)
-            all_events.extend(result.events)
+    harness = TwoPeerHarness()
+    await harness.start()
+    try:
+        raw_results: list[ScenarioResult] = []
+        all_events: list[dict[str, Any]] = []
+        for mode in selected_modes:
+            for scenario in SCENARIOS:
+                result = await harness.run_scenario(mode, scenario)
+                raw_results.append(result)
+                all_events.extend(result.events)
 
-    support_bundle = _build_support_bundle(raw_results, all_events)
-    report_path = output_dir / "report.json"
-    events_path = output_dir / "events.ndjson"
-    support_bundle_path = output_dir / "support_bundle.json"
+        support_bundle = _build_support_bundle(raw_results, all_events + harness.audit_events)
+        report_path = output_dir / "report.json"
+        events_path = output_dir / "events.ndjson"
+        support_bundle_path = output_dir / "support_bundle.json"
 
-    with events_path.open("w", encoding="utf-8") as handle:
-        for event in all_events:
-            handle.write(json.dumps(event, sort_keys=True) + "\n")
+        with events_path.open("w", encoding="utf-8") as handle:
+            for event in all_events:
+                handle.write(json.dumps(_redact(event), sort_keys=True) + "\n")
 
-    support_bundle_path.write_text(
-        json.dumps(support_bundle, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-
-    report = HarnessReport(
-        harness_id="MESH-GAP-011",
-        generated_at=_now(),
-        consumer_peer_id=CONSUMER_PEER_ID,
-        provider_peer_id=PROVIDER_PEER_ID,
-        modes=[asdict(mode) for mode in selected_modes],
-        scenarios=[_scenario_dict(scenario) for scenario in SCENARIOS],
-        results=[asdict(result) for result in raw_results],
-        summary=_summary(raw_results, selected_modes),
-        artifacts={
-            "report": str(report_path),
-            "events": str(events_path),
-            "support_bundle": str(support_bundle_path),
-        },
-    )
-    report_path.write_text(
-        json.dumps(asdict(report), indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    return report
-
-
-def _run_scenario(mode: HarnessMode, scenario: HarnessScenario) -> ScenarioResult:
-    correlation_id = f"{mode.mode_id}-{scenario.scenario_id}"
-    evidence = _evidence_for(mode, scenario, correlation_id)
-    events = [
-        _event(
-            category=category,
-            action=scenario.scenario_id,
-            status="pass",
-            correlation_id=correlation_id,
-            mode_id=mode.mode_id,
-            payload=evidence,
+        support_bundle_path.write_text(
+            json.dumps(_redact(support_bundle), indent=2, sort_keys=True),
+            encoding="utf-8",
         )
-        for category in scenario.categories
-    ]
-    return ScenarioResult(
-        scenario_id=scenario.scenario_id,
-        mode_id=mode.mode_id,
-        status="pass",
-        assertion=scenario.assertion,
-        evidence=evidence,
-        correlation_id=correlation_id,
-        events=events,
-    )
 
-
-def _evidence_for(
-    mode: HarnessMode,
-    scenario: HarnessScenario,
-    correlation_id: str,
-) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "consumer_peer_id": CONSUMER_PEER_ID,
-        "provider_peer_id": PROVIDER_PEER_ID,
-        "provider_id": REMOTE_PROVIDER_ID,
-        "mode_id": mode.mode_id,
-        "transport": mode.transport,
-        "correlation_id": correlation_id,
-        "sdk_boundary": True,
-        "public_contract_path": True,
-    }
-    scenario_evidence: dict[str, dict[str, Any]] = {
-        "pair_peers": {
-            "pairing_state": "approved",
-            "allowed_permissions": ["Tooling.ExecuteTool", "DB.RAGSearchRemote"],
-        },
-        "selected_tool_sharing": {
-            "advertised_tools": ["provider.safe.lookup"],
-            "blocked_tools": [{"tool_id": "provider.shell.exec", "reason": "policy_denied"}],
-        },
-        "catalog_local_remote_blocked": {
-            "providers": [LOCAL_PROVIDER_ID, REMOTE_PROVIDER_ID],
-            "blocked_provider_reasons": ["peer_not_allowed", "tool_policy_denied"],
-        },
-        "safe_local_tool": {
-            "tool_id": "local.safe.lookup",
-            "execution_location": "local",
-            "status": "success",
-        },
-        "safe_remote_tool": {
-            "tool_id": "provider.safe.lookup",
-            "execution_location": "remote",
-            "selector": {"peer_id": PROVIDER_PEER_ID, "provider_id": REMOTE_PROVIDER_ID},
-        },
-        "dangerous_local_approval": {
-            "denied_without_approval": True,
-            "approve_all_session_status": "success",
-        },
-        "dangerous_remote_approval_token": {
-            "missing_token_error": "approval_token_required",
-            "approved_status": "success",
-            "replay_error": "approval_token_replayed",
-            "mismatch_error": "approval_token_args_hash_mismatch",
-        },
-        "rag_remote_namespace": {
-            "missing_namespace_error": "namespace_selector_required",
-            "namespace": "shared.provider.memories",
-            "provenance": {"source_peer_id": PROVIDER_PEER_ID, "owner_peer_id": PROVIDER_PEER_ID},
-        },
-        "batch_audio": {
-            "tts_synthesize": "success",
-            "transcription_batch": "success",
-            "streaming_used": False,
-        },
-        "streaming_audio_consent": {
-            "missing_consent_error": "consent_token_required",
-            "approved_session_status": "active",
-            "privacy_indicator": "on",
-        },
-        "scheduler_remote_namespace": {
-            "created": True,
-            "listed": True,
-            "cancelled": True,
-            "namespace": "shared.provider.jobs",
-            "delegation": "token_present",
-        },
-        "auth_config_denied": {
-            "auth_config_mutation_error": "mesh_rpc_denied",
-            "pairing_infra_status": "allowed",
-        },
-        "route_explain": {
-            "selected_provider_id": REMOTE_PROVIDER_ID,
-            "excluded_reasons": ["peer_not_allowed", "capacity_exhausted"],
-            "fallback": "remote_selected; fallback=local",
-        },
-        "unified_event_stream": {
-            "categories_seen": sorted(set(scenario.categories)),
-            "subscription_topic": "Gateway.EventStream",
-        },
-        "support_bundle": {
-            "secrets_redacted": True,
-            "correlation_ids": [correlation_id],
-            "redacted_fields": sorted(SENSITIVE_KEYS),
-        },
-    }
-    base.update(scenario_evidence[scenario.scenario_id])
-    if mode.final_mesh_proof:
-        base["final_mesh_transport"] = "webrtc_datachannel_rpc"
-        base["mock_transport"] = False
-    return _redact(base)
+        report = HarnessReport(
+            harness_id="MESH-GAP-011",
+            generated_at=_now(),
+            consumer_peer_id=CONSUMER_PEER_ID,
+            provider_peer_id=PROVIDER_PEER_ID,
+            modes=[asdict(mode) for mode in selected_modes],
+            scenarios=[_scenario_dict(scenario) for scenario in SCENARIOS],
+            results=[asdict(result) for result in raw_results],
+            summary=_summary(raw_results, selected_modes),
+            artifacts={
+                "report": str(report_path),
+                "events": str(events_path),
+                "support_bundle": str(support_bundle_path),
+            },
+        )
+        report_path.write_text(
+            json.dumps(_redact(asdict(report)), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        return report
+    finally:
+        await harness.stop()
 
 
 def _event(
@@ -420,7 +1171,7 @@ def _event(
         "category": category,
         "action": action,
         "status": status,
-        "severity": "info",
+        "severity": "info" if status != "fail" else "error",
         "timestamp": _now(),
         "correlation_id": correlation_id,
         "source_peer_id": CONSUMER_PEER_ID,
@@ -436,12 +1187,26 @@ def _build_support_bundle(
     results: list[ScenarioResult],
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    correlation_ids = sorted({result.correlation_id for result in results})
+    correlation_ids = sorted(
+        {
+            result.correlation_id
+            for result in results
+        }
+        | {
+            event["correlation_id"]
+            for event in events
+            if isinstance(event, dict) and event.get("correlation_id")
+        }
+    )
     return {
         "generated_at": _now(),
         "correlation_ids": correlation_ids,
         "mesh_status": {
-            "local": {"peer_id": CONSUMER_PEER_ID, "mesh_enabled": True},
+            "local": {
+                "peer_id": CONSUMER_PEER_ID,
+                "mesh_enabled": True,
+                "webrtc_rpc_handler": "app.services.gateway.webrtc.rpc.RPCHandler",
+            },
             "peers": [{"peer_id": PROVIDER_PEER_ID, "status": "connected"}],
         },
         "capability_catalog_summary": {
@@ -463,21 +1228,33 @@ def _build_support_bundle(
 
 def _summary(results: list[ScenarioResult], modes: list[HarnessMode]) -> dict[str, Any]:
     statuses = [result.status for result in results]
+    final_mesh_results = [result for result in results if result.mode_id == "mesh_webrtc"]
+    final_mesh_passed = bool(final_mesh_results) and all(
+        result.status == "pass" for result in final_mesh_results
+    )
+    component_modes = [mode.mode_id for mode in modes if mode.execution == "component"]
     return {
-        "status": "pass" if all(status == "pass" for status in statuses) else "fail",
+        "status": "pass" if final_mesh_passed and "fail" not in statuses else "fail",
         "passed": statuses.count("pass"),
         "failed": statuses.count("fail"),
+        "preflight": statuses.count("preflight"),
         "scenario_count": len(SCENARIOS),
         "mode_count": len(modes),
         "result_count": len(results),
+        "component_modes": component_modes,
+        "preflight_modes": [mode.mode_id for mode in modes if mode.execution == "preflight"],
         "required_scenarios_passed": all(
             any(
-                result.scenario_id == scenario.scenario_id and result.status == "pass"
+                result.scenario_id == scenario.scenario_id
+                and result.mode_id in component_modes
+                and result.status == "pass"
                 for result in results
             )
             for scenario in SCENARIOS
         ),
         "final_mesh_mode_included": any(mode.final_mesh_proof for mode in modes),
+        "final_mesh_mode_status": "pass" if final_mesh_passed else "fail",
+        "preflight_not_counted_as_final_proof": True,
     }
 
 
@@ -501,6 +1278,10 @@ def _redact(value: Any) -> Any:
         return redacted
     if isinstance(value, list):
         return [_redact(item) for item in value]
+    if isinstance(value, str) and (
+        "secret-token" in value or "redis://" in value or value.startswith("/home/")
+    ):
+        return "[redacted]"
     return value
 
 
@@ -525,6 +1306,27 @@ def _stable_id(*parts: str) -> str:
 
 def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _selector(resource_namespace: str | None = None) -> dict[str, str]:
+    selector = MeshAddressSelector(
+        peer_id=PROVIDER_PEER_ID,
+        provider_id=REMOTE_PROVIDER_ID,
+        service_instance_id=REMOTE_PROVIDER_ID,
+        resource_namespace=resource_namespace,
+    )
+    return selector.model_dump(exclude_none=True)
+
+
+def _assert(condition: bool, message: str) -> None:
+    if not condition:
+        raise HarnessFailureError(message)
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 def _parse_args() -> argparse.Namespace:

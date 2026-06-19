@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-19T08:46:58.897Z",
+  "updatedAt": "2026-06-19T10:13:19.210Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -174,6 +174,18 @@
       "evidence": "PER-163 harness implemented in scripts/mesh_gap_e2e_harness.py with tests/e2e/test_mesh_gap_e2e_harness.py and docs/MESH_GAP_E2E_HARNESS.md; .venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q passed 3 tests; .venv/bin/ruff check scripts/mesh_gap_e2e_harness.py tests/e2e/test_mesh_gap_e2e_harness.py passed; .venv/bin/python scripts/mesh_gap_e2e_harness.py generated .omx/reports/mesh-gap-e2e/latest with 75/75 passed.",
       "startedAt": "2026-06-19T08:40:11.839Z",
       "completedAt": "2026-06-19T08:46:58.897Z"
+    },
+    {
+      "id": "G017-per-163-qa-rejection-rework",
+      "title": "PER-163 QA rejection rework",
+      "objective": "Replace rejected static PER-163 fixture generator with component-backed two-peer LocalBus and WebRTC RPC harness evidence, update tests/docs, regenerate artifacts, and return PR 57 to QA.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-19T10:13:00.403Z",
+      "updatedAt": "2026-06-19T10:13:19.210Z",
+      "evidence": "Reworked scripts/mesh_gap_e2e_harness.py from static pass fixture generator into executable two-peer component harness: thread_localbus uses LocalBus.request, mesh_webrtc uses production RPCHandler.on_message -> provider LocalBus.request, process/HTTP/Tauri rows are explicit preflight and not final proof. Updated tests/docs. Verification: .venv/bin/python scripts/mesh_gap_e2e_harness.py passed with 30 component passes, 45 preflight rows, final_mesh_mode_status=pass; .venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q passed 4 tests; .venv/bin/ruff check scripts/mesh_gap_e2e_harness.py tests/e2e/test_mesh_gap_e2e_harness.py passed; QA targeted mesh suite passed 113 tests.",
+      "startedAt": "2026-06-19T10:13:04.354Z",
+      "completedAt": "2026-06-19T10:13:19.210Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."

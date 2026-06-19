@@ -42,7 +42,19 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
     assert report.summary["status"] == "pass"
     assert report.summary["required_scenarios_passed"] is True
     assert report.summary["final_mesh_mode_included"] is True
-    assert all(result["status"] == "pass" for result in report.results)
+    assert report.summary["final_mesh_mode_status"] == "pass"
+    assert report.summary["preflight_not_counted_as_final_proof"] is True
+    assert all(
+        result["status"] == "pass"
+        for result in report.results
+        if result["mode_id"] in {"thread_localbus", "mesh_webrtc"}
+    )
+    assert all(
+        result["status"] == "preflight"
+        for result in report.results
+        if result["mode_id"]
+        in {"process_bullmq_redis", "http_gateway_thin_client", "tauri_local_native"}
+    )
 
     report_path = tmp_path / "report.json"
     events_path = tmp_path / "events.ndjson"
@@ -68,7 +80,8 @@ def test_mesh_gap_harness_records_security_privacy_negative_cases(tmp_path):
     assert remote_approval["missing_token_error"] == "approval_token_required"
     assert remote_approval["replay_error"] == "approval_token_replayed"
     assert remote_approval["mismatch_error"] == "approval_token_args_hash_mismatch"
-    assert remote_approval["mock_transport"] is False
+    assert remote_approval["rpc_handler_invoked"] is True
+    assert remote_approval["transport_path"] == "RPCHandler.on_message->LocalBus.request"
 
     rag = by_scenario[("mesh_webrtc", "rag_remote_namespace")]["evidence"]
     assert rag["missing_namespace_error"] == "namespace_selector_required"
@@ -80,6 +93,29 @@ def test_mesh_gap_harness_records_security_privacy_negative_cases(tmp_path):
 
     admin = by_scenario[("mesh_webrtc", "auth_config_denied")]["evidence"]
     assert admin["auth_config_mutation_error"] == "mesh_rpc_denied"
+
+    safe_remote = by_scenario[("mesh_webrtc", "safe_remote_tool")]["evidence"]
+    assert safe_remote["rpc_handler_invoked"] is True
+    assert safe_remote["provider_peer_id"] == "provider-peer"
+    assert safe_remote["route_decision_id"]
+
+
+@pytest.mark.e2e
+def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
+    report = run_harness(output_dir=tmp_path, mode_filter={"mesh_webrtc"})
+    by_scenario = {result["scenario_id"]: result for result in report.results}
+
+    assert report.summary["status"] == "pass"
+    assert report.summary["component_modes"] == ["mesh_webrtc"]
+    assert by_scenario["safe_remote_tool"]["evidence"]["transport_path"] == (
+        "RPCHandler.on_message->LocalBus.request"
+    )
+    assert by_scenario["pair_peers"]["evidence"]["rpc_handler_invoked"] is True
+
+    preflight_report = run_harness(output_dir=tmp_path / "preflight", mode_filter={"http_gateway_thin_client"})
+    assert preflight_report.summary["status"] == "fail"
+    assert preflight_report.summary["preflight"] == len(SCENARIOS)
+    assert all(result["status"] == "preflight" for result in preflight_report.results)
 
 
 @pytest.mark.e2e
