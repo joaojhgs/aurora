@@ -1,6 +1,6 @@
 'use client'
 
-import { Cpu, Download, Gauge, HardDrive, Route, Smartphone, Thermometer, Zap } from 'lucide-react'
+import { Cpu, Download, Gauge, Route, Smartphone, Thermometer, Zap } from 'lucide-react'
 import { PageHeader } from '@/components/aurora/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

@@ -1,6 +1,6 @@
 # Aurora UI reference mock
 
-This module is a visual reference application generated from the Aurora UI planning artifacts and completed as a UI-only mock. It is not the production Tauri implementation and does not wire to the Aurora Gateway, LocalBus, MeshBus, or native plugins yet.
+This module is a visual reference application generated from the Aurora UI planning artifacts and completed as a UI-only mock. It is not production runtime code, not the production Tauri implementation, and does not wire to the Aurora Gateway, LocalBus, MeshBus, or native plugins.
 
 ## Scope covered
 
@@ -43,15 +43,25 @@ pnpm install --store-dir /tmp/aurora-pnpm-store
 pnpm dev
 ```
 
-Validation used during completion:
+## Quality harness
+
+The package owns its frontend-readiness checks so future UI/SDK work can run the same command set in local development and CI:
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm typecheck
+pnpm lint
+pnpm test
 pnpm build
 ```
 
-`pnpm lint` is currently not valid until the module adds `eslint`/config; the inherited `package.json` has a lint script but no eslint dependency.
+The combined gate is:
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+```
+
+These checks validate only the reference package. They do not prove Gateway, mesh, native, Tauri IPC, audio, storage, or backend service behavior.
 
 ## Future implementation boundary
 
-The production client should reuse this mock as a visual reference only. Actual implementation should be built around the planned `AuroraClient` SDK, capability graph, admin action wrapper, official Tauri 2/Rust shell, desktop Python sidecar for local mode, HTTP Gateway transport for server mode, Mesh/WebRTC transport for peer mode, and mobile native plugins for Android/iOS capability providers.
+The production client should reuse this mock as a visual/component reference only. Import or migrate components deliberately into the future production package; do not run this module as backend-integrated UI. Actual implementation should be built around the planned `AuroraClient` SDK, capability graph, admin action wrapper, official Tauri 2/Rust shell, desktop Python sidecar for local mode, HTTP Gateway transport for server mode, Mesh/WebRTC transport for peer mode, and mobile native plugins for Android/iOS capability providers.
