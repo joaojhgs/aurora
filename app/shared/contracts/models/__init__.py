@@ -91,8 +91,14 @@ from .db import (
     DBSaveMessageResponse,
 )
 from .gateway import (
+    CapabilityCatalogSummary,
+    GatewayEventStreamEvent,
+    GatewayListEventsRequest,
+    GatewayListEventsResponse,
     GatewayMethods,
     GatewayModule,
+    GatewaySupportBundleRequest,
+    GatewaySupportBundleResponse,
     GetRegistryResponse,
     GetServiceHealthRequest,
     GetServiceHealthResponse,
@@ -102,6 +108,7 @@ from .gateway import (
     ServiceDeparture,
     ServiceHeartbeat,
     ServiceInfo,
+    SupportBundleRedactionInfo,
 )
 from .orchestrator import (
     OrchestratorProcessRequest,
@@ -151,6 +158,13 @@ __all__ = [
     # Gateway
     "GatewayModule",
     "GatewayMethods",
+    "GatewayEventStreamEvent",
+    "GatewayListEventsRequest",
+    "GatewayListEventsResponse",
+    "GatewaySupportBundleRequest",
+    "GatewaySupportBundleResponse",
+    "SupportBundleRedactionInfo",
+    "CapabilityCatalogSummary",
     "MethodInfo",
     "ServiceAnnouncement",
     "ServiceDeparture",

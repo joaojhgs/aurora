@@ -733,6 +733,11 @@ class AuthService(BaseService):
             event=data.event,
             correlation_id=data.correlation_id,
             peer_id=data.peer_id,
+            provider_id=data.provider_id,
+            tool_id=data.tool_id,
+            action=data.action,
+            policy_decision_id=data.policy_decision_id,
+            route=data.route,
         )
         return AuditLogResponse(events=events, total=total)
 
