@@ -6,8 +6,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.scheduler.service import DELEGATED_APPROVAL_REQUIRED_REASON, SchedulerService
+from app.services.scheduler.service import (
+    DELEGATED_APPROVAL_REQUIRED_REASON,
+    DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON,
+    SchedulerService,
+)
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.scheduler import (
     SchedulerCancelJobRequest,
     SchedulerListJobsRequest,
@@ -241,3 +246,42 @@ async def test_fire_job_emits_delegated_context_on_events():
     assert completed_event.delegated_permissions == ["Tooling.ExecuteTool"]
     assert completed_event.delegated_approval_token_present is True
     assert completed_event.correlation_id == "corr-1"
+
+
+@pytest.mark.asyncio
+async def test_remote_orchestrator_job_blocks_before_ambient_system_execution():
+    service = make_service()
+    context = {
+        "namespace": "lab",
+        "owner_peer_id": "owner-peer",
+        "owner_principal_id": "principal-1",
+        "target_peer_id": "provider-peer",
+        "target_resource_namespace": "lab",
+        "delegated_permissions": ["Orchestrator.UserInput"],
+        "policy_decision_id": "policy-1",
+        "delegated_approval_token": "approval-token-1",
+        "correlation_id": "corr-1",
+    }
+
+    await service.fire_job(
+        "job-1",
+        "remote orchestrator",
+        "orchestrator:turn on the lab lights",
+        scheduler_context=context,
+    )
+
+    published_topics = [call.args[0] for call in service.bus.publish.await_args_list]
+    assert OrchestratorMethods.USER_INPUT not in published_topics
+    assert published_topics == [SchedulerMethods.JOB_FIRED, SchedulerMethods.JOB_COMPLETED]
+
+    completed_event = service.bus.publish.await_args_list[-1].args[1]
+    assert completed_event.success is False
+    assert completed_event.error == DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON
+    assert completed_event.delegated_approval_token_present is True
+    assert completed_event.correlation_id == "corr-1"
+
+    audit_request = service.bus.request.await_args_list[-1].args[1]
+    details = json.loads(audit_request.details)
+    assert audit_request.event == "scheduler.execution.blocked"
+    assert details["reason"] == DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON
+    assert details["delegated_approval_token_present"] is True

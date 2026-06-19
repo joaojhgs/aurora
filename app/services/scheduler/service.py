@@ -42,6 +42,9 @@ DEFAULT_SCHEDULER_NAMESPACE = "local"
 DEFAULT_SCHEDULER_OWNER_PEER = "local"
 DEFAULT_SCHEDULER_OWNER_PRINCIPAL = "system"
 DELEGATED_APPROVAL_REQUIRED_REASON = "delegated_approval_token_required"
+DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON = (
+    "delegated_orchestrator_execution_boundary_unsupported"
+)
 
 
 # Service implementation
@@ -682,6 +685,43 @@ class SchedulerService(BaseService):
                             origin="system",
                         )
                     elif service == "orchestrator":
+                        if self._is_remote_delegated_context(context):
+                            reason = DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON
+                            context["blocked_reason"] = reason
+                            log_warning(
+                                f"Blocked delegated orchestrator schedule for job "
+                                f"{job_id}: {reason}"
+                            )
+                            await self.bus.publish(
+                                SchedulerMethods.JOB_COMPLETED,
+                                SchedulerJobCompletedEvent(
+                                    job_id=job_id,
+                                    job_name=job_name,
+                                    success=False,
+                                    error=reason,
+                                    namespace=context["namespace"],
+                                    owner_peer_id=context["owner_peer_id"],
+                                    owner_principal_id=context["owner_principal_id"],
+                                    target_peer_id=context.get("target_peer_id"),
+                                    delegated_permissions=context["delegated_permissions"],
+                                    policy_decision_id=context.get("policy_decision_id"),
+                                    delegated_approval_token_present=bool(
+                                        context.get("delegated_approval_token")
+                                    ),
+                                    correlation_id=context.get("correlation_id"),
+                                ),
+                                priority=get_system_priority(),
+                                origin="system",
+                            )
+                            await self._audit_scheduler_event(
+                                "scheduler.execution.blocked",
+                                context,
+                                status="blocked",
+                                job_id=job_id,
+                                reason=reason,
+                            )
+                            return
+
                         # Send to orchestrator as user input
                         from app.shared.contracts.models.orchestrator import OrchestratorMethods
                         from app.shared.messaging.models.orchestrator_models import UserInput
