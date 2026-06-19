@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-19T14:28:09.983Z",
+  "updatedAt": "2026-06-19T17:32:11.012Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -210,6 +210,18 @@
       "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the fresh Codex snapshot because the active Codex goal objective was narrower than the aggregate Ultragoal objective. G019 implementation is complete: process_bullmq_redis now has a live-gated BullMQBus/Redis request/reply path, tests/docs/plan are updated, ruff passed, e2e harness tests passed 4, full matrix generated 60 pass and 15 dependency_gap with live_attempted=true due Redis unreachable, existing BullMQ Redis integration test skipped 2 due Redis not reachable, and Docker socket access was denied.",
       "startedAt": "2026-06-19T14:20:05.211Z",
       "completedAt": "2026-06-19T14:28:09.983Z"
+    },
+    {
+      "id": "G020-per-219-live-backend-inventory",
+      "title": "PER-219 live backend inventory",
+      "objective": "Implement and verify the PER-219 live backend contract, route, permission, exposure inventory; align Auth generated-route bypass casing; validate UI mock fixture references; open a PR and hand off to QA.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-19T17:23:05.547Z",
+      "updatedAt": "2026-06-19T17:32:11.012Z",
+      "evidence": "PER-219 commit 7adacf4 adds scripts/generate_backend_inventory.py, GatewayAuth PascalCase bypass coverage, UI fixture validation, and tests. Verification passed: .venv/bin/pytest tests/unit/gateway/test_backend_inventory.py -q; .venv/bin/python scripts/generate_backend_inventory.py --output /tmp/per219-inventory.json --fail-on-ui-fixture-errors; .venv/bin/pytest tests/unit/gateway -q (401 passed, 20 skipped). Ruff unavailable in repo venv (.venv/bin/ruff missing; python -m ruff missing); py_compile passed for changed Python files.",
+      "startedAt": "2026-06-19T17:23:16.809Z",
+      "completedAt": "2026-06-19T17:32:11.012Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
