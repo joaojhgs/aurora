@@ -90,8 +90,10 @@ def create_gateway_app(
             "| Bearer Token | `Authorization: Bearer <token>` "
             "| `Authorization: Bearer eyJ…` |\n\n"
             'Use the **Authorize** button above to set credentials for "Try it out".\n\n'
-            "Endpoints under *Auth → Pairing* (`/start`, `/connect`, `/exchange`) "
-            "and `/login` do **not** require authentication."
+            "Canonical public auth routes are `POST /api/Auth/Login`, "
+            "`POST /api/Auth/PairingStart`, `POST /api/Auth/PairingConnect`, "
+            "and `POST /api/Auth/PairingExchange`. When auth is enabled, these "
+            "routes run as an anonymous caller, not as the system principal."
         ),
         docs_url="/api/docs",
         redoc_url="/api/redoc",

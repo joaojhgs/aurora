@@ -186,7 +186,7 @@ class AuthService(BaseService):
     # ── Login / Logout ───────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.Login",
+        method_id=AuthMethods.LOGIN,
         summary="Authenticate with username/password and receive a session token",
         input_model=LoginRequest,
         output_model=LoginResponse,
@@ -307,7 +307,7 @@ class AuthService(BaseService):
     # ── Pairing ──────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.PairingStart",
+        method_id=AuthMethods.PAIRING_START,
         summary="Start a device pairing request (returns 6-digit code)",
         input_model=PairingStartRequest,
         output_model=PairingStartResponse,
@@ -328,7 +328,7 @@ class AuthService(BaseService):
         return PairingStartResponse(code=code, expires_in_seconds=300)
 
     @method_contract(
-        method_id="Auth.PairingConnect",
+        method_id=AuthMethods.PAIRING_CONNECT,
         summary="Check the status of a pairing request",
         input_model=PairingConnectRequest,
         output_model=PairingConnectResponse,
@@ -368,7 +368,7 @@ class AuthService(BaseService):
         return PairingApproveResponse(success=success)
 
     @method_contract(
-        method_id="Auth.PairingExchange",
+        method_id=AuthMethods.PAIRING_EXCHANGE,
         summary="Exchange an approved pairing code for a token",
         input_model=PairingExchangeRequest,
         output_model=PairingExchangeResponse,
