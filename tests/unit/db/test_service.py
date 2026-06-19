@@ -296,3 +296,251 @@ class TestDBServiceRAGOperations:
         # Verify response
         assert isinstance(response, DBRAGListResponse)
         assert len(response.items) == 1
+
+    @pytest.mark.asyncio
+    async def test_rag_list_namespaces_includes_policy(self, db_service):
+        """Namespace catalog exposes availability and policy metadata."""
+        from app.shared.contracts.models.db import DBRAGListNamespacesRequest
+
+        mock_store = MagicMock()
+        mock_store.retrieve_items = Mock(return_value=[])
+        db_service.rag_service.combined_store = mock_store
+
+        response = await db_service.rag_list_namespaces(DBRAGListNamespacesRequest())
+
+        namespaces = {entry.namespace: entry for entry in response.namespaces}
+        assert "main.memories" in namespaces
+        assert namespaces["main.memories"].policy.explicit_selector_required is True
+        assert namespaces["main.memories"].policy.export_supported is True
+        assert "tools" in namespaces
+        assert namespaces["tools"].policy.export_supported is False
+
+    @pytest.mark.asyncio
+    async def test_rag_search_remote_denies_remote_selector_without_namespace(self, db_service):
+        """Remote RAG search requires an explicit namespace/data scope selector."""
+        from app.shared.contracts.models.db import DBRAGSearchRemoteRequest
+        from app.shared.contracts.models.mesh import MeshAddressSelector
+
+        response = await db_service.rag_search_remote(
+            DBRAGSearchRemoteRequest(
+                namespace="main.memories",
+                query="privacy",
+                mesh_selector=MeshAddressSelector(peer_id="peer-b"),
+            )
+        )
+
+        assert response.decision == "denied"
+        assert "resource_namespace" in response.denial_reason
+
+    @pytest.mark.asyncio
+    async def test_rag_search_remote_allows_selector_and_redacts(self, db_service):
+        """Allowed remote search returns provenance and redacts sensitive fields."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        from app.shared.contracts.models.db import DBRAGSearchRemoteRequest
+        from app.shared.contracts.models.mesh import MeshAddressSelector
+
+        item = Item(
+            value={
+                "text": "safe memory",
+                "embedding": [0.1, 0.2],
+                "source_path": "/home/user/private.txt",
+                "_aurora_provenance": {
+                    "source_peer_id": "peer-owner",
+                    "owner_peer_id": "peer-owner",
+                    "namespace": "main.memories",
+                    "record_id": "memory-1",
+                    "origin_principal_id": "redacted",
+                    "created_at": "2026-06-19T00:00:00+00:00",
+                    "updated_at": "2026-06-19T00:00:00+00:00",
+                    "schema_version": "rag-provenance.v1",
+                    "policy_decision_id": "old",
+                    "correlation_id": "old",
+                    "tombstone": False,
+                },
+            },
+            key="memory-1",
+            namespace=("main", "memories"),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_store = MagicMock()
+        mock_store.search = Mock(return_value=[item])
+        db_service.rag_service.combined_store = mock_store
+
+        response = await db_service.rag_search_remote(
+            DBRAGSearchRemoteRequest(
+                namespace="main.memories",
+                query="safe",
+                mesh_selector=MeshAddressSelector(
+                    peer_id="peer-b", resource_namespace="main.memories"
+                ),
+                caller_principal_id="principal-a",
+                policy_decision_id="policy-1",
+                correlation_id="corr-1",
+            )
+        )
+
+        assert response.decision == "allowed"
+        assert len(response.items) == 1
+        result = response.items[0]
+        assert result.provenance.source_peer_id == "peer-owner"
+        assert result.provenance.policy_decision_id == "policy-1"
+        assert result.value["embedding"] == "[redacted]"
+        assert result.value["source_path"] == "[redacted]"
+        assert "_aurora_provenance" not in result.value
+        assert result.redacted is True
+
+    @pytest.mark.asyncio
+    async def test_rag_export_namespace_preserves_provenance_and_tombstones(self, db_service):
+        """Export produces a bounded snapshot with provenance and tombstone metadata."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        from app.shared.contracts.models.db import DBRAGExportNamespaceRequest
+
+        item = Item(
+            value={
+                "text": "deleted memory",
+                "_aurora_tombstone": True,
+                "_aurora_deleted_at": "2026-06-19T00:00:00+00:00",
+                "_aurora_deleted_by": "principal-a",
+                "_aurora_delete_reason": "user_forget",
+            },
+            key="memory-1",
+            namespace=("main", "memories"),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_store = MagicMock()
+        mock_store.retrieve_items = Mock(return_value=[item])
+        db_service.rag_service.combined_store = mock_store
+
+        response = await db_service.rag_export_namespace(
+            DBRAGExportNamespaceRequest(
+                namespace="main.memories",
+                policy_decision_id="policy-export",
+                correlation_id="corr-export",
+            )
+        )
+
+        assert response.decision == "allowed"
+        assert response.tombstone_count == 1
+        assert response.records[0].provenance.tombstone is True
+        assert response.records[0].provenance.deleted_by == "principal-a"
+        assert response.records[0].provenance.policy_decision_id == "policy-export"
+
+    @pytest.mark.asyncio
+    async def test_rag_import_namespace_blocks_existing_owner_without_override(self, db_service):
+        """Import cannot silently overwrite an existing target namespace."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        from app.shared.contracts.models.db import (
+            DBRAGExportRecord,
+            DBRAGImportNamespaceRequest,
+            DBRAGProvenance,
+        )
+
+        mock_store = MagicMock()
+        mock_store.retrieve_items = Mock(
+            return_value=[
+                Item(
+                    value={"text": "existing"},
+                    key="existing",
+                    namespace=("imported", "memories"),
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+            ]
+        )
+        db_service.rag_service.combined_store = mock_store
+        record = DBRAGExportRecord(
+            key="memory-1",
+            value={"text": "portable"},
+            provenance=DBRAGProvenance(
+                source_peer_id="peer-a",
+                owner_peer_id="peer-a",
+                namespace="main.memories",
+                record_id="memory-1",
+                origin_principal_id="redacted",
+                created_at="2026-06-19T00:00:00+00:00",
+                updated_at="2026-06-19T00:00:00+00:00",
+                policy_decision_id="policy-export",
+                correlation_id="corr-export",
+            ),
+        )
+
+        response = await db_service.rag_import_namespace(
+            DBRAGImportNamespaceRequest(
+                source_namespace="main.memories",
+                target_namespace="imported.memories",
+                records=[record],
+                source_peer_id="peer-a",
+                owner_peer_id="peer-a",
+            )
+        )
+
+        assert response.decision == "conflict"
+        mock_store.put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rag_import_namespace_preserves_import_provenance(self, db_service):
+        """Import writes records with preserved source provenance in the target namespace."""
+        from app.shared.contracts.models.db import (
+            DBRAGExportRecord,
+            DBRAGImportNamespaceRequest,
+            DBRAGProvenance,
+        )
+
+        mock_store = MagicMock()
+        mock_store.retrieve_items = Mock(return_value=[])
+        mock_store.put = Mock()
+        db_service.rag_service.combined_store = mock_store
+        record = DBRAGExportRecord(
+            key="memory-1",
+            value={"text": "portable"},
+            provenance=DBRAGProvenance(
+                source_peer_id="peer-a",
+                owner_peer_id="peer-a",
+                namespace="main.memories",
+                record_id="memory-1",
+                origin_principal_id="redacted",
+                created_at="2026-06-19T00:00:00+00:00",
+                updated_at="2026-06-19T00:00:00+00:00",
+                policy_decision_id="policy-export",
+                correlation_id="corr-export",
+            ),
+        )
+
+        response = await db_service.rag_import_namespace(
+            DBRAGImportNamespaceRequest(
+                source_namespace="main.memories",
+                target_namespace="imported.memories",
+                records=[record],
+                source_peer_id="peer-a",
+                owner_peer_id="peer-a",
+            )
+        )
+
+        assert response.decision == "allowed"
+        assert response.imported_count == 1
+        put_args = mock_store.put.call_args.args
+        assert put_args[0] == ("imported", "memories")
+        stored_value = put_args[2]
+        assert stored_value["_aurora_provenance"]["source_peer_id"] == "peer-a"
+        assert stored_value["_aurora_provenance"]["namespace"] == "imported.memories"
+        assert stored_value["_aurora_provenance"]["import_operation_id"].startswith("rag-import-")
+
+    def test_rag_contract_exposure_and_raw_sql_internal(self):
+        """RAG sharing contracts are exposed, while raw SQL remains internal-only."""
+        assert DBService.rag_search_remote._contract_metadata["exposure"] == "both"
+        assert DBService.rag_list_namespaces._contract_metadata["exposure"] == "both"
+        assert DBService.rag_export_namespace._contract_metadata["method_type"] == "manage"
+        assert DBService.rag_import_namespace._contract_metadata["method_type"] == "manage"
+        assert DBService.execute_sql._contract_metadata["exposure"] == "internal"
+        assert DBService.execute_sql._contract_metadata["method_type"] == "manage"

@@ -76,6 +76,19 @@ implementation:
   These are read/query surfaces and are compatible with remote-query-only policy
   when protected by peer permissions and explicit selectors for remote DB/data
   access.
+- `DB.RAGListNamespaces` is `both` and returns a policy-aware namespace catalog:
+  availability, source/owner peer, allowed operations, privacy class, explicit
+  selector requirement, and export/import support.
+- `DB.RAGSearchRemote` is `both` and enforces explicit remote namespace intent.
+  When a request carries a remote mesh selector, the selector must include
+  `resource_namespace` or `data_scope` matching the requested namespace. Denied
+  requests return a typed policy denial instead of falling back to another
+  namespace/provider.
+- `DB.RAGGetProvenance` is `both` and returns record provenance without exposing
+  internal RAG metadata.
+- `DB.RAGExportNamespace` and `DB.RAGImportNamespace` are `both`/`manage` with
+  `DB.manage` permission. They implement bounded export/import snapshots, not
+  continuous replication.
 - `DB.RAGStore`, `DB.RAGDelete`, `DB.RAGGet`, `DB.RAGList`, and DB cron-job
   persistence methods are internal. They are not current replication contracts.
 - RAG request models already include optional `mesh_selector`; this preserves
@@ -87,14 +100,43 @@ implementation:
 - Auth principal/token/device management and mesh peer management are controlled
   through Auth contracts. The underlying DB rows are not DB/data-sharing domains.
 
+## Implemented RAG Namespace Contracts
+
+The implemented RAG namespace contracts use schema version
+`rag-provenance.v1` for records and `rag-export.v1` for namespace snapshots.
+Each exported/imported or remote-search result carries:
+
+- `source_peer_id`
+- `owner_peer_id`
+- `namespace`
+- `record_id`
+- `origin_principal_id`, using `redacted` when no safe principal can be exposed
+- `created_at` and `updated_at`
+- `schema_version`
+- `policy_decision_id`
+- `correlation_id`
+- tombstone fields when a delete marker is present
+
+Search and export responses redact raw embeddings, vector fields, secrets,
+credential material, tokens/passwords, internal Aurora metadata, and private
+filesystem path fields before returning records to a peer or UI.
+
+Import preserves the source and owner provenance while writing into the target
+namespace with an `import_operation_id` and `imported_at` timestamp. It refuses
+to write into a non-empty target namespace unless the caller explicitly sets the
+overwrite flag, preventing silent owner-namespace replacement.
+
+One-way and bidirectional sync remain deferred. Future sync contracts must add
+source authority, subscription, conflict resolution, delete propagation, and
+retention semantics before copying data continuously across peers.
+
 ## Follow-up Gates
 
 Before implementing P4 data sync or replication work, create explicit follow-up
 contracts/specs for:
 
-1. RAG namespace export/import with provenance and namespace ownership.
-2. RAG one-way published namespace replication with tombstones.
-3. Chat history export/import with user-scoped redaction and delete handling.
-4. Scheduler migration/import that creates new local jobs unless ownership
+1. RAG one-way published namespace replication with tombstones.
+2. Chat history export/import with user-scoped redaction and delete handling.
+3. Scheduler migration/import that creates new local jobs unless ownership
    transfer is explicitly approved.
-5. Redacted cross-peer audit query/export for diagnostics.
+4. Redacted cross-peer audit query/export for diagnostics.
