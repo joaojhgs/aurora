@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-19T01:48:29.136Z",
+  "updatedAt": "2026-06-19T08:46:58.897Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -156,10 +156,25 @@
       "status": "in_progress",
       "attempt": 1,
       "createdAt": "2026-06-19T01:26:26.610Z",
-      "updatedAt": "2026-06-19T01:48:29.136Z",
-      "startedAt": "2026-06-19T01:48:29.136Z"
+      "updatedAt": "2026-06-19T08:40:07.893Z",
+      "startedAt": "2026-06-19T01:48:29.136Z",
+      "steeringStatus": "blocked",
+      "blockedReason": "Resume durable execution on the current assigned Multica issue without overwriting prior ledger history.",
+      "steeringEvidence": "PER-163 branch handoff starts from this repository state; G015 belongs to prior PER-160 audio session work and should not block the PER-163 harness ledger.",
+      "steeringRationale": "Resume durable execution on the current assigned Multica issue without overwriting prior ledger history."
+    },
+    {
+      "id": "G016-per-163-production-mesh-e2e-harness",
+      "title": "PER-163 production mesh E2E harness",
+      "objective": "Build and verify the MESH-GAP-011 deterministic two-peer production E2E harness, documentation, artifacts, and QA handoff on multica/PER-163-mesh-production-e2e-harness without changing unrelated production behavior.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-19T08:39:59.293Z",
+      "updatedAt": "2026-06-19T08:46:58.897Z",
+      "evidence": "PER-163 harness implemented in scripts/mesh_gap_e2e_harness.py with tests/e2e/test_mesh_gap_e2e_harness.py and docs/MESH_GAP_E2E_HARNESS.md; .venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q passed 3 tests; .venv/bin/ruff check scripts/mesh_gap_e2e_harness.py tests/e2e/test_mesh_gap_e2e_harness.py passed; .venv/bin/python scripts/mesh_gap_e2e_harness.py generated .omx/reports/mesh-gap-e2e/latest with 75/75 passed.",
+      "startedAt": "2026-06-19T08:40:11.839Z",
+      "completedAt": "2026-06-19T08:46:58.897Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G015-the-event-stream-is-a-bus-level-unif"
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
 }
