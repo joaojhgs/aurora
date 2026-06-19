@@ -96,6 +96,9 @@ This task is now downstream of `.omx/multica/mesh-production-gap-tasks/03-mesh-g
 
 Additional requirements:
 
+- Expose the capability catalog through `client.capabilities.listCatalog(options)` over `Gateway.GetCapabilityCatalog`, preserving raw action/provider IDs, selector fields, bindability, policy flags, freshness, blockers, and `secrets_redacted`.
+- Expose aggregate tool inventory through `client.tools.listCatalog(options)` over `Tooling.GetToolCatalog`, returning bindable tools and approval/blocked candidates as separate collections rather than dropping blocked capabilities.
+- Add `client.capabilities.explain(featureId)` as an SDK projection over the cached catalog node plus the latest provider/route blockers; it must include the next backend-backed repair action when available.
 - Consume the backend typed capability catalog once `Gateway.GetCapabilityCatalog` / equivalent lands, including local node, remote peer, transport, service, method, tool, model, audio, scheduler, and data/RAG capabilities.
 - Merge capability facts from local HTTP Gateway, Tauri native manifest, mobile native manifest, persisted peers, live WebRTC sessions, and policy results into one deterministic feature-state graph.
 - Preserve provider identity in feature states: `local`, `remote:<peer_id>`, `native:<platform>`, `cloud`, `unavailable`, and `blocked` must be distinguishable.
@@ -110,3 +113,4 @@ Additional acceptance criteria:
 - UI tasks can ask `AuroraClient.capabilities.explain(featureId)` and receive a stable explanation with provider candidates and next repair action.
 - Capability graph tests prove that local and remote tool providers coexist and remain separately selectable.
 - Capability graph tests prove explicit selector policy blocks unsafe fallback.
+- SDK fixtures include `Tooling.GetToolCatalog` responses with `blocked_tools` for approval-required local and remote tools, and graph tests prove those become approval-card candidates rather than bindable model tools.

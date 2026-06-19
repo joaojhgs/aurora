@@ -1,6 +1,9 @@
 """Unit tests for orchestrator Tooling binding metadata."""
 
-from app.services.orchestrator.tool_bindings import build_tool_bindings
+from app.services.orchestrator.tool_bindings import (
+    build_tool_approval_candidates,
+    build_tool_bindings,
+)
 
 
 def test_build_tool_bindings_keeps_local_and_safe_remote_tools():
@@ -75,6 +78,31 @@ def test_build_tool_bindings_hides_remote_confirmation_required_tools():
     assert bindings == {}
 
 
+def test_build_tool_bindings_hides_local_confirmation_required_tools():
+    """High-risk local tools also require approval instead of model binding."""
+
+    tools, bindings = build_tool_bindings(
+        [
+            {
+                "name": "delete_file",
+                "local_name": "delete_file",
+                "global_tool_id": "local:Tooling:tool:delete_file",
+                "provider_peer_id": "local",
+                "provider_service_instance_id": "local:Tooling",
+                "description": "Delete a file.",
+                "args_schema": {"type": "object", "properties": {}},
+                "execution_location": "local",
+                "source_type": "local",
+                "safety_class": "dangerous",
+                "confirmation_required": True,
+            }
+        ]
+    )
+
+    assert tools == []
+    assert bindings == {}
+
+
 def test_build_tool_bindings_resolves_duplicate_names_deterministically():
     """Unexpected duplicate bind names are suffixed while preserving provider IDs."""
 
@@ -110,3 +138,42 @@ def test_build_tool_bindings_resolves_duplicate_names_deterministically():
     assert [tool.name for tool in tools] == ["remote_status", "remote_status_2"]
     assert bindings["remote_status"]["tool_name"] == "peer-a:service:tool:status"
     assert bindings["remote_status_2"]["tool_name"] == "peer-b:service:tool:status"
+
+
+def test_build_tool_approval_candidates_preserves_provider_metadata():
+    """Blocked unsafe tools become UI/session approval candidates."""
+
+    candidates = build_tool_approval_candidates(
+        [
+            {
+                "reason_code": "confirmation_required",
+                "reason": "tool requires approval before it can be model-bound",
+                "tool": {
+                    "name": "raspi-lab_unlock_door",
+                    "local_name": "unlock_door",
+                    "global_tool_id": "raspi-lab:service:tool:unlock_door",
+                    "provider_peer_id": "raspi-lab",
+                    "provider_service_instance_id": "remote:raspi-lab:Tooling",
+                    "display_name": "raspi-lab.unlock_door",
+                    "description": "Unlock a door.",
+                    "args_schema": {
+                        "type": "object",
+                        "properties": {"door": {"type": "string"}},
+                    },
+                    "execution_location": "remote",
+                    "source_type": "mesh_peer",
+                    "safety_class": "dangerous",
+                    "confirmation_required": True,
+                    "required_permissions": ["Tooling.ExecuteTool"],
+                },
+            }
+        ]
+    )
+
+    candidate = candidates["raspi-lab_unlock_door"]
+    assert candidate["approval_required"] is True
+    assert candidate["tool_name"] == "raspi-lab:service:tool:unlock_door"
+    assert candidate["mesh_selector"]["peer_id"] == "raspi-lab"
+    assert candidate["mesh_selector"]["service_instance_id"] == "remote:raspi-lab:Tooling"
+    assert candidate["global_tool_id"] == "raspi-lab:service:tool:unlock_door"
+    assert candidate["reason_code"] == "confirmation_required"

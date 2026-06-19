@@ -96,6 +96,13 @@ This task is now downstream of `MESH-GAP-002`, `MESH-GAP-003`, and `MESH-GAP-005
 
 Additional requirements:
 
+- Expose `client.routes.explain(request)` over `Gateway.ExplainRoute`; SDK route decisions must cite backend `selected`, `candidates`, `reason_code`, fallback, freshness, and explicit-selector blockers rather than recomputing mesh policy.
+- Expose Tooling preflight APIs with typed request/response wrappers:
+  - `client.tools.prepareExecution(request)` -> `Tooling.PrepareExecution`
+  - `client.tools.requestApproval(request)` -> `Tooling.RequestApproval`
+  - `client.tools.confirmExecution(request)` -> `Tooling.ConfirmExecution`
+  - `client.tools.execute(request)` -> `Tooling.ExecuteTool`
+- Preserve approval binding fields end to end: global tool ID, provider peer ID, service instance ID, route selector, args hash, resource selector hash, policy decision ID, approval request ID, approval token expiry, approver principal, and correlation ID.
 - Consume route explain output (`Gateway.ExplainRoute` / equivalent) rather than independently guessing backend routing decisions.
 - Model explicit resource selectors as required for tools, DB/RAG namespaces, audio/STT/TTS sessions, scheduler ownership, hardware/device access, model runtime selection, and admin mutations when policy marks them safety-sensitive.
 - Treat internal/local tools and remote mesh tools uniformly through the approval policy engine: both can require user approval, admin confirmation, dry-run preview, deny, or approve-all scope.
@@ -107,3 +114,4 @@ Additional acceptance criteria:
 
 - `RouteSheet` and approval cards can show exact backend route decisions, not duplicated SDK guesses.
 - Tests cover local dangerous tool approval, remote dangerous tool approval, approve-all session behavior, expired approvals, route denial, replay/mismatched args rejection, and explicit selector missing errors.
+- SDK conformance tests cover HTTP transport, Tauri-local mock transport, and mesh mock transport for the four Tooling execution APIs and route explain.
