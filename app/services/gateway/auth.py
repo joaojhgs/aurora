@@ -17,6 +17,21 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
 from app.services.gateway.acl.identity import ANONYMOUS, SYSTEM, Identity
 from app.services.gateway.dependencies import get_gateway_auth
+from app.shared.contracts.models.auth import AuthMethods
+
+_PUBLIC_AUTH_CONTRACT_PATHS = {
+    AuthMethods.LOGIN: "/api/Auth/Login",
+    AuthMethods.PAIRING_START: "/api/Auth/PairingStart",
+    AuthMethods.PAIRING_CONNECT: "/api/Auth/PairingConnect",
+    AuthMethods.PAIRING_EXCHANGE: "/api/Auth/PairingExchange",
+}
+
+_LEGACY_PUBLIC_AUTH_PATHS = {
+    "/api/auth/login",
+    "/api/auth/pairing/start",
+    "/api/auth/pairing/connect",
+    "/api/auth/pairing/exchange",
+}
 
 
 class GatewayAuth:
@@ -54,16 +69,8 @@ class GatewayAuth:
                 "/api/docs",
                 "/api/redoc",
                 "/api/openapi.json",
-                # Canonical generated Auth routes from RouteGenerator.
-                "/api/Auth/Login",
-                "/api/Auth/PairingStart",
-                "/api/Auth/PairingConnect",
-                "/api/Auth/PairingExchange",
-                # Backward-compatible aliases kept for older clients/docs.
-                "/api/auth/login",
-                "/api/auth/pairing/start",
-                "/api/auth/pairing/connect",
-                "/api/auth/pairing/exchange",
+                *_PUBLIC_AUTH_CONTRACT_PATHS.values(),
+                *_LEGACY_PUBLIC_AUTH_PATHS,
             ]
         )
 
@@ -340,11 +347,11 @@ async def _resolve_identity_and_check(
     if not auth.is_enabled():
         return SYSTEM
 
-    if auth.should_bypass(request.url.path):
-        return SYSTEM
-
     # Retrieve identity set by middleware
     identity: Identity | None = getattr(request.state, "identity", None)
+
+    if auth.should_bypass(request.url.path):
+        identity = identity or ANONYMOUS
 
     if identity is None:
         # Fallback: re-authenticate (shouldn't happen if middleware is wired)

@@ -1,0 +1,178 @@
+{
+  "status": "accepted-planning-baseline",
+  "date": "2026-06-19",
+  "scope": "P0-004 package layout decision; no production scaffold",
+  "workspaceRoot": ".",
+  "pythonRuntimeSource": "pyproject.toml",
+  "referenceOnly": [
+    {
+      "path": "modules/ui-mock-reference",
+      "rule": "visual and component reference only; no production imports"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "aurora-python-runtime",
+      "path": "app",
+      "kind": "python-runtime",
+      "ownerLane": "backend",
+      "publishName": null
+    },
+    {
+      "id": "aurora-client",
+      "path": "packages/aurora-sdk",
+      "kind": "typescript-package",
+      "ownerLane": "sdk",
+      "publishName": "@aurora/client"
+    },
+    {
+      "id": "aurora-ui",
+      "path": "packages/aurora-ui",
+      "kind": "typescript-package",
+      "ownerLane": "ui",
+      "publishName": "@aurora/ui"
+    },
+    {
+      "id": "aurora-web",
+      "path": "apps/aurora-web",
+      "kind": "web-app",
+      "ownerLane": "ui",
+      "publishName": "@aurora/web"
+    },
+    {
+      "id": "aurora-tauri-ui",
+      "path": "apps/aurora-tauri/src",
+      "kind": "tauri-frontend",
+      "ownerLane": "tauri-desktop",
+      "publishName": "@aurora/tauri-ui"
+    },
+    {
+      "id": "aurora-tauri-rust",
+      "path": "apps/aurora-tauri/src-tauri",
+      "kind": "rust-tauri-crate",
+      "ownerLane": "tauri-desktop",
+      "publishName": "aurora-tauri"
+    },
+    {
+      "id": "aurora-tauri-sidecars",
+      "path": "apps/aurora-tauri/sidecars",
+      "kind": "sidecar-packaging",
+      "ownerLane": "tauri-desktop",
+      "publishName": null
+    },
+    {
+      "id": "aurora-android-plugin",
+      "path": "native/android",
+      "kind": "android-native-plugin",
+      "ownerLane": "android-native",
+      "publishName": "aurora-android-plugin"
+    },
+    {
+      "id": "aurora-ios-plugin",
+      "path": "native/ios",
+      "kind": "ios-native-plugin",
+      "ownerLane": "ios-native",
+      "publishName": "aurora-ios-plugin"
+    }
+  ],
+  "allowedEdges": [
+    {
+      "from": "aurora-web",
+      "to": "aurora-ui",
+      "type": "imports"
+    },
+    {
+      "from": "aurora-web",
+      "to": "aurora-client",
+      "type": "imports"
+    },
+    {
+      "from": "aurora-tauri-ui",
+      "to": "aurora-ui",
+      "type": "imports"
+    },
+    {
+      "from": "aurora-tauri-ui",
+      "to": "aurora-client",
+      "type": "imports"
+    },
+    {
+      "from": "aurora-ui",
+      "to": "aurora-client",
+      "type": "imports"
+    },
+    {
+      "from": "aurora-client",
+      "to": "aurora-python-runtime",
+      "type": "generated-contracts-only"
+    },
+    {
+      "from": "aurora-tauri-rust",
+      "to": "aurora-python-runtime",
+      "type": "sidecar-process-or-gateway-contract"
+    },
+    {
+      "from": "aurora-tauri-sidecars",
+      "to": "aurora-python-runtime",
+      "type": "packages-entrypoints"
+    },
+    {
+      "from": "aurora-android-plugin",
+      "to": "aurora-tauri-rust",
+      "type": "mobile-plugin-bridge"
+    },
+    {
+      "from": "aurora-ios-plugin",
+      "to": "aurora-tauri-rust",
+      "type": "mobile-plugin-bridge"
+    }
+  ],
+  "forbiddenEdges": [
+    {
+      "from": "aurora-ui",
+      "to": "aurora-python-runtime",
+      "reason": "UI must consume backend truth through @aurora/client only"
+    },
+    {
+      "from": "aurora-web",
+      "to": "aurora-python-runtime",
+      "reason": "Web app must not call Python services or bus internals directly"
+    },
+    {
+      "from": "aurora-client",
+      "to": "aurora-ui",
+      "reason": "SDK must stay framework-neutral"
+    },
+    {
+      "from": "aurora-client",
+      "to": "aurora-tauri-rust",
+      "reason": "Tauri transport is an adapter boundary, not a hard SDK dependency"
+    },
+    {
+      "from": "aurora-web",
+      "to": "modules/ui-mock-reference",
+      "reason": "Mock is reference-only; copied code requires attribution and review"
+    },
+    {
+      "from": "aurora-ui",
+      "to": "modules/ui-mock-reference",
+      "reason": "Mock is reference-only; production components live under packages/aurora-ui"
+    },
+    {
+      "from": "aurora-tauri-ui",
+      "to": "modules/ui-mock-reference",
+      "reason": "Mock is reference-only; production Tauri UI consumes @aurora/ui"
+    }
+  ],
+  "ciOwners": {
+    "root-js-workspace": "P0-003",
+    "packages/aurora-sdk": "SDK-001",
+    "packages/aurora-ui": "UI-001",
+    "apps/aurora-web": "UI-001",
+    "apps/aurora-tauri/src": "TAURI-001",
+    "apps/aurora-tauri/src-tauri": "TAURI-001",
+    "apps/aurora-tauri/sidecars": "TAURI-002",
+    "native/android": "AND-001",
+    "native/ios": "IOS-001"
+  }
+}

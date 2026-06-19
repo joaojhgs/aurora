@@ -1,0 +1,13 @@
+{
+  "name": "aurora-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "^4.0.16"
+  }
+}

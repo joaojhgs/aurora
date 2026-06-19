@@ -1,0 +1,36 @@
+{
+  "name": "@aurora/client",
+  "version": "0.1.0",
+  "description": "Transport-independent TypeScript client SDK for Aurora Gateway and native adapters.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./test-utils": {
+      "types": "./dist/test-utils.d.ts",
+      "import": "./dist/test-utils.js",
+      "default": "./dist/test-utils.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run --environment node"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "^4.0.16"
+  }
+}
