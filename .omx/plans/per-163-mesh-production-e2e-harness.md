@@ -75,3 +75,20 @@ uv run pytest tests/unit/gateway/test_negotiation.py tests/unit/gateway/test_rou
 - `.venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q` -> 4 passed.
 - `.venv/bin/ruff check scripts/mesh_gap_e2e_harness.py tests/e2e/test_mesh_gap_e2e_harness.py` -> passed.
 - `.venv/bin/pytest tests/unit/gateway/test_negotiation.py tests/unit/gateway/test_routing_table.py tests/unit/gateway/test_peer_bridge.py tests/unit/gateway/test_rpc.py tests/unit/gateway/test_rtc_auth_enforcement.py tests/integration/test_mesh_routing.py tests/integration/test_mesh_permissions.py tests/integration/test_mesh_failover.py -q` -> 113 passed.
+
+
+## 2026-06-19 Process Row Recovery Plan
+
+Source comments: QA and architecture rejected leaving `process_bullmq_redis` as a final `dependency_gap`. The remaining recovery scope is limited to live BullMQ/Redis request/reply evidence or concrete runtime infeasibility evidence after a real attempt.
+
+Implementation steps:
+1. Keep the existing two-peer harness and artifact schema unchanged.
+2. Add a live-gated `process_bullmq_redis` path using two `BullMQBus` instances, a live Redis ping, and the same deterministic provider handlers as the LocalBus row.
+3. Route process-mode remote requests through `BullMQBus.request -> Redis -> BullMQBus.worker -> BullMQBus.reply`; use command replies, not event fanout, for temporary reply queues.
+4. If Python dependencies or Redis are unavailable, emit `dependency_gap` with `live_attempted=true`, exception type, and redacted dependency evidence; do not count that row as proof.
+5. Update docs/tests so QA can distinguish live pass/fail from unavailable runtime evidence.
+
+Verification strategy:
+- Run the process-mode harness row with the current environment and record whether Redis is available.
+- Run the e2e harness tests and focused BullMQ Redis integration test when Redis is available.
+- Run ruff on changed files and regenerate `.omx/reports/mesh-gap-e2e/latest/`.

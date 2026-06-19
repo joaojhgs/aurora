@@ -39,23 +39,36 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
     assert {mode["mode_id"] for mode in report.modes} == required_modes
     assert {scenario["scenario_id"] for scenario in report.scenarios} == required_scenarios
     assert len(report.results) == len(MODES) * len(SCENARIOS)
-    assert report.summary["status"] == "blocked"
+    assert report.summary["status"] in {"pass", "blocked"}
     assert report.summary["required_scenarios_passed"] is True
     assert report.summary["final_mesh_mode_included"] is True
     assert report.summary["final_mesh_mode_status"] == "pass"
     assert report.summary["preflight_not_counted_as_final_proof"] is True
-    assert report.summary["dependency_gap"] == len(SCENARIOS)
-    assert report.summary["dependency_gap_modes"] == ["process_bullmq_redis"]
+
+    process_results = [
+        result for result in report.results if result["mode_id"] == "process_bullmq_redis"
+    ]
+    if report.summary["dependency_gap"]:
+        assert report.summary["status"] == "blocked"
+        assert report.summary["dependency_gap"] == len(SCENARIOS)
+        assert report.summary["dependency_gap_modes"] == ["process_bullmq_redis"]
+        assert all(result["status"] == "dependency_gap" for result in process_results)
+        assert all(result["evidence"]["live_attempted"] is True for result in process_results)
+    else:
+        assert report.summary["status"] == "pass"
+        assert report.summary["dependency_gap_modes"] == []
+        assert all(result["status"] == "pass" for result in process_results)
+        assert all(
+            result["evidence"]["transport_path"]
+            == "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            for result in process_results
+        )
+
     assert all(
         result["status"] == "pass"
         for result in report.results
         if result["mode_id"]
         in {"thread_localbus", "http_gateway_thin_client", "tauri_local_native", "mesh_webrtc"}
-    )
-    assert all(
-        result["status"] == "dependency_gap"
-        for result in report.results
-        if result["mode_id"] == "process_bullmq_redis"
     )
 
     report_path = tmp_path / "report.json"
@@ -72,13 +85,9 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
 @pytest.mark.e2e
 def test_mesh_gap_harness_records_security_privacy_negative_cases(tmp_path):
     report = run_harness(output_dir=tmp_path)
-    by_scenario = {
-        (result["mode_id"], result["scenario_id"]): result for result in report.results
-    }
+    by_scenario = {(result["mode_id"], result["scenario_id"]): result for result in report.results}
 
-    remote_approval = by_scenario[
-        ("mesh_webrtc", "dangerous_remote_approval_token")
-    ]["evidence"]
+    remote_approval = by_scenario[("mesh_webrtc", "dangerous_remote_approval_token")]["evidence"]
     assert remote_approval["missing_token_error"] == "approval_token_required"
     assert remote_approval["replay_error"] == "approval_token_replayed"
     assert remote_approval["mismatch_error"] == "approval_token_args_hash_mismatch"
@@ -128,9 +137,20 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
         output_dir=tmp_path / "process",
         mode_filter={"process_bullmq_redis"},
     )
-    assert process_report.summary["status"] == "blocked"
-    assert process_report.summary["dependency_gap"] == len(SCENARIOS)
-    assert all(result["status"] == "dependency_gap" for result in process_report.results)
+    if process_report.summary["dependency_gap"]:
+        assert process_report.summary["status"] == "blocked"
+        assert process_report.summary["dependency_gap"] == len(SCENARIOS)
+        assert all(result["status"] == "dependency_gap" for result in process_report.results)
+        assert all(
+            result["evidence"]["live_attempted"] is True for result in process_report.results
+        )
+    else:
+        assert process_report.summary["status"] == "fail"
+        assert process_report.summary["passed"] == len(SCENARIOS)
+        assert all(result["status"] == "pass" for result in process_report.results)
+        assert process_report.results[0]["evidence"]["transport_path"] == (
+            "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+        )
 
 
 @pytest.mark.e2e
