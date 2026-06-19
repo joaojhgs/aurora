@@ -1,12 +1,14 @@
 {
-  "name": "my-project",
+  "name": "@aurora/ui-mock-reference",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "typecheck": "tsc --noEmit --incremental false",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint ."
+    "start": "next start"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -25,11 +27,16 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@eslint/js": "^9.39.2",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "typescript-eslint": "^8.50.0",
+    "vitest": "^4.0.16"
   }
 }

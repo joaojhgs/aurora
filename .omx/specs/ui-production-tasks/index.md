@@ -17,6 +17,71 @@ This directory decomposes the full Aurora UI/product plan into individually impl
 - Android assistant role is conditional: Tauri/Kotlin can support plugins/manifest/service declarations, but OS role grant requires package qualification plus user/OEM/profile support.
 - iOS integrates through App Intents, Shortcuts, widgets, share extensions, file/deep links, and in-app voice; it must not claim Siri replacement.
 
+## Canonical implementation glossary
+
+This section is the shared vocabulary for every production UI task. If a task uses a different term, it must define the variance explicitly and link the matrix row or backend task that requires it.
+
+### Deployment modes
+
+| Mode | Canonical meaning | Production boundary |
+| --- | --- | --- |
+| Server Web | Browser UI connected to an Aurora Gateway hosted by a server or operator node. | Uses HTTP/WebSocket/SSE SDK transports only; no local Python service access, native device APIs, or filesystem assumptions. |
+| Desktop Thin | Desktop shell or browser pointed at a remote Aurora Gateway. | Same backend trust model as Server Web, plus desktop window/storage affordances only when exposed through SDK/native manifest. |
+| Desktop Local | Official Tauri 2 desktop app supervising or connecting to a local Aurora node/sidecar. | UI still calls `AuroraClient`; local service access goes through the SDK/Tauri command bridge and bus/gateway contracts. |
+| Mesh Shell | UI attached to a local or thin node that can discover and route to mesh peers. | Every remote action requires provider identity, route explain/selector evidence, policy result, provenance, and audit/correlation data. |
+| Android Thin | Android app connected to a remote/server Aurora Gateway. | No local inference, assistant-role, microphone background, or native storage claim unless Android native capability manifest says it exists. |
+| Android Local-Light | Android app with approved native plugins for selected local capture, secure storage, share/intents, and lightweight inference. | Local capabilities are explicit, permission-gated, and SDK-advertised; cloud/peer fallback follows route/privacy policy. |
+| iOS Thin | iOS app connected to a remote/server Aurora Gateway. | Uses app-owned surfaces only; must not claim Siri replacement or background assistant control. |
+| iOS Local-Light | iOS app with approved App Intents, Shortcuts, widgets/share extensions, secure storage, and selected local-light inference. | Native features are manifest-driven and permission-gated; invocation remains inside Apple-permitted app/extension surfaces. |
+
+### Mode support codes
+
+Use these codes in task files, capability fixtures, and acceptance criteria when a feature is mode-specific.
+
+| Code | Meaning | Required evidence |
+| --- | --- | --- |
+| `supported` | The mode can ship the feature in production. | Implemented backend/SDK/native contract plus tests for the named mode. |
+| `partial` | A subset works, or it works only with explicit limitations. | Documented supported subset, disabled states for the rest, and tests for the enabled subset. |
+| `planned` | Product intent exists, but implementation has not started. | Linked task ID and no production UI enablement. |
+| `unsupported` | The mode intentionally cannot provide this feature. | Disabled state or absence with explanation when user-visible. |
+| `blocked` | A known prerequisite prevents implementation now. | Linked blocker task, issue, backend gap, or platform requirement. |
+| `deferred` | Intentionally out of this production slice. | Explicit follow-up or rationale; no hidden implementation work. |
+
+### Privacy classes
+
+Every task must name the highest privacy class it can touch. Higher classes inherit the handling requirements of lower classes.
+
+| Class | Meaning | UI/SDK handling requirement |
+| --- | --- | --- |
+| `public` | Data safe to show in diagnostics or docs without user context. | May be displayed and logged normally. |
+| `personal` | User content, preferences, identity labels, conversation snippets, or device names. | Redact in support exports unless explicitly included; show route/privacy context when leaving the local node. |
+| `sensitive` | Health, precise location, private documents, privileged automation context, or high-impact user data. | Requires explicit route/privacy review before remote/cloud/peer use. |
+| `secret` | API keys, passwords, private tokens, seed material, and credential-like values. | Never render full value after capture; never include in logs, traces, exports, or route previews. |
+| `raw-audio` | Microphone streams, wake audio, voiceprints, or unprocessed audio buffers. | Requires explicit capture consent, retention statement, target selector, and stop/revoke path. |
+| `credential` | Auth tokens, session secrets, mesh credentials, refresh material, and device credentials. | Store only in approved secure storage; one-time reveal only where backend contract allows it. |
+| `admin-critical` | Actions or payloads that can alter security, config, peer trust, backups, restore, service lifecycle, or broad data access. | Requires AdminAction draft/confirm/audit once BE-004 exists; must include reason, impact, and audit receipt. |
+
+### Availability states
+
+These states align UI language with capability catalog output, route explain evidence, and the existing availability graph vocabulary. Mock `AvailabilityState` values must map to this set before production wiring.
+
+| State | SDK/capability meaning | UI rule |
+| --- | --- | --- |
+| `available-local` | Local provider exists and policy allows local use. | Enable the action with local/provider label. |
+| `available-remote` | Remote or mesh provider is eligible and policy allows use. | Enable only with visible target/provider and route/privacy context. |
+| `pending` | Pairing, approval, manifest, confirmation, consent, or request completion is in progress. | Disable duplicate actions and show resumable progress when possible. |
+| `denied` | Backend rejected by auth, permission, selector, sharing, or policy. | Show reason and repair path when safe. |
+| `degraded` | Feature is usable through fallback, reduced capacity, or compatibility warning. | Enable only the supported subset and explain limitation. |
+| `stale` | Provider is known but not fresh enough to select. | Do not execute; show freshness/heartbeat evidence. |
+| `privacy-blocked` | Consent, explicit target, retention choice, or policy approval is missing. | Do not execute until the user/admin completes the required control. |
+| `unsupported` | No production backend/SDK/native contract exists for this mode. | Keep disabled or absent with task/backlog reference where user-facing. |
+
+### Task-board contract
+
+Every future task must include the standard task file sections listed below and must link to at least one `spec-vs-code-coverage-matrix.md` row, `backend-gap-crosswalk.md` gap, or state `infrastructure-only` with a concrete reason. Tasks that enable UI behavior must name deployment modes, support codes, permissions, privacy class, SDK surface, backend evidence source, verification depth, and whether production wiring is blocked by the mesh-gap gate.
+
+Accepted evidence must exercise the production boundary claimed by the task. Frontend-only tests can prove UI rendering, but they cannot prove backend, mesh, Tauri/native, audio, Auth/RBAC, process-mode, or transport parity behavior.
+
 ## Official platform evidence used
 
 - Tauri mobile plugins: https://v2.tauri.app/develop/plugins/develop-mobile/

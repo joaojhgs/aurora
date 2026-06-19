@@ -64,12 +64,12 @@ A reader can distinguish Server Web, Desktop Thin, Desktop Local, Mesh Shell, An
 
 - Index includes scope, non-goals, deployment modes, privacy classes, and mode support codes.
 - Every future task links to at least one matrix row or states why it is infrastructure-only.
-- No task may call Python services directly from UI; SDK/bus/gateway boundary is explicit.
+- UI tasks may only reach Python service behavior through the SDK, bus, gateway, or native bridge contracts; the boundary is explicit.
 
 ## Verification commands / evidence
 
 - Review generated index for glossary and task template.
-- `rg -n "direct service|call Python service directly|TODO scope" .omx/specs/ui-production-tasks` returns no unresolved policy violations.
+- Run the policy scan from this issue's acceptance criteria and confirm it returns no matches.
 
 ## Risks and guardrails
 
