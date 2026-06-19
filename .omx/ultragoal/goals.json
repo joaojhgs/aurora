@@ -186,6 +186,18 @@
       "evidence": "Reworked scripts/mesh_gap_e2e_harness.py from static pass fixture generator into executable two-peer component harness: thread_localbus uses LocalBus.request, mesh_webrtc uses production RPCHandler.on_message -> provider LocalBus.request, process/HTTP/Tauri rows are explicit preflight and not final proof. Updated tests/docs. Verification: .venv/bin/python scripts/mesh_gap_e2e_harness.py passed with 30 component passes, 45 preflight rows, final_mesh_mode_status=pass; .venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q passed 4 tests; .venv/bin/ruff check scripts/mesh_gap_e2e_harness.py tests/e2e/test_mesh_gap_e2e_harness.py passed; QA targeted mesh suite passed 113 tests.",
       "startedAt": "2026-06-19T10:13:04.354Z",
       "completedAt": "2026-06-19T10:13:19.210Z"
+    },
+    {
+      "id": "G018-per-163-qa-rejection-live-transport-rework",
+      "title": "PER-163 QA rejection live transport rework",
+      "objective": "Promote PER-163 HTTP Gateway, Tauri local/native, and Mesh/WebRTC rows to executable transport evidence; mark process BullMQ/Redis as an explicit dependency blocker until mode-processes dependencies and Redis are available or architecture grants a waiver.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-19T10:42:01.847Z",
+      "updatedAt": "2026-06-19T10:42:01.847Z",
+      "evidence": "scripts/mesh_gap_e2e_harness.py now drives http_gateway_thin_client through generated Gateway FastAPI routes via httpx.ASGITransport, tauri_local_native through a local/native LocalBus smoke boundary, and mesh_webrtc through aiortc RTCPeerConnection.DataChannel into production RPCHandler.on_message. The full report status is blocked when process_bullmq_redis is selected because the repo venv lacks bullmq and redis. Verification: .venv/bin/python scripts/mesh_gap_e2e_harness.py --mode mesh_webrtc --mode http_gateway_thin_client --mode tauri_local_native passed 45 executable rows; .venv/bin/python scripts/mesh_gap_e2e_harness.py full matrix reported 60 pass and 15 dependency_gap; .venv/bin/ruff check changed harness/test files passed; .venv/bin/pytest tests/e2e/test_mesh_gap_e2e_harness.py -q passed 4 tests; targeted mesh regression suite passed 113 tests; .venv/bin/python import check reported bullmq False and redis False.",
+      "startedAt": "2026-06-19T10:42:01.847Z",
+      "completedAt": "2026-06-19T10:42:01.847Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."

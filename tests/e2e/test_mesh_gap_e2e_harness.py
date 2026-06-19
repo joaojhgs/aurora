@@ -39,21 +39,23 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
     assert {mode["mode_id"] for mode in report.modes} == required_modes
     assert {scenario["scenario_id"] for scenario in report.scenarios} == required_scenarios
     assert len(report.results) == len(MODES) * len(SCENARIOS)
-    assert report.summary["status"] == "pass"
+    assert report.summary["status"] == "blocked"
     assert report.summary["required_scenarios_passed"] is True
     assert report.summary["final_mesh_mode_included"] is True
     assert report.summary["final_mesh_mode_status"] == "pass"
     assert report.summary["preflight_not_counted_as_final_proof"] is True
+    assert report.summary["dependency_gap"] == len(SCENARIOS)
+    assert report.summary["dependency_gap_modes"] == ["process_bullmq_redis"]
     assert all(
         result["status"] == "pass"
         for result in report.results
-        if result["mode_id"] in {"thread_localbus", "mesh_webrtc"}
+        if result["mode_id"]
+        in {"thread_localbus", "http_gateway_thin_client", "tauri_local_native", "mesh_webrtc"}
     )
     assert all(
-        result["status"] == "preflight"
+        result["status"] == "dependency_gap"
         for result in report.results
-        if result["mode_id"]
-        in {"process_bullmq_redis", "http_gateway_thin_client", "tauri_local_native"}
+        if result["mode_id"] == "process_bullmq_redis"
     )
 
     report_path = tmp_path / "report.json"
@@ -81,7 +83,9 @@ def test_mesh_gap_harness_records_security_privacy_negative_cases(tmp_path):
     assert remote_approval["replay_error"] == "approval_token_replayed"
     assert remote_approval["mismatch_error"] == "approval_token_args_hash_mismatch"
     assert remote_approval["rpc_handler_invoked"] is True
-    assert remote_approval["transport_path"] == "RPCHandler.on_message->LocalBus.request"
+    assert remote_approval["transport_path"] == (
+        "RTCPeerConnection.DataChannel->RPCHandler.on_message->LocalBus.request"
+    )
 
     rag = by_scenario[("mesh_webrtc", "rag_remote_namespace")]["evidence"]
     assert rag["missing_namespace_error"] == "namespace_selector_required"
@@ -108,14 +112,25 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
     assert report.summary["status"] == "pass"
     assert report.summary["component_modes"] == ["mesh_webrtc"]
     assert by_scenario["safe_remote_tool"]["evidence"]["transport_path"] == (
-        "RPCHandler.on_message->LocalBus.request"
+        "RTCPeerConnection.DataChannel->RPCHandler.on_message->LocalBus.request"
     )
     assert by_scenario["pair_peers"]["evidence"]["rpc_handler_invoked"] is True
 
-    preflight_report = run_harness(output_dir=tmp_path / "preflight", mode_filter={"http_gateway_thin_client"})
-    assert preflight_report.summary["status"] == "fail"
-    assert preflight_report.summary["preflight"] == len(SCENARIOS)
-    assert all(result["status"] == "preflight" for result in preflight_report.results)
+    http_report = run_harness(
+        output_dir=tmp_path / "http",
+        mode_filter={"http_gateway_thin_client"},
+    )
+    assert http_report.summary["status"] == "fail"
+    assert http_report.summary["passed"] == len(SCENARIOS)
+    assert all(result["status"] == "pass" for result in http_report.results)
+
+    process_report = run_harness(
+        output_dir=tmp_path / "process",
+        mode_filter={"process_bullmq_redis"},
+    )
+    assert process_report.summary["status"] == "blocked"
+    assert process_report.summary["dependency_gap"] == len(SCENARIOS)
+    assert all(result["status"] == "dependency_gap" for result in process_report.results)
 
 
 @pytest.mark.e2e

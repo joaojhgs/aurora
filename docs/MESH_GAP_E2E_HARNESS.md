@@ -2,11 +2,12 @@
 
 PER-163 / MESH-GAP-011 adds an executable two-peer harness for the mesh
 capability fabric. The default CI profile creates isolated consumer/provider
-peers in-process, drives provider calls through `LocalBus.request`, and uses the
+peers in-process, drives provider calls through `LocalBus.request`, generated
+Gateway FastAPI routes, and an `aiortc` WebRTC DataChannel wired to the
 production `app.services.gateway.webrtc.rpc.RPCHandler` for the final
 Mesh/WebRTC JSON-RPC row. Deterministic provider handlers supply fake
 Tooling/RAG/audio/scheduler data, but pass/fail comes from real request/reply
-results.
+results on the exercised transport.
 
 ## Run Locally
 
@@ -30,15 +31,15 @@ uv run python scripts/mesh_gap_e2e_harness.py --mode mesh_webrtc
 ## Covered Modes
 
 - `thread_localbus`: component-backed thread mode using `LocalBus.request`.
-- `process_bullmq_redis`: preflight row for a Redis-backed process wrapper.
-- `http_gateway_thin_client`: preflight row for a live Gateway HTTP wrapper.
-- `tauri_local_native`: preflight row for a native/Tauri smoke wrapper.
-- `mesh_webrtc`: component-backed final proof using `RPCHandler.on_message` and provider `LocalBus.request`.
+- `process_bullmq_redis`: dependency-gap row until the process extras and live Redis endpoint are available.
+- `http_gateway_thin_client`: component-backed HTTP row using generated Gateway FastAPI routes through `httpx.ASGITransport`.
+- `tauri_local_native`: component-backed local/native command smoke boundary over `LocalBus.request`.
+- `mesh_webrtc`: component-backed final proof using `RTCPeerConnection.DataChannel -> RPCHandler.on_message -> LocalBus.request`.
 
 The `mesh_webrtc` row is the final mesh proof row in the matrix. The default
-runner does not count fixture-only or preflight rows as final acceptance proof.
-Live peer startup can reuse the same mode and scenario IDs while replacing the
-preflight rows with live service logs.
+runner does not count dependency-gap rows as final acceptance proof. Until the
+process row is backed by a live BullMQ/Redis runtime, the full matrix reports
+`status: blocked` while the executable component rows still report `pass`.
 
 ## Covered Scenarios
 
@@ -69,8 +70,8 @@ uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py -q
 ```
 
 The test checks that every required scenario is represented, component-backed
-rows pass, preflight rows are explicitly labeled as non-final evidence, negative
-security/privacy cases are present, and artifacts are redacted and
+rows pass, dependency gaps are explicitly labeled as non-final evidence,
+negative security/privacy cases are present, and artifacts are redacted and
 correlation-ready. The default fake data never includes raw tokens, Redis URLs,
 host paths, raw audio, or raw RAG records in artifacts.
 
@@ -83,14 +84,10 @@ docker compose -f docker-compose.process.yml up -d redis auth gateway tooling db
 uv run python scripts/mesh_gap_e2e_harness.py --mode process_bullmq_redis --mode mesh_webrtc
 ```
 
-The current runner is the stable artifact and assertion schema. A live wrapper
-should preserve the same `mode_id`, `scenario_id`, `correlation_id`,
+The current runner is the stable artifact and assertion schema. A live process
+wrapper should preserve the same `mode_id`, `scenario_id`, `correlation_id`,
 `report.json`, `events.ndjson`, and `support_bundle.json` shapes so CI and QA
-can compare deterministic and live evidence directly.
-
-The default harness reports the Redis, HTTP, and Tauri rows as `preflight` until
-the wrapper provides:
-
-- `AURORA_MESH_E2E_REDIS_URL` for process/BullMQ/Redis.
-- `AURORA_MESH_E2E_GATEWAY_URL` for Gateway HTTP.
-- `AURORA_MESH_E2E_TAURI=1` for native/Tauri smoke execution.
+can compare deterministic and live evidence directly. The default harness
+reports only `process_bullmq_redis` as `dependency_gap`; it needs the
+`mode-processes` Python extras plus a live Redis endpoint before it can become a
+real pass/fail row.
