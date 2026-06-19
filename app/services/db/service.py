@@ -232,6 +232,7 @@ class DBService(BaseService):
         selector: Any | None,
         *,
         operation: str,
+        require_explicit_selector: bool = False,
     ) -> tuple[bool, str | None, DBRAGNamespacePolicy]:
         policy = self._namespace_policy(namespace)
         if policy.sharing_mode == "never":
@@ -239,13 +240,13 @@ class DBService(BaseService):
         if operation not in policy.allowed_operations:
             return False, f"operation {operation} is not allowed for namespace {namespace}", policy
         if (
-            self._is_remote_selector(selector)
+            (require_explicit_selector or self._is_remote_selector(selector))
             and policy.explicit_selector_required
             and not self._selector_matches_namespace(namespace, selector)
         ):
             return (
                 False,
-                "remote RAG access requires mesh_selector.resource_namespace "
+                "remote RAG access requires explicit mesh_selector.resource_namespace "
                 "or mesh_selector.data_scope matching the requested namespace",
                 policy,
             )
@@ -705,7 +706,7 @@ class DBService(BaseService):
         input_model=DBRAGSearchRequest,
         output_model=DBRAGListResponse,
         summary="Search RAG store",
-        exposure="both",
+        exposure="internal",
         method_type="use",
     )
     async def rag_search(self, query: DBRAGSearchRequest) -> DBRAGListResponse:
@@ -898,7 +899,10 @@ class DBService(BaseService):
         policy_decision_id = self._new_policy_decision_id(query.policy_decision_id)
         correlation_id = self._new_correlation_id(query.correlation_id)
         allowed, denial_reason, _policy = self._validate_rag_access(
-            query.namespace, query.mesh_selector, operation="search"
+            query.namespace,
+            query.mesh_selector,
+            operation="search",
+            require_explicit_selector=True,
         )
         if not allowed:
             return DBRAGSearchRemoteResponse(

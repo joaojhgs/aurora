@@ -333,6 +333,41 @@ class TestDBServiceRAGOperations:
         assert "resource_namespace" in response.denial_reason
 
     @pytest.mark.asyncio
+    async def test_rag_search_remote_denies_missing_selector_for_sensitive_namespace(
+        self, db_service
+    ):
+        """Remote-safe RAG search denies personal namespaces without any explicit selector."""
+        from datetime import datetime
+
+        from langgraph.store.base import Item
+
+        from app.shared.contracts.models.db import DBRAGSearchRemoteRequest
+
+        item = Item(
+            value={
+                "text": "private memory",
+                "embedding": [0.1],
+                "source_path": "/home/user/private.txt",
+            },
+            key="memory-1",
+            namespace=("main", "memories"),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_store = MagicMock()
+        mock_store.search = Mock(return_value=[item])
+        db_service.rag_service.combined_store = mock_store
+
+        response = await db_service.rag_search_remote(
+            DBRAGSearchRemoteRequest(namespace="main.memories", query="private")
+        )
+
+        assert response.decision == "denied"
+        assert response.items == []
+        assert "explicit mesh_selector" in response.denial_reason
+        mock_store.search.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_rag_search_remote_allows_selector_and_redacts(self, db_service):
         """Allowed remote search returns provenance and redacts sensitive fields."""
         from datetime import datetime
@@ -538,6 +573,7 @@ class TestDBServiceRAGOperations:
 
     def test_rag_contract_exposure_and_raw_sql_internal(self):
         """RAG sharing contracts are exposed, while raw SQL remains internal-only."""
+        assert DBService.rag_search._contract_metadata["exposure"] == "internal"
         assert DBService.rag_search_remote._contract_metadata["exposure"] == "both"
         assert DBService.rag_list_namespaces._contract_metadata["exposure"] == "both"
         assert DBService.rag_export_namespace._contract_metadata["method_type"] == "manage"
