@@ -41,6 +41,10 @@ _scheduler_service_instance: SchedulerService | None = None
 DEFAULT_SCHEDULER_NAMESPACE = "local"
 DEFAULT_SCHEDULER_OWNER_PEER = "local"
 DEFAULT_SCHEDULER_OWNER_PRINCIPAL = "system"
+DELEGATED_APPROVAL_REQUIRED_REASON = "delegated_approval_token_required"
+DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON = (
+    "delegated_orchestrator_execution_boundary_unsupported"
+)
 
 
 # Service implementation
@@ -85,9 +89,36 @@ class SchedulerService(BaseService):
             return selector.model_dump(exclude_none=True)
         return selector.dict(exclude_none=True)
 
-    def _scheduler_context_from_schedule(
-        self, cmd: SchedulerScheduleJobRequest
-    ) -> dict[str, Any]:
+    def _is_remote_delegated_context(self, context: dict[str, Any]) -> bool:
+        return bool(
+            context.get("caller_peer_id")
+            or context.get("target_peer_id")
+            or context.get("owner_peer_id") != DEFAULT_SCHEDULER_OWNER_PEER
+        )
+
+    def _action_requires_delegated_approval(self, action: str, context: dict[str, Any]) -> bool:
+        if not self._is_remote_delegated_context(context):
+            return False
+
+        normalized = action.strip().lower()
+        return normalized.startswith(("tooling:", "tool:", "orchestrator:")) or normalized in {
+            "tooling.executetool",
+            "orchestrator.userinput",
+            "orchestrator.externaluserinput",
+        }
+
+    def _delegated_approval_context_valid(
+        self, action: str, context: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        if not self._action_requires_delegated_approval(action, context):
+            return True, None
+        if not context.get("policy_decision_id"):
+            return False, "policy_decision_id_required"
+        if not context.get("delegated_approval_token"):
+            return False, DELEGATED_APPROVAL_REQUIRED_REASON
+        return True, None
+
+    def _scheduler_context_from_schedule(self, cmd: SchedulerScheduleJobRequest) -> dict[str, Any]:
         namespace = (
             cmd.namespace
             or self._target_resource_namespace(cmd.target_selector)
@@ -95,9 +126,7 @@ class SchedulerService(BaseService):
         )
         owner_peer_id = cmd.owner_peer_id or cmd.caller_peer_id or DEFAULT_SCHEDULER_OWNER_PEER
         owner_principal_id = (
-            cmd.owner_principal_id
-            or cmd.caller_principal_id
-            or DEFAULT_SCHEDULER_OWNER_PRINCIPAL
+            cmd.owner_principal_id or cmd.caller_principal_id or DEFAULT_SCHEDULER_OWNER_PRINCIPAL
         )
         return {
             "namespace": namespace,
@@ -108,12 +137,16 @@ class SchedulerService(BaseService):
             "target_resource_namespace": self._target_resource_namespace(cmd.target_selector),
             "delegated_permissions": list(cmd.delegated_permissions or []),
             "policy_decision_id": cmd.policy_decision_id,
+            "delegated_approval_token": cmd.delegated_approval_token,
             "correlation_id": cmd.correlation_id,
             "caller_peer_id": cmd.caller_peer_id,
             "caller_principal_id": cmd.caller_principal_id,
+            "blocked_reason": None,
         }
 
-    def _request_scope(self, cmd: SchedulerCancelJobRequest | SchedulerListJobsRequest) -> dict[str, Any]:
+    def _request_scope(
+        self, cmd: SchedulerCancelJobRequest | SchedulerListJobsRequest
+    ) -> dict[str, Any]:
         return {
             "namespace": cmd.namespace,
             "owner_peer_id": cmd.owner_peer_id or cmd.caller_peer_id,
@@ -136,9 +169,11 @@ class SchedulerService(BaseService):
             "target_resource_namespace": context.get("target_resource_namespace"),
             "delegated_permissions": context.get("delegated_permissions") or [],
             "policy_decision_id": context.get("policy_decision_id"),
+            "delegated_approval_token": context.get("delegated_approval_token"),
             "correlation_id": context.get("correlation_id"),
             "caller_peer_id": context.get("caller_peer_id"),
             "caller_principal_id": context.get("caller_principal_id"),
+            "blocked_reason": context.get("blocked_reason"),
         }
 
     def _remote_scope_requested(self, scope: dict[str, Any]) -> bool:
@@ -146,7 +181,10 @@ class SchedulerService(BaseService):
 
     def _scope_allows_job(self, job_context: dict[str, Any], scope: dict[str, Any]) -> bool:
         if self._remote_scope_requested(scope):
-            if scope.get("caller_peer_id") and job_context["owner_peer_id"] != scope["caller_peer_id"]:
+            if (
+                scope.get("caller_peer_id")
+                and job_context["owner_peer_id"] != scope["caller_peer_id"]
+            ):
                 return False
             if (
                 scope.get("caller_principal_id")
@@ -168,9 +206,7 @@ class SchedulerService(BaseService):
         caller_principal_id = context.get("caller_principal_id")
         if caller_peer_id and context["owner_peer_id"] != caller_peer_id:
             return False
-        return not (
-            caller_principal_id and context["owner_principal_id"] != caller_principal_id
-        )
+        return not (caller_principal_id and context["owner_principal_id"] != caller_principal_id)
 
     async def _audit_scheduler_event(
         self,
@@ -192,6 +228,7 @@ class SchedulerService(BaseService):
             "policy_decision_id": context.get("policy_decision_id"),
             "correlation_id": context.get("correlation_id"),
             "delegated_permissions": context.get("delegated_permissions") or [],
+            "delegated_approval_token_present": bool(context.get("delegated_approval_token")),
             "reason": reason,
         }
         try:
@@ -249,14 +286,27 @@ class SchedulerService(BaseService):
         try:
             scheduler_context = self._scheduler_context_from_schedule(cmd)
             if not self._scope_allows_schedule(scheduler_context):
-                log_warning(
-                    f"Denied schedule for job '{cmd.name}' outside caller ownership scope"
-                )
+                log_warning(f"Denied schedule for job '{cmd.name}' outside caller ownership scope")
                 await self._audit_scheduler_event(
                     "scheduler.schedule.denied",
                     scheduler_context,
                     status="denied",
                     reason="owner_scope_mismatch",
+                )
+                return EmptyOutput()
+
+            delegated_ok, delegated_reason = self._delegated_approval_context_valid(
+                cmd.action,
+                scheduler_context,
+            )
+            if not delegated_ok:
+                scheduler_context["blocked_reason"] = delegated_reason
+                log_warning(f"Denied delegated schedule for job '{cmd.name}': {delegated_reason}")
+                await self._audit_scheduler_event(
+                    "scheduler.schedule.denied",
+                    scheduler_context,
+                    status="denied",
+                    reason=delegated_reason,
                 )
                 return EmptyOutput()
 
@@ -520,7 +570,9 @@ class SchedulerService(BaseService):
                     target_resource_namespace=context["target_resource_namespace"],
                     delegated_permissions=context["delegated_permissions"],
                     policy_decision_id=context["policy_decision_id"],
+                    delegated_approval_token_present=bool(context.get("delegated_approval_token")),
                     correlation_id=context["correlation_id"],
+                    blocked_reason=context.get("blocked_reason"),
                 )
                 job_infos.append(job_info)
 
@@ -534,6 +586,7 @@ class SchedulerService(BaseService):
                         "target_resource_namespace": None,
                         "delegated_permissions": [],
                         "policy_decision_id": None,
+                        "delegated_approval_token": None,
                         "correlation_id": None,
                     },
                     status="allowed",
@@ -572,6 +625,7 @@ class SchedulerService(BaseService):
                 "target_resource_namespace": None,
                 "delegated_permissions": [],
                 "policy_decision_id": None,
+                "delegated_approval_token": None,
                 "correlation_id": None,
                 **(scheduler_context or {}),
             }
@@ -598,6 +652,7 @@ class SchedulerService(BaseService):
                     target_peer_id=context.get("target_peer_id"),
                     delegated_permissions=context["delegated_permissions"],
                     policy_decision_id=context.get("policy_decision_id"),
+                    delegated_approval_token_present=bool(context.get("delegated_approval_token")),
                     correlation_id=context.get("correlation_id"),
                 ),
                 priority=get_system_priority(),  # System priority
@@ -630,6 +685,43 @@ class SchedulerService(BaseService):
                             origin="system",
                         )
                     elif service == "orchestrator":
+                        if self._is_remote_delegated_context(context):
+                            reason = DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON
+                            context["blocked_reason"] = reason
+                            log_warning(
+                                f"Blocked delegated orchestrator schedule for job "
+                                f"{job_id}: {reason}"
+                            )
+                            await self.bus.publish(
+                                SchedulerMethods.JOB_COMPLETED,
+                                SchedulerJobCompletedEvent(
+                                    job_id=job_id,
+                                    job_name=job_name,
+                                    success=False,
+                                    error=reason,
+                                    namespace=context["namespace"],
+                                    owner_peer_id=context["owner_peer_id"],
+                                    owner_principal_id=context["owner_principal_id"],
+                                    target_peer_id=context.get("target_peer_id"),
+                                    delegated_permissions=context["delegated_permissions"],
+                                    policy_decision_id=context.get("policy_decision_id"),
+                                    delegated_approval_token_present=bool(
+                                        context.get("delegated_approval_token")
+                                    ),
+                                    correlation_id=context.get("correlation_id"),
+                                ),
+                                priority=get_system_priority(),
+                                origin="system",
+                            )
+                            await self._audit_scheduler_event(
+                                "scheduler.execution.blocked",
+                                context,
+                                status="blocked",
+                                job_id=job_id,
+                                reason=reason,
+                            )
+                            return
+
                         # Send to orchestrator as user input
                         from app.shared.contracts.models.orchestrator import OrchestratorMethods
                         from app.shared.messaging.models.orchestrator_models import UserInput
@@ -664,6 +756,7 @@ class SchedulerService(BaseService):
                     target_peer_id=context.get("target_peer_id"),
                     delegated_permissions=context["delegated_permissions"],
                     policy_decision_id=context.get("policy_decision_id"),
+                    delegated_approval_token_present=bool(context.get("delegated_approval_token")),
                     correlation_id=context.get("correlation_id"),
                 ),
                 priority=get_system_priority(),
@@ -696,6 +789,7 @@ class SchedulerService(BaseService):
                     target_peer_id=context.get("target_peer_id"),
                     delegated_permissions=context.get("delegated_permissions") or [],
                     policy_decision_id=context.get("policy_decision_id"),
+                    delegated_approval_token_present=bool(context.get("delegated_approval_token")),
                     correlation_id=context.get("correlation_id"),
                 ),
                 priority=get_system_priority(),
@@ -713,6 +807,7 @@ class SchedulerService(BaseService):
                     "target_resource_namespace": context.get("target_resource_namespace"),
                     "delegated_permissions": context.get("delegated_permissions") or [],
                     "policy_decision_id": context.get("policy_decision_id"),
+                    "delegated_approval_token": context.get("delegated_approval_token"),
                     "correlation_id": context.get("correlation_id"),
                 },
                 status="failed",
