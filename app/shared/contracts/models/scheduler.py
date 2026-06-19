@@ -40,6 +40,7 @@ class SchedulerScheduleJobRequest(IOModel):
     target_selector: MeshAddressSelector | None = None
     delegated_permissions: list[str] = Field(default_factory=list)
     policy_decision_id: str | None = None
+    delegated_approval_token: str | None = None
     correlation_id: str | None = None
     caller_peer_id: str | None = None
     caller_principal_id: str | None = None
@@ -99,7 +100,9 @@ class SchedulerJobInfo(IOModel):
     target_resource_namespace: str | None = None
     delegated_permissions: list[str] = Field(default_factory=list)
     policy_decision_id: str | None = None
+    delegated_approval_token_present: bool = False
     correlation_id: str | None = None
+    blocked_reason: str | None = None
 
 
 class SchedulerListJobsResponse(IOModel):
@@ -122,6 +125,7 @@ class SchedulerJobFiredEvent(IOModel):
     target_peer_id: str | None = None
     delegated_permissions: list[str] = Field(default_factory=list)
     policy_decision_id: str | None = None
+    delegated_approval_token_present: bool = False
     correlation_id: str | None = None
 
 
@@ -138,4 +142,5 @@ class SchedulerJobCompletedEvent(IOModel):
     target_peer_id: str | None = None
     delegated_permissions: list[str] = Field(default_factory=list)
     policy_decision_id: str | None = None
+    delegated_approval_token_present: bool = False
     correlation_id: str | None = None

@@ -1,11 +1,12 @@
 """Scheduler namespace and delegated-action policy tests."""
 
+import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.scheduler.service import SchedulerService
+from app.services.scheduler.service import DELEGATED_APPROVAL_REQUIRED_REASON, SchedulerService
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.scheduler import (
     SchedulerCancelJobRequest,
@@ -53,6 +54,7 @@ def make_job(
                 "target_resource_namespace": namespace,
                 "delegated_permissions": ["Tooling.ExecuteTool"],
                 "policy_decision_id": "policy-1",
+                "delegated_approval_token": "approval-token-1",
                 "correlation_id": "corr-1",
             },
         },
@@ -76,6 +78,7 @@ async def test_schedule_job_stores_namespace_and_delegated_context():
             target_selector=MeshAddressSelector(peer_id="provider-peer", resource_namespace="lab"),
             delegated_permissions=["Tooling.ExecuteTool"],
             policy_decision_id="policy-1",
+            delegated_approval_token="approval-token-1",
             correlation_id="corr-1",
             caller_peer_id="owner-peer",
             caller_principal_id="principal-1",
@@ -91,8 +94,65 @@ async def test_schedule_job_stores_namespace_and_delegated_context():
     assert context["target_peer_id"] == "provider-peer"
     assert context["delegated_permissions"] == ["Tooling.ExecuteTool"]
     assert context["policy_decision_id"] == "policy-1"
+    assert context["delegated_approval_token"] == "approval-token-1"
     assert context["correlation_id"] == "corr-1"
     service.bus.request.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remote_tool_schedule_denied_without_delegated_approval_token():
+    service = make_service()
+    service.cron_service.schedule_from_text = AsyncMock(return_value="job-1")
+
+    await service.schedule_job(
+        SchedulerScheduleJobRequest(
+            name="remote tool",
+            schedule="*/5 * * * *",
+            action="tooling:switch_on",
+            namespace="lab",
+            target_selector=MeshAddressSelector(peer_id="provider-peer", resource_namespace="lab"),
+            delegated_permissions=["Tooling.ExecuteTool"],
+            policy_decision_id="policy-1",
+            correlation_id="corr-1",
+            caller_peer_id="owner-peer",
+            caller_principal_id="principal-1",
+        )
+    )
+
+    service.cron_service.schedule_from_text.assert_not_awaited()
+    audit_request = service.bus.request.call_args.args[1]
+    details = json.loads(audit_request.details)
+    assert audit_request.event == "scheduler.schedule.denied"
+    assert details["reason"] == DELEGATED_APPROVAL_REQUIRED_REASON
+    assert details["delegated_approval_token_present"] is False
+
+
+@pytest.mark.asyncio
+async def test_remote_tool_schedule_denied_without_policy_decision():
+    service = make_service()
+    service.cron_service.schedule_from_text = AsyncMock(return_value="job-1")
+
+    await service.schedule_job(
+        SchedulerScheduleJobRequest(
+            name="remote tool",
+            schedule="*/5 * * * *",
+            action="tooling:switch_on",
+            namespace="lab",
+            target_selector=MeshAddressSelector(peer_id="provider-peer", resource_namespace="lab"),
+            delegated_permissions=["Tooling.ExecuteTool"],
+            delegated_approval_token="approval-token-1",
+            correlation_id="corr-1",
+            caller_peer_id="owner-peer",
+            caller_principal_id="principal-1",
+        )
+    )
+
+    service.cron_service.schedule_from_text.assert_not_awaited()
+    audit_request = service.bus.request.call_args.args[1]
+    details = json.loads(audit_request.details)
+    assert audit_request.event == "scheduler.schedule.denied"
+    assert details["reason"] == "policy_decision_id_required"
+    assert details["delegated_approval_token_present"] is True
 
 
 @pytest.mark.asyncio
@@ -119,6 +179,7 @@ async def test_remote_list_jobs_is_filtered_to_caller_scope():
     assert response.jobs[0].namespace == "lab"
     assert response.jobs[0].owner_peer_id == "owner-peer"
     assert response.jobs[0].delegated_permissions == ["Tooling.ExecuteTool"]
+    assert response.jobs[0].delegated_approval_token_present is True
 
 
 @pytest.mark.asyncio
@@ -155,6 +216,7 @@ async def test_fire_job_emits_delegated_context_on_events():
         "target_resource_namespace": "lab",
         "delegated_permissions": ["Tooling.ExecuteTool"],
         "policy_decision_id": "policy-1",
+        "delegated_approval_token": "approval-token-1",
         "correlation_id": "corr-1",
     }
 
@@ -174,6 +236,8 @@ async def test_fire_job_emits_delegated_context_on_events():
     assert fired_event.target_peer_id == "provider-peer"
     assert fired_event.delegated_permissions == ["Tooling.ExecuteTool"]
     assert fired_event.policy_decision_id == "policy-1"
+    assert fired_event.delegated_approval_token_present is True
     assert completed_topic == SchedulerMethods.JOB_COMPLETED
     assert completed_event.delegated_permissions == ["Tooling.ExecuteTool"]
+    assert completed_event.delegated_approval_token_present is True
     assert completed_event.correlation_id == "corr-1"
