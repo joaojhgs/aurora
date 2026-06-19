@@ -7,25 +7,38 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import math
 import os
 import time
+import uuid
+from collections import deque
+from datetime import UTC, datetime
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging.bus import Envelope
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
     Auth as AuthConfigModel,
     Gateway as GatewayConfigModel,
     MeshSharing,
 )
-from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods
 from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
     CapabilityCatalogRequest,
     CapabilityCatalogResponse,
+    CapabilityCatalogSummary,
     CapabilityGraph,
+    GatewayEventStreamEvent,
+    GatewayListEventsRequest,
+    GatewayListEventsResponse,
     GatewayMethods,
+    GatewaySupportBundleRequest,
+    GatewaySupportBundleResponse,
     GetMeshStatusResponse,
     MeshCompatibilityFailure,
     MeshLocalStatus,
@@ -36,9 +49,40 @@ from app.shared.contracts.models.gateway import (
     MeshRouteProviderDiagnostic,
     RouteExplainRequest,
     RouteExplainResponse,
+    SupportBundleRedactionInfo,
 )
+from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.registry import method_contract
+from app.shared.mesh.tracing import get_payload_correlation_id
 from app.shared.services.base_service import BaseService
+
+_EVENT_STREAM_MAXLEN = 500
+_DIAGNOSTIC_REDACT_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "args",
+    "audio",
+    "auth",
+    "bearer",
+    "content",
+    "cookie",
+    "credential",
+    "data",
+    "directory",
+    "file",
+    "jwt",
+    "key",
+    "model",
+    "password",
+    "path",
+    "rag",
+    "redis_url",
+    "secret",
+    "token",
+    "transcript",
+    "url",
+)
 
 
 def _config_secret_plain(val: Any) -> Any:
@@ -103,6 +147,213 @@ def _route_reason(
     return f"route target is {decision_target}"
 
 
+def _event_from_envelope(envelope: Envelope) -> GatewayEventStreamEvent:
+    payload = _payload_dict(envelope.payload)
+    redacted_payload = _diagnostic_redacted_copy(payload)
+    correlation_id = (
+        envelope.correlation_id
+        or get_payload_correlation_id(envelope.payload)
+        or _string_value(payload, "correlation_id")
+    )
+    return GatewayEventStreamEvent(
+        event_id=str(uuid.uuid4()),
+        topic=envelope.type,
+        category=_event_category(envelope.type, payload),
+        action=_event_action(envelope.type, payload),
+        status=_event_status(envelope.type, payload),
+        severity=_event_severity(envelope.type, payload),
+        timestamp=envelope.timestamp.isoformat(),
+        correlation_id=correlation_id,
+        source_peer_id=_first_string(
+            payload,
+            "source_peer_id",
+            "caller_peer_id",
+            "peer_id",
+            "owner_peer_id",
+        ),
+        target_peer_id=_first_string(
+            payload,
+            "target_peer_id",
+            "provider_peer_id",
+            "target_peer",
+        ),
+        provider_id=_first_string(
+            payload,
+            "provider_id",
+            "provider_service_instance_id",
+            "service_instance_id",
+        ),
+        tool_id=_first_string(payload, "global_tool_id", "tool_id", "tool_name"),
+        resource_id=_first_string(payload, "resource_id", "resource_namespace", "namespace"),
+        route=_first_string(payload, "route", "route_target", "selected_target"),
+        policy_decision_id=_first_string(payload, "policy_decision_id", "decision_id"),
+        principal_id=envelope.principal_id
+        or _first_string(payload, "principal_id", "caller_principal_id", "owner_principal_id"),
+        redacted_payload=redacted_payload if isinstance(redacted_payload, dict) else {},
+        payload_sha256=_payload_hash(redacted_payload),
+    )
+
+
+def _event_category(topic: str, payload: dict[str, Any]) -> str:
+    if topic in {
+        GatewayMethods.SERVICE_ANNOUNCE,
+        GatewayMethods.SERVICE_DEPART,
+        GatewayMethods.SERVICE_HEARTBEAT,
+    }:
+        return "service"
+    if topic in {
+        GatewayMethods.GET_CAPABILITY_GRAPH,
+        GatewayMethods.GET_CAPABILITY_CATALOG,
+    }:
+        return "capability"
+    if topic in {GatewayMethods.EXPLAIN_ROUTE}:
+        return "route"
+    if topic.startswith("Mesh.") or topic in {AuthMethods.PAIRING_REQUESTED}:
+        return "peer"
+    if topic in {ConfigMethods.UPDATED, ConfigMethods.ERROR}:
+        return "admin_action"
+    if topic in {
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.REQUEST_APPROVAL,
+        ToolingMethods.CONFIRM_EXECUTION,
+    }:
+        return "tool_approval"
+    if topic in {ToolingMethods.EXECUTE_TOOL}:
+        return "tool_execution"
+    if topic.startswith("AudioSession.") or topic.startswith("STTCoordinator.") or topic.startswith(
+        "Transcription."
+    ) or topic.startswith("WakeWord.") or topic.startswith("TTS."):
+        return "audio"
+    if topic.startswith("DB.RAG") or payload.get("namespace") or payload.get("data_scope"):
+        return "data"
+    if topic in {SchedulerMethods.JOB_FIRED, SchedulerMethods.JOB_COMPLETED}:
+        return "scheduler"
+    if topic == AuthMethods.STORE_AUDIT_EVENT:
+        return "audit"
+    return "unknown"
+
+
+def _event_action(topic: str, payload: dict[str, Any]) -> str:
+    if payload.get("action"):
+        return str(payload["action"])
+    if payload.get("event_type"):
+        return str(payload["event_type"])
+    return topic.split(".", 1)[1] if "." in topic else topic
+
+
+def _event_status(topic: str, payload: dict[str, Any]) -> str:
+    if payload.get("status"):
+        return str(payload["status"])
+    if payload.get("success") is True or payload.get("ok") is True:
+        return "success"
+    if payload.get("success") is False or payload.get("ok") is False:
+        return "failed"
+    if topic == GatewayMethods.SERVICE_DEPART:
+        return "disconnected"
+    if topic == GatewayMethods.SERVICE_ANNOUNCE:
+        return "connected"
+    if payload.get("approved") is True:
+        return "approved"
+    if payload.get("approved") is False:
+        return "denied"
+    return ""
+
+
+def _event_severity(topic: str, payload: dict[str, Any]) -> str:
+    status = _event_status(topic, payload)
+    if status in {"failed", "denied", "expired"} or payload.get("error"):
+        return "error"
+    if "stale" in status or "fallback" in status:
+        return "warning"
+    return "info"
+
+
+def _payload_dict(payload: Any) -> dict[str, Any]:
+    if hasattr(payload, "model_dump"):
+        value = payload.model_dump(mode="json")
+    elif isinstance(payload, dict):
+        value = payload
+    else:
+        value = {"value": str(payload)}
+    return value if isinstance(value, dict) else {"value": value}
+
+
+def _model_dump(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return value
+
+
+def _details_dict(details: Any) -> dict[str, Any]:
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except json.JSONDecodeError:
+            return {}
+    return details if isinstance(details, dict) else {}
+
+
+def _diagnostic_redacted_copy(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {
+            str(key): _diagnostic_redacted_value(str(key), nested)
+            for key, nested in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_diagnostic_redacted_copy(item) for item in value]
+    return value
+
+
+def _diagnostic_redacted_value(key: str, value: Any) -> Any:
+    if key == "details" and isinstance(value, str):
+        details = _details_dict(value)
+        if details:
+            return _diagnostic_redacted_copy(details)
+    if _is_diagnostic_secret_key(key):
+        digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
+        return {"redacted": True, "sha256": digest}
+    return _diagnostic_redacted_copy(value)
+
+
+def _is_diagnostic_secret_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(part in normalized for part in _DIAGNOSTIC_REDACT_KEY_PARTS)
+
+
+def _first_string(payload: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = _string_value(payload, key)
+        if value:
+            return value
+    return None
+
+
+def _string_value(payload: dict[str, Any], key: str) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    return str(value)
+
+
+def _payload_hash(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _catalog_summary(catalog: CapabilityCatalogResponse) -> CapabilityCatalogSummary:
+    modules = sorted({provider.module for provider in catalog.providers})
+    blocked_actions = sum(1 for action in catalog.actions if action.route_blockers)
+    return CapabilityCatalogSummary(
+        providers=len(catalog.providers),
+        actions=len(catalog.actions),
+        resources=len(catalog.resources),
+        modules=modules,
+        blocked_actions=blocked_actions,
+    )
+
+
 class GatewayService(BaseService):
     """Gateway Service for Aurora.
 
@@ -136,9 +387,14 @@ class GatewayService(BaseService):
         self._mesh_peer_id = None
         self._runtime_config_lock = asyncio.Lock()
         self._audio_session_service = AudioSessionService()
+        self._event_stream: deque[GatewayEventStreamEvent] = deque(
+            maxlen=_EVENT_STREAM_MAXLEN
+        )
+        self._event_stream_subscription_topic = "*"
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
+        self.bus.subscribe(self._event_stream_subscription_topic, self._capture_gateway_event)
         await self._audio_session_service.start()
         await self._start_gateway()
         await self._start_webrtc()
@@ -146,6 +402,11 @@ class GatewayService(BaseService):
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
+        with contextlib.suppress(Exception):
+            self.bus.unsubscribe(
+                self._event_stream_subscription_topic,
+                self._capture_gateway_event,
+            )
         await self._stop_mesh()
         await self._stop_webrtc()
         await self._stop_gateway()
@@ -348,6 +609,94 @@ class GatewayService(BaseService):
             local_peer_id=self._mesh_peer_id,
         )
 
+    @method_contract(
+        method_id=GatewayMethods.LIST_EVENTS,
+        summary="List recent normalized Gateway event stream entries",
+        input_model=GatewayListEventsRequest,
+        output_model=GatewayListEventsResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def list_events(self, data: GatewayListEventsRequest) -> GatewayListEventsResponse:
+        """Return recent redacted event stream entries for UI/SDK backfill."""
+        events = self._filter_events(data)
+        return GatewayListEventsResponse(
+            events=events[: data.limit],
+            total=len(events),
+            subscription_topic=GatewayMethods.EVENT_STREAM,
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SUPPORT_BUNDLE,
+        summary="Get a redacted Gateway and mesh support bundle",
+        input_model=GatewaySupportBundleRequest,
+        output_model=GatewaySupportBundleResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_support_bundle(
+        self,
+        data: GatewaySupportBundleRequest,
+    ) -> GatewaySupportBundleResponse:
+        """Return redacted diagnostics for route, mesh, audit, and config debugging."""
+        mesh_status = await self.get_mesh_status(EmptyInput())
+        catalog_summary = CapabilityCatalogSummary()
+        if data.include_capability_catalog:
+            catalog = await self.get_capability_catalog(
+                CapabilityCatalogRequest(include_schemas=False)
+            )
+            catalog_summary = _catalog_summary(catalog)
+
+        event_request = GatewayListEventsRequest(
+            correlation_id=data.correlation_id,
+            limit=max(data.event_limit, 1) if data.event_limit else 1,
+        )
+        recent_events = [] if data.event_limit == 0 else self._filter_events(event_request)[
+            : data.event_limit
+        ]
+        recent_audit_events = [
+            _diagnostic_redacted_copy(event)
+            for event in await self._get_recent_audit_events(data)
+        ]
+        settings = await self._get_gateway_config()
+
+        correlation_ids = {
+            event.correlation_id
+            for event in recent_events
+            if event.correlation_id
+        }
+        for audit_event in recent_audit_events:
+            details = _details_dict(audit_event.get("details"))
+            correlation_id = details.get("correlation_id")
+            if correlation_id:
+                correlation_ids.add(str(correlation_id))
+
+        return GatewaySupportBundleResponse(
+            generated_at=datetime.now(UTC).isoformat(),
+            correlation_id=data.correlation_id,
+            mesh_status=mesh_status,
+            route_diagnostics=mesh_status.routes,
+            capability_catalog_summary=catalog_summary,
+            recent_events=recent_events,
+            recent_audit_events=recent_audit_events,
+            config_shape=_diagnostic_redacted_copy(_model_dump(settings)),
+            correlation_ids=sorted(correlation_ids),
+            redaction=SupportBundleRedactionInfo(
+                secrets_redacted=True,
+                redacted_fields=list(_DIAGNOSTIC_REDACT_KEY_PARTS),
+                omitted_payloads=[
+                    "raw audio",
+                    "unredacted tool arguments",
+                    "RAG contents",
+                    "tokens and credentials",
+                ],
+            ),
+            secrets_redacted=True,
+        )
+
     def _build_peer_diagnostic(self, peer: Any, mesh_config: Any) -> MeshPeerDiagnostic:
         """Serialize peer state without credential-bearing fields."""
         from app.services.gateway.mesh.negotiation import generate_manifest_ack
@@ -456,6 +805,86 @@ class GatewayService(BaseService):
             reason=reason,
             providers=providers,
         )
+
+    async def _capture_gateway_event(self, envelope: Envelope) -> None:
+        """Capture bus events into a redacted normalized stream."""
+        if envelope.type == GatewayMethods.EVENT_STREAM:
+            return
+        event = _event_from_envelope(envelope)
+        self._event_stream.appendleft(event)
+        with contextlib.suppress(Exception):
+            await self.bus.publish(
+                GatewayMethods.EVENT_STREAM,
+                event,
+                event=True,
+                mesh=False,
+                origin="internal",
+                correlation_id=event.correlation_id,
+            )
+
+    def _filter_events(
+        self,
+        request: GatewayListEventsRequest,
+    ) -> list[GatewayEventStreamEvent]:
+        categories = set(request.categories or [])
+        events: list[GatewayEventStreamEvent] = []
+        for event in list(self._event_stream):
+            if categories and event.category not in categories:
+                continue
+            if request.action and event.action != request.action:
+                continue
+            if request.status and event.status != request.status:
+                continue
+            if request.correlation_id and event.correlation_id != request.correlation_id:
+                continue
+            if request.provider_id and event.provider_id != request.provider_id:
+                continue
+            if request.tool_id and event.tool_id != request.tool_id:
+                continue
+            if request.route and event.route != request.route:
+                continue
+            if (
+                request.policy_decision_id
+                and event.policy_decision_id != request.policy_decision_id
+            ):
+                continue
+            if request.peer_id and request.peer_id not in {
+                event.source_peer_id,
+                event.target_peer_id,
+            }:
+                continue
+            events.append(event)
+        return events
+
+    async def _get_recent_audit_events(
+        self,
+        request: GatewaySupportBundleRequest,
+    ) -> list[dict[str, Any]]:
+        if request.audit_limit <= 0:
+            return []
+        try:
+            result = await self.bus.request(
+                AuthMethods.AUDIT_LOG,
+                AuditLogRequest(
+                    limit=request.audit_limit,
+                    correlation_id=request.correlation_id,
+                ),
+                timeout=5.0,
+                origin="internal",
+            )
+        except Exception as exc:
+            log_warning(f"Support bundle audit fetch failed: {exc}")
+            return []
+        if not result.ok or not result.data:
+            return []
+        data = result.data
+        if hasattr(data, "events"):
+            events = data.events
+        elif isinstance(data, dict):
+            events = data.get("events", [])
+        else:
+            events = []
+        return [_diagnostic_redacted_copy(event) for event in events]
 
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.

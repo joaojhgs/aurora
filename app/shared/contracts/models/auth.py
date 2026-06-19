@@ -406,6 +406,11 @@ class AuditLogRequest(BaseModel):
     event: str | None = None
     correlation_id: str | None = None
     peer_id: str | None = None
+    provider_id: str | None = None
+    tool_id: str | None = None
+    action: str | None = None
+    policy_decision_id: str | None = None
+    route: str | None = None
 
 
 class AuditLogResponse(BaseModel):

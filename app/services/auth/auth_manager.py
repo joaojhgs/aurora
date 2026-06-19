@@ -935,8 +935,13 @@ class AuthManager:
         event: str | None = None,
         correlation_id: str | None = None,
         peer_id: str | None = None,
+        provider_id: str | None = None,
+        tool_id: str | None = None,
+        action: str | None = None,
+        policy_decision_id: str | None = None,
+        route: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
-        if correlation_id or peer_id:
+        if any((correlation_id, peer_id, provider_id, tool_id, action, policy_decision_id, route)):
             # Diagnostic mesh trace view: audit details are JSON strings stored in
             # the audit_log table, so filter after retrieving a bounded window.
             events = await self._get_audit_log(
@@ -952,6 +957,11 @@ class AuthManager:
                     audit_event,
                     correlation_id=correlation_id,
                     peer_id=peer_id,
+                    provider_id=provider_id,
+                    tool_id=tool_id,
+                    action=action,
+                    policy_decision_id=policy_decision_id,
+                    route=route,
                 )
             ]
             return filtered[offset : offset + limit], len(filtered)
@@ -1443,6 +1453,11 @@ def _audit_event_matches_trace(
     *,
     correlation_id: str | None = None,
     peer_id: str | None = None,
+    provider_id: str | None = None,
+    tool_id: str | None = None,
+    action: str | None = None,
+    policy_decision_id: str | None = None,
+    route: str | None = None,
 ) -> bool:
     details = audit_event.get("details")
     if isinstance(details, str):
@@ -1453,6 +1468,27 @@ def _audit_event_matches_trace(
     if not isinstance(details, dict):
         details = {}
 
-    if correlation_id and details.get("correlation_id") != correlation_id:
-        return False
-    return not (peer_id and details.get("peer_id") != peer_id)
+    filters = {
+        "correlation_id": correlation_id,
+        "peer_id": peer_id,
+        "provider_id": provider_id,
+        "tool_id": tool_id,
+        "action": action,
+        "policy_decision_id": policy_decision_id,
+        "route": route,
+    }
+    for key, expected in filters.items():
+        if expected and _detail_value(details, key) != expected:
+            return False
+    return True
+
+
+def _detail_value(details: dict[str, Any], key: str) -> str | None:
+    value = details.get(key)
+    if value is None and key == "peer_id":
+        value = details.get("source_peer_id") or details.get("target_peer_id")
+    if value is None and key == "tool_id":
+        value = details.get("global_tool_id") or details.get("tool_name")
+    if value is None and key == "route":
+        value = details.get("route_target") or details.get("route")
+    return str(value) if value is not None else None

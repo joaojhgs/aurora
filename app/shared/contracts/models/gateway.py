@@ -8,7 +8,7 @@ This module defines the contracts for:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -46,6 +46,9 @@ class GatewayMethods:
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
+    EVENT_STREAM = f"{GatewayModule.NAME}.EventStream"
+    LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
+    GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
 
 
 # =============================================================================
@@ -272,6 +275,114 @@ class GetMeshStatusResponse(IOModel):
     peers: list[MeshPeerDiagnostic] = Field(default_factory=list)
     routes: list[MeshRouteDiagnostic] = Field(default_factory=list)
     compatibility_failures: list[MeshCompatibilityFailure] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
+GatewayEventCategory = Literal[
+    "capability",
+    "peer",
+    "route",
+    "tool_approval",
+    "tool_execution",
+    "data",
+    "audio",
+    "scheduler",
+    "admin_action",
+    "audit",
+    "service",
+    "unknown",
+]
+
+
+class GatewayEventStreamEvent(IOModel):
+    """Redacted normalized event visible to SDK/UI event subscribers."""
+
+    event_id: str
+    topic: str
+    category: GatewayEventCategory = "unknown"
+    action: str = ""
+    status: str = ""
+    severity: Literal["info", "warning", "error"] = "info"
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    correlation_id: str | None = None
+    source_peer_id: str | None = None
+    target_peer_id: str | None = None
+    provider_id: str | None = None
+    tool_id: str | None = None
+    resource_id: str | None = None
+    route: str | None = None
+    policy_decision_id: str | None = None
+    principal_id: str | None = None
+    redacted_payload: dict[str, Any] = Field(default_factory=dict)
+    payload_sha256: str = ""
+
+
+class GatewayListEventsRequest(IOModel):
+    """Query the bounded Gateway event buffer."""
+
+    categories: list[GatewayEventCategory] | None = None
+    action: str | None = None
+    status: str | None = None
+    correlation_id: str | None = None
+    peer_id: str | None = None
+    provider_id: str | None = None
+    tool_id: str | None = None
+    route: str | None = None
+    policy_decision_id: str | None = None
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class GatewayListEventsResponse(IOModel):
+    """Response containing recent normalized Gateway events."""
+
+    events: list[GatewayEventStreamEvent] = Field(default_factory=list)
+    total: int = 0
+    subscription_topic: str = GatewayMethods.EVENT_STREAM
+    secrets_redacted: bool = True
+
+
+class SupportBundleRedactionInfo(IOModel):
+    """Redaction assertions for a support bundle."""
+
+    secrets_redacted: bool = True
+    redacted_fields: list[str] = Field(default_factory=list)
+    omitted_payloads: list[str] = Field(default_factory=list)
+
+
+class GatewaySupportBundleRequest(IOModel):
+    """Request a redacted support bundle for diagnostics."""
+
+    correlation_id: str | None = None
+    event_limit: int = Field(default=100, ge=0, le=500)
+    audit_limit: int = Field(default=50, ge=0, le=500)
+    include_capability_catalog: bool = True
+
+
+class CapabilityCatalogSummary(IOModel):
+    """Compact support-bundle summary of the capability catalog."""
+
+    providers: int = 0
+    actions: int = 0
+    resources: int = 0
+    modules: list[str] = Field(default_factory=list)
+    blocked_actions: int = 0
+
+
+class GatewaySupportBundleResponse(IOModel):
+    """Redacted operator support bundle."""
+
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    correlation_id: str | None = None
+    mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
+    route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
+    capability_catalog_summary: CapabilityCatalogSummary = Field(
+        default_factory=CapabilityCatalogSummary
+    )
+    recent_events: list[GatewayEventStreamEvent] = Field(default_factory=list)
+    recent_audit_events: list[dict[str, Any]] = Field(default_factory=list)
+    config_shape: dict[str, Any] = Field(default_factory=dict)
+    correlation_ids: list[str] = Field(default_factory=list)
+    redaction: SupportBundleRedactionInfo = Field(default_factory=SupportBundleRedactionInfo)
     secrets_redacted: bool = True
 
 
