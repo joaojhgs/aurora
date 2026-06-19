@@ -50,6 +50,7 @@ _HARDWARE_OR_AUDIO_MODULES = {
 _LOW_RISK_AUDIO_METHODS = {
     ("TTS", "Synthesize"): ("batch_synthesize", "generated_audio"),
     ("Transcription", "Transcribe"): ("batch_transcription", "submitted_audio"),
+    ("WakeWord", "Detect"): ("wakeword_detection", "submitted_audio"),
 }
 
 _EXPLICIT_AUDIO_METHODS = {
@@ -61,8 +62,14 @@ _EXPLICIT_AUDIO_METHODS = {
     ("STTCoordinator", "StopListening"): ("microphone_capture_control", "microphone"),
     ("STTCoordinator", "Audio"): ("audio_streaming", "microphone"),
     ("WakeWord", "ProcessAudio"): ("wakeword_streaming", "microphone"),
-    ("WakeWord", "Detect"): ("wakeword_detection", "submitted_audio"),
     ("Transcription", "ProcessAudio"): ("transcription_streaming", "microphone"),
+    ("AudioSession", "Prepare"): ("audio_session_prepare", "microphone"),
+    ("AudioSession", "RequestConsent"): ("audio_session_consent", "microphone"),
+    ("AudioSession", "Start"): ("audio_session_start", "microphone"),
+    ("AudioSession", "Stop"): ("audio_session_stop", "microphone"),
+    ("AudioSession", "Status"): ("audio_session_status", "microphone"),
+    ("AudioSession", "ListEvents"): ("audio_session_event_backfill", "microphone"),
+    ("AudioSession", "Events"): ("audio_session_events", "microphone"),
 }
 
 

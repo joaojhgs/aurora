@@ -1,42 +1,28 @@
-# PER-156 Tool Catalog Provider Fanout Plan
+# PER-160 Audio Session Consent And Event Streaming Plan
 
 ## Requirements Summary
 
-- Source issue: PER-156 / MESH-GAP-004.
-- Source docs read: `.omx/multica/mesh-production-gap-tasks/04-mesh-gap-004-mesh-gap-p2-implement-aggregate-local-plus-remote-tooling-catalog-and-provider-fanout.md`, `.omx/plans/mesh-production-e2e-integration-gap-plan.md`, `.omx/specs/deep-interview-mesh-distributed-integration.md`.
-- Relevant code paths: `app/shared/contracts/models/tooling.py`, `app/services/tooling/service.py`, `app/services/orchestrator/agents/chatbot.py`, `app/messaging/mesh_bus.py`, `app/services/gateway/mesh/peer_registry.py`, `tests/unit/tooling/test_service.py`, `tests/unit/orchestrator/test_chatbot.py`, `tests/integration/test_mesh_routing.py`.
-- Invariants: bus-only communication, typed Tooling contract constants/models, privacy-first discovery with no raw secrets, backward-compatible `Tooling.GetTools`.
-
-## Acceptance Criteria
-
-- `Tooling.GetToolCatalog` returns local tools plus all eligible remote Tooling provider tools in one response.
-- Remote fanout uses explicit `MeshAddressSelector` requests to `Tooling.GetTools`, so existing MeshBus/PeerBridge policy and provider eligibility gates remain authoritative.
-- Ineligible or failed providers are represented with machine-readable reason codes.
-- Bindable tool names remain collision-safe and stable across local and remote providers.
-- Dangerous, sensitive, or confirmation-required tools are present as blocked/non-bindable catalog entries and are not bound directly to the LLM by the orchestrator.
-- Existing `Tooling.GetTools` behavior stays unchanged for per-provider callers.
+- Source of truth: Multica PER-160 / MESH-GAP-008.
+- Preserve batch remote candidates: `TTS.Synthesize`, `Transcription.Transcribe`, and `WakeWord.Detect`.
+- Require explicit target selector plus consent token for streaming methods: `Transcription.ProcessAudio`, `WakeWord.ProcessAudio`, and future live mic stream paths.
+- Keep `STTCoordinator.Listen`, `STTCoordinator.Audio`, `STTCoordinator.Control`, and playback controls local-only/internal by default.
+- Expose typed session lifecycle methods and status/events for UI/SDK consumption without raw microphone stream exposure.
 
 ## Implementation Steps
 
-1. Add Tooling catalog IO models and `ToolingMethods.GET_TOOL_CATALOG`.
-2. Implement `ToolingService._on_get_tool_catalog` with local discovery, remote provider candidate fanout, short TTL cache, and cache invalidation on reload/local tool changes.
-3. Add blocked provider/tool reason projection and safe bindable filtering.
-4. Update chatbot tool retrieval to prefer `Tooling.GetToolCatalog`, with graceful fallback to legacy `GetTools`.
-5. Add unit tests for local+remote aggregation, collisions, blocked providers, cache invalidation, and unsafe filtering.
-6. Add a mocked MeshBus/PeerBridge integration test for explicit remote Tooling provider fanout.
-
-## Risks And Mitigations
-
-- Risk: ToolingService may not always run behind MeshBus in unit tests. Mitigation: detect optional registry/mesh internals conservatively and still return local catalog.
-- Risk: remote calls may fail or time out. Mitigation: record a blocked provider entry and keep local tools available.
-- Risk: unsafe tools could leak into LLM binding. Mitigation: catalog marks bindability and chatbot consumes only bindable tools.
+1. Add typed audio session contract models and topic constants in `app/shared/contracts/models/stt.py`.
+2. Register `AudioSession.Prepare`, `RequestConsent`, `Start`, `Stop`, `Status`, and `Events` on `GatewayService`, backed by an in-memory session registry suitable for process-local Gateway runtime.
+3. Add consent/session fields to streaming audio payloads, validate selector/session/token/sample format in STT transcription and wakeword streaming handlers, and publish typed `AudioSession.Events` updates for accepted/denied/result events.
+4. Keep batch TTS/transcription/wakeword request behavior unchanged and update capability catalog/graph policy metadata where needed so UI sees session/privacy/TTL requirements.
+5. Add focused unit tests for contract classification, session lifecycle, streaming denial without selector/token, approved event publication, and route/catalog policy visibility.
 
 ## Verification
 
-- `uv run pytest tests/unit/tooling/test_service.py tests/unit/orchestrator/test_chatbot.py tests/integration/test_mesh_routing.py -q`
-- If dependency extras are missing, rerun with the minimal documented extras for gateway/tooling/orchestrator integration.
+- `uv run pytest tests/unit/gateway/test_routing_table.py tests/unit/gateway/test_capability_graph.py tests/unit/gateway/test_capability_catalog.py -q`
+- `uv run pytest tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py -q`
+- `uv run ruff check app/shared/contracts/models/stt.py app/services/gateway/service.py app/services/stt_transcription/service.py app/services/stt_wakeword/service.py tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py`
 
-## Merge Recovery Context
+## Risks
 
-- This PR was refreshed on top of PER-157 / MESH-GAP-005 so `Tooling.GetToolCatalog` fanout and Tooling approval-token policy coexist in `app/services/tooling/service.py`.
-- Companion PER-157 plan context is preserved in `.omx/plans/PER-157-tool-sharing-approval.md`.
+- Consent tokens in this slice are process-local and intentionally not durable across Gateway restarts.
+- The event stream is a bus-level unified contract; full HTTP SSE/WebSocket transport can build on it without changing STT/TTS service internals.
