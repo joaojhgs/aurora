@@ -70,7 +70,7 @@ export const services: AuroraService[] = [
     methods: [
       { name: 'ExternalUserInput', busTopic: 'Orchestrator.ExternalUserInput', methodType: 'use', exposure: 'external', permissions: ['Orchestrator.use'], routePath: '/api/Orchestrator/ExternalUserInput', backendCoverage: 'implemented' },
       { name: 'UserInput', busTopic: 'Orchestrator.UserInput', methodType: 'use', exposure: 'internal', permissions: ['Orchestrator.use'], backendCoverage: 'internal_only', note: 'Local/Tauri bus path only, not HTTP generated.' },
-      { name: 'Response', busTopic: 'Orchestrator.Response', methodType: 'event', exposure: 'internal', permissions: [], backendCoverage: 'partial', note: 'Streaming/event transport remains a product gap.' },
+      { name: 'Response', busTopic: 'Orchestrator.Response', methodType: 'event', exposure: 'internal', permissions: [], backendCoverage: 'internal_only', note: 'Streaming/event transport remains a product gap.' },
       { name: 'Cancel', busTopic: 'Orchestrator.Cancel', methodType: 'planned', exposure: 'planned', permissions: ['Orchestrator.use'], backendCoverage: 'missing_contract', note: 'Needed for interrupt/stop generation UX.' },
     ],
     lastHeartbeat: '3s ago',

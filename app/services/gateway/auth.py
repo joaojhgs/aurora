@@ -54,6 +54,12 @@ class GatewayAuth:
                 "/api/docs",
                 "/api/redoc",
                 "/api/openapi.json",
+                # Canonical generated Auth routes from RouteGenerator.
+                "/api/Auth/Login",
+                "/api/Auth/PairingStart",
+                "/api/Auth/PairingConnect",
+                "/api/Auth/PairingExchange",
+                # Backward-compatible aliases kept for older clients/docs.
                 "/api/auth/login",
                 "/api/auth/pairing/start",
                 "/api/auth/pairing/connect",

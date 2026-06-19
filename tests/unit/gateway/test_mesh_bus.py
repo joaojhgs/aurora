@@ -104,7 +104,12 @@ class TestMeshBusPublish:
         # Local delivery
         inner_bus.publish.assert_awaited_once()
         # Peer forwarding
-        peer_bridge.fire_event.assert_called_once_with("peer-1", "TTS.Started", FakePayload())
+        peer_bridge.fire_event.assert_called_once_with(
+            "peer-1",
+            "TTS.Started",
+            FakePayload(),
+            correlation_id=None,
+        )
 
     @pytest.mark.asyncio
     async def test_events_with_mesh_true_not_forwarded_when_not_shared(
