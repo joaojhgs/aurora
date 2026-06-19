@@ -227,6 +227,28 @@ All service methods with `exposure="external"` or `exposure="both"` are automati
 POST /api/{ServiceName}/{MethodName}
 ```
 
+Service and method path segments use the canonical PascalCase contract names
+from the service registry. SDKs should prefer these generated paths and should
+not infer lowercase route names from bus topics.
+
+### Public Auth Endpoints
+
+The canonical public Auth endpoints are generated from `Auth` service
+contracts:
+
+| Method ID | HTTP route | Public behavior |
+|-----------|------------|-----------------|
+| `Auth.Login` | `POST /api/Auth/Login` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingStart` | `POST /api/Auth/PairingStart` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingConnect` | `POST /api/Auth/PairingConnect` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingExchange` | `POST /api/Auth/PairingExchange` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+
+When gateway auth is enabled, these routes are public but do not receive
+`SYSTEM` privileges. `SYSTEM` is reserved for auth-disabled mode and validated
+API-key calls. Lowercase legacy paths such as `/api/auth/login` may exist for
+compatibility in older deployments, but SDK descriptors should advertise the
+canonical generated PascalCase routes.
+
 #### Example: Orchestrator.ExternalUserInput
 
 ```bash
@@ -421,7 +443,7 @@ Schemas are extracted from service method contracts:
 
 ### API Key Authentication
 
-When enabled, all requests (except `/api/health`) require an API key:
+When enabled, protected requests require an API key or bearer token:
 
 ```bash
 curl -X POST http://localhost:8000/api/Orchestrator/ExternalUserInput \
@@ -437,6 +459,10 @@ The following endpoints bypass authentication:
 - `/api/docs`
 - `/api/redoc`
 - `/api/openapi.json`
+- `POST /api/Auth/Login`
+- `POST /api/Auth/PairingStart`
+- `POST /api/Auth/PairingConnect`
+- `POST /api/Auth/PairingExchange`
 
 ## WebRTC Authentication & Pairing
 
