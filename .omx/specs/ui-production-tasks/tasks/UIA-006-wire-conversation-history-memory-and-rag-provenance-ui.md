@@ -13,7 +13,7 @@
 
 - **Phase:** P7 — Assistant UI production wiring
 - **Lane:** assistant-memory
-- **Depends on:** UIA-001, SDK-007, BE-017
+- **Depends on:** UIA-001, SDK-007, BE-017, MESH-GAP-007
 - **Parallelizable with:** None
 - **Coverage matrix rows:** assistant.history
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ User can browse/search conversations, inspect memory/RAG provenance, delete/expo
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 
@@ -90,6 +90,7 @@ This UI must represent remote RAG/data namespaces from `MESH-GAP-007`.
 Additional requirements:
 
 - Add namespace selector/filter for local memory, local RAG, remote peer namespaces, imported snapshots, and unavailable/stale namespaces.
+- Use namespace/provenance/export/import/tombstone semantics from `MESH-GAP-007`; replication remains deferred unless backend contracts explicitly add one-way sync.
 - Search results must show provenance: peer/provider, namespace, privacy class, route path, source/citation, redaction status, and audit/correlation ID.
 - Delete/export/import actions require AdminAction or data-sharing approval according to backend policy.
 - Explicit selector missing, remote namespace denied, incompatible embeddings, stale peer, and policy-blocked states need first-class UI copy.

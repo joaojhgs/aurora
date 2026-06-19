@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Future UI should render service availability from backend graph and diagnostic data, not from hardcoded feature flags. The graph is a UI interpretation layer over `Gateway.GetCapabilityGraph`, `Gateway.GetMeshStatus`, Auth peer state, and domain-specific service contracts.
+Future UI should render service availability from backend catalog and diagnostic data, not from hardcoded feature flags. The executable availability layer is a UI interpretation over `Gateway.GetCapabilityCatalog`, `Gateway.GetMeshStatus`, Auth peer state, and domain-specific service contracts. `Gateway.GetCapabilityGraph` may feed topology diagnostics, but it is not the execution source of truth.
 
 ## Availability Inputs
 
 | Input | Use |
 |---|---|
-| `CapabilityGraph.peers` | Peer identity, provider kind, lifecycle status, latency, provenance. |
-| `CapabilityGraph.services` | Service instance identity, module, version, methods, capacity, routability, blockers, policy. |
-| `CapabilityGraph.resources` | Explicitly addressable resource placeholders and future resource ownership. |
+| `CapabilityCatalog.providers` / graph peers | Peer identity, provider kind, lifecycle status, latency, provenance. |
+| `CapabilityCatalog.actions` / graph services | Service instance identity, module, version, actions/methods/tools, capacity, routability, blockers, policy. |
+| `CapabilityCatalog.resources` | Explicitly addressable resources, namespaces, devices, and ownership. |
 | `provider_index` | Routable providers by module. |
 | `candidate_provider_index` | All known provider candidates, including blocked/degraded candidates. |
 | `GetMeshStatus.routes` | Current routing decisions and provider eligibility reasons. |
@@ -42,7 +42,7 @@ Future UI should render service availability from backend graph and diagnostic d
 
 ### Mesh Core
 
-`GetMeshStatus` is the source for operational route diagnostics. `GetCapabilityGraph` is the source for inspectable service/method/resource topology.
+`GetMeshStatus` is the source for operational route diagnostics. `GetCapabilityCatalog` is the execution source for selectable capabilities; `GetCapabilityGraph` is diagnostic service/method/resource topology when exposed.
 
 ### Tooling And Orchestrator
 

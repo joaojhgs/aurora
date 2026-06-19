@@ -13,7 +13,7 @@
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
 - **Lane:** admin
-- **Depends on:** SDK-007, BE-011
+- **Depends on:** SDK-007, BE-011, MESH-GAP-004, MESH-GAP-005
 - **Parallelizable with:** None
 - **Coverage matrix rows:** admin.plugins
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -32,7 +32,7 @@ Show plugin/MCP status, safe config toggles, internal-only reload, tool inventor
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs, aggregate tool catalog, and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 

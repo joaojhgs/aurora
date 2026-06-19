@@ -13,7 +13,7 @@
 
 - **Phase:** P10 — Quality, security, release, and operations
 - **Lane:** qa-release
-- **Depends on:** UIA-001, ADM-001, TAURI-004, AND-001, IOS-001
+- **Depends on:** UIA-001, ADM-001, TAURI-004, AND-001, IOS-001, MESH-GAP-011
 - **Parallelizable with:** None
 - **Coverage matrix rows:** all
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -87,4 +87,5 @@ Additional requirements:
 
 - Add E2E scenarios for local-only tool, remote-only tool, duplicated local+remote tool with explicit provider selector, dangerous local tool approval, dangerous remote tool approval, approve-all session, expired approval, and denied replay.
 - Include remote RAG namespace search/export/import preview, remote STT session consent/event streaming, scheduler remote delegation, route explain, and diagnostics/audit support bundle.
+- The mesh row must run the production two-peer harness from `MESH-GAP-011` with consumer/provider peers, capability catalog, aggregate tool catalog, approval token binding, RAG provenance, audio consent, scheduler delegation, unified events, and redacted support bundle assertions.
 - Run across thread/local, process/Redis, HTTP server, Tauri local, and mesh/WebRTC modes where each feature is supported.

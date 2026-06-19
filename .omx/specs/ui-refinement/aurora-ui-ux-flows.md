@@ -34,19 +34,19 @@ Blocked claims:
 
 ## Capability Explorer Flow
 
-1. Load `Gateway.GetCapabilityGraph`.
-2. Render provider peers, service instances, methods, and resources with policy flags.
+1. Load `Gateway.GetCapabilityCatalog` for executable availability; optionally load `Gateway.GetCapabilityGraph` only for diagnostic topology.
+2. Render provider peers, service instances, actions, methods, and resources with policy flags, bindability, approval requirements, and freshness.
 3. Show candidate providers separately from currently routable providers so degraded and blocked services are inspectable.
 4. Use policy flags to explain required selectors, confirmation, consent, privacy indicators, bandwidth checks, and local-only status.
 5. For methods/resources with `explicit_selector_required=true`, expose selector construction as a preflight step before any execution UI.
 
 ## Remote Tool Flow
 
-1. Discover tools through `Tooling.GetTools`.
+1. Discover the full local-plus-remote tool surface through `Tooling.GetToolCatalog`; use `Tooling.GetTools` only for per-provider/backward-compatible diagnostics.
 2. Show provider peer, service instance, display name, stable global tool ID, source, safety class, required permissions, and confirmation requirement.
 3. Standard remote tools may be made available to Orchestrator when backend metadata marks them safe and authorized.
-4. Sensitive/dangerous/confirmation-required tools require a preflight screen with target peer/resource, argument summary, confirmation, and expected audit trail.
-5. Execute with explicit selector/resource fields when required.
+4. Sensitive/dangerous/approval-required tools, local or remote, require a preflight screen with target peer/resource, argument summary, requested approval scope, token expiry, and expected audit trail.
+5. Execute with explicit selector/resource fields and a backend-issued approval token when required.
 6. Display `success`, `denied`, `not_found`, `failed`, or `dry_run` from `ToolingExecuteToolResponse` with correlation ID.
 
 ## Data And Memory Flow

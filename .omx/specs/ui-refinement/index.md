@@ -23,10 +23,10 @@ The following backend surfaces are considered stabilized enough for UI planning:
 - Peer-scoped inbound WebRTC tokens and peer-specific reverse pairing semantics.
 - Mesh sharing config parity for share, capacity, peer allowlists, version, capabilities, route preference, fallback, and explicit selector requirements.
 - Optional DataChannel app-layer E2EE with safe mismatch/drop behavior.
-- Capability graph output via `Gateway.GetCapabilityGraph`.
+- Executable capability catalog output via `Gateway.GetCapabilityCatalog`; `Gateway.GetCapabilityGraph` may remain a derived diagnostic/topology view, but production UI execution decisions must use the catalog.
 - Hybrid addressing through `MeshAddressSelector`.
 - Provider aggregation with eligible and ineligible provider reason codes.
-- Tooling discovery/execution metadata with provider identity, stable tool IDs, safety class, confirmation, resource selector, provenance, status, and `correlation_id`.
+- Aggregate Tooling discovery/execution metadata via `Tooling.GetToolCatalog` and approval/execution APIs, with provider identity, stable tool IDs, safety class, token-bound approval, resource selector, provenance, status, and `correlation_id`.
 - Orchestrator binding for safe remote tools only, with unsafe/confirmation-required remote tools hidden from automatic model selection.
 - DB/data-sharing policy that prohibits raw cross-peer SQL and defers replication.
 - Audio boundaries that distinguish batch synthesis/transcription from remote playback and live audio streams.

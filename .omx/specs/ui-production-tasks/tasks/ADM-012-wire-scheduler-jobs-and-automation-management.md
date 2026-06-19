@@ -13,7 +13,7 @@
 
 - **Phase:** P8 — Admin/operator dashboard production wiring
 - **Lane:** admin
-- **Depends on:** SDK-007, SDK-013, BE-018
+- **Depends on:** SDK-007, SDK-013, BE-018, MESH-GAP-009
 - **Parallelizable with:** None
 - **Coverage matrix rows:** scheduler.jobs
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -33,7 +33,7 @@ List/schedule/cancel/pause/resume jobs with permission and audit handling.
 
 ## SDK integration details
 
-- Use `AuroraClient` APIs and capability graph; no direct fetch/invoke in screen components.
+- Use `AuroraClient` APIs and executable capability catalog projections; no direct fetch/invoke or diagnostic graph-only execution in screen components.
 
 ## Tauri/native integration details
 
@@ -93,5 +93,6 @@ Additional requirements:
 
 - Show local jobs, remote-delegated jobs owned by this node, and jobs running on a remote peer as distinct ownership states.
 - Job create/edit must include target peer/provider selector when remote execution or remote tool use is selected.
+- Jobs that invoke tools/orchestrator flows must display delegated approval token scope, expiry, target peer/resource, and policy decision ID; do not treat ambient user permission as durable approval for future scheduled execution.
 - Display delegated permission context, approval policy for scheduled tool executions, next approval requirement, and audit receipt.
 - Cancellation/listing must respect owner namespace and permission; UI must show denied/foreign namespace clearly.
