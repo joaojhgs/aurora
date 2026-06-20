@@ -12,7 +12,7 @@ export {
   routePath
 } from './descriptors.js'
 export { availabilityForAction, privacyClassForAction, summarizeCapabilities } from './capabilities.js'
-export { captureResult, normalizeError } from './transport.js'
+export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export { capabilityCatalogFixture, emptyRegistryFixture, gatewayRegistryFixture } from './fixtures.js'
 export type * from './types.js'
 export type * from './transport.js'

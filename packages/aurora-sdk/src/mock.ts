@@ -1,12 +1,14 @@
 import { AuroraError, type AuroraErrorCode } from './errors.js'
+import type { AuroraTransportEnvelope } from './types.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 
 export type MockHandler<TPayload = unknown, TData = unknown> = (
   request: AuroraTransportRequest<TPayload>
-) => TData | Promise<TData>
+) => TData | AuroraTransportEnvelope<TData> | Promise<TData | AuroraTransportEnvelope<TData>>
 export type MockRegistration<TPayload = unknown, TData = unknown> =
   | MockHandler<TPayload, TData>
   | TData
+  | AuroraTransportEnvelope<TData>
 
 export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
@@ -42,9 +44,25 @@ export class MockAuroraTransport implements AuroraTransport {
         busTopic: request.busTopic
       })
     }
+    const value = await handler(request)
+    if (isTransportEnvelope<TData>(value)) return value
     return {
-      data: (await handler(request)) as TData,
-      status: 200
+      data: value as TData,
+      status: 200,
+      audit: {
+        method: request.method,
+        busTopic: request.busTopic ?? null,
+        transport: this.kind
+      }
     }
   }
+}
+
+function isTransportEnvelope<TData>(value: unknown): value is AuroraTransportEnvelope<TData> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'data' in value &&
+    ('status' in value || 'headers' in value || 'audit' in value)
+  )
 }

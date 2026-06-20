@@ -1,7 +1,77 @@
+import type { AuroraError } from './errors.js'
+
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
 export interface JsonObject {
   [key: string]: JsonValue | undefined
+}
+
+export type AuroraTransportKind = 'http' | 'tauri-local' | 'mesh' | 'native-mobile' | 'mock' | string
+
+export interface RedactionMetadata {
+  secretsRedacted: boolean
+  redactedFields: string[]
+  source: 'backend' | 'transport' | 'sdk' | 'unknown'
+  warnings: string[]
+}
+
+export interface AuditReceipt {
+  correlationId: string | null
+  eventKind: string | null
+  peerId: string | null
+  principalId: string | null
+  targetPeerId: string | null
+  method: string | null
+  busTopic: string | null
+  toolId: string | null
+  resourceId: string | null
+  status: string | null
+  transport: AuroraTransportKind | null
+  redaction: RedactionMetadata
+}
+
+export interface AuroraRequest<TPayload = unknown> {
+  method: string
+  busTopic?: string | undefined
+  path?: string | undefined
+  payload?: TPayload | undefined
+  timeoutMs?: number | undefined
+  headers?: Record<string, string> | undefined
+  signal?: AbortSignal | undefined
+  audit?: Partial<AuditReceipt> | undefined
+}
+
+export interface AuroraTransportEnvelope<TData = unknown> {
+  data: TData
+  status?: number | undefined
+  headers?: Headers | Record<string, string> | undefined
+  audit?: Partial<AuditReceipt> | undefined
+}
+
+export interface AuroraResultSuccess<TData> {
+  ok: true
+  data: TData
+  audit: AuditReceipt
+}
+
+export interface AuroraResultFailure {
+  ok: false
+  error: AuroraError
+  audit: AuditReceipt
+}
+
+export type AuroraResult<TData> = AuroraResultSuccess<TData> | AuroraResultFailure
+
+export interface AuroraEvent<TPayload = unknown> {
+  id: string | null
+  kind: string
+  topic: string | null
+  method: string | null
+  busTopic: string | null
+  payload: TPayload
+  audit: AuditReceipt
+  redaction: RedactionMetadata
+  receivedAt: string
 }
 
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string
