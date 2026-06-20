@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
+import { ChevronRight, Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
@@ -123,7 +123,63 @@ function RouteCard({ route }: { route: RouteAvailability }) {
         <div><dt>Task</dt><dd>{route.item.expectedTask}</dd></div>
         <div><dt>AdminAction</dt><dd>{route.requiresAdminAction ? 'required for mutation' : 'not required'}</dd></div>
       </dl>
+      <FeatureDrawer route={route} />
     </article>
+  )
+}
+
+function FeatureDrawer({ route }: { route: RouteAvailability }) {
+  return (
+    <details className="aui-feature-drawer">
+      <summary>
+        <span>Feature details</span>
+        <ChevronRight size={15} aria-hidden />
+      </summary>
+      <div className="aui-feature-drawer-body">
+        <section aria-label={`${route.item.label} repair actions`}>
+          <h4>Repair actions</h4>
+          <div className="aui-repair-actions">
+            {route.repairActions.map((action) => (
+              action.disabled ? (
+                <button key={action.id} type="button" className="aui-action-chip" disabled title={action.reason}>
+                  {action.label}
+                </button>
+              ) : (
+                <a key={action.id} className="aui-action-chip" href={action.href} title={action.reason}>
+                  {action.label}
+                </a>
+              )
+            ))}
+          </div>
+        </section>
+        <section aria-label={`${route.item.label} capability blockers`}>
+          <h4>Capability evidence</h4>
+          <dl>
+            <div><dt>Routeable</dt><dd>{route.routeable ? 'yes' : 'no'}</dd></div>
+            <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
+            <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
+            <div><dt>Sources</dt><dd>{route.evidenceSources.join(', ') || 'none'}</dd></div>
+            <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || 'none'}</dd></div>
+          </dl>
+        </section>
+        <section aria-label={`${route.item.label} provider candidates`}>
+          <h4>Providers</h4>
+          {route.candidateProviders.length > 0 ? (
+            <ul className="aui-provider-list">
+              {route.candidateProviders.map((provider) => (
+                <li key={provider.id}>
+                  <span>{provider.label}</span>
+                  <StatusBadge state={provider.state} />
+                  <small>{provider.requiredAction ?? provider.reason}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No candidate provider was reported by the capability graph.</p>
+          )}
+        </section>
+      </div>
+    </details>
   )
 }
 
