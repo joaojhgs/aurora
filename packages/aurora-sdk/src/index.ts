@@ -19,6 +19,7 @@ export {
 export {
   availabilityForAction,
   buildAdminOverviewManifest,
+  buildCapabilityGraph,
   privacyClassForAction,
   summarizeCapabilities
 } from './capabilities.js'
@@ -39,6 +40,7 @@ export {
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
   backendInventoryFixture,
+  capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
