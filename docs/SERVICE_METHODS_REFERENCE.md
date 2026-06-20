@@ -660,6 +660,20 @@ Service lifecycle management.
 |-----------|---------|-------|--------|----------|
 | `Supervisor.GetStatus` | Get all service status | `EmptyInput` | `GetStatusResponse` | **both** |
 | `Supervisor.RestartService` | Restart a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StopService` | Stop a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StartService` | Start a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+
+`Supervisor.GetStatus` includes `control_capabilities` and per-service `controls`
+metadata for `restart`, `stop`, and `start`. These controls currently report
+`supported=false`, `state="internal_only"`, `exposure="internal"`, and
+`method_type="manage"` so SDK/UI consumers can keep service lifecycle buttons
+disabled instead of simulating success.
+
+The control command handlers intentionally return `success=false` with
+`status="unsupported"` and `control_state="internal_only"` until a safe
+per-service lifecycle executor exists. If these controls are ever exposed through
+Gateway-generated HTTP routes, their `method_type="manage"` metadata requires the
+AdminAction draft/confirm/audit envelope before forwarding.
 
 ---
 
@@ -718,7 +732,9 @@ These are only accessible via the message bus:
 | DB | RAG write methods | Data integrity |
 | Tooling | ReloadMCP | Administrative operation |
 | Config | ReloadService | Administrative operation |
-| Supervisor | RestartService | Administrative operation |
+| Supervisor | RestartService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StopService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StartService | Internal-only; currently returns unsupported gated response |
 
 ---
 

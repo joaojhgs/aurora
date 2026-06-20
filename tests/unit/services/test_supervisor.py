@@ -9,6 +9,9 @@ import pytest
 
 from app.messaging import MessageBus
 from app.services.supervisor import Supervisor
+from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.supervisor import ServiceControlCommand, SupervisorMethods
+from app.shared.contracts.registry import all_contracts
 
 # Sentinel for "attribute was absent before injection" (restored on exit).
 _ATTR_SENTINEL = object()
@@ -241,3 +244,69 @@ class TestSupervisorErrorHandling:
 
             with pytest.raises(Exception, match="Service failure"):
                 await supervisor.start_services()
+
+
+class TestSupervisorControlContracts:
+    """Test explicit gating for Supervisor service controls."""
+
+    def test_control_methods_are_registered_internal_manage_contracts(self):
+        """Start/stop/restart are discoverable as internal-only manage contracts."""
+        Supervisor()
+
+        contracts = all_contracts()
+        for method_id in (
+            SupervisorMethods.RESTART_SERVICE,
+            SupervisorMethods.STOP_SERVICE,
+            SupervisorMethods.START_SERVICE,
+        ):
+            contract = contracts[method_id]
+            assert contract.exposure == "internal"
+            assert contract.method_type == "manage"
+            assert contract.required_perms == [method_id]
+
+    @pytest.mark.asyncio
+    async def test_get_status_exposes_control_availability(self, supervisor):
+        """Status response gives UI/SDK a disabled-state contract for controls."""
+        mock_service = Mock()
+        mock_service.module = "Tooling"
+        mock_service._started = True
+        supervisor.services = [mock_service]
+
+        response = await supervisor._handle_get_status(EmptyInput())
+
+        assert response.mode == "threads"
+        assert len(response.control_capabilities) == 3
+        assert {cap.operation for cap in response.control_capabilities} == {
+            "restart",
+            "stop",
+            "start",
+        }
+        restart = response.services[0].controls["restart"]
+        assert restart.supported is False
+        assert restart.state == "internal_only"
+        assert restart.exposure == "internal"
+        assert restart.method_type == "manage"
+        assert restart.required_perms == [SupervisorMethods.RESTART_SERVICE]
+        assert restart.admin_action_required is True
+
+    @pytest.mark.asyncio
+    async def test_control_handlers_return_explicit_gated_failure(self, supervisor):
+        """Control handlers must not report placeholder success."""
+        command = ServiceControlCommand(service_name="Tooling", reason="test")
+
+        restart = await supervisor._handle_restart_service(command)
+        stop = await supervisor._handle_stop_service(command)
+        start = await supervisor._handle_start_service(command)
+
+        for response, operation in (
+            (restart, "restart"),
+            (stop, "stop"),
+            (start, "start"),
+        ):
+            assert response.success is False
+            assert response.operation == operation
+            assert response.service_name == "Tooling"
+            assert response.status == "unsupported"
+            assert response.control_state == "internal_only"
+            assert response.admin_action_required is True
+            assert "intentionally gated" in (response.message or "")

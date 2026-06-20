@@ -246,6 +246,23 @@ Service and method path segments use the canonical PascalCase contract names
 from the service registry. SDKs should prefer these generated paths and should
 not infer lowercase route names from bus topics.
 
+### Supervisor Service Controls
+
+`Supervisor.GetStatus` is exposed as `POST /api/Supervisor/GetStatus` and
+returns service status plus machine-readable service-control availability.
+`Supervisor.RestartService`, `Supervisor.StopService`, and
+`Supervisor.StartService` are registered typed contracts, but intentionally
+remain `exposure="internal"`, `method_type="manage"`, and `supported=false`.
+Their handlers return `success=false`, `status="unsupported"`, and
+`control_state="internal_only"` until Aurora has a safe per-service lifecycle
+executor.
+
+Because the control methods are internal-only, Gateway does not generate public
+HTTP routes for them. SDK/UI clients must treat the `GetStatus` control metadata
+as the source of truth and keep lifecycle buttons disabled. If a future task
+externalizes these manage routes, Gateway's AdminAction draft/confirm/audit
+enforcement applies before any service mutation is forwarded.
+
 ### AdminAction Draft / Confirm Enforcement
 
 Generated routes for high-risk admin mutations require a server-issued
