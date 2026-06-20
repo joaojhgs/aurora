@@ -6,6 +6,11 @@ export { AuroraError, classifyHttpError } from './errors.js'
 export {
   GATEWAY_METHODS,
   TOOLING_METHODS,
+  buildBackendMethodTypes,
+  describeBackendInventory,
+  describeBackendInventoryMethod,
+  describeBackendInventoryMethods,
+  describeGatewayBuiltins,
   describeMethod,
   describeRegistry,
   methodIdentity,
@@ -19,6 +24,7 @@ export {
 } from './capabilities.js'
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
+  backendInventoryFixture,
   capabilityCatalogFixture,
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,

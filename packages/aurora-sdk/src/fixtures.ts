@@ -1,4 +1,5 @@
 import type {
+  BackendInventory,
   CapabilityCatalogResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
@@ -102,3 +103,76 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
     requiredPermissions: ['Auth.manage']
   }
 ]
+
+export const backendInventoryFixture: BackendInventory = {
+  generated_by: 'scripts/generate_backend_inventory.py',
+  method_count: 2,
+  gateway_builtin_count: 2,
+  methods: [
+    {
+      module: 'Gateway',
+      name: 'GetRegistry',
+      summary: 'Return the aggregated service registry',
+      bus_topic: 'Gateway.GetRegistry',
+      routePath: '/api/Gateway/GetRegistry',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Gateway.use'],
+      input_model: null,
+      output_model: 'GetRegistryResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'GetRegistryResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'InternalOnly',
+      summary: 'Internal-only method',
+      bus_topic: 'Gateway.InternalOnly',
+      routePath: null,
+      route_kind: 'internal_bus',
+      exposure: 'internal',
+      method_type: 'manage',
+      required_perms: ['Gateway.manage'],
+      input_model: null,
+      output_model: null,
+      input_schema: null,
+      output_schema: null,
+      source: 'static_contract',
+      source_file: 'tests/fixtures/gateway.py:1'
+    }
+  ],
+  gateway_builtins: [
+    {
+      name: 'get_registry',
+      summary: 'Get aggregated service registry',
+      routePath: '/api/registry',
+      http_methods: ['GET'],
+      route_kind: 'gateway_builtin',
+      exposure: 'gateway_builtin',
+      method_type: 'gateway',
+      required_perms: []
+    },
+    {
+      name: 'list_peers',
+      summary: 'List connected WebRTC peers',
+      routePath: '/api/admin/peers',
+      http_methods: ['GET'],
+      route_kind: 'gateway_builtin',
+      exposure: 'gateway_builtin',
+      method_type: 'manage',
+      required_perms: ['Auth.manage']
+    }
+  ],
+  import_errors: [],
+  ui_fixture_validation: {
+    checked: 0,
+    errors: [],
+    ok: true
+  }
+}

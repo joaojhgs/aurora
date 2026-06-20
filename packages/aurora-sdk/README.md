@@ -21,6 +21,23 @@ const catalog = await client.capabilities.listCatalog({ include_schemas: true })
 const result = await client.result(() => client.registry.getRegistry())
 ```
 
+## Generated Backend Inventory
+
+`scripts/generate_backend_inventory.py` emits the backend contract, route, permission, exposure, and gateway built-in inventory used by UI planning. The SDK can ingest that generated shape directly:
+
+```ts
+import { describeBackendInventory } from '@aurora/client'
+
+const inventory = await fetch('/backend-inventory.json').then((response) => response.json())
+const { methods, gatewayBuiltins, methodTypes } = describeBackendInventory(inventory)
+
+methodTypes['Gateway.GetRegistry'].responseSchema
+methods.find((method) => method.busTopic === 'Gateway.GetRegistry')?.routePath
+gatewayBuiltins.find((route) => route.routePath === '/api/registry')
+```
+
+Generated methods keep backend `bus_topic`, permission casing, `method_type`, schemas, and route paths. Internal-only methods are marked unavailable over HTTP unless a local/native transport explicitly supports bus access.
+
 ## Tauri Local
 
 ```ts

@@ -158,6 +158,73 @@ export interface GatewayBuiltinRouteDescriptor {
   requiredPermissions: string[]
 }
 
+export type BackendInventoryRouteKind = 'dynamic' | 'internal_bus' | 'gateway_builtin' | string
+
+export interface BackendInventoryMethod {
+  module: string
+  name: string
+  summary?: string | null
+  bus_topic: string | null
+  routePath?: string | null
+  route_path?: string | null
+  route_kind?: BackendInventoryRouteKind
+  exposure: ContractExposure
+  method_type: ContractMethodType
+  required_perms: string[]
+  input_model?: string | null
+  output_model?: string | null
+  input_schema?: JsonObject | null
+  output_schema?: JsonObject | null
+  source?: string | null
+  source_file?: string | null
+}
+
+export interface GatewayBuiltinInventoryRoute {
+  name: string
+  summary?: string | null
+  routePath?: string | null
+  route_path?: string | null
+  http_methods: string[]
+  route_kind: 'gateway_builtin' | string
+  exposure: 'gateway_builtin' | string
+  method_type: ContractMethodType
+  required_perms: string[]
+}
+
+export interface BackendInventory {
+  generated_by?: string
+  method_count?: number
+  gateway_builtin_count?: number
+  methods: BackendInventoryMethod[]
+  gateway_builtins?: GatewayBuiltinInventoryRoute[]
+  import_errors?: Array<Record<string, JsonValue>>
+  ui_fixture_validation?: Record<string, JsonValue>
+}
+
+export interface GeneratedMethodDescriptor extends MethodDescriptor {
+  routeKind: BackendInventoryRouteKind
+  source: string | null
+  sourceFile: string | null
+}
+
+export interface BackendMethodTypeDescriptor<
+  TRequest = JsonObject,
+  TResponse = JsonObject
+> {
+  busTopic: string
+  requestModel: string | null
+  responseModel: string | null
+  requestSchema: JsonObject | null
+  responseSchema: JsonObject | null
+  descriptor: GeneratedMethodDescriptor
+}
+
+export interface BackendInventoryDescriptors {
+  methods: GeneratedMethodDescriptor[]
+  gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
+  methodTypes: Record<string, BackendMethodTypeDescriptor>
+}
+
 export type AvailabilityState =
   | 'available-local'
   | 'available-remote'
