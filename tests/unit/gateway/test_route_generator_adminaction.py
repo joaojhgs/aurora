@@ -27,6 +27,7 @@ from app.shared.contracts.models.auth import (
     PasswordChangeRequest,
     PasswordChangeResponse,
 )
+from app.shared.contracts.models.backup import BackupCreateRequest, BackupCreateResponse, BackupMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods, ConfigSetRequest, ConfigSetResponse
 from app.shared.contracts.models.gateway import MethodInfo
@@ -133,6 +134,21 @@ def _generic_manage_method() -> MethodInfo:
         output_model="EmptyInput",
         input_schema=EmptyInput.model_json_schema(),
         output_schema=EmptyInput.model_json_schema(),
+    )
+
+
+def _backup_create_method() -> MethodInfo:
+    return MethodInfo(
+        name="Create",
+        summary="Create backup",
+        bus_topic=BackupMethods.CREATE,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Backup.manage"],
+        input_model="BackupCreateRequest",
+        output_model="BackupCreateResponse",
+        input_schema=BackupCreateRequest.model_json_schema(),
+        output_schema=BackupCreateResponse.model_json_schema(),
     )
 
 
@@ -338,6 +354,19 @@ async def test_generated_manage_route_requires_admin_action_even_when_not_allowl
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/Test/DoManage", json={})
+
+    assert response.status_code == 428
+    assert response.json()["detail"]["code"] == "admin_action_required"
+    bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_backup_create_requires_admin_action_headers(generated_route_app):
+    app, router, generator, bus, _manager = generated_route_app("Backup", _backup_create_method())
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/Backup/Create", json={"reason": "pre-upgrade"})
 
     assert response.status_code == 428
     assert response.json()["detail"]["code"] == "admin_action_required"
