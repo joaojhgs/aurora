@@ -35,6 +35,11 @@ export {
   summarizeCapabilities
 } from './capabilities.js'
 export {
+  buildRoutePreview,
+  classifyPayloadPrivacy,
+  evaluateRoutePolicy
+} from './policy.js'
+export {
   PERMISSION_ALL,
   buildPermissionCatalog,
   buildPermissionCatalogFromBackendInventory,

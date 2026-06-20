@@ -201,11 +201,32 @@ const route = await client.routes.explain({
   topic: 'TTS.Synthesize',
   selector: { peer_id: 'peer-123', module: 'TTS' }
 })
+const sessionId = 'assistant-session-123'
+
+const policy = await client.routes.evaluatePolicy({
+  route,
+  topic: 'TTS.Synthesize',
+  selector: { peer_id: 'peer-123', module: 'TTS' },
+  payload: { text: 'Hello' },
+  sessionId,
+  consentGranted: true,
+  privacyIndicatorShown: true,
+  approvalScopes: [{
+    scope: 'session',
+    decision: 'approve',
+    sessionId,
+    peerId: 'peer-123',
+    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString()
+  }]
+})
 
 const capability = await client.capabilities.explain('method:TTS.Synthesize')
 
-if (route.security_privacy_blockers.length > 0) {
+if (!policy.allowed) {
   // Show the backend reason and keep execution disabled.
+  policy.reasonCode
+  policy.repairPath
+  policy.preview.blockers
 }
 
 if (capability.selectorRequired && !capability.selectedProvider) {
@@ -231,6 +252,90 @@ client.permissions.check(['TTS.Synthesize'], 'use').allowed
 `MeshP2PTransport` is an interface over peer RPC rather than a WebRTC implementation. The bridge owns DataChannel/native details; the SDK preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
+
+## Route And Privacy Policy
+
+`client.routes.evaluatePolicy()` combines backend `Gateway.ExplainRoute` output with `Gateway.GetCapabilityCatalog` policy facts. It does not guess the backend route; it preserves the selected candidate, denial code, explicit selector requirement, approval state, privacy class, redacted payload preview, fallback behavior, and audit target for RouteSheet/tool approval UI.
+
+HTTP/server-web example:
+
+```ts
+const evaluation = await client.routes.evaluatePolicy({
+  routeRequest: { topic: 'Tooling.ExecuteTool' },
+  toolId: 'tool:diagnostics.serviceHealth',
+  payload: { args: { service: 'Gateway' } }
+})
+
+if (evaluation.availability === 'privacy-blocked') showPrivacyGuard(evaluation.preview)
+```
+
+Tauri local example:
+
+```ts
+const manifest = await client.native.getManifest()
+client.native.requirePermission('secureStorage', manifest)
+
+const payload = { key: 'ui.dark_mode', value: true }
+const argsHash = 'sha256:config-set-ui-dark-mode-true'
+const route = await client.routes.explain({ topic: 'Config.Set' })
+const evaluation = await client.routes.evaluatePolicy({
+  route,
+  topic: 'Config.Set',
+  payload,
+  argsHash,
+  approvalScopes: [{
+    scope: 'single',
+    decision: 'approve',
+    approvalId: 'approval-config-set-1',
+    argsHash,
+    providerId: route.selected_provider_id ?? 'local:Config',
+    expiresAt: expiresAtIso
+  }]
+})
+```
+
+Mesh example:
+
+```ts
+const evaluation = await client.routes.evaluatePolicy({
+  routeRequest: {
+    topic: 'TTS.Synthesize',
+    selector: { peer_id: 'peer-studio-gpu', module: 'TTS' }
+  },
+  selector: { peer_id: 'peer-studio-gpu', module: 'TTS' },
+  payload: { text: userText },
+  consentGranted: true,
+  privacyIndicatorShown: true
+})
+```
+
+Native mobile example:
+
+```ts
+const mobile = new AuroraClient({ transport: nativeMobileTransport })
+const evaluation = await mobile.routes.evaluatePolicy({
+  routeRequest: { topic: 'STT.Transcribe' },
+  payload: { media_ref: 'native://recording/latest' },
+  privacyClass: 'raw-audio',
+  consentGranted: microphoneConsent,
+  privacyIndicatorShown: recordingIndicatorVisible
+})
+```
+
+Mock/test example:
+
+```ts
+import { MockAuroraTransport, defaultMockAuroraFixtures } from '@aurora/client'
+
+const mockClient = new AuroraClient({ transport: new MockAuroraTransport(defaultMockAuroraFixtures) })
+const evaluation = await mockClient.routes.evaluatePolicy({
+  route: defaultMockAuroraFixtures.routeExplain,
+  catalog: defaultMockAuroraFixtures.capabilityCatalog,
+  payload: { api_key: 'hidden in preview' }
+})
+
+evaluation.preview.payloadPreview // { api_key: '[redacted]' }
+```
 
 ## Event Streams
 

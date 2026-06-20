@@ -21,6 +21,7 @@ import {
   defaultMockAuroraFixtures,
   describeBackendInventory,
   describeRegistry,
+  evaluateRoutePolicy,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
   gatewayRegistryFixture,
@@ -382,6 +383,399 @@ describe('AuroraClient', () => {
     )
     expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
+  })
+
+  it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
+    const evaluation = evaluateRoutePolicy({
+      route: routeExplainFixture,
+      catalog: capabilityCatalogFixture,
+      payload: { text: 'Remote speech synthesis should be reviewed before egress.' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        decision: 'privacy-blocked',
+        availability: 'privacy-blocked',
+        reasonCode: 'explicit_selector_required',
+        explicitSelectorRequired: true,
+        repairPath: 'choose an explicit peer/provider/resource selector',
+        privacyClass: 'raw-audio'
+      })
+    )
+    expect(evaluation.preview).toEqual(
+      expect.objectContaining({
+        egressDestination: 'peer',
+        providerId: 'mesh:studio-gpu:TTS',
+        peerId: 'peer-studio-gpu',
+        secretsRedacted: true,
+        dataClasses: expect.arrayContaining(['raw-audio'])
+      })
+    )
+    expect(evaluation.blockers.map((blocker) => blocker.code)).toEqual(
+      expect.arrayContaining(['explicit_selector_required', 'privacy_indicator_required'])
+    )
+  })
+
+  it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
+    const route = {
+      topic: 'Tooling.ExecuteTool',
+      module: 'Tooling',
+      selected_target: 'local',
+      selected_peer_id: 'local-peer',
+      selected_service_instance_id: 'tooling-local',
+      selected_provider_id: 'local:TTS',
+      selector_valid: true,
+      selector_validation_code: '',
+      selector_validation_message: '',
+      fallback_behavior: '',
+      candidates: [
+        {
+          provider_id: 'local:TTS',
+          peer_id: 'local-peer',
+          provider_kind: 'local',
+          service_instance_id: 'tooling-local',
+          module: 'Tooling',
+          version: '0.1.0',
+          included: true,
+          selected: true,
+          reason_code: 'eligible',
+          reason: 'Local dangerous tool is available after approval.',
+          latency_ms: 1,
+          active_calls: 0,
+          max_concurrent: 2,
+          available_capacity: 2,
+          blockers: []
+        }
+      ],
+      blockers: [],
+      security_privacy_blockers: [],
+      secrets_redacted: true
+    }
+    const catalog = {
+      ...capabilityGraphCatalogFixture,
+      actions: capabilityGraphCatalogFixture.actions.map((action) =>
+        action.action_id === 'tool-local-notes'
+          ? {
+              ...action,
+              policy: {
+                ...action.policy,
+                approval_required: true,
+                operation_class: 'admin',
+                safety_class: 'admin'
+              }
+            }
+          : action
+      )
+    }
+    const transport = new MockAuroraTransport()
+      .register('Gateway.ExplainRoute', route)
+      .register('Gateway.GetCapabilityCatalog', catalog)
+    const client = new AuroraClient({ transport })
+
+    await expect(
+      client.routes.evaluatePolicy({
+        routeRequest: { topic: 'Tooling.ExecuteTool' },
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        payload: { token: 'must-not-render', operation: 'delete notes' },
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        allowed: false,
+        decision: 'privacy-blocked',
+        reasonCode: 'approval_required',
+        approval: expect.objectContaining({ required: true, status: 'required' }),
+        preview: expect.objectContaining({
+          payloadPreview: expect.objectContaining({ token: '[redacted]' })
+        })
+      })
+    )
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [{ scope: 'single', decision: 'approve' }],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'future-approve-all',
+            decision: 'approve',
+            providerId: 'local:TTS',
+            argsHash: 'args-local-1'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS',
+            argsHash: 'different'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'local-safe-tools',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        payload: { token: 'must-not-render', operation: 'delete notes' },
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            approvalId: 'approval-local-1',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS',
+            argsHash: 'args-local-1',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        allowed: true,
+        decision: 'allowed',
+        approval: expect.objectContaining({
+          status: 'approved',
+          matchedScope: expect.objectContaining({ approvalId: 'approval-local-1' })
+        })
+      })
+    )
+  })
+
+  it('requires scoped session, provider, and args evidence for remote approvals', () => {
+    const remoteAllowedRoute = {
+      ...routeExplainFixture,
+      selected_target: 'remote',
+      selected_peer_id: 'peer-studio-gpu',
+      selected_provider_id: 'mesh:studio-gpu:TTS',
+      selected_service_instance_id: 'tts-remote-01',
+      selector_valid: true,
+      selector_validation_code: '',
+      selector_validation_message: '',
+      blockers: [],
+      security_privacy_blockers: [],
+      candidates: routeExplainFixture.candidates.map((candidate) => ({
+        ...candidate,
+        selected: true,
+        included: true,
+        blockers: []
+      }))
+    }
+    const catalog = {
+      ...capabilityCatalogFixture,
+      actions: capabilityCatalogFixture.actions.map((action) =>
+        action.action_id === 'tts-remote-privacy-blocked'
+          ? {
+              ...action,
+              bindability: 'available',
+              route_blockers: [],
+              policy: {
+                ...action.policy,
+                approval_required: true,
+                explicit_selector_required: false,
+                selector_required: false,
+                consent_required: false,
+                privacy_indicator_required: false
+              }
+            }
+          : action
+      )
+    }
+    const base = {
+      route: remoteAllowedRoute,
+      catalog,
+      actionId: 'tts-remote-privacy-blocked',
+      argsHash: 'args-remote-1',
+      sessionId: 'session-remote-1',
+      selector: { peer_id: 'peer-studio-gpu', module: 'TTS' },
+      now: '2026-06-20T10:00:00Z'
+    }
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [{ scope: 'session', decision: 'approve' }]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'session-remote-1',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'other-session',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'peer-studio-gpu',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'other-peer',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'session-remote-1',
+            peerId: 'peer-studio-gpu',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T09:59:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reasonCode: 'approval_required',
+        approval: expect.objectContaining({ status: 'expired' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [{ scope: 'deny-all', decision: 'deny-all' }]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reasonCode: 'approval_denied',
+        approval: expect.objectContaining({ status: 'rejected' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            toolId: 'tool:remote-danger',
+            peerId: 'other-peer',
+            providerId: 'mesh:studio-gpu:TTS',
+            argsHash: 'different'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
   })
 
   it('returns cloned fixture data so tests cannot mutate shared backend truth', async () => {
