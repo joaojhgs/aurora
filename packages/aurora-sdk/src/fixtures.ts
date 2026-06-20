@@ -1,4 +1,9 @@
-import type { CapabilityCatalogResponse, GetRegistryResponse } from './types.js'
+import type {
+  CapabilityCatalogResponse,
+  GatewayBuiltinRouteDescriptor,
+  GetRegistryResponse,
+  GetServicesResponse
+} from './types.js'
 
 export const emptyRegistryFixture: GetRegistryResponse = {
   modules: [],
@@ -58,3 +63,42 @@ export const capabilityCatalogFixture: CapabilityCatalogResponse = {
   action_index: {},
   secrets_redacted: true
 }
+
+export const gatewayServicesFixture: GetServicesResponse = {
+  mode: 'threads',
+  services: [
+    {
+      module: 'Gateway',
+      version: '0.1.0',
+      summary: 'Gateway service',
+      capabilities: ['registry'],
+      method_count: 2,
+      last_seen: '2026-06-19T00:00:00Z',
+      status: 'healthy',
+      instance_id: null
+    }
+  ]
+}
+
+export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
+  {
+    name: 'health_check',
+    summary: 'Gateway health check',
+    routePath: '/api/health',
+    httpMethods: ['GET'],
+    routeKind: 'gateway_builtin',
+    exposure: 'gateway_builtin',
+    methodType: 'gateway',
+    requiredPermissions: []
+  },
+  {
+    name: 'list_peers',
+    summary: 'List connected WebRTC peers',
+    routePath: '/api/admin/peers',
+    httpMethods: ['GET'],
+    routeKind: 'gateway_builtin',
+    exposure: 'gateway_builtin',
+    methodType: 'manage',
+    requiredPermissions: ['Auth.manage']
+  }
+]

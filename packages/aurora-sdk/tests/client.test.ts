@@ -5,10 +5,13 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  buildAdminOverviewManifest,
   capabilityCatalogFixture,
   createAuditReceipt,
   createAuroraEvent,
   describeRegistry,
+  gatewayBuiltinRoutesFixture,
+  gatewayServicesFixture,
   gatewayRegistryFixture
 } from '../src/index.js'
 
@@ -97,6 +100,123 @@ describe('AuroraClient', () => {
         peerId: 'local-peer'
       })
     ])
+  })
+
+  it('builds an admin overview manifest from backend evidence only', async () => {
+    const catalog = {
+      ...capabilityCatalogFixture,
+      actions: [
+        {
+          action_id: 'gateway-catalog',
+          module: 'Gateway',
+          method: 'GetCapabilityCatalog',
+          topic: 'Gateway.GetCapabilityCatalog',
+          tool_id: null,
+          resource_id: null,
+          provider_id: 'local:Gateway',
+          peer_id: 'local-peer',
+          provider_kind: 'local',
+          service_instance_id: 'gateway-local',
+          selector: { peer_id: 'local-peer', module: 'Gateway' },
+          bindability: 'available',
+          sdk_operation_kind: 'bus_method',
+          route_hints: [],
+          route_blockers: [],
+          summary: 'Capability catalog',
+          input_schema: null,
+          output_schema: null,
+          policy: {
+            required_permissions: ['Gateway.manage'],
+            trust_tier: 'local',
+            safety_class: 'admin',
+            explicit_selector_required: false,
+            consent_required: false,
+            privacy_indicator_required: false,
+            bandwidth_check_required: false,
+            approval_required: false,
+            selector_required: false,
+            mesh_visible: false,
+            local_only: false,
+            allowed_peers: null,
+            operation_class: 'admin',
+            resource_scope: null,
+            denial_reasons: []
+          },
+          freshness: {
+            source: 'registry',
+            manifest_time: null,
+            last_probe_age_s: null,
+            ttl_s: null,
+            stale: false,
+            registry_digest: 'fixture'
+          }
+        }
+      ]
+    }
+
+    const manifest = buildAdminOverviewManifest({
+      registry: gatewayRegistryFixture,
+      services: gatewayServicesFixture,
+      capabilityCatalog: catalog,
+      gatewayBuiltins: gatewayBuiltinRoutesFixture,
+      nativeManifest: null,
+      peers: [],
+      generatedAt: '2026-06-19T12:00:00Z'
+    })
+
+    expect(manifest.generatedAt).toBe('2026-06-19T12:00:00Z')
+    expect(manifest.serviceMode).toBe('threads')
+    expect(manifest.totals).toEqual(
+      expect.objectContaining({
+        services: 1,
+        methods: 2,
+        externalMethods: 1,
+        internalMethods: 1,
+        gatewayBuiltins: 2,
+        capabilityActions: 1
+      })
+    )
+    expect(manifest.services[0]).toEqual(
+      expect.objectContaining({
+        module: 'Gateway',
+        status: 'healthy',
+        requiredPermissions: ['Gateway.manage', 'Gateway.use']
+      })
+    )
+    expect(manifest.internalOnly).toHaveLength(1)
+    expect(manifest.internalOnly[0]?.busTopic).toBe('Gateway.InternalOnly')
+    expect(manifest.permissionCatalog).toEqual(['Auth.manage', 'Gateway.manage', 'Gateway.use'])
+    expect(manifest.native).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        evidenceSource: 'not-provided'
+      })
+    )
+    expect(manifest.privacy).toEqual({
+      secretsRedacted: true,
+      nativeStateInvented: false,
+      peerStateInvented: false
+    })
+  })
+
+  it('loads the admin overview manifest through the client namespace', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetServices', gatewayServicesFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+    const client = new AuroraClient({ transport })
+
+    const manifest = await client.adminOverview.getManifest({
+      gatewayBuiltins: gatewayBuiltinRoutesFixture,
+      generatedAt: '2026-06-19T12:00:00Z'
+    })
+
+    expect(manifest.registryDigest).toBe('fixture')
+    expect(manifest.gatewayBuiltins.map((route) => route.routePath)).toEqual([
+      '/api/admin/peers',
+      '/api/health'
+    ])
+    expect(manifest.native.availability).toBe('unsupported')
   })
 
   it('returns classified result errors for permissions and transport loss', async () => {

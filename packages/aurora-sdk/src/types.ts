@@ -105,6 +105,22 @@ export interface GetRegistryResponse {
   method_count: number
 }
 
+export interface ServiceInfo {
+  module: string
+  version: string
+  summary: string
+  capabilities: string[]
+  method_count: number
+  last_seen: string
+  status: string
+  instance_id: string | null
+}
+
+export interface GetServicesResponse {
+  services: ServiceInfo[]
+  mode: string
+}
+
 export interface ServiceAnnouncement {
   module: string
   version: string
@@ -129,6 +145,17 @@ export interface MethodDescriptor {
   inputSchema: JsonObject | null
   outputSchema: JsonObject | null
   availableOverHttp: boolean
+}
+
+export interface GatewayBuiltinRouteDescriptor {
+  name: string
+  summary: string
+  routePath: string
+  httpMethods: string[]
+  routeKind: 'gateway_builtin'
+  exposure: 'gateway_builtin'
+  methodType: ContractMethodType
+  requiredPermissions: string[]
 }
 
 export type AvailabilityState =
@@ -266,6 +293,75 @@ export interface CapabilitySummary {
   routeBlockers: string[]
   selector: unknown
   raw: CapabilityActionInfo
+}
+
+export interface PeerSummary {
+  peerId: string
+  nodeName: string
+  lifecycleState: string
+  trustState: string
+  latencyMs: number | null
+  staleAgeSeconds: number | null
+  serviceCount: number
+  lastEvidenceSource: string
+}
+
+export interface NativeCapabilityState {
+  platform: string
+  availability: AvailabilityState
+  permissions: Record<string, boolean>
+  capabilityKeys: string[]
+  evidenceSource: string
+}
+
+export interface AdminOverviewServiceSummary {
+  module: string
+  version: string
+  status: string
+  methodCount: number
+  externalMethodCount: number
+  internalMethodCount: number
+  requiredPermissions: string[]
+  lastSeen: string
+}
+
+export interface AdminOverviewManifestInput {
+  registry: GetRegistryResponse
+  services?: GetServicesResponse | ServiceInfo[]
+  capabilityCatalog?: CapabilityCatalogResponse | null
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  nativeManifest?: NativeCapabilityManifest | null
+  peers?: PeerSummary[]
+  generatedAt?: string
+}
+
+export interface AdminOverviewManifest {
+  generatedAt: string
+  registryDigest: string
+  serviceMode: string
+  services: AdminOverviewServiceSummary[]
+  methods: MethodDescriptor[]
+  gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
+  capabilities: CapabilitySummary[]
+  native: NativeCapabilityState
+  peers: PeerSummary[]
+  unavailable: CapabilitySummary[]
+  internalOnly: MethodDescriptor[]
+  permissionCatalog: string[]
+  totals: {
+    services: number
+    methods: number
+    externalMethods: number
+    internalMethods: number
+    gatewayBuiltins: number
+    capabilityActions: number
+    peers: number
+  }
+  privacy: {
+    secretsRedacted: boolean
+    nativeStateInvented: false
+    peerStateInvented: false
+  }
 }
 
 export interface RouteExplainRequest {

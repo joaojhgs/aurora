@@ -11,9 +11,20 @@ export {
   methodIdentity,
   routePath
 } from './descriptors.js'
-export { availabilityForAction, privacyClassForAction, summarizeCapabilities } from './capabilities.js'
+export {
+  availabilityForAction,
+  buildAdminOverviewManifest,
+  privacyClassForAction,
+  summarizeCapabilities
+} from './capabilities.js'
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
-export { capabilityCatalogFixture, emptyRegistryFixture, gatewayRegistryFixture } from './fixtures.js'
+export {
+  capabilityCatalogFixture,
+  emptyRegistryFixture,
+  gatewayBuiltinRoutesFixture,
+  gatewayRegistryFixture,
+  gatewayServicesFixture
+} from './fixtures.js'
 export type * from './types.js'
 export type * from './transport.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
