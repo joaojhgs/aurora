@@ -10,6 +10,7 @@ import {
 } from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
+import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -22,9 +23,16 @@ import type {
   MethodDescriptor,
   NativeCapabilityManifest,
   PeerSummary,
+  ContractMethodType,
   RouteExplainRequest,
   RouteExplainResponse
 } from './types.js'
+import type {
+  EffectivePermissionInput,
+  PermissionAccessDecision,
+  PermissionCatalogInput,
+  PermissionCatalogEntry
+} from './permissions.js'
 
 export interface AuroraClientOptions {
   transport: AuroraTransport
@@ -37,6 +45,7 @@ export class AuroraClient {
   readonly registry: RegistryClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
+  readonly permissions: PermissionClient
   readonly routes: RouteClient
   readonly tools: ToolClient
   readonly native: NativeClient
@@ -49,6 +58,7 @@ export class AuroraClient {
     this.registry = new RegistryClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
+    this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
     this.tools = new ToolClient(this)
     this.native = new NativeClient(this)
@@ -150,6 +160,35 @@ export class CapabilityClient {
 
   async listSummaries(request: CapabilityCatalogRequest = {}): Promise<CapabilitySummary[]> {
     return summarizeCapabilities(await this.listCatalog(request))
+  }
+}
+
+export interface PermissionCatalogOptions {
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+}
+
+export class PermissionClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async listCatalog(options: PermissionCatalogOptions = {}): Promise<PermissionCatalogEntry[]> {
+    const input: PermissionCatalogInput = {
+      methods: await this.client.registry.listMethods(),
+      source: 'registry'
+    }
+    if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
+    return buildPermissionCatalog(input)
+  }
+
+  has(permission: string, methodType: ContractMethodType | null = null): boolean {
+    return hasPermission(permission, this.client.auth.snapshot().effectivePermissions, methodType)
+  }
+
+  check(requiredPermissions: string[], methodType: ContractMethodType | null = null): PermissionAccessDecision {
+    return checkAccess(this.client.auth.snapshot().effectivePermissions, requiredPermissions, methodType)
+  }
+
+  resolveEffective(input: EffectivePermissionInput): string[] {
+    return resolveEffectivePermissions(input)
   }
 }
 

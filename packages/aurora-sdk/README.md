@@ -18,6 +18,7 @@ const client = new AuroraClient({
 
 const methods = await client.registry.listMethods()
 const catalog = await client.capabilities.listCatalog({ include_schemas: true })
+const permissions = await client.permissions.listCatalog()
 const result = await client.result(() => client.registry.getRegistry())
 
 client.auth.updateFromLogin({
@@ -31,6 +32,9 @@ client.auth.updateFromLogin({
 if (client.auth.snapshot().state === 'admin') {
   // Enable admin surfaces only from backend-proven permissions.
 }
+
+client.permissions.check(['Auth.DeletePrincipal'], 'manage').allowed
+permissions.find((permission) => permission.id === 'Auth.manage')?.label
 ```
 
 ## Generated Backend Inventory
@@ -50,6 +54,21 @@ gatewayBuiltins.find((route) => route.routePath === '/api/registry')
 
 Generated methods keep backend `bus_topic`, permission casing, `method_type`, schemas, and route paths. Internal-only methods are marked unavailable over HTTP unless a local/native transport explicitly supports bus access.
 
+Permission catalogs can be derived from the same inventory without inventing frontend permission IDs:
+
+```ts
+import { buildPermissionCatalogFromBackendInventory, resolveEffectivePermissions } from '@aurora/client'
+
+const permissions = buildPermissionCatalogFromBackendInventory(inventory)
+permissions.find((permission) => permission.id === 'Tooling.use')?.label // "Use Tooling"
+
+const effective = resolveEffectivePermissions({
+  userPermissions: ['Auth.manage', 'Gateway.use'],
+  tokenScopes: ['Gateway.*'],
+  userIsAdmin: false
+})
+```
+
 ## Tauri Local
 
 ```ts
@@ -68,6 +87,7 @@ const tauriTransport: AuroraTransport = {
 const client = new AuroraClient({ transport: tauriTransport })
 const manifest = await client.native.getManifest()
 const result = await client.result(() => client.native.getManifest())
+const canManageAuth = client.permissions.has('Auth.DeletePrincipal', 'manage')
 
 client.auth.updateFromWhoAmI({
   principal_id: 'local-owner',
@@ -105,6 +125,8 @@ client.auth.updateFromPairingExchange({
   node_name: 'Kitchen node',
   permissions: ['TTS.use']
 })
+
+client.permissions.check(['TTS.Synthesize'], 'use').allowed
 ```
 
 Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
@@ -125,6 +147,11 @@ client.auth.updateFromTokenValidation({
   is_admin: false,
   source: 'http_bearer'
 })
+
+const effective = client.permissions.resolveEffective({
+  userPermissions: ['Gateway.use', 'TTS.use'],
+  tokenScopes: ['TTS.*']
+})
 ```
 
 Android/iOS features are enabled only when the native capability manifest and backend route/policy evidence both support them.
@@ -139,6 +166,7 @@ const transport = new MockAuroraTransport()
 
 const client = new AuroraClient({ transport })
 const result = await client.result(() => client.registry.getRegistry())
+const permissionCatalog = await client.permissions.listCatalog()
 
 client.auth.setApiKeySystem()
 client.auth.snapshot().state // "api_key_system"
@@ -179,6 +207,28 @@ if (session.state === 'forbidden') {
 ```
 
 `request()` and `requestResult()` apply normalized `401` and `403` failures to `client.auth`. A `401` becomes `unauthorized`, `expired`, or `revoked` when backend detail text identifies the specific condition. A `403` becomes `forbidden`. Transport loss, timeouts, validation errors, unavailable services, unsupported features, privacy blocks, and native permission errors do not change auth state.
+
+## Permission Catalog And Effective Access
+
+Permission helpers mirror the backend matcher in `app/shared/auth/permissions.py`:
+
+- `*` grants all permissions.
+- `Service.*` grants every permission under that service prefix.
+- `Service.use` and `Service.manage` grant methods with the matching backend `method_type`.
+- Exact method permissions such as `Gateway.GetRegistry` grant that backend method only.
+- Matching is case-sensitive; display helpers preserve raw backend IDs like `Auth.manage`, `Tooling.use`, and `*`.
+
+```ts
+import { checkAccess, hasPermission, permissionLabel } from '@aurora/client'
+
+hasPermission('Auth.DeletePrincipal', ['Auth.manage'], 'manage') // true
+hasPermission('Auth.DeletePrincipal', ['auth.manage'], 'manage') // false
+
+const decision = checkAccess(['Gateway.use'], ['Gateway.GetRegistry'], 'use')
+decision.grants['Gateway.GetRegistry'] // "Gateway.use"
+
+permissionLabel('Auth.manage') // "Manage Auth"
+```
 
 ## Normalized Envelopes
 
