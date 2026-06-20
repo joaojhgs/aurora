@@ -111,7 +111,15 @@ def explain_route(
 ) -> RouteExplainResponse:
     topic = _topic_from_request(request)
     module = topic.split(".", 1)[0]
+    method_name = topic.split(".", 1)[1] if "." in topic else None
     config = mesh_config.services.get(module)
+    graph = build_capability_graph(
+        mesh_config=mesh_config,
+        local_services=local_services or {},
+        peers=registry.get_all_peers() if registry else [],
+        local_peer_id=local_peer_id,
+    )
+    graph_services = {service.service_instance_id: service for service in graph.services}
     route = (
         routing_table.resolve(topic, routing_config=config, selector=request.selector)
         if routing_table
@@ -122,6 +130,8 @@ def explain_route(
         module=module,
         local_services=local_services or {},
         local_peer_id=local_peer_id,
+        method_name=method_name,
+        graph_services=graph_services,
         route_target=route.target if route else "local",
     )
     if local_candidate:
@@ -138,6 +148,8 @@ def explain_route(
             candidates.append(
                 _remote_candidate_from_registry(
                     candidate,
+                    method_name=method_name,
+                    graph_services=graph_services,
                     selected_peer_id=route.peer_id if route else None,
                     selected_target=route.target if route else "local",
                 )
@@ -322,6 +334,8 @@ def _local_candidate(
     module: str,
     local_services: dict[str, ServiceAnnouncement],
     local_peer_id: str | None,
+    method_name: str | None,
+    graph_services: dict[str, CapabilityServiceInfo],
     route_target: str,
 ) -> RouteCandidateDecision | None:
     announcement = local_services.get(module)
@@ -329,6 +343,8 @@ def _local_candidate(
         return None
     peer_id = local_peer_id or "local"
     service_instance_id = f"local:{peer_id}:{module}"
+    service = graph_services.get(service_instance_id)
+    policy = _candidate_policy(service=service, method_name=method_name, denial_reasons=[])
     return RouteCandidateDecision(
         provider_id=service_instance_id,
         peer_id=peer_id,
@@ -341,12 +357,22 @@ def _local_candidate(
         reason_code="local_available",
         reason="local service is available",
         latency_ms=0.0,
+        active_calls=0,
+        max_concurrent=service.max_concurrent if service else 0,
+        available_capacity=service.available_capacity if service else None,
+        policy=policy,
+        freshness=_freshness(service) if service else CapabilityFreshnessInfo(source="local_registry"),
+        auth_rbac_state=_auth_rbac_state(policy=policy, blockers=[], included=True),
+        transport="local_bus",
+        privacy_class=_privacy_class(policy),
     )
 
 
 def _remote_candidate_from_registry(
     candidate: Any,
     *,
+    method_name: str | None,
+    graph_services: dict[str, CapabilityServiceInfo],
     selected_peer_id: str | None,
     selected_target: str,
 ) -> RouteCandidateDecision:
@@ -367,6 +393,13 @@ def _remote_candidate_from_registry(
                 security_privacy=_is_security_privacy_blocker(candidate.reason_code),
             )
         )
+    graph_service = graph_services.get(service_instance_id)
+    denial_reasons = [candidate.reason_code] if candidate.reason_code != "eligible" else []
+    policy = _candidate_policy(
+        service=graph_service,
+        method_name=method_name,
+        denial_reasons=[reason for reason in denial_reasons if reason],
+    )
     return RouteCandidateDecision(
         provider_id=service_instance_id,
         peer_id=peer.peer_id,
@@ -382,8 +415,66 @@ def _remote_candidate_from_registry(
         active_calls=peer.active_calls,
         max_concurrent=service.max_concurrent,
         available_capacity=available_capacity,
+        policy=policy,
+        freshness=_freshness(graph_service)
+        if graph_service
+        else _freshness_from_parts(
+            source="remote_manifest",
+            manifest_time=peer.manifest.timestamp if peer.manifest else None,
+            registry_digest=service.digest,
+            stale=peer.status == "stale",
+        ),
+        auth_rbac_state=_auth_rbac_state(
+            policy=policy,
+            blockers=blockers,
+            included=candidate.eligible,
+        ),
+        transport="mesh_webrtc",
+        privacy_class=_privacy_class(policy),
         blockers=blockers,
     )
+
+
+def _candidate_policy(
+    *,
+    service: CapabilityServiceInfo | None,
+    method_name: str | None,
+    denial_reasons: list[str],
+) -> CapabilityPolicyDecisionInfo:
+    if not service:
+        return CapabilityPolicyDecisionInfo(denial_reasons=denial_reasons)
+    if method_name:
+        for method in service.methods:
+            if method.name == method_name:
+                return _policy_decision(method.policy, denial_reasons)
+    return _policy_decision(service.policy, denial_reasons)
+
+
+def _auth_rbac_state(
+    *,
+    policy: CapabilityPolicyDecisionInfo,
+    blockers: list[RouteBlockerInfo],
+    included: bool,
+) -> str:
+    if any(blocker.security_privacy for blocker in blockers):
+        return "blocked"
+    if policy.required_permissions:
+        return "permission_required"
+    if included:
+        return "allowed"
+    return "unknown"
+
+
+def _privacy_class(policy: CapabilityPolicyDecisionInfo) -> str:
+    if policy.safety_class == "admin":
+        return "admin-critical"
+    if policy.resource_scope == "audio" or policy.consent_required:
+        return "raw-audio"
+    if policy.safety_class == "data":
+        return "sensitive"
+    if policy.safety_class == "delegated_action":
+        return "personal"
+    return "public"
 
 
 def _topic_from_request(request: RouteExplainRequest) -> str:
