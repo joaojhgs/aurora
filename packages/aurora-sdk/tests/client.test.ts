@@ -5,16 +5,31 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  TauriLocalTransport,
   backendInventoryFixture,
+  buildPermissionCatalog,
+  buildPermissionCatalogFromBackendInventory,
+  checkAccess,
   buildAdminOverviewManifest,
+  buildCapabilityGraph,
+  capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
   createAuroraEvent,
+  defaultMockAuroraFixtures,
   describeBackendInventory,
   describeRegistry,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
-  gatewayRegistryFixture
+  gatewayRegistryFixture,
+  hasPermission,
+  nativeCapabilityManifestFixture,
+  permissionLabel,
+  routeExplainFixture,
+  resolveEffectivePermissions,
+  uiMockReferenceFixtureSummary,
+  wildcardIntersection
 } from '../src/index.js'
 
 describe('AuroraClient', () => {
@@ -102,6 +117,125 @@ describe('AuroraClient', () => {
         peerId: 'local-peer'
       })
     ])
+  })
+
+  it('builds a deterministic capability graph with separate local and remote providers', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: true },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    const tts = graph.byFeatureId['method:TTS.Synthesize']
+    expect(tts).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'local',
+        routeable: true
+      })
+    )
+    expect(tts?.providers.map((provider) => provider.providerIdentity)).toEqual([
+      'local',
+      'remote:kitchen-peer'
+    ])
+
+    const duplicatedTool = graph.byFeatureId['tool:tool:notes']
+    expect(duplicatedTool?.providers).toHaveLength(2)
+    expect(duplicatedTool?.providers.map((provider) => provider.providerIdentity)).toEqual([
+      'local',
+      'remote:kitchen-peer'
+    ])
+    expect(duplicatedTool?.selectedProvider?.providerIdentity).toBe('local')
+
+    const native = graph.byFeatureId['native:android:microphoneCapture']
+    expect(native).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android',
+        privacyClass: 'raw-audio'
+      })
+    )
+  })
+
+  it('explains policy, selector, stale, and unsupported capability states', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: false },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    const denied = graph.explain('tool:tool:garage-door')
+    expect(denied).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        selectorRequired: true,
+        approvalRequired: true,
+        nextRepairAction: 'choose a peer/provider'
+      })
+    )
+    expect(denied.providerCandidates[0]).toEqual(
+      expect.objectContaining({
+        providerIdentity: 'remote:den-peer',
+        selectable: false,
+        disabledReasons: expect.arrayContaining(['policy_denied'])
+      })
+    )
+
+    const stale = graph.explain('tool:tool:camera-snapshot')
+    expect(stale).toEqual(
+      expect.objectContaining({
+        state: 'stale',
+        routeable: false,
+        nextRepairAction: 'refresh peer manifest or reconnect provider'
+      })
+    )
+
+    const internalOnly = graph.explain('method:Gateway.InternalOnly')
+    expect(internalOnly).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        routeable: false,
+        nextRepairAction: 'use a local/Tauri transport with bus access or expose a backend contract'
+      })
+    )
+
+    const nativePermission = graph.explain('native:android:microphoneCapture')
+    expect(nativePermission).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        nextRepairAction: 'grant required native permission',
+        requiredPermissions: ['microphone']
+      })
+    )
+  })
+
+  it('loads capability graph explanations through the client namespace', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityGraphCatalogFixture)
+    const client = new AuroraClient({ transport })
+
+    const explanation = await client.capabilities.explain('tool:tool:file-search')
+
+    expect(explanation).toEqual(
+      expect.objectContaining({
+        state: 'available-remote',
+        routeable: true,
+        selectedProvider: expect.objectContaining({
+          providerIdentity: 'remote:kitchen-peer'
+        })
+      })
+    )
   })
 
   it('builds an admin overview manifest from backend evidence only', async () => {
@@ -221,6 +355,55 @@ describe('AuroraClient', () => {
     expect(manifest.native.availability).toBe('unsupported')
   })
 
+  it('preloads deterministic mock fixtures for offline SDK development', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const [registry, services, summaries, route, nativeManifest, toolCatalog] = await Promise.all([
+      client.registry.getRegistry(),
+      client.registry.listServices(),
+      client.capabilities.listSummaries({ include_unavailable: true }),
+      client.routes.explain({ topic: 'TTS.Synthesize' }),
+      client.native.getManifest(),
+      client.tools.listCatalog<typeof defaultMockAuroraFixtures.toolCatalog>()
+    ])
+
+    expect(registry.digest).toBe('fixture')
+    expect(services.services[0]?.module).toBe('Gateway')
+    expect(summaries.map((summary) => summary.availability)).toEqual(
+      expect.arrayContaining(['available-local', 'privacy-blocked', 'stale'])
+    )
+    expect(route).toEqual(routeExplainFixture)
+    expect(nativeManifest).toEqual(
+      expect.objectContaining({
+        platform: 'tauri-desktop',
+        permissions: expect.objectContaining({ microphone: false })
+      })
+    )
+    expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
+    expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
+  })
+
+  it('returns cloned fixture data so tests cannot mutate shared backend truth', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const registry = await client.registry.getRegistry()
+    registry.modules[0]!.methods[0]!.required_perms.push('mutated.permission')
+
+    await expect(client.registry.getRegistry()).resolves.toEqual(
+      expect.objectContaining({
+        modules: [
+          expect.objectContaining({
+            methods: [
+              expect.objectContaining({
+                required_perms: ['Gateway.use']
+              }),
+              expect.any(Object)
+            ]
+          })
+        ]
+      })
+    )
+  })
+
   it('returns classified result errors for permissions and transport loss', async () => {
     const permissionTransport = new MockAuroraTransport().fail('Gateway.GetRegistry', 'permission', 'Forbidden')
     const permissionClient = new AuroraClient({ transport: permissionTransport })
@@ -240,6 +423,25 @@ describe('AuroraClient', () => {
 
     expect(lossResult.ok).toBe(false)
     if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
+  })
+
+  it('scripts mock permission, timeout, and transport-loss failures by method', async () => {
+    const transport = new MockAuroraTransport()
+      .fail('Gateway.GetRegistry', 'permission', 'Forbidden')
+      .timeout('Gateway.GetServices')
+      .lose('Gateway.GetCapabilityCatalog', 'mock socket closed')
+    const client = new AuroraClient({ transport })
+
+    const permission = await client.requestResult('Gateway.GetRegistry')
+    const timeout = await client.requestResult('Gateway.GetServices')
+    const loss = await client.requestResult('Gateway.GetCapabilityCatalog')
+
+    expect(permission.ok).toBe(false)
+    if (!permission.ok) expect(permission.error.code).toBe('permission')
+    expect(timeout.ok).toBe(false)
+    if (!timeout.ok) expect(timeout.error.code).toBe('timeout')
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
 
   it('normalizes successful results with audit and redaction metadata', async () => {
@@ -316,6 +518,68 @@ describe('AuroraClient', () => {
     }
   })
 
+  it('uses Gateway built-in GET routes with auth headers and no request body', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local/',
+      apiKey: 'test-api-key',
+      bearerToken: 'test-bearer-token',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(
+          JSON.stringify({
+            digest: 'fixture',
+            modules: [],
+            service_count: 0,
+            method_count: 0
+          }),
+          {
+            status: 200,
+            headers: { 'x-correlation-id': 'corr-http-registry' }
+          }
+        )
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await expect(client.registry.getRegistry()).resolves.toEqual(
+      expect.objectContaining({ digest: 'fixture' })
+    )
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://aurora.local/api/registry')
+    expect(calls[0]?.init.method).toBe('GET')
+    expect(calls[0]?.init.body).toBeUndefined()
+    expect(calls[0]?.init.headers).toEqual(
+      expect.objectContaining({
+        'X-API-Key': 'test-api-key',
+        Authorization: 'Bearer test-bearer-token',
+        'content-type': 'application/json'
+      })
+    )
+  })
+
+  it('posts dynamic generated route payloads by method identity when no explicit path is supplied', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(JSON.stringify({ route_decision: 'local', topic: 'TTS.Synthesize' }), {
+          status: 200
+        })
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await expect(client.request('TTS.Synthesize', { text: 'hello' })).resolves.toEqual(
+      expect.objectContaining({ route_decision: 'local' })
+    )
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://aurora.local/api/TTS/Synthesize')
+    expect(calls[0]?.init.method).toBe('POST')
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ text: 'hello' }))
+  })
+
   it('classifies HTTP auth, validation, timeout, and unavailable service failures', async () => {
     const responses = [401, 422, 504, 503]
     const expected = ['auth', 'validation', 'timeout', 'unavailable_service']
@@ -361,8 +625,55 @@ describe('AuroraClient', () => {
     }
   })
 
+  it('classifies HTTP detail-code unsupported, privacy, and native permission failures', async () => {
+    const cases = [
+      [{ detail: { code: 'unsupported_feature', message: 'Unsupported method' } }, 'unsupported_feature'],
+      [{ detail: { reason_code: 'privacy_blocked', message: 'Explicit selector required' } }, 'privacy_blocked'],
+      [{ detail: { code: 'native_permission_missing', message: 'Native permission missing' } }, 'native_permission_missing']
+    ] as const
+
+    for (const [body, expected] of cases) {
+      const transport = new HttpGatewayTransport({
+        baseUrl: 'http://aurora.local',
+        fetchImpl: async () => new Response(JSON.stringify(body), { status: 428 })
+      })
+      const client = new AuroraClient({ transport })
+      const result = await client.requestResult('Gateway.ExplainRoute', { topic: 'TTS.Synthesize' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(expected)
+    }
+  })
+
+  it('classifies HTTP abort timeout and network send failures', async () => {
+    const timeoutTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      defaultTimeoutMs: 5,
+      fetchImpl: async () => {
+        throw new DOMException('Request aborted', 'AbortError')
+      }
+    })
+    const timeoutClient = new AuroraClient({ transport: timeoutTransport })
+    const timeoutResult = await timeoutClient.requestResult('Gateway.GetRegistry')
+
+    expect(timeoutResult.ok).toBe(false)
+    if (!timeoutResult.ok) expect(timeoutResult.error.code).toBe('timeout')
+
+    const lossTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () => {
+        throw new TypeError('fetch failed')
+      }
+    })
+    const lossClient = new AuroraClient({ transport: lossTransport })
+    const lossResult = await lossClient.requestResult('Gateway.GetRegistry')
+
+    expect(lossResult.ok).toBe(false)
+    if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
+  })
+
   it('classifies unsupported, privacy blocked, and native permission errors', async () => {
-    const unsupportedClient = new AuroraClient({ transport: new MockAuroraTransport() })
+    const unsupportedClient = new AuroraClient({ transport: MockAuroraTransport.empty() })
     const unsupported = await unsupportedClient.result(() => unsupportedClient.registry.getRegistry())
     expect(unsupported.ok).toBe(false)
     if (!unsupported.ok) expect(unsupported.error.code).toBe('unsupported_feature')
@@ -391,6 +702,157 @@ describe('AuroraClient', () => {
     })
     expect(native.ok).toBe(false)
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
+  })
+
+  it('bridges SDK requests through Tauri invoke without rewriting method identity', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        return {
+          data: gatewayRegistryFixture,
+          status: 200,
+          audit: { correlationId: 'corr-tauri-registry' }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const registry = await client.registry.getRegistry()
+    const result = await client.requestResult('Gateway.GetRegistry')
+
+    expect(registry.digest).toBe('fixture')
+    expect(calls[0]).toEqual({
+      command: 'aurora_request',
+      args: {
+        request: expect.objectContaining({
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          path: '/api/registry',
+          httpMethod: 'GET'
+        })
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-tauri-registry',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          transport: 'tauri-local'
+        })
+      )
+    }
+  })
+
+  it('exposes Tauri native sidecar, secure storage, and local file helpers', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_sidecar_status':
+            return { running: true, mode: 'sidecar', pid: 42 }
+          case 'aurora_native_capability_manifest':
+            return nativeCapabilityManifestFixture
+          case 'aurora_secure_storage_get':
+            return { key: 'session', value: 'token-ref' }
+          case 'aurora_secure_storage_set':
+          case 'aurora_secure_storage_delete':
+            return { key: String(args?.key), ok: true }
+          case 'aurora_local_file_read':
+            return { path: String(args?.path), data: 'hello', encoding: 'utf-8' }
+          case 'aurora_local_file_write':
+            return { path: String(args?.path), ok: true, bytesWritten: 5 }
+          case 'aurora_local_file_pick':
+            return { paths: ['/tmp/a.txt'], cancelled: false }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getSidecarStatus()).resolves.toEqual(
+      expect.objectContaining({ running: true, mode: 'sidecar' })
+    )
+    await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
+    await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.readLocalFile('/tmp/a.txt')).resolves.toEqual({
+      path: '/tmp/a.txt',
+      data: 'hello',
+      encoding: 'utf-8'
+    })
+    await expect(transport.writeLocalFile('/tmp/a.txt', 'hello')).resolves.toEqual({
+      path: '/tmp/a.txt',
+      ok: true,
+      bytesWritten: 5
+    })
+    await expect(transport.pickLocalFile({ multiple: false })).resolves.toEqual({
+      paths: ['/tmp/a.txt'],
+      cancelled: false
+    })
+
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_sidecar_status',
+      'aurora_native_capability_manifest',
+      'aurora_secure_storage_get',
+      'aurora_secure_storage_set',
+      'aurora_secure_storage_delete',
+      'aurora_local_file_read',
+      'aurora_local_file_write',
+      'aurora_local_file_pick'
+    ])
+    expect(calls[3]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[6]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+  })
+
+  it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
+    const cases = [
+      [{ status: 401, detail: { message: 'auth required' } }, 'auth'],
+      [{ status: 403, detail: { message: 'forbidden' } }, 'permission'],
+      [{ detail: { code: 'validation_error', message: 'bad payload' } }, 'validation'],
+      [{ detail: { code: 'unavailable_service', message: 'service unavailable' } }, 'unavailable_service'],
+      [{ detail: { code: 'unsupported_feature', message: 'unsupported' } }, 'unsupported_feature'],
+      [{ detail: { reason_code: 'privacy_blocked', message: 'privacy blocked' } }, 'privacy_blocked'],
+      [{ detail: { code: 'native_permission_missing', message: 'native permission missing' } }, 'native_permission_missing']
+    ] as const
+
+    for (const [error, expected] of cases) {
+      const client = new AuroraClient({
+        transport: new TauriLocalTransport({
+          invoke: async () => {
+            throw error
+          }
+        })
+      })
+      const result = await client.requestResult('Gateway.GetRegistry')
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(expected)
+    }
+
+    const timeoutClient = new AuroraClient({
+      transport: new TauriLocalTransport({
+        defaultTimeoutMs: 1,
+        invoke: async () => new Promise(() => undefined)
+      })
+    })
+    const timeout = await timeoutClient.requestResult('Gateway.GetRegistry', undefined, { timeoutMs: 1 })
+    expect(timeout.ok).toBe(false)
+    if (!timeout.ok) expect(timeout.error.code).toBe('timeout')
+
+    const lossClient = new AuroraClient({
+      transport: new TauriLocalTransport({
+        invoke: async () => {
+          throw new TypeError('ipc closed')
+        }
+      })
+    })
+    const loss = await lossClient.requestResult('Gateway.GetRegistry')
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
 
   it('tracks user, admin, mesh peer, system, expired, and revoked auth session states', () => {
@@ -604,6 +1066,159 @@ describe('AuroraClient', () => {
   })
 })
 
+describe('permissions', () => {
+  it('matches backend permission semantics without lowercasing backend IDs', () => {
+    expect(hasPermission('Auth.DeletePrincipal', ['*'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.DeletePrincipal'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.*'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.manage'], 'manage')).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.use'], 'manage')).toBe(false)
+    expect(hasPermission('Auth.DeletePrincipal', ['auth.*'])).toBe(false)
+
+    expect(checkAccess(['Gateway.use'], ['Gateway.GetRegistry'], 'use')).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        satisfied: ['Gateway.GetRegistry'],
+        missing: [],
+        grants: { 'Gateway.GetRegistry': 'Gateway.use' }
+      })
+    )
+
+    expect(checkAccess(['Gateway.use'], ['Gateway.InternalOnly'], 'manage')).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        missing: ['Gateway.InternalOnly'],
+        grants: { 'Gateway.InternalOnly': null }
+      })
+    )
+  })
+
+  it('resolves effective permissions with backend wildcard intersection rules', () => {
+    expect(resolveEffectivePermissions({
+      userPermissions: ['Gateway.use', 'Auth.manage'],
+      userIsAdmin: true,
+      tokenScopes: ['Gateway.use']
+    })).toEqual(['*'])
+
+    expect(resolveEffectivePermissions({
+      userPermissions: ['Gateway.use', 'Auth.manage'],
+      tokenScopes: ['all']
+    })).toEqual(['Auth.manage', 'Gateway.use'])
+
+    expect(wildcardIntersection(['TTS.Synthesize', 'DB.RagSearch'], ['TTS.*'])).toEqual(['TTS.Synthesize'])
+    expect(resolveEffectivePermissions({
+      userPermissions: ['TTS.*', 'Gateway.GetRegistry'],
+      tokenScopes: ['TTS.Synthesize', 'Gateway.*']
+    })).toEqual(['Gateway.GetRegistry', 'TTS.Synthesize'])
+  })
+
+  it('builds a permission catalog from generated backend inventory and gateway builtins', () => {
+    const catalog = buildPermissionCatalogFromBackendInventory(backendInventoryFixture)
+    const byId = new Map(catalog.map((entry) => [entry.id, entry]))
+
+    expect(byId.get('*')).toEqual(
+      expect.objectContaining({
+        label: 'Full access',
+        kind: 'all'
+      })
+    )
+    expect(byId.get('Gateway.use')).toEqual(
+      expect.objectContaining({
+        id: 'Gateway.use',
+        label: 'Use Gateway',
+        kind: 'method_type'
+      })
+    )
+    expect(byId.get('Gateway.manage')).toEqual(
+      expect.objectContaining({
+        id: 'Gateway.manage',
+        methodType: 'manage'
+      })
+    )
+    expect(byId.get('Auth.manage')).toEqual(
+      expect.objectContaining({
+        id: 'Auth.manage',
+        label: 'Manage Auth',
+        kind: 'method_type',
+        availableOverHttp: true,
+        requiredBy: [
+          expect.objectContaining({
+            method: 'list_peers',
+            routePath: '/api/admin/peers',
+            source: 'gateway_builtin'
+          })
+        ]
+      })
+    )
+    expect(catalog.map((entry) => entry.id)).toEqual(expect.arrayContaining(['Gateway.GetRegistry', 'Gateway.*']))
+    expect(permissionLabel('Tooling.use')).toBe('Use Tooling')
+  })
+
+  it('builds a registry-backed permission catalog through AuroraClient and preserves transport-loss failures', async () => {
+    const client = new AuroraClient({
+      transport: new MockAuroraTransport().register('Gateway.GetRegistry', gatewayRegistryFixture)
+    })
+    client.auth.updateFromTokenValidation({
+      valid: true,
+      principal_id: 'user-1',
+      permissions: ['Gateway.use'],
+      effective_perms: ['Gateway.use'],
+      is_admin: false
+    })
+
+    const catalog = await client.permissions.listCatalog({ gatewayBuiltins: gatewayBuiltinRoutesFixture })
+    expect(catalog.map((entry) => entry.id)).toEqual(expect.arrayContaining(['Gateway.use', 'Auth.manage']))
+    expect(client.permissions.has('Gateway.GetRegistry', 'use')).toBe(true)
+    expect(client.permissions.check(['Gateway.InternalOnly'], 'manage')).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        missing: ['Gateway.InternalOnly']
+      })
+    )
+
+    const result = await new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async () => {
+          throw new TypeError('registry offline')
+        }
+      }
+    }).result(async function loadPermissions() {
+      const failingClient = new AuroraClient({
+        transport: {
+          kind: 'mock',
+          request: async () => {
+            throw new TypeError('registry offline')
+          }
+        }
+      })
+      return failingClient.permissions.listCatalog()
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('transport_loss')
+  })
+
+  it('builds manual catalog entries from registry descriptors and builtins without invented IDs', () => {
+    const methods = describeRegistry(gatewayRegistryFixture)
+    const catalog = buildPermissionCatalog({ methods, gatewayBuiltins: gatewayBuiltinRoutesFixture })
+
+    expect(catalog.find((entry) => entry.id === 'Gateway.GetRegistry')).toEqual(
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        routePath: '/api/Gateway/GetRegistry',
+        availableOverHttp: true
+      })
+    )
+    expect(catalog.find((entry) => entry.id === 'Gateway.manage')).toEqual(
+      expect.objectContaining({
+        busTopic: null,
+        kind: 'method_type'
+      })
+    )
+  })
+})
+
 describe('descriptors', () => {
   it('uses bus topic plus method name as identity source', () => {
     expect(describeRegistry(gatewayRegistryFixture)[0]).toEqual(
@@ -650,6 +1265,45 @@ describe('descriptors', () => {
         routePath: '/api/admin/peers',
         methodType: 'manage',
         requiredPermissions: ['Auth.manage']
+      })
+    ])
+  })
+
+  it('compares registry fixtures against backend inventory snapshots', () => {
+    const comparison = compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture)
+
+    expect(comparison).toEqual({
+      ok: true,
+      checked: 2,
+      issues: []
+    })
+
+    const mismatched = compareRegistryFixtureToBackendInventory(
+      {
+        ...gatewayRegistryFixture,
+        modules: [
+          {
+            ...gatewayRegistryFixture.modules[0]!,
+            methods: [
+              {
+                ...gatewayRegistryFixture.modules[0]!.methods[0]!,
+                required_perms: ['gateway.use']
+              }
+            ]
+          }
+        ],
+        method_count: 1
+      },
+      backendInventoryFixture
+    )
+
+    expect(mismatched.ok).toBe(false)
+    expect(mismatched.issues).toEqual([
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        field: 'requiredPermissions',
+        fixture: ['gateway.use'],
+        inventory: ['Gateway.use']
       })
     ])
   })

@@ -137,6 +137,7 @@ class Supervisor(BaseService):
 
         # Import services
         from app.services.auth import AuthService
+        from app.services.backup import BackupService
         from app.services.config import ConfigService
         from app.services.db import DBService
         from app.services.gateway import GatewayService
@@ -153,6 +154,7 @@ class Supervisor(BaseService):
         config_service = ConfigService()
         db_service = DBService()
         auth_service = AuthService()
+        backup_service = BackupService()
         tooling_service = ToolingService()
         scheduler_service = SchedulerService()
         orchestrator_service = OrchestratorService()
@@ -187,6 +189,16 @@ class Supervisor(BaseService):
             log_info("✓ Auth service started")
         except Exception as e:
             log_error(f"Failed to start Auth service: {e}", exc_info=True)
+            raise
+
+        # Start Backup service (depends on Config and DB contracts)
+        try:
+            log_info("Starting Backup service...")
+            await backup_service.start()
+            self.services.append(backup_service)
+            log_info("✓ Backup service started")
+        except Exception as e:
+            log_error(f"Failed to start Backup service: {e}", exc_info=True)
             raise
 
         # Start Tooling service (needs DB to be ready for tool sync)
@@ -251,6 +263,7 @@ class Supervisor(BaseService):
             ("ConfigService", "app.services.config"),
             ("DBService", "app.services.db"),
             ("AuthService", "app.services.auth"),
+            ("BackupService", "app.services.backup"),
             ("ToolingService", "app.services.tooling"),
             ("SchedulerService", "app.services.scheduler"),
             ("OrchestratorService", "app.services.orchestrator"),

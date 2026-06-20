@@ -34,6 +34,7 @@ export interface AuroraRequest<TPayload = unknown> {
   method: string
   busTopic?: string | undefined
   path?: string | undefined
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | undefined
   payload?: TPayload | undefined
   timeoutMs?: number | undefined
   headers?: Record<string, string> | undefined
@@ -360,6 +361,211 @@ export interface CapabilitySummary {
   routeBlockers: string[]
   selector: unknown
   raw: CapabilityActionInfo
+}
+
+export type CapabilityProviderIdentity =
+  | 'local'
+  | `remote:${string}`
+  | `native:${string}`
+  | 'cloud'
+  | 'unavailable'
+  | 'blocked'
+  | string
+
+export interface CapabilityProviderCandidate {
+  id: string
+  featureId: string
+  providerIdentity: CapabilityProviderIdentity
+  providerId: string
+  providerKind: string
+  peerId: string | null
+  serviceInstanceId: string | null
+  module: string
+  method: string
+  busTopic: string | null
+  toolId: string | null
+  resourceId: string | null
+  availability: AvailabilityState
+  selectable: boolean
+  selected: boolean
+  trustTier: string
+  routeability: string
+  freshness: CapabilityFreshnessInfo
+  requiredPermissions: string[]
+  privacyClass: PrivacyClass
+  disabledReasons: string[]
+  requiredAction: string | null
+  selector: unknown
+  source: 'catalog' | 'registry' | 'native-manifest'
+  raw: CapabilityActionInfo | MethodDescriptor | null
+}
+
+export interface CapabilityGraphNode {
+  featureId: string
+  module: string
+  method: string
+  busTopic: string | null
+  kind: 'method' | 'tool' | 'resource' | 'native' | string
+  availability: AvailabilityState
+  privacyClass: PrivacyClass
+  providerIdentity: CapabilityProviderIdentity
+  selectedProvider: CapabilityProviderCandidate | null
+  providers: CapabilityProviderCandidate[]
+  alternateProviders: CapabilityProviderCandidate[]
+  requiredPermissions: string[]
+  disabledReason: string | null
+  requiredAction: string | null
+  freshness: CapabilityFreshnessInfo | null
+  selectorRequired: boolean
+  approvalRequired: boolean
+  routeable: boolean
+  trustTier: string | null
+  rawActions: CapabilityActionInfo[]
+}
+
+export interface CapabilityExplanation {
+  featureId: string
+  state: AvailabilityState
+  summary: string
+  selectedProvider: CapabilityProviderCandidate | null
+  providerCandidates: CapabilityProviderCandidate[]
+  alternateProviders: CapabilityProviderCandidate[]
+  disabledReason: string | null
+  nextRepairAction: string | null
+  selectorRequired: boolean
+  approvalRequired: boolean
+  routeable: boolean
+  requiredPermissions: string[]
+  privacyClass: PrivacyClass
+  evidence: {
+    generatedAt: string
+    secretsRedacted: boolean
+    sources: string[]
+  }
+}
+
+export interface CapabilityGraph {
+  generatedAt: string
+  localPeerId: string | null
+  localNodeName: string
+  secretsRedacted: boolean
+  nodes: CapabilityGraphNode[]
+  byFeatureId: Record<string, CapabilityGraphNode>
+  providerIndex: Record<string, string[]>
+  candidateProviderIndex: Record<string, string[]>
+  explain(featureId: string): CapabilityExplanation
+}
+
+export interface CapabilityGraphInput {
+  catalog: CapabilityCatalogResponse
+  registry?: GetRegistryResponse | null
+  nativeManifest?: NativeCapabilityManifest | null
+  transportKind?: AuroraTransportKind | null
+}
+
+export interface ModelRuntimeFileInfo {
+  kind: string
+  display_name: string
+  exists: boolean | null
+  size_bytes: number | null
+  path_redacted: boolean
+}
+
+export interface ModelRuntimeBenchmarkInfo {
+  status: string
+  tokens_per_second: number | null
+  latency_ms: number | null
+  measured_at: string | null
+  reason: string | null
+}
+
+export interface ModelRuntimeProgressInfo {
+  operation_id: string | null
+  operation_type: string
+  status: string
+  progress_percent: number
+  message: string
+  updated_at: string | null
+}
+
+export interface ModelRuntimeProviderInfo {
+  provider_id: string
+  display_name: string
+  backend_kind: string
+  provider_type: string
+  enabled: boolean
+  selected: boolean
+  health: string
+  health_reason: string | null
+  model_id: string | null
+  source: string | null
+  license: string | null
+  context_window: number | null
+  generation_limit: number | null
+  hardware: JsonObject
+  model_files: ModelRuntimeFileInfo[]
+  capabilities: string[]
+  benchmark: ModelRuntimeBenchmarkInfo
+  import_progress: ModelRuntimeProgressInfo
+  download_progress: ModelRuntimeProgressInfo
+  secrets_redacted: boolean
+}
+
+export interface ModelRuntimeRequest {
+  provider_id?: string | null
+  include_unavailable?: boolean
+}
+
+export interface ModelRuntimeCatalogRequest {
+  include_unavailable?: boolean
+  include_operations?: boolean
+}
+
+export interface ModelRuntimeCatalogResponse {
+  generated_at: string
+  selected_provider_id: string | null
+  providers: ModelRuntimeProviderInfo[]
+  provider_index: Record<string, string[]>
+  unavailable: string[]
+  internal_only: string[]
+  secrets_redacted: boolean
+}
+
+export interface ModelRuntimeResponse {
+  generated_at: string
+  selected_provider_id: string | null
+  provider: ModelRuntimeProviderInfo | null
+  providers: ModelRuntimeProviderInfo[]
+  secrets_redacted: boolean
+}
+
+export interface ModelRuntimeOperationRequest {
+  provider_id?: string | null
+  model_id?: string | null
+  source_uri?: string | null
+  target_name?: string | null
+  options?: JsonObject
+  dry_run?: boolean
+}
+
+export interface ModelRuntimeOperationStatusRequest {
+  operation_id: string
+}
+
+export interface ModelRuntimeOperationResponse {
+  operation_id: string
+  operation_type: string
+  status: string
+  provider_id: string | null
+  model_id: string | null
+  progress_percent: number
+  message: string
+  reason_code: string | null
+  started_at: string | null
+  updated_at: string | null
+  completed_at: string | null
+  audit_event: string | null
+  secrets_redacted: boolean
 }
 
 export interface PeerSummary {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T03:21:59.727Z",
+  "updatedAt": "2026-06-20T07:59:30.745Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -258,6 +258,38 @@
       "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was narrower than the aggregate Ultragoal objective. PER-190 implemented in commit 131f9f9 and PR https://github.com/joaojhgs/aurora/pull/69. Verification passed: /home/developer/.local/bin/uv run pytest tests/unit/gateway/test_mesh_observability.py tests/unit/gateway/test_event_stream_route.py -q; /home/developer/.local/bin/uv run python -m py_compile touched Python files; git diff --check. Ruff unavailable: uv run ruff failed to spawn and python -m ruff reported no module named ruff.",
       "startedAt": "2026-06-20T03:21:59.727Z",
       "completedAt": "2026-06-20T03:27:21.559Z"
+    },
+    {
+      "id": "G024-per-192-diagnostics-support-bundle-c",
+      "title": "PER-192 diagnostics support bundle contract",
+      "objective": "Implement and verify the PER-192 redacted diagnostics support bundle contract, tests, docs, PR, and QA handoff without touching unrelated changes.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-06-20T05:59:09.772Z",
+      "updatedAt": "2026-06-20T05:59:09.772Z",
+      "evidence": ".omx/plans/PER-192-diagnostics-support-bundle.md"
+    },
+    {
+      "id": "G025-per-193-backup-restore-contracts",
+      "title": "PER-193 backup restore contracts",
+      "objective": "Implement and verify PER-193 BE-006 backup/restore contracts for config, DB/RAG, and model state with manage permissions, AdminAction/audit behavior, tests, PR, and QA handoff without touching unrelated changes.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T07:06:05.901Z",
+      "updatedAt": "2026-06-20T07:15:11.839Z",
+      "evidence": "PER-193 implementation complete locally. Verification passed: /home/developer/.local/bin/uv run pytest tests/unit/services/test_backup_service.py tests/unit/gateway/test_route_generator_adminaction.py -q (12 passed); /home/developer/.local/bin/uv run python -m py_compile touched Python files; git diff --check. Ruff unavailable: uv run ruff failed to spawn because ruff is not installed.",
+      "completedAt": "2026-06-20T07:15:11.839Z"
+    },
+    {
+      "id": "G026-per-194-model-runtime-catalog-contra",
+      "title": "PER-194 model runtime catalog contracts",
+      "objective": "Implement and verify PER-194 / BE-007 model runtime, catalog, import, download, benchmark contracts, SDK descriptors, tests, PR, and QA handoff without production UI wiring or unrelated changes.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T07:52:09.649Z",
+      "updatedAt": "2026-06-20T07:59:30.745Z",
+      "evidence": "PER-194 implementation verified locally before PR: py_compile passed for changed Python files; targeted pytest passed 10 tests; SDK build passed; git diff --check passed; Ruff unavailable in repo venv via python -m ruff.",
+      "completedAt": "2026-06-20T07:59:30.745Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",

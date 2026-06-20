@@ -1,0 +1,385 @@
+import { AuroraError, classifyHttpError, readDetailCode, type AuroraErrorCode } from './errors.js'
+import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
+import type { AuditReceipt, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
+
+export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
+
+export interface TauriCommandNames {
+  request: string
+  sidecarStatus: string
+  nativeCapabilityManifest: string
+  secureStorageGet: string
+  secureStorageSet: string
+  secureStorageDelete: string
+  localFileRead: string
+  localFileWrite: string
+  localFilePick: string
+}
+
+export interface TauriLocalTransportOptions {
+  invoke?: TauriInvoke
+  commands?: Partial<TauriCommandNames>
+  requestArgName?: string
+  defaultTimeoutMs?: number
+}
+
+export interface TauriSidecarStatus {
+  running: boolean
+  mode?: 'threads' | 'processes' | 'sidecar' | string
+  pid?: number | null
+  gatewayUrl?: string | null
+  version?: string | null
+  lastError?: string | null
+  details?: JsonObject
+}
+
+export interface SecureStorageGetResult {
+  key: string
+  value: string | null
+}
+
+export interface SecureStorageWriteResult {
+  key: string
+  ok: boolean
+}
+
+export interface LocalFileReadOptions {
+  encoding?: 'utf-8' | 'base64' | 'bytes'
+}
+
+export interface LocalFileReadResult {
+  path: string
+  data: string | number[]
+  encoding: 'utf-8' | 'base64' | 'bytes'
+}
+
+export interface LocalFileWriteOptions {
+  encoding?: 'utf-8' | 'base64' | 'bytes'
+  createDirs?: boolean
+}
+
+export interface LocalFileWriteResult {
+  path: string
+  bytesWritten?: number
+  ok: boolean
+}
+
+export interface LocalFilePickOptions {
+  multiple?: boolean
+  directory?: boolean
+  filters?: Array<{ name: string; extensions: string[] }>
+}
+
+export interface LocalFilePickResult {
+  paths: string[]
+  cancelled: boolean
+}
+
+const DEFAULT_COMMANDS: TauriCommandNames = {
+  request: 'aurora_request',
+  sidecarStatus: 'aurora_sidecar_status',
+  nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  secureStorageGet: 'aurora_secure_storage_get',
+  secureStorageSet: 'aurora_secure_storage_set',
+  secureStorageDelete: 'aurora_secure_storage_delete',
+  localFileRead: 'aurora_local_file_read',
+  localFileWrite: 'aurora_local_file_write',
+  localFilePick: 'aurora_local_file_pick'
+}
+
+export class TauriLocalTransport implements AuroraTransport {
+  readonly kind = 'tauri-local'
+  readonly commands: TauriCommandNames
+  private readonly invokeImpl: TauriInvoke
+  private readonly requestArgName: string
+  private readonly defaultTimeoutMs: number
+
+  constructor(options: TauriLocalTransportOptions = {}) {
+    this.invokeImpl = options.invoke ?? resolveTauriInvoke()
+    this.commands = { ...DEFAULT_COMMANDS, ...options.commands }
+    this.requestArgName = options.requestArgName ?? 'request'
+    this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
+  }
+
+  async request<TData = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>
+  ): Promise<AuroraTransportResponse<TData>> {
+    const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs
+    const args = { [this.requestArgName]: request }
+    const context: TauriInvokeContext = { timeoutMs, method: request.method }
+    if (request.signal !== undefined) context.signal = request.signal
+    if (request.busTopic !== undefined) context.busTopic = request.busTopic
+    const value = await this.invokeCommand<unknown>(this.commands.request, args, context)
+    const envelope = toTransportEnvelope<TData>(value)
+    return {
+      ...envelope,
+      audit: {
+        ...envelope.audit,
+        method: envelope.audit?.method ?? request.method,
+        busTopic: envelope.audit?.busTopic ?? request.busTopic ?? null,
+        transport: this.kind
+      }
+    }
+  }
+
+  getSidecarStatus(): Promise<TauriSidecarStatus> {
+    return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStatus)
+  }
+
+  getNativeCapabilityManifest(): Promise<NativeCapabilityManifest> {
+    return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
+  }
+
+  secureStorageGet(key: string): Promise<SecureStorageGetResult> {
+    return this.invokeCommand<SecureStorageGetResult>(this.commands.secureStorageGet, { key })
+  }
+
+  secureStorageSet(key: string, value: string): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageSet, { key, value })
+  }
+
+  secureStorageDelete(key: string): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
+  }
+
+  readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileReadResult> {
+    return this.invokeCommand<LocalFileReadResult>(this.commands.localFileRead, { path, options })
+  }
+
+  writeLocalFile(
+    path: string,
+    data: string | number[],
+    options: LocalFileWriteOptions = {}
+  ): Promise<LocalFileWriteResult> {
+    return this.invokeCommand<LocalFileWriteResult>(this.commands.localFileWrite, { path, data, options })
+  }
+
+  pickLocalFile(options: LocalFilePickOptions = {}): Promise<LocalFilePickResult> {
+    return this.invokeCommand<LocalFilePickResult>(this.commands.localFilePick, { options })
+  }
+
+  async invokeNative<TResponse = unknown>(
+    command: string,
+    args?: Record<string, unknown>
+  ): Promise<TResponse> {
+    return this.invokeCommand<TResponse>(command, args)
+  }
+
+  private async invokeCommand<TResponse>(
+    command: string,
+    args?: Record<string, unknown>,
+    context: TauriInvokeContext = {}
+  ): Promise<TResponse> {
+    try {
+      const timeoutOptions: TauriTimeoutOptions = { command }
+      if (context.timeoutMs !== undefined) timeoutOptions.timeoutMs = context.timeoutMs
+      if (context.signal !== undefined) timeoutOptions.signal = context.signal
+      return await withTimeout(this.invokeImpl(command, args).then((value) => value as TResponse), timeoutOptions)
+    } catch (error) {
+      throw normalizeTauriError(error, {
+        method: context.method ?? command,
+        busTopic: context.busTopic
+      })
+    }
+  }
+}
+
+interface TauriInvokeContext {
+  timeoutMs?: number
+  signal?: AbortSignal
+  method?: string
+  busTopic?: string
+}
+
+function resolveTauriInvoke(): TauriInvoke {
+  const tauri = (globalThis as { __TAURI__?: { core?: { invoke?: TauriInvoke }; invoke?: TauriInvoke } }).__TAURI__
+  const invoke = tauri?.core?.invoke ?? tauri?.invoke
+  if (!invoke) {
+    throw new AuroraError({
+      code: 'unsupported_feature',
+      message: 'Tauri invoke is unavailable; pass an invoke implementation to TauriLocalTransport.'
+    })
+  }
+  return invoke
+}
+
+function toTransportEnvelope<TData>(value: unknown): AuroraTransportEnvelope<TData> {
+  if (isTransportEnvelope<TData>(value)) return value
+  return { data: value as TData }
+}
+
+function isTransportEnvelope<TData>(value: unknown): value is AuroraTransportEnvelope<TData> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'data' in value &&
+    ('status' in value || 'headers' in value || 'audit' in value)
+  )
+}
+
+interface TauriTimeoutOptions {
+  timeoutMs?: number
+  signal?: AbortSignal
+  command: string
+}
+
+async function withTimeout<TResponse>(promise: Promise<TResponse>, options: TauriTimeoutOptions): Promise<TResponse> {
+  const racers: Array<Promise<TResponse>> = [promise]
+  let timeout: ReturnType<typeof setTimeout> | undefined
+
+  if (options.timeoutMs !== undefined) {
+    racers.push(
+      new Promise<TResponse>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new AuroraError({
+              code: 'timeout',
+              message: `Tauri command ${options.command} timed out after ${options.timeoutMs}ms`
+            })
+          )
+        }, options.timeoutMs)
+      })
+    )
+  }
+
+  if (options.signal) {
+    racers.push(
+      new Promise<TResponse>((_, reject) => {
+        if (options.signal?.aborted) {
+          reject(new AuroraError({ code: 'timeout', message: `Tauri command ${options.command} was aborted` }))
+          return
+        }
+        options.signal?.addEventListener(
+          'abort',
+          () => {
+            reject(new AuroraError({ code: 'timeout', message: `Tauri command ${options.command} was aborted` }))
+          },
+          { once: true }
+        )
+      })
+    )
+  }
+
+  try {
+    return await Promise.race(racers)
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout)
+  }
+}
+
+function normalizeTauriError(
+  error: unknown,
+  context: { method: string; busTopic?: string | undefined }
+): AuroraError {
+  if (error instanceof AuroraError) return enrichAuroraError(error, context)
+  if (isAbortError(error)) {
+    return new AuroraError({
+      code: 'timeout',
+      message: 'Tauri command timed out',
+      method: context.method,
+      busTopic: context.busTopic,
+      cause: error
+    })
+  }
+  if (error instanceof TypeError) {
+    return new AuroraError({
+      code: 'transport_loss',
+      message: error.message,
+      method: context.method,
+      busTopic: context.busTopic,
+      cause: error
+    })
+  }
+
+  const detail = readErrorDetail(error)
+  const status = readStatus(error)
+  const code = classifyTauriError(status, detail)
+  return new AuroraError({
+    code,
+    message: readErrorMessage(error, detail) ?? `Tauri command failed: ${context.method}`,
+    status,
+    method: context.method,
+    busTopic: context.busTopic,
+    correlationId: readCorrelationId(error, detail),
+    detail,
+    cause: error
+  })
+}
+
+function enrichAuroraError(
+  error: AuroraError,
+  context: { method: string; busTopic?: string | undefined }
+): AuroraError {
+  return new AuroraError({
+    code: error.code,
+    message: error.message,
+    status: error.status,
+    method: error.method ?? context.method,
+    busTopic: error.busTopic ?? context.busTopic,
+    correlationId: error.correlationId,
+    detail: error.detail,
+    cause: error
+  })
+}
+
+function classifyTauriError(status: number | undefined, detail: unknown): AuroraErrorCode {
+  if (status !== undefined) return classifyHttpError(status, detail)
+  const detailCode = readDetailCode(detail)?.toLowerCase()
+  const text = readErrorMessage(detail, detail)?.toLowerCase() ?? ''
+  if (detailCode?.includes('native_permission') || text.includes('native permission')) {
+    return 'native_permission_missing'
+  }
+  if (detailCode?.includes('auth') || text.includes('authentication')) return 'auth'
+  if (detailCode?.includes('permission') || text.includes('permission denied')) return 'permission'
+  if (detailCode?.includes('validation') || text.includes('validation')) return 'validation'
+  if (detailCode?.includes('timeout') || text.includes('timed out')) return 'timeout'
+  if (detailCode?.includes('unavailable') || text.includes('unavailable')) return 'unavailable_service'
+  if (detailCode?.includes('unsupported') || text.includes('unsupported')) return 'unsupported_feature'
+  if (detailCode?.includes('privacy') || text.includes('privacy')) return 'privacy_blocked'
+  return 'unknown'
+}
+
+function readErrorDetail(error: unknown): unknown {
+  if (typeof error === 'object' && error !== null && 'detail' in error) return (error as { detail?: unknown }).detail
+  return error
+}
+
+function readStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  const status = (error as { status?: unknown; status_code?: unknown }).status ?? (error as { status_code?: unknown }).status_code
+  return typeof status === 'number' ? status : undefined
+}
+
+function readCorrelationId(error: unknown, detail: unknown): string | undefined {
+  return readString(error, 'correlationId', 'correlation_id') ?? readString(detail, 'correlationId', 'correlation_id') ?? undefined
+}
+
+function readErrorMessage(error: unknown, detail: unknown): string | null {
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  if (typeof detail === 'string') return detail
+  return (
+    readString(detail, 'message', 'error', 'reason') ??
+    readString(error, 'message', 'error', 'reason') ??
+    null
+  )
+}
+
+function readString(value: unknown, ...keys: string[]): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  for (const key of keys) {
+    const found = (value as Record<string, unknown>)[key]
+    if (typeof found === 'string') return found
+  }
+  return null
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'name' in error &&
+      (error as { name?: unknown }).name === 'AbortError')
+  )
+}

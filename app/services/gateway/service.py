@@ -19,17 +19,22 @@ from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.bus import Envelope
+from app.services.gateway.admin_action import AdminActionManager
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
     Auth as AuthConfigModel,
     Gateway as GatewayConfigModel,
     MeshSharing,
 )
-from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods
+from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.aurora import AuroraMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
+    AdminActionConfirmRequest,
+    AdminActionConfirmResponse,
+    AdminActionDraftRequest,
+    AdminActionDraftResponse,
     CapabilityCatalogRequest,
     CapabilityCatalogResponse,
     CapabilityCatalogSummary,
@@ -40,7 +45,11 @@ from app.shared.contracts.models.gateway import (
     GatewayMethods,
     GatewaySupportBundleRequest,
     GatewaySupportBundleResponse,
+    GetRegistryResponse,
     GetMeshStatusResponse,
+    GetServiceHealthRequest,
+    GetServiceHealthResponse,
+    GetServicesResponse,
     MeshCompatibilityFailure,
     MeshLocalStatus,
     MeshPeerCompatibilityDiagnostic,
@@ -50,6 +59,8 @@ from app.shared.contracts.models.gateway import (
     MeshRouteProviderDiagnostic,
     RouteExplainRequest,
     RouteExplainResponse,
+    ServiceInfo,
+    SupportBundleDiagnosticItem,
     SupportBundleRedactionInfo,
 )
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
@@ -64,6 +75,7 @@ _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "api_key",
     "apikey",
     "args",
+    "argument",
     "audio",
     "auth",
     "bearer",
@@ -73,14 +85,23 @@ _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "data",
     "directory",
     "file",
+    "input",
     "jwt",
     "key",
+    "message",
     "model",
+    "output",
     "password",
     "path",
+    "prompt",
+    "query",
     "rag",
     "redis_url",
+    "response",
+    "result",
     "secret",
+    "speech",
+    "text",
     "token",
     "transcript",
     "url",
@@ -226,9 +247,13 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
         return "tool_approval"
     if topic in {ToolingMethods.EXECUTE_TOOL}:
         return "tool_execution"
-    if topic.startswith("AudioSession.") or topic.startswith("STTCoordinator.") or topic.startswith(
-        "Transcription."
-    ) or topic.startswith("WakeWord.") or topic.startswith("TTS."):
+    if (
+        topic.startswith("AudioSession.")
+        or topic.startswith("STTCoordinator.")
+        or topic.startswith("Transcription.")
+        or topic.startswith("WakeWord.")
+        or topic.startswith("TTS.")
+    ):
         return "audio"
     if topic.startswith("DB.RAG") or payload.get("namespace") or payload.get("data_scope"):
         return "data"
@@ -304,8 +329,7 @@ def _diagnostic_redacted_copy(value: Any) -> Any:
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
         return {
-            str(key): _diagnostic_redacted_value(str(key), nested)
-            for key, nested in value.items()
+            str(key): _diagnostic_redacted_value(str(key), nested) for key, nested in value.items()
         }
     if isinstance(value, list | tuple):
         return [_diagnostic_redacted_copy(item) for item in value]
@@ -393,10 +417,9 @@ class GatewayService(BaseService):
         self._mesh_peer_id = None
         self._runtime_config_lock = asyncio.Lock()
         self._audio_session_service = AudioSessionService()
-        self._event_stream: deque[GatewayEventStreamEvent] = deque(
-            maxlen=_EVENT_STREAM_MAXLEN
-        )
+        self._event_stream: deque[GatewayEventStreamEvent] = deque(maxlen=_EVENT_STREAM_MAXLEN)
         self._event_stream_subscription_topic = "*"
+        self._admin_action_manager = AdminActionManager()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
@@ -449,6 +472,104 @@ class GatewayService(BaseService):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_DRAFT,
+        name="AdminActionDraft",
+        summary="Draft a high-risk admin action before confirmation",
+        input_model=AdminActionDraftRequest,
+        output_model=AdminActionDraftResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_draft(
+        self,
+        data: AdminActionDraftRequest,
+        envelope: Envelope,
+    ) -> AdminActionDraftResponse:
+        """Return a short-lived nonce and digest for a high-risk admin action."""
+        return self._admin_action_manager.draft(
+            data,
+            principal_id=envelope.principal_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_CONFIRM,
+        name="AdminActionConfirm",
+        summary="Confirm a drafted admin action and issue a route submission token",
+        input_model=AdminActionConfirmRequest,
+        output_model=AdminActionConfirmResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_confirm(
+        self,
+        data: AdminActionConfirmRequest,
+        envelope: Envelope,
+    ) -> AdminActionConfirmResponse:
+        """Validate reauth/reason/phrase and return a single-use confirmation token."""
+        return self._admin_action_manager.confirm(
+            data,
+            principal_id=envelope.principal_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_REGISTRY,
+        name="GetRegistry",
+        summary="Get the aggregated service contract registry",
+        input_model=EmptyInput,
+        output_model=GetRegistryResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_registry(self, data: EmptyInput) -> GetRegistryResponse:
+        """Return the current Gateway registry export."""
+        return await self._get_registry_export()
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SERVICES,
+        name="GetServices",
+        summary="Get known Gateway services and health states",
+        input_model=EmptyInput,
+        output_model=GetServicesResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_services(self, data: EmptyInput) -> GetServicesResponse:
+        """Return known services from the Gateway registry aggregator."""
+        services = await self._get_services_snapshot()
+        return GetServicesResponse(services=services, mode=self._mode)
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SERVICE_HEALTH,
+        name="GetServiceHealth",
+        summary="Get a single service health summary",
+        input_model=GetServiceHealthRequest,
+        output_model=GetServiceHealthResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_service_health(
+        self,
+        data: GetServiceHealthRequest,
+    ) -> GetServiceHealthResponse:
+        """Return a service health summary without probing service internals."""
+        services = await self._get_services_snapshot()
+        for service in services:
+            if service.module == data.module:
+                return self._service_health_response(service)
+        return GetServiceHealthResponse(
+            module=data.module,
+            status="unknown",
+            checks={"registry": "missing"},
+            timestamp=datetime.now(UTC).isoformat(),
+            error="service is not present in Gateway registry",
+        )
 
     @method_contract(
         method_id=GatewayMethods.GET_MESH_STATUS,
@@ -648,6 +769,9 @@ class GatewayService(BaseService):
         data: GatewaySupportBundleRequest,
     ) -> GatewaySupportBundleResponse:
         """Return redacted diagnostics for route, mesh, audit, and config debugging."""
+        registry_export = await self._get_registry_export()
+        services = await self._get_services_snapshot()
+        service_health = [self._service_health_response(service) for service in services]
         mesh_status = await self.get_mesh_status(EmptyInput())
         catalog_summary = CapabilityCatalogSummary()
         if data.include_capability_catalog:
@@ -660,36 +784,46 @@ class GatewayService(BaseService):
             correlation_id=data.correlation_id,
             limit=max(data.event_limit, 1) if data.event_limit else 1,
         )
-        recent_events = [] if data.event_limit == 0 else self._filter_events(event_request)[
-            : data.event_limit
-        ]
+        recent_events = (
+            [] if data.event_limit == 0 else self._filter_events(event_request)[: data.event_limit]
+        )
         recent_audit_events = [
-            _diagnostic_redacted_copy(event)
-            for event in await self._get_recent_audit_events(data)
+            _diagnostic_redacted_copy(event) for event in await self._get_recent_audit_events(data)
         ]
         settings = await self._get_gateway_config()
 
-        correlation_ids = {
-            event.correlation_id
-            for event in recent_events
-            if event.correlation_id
-        }
+        correlation_ids = {event.correlation_id for event in recent_events if event.correlation_id}
         for audit_event in recent_audit_events:
             details = _details_dict(audit_event.get("details"))
             correlation_id = details.get("correlation_id")
             if correlation_id:
                 correlation_ids.add(str(correlation_id))
 
+        audit_receipt, audit_error = await self._audit_support_bundle_export(
+            correlation_id=data.correlation_id,
+            registry=registry_export,
+            services=services,
+            event_count=len(recent_events),
+            audit_event_count=len(recent_audit_events),
+        )
+
         return GatewaySupportBundleResponse(
             generated_at=datetime.now(UTC).isoformat(),
             correlation_id=data.correlation_id,
+            registry=registry_export,
+            services=services,
+            service_health=service_health,
             mesh_status=mesh_status,
             route_diagnostics=mesh_status.routes,
             capability_catalog_summary=catalog_summary,
             recent_events=recent_events,
             recent_audit_events=recent_audit_events,
+            native_capabilities=self._native_capability_diagnostics(),
+            sidecar_logs=self._sidecar_log_diagnostics(),
             config_shape=_diagnostic_redacted_copy(_model_dump(settings)),
             correlation_ids=sorted(correlation_ids),
+            audit_receipt=audit_receipt,
+            audit_error=audit_error,
             redaction=SupportBundleRedactionInfo(
                 secrets_redacted=True,
                 redacted_fields=list(_DIAGNOSTIC_REDACT_KEY_PARTS),
@@ -892,6 +1026,121 @@ class GatewayService(BaseService):
             events = []
         return [_diagnostic_redacted_copy(event) for event in events]
 
+    async def _get_registry_export(self) -> GetRegistryResponse:
+        """Return registry export, or an empty typed response when unavailable."""
+        if not self._registry_aggregator:
+            return GetRegistryResponse()
+        try:
+            export = await self._registry_aggregator.get_registry_export()
+        except Exception as exc:
+            log_warning(f"Support bundle registry export failed: {exc}")
+            return GetRegistryResponse()
+        return GetRegistryResponse.model_validate(export)
+
+    async def _get_services_snapshot(self) -> list[ServiceInfo]:
+        """Return known services from the registry aggregator."""
+        if not self._registry_aggregator:
+            return []
+        try:
+            return await self._registry_aggregator.get_services()
+        except Exception as exc:
+            log_warning(f"Support bundle service snapshot failed: {exc}")
+            return []
+
+    def _service_health_response(self, service: ServiceInfo) -> GetServiceHealthResponse:
+        """Convert registry service status into the support-bundle health shape."""
+        return GetServiceHealthResponse(
+            module=service.module,
+            status=service.status,
+            checks={
+                "registry": "present",
+                "heartbeat": service.status,
+                "contracts": "present" if service.method_count else "empty",
+            },
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+
+    def _native_capability_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
+        """Expose native capability state without inventing platform support."""
+        return [
+            SupportBundleDiagnosticItem(
+                name="native_capability_manifest",
+                status="unavailable",
+                source="tauri/native manifest",
+                details={
+                    "reason": "no native manifest is registered in this backend runtime",
+                    "backend_coverage": "deferred",
+                },
+            )
+        ]
+
+    def _sidecar_log_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
+        """Expose sidecar log availability without reading local files or secrets."""
+        return [
+            SupportBundleDiagnosticItem(
+                name="gateway_sidecar_logs",
+                status="metadata_only",
+                source="gateway runtime",
+                details={
+                    "reason": "no sidecar log collector is registered; raw logs are omitted",
+                    "omitted_payloads": ["host paths", "tokens", "raw audio", "personal content"],
+                },
+            )
+        ]
+
+    async def _audit_support_bundle_export(
+        self,
+        *,
+        correlation_id: str | None,
+        registry: GetRegistryResponse,
+        services: list[ServiceInfo],
+        event_count: int,
+        audit_event_count: int,
+    ) -> tuple[str | None, str | None]:
+        """Store a redacted audit event for diagnostics bundle generation."""
+        receipt = f"support_bundle:{uuid.uuid4()}"
+        details = {
+            "audit_receipt": receipt,
+            "correlation_id": correlation_id,
+            "registry_digest": registry.digest,
+            "service_count": len(services),
+            "method_count": registry.method_count,
+            "event_count": event_count,
+            "audit_event_count": audit_event_count,
+            "secrets_redacted": True,
+            "omitted_payloads": [
+                "raw audio",
+                "unredacted tool arguments",
+                "RAG contents",
+                "tokens and credentials",
+            ],
+        }
+        try:
+            result = await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event="diagnostics.support_bundle.exported",
+                    principal_id=None,
+                    details=json.dumps(details, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:
+            log_warning(f"Support bundle audit storage failed: {exc}")
+            return None, str(exc)
+        if hasattr(result, "ok") and not result.ok:
+            error = result.error or "audit storage failed"
+            log_warning(f"Support bundle audit storage failed: {error}")
+            return None, error
+        data = getattr(result, "data", None)
+        if hasattr(data, "success") and not data.success:
+            error = getattr(data, "message", None) or "audit storage failed"
+            log_warning(f"Support bundle audit storage failed: {error}")
+            return None, error
+        return receipt, None
+
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
 
@@ -1061,6 +1310,7 @@ class GatewayService(BaseService):
                 auth_enabled=auth_enabled,
                 auth_api_keys=auth_api_keys,
                 request_timeout=request_timeout,
+                admin_action_manager=self._admin_action_manager,
             )
 
             import uvicorn

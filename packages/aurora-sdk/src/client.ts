@@ -9,12 +9,15 @@ import {
   type AuroraTransport
 } from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
-import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
+import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
+import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
+  CapabilityExplanation,
+  CapabilityGraph,
   CapabilitySummary,
   GetRegistryResponse,
   GetServicesResponse,
@@ -22,9 +25,16 @@ import type {
   MethodDescriptor,
   NativeCapabilityManifest,
   PeerSummary,
+  ContractMethodType,
   RouteExplainRequest,
   RouteExplainResponse
 } from './types.js'
+import type {
+  EffectivePermissionInput,
+  PermissionAccessDecision,
+  PermissionCatalogInput,
+  PermissionCatalogEntry
+} from './permissions.js'
 
 export interface AuroraClientOptions {
   transport: AuroraTransport
@@ -37,6 +47,7 @@ export class AuroraClient {
   readonly registry: RegistryClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
+  readonly permissions: PermissionClient
   readonly routes: RouteClient
   readonly tools: ToolClient
   readonly native: NativeClient
@@ -49,6 +60,7 @@ export class AuroraClient {
     this.registry = new RegistryClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
+    this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
     this.tools = new ToolClient(this)
     this.native = new NativeClient(this)
@@ -57,13 +69,14 @@ export class AuroraClient {
   async request<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number } = {}
   ): Promise<TData> {
     try {
       const response = await this.transport.request<TData, TPayload>({
         method,
         busTopic: options.busTopic ?? method,
         path: options.path,
+        httpMethod: options.httpMethod,
         payload,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
@@ -77,7 +90,7 @@ export class AuroraClient {
   async requestResult<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number } = {}
   ): Promise<AuroraResponse<TData>> {
     const busTopic = options.busTopic ?? method
     try {
@@ -85,6 +98,7 @@ export class AuroraClient {
         method,
         busTopic,
         path: options.path,
+        httpMethod: options.httpMethod,
         payload,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
@@ -125,7 +139,10 @@ export class RegistryClient {
   constructor(private readonly client: AuroraClient) {}
 
   getRegistry(): Promise<GetRegistryResponse> {
-    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: '/api/registry' })
+    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, undefined, {
+      path: '/api/registry',
+      httpMethod: 'GET'
+    })
   }
 
   async listMethods(): Promise<MethodDescriptor[]> {
@@ -133,7 +150,10 @@ export class RegistryClient {
   }
 
   listServices(): Promise<GetServicesResponse> {
-    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, {}, { path: '/api/services' })
+    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, undefined, {
+      path: '/api/services',
+      httpMethod: 'GET'
+    })
   }
 }
 
@@ -150,6 +170,53 @@ export class CapabilityClient {
 
   async listSummaries(request: CapabilityCatalogRequest = {}): Promise<CapabilitySummary[]> {
     return summarizeCapabilities(await this.listCatalog(request))
+  }
+
+  async getGraph(
+    request: CapabilityCatalogRequest = { include_unavailable: true, include_internal: true }
+  ): Promise<CapabilityGraph> {
+    const [catalog, registry] = await Promise.all([
+      this.listCatalog(request),
+      this.client.registry.getRegistry()
+    ])
+    return buildCapabilityGraph({
+      catalog,
+      registry,
+      transportKind: this.client.transport.kind
+    })
+  }
+
+  async explain(featureId: string): Promise<CapabilityExplanation> {
+    return (await this.getGraph()).explain(featureId)
+  }
+}
+
+export interface PermissionCatalogOptions {
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+}
+
+export class PermissionClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async listCatalog(options: PermissionCatalogOptions = {}): Promise<PermissionCatalogEntry[]> {
+    const input: PermissionCatalogInput = {
+      methods: await this.client.registry.listMethods(),
+      source: 'registry'
+    }
+    if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
+    return buildPermissionCatalog(input)
+  }
+
+  has(permission: string, methodType: ContractMethodType | null = null): boolean {
+    return hasPermission(permission, this.client.auth.snapshot().effectivePermissions, methodType)
+  }
+
+  check(requiredPermissions: string[], methodType: ContractMethodType | null = null): PermissionAccessDecision {
+    return checkAccess(this.client.auth.snapshot().effectivePermissions, requiredPermissions, methodType)
+  }
+
+  resolveEffective(input: EffectivePermissionInput): string[] {
+    return resolveEffectivePermissions(input)
   }
 }
 

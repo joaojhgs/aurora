@@ -31,6 +31,15 @@ export const TOOLING_METHODS = {
   executeTool: 'Tooling.ExecuteTool'
 } as const
 
+export const ORCHESTRATOR_MODEL_METHODS = {
+  getRuntime: 'Orchestrator.GetModelRuntime',
+  getCatalog: 'Orchestrator.GetModelCatalog',
+  getOperation: 'Orchestrator.GetModelOperation',
+  importModel: 'Orchestrator.ImportModel',
+  downloadModel: 'Orchestrator.DownloadModel',
+  benchmarkModel: 'Orchestrator.BenchmarkModel'
+} as const
+
 export function routePath(module: string, method: string): string {
   return `/api/${encodeURIComponent(module)}/${encodeURIComponent(method)}`
 }

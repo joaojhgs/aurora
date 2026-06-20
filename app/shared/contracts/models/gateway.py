@@ -54,6 +54,8 @@ class GatewayMethods:
     EVENT_STREAM = AuroraMethods.EVENT_STREAM
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
+    ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
+    ADMIN_ACTION_CONFIRM = f"{GatewayModule.NAME}.AdminActionConfirm"
 
 
 # =============================================================================
@@ -175,6 +177,61 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class AdminActionHeaderNames(IOModel):
+    """HTTP headers used to submit a confirmed AdminAction."""
+
+    action_id: str = "X-Aurora-AdminAction-Id"
+    confirmation_token: str = "X-Aurora-AdminAction-Token"
+    digest: str = "X-Aurora-AdminAction-Digest"
+
+
+class AdminActionDraftRequest(IOModel):
+    """Request a short-lived draft for a high-risk admin action."""
+
+    method_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    affected_resources: list[str] = Field(default_factory=list)
+
+
+class AdminActionDraftResponse(IOModel):
+    """Draft details that a client must display before confirmation."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    method_id: str
+    affected_resources: list[str] = Field(default_factory=list)
+    required_phrase: str = "CONFIRM"
+    required_reason: bool = True
+    required_reauth: bool = True
+    expires_at: str
+    expires_in_seconds: int
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
+
+
+class AdminActionConfirmRequest(IOModel):
+    """Confirm a drafted AdminAction after reauth/reason collection."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    reason: str
+    reauth_confirmed: bool
+    phrase: str = "CONFIRM"
+
+
+class AdminActionConfirmResponse(IOModel):
+    """Single-use confirmation token for submitting the matching action."""
+
+    action_id: str
+    confirmation_token: str
+    digest: str
+    confirmed: bool = True
+    expires_at: str
+    audit_receipt: str
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
 
 
 class MeshLocalStatus(IOModel):
@@ -318,6 +375,16 @@ class SupportBundleRedactionInfo(IOModel):
     omitted_payloads: list[str] = Field(default_factory=list)
 
 
+class SupportBundleDiagnosticItem(IOModel):
+    """One redacted support-bundle diagnostic source."""
+
+    name: str
+    status: str = "unavailable"
+    source: str = ""
+    details: dict[str, Any] = Field(default_factory=dict)
+    redacted: bool = True
+
+
 class GatewaySupportBundleRequest(IOModel):
     """Request a redacted support bundle for diagnostics."""
 
@@ -342,6 +409,9 @@ class GatewaySupportBundleResponse(IOModel):
 
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     correlation_id: str | None = None
+    registry: GetRegistryResponse = Field(default_factory=GetRegistryResponse)
+    services: list[ServiceInfo] = Field(default_factory=list)
+    service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
     mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
     route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
     capability_catalog_summary: CapabilityCatalogSummary = Field(
@@ -349,8 +419,12 @@ class GatewaySupportBundleResponse(IOModel):
     )
     recent_events: list[GatewayEventStreamEvent] = Field(default_factory=list)
     recent_audit_events: list[dict[str, Any]] = Field(default_factory=list)
+    native_capabilities: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
+    sidecar_logs: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
     config_shape: dict[str, Any] = Field(default_factory=dict)
     correlation_ids: list[str] = Field(default_factory=list)
+    audit_receipt: str | None = None
+    audit_error: str | None = None
     redaction: SupportBundleRedactionInfo = Field(default_factory=SupportBundleRedactionInfo)
     secrets_redacted: bool = True
 

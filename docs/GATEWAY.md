@@ -231,6 +231,64 @@ Service and method path segments use the canonical PascalCase contract names
 from the service registry. SDKs should prefer these generated paths and should
 not infer lowercase route names from bus topics.
 
+### AdminAction Draft / Confirm Enforcement
+
+Generated routes for high-risk admin mutations require a server-issued
+AdminAction confirmation before the route is forwarded to the service bus.
+This applies to explicit high-risk Auth/Config routes and to generated
+`method_type="manage"` routes except read-only diagnostics such as registry,
+capability, route explain, event list, support bundle, and audit-log reads.
+
+The typed Gateway contract exposes the preflight flow:
+
+| Method ID | HTTP route | Purpose |
+|-----------|------------|---------|
+| `Gateway.AdminActionDraft` | `POST /api/Gateway/AdminActionDraft` | Create a short-lived draft containing `action_id`, `nonce`, `digest`, affected resources, required phrase/reason/reauth flags, expiry, and required header names. |
+| `Gateway.AdminActionConfirm` | `POST /api/Gateway/AdminActionConfirm` | Confirm the draft with nonce, digest, reason, confirmation phrase, and recent reauth evidence; returns a single-use confirmation token and audit receipt ID. |
+
+To submit the protected generated route, clients must include:
+
+```text
+X-Aurora-AdminAction-Id: <action_id>
+X-Aurora-AdminAction-Token: <confirmation_token>
+X-Aurora-AdminAction-Digest: <digest>
+```
+
+The Gateway verifies that the confirmation token is unexpired, single-use,
+bound to the authenticated principal, route method ID, and exact request
+payload digest. Raw payload fields such as `confirmed=true` and legacy
+reason/reauth headers do not bypass this enforcement. Before forwarding the
+mutation, Gateway stores an `Auth.StoreAuditEvent` record containing the action
+ID, audit receipt, reason, digest, affected resources, and principal. If audit
+storage fails, the mutation is not forwarded. Successful protected route
+responses include `X-Aurora-AdminAction-Audit-Receipt`.
+
+### Diagnostics Support Bundle
+
+The typed `Gateway.GetSupportBundle` contract is exposed at:
+
+```text
+POST /api/Gateway/GetSupportBundle
+```
+
+It requires `Gateway.manage` and returns a redacted diagnostics bundle for
+operator support and admin UI export flows. The bundle includes:
+
+- registry inventory and service health derived from the Gateway registry;
+- mesh status and route diagnostics;
+- capability catalog counts without sensitive schemas by default;
+- recent normalized Gateway events and recent audit metadata;
+- explicit native-capability and sidecar-log diagnostic states;
+- config metadata with secrets, tokens, URLs, paths, audio, transcripts, RAG
+  content, and tool arguments redacted or omitted;
+- a best-effort `diagnostics.support_bundle.exported` audit receipt, plus
+  `audit_error` when audit storage is unavailable.
+
+Raw audio, full transcripts, token values, credential material, unredacted tool
+arguments, RAG contents, host paths, and raw sidecar logs are not included in
+this contract. Future workflows that deliberately include those payloads must
+use an admin-critical confirmation flow and a separate typed contract.
+
 ### Public Auth Endpoints
 
 The canonical public Auth endpoints are generated from `Auth` service
