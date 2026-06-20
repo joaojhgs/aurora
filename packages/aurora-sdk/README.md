@@ -201,17 +201,20 @@ const route = await client.routes.explain({
   topic: 'TTS.Synthesize',
   selector: { peer_id: 'peer-123', module: 'TTS' }
 })
+const sessionId = 'assistant-session-123'
 
 const policy = await client.routes.evaluatePolicy({
   route,
   topic: 'TTS.Synthesize',
   selector: { peer_id: 'peer-123', module: 'TTS' },
   payload: { text: 'Hello' },
+  sessionId,
   consentGranted: true,
   privacyIndicatorShown: true,
   approvalScopes: [{
     scope: 'session',
     decision: 'approve',
+    sessionId,
     peerId: 'peer-123',
     expiresAt: new Date(Date.now() + 5 * 60_000).toISOString()
   }]
@@ -272,10 +275,22 @@ Tauri local example:
 const manifest = await client.native.getManifest()
 client.native.requirePermission('secureStorage', manifest)
 
+const payload = { key: 'ui.dark_mode', value: true }
+const argsHash = 'sha256:config-set-ui-dark-mode-true'
+const route = await client.routes.explain({ topic: 'Config.Set' })
 const evaluation = await client.routes.evaluatePolicy({
-  routeRequest: { topic: 'Config.Set' },
-  payload: { key: 'ui.dark_mode', value: true },
-  approvalScopes: [{ scope: 'single', decision: 'approve', expiresAt: expiresAtIso }]
+  route,
+  topic: 'Config.Set',
+  payload,
+  argsHash,
+  approvalScopes: [{
+    scope: 'single',
+    decision: 'approve',
+    approvalId: 'approval-config-set-1',
+    argsHash,
+    providerId: route.selected_provider_id ?? 'local:Config',
+    expiresAt: expiresAtIso
+  }]
 })
 ```
 
