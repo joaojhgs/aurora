@@ -263,6 +263,32 @@ ID, audit receipt, reason, digest, affected resources, and principal. If audit
 storage fails, the mutation is not forwarded. Successful protected route
 responses include `X-Aurora-AdminAction-Audit-Receipt`.
 
+### Diagnostics Support Bundle
+
+The typed `Gateway.GetSupportBundle` contract is exposed at:
+
+```text
+POST /api/Gateway/GetSupportBundle
+```
+
+It requires `Gateway.manage` and returns a redacted diagnostics bundle for
+operator support and admin UI export flows. The bundle includes:
+
+- registry inventory and service health derived from the Gateway registry;
+- mesh status and route diagnostics;
+- capability catalog counts without sensitive schemas by default;
+- recent normalized Gateway events and recent audit metadata;
+- explicit native-capability and sidecar-log diagnostic states;
+- config metadata with secrets, tokens, URLs, paths, audio, transcripts, RAG
+  content, and tool arguments redacted or omitted;
+- a best-effort `diagnostics.support_bundle.exported` audit receipt, plus
+  `audit_error` when audit storage is unavailable.
+
+Raw audio, full transcripts, token values, credential material, unredacted tool
+arguments, RAG contents, host paths, and raw sidecar logs are not included in
+this contract. Future workflows that deliberately include those payloads must
+use an admin-critical confirmation flow and a separate typed contract.
+
 ### Public Auth Endpoints
 
 The canonical public Auth endpoints are generated from `Auth` service
