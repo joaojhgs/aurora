@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T23:12:43.959Z",
+  "updatedAt": "2026-06-20T23:22:02.424Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -317,11 +317,12 @@
       "id": "G029-per-202-supervisor-service-controls",
       "title": "PER-202 supervisor service controls",
       "objective": "Implement and verify PER-202 / BE-015 by explicitly gating Supervisor start/stop/restart controls with typed availability state, internal-only manage contracts, docs, tests, PR, and QA handoff.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-06-20T23:12:43.959Z",
-      "updatedAt": "2026-06-20T23:12:43.959Z",
-      "evidence": ".omx/plans/PER-202-supervisor-service-controls.md and Multica PER-202 acceptance criteria"
+      "updatedAt": "2026-06-20T23:22:02.424Z",
+      "evidence": "PER-202 implemented in commit 29a535e and PR https://github.com/joaojhgs/aurora/pull/90. Verification passed: scoped ruff, Supervisor unit tests 12 passed, Gateway AdminAction tests 9 passed, Supervisor schema generation, and git diff --check. PR is draft/open/mergeable with no checks reported.",
+      "completedAt": "2026-06-20T23:22:02.424Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
