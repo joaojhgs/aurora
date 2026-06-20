@@ -224,9 +224,52 @@ class TestToolingServiceQueries:
         assert tool_info.provider_peer_id == "local"
         assert tool_info.source_type == "local"
         assert tool_info.execution_location == "local"
+        assert tool_info.risk_class == "standard"
+        assert tool_info.data_egress is False
+        assert tool_info.mutating is False
+        assert tool_info.external is False
+        assert tool_info.admin is False
+        assert tool_info.privacy_hints == []
         assert tool_info.global_tool_id == "local:local_Tooling:tool:test_tool"
         assert tool_info.provenance.advertised_name == "test_tool"
         assert "input" in tool_info.args_schema["properties"]
+
+    @pytest.mark.asyncio
+    async def test_get_tools_includes_risk_and_privacy_hints(self, tooling_service):
+        """Discovery exposes canonical risk, egress, mutation, external, and admin hints."""
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        risky_tool = Mock()
+        risky_tool.name = "send_admin_report"
+        risky_tool.description = "Send an admin report externally"
+        risky_tool.args_schema = None
+        risky_tool.safety_class = "sensitive"
+        risky_tool.risk_class = "dangerous"
+        risky_tool.operation_class = "admin"
+        risky_tool.data_egress = True
+        risky_tool.external = True
+        risky_tool.privacy_hints = ["contains_user_data"]
+
+        tooling_service.tools_manager.get_tools = Mock(return_value=[risky_tool])
+
+        response = await tooling_service._on_get_tools(ToolingGetToolsRequest(query=None, top_k=10))
+
+        assert response.count == 1
+        tool_info = response.tools[0]
+        assert tool_info.risk_class == "dangerous"
+        assert tool_info.safety_class == "sensitive"
+        assert tool_info.data_egress is True
+        assert tool_info.mutating is True
+        assert tool_info.external is True
+        assert tool_info.admin is True
+        assert tool_info.privacy_hints == [
+            "admin",
+            "contains_user_data",
+            "data_egress",
+            "external",
+            "mutating",
+            "risk:sensitive",
+        ]
 
     @pytest.mark.asyncio
     async def test_get_tool_catalog_aggregates_local_and_remote_safe_tools(
@@ -1328,6 +1371,47 @@ class TestToolingSharingPolicyAndApproval:
         assert "tooling.approval.requested" in event_names
         assert "tooling.approval.approved" in event_names
         assert "tooling.execute" in event_names
+
+    @pytest.mark.asyncio
+    async def test_config_loaded_policy_enforces_peer_scoped_rule(
+        self, tooling_service, mock_bus
+    ):
+        """Schema-backed approval_policy loads into runtime sharing enforcement."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        tooling_service._config.aget = AsyncMock(
+            return_value={
+                "default_share": True,
+                "default_approval_mode": "approve_all_local_safe",
+                "default_token_ttl_seconds": 300,
+                "rules": [
+                    {
+                        "rule_id": "deny-untrusted-peer",
+                        "caller_peer_id": "untrusted-peer",
+                        "approval_mode": "deny_all",
+                        "token_ttl_seconds": 120,
+                    }
+                ],
+            }
+        )
+        mock_tool = self._mock_tool()
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["safe_tool"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        await tooling_service._load_sharing_policy_from_config()
+        response = await tooling_service._on_execute_tool(
+            ToolingExecuteToolRequest(
+                tool_name="safe_tool",
+                arguments={},
+                caller_peer_id="untrusted-peer",
+            )
+        )
+
+        assert response.ok is False
+        assert response.status == "denied"
+        assert response.error_code == "policy_denied"
+        mock_tool.ainvoke.assert_not_called()
 
 
 class TestToolingServiceMCPReload:

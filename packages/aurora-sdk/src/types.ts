@@ -689,6 +689,89 @@ export interface RouteExplainResponse {
   secrets_redacted: boolean
 }
 
+export interface ApprovalScope {
+  scope: 'single' | 'tool-args' | 'peer-provider' | 'session' | 'local-safe-tools' | 'deny-all' | string
+  decision: 'approve' | 'deny' | 'deny-all'
+  approvalId?: string | null
+  peerId?: string | null
+  providerId?: string | null
+  toolId?: string | null
+  resourceId?: string | null
+  argsHash?: string | null
+  sessionId?: string | null
+  expiresAt?: string | null
+}
+
+export interface RoutePolicyInput {
+  route: RouteExplainResponse
+  catalog?: CapabilityCatalogResponse | null
+  payload?: unknown
+  selector?: unknown
+  topic?: string | null
+  method?: string | null
+  actionId?: string | null
+  toolId?: string | null
+  resourceId?: string | null
+  sessionId?: string | null
+  argsHash?: string | null
+  dataClasses?: PrivacyClass[]
+  privacyClass?: PrivacyClass
+  approvalScopes?: ApprovalScope[]
+  consentGranted?: boolean
+  privacyIndicatorShown?: boolean
+  allowCloudFallback?: boolean
+  auditReceiptTarget?: string | null
+  transportKind?: AuroraTransportKind | null
+  now?: string
+}
+
+export interface RoutePreview {
+  topic: string
+  module: string
+  method: string | null
+  providerId: string | null
+  peerId: string | null
+  serviceInstanceId: string | null
+  providerKind: string
+  trustTier: string
+  transport: AuroraTransportKind | null
+  fallbackBehavior: string
+  egressDestination: 'local' | 'peer' | 'cloud' | 'none'
+  expectedPersistence: string
+  auditReceiptTarget: string | null
+  dataClasses: PrivacyClass[]
+  privacyClass: PrivacyClass
+  selector: unknown
+  payloadPreview: unknown
+  secretsRedacted: boolean
+  blockers: Array<{
+    code: string
+    message: string
+    securityPrivacy: boolean
+  }>
+}
+
+export interface RoutePolicyEvaluation {
+  decision: 'allowed' | 'blocked' | 'privacy-blocked'
+  allowed: boolean
+  availability: AvailabilityState
+  reasonCode: string
+  repairPath: string | null
+  privacyClass: PrivacyClass
+  dataClasses: PrivacyClass[]
+  explicitSelectorRequired: boolean
+  approval: {
+    required: boolean
+    status: 'not-required' | 'required' | 'approved' | 'expired' | 'rejected'
+    scopes: ApprovalScope[]
+    matchedScope?: ApprovalScope
+  }
+  route: RouteExplainResponse
+  selectedCandidate: RouteCandidateDecision | null
+  blockers: RouteBlockerInfo[]
+  preview: RoutePreview
+}
+
 export interface AuditReference {
   correlationId: string | null
   eventKind: string | null

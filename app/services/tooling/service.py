@@ -23,6 +23,7 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
+from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import (
     AuthMethods,
     PrincipalGetRequest,
@@ -54,6 +55,7 @@ from app.shared.contracts.models.tooling import (
     ToolingPolicyDecision,
     ToolingPrepareExecutionRequest,
     ToolingPrepareExecutionResponse,
+    ToolingRateLimitHints,
     ToolingReloadMCPRequest,
     ToolingRequestApprovalRequest,
     ToolingRequestApprovalResponse,
@@ -106,6 +108,7 @@ class ToolingService(BaseService):
             summary="Tool management and execution service",
             capabilities=["tool_discovery", "tool_execution", "mcp_integration"],
         )
+        self._config = ConfigAPI()
         self.tools_manager = ToolsManager(self.bus)
         self._catalog_cache: dict[str, tuple[float, ToolingGetToolsResponse]] = {}
         self._sharing_policy = ToolingSharingPolicy()
@@ -115,6 +118,7 @@ class ToolingService(BaseService):
     async def on_start(self) -> None:
         """Start the tooling service and initialize tools."""
         log_info("Starting Tooling service...")
+        await self._load_sharing_policy_from_config()
 
         # Set as global instance
         set_tools_manager(self.tools_manager)
@@ -151,9 +155,12 @@ class ToolingService(BaseService):
         log_info(f"Reloading ToolingService configuration: section={config_section}")
         # Reload tools if MCP config changed
         if config_section is None or config_section in ["services"]:
+            await self._load_sharing_policy_from_config()
             log_info("Reloading tools due to config change...")
             await self.tools_manager.reload()
             self._catalog_cache.clear()
+        elif config_section == "services.tooling":
+            await self._load_sharing_policy_from_config()
         log_info("ToolingService configuration reloaded")
 
     @staticmethod
@@ -268,9 +275,18 @@ class ToolingService(BaseService):
         )
         display_name = f"{namespace}.{local_name}" if is_remote else local_name
         args_schema = self._serialize_tool_schema(tool)
-        required_permissions = getattr(tool, "required_permissions", None) or [
-            ToolingMethods.EXECUTE_TOOL
-        ]
+        raw_required_permissions = getattr(tool, "required_permissions", None)
+        required_permissions = (
+            list(raw_required_permissions)
+            if isinstance(raw_required_permissions, (list, tuple, set))
+            else [ToolingMethods.EXECUTE_TOOL]
+        )
+        safety_class = self._safe_metadata_value(
+            getattr(tool, "safety_class", "standard"),
+            {"standard", "sensitive", "dangerous"},
+            "standard",
+        )
+        operation_class = self._operation_class(tool, safety_class)
 
         return ToolingToolInfo(
             name=bindable_name,
@@ -286,14 +302,16 @@ class ToolingService(BaseService):
             schema=args_schema,
             source_type=source_type,
             execution_location="remote" if is_remote else "local",
-            safety_class=self._safe_metadata_value(
-                getattr(tool, "safety_class", "standard"),
-                {"standard", "sensitive", "dangerous"},
-                "standard",
-            ),
-            required_permissions=list(required_permissions),
+            safety_class=safety_class,
+            risk_class=self._risk_class(tool, safety_class),
+            data_egress=self._tool_data_egress(tool, operation_class),
+            mutating=self._tool_mutating(tool, operation_class),
+            external=self._tool_external(tool, operation_class),
+            admin=self._tool_admin(tool, operation_class),
+            privacy_hints=self._tool_privacy_hints(tool, safety_class, operation_class),
+            required_permissions=required_permissions,
             confirmation_required=bool(getattr(tool, "confirmation_required", False)),
-            rate_limit_hints=getattr(tool, "rate_limit_hints", None),
+            rate_limit_hints=self._tool_rate_limit_hints(tool),
             provenance=ToolingToolProvenance(
                 provider_peer_id=provider_peer_id,
                 provider_service_instance_id=service_instance_id,
@@ -766,6 +784,88 @@ class ToolingService(BaseService):
         if safety_class == "sensitive":
             return "data-egress"
         return "read"
+
+    def _risk_class(self, tool: Any, safety_class: str) -> str:
+        return self._safe_metadata_value(
+            getattr(tool, "risk_class", safety_class),
+            {"standard", "sensitive", "dangerous"},
+            safety_class,
+        )
+
+    @staticmethod
+    def _tool_data_egress(tool: Any, operation_class: str) -> bool:
+        return bool(getattr(tool, "data_egress", False)) or operation_class == "data-egress"
+
+    @staticmethod
+    def _tool_mutating(tool: Any, operation_class: str) -> bool:
+        return bool(getattr(tool, "mutating", False)) or operation_class in {
+            "write",
+            "admin",
+            "hardware",
+        }
+
+    @staticmethod
+    def _tool_external(tool: Any, operation_class: str) -> bool:
+        return bool(getattr(tool, "external", False)) or operation_class == "external"
+
+    @staticmethod
+    def _tool_admin(tool: Any, operation_class: str) -> bool:
+        return bool(getattr(tool, "admin", False)) or operation_class == "admin"
+
+    def _tool_privacy_hints(
+        self, tool: Any, safety_class: str, operation_class: str
+    ) -> list[str]:
+        raw_hints = getattr(tool, "privacy_hints", None)
+        hints: list[str] = []
+        if isinstance(raw_hints, (list, tuple, set)):
+            hints.extend(str(hint) for hint in raw_hints if hint)
+        if safety_class in {"sensitive", "dangerous"}:
+            hints.append(f"risk:{safety_class}")
+        if self._tool_data_egress(tool, operation_class):
+            hints.append("data_egress")
+        if self._tool_mutating(tool, operation_class):
+            hints.append("mutating")
+        if self._tool_external(tool, operation_class):
+            hints.append("external")
+        if self._tool_admin(tool, operation_class):
+            hints.append("admin")
+        return sorted(set(hints))
+
+    @staticmethod
+    def _tool_rate_limit_hints(tool: Any) -> Any | None:
+        hints = getattr(tool, "rate_limit_hints", None)
+        if hints is None or isinstance(hints, (dict, ToolingRateLimitHints)):
+            return hints
+        return None
+
+    async def _load_sharing_policy_from_config(self) -> None:
+        """Load the Tooling approval policy from schema-backed config if present."""
+
+        try:
+            raw_policy = await self._config.aget(
+                "services.tooling.approval_policy",
+                default=None,
+                config_timeout=20.0,
+            )
+            if raw_policy is None:
+                return
+            policy = (
+                raw_policy
+                if isinstance(raw_policy, ToolingSharingPolicy)
+                else ToolingSharingPolicy.model_validate(raw_policy)
+            )
+            self._sharing_policy = policy
+            await self._audit_tooling_event(
+                "tooling.policy.loaded",
+                principal_id=None,
+                details={
+                    "default_share": policy.default_share,
+                    "default_approval_mode": policy.default_approval_mode,
+                    "rule_count": len(policy.rules),
+                },
+            )
+        except Exception as error:
+            log_warning(f"Failed to load Tooling approval policy from config: {error}")
 
     def _toolkit_name(self, tool: Any) -> str | None:
         return (

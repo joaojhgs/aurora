@@ -201,11 +201,32 @@ const route = await client.routes.explain({
   topic: 'TTS.Synthesize',
   selector: { peer_id: 'peer-123', module: 'TTS' }
 })
+const sessionId = 'assistant-session-123'
+
+const policy = await client.routes.evaluatePolicy({
+  route,
+  topic: 'TTS.Synthesize',
+  selector: { peer_id: 'peer-123', module: 'TTS' },
+  payload: { text: 'Hello' },
+  sessionId,
+  consentGranted: true,
+  privacyIndicatorShown: true,
+  approvalScopes: [{
+    scope: 'session',
+    decision: 'approve',
+    sessionId,
+    peerId: 'peer-123',
+    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString()
+  }]
+})
 
 const capability = await client.capabilities.explain('method:TTS.Synthesize')
 
-if (route.security_privacy_blockers.length > 0) {
+if (!policy.allowed) {
   // Show the backend reason and keep execution disabled.
+  policy.reasonCode
+  policy.repairPath
+  policy.preview.blockers
 }
 
 if (capability.selectorRequired && !capability.selectedProvider) {
@@ -231,6 +252,190 @@ client.permissions.check(['TTS.Synthesize'], 'use').allowed
 `MeshP2PTransport` is an interface over peer RPC rather than a WebRTC implementation. The bridge owns DataChannel/native details; the SDK preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
+
+## Route And Privacy Policy
+
+`client.routes.evaluatePolicy()` combines backend `Gateway.ExplainRoute` output with `Gateway.GetCapabilityCatalog` policy facts. It does not guess the backend route; it preserves the selected candidate, denial code, explicit selector requirement, approval state, privacy class, redacted payload preview, fallback behavior, and audit target for RouteSheet/tool approval UI.
+
+HTTP/server-web example:
+
+```ts
+const evaluation = await client.routes.evaluatePolicy({
+  routeRequest: { topic: 'Tooling.ExecuteTool' },
+  toolId: 'tool:diagnostics.serviceHealth',
+  payload: { args: { service: 'Gateway' } }
+})
+
+if (evaluation.availability === 'privacy-blocked') showPrivacyGuard(evaluation.preview)
+```
+
+Tauri local example:
+
+```ts
+const manifest = await client.native.getManifest()
+client.native.requirePermission('secureStorage', manifest)
+
+const payload = { key: 'ui.dark_mode', value: true }
+const argsHash = 'sha256:config-set-ui-dark-mode-true'
+const route = await client.routes.explain({ topic: 'Config.Set' })
+const evaluation = await client.routes.evaluatePolicy({
+  route,
+  topic: 'Config.Set',
+  payload,
+  argsHash,
+  approvalScopes: [{
+    scope: 'single',
+    decision: 'approve',
+    approvalId: 'approval-config-set-1',
+    argsHash,
+    providerId: route.selected_provider_id ?? 'local:Config',
+    expiresAt: expiresAtIso
+  }]
+})
+```
+
+Mesh example:
+
+```ts
+const evaluation = await client.routes.evaluatePolicy({
+  routeRequest: {
+    topic: 'TTS.Synthesize',
+    selector: { peer_id: 'peer-studio-gpu', module: 'TTS' }
+  },
+  selector: { peer_id: 'peer-studio-gpu', module: 'TTS' },
+  payload: { text: userText },
+  consentGranted: true,
+  privacyIndicatorShown: true
+})
+```
+
+Native mobile example:
+
+```ts
+const mobile = new AuroraClient({ transport: nativeMobileTransport })
+const evaluation = await mobile.routes.evaluatePolicy({
+  routeRequest: { topic: 'STT.Transcribe' },
+  payload: { media_ref: 'native://recording/latest' },
+  privacyClass: 'raw-audio',
+  consentGranted: microphoneConsent,
+  privacyIndicatorShown: recordingIndicatorVisible
+})
+```
+
+Mock/test example:
+
+```ts
+import { MockAuroraTransport, defaultMockAuroraFixtures } from '@aurora/client'
+
+const mockClient = new AuroraClient({ transport: new MockAuroraTransport(defaultMockAuroraFixtures) })
+const evaluation = await mockClient.routes.evaluatePolicy({
+  route: defaultMockAuroraFixtures.routeExplain,
+  catalog: defaultMockAuroraFixtures.capabilityCatalog,
+  payload: { api_key: 'hidden in preview' }
+})
+
+evaluation.preview.payloadPreview // { api_key: '[redacted]' }
+```
+
+## Event Streams
+
+`client.events` provides one transport-independent event contract for assistant streaming, service health, config updates, pairing/admin/audit-style streams, and future BE-003 unified events. It returns an async iterable `AuroraEvent` subscription, preserving backend IDs, topics, correlation, peer/target peer, method/bus topic, status, and redaction metadata.
+
+```ts
+const subscription = client.events.streamAssistant({ prompt: 'Summarize status' }, {
+  reconnect: { maxAttempts: 3, initialDelayMs: 250 },
+  backfill: true
+})
+
+for await (const event of subscription) {
+  if (event.kind === 'assistant.delta') renderDelta(event.payload)
+  if (event.kind === 'tool.requested') showToolApproval(event.audit.toolId, event.audit.correlationId)
+}
+```
+
+HTTP transports support SSE by default and WebSocket when requested. The live backend path is intentionally configurable until the unified backend event contract lands:
+
+```ts
+const client = new AuroraClient({
+  transport: new HttpGatewayTransport({
+    baseUrl: 'https://aurora.example',
+    bearerToken: sessionToken,
+    eventStreamPath: '/api/events'
+  })
+})
+
+const health = client.events.watchHealth({
+  protocol: 'sse',
+  reconnect: true,
+  backfill: true
+})
+
+const assistant = client.events.streamAssistant({ prompt: 'Hello' }, {
+  protocol: 'websocket',
+  path: '/api/events'
+})
+```
+
+Tauri local shells expose the same API through an IPC command that returns backend/service event evidence:
+
+```ts
+const transport = new TauriLocalTransport({
+  invoke: window.__TAURI__.core.invoke,
+  commands: { eventSubscribe: 'aurora_event_subscribe' }
+})
+const client = new AuroraClient({ transport })
+
+for await (const event of client.events.watchConfig({ backfill: true })) {
+  event.audit.transport // "tauri-local"
+  event.audit.correlationId
+}
+```
+
+Mesh subscriptions are bridge-owned. The bridge may use WebRTC DataChannels, a local Gateway, or a native command, but it must return backend/peer event evidence:
+
+```ts
+const transport = new MeshP2PTransport({
+  defaultPeerId: 'peer-123',
+  bridge: {
+    async call(request) {
+      return meshRpc.call(request.peerId, request)
+    },
+    subscribe(request) {
+      return meshEvents.subscribe(request.peerId, {
+        stream: request.stream,
+        topics: request.topics,
+        lastEventId: request.lastEventId
+      })
+    }
+  }
+})
+
+const client = new AuroraClient({ transport })
+const events = client.events.watchHealth({ reconnect: true })
+```
+
+Native mobile shells use the same transport contract through their bridge layer. Android/iOS code should expose event support through a native/Tauri-style command only after the native manifest and backend route/policy evidence support the claimed feature:
+
+```ts
+const mobileClient = new AuroraClient({ transport: nativeMobileTransport })
+const configEvents = mobileClient.events.watchConfig({ kinds: ['config.updated'] })
+```
+
+Mocks can script success, failure, permission, and transport-loss paths deterministically:
+
+```ts
+const transport = new MockAuroraTransport()
+  .stream('assistant', [
+    { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-1' },
+    { id: '2', kind: 'assistant.delta', payload: { text: 'lo' }, correlation_id: 'corr-1' }
+  ])
+  .failStream('config', 'permission', 'Forbidden stream')
+
+const client = new AuroraClient({ transport })
+const stream = client.events.streamAssistant(undefined, { reconnect: true, backfill: true })
+```
+
+Reconnects carry the last delivered event ID back into the next transport subscription as `lastEventId`; `backfill` and `replayFrom` are request hints for transports/backends that support replay. The SDK does not invent event delivery, pairing success, health, config, tool execution, or audit state; it only normalizes events supplied by the selected transport.
 
 ## Native Mobile
 
@@ -302,6 +507,125 @@ const transport = new MockAuroraTransport()
 ```
 
 The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
+
+## AdminAction And Tool Approval Controllers
+
+`client.admin` wraps the backend-enforced AdminAction draft/confirm/submit flow for admin-critical mutations. The SDK displays and returns backend-issued `action_id`, `nonce`, `digest`, expiry, required phrase, affected resources, confirmation token, and audit receipt; it does not compute or synthesize confirmation tokens.
+
+HTTP/server-web example:
+
+```ts
+const payload = { key: 'services.gateway.enabled', value: true }
+const draft = await client.admin.draft({
+  method_id: 'Config.Set',
+  payload,
+  affected_resources: ['key:services.gateway.enabled']
+})
+
+showAdminConfirmDialog({
+  method: draft.method_id,
+  digest: draft.digest,
+  affectedResources: draft.affected_resources,
+  expiresAt: draft.expires_at,
+  requiredPhrase: draft.required_phrase
+})
+
+const confirmation = await client.admin.confirm(draft, {
+  reason: 'Enable Gateway for local admin',
+  reauthConfirmed: recentAdminUnlock,
+  phrase: 'CONFIRM'
+})
+
+await client.admin.submit({
+  methodId: 'Config.Set',
+  payload,
+  confirmation
+})
+```
+
+Tauri local example:
+
+```ts
+const client = new AuroraClient({ transport: new TauriLocalTransport({ invoke }) })
+const result = await client.admin.execute({
+  methodId: 'Config.Rollback',
+  payload: { version_id: selectedVersionId },
+  reason: 'Rollback after failed plugin update',
+  reauthConfirmed: await nativeAdminUnlock()
+})
+
+result.confirmation.audit_receipt
+```
+
+Tauri/native bridges must forward AdminAction headers through their backend request command. They must not bypass Gateway enforcement with direct Python service calls.
+
+Mesh example:
+
+```ts
+const approval = await client.approvals.request({
+  global_tool_id: 'tool:remote-danger',
+  provider_peer_id: 'peer-kitchen',
+  provider_service_instance_id: 'tooling-remote',
+  args_hash: argsHash,
+  redacted_args_preview: { target: 'garage', api_key: '[redacted]' },
+  risk_class: 'admin-critical',
+  requested_approval_scope: 'tool-args',
+  expected_audit_event: 'tooling.approval.approved',
+  args: { target: 'garage' }
+})
+
+const token = await client.approvals.approve({
+  approval_request_id: approval.approval_request_id!,
+  approver_principal_id: client.auth.snapshot().principalId ?? 'operator',
+  reason: 'Operator approved one garage diagnostic run'
+})
+
+await client.requestResult('Tooling.ExecuteTool', {
+  global_tool_id: 'tool:remote-danger',
+  approval_token: token.approvalToken,
+  args: { target: 'garage' }
+})
+```
+
+Tool approvals are intentionally separate from AdminAction. A dangerous/admin tool can compose both: first get a backend-issued tool approval token through `client.approvals`, then wrap the final `Tooling.ExecuteTool` mutation in `client.admin.submit()` when backend policy marks the execution admin-critical.
+
+Native mobile example:
+
+```ts
+const mobileClient = new AuroraClient({ transport: nativeMobileTransport })
+const manifest = await mobileClient.native.getManifest()
+mobileClient.native.requirePermission('secureStorage', manifest)
+
+const draft = await mobileClient.admin.draft({
+  method_id: 'Auth.DeleteDevice',
+  payload: { device_id: lostDeviceId }
+})
+const confirmation = await mobileClient.admin.confirm(draft, {
+  reason: 'Revoke lost phone',
+  reauthConfirmed: await biometricAdminUnlock()
+})
+```
+
+Mock/test example:
+
+```ts
+const transport = new MockAuroraTransport({ fixtures: false })
+  .register('Gateway.AdminActionDraft', draftFixture)
+  .register('Gateway.AdminActionConfirm', confirmationFixture)
+  .register('Config.Set', { success: true })
+
+const client = new AuroraClient({ transport })
+const result = await client.result(() =>
+  client.admin.execute({
+    methodId: 'Config.Set',
+    payload: { key: 'ui.dark_mode', value: true },
+    reason: 'Test admin flow',
+    reauthConfirmed: true
+  })
+)
+```
+
+AdminAction and approval failures normalize into the shared SDK error codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Replay, changed args/provider, expired approval, and downgraded-risk responses become typed `AuroraError` failures instead of successful data objects.
 
 ## Capability Graph
 

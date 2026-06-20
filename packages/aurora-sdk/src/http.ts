@@ -1,6 +1,14 @@
 import { AuroraError, classifyHttpError } from './errors.js'
+import {
+  createEventSubscription,
+  eventFromUnknown,
+  parseSseEvent,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest
+} from './events.js'
 import { auditFromHeaders } from './transport.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
+import type { AuroraEvent } from './types.js'
 
 type HttpMethod = NonNullable<AuroraTransportRequest['httpMethod']>
 
@@ -9,7 +17,28 @@ export interface HttpTransportOptions {
   apiKey?: string
   bearerToken?: string
   fetchImpl?: typeof fetch
+  eventSourceFactory?: EventSourceFactory | undefined
+  webSocketFactory?: WebSocketFactory | undefined
+  eventStreamPath?: string | undefined
   defaultTimeoutMs?: number
+}
+
+export type EventSourceFactory = (url: string, init?: EventSourceInit) => EventSourceLike
+export type WebSocketFactory = (url: string) => WebSocketLike
+
+export interface EventSourceLike {
+  onmessage: ((event: MessageEvent<string>) => void) | null
+  onerror: ((event: Event) => void) | null
+  addEventListener?(type: string, listener: (event: MessageEvent<string>) => void): void
+  close(): void
+}
+
+export interface WebSocketLike {
+  onmessage: ((event: MessageEvent<string>) => void) | null
+  onerror: ((event: Event) => void) | null
+  onclose: ((event: CloseEvent) => void) | null
+  send?(data: string): void
+  close(): void
 }
 
 export class HttpGatewayTransport implements AuroraTransport {
@@ -18,6 +47,9 @@ export class HttpGatewayTransport implements AuroraTransport {
   private readonly fetchImpl: typeof fetch
   private readonly apiKey: string | undefined
   private readonly bearerToken: string | undefined
+  private readonly eventSourceFactory: EventSourceFactory | undefined
+  private readonly webSocketFactory: WebSocketFactory | undefined
+  private readonly eventStreamPath: string
   private readonly defaultTimeoutMs: number
 
   constructor(options: HttpTransportOptions) {
@@ -25,6 +57,9 @@ export class HttpGatewayTransport implements AuroraTransport {
     this.fetchImpl = options.fetchImpl ?? fetch
     this.apiKey = options.apiKey
     this.bearerToken = options.bearerToken
+    this.eventSourceFactory = options.eventSourceFactory ?? defaultEventSourceFactory()
+    this.webSocketFactory = options.webSocketFactory ?? defaultWebSocketFactory()
+    this.eventStreamPath = options.eventStreamPath ?? '/api/events'
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
   }
 
@@ -104,6 +139,156 @@ export class HttpGatewayTransport implements AuroraTransport {
     if (this.apiKey) headers['X-API-Key'] = this.apiKey
     if (this.bearerToken) headers.Authorization = `Bearer ${this.bearerToken}`
     return headers
+  }
+
+  subscribe<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraStreamRequest<TPayload>
+  ): AuroraEventSubscription<TEventPayload> {
+    if (request.protocol === 'websocket') return this.subscribeWebSocket<TEventPayload, TPayload>(request)
+    return this.subscribeSse<TEventPayload, TPayload>(request)
+  }
+
+  private subscribeSse<TEventPayload, TPayload>(
+    request: AuroraStreamRequest<TPayload>
+  ): AuroraEventSubscription<TEventPayload> {
+    if (!this.eventSourceFactory) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'HTTP SSE event streams require EventSource or an eventSourceFactory.'
+      })
+    }
+    let source: EventSourceLike | null = null
+    const stream = eventQueue<TEventPayload>((push, fail, done) => {
+      const url = this.streamUrl(request)
+      source = this.eventSourceFactory!(url, { withCredentials: false })
+      source.onmessage = (event) => push(parseSseEvent<TEventPayload>(event, { kind: request.stream, transport: this.kind, audit: request.audit }))
+      source.onerror = () => fail(new AuroraError({
+        code: 'transport_loss',
+        message: `HTTP SSE stream failed for ${request.stream}`,
+        detail: { stream: request.stream, topics: request.topics }
+      }))
+      for (const kind of request.kinds) {
+        source.addEventListener?.(kind, (event) => push(parseSseEvent<TEventPayload>(event, { kind, transport: this.kind, audit: request.audit })))
+      }
+      request.signal?.addEventListener('abort', done, { once: true })
+    })
+    return createEventSubscription(stream, () => source?.close())
+  }
+
+  private subscribeWebSocket<TEventPayload, TPayload>(
+    request: AuroraStreamRequest<TPayload>
+  ): AuroraEventSubscription<TEventPayload> {
+    if (!this.webSocketFactory) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'HTTP WebSocket event streams require WebSocket or a webSocketFactory.'
+      })
+    }
+    let socket: WebSocketLike | null = null
+    const stream = eventQueue<TEventPayload>((push, fail, done) => {
+      socket = this.webSocketFactory!(this.websocketUrl(request))
+      socket.onmessage = (event) => push(eventFromUnknown<TEventPayload>(parseSocketData(event.data), {
+        kind: request.stream,
+        transport: this.kind,
+        audit: request.audit
+      }))
+      socket.onerror = () => fail(new AuroraError({
+        code: 'transport_loss',
+        message: `HTTP WebSocket stream failed for ${request.stream}`,
+        detail: { stream: request.stream, topics: request.topics }
+      }))
+      socket.onclose = () => done()
+      socket.send?.(JSON.stringify(streamHandshake(request)))
+      request.signal?.addEventListener('abort', done, { once: true })
+    })
+    return createEventSubscription(stream, () => socket?.close())
+  }
+
+  private streamUrl(request: AuroraStreamRequest): string {
+    const url = new URL(`${this.baseUrl}${request.path ?? this.eventStreamPath}`)
+    url.searchParams.set('stream', request.stream)
+    for (const topic of request.topics) url.searchParams.append('topic', topic)
+    for (const kind of request.kinds) url.searchParams.append('kind', kind)
+    if (request.lastEventId) url.searchParams.set('last_event_id', request.lastEventId)
+    if (request.replayFrom) url.searchParams.set('replay_from', request.replayFrom)
+    if (request.backfill) url.searchParams.set('backfill', 'true')
+    return url.toString()
+  }
+
+  private websocketUrl(request: AuroraStreamRequest): string {
+    const url = new URL(this.streamUrl(request))
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    return url.toString()
+  }
+}
+
+function defaultEventSourceFactory(): EventSourceFactory | undefined {
+  return typeof EventSource === 'undefined' ? undefined : (url, init) => new EventSource(url, init)
+}
+
+function defaultWebSocketFactory(): WebSocketFactory | undefined {
+  return typeof WebSocket === 'undefined' ? undefined : (url) => new WebSocket(url)
+}
+
+function streamHandshake(request: AuroraStreamRequest): Record<string, unknown> {
+  return {
+    stream: request.stream,
+    topics: request.topics,
+    kinds: request.kinds,
+    payload: request.payload,
+    last_event_id: request.lastEventId ?? null,
+    replay_from: request.replayFrom ?? null,
+    backfill: request.backfill ?? false
+  }
+}
+
+function parseSocketData(data: unknown): unknown {
+  if (typeof data !== 'string') return data
+  try {
+    return JSON.parse(data) as unknown
+  } catch {
+    return { data }
+  }
+}
+
+function eventQueue<TPayload>(
+  start: (
+    push: (event: AuroraEvent<TPayload>) => void,
+    fail: (error: unknown) => void,
+    done: () => void
+  ) => void
+): AsyncIterable<AuroraEvent<TPayload>> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      const events: Array<AuroraEvent<TPayload>> = []
+      const waiters: Array<() => void> = []
+      let failure: unknown
+      let closed = false
+      const wake = () => waiters.splice(0).forEach((resolve) => resolve())
+      start(
+        (event) => {
+          events.push(event)
+          wake()
+        },
+        (error) => {
+          failure = error
+          closed = true
+          wake()
+        },
+        () => {
+          closed = true
+          wake()
+        }
+      )
+      while (!closed || events.length > 0) {
+        if (events.length > 0) {
+          yield events.shift()!
+          continue
+        }
+        await new Promise<void>((resolve) => waiters.push(resolve))
+      }
+      if (failure) throw failure
+    }
   }
 }
 

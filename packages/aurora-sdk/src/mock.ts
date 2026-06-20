@@ -1,6 +1,12 @@
 import { AuroraError, type AuroraErrorCode } from './errors.js'
+import {
+  createEventSubscription,
+  eventFromUnknown,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest
+} from './events.js'
 import { cloneFixture, defaultMockAuroraFixtures, type MockAuroraFixtureSet } from './fixtures.js'
-import type { AuroraTransportEnvelope } from './types.js'
+import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 
 export type MockHandler<TPayload = unknown, TData = unknown> = (
@@ -10,6 +16,9 @@ export type MockRegistration<TPayload = unknown, TData = unknown> =
   | MockHandler<TPayload, TData>
   | TData
   | AuroraTransportEnvelope<TData>
+export type MockEventRegistration<TPayload = unknown> =
+  | Array<AuroraEvent<TPayload> | Record<string, unknown>>
+  | ((request: AuroraStreamRequest) => AsyncIterable<AuroraEvent<TPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TPayload> | Record<string, unknown>>)
 
 export interface MockAuroraTransportOptions {
   fixtures?: MockAuroraFixtureSet | false
@@ -18,6 +27,7 @@ export interface MockAuroraTransportOptions {
 export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
   private readonly handlers = new Map<string, MockHandler>()
+  private readonly eventHandlers = new Map<string, MockEventRegistration>()
 
   constructor(options: MockAuroraTransportOptions = {}) {
     const fixtures = options.fixtures === false ? null : options.fixtures ?? defaultMockAuroraFixtures
@@ -68,6 +78,17 @@ export class MockAuroraTransport implements AuroraTransport {
     })
   }
 
+  stream<TPayload = unknown>(stream: string, registration: MockEventRegistration<TPayload>): this {
+    this.eventHandlers.set(stream, registration as MockEventRegistration)
+    return this
+  }
+
+  failStream(stream: string, code: AuroraErrorCode, message: string): this {
+    return this.stream(stream, async function* () {
+      throw new AuroraError({ code, message, detail: { stream } })
+    })
+  }
+
   async request<TData = unknown, TPayload = unknown>(
     request: AuroraTransportRequest<TPayload>
   ): Promise<AuroraTransportResponse<TData>> {
@@ -91,6 +112,39 @@ export class MockAuroraTransport implements AuroraTransport {
         transport: this.kind
       }
     }
+  }
+
+  subscribe<TEventPayload = unknown>(
+    request: AuroraStreamRequest
+  ): AuroraEventSubscription<TEventPayload> {
+    const registration = this.eventHandlers.get(request.stream) ?? this.eventHandlers.get('*')
+    if (!registration) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: `No mock event stream registered for ${request.stream}`,
+        detail: { stream: request.stream, topics: request.topics }
+      })
+    }
+    const source = (typeof registration === 'function' ? registration(request) : registration) as
+      | AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+      | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+    return createEventSubscription(normalizeMockEvents<TEventPayload>(source, request))
+  }
+}
+
+async function* normalizeMockEvents<TPayload>(
+  source: AsyncIterable<AuroraEvent<TPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TPayload> | Record<string, unknown>>,
+  request: AuroraStreamRequest
+): AsyncIterable<AuroraEvent<TPayload>> {
+  for await (const raw of source) {
+    const event = eventFromUnknown<TPayload>(raw, {
+      kind: request.stream,
+      transport: 'mock',
+      audit: request.audit
+    })
+    if (request.lastEventId && event.id && event.id <= request.lastEventId) continue
+    if (request.kinds.length > 0 && !request.kinds.includes(event.kind)) continue
+    yield event
   }
 }
 

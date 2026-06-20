@@ -21,6 +21,7 @@ import {
   defaultMockAuroraFixtures,
   describeBackendInventory,
   describeRegistry,
+  evaluateRoutePolicy,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
   gatewayRegistryFixture,
@@ -384,6 +385,399 @@ describe('AuroraClient', () => {
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
   })
 
+  it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
+    const evaluation = evaluateRoutePolicy({
+      route: routeExplainFixture,
+      catalog: capabilityCatalogFixture,
+      payload: { text: 'Remote speech synthesis should be reviewed before egress.' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        decision: 'privacy-blocked',
+        availability: 'privacy-blocked',
+        reasonCode: 'explicit_selector_required',
+        explicitSelectorRequired: true,
+        repairPath: 'choose an explicit peer/provider/resource selector',
+        privacyClass: 'raw-audio'
+      })
+    )
+    expect(evaluation.preview).toEqual(
+      expect.objectContaining({
+        egressDestination: 'peer',
+        providerId: 'mesh:studio-gpu:TTS',
+        peerId: 'peer-studio-gpu',
+        secretsRedacted: true,
+        dataClasses: expect.arrayContaining(['raw-audio'])
+      })
+    )
+    expect(evaluation.blockers.map((blocker) => blocker.code)).toEqual(
+      expect.arrayContaining(['explicit_selector_required', 'privacy_indicator_required'])
+    )
+  })
+
+  it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
+    const route = {
+      topic: 'Tooling.ExecuteTool',
+      module: 'Tooling',
+      selected_target: 'local',
+      selected_peer_id: 'local-peer',
+      selected_service_instance_id: 'tooling-local',
+      selected_provider_id: 'local:TTS',
+      selector_valid: true,
+      selector_validation_code: '',
+      selector_validation_message: '',
+      fallback_behavior: '',
+      candidates: [
+        {
+          provider_id: 'local:TTS',
+          peer_id: 'local-peer',
+          provider_kind: 'local',
+          service_instance_id: 'tooling-local',
+          module: 'Tooling',
+          version: '0.1.0',
+          included: true,
+          selected: true,
+          reason_code: 'eligible',
+          reason: 'Local dangerous tool is available after approval.',
+          latency_ms: 1,
+          active_calls: 0,
+          max_concurrent: 2,
+          available_capacity: 2,
+          blockers: []
+        }
+      ],
+      blockers: [],
+      security_privacy_blockers: [],
+      secrets_redacted: true
+    }
+    const catalog = {
+      ...capabilityGraphCatalogFixture,
+      actions: capabilityGraphCatalogFixture.actions.map((action) =>
+        action.action_id === 'tool-local-notes'
+          ? {
+              ...action,
+              policy: {
+                ...action.policy,
+                approval_required: true,
+                operation_class: 'admin',
+                safety_class: 'admin'
+              }
+            }
+          : action
+      )
+    }
+    const transport = new MockAuroraTransport()
+      .register('Gateway.ExplainRoute', route)
+      .register('Gateway.GetCapabilityCatalog', catalog)
+    const client = new AuroraClient({ transport })
+
+    await expect(
+      client.routes.evaluatePolicy({
+        routeRequest: { topic: 'Tooling.ExecuteTool' },
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        payload: { token: 'must-not-render', operation: 'delete notes' },
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        allowed: false,
+        decision: 'privacy-blocked',
+        reasonCode: 'approval_required',
+        approval: expect.objectContaining({ required: true, status: 'required' }),
+        preview: expect.objectContaining({
+          payloadPreview: expect.objectContaining({ token: '[redacted]' })
+        })
+      })
+    )
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [{ scope: 'single', decision: 'approve' }],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'future-approve-all',
+            decision: 'approve',
+            providerId: 'local:TTS',
+            argsHash: 'args-local-1'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS',
+            argsHash: 'different'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'local-safe-tools',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        payload: { token: 'must-not-render', operation: 'delete notes' },
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            approvalId: 'approval-local-1',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS',
+            argsHash: 'args-local-1',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        allowed: true,
+        decision: 'allowed',
+        approval: expect.objectContaining({
+          status: 'approved',
+          matchedScope: expect.objectContaining({ approvalId: 'approval-local-1' })
+        })
+      })
+    )
+  })
+
+  it('requires scoped session, provider, and args evidence for remote approvals', () => {
+    const remoteAllowedRoute = {
+      ...routeExplainFixture,
+      selected_target: 'remote',
+      selected_peer_id: 'peer-studio-gpu',
+      selected_provider_id: 'mesh:studio-gpu:TTS',
+      selected_service_instance_id: 'tts-remote-01',
+      selector_valid: true,
+      selector_validation_code: '',
+      selector_validation_message: '',
+      blockers: [],
+      security_privacy_blockers: [],
+      candidates: routeExplainFixture.candidates.map((candidate) => ({
+        ...candidate,
+        selected: true,
+        included: true,
+        blockers: []
+      }))
+    }
+    const catalog = {
+      ...capabilityCatalogFixture,
+      actions: capabilityCatalogFixture.actions.map((action) =>
+        action.action_id === 'tts-remote-privacy-blocked'
+          ? {
+              ...action,
+              bindability: 'available',
+              route_blockers: [],
+              policy: {
+                ...action.policy,
+                approval_required: true,
+                explicit_selector_required: false,
+                selector_required: false,
+                consent_required: false,
+                privacy_indicator_required: false
+              }
+            }
+          : action
+      )
+    }
+    const base = {
+      route: remoteAllowedRoute,
+      catalog,
+      actionId: 'tts-remote-privacy-blocked',
+      argsHash: 'args-remote-1',
+      sessionId: 'session-remote-1',
+      selector: { peer_id: 'peer-studio-gpu', module: 'TTS' },
+      now: '2026-06-20T10:00:00Z'
+    }
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [{ scope: 'session', decision: 'approve' }]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'session-remote-1',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'other-session',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'peer-studio-gpu',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'other-peer',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'session-remote-1',
+            peerId: 'peer-studio-gpu',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T09:59:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reasonCode: 'approval_required',
+        approval: expect.objectContaining({ status: 'expired' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [{ scope: 'deny-all', decision: 'deny-all' }]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reasonCode: 'approval_denied',
+        approval: expect.objectContaining({ status: 'rejected' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            toolId: 'tool:remote-danger',
+            peerId: 'other-peer',
+            providerId: 'mesh:studio-gpu:TTS',
+            argsHash: 'different'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+  })
+
   it('returns cloned fixture data so tests cannot mutate shared backend truth', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const registry = await client.registry.getRegistry()
@@ -441,6 +835,268 @@ describe('AuroraClient', () => {
     if (!permission.ok) expect(permission.error.code).toBe('permission')
     expect(timeout.ok).toBe(false)
     if (!timeout.ok) expect(timeout.error.code).toBe('timeout')
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
+  })
+
+  it('drafts, confirms, and submits AdminAction routes with backend-issued headers', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config-set',
+          nonce: 'nonce-config-set',
+          digest: 'digest-config-set',
+          method_id: 'Config.Set',
+          affected_resources: ['key:services.gateway.enabled'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(
+          expect.objectContaining({
+            action_id: 'aa-config-set',
+            nonce: 'nonce-config-set',
+            digest: 'digest-config-set',
+            reason: 'Enable Gateway for local admin',
+            reauth_confirmed: true,
+            phrase: 'CONFIRM'
+          })
+        )
+        return {
+          action_id: 'aa-config-set',
+          confirmation_token: 'token-config-set',
+          digest: 'digest-config-set',
+          confirmed: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          audit_receipt: 'aar-config-set',
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Config.Set', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, correlation_id: 'corr-config-set' }
+      })
+    const client = new AuroraClient({ transport })
+    const payload = { key: 'services.gateway.enabled', value: true }
+
+    const draft = await client.admin.draft({ method_id: 'Config.Set', payload })
+    const confirmation = await client.admin.confirm(draft, {
+      reason: 'Enable Gateway for local admin',
+      reauthConfirmed: true
+    })
+    const submitted = await client.admin.submit<{ success: boolean }>({
+      methodId: 'Config.Set',
+      payload,
+      confirmation
+    })
+
+    expect(submitted.success).toBe(true)
+    expect(calls.at(-1)).toEqual(
+      expect.objectContaining({
+        method: 'Config.Set',
+        payload,
+        headers: {
+          'X-Aurora-AdminAction-Id': 'aa-config-set',
+          'X-Aurora-AdminAction-Token': 'token-config-set',
+          'X-Aurora-AdminAction-Digest': 'digest-config-set'
+        }
+      })
+    )
+  })
+
+  it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.RequestApproval', {
+        ok: true,
+        approval_request_id: 'tool-approval-1',
+        policy_decision: {
+          decision_id: 'policy-1',
+          allowed: true,
+          approval_required: true,
+          approval_mode: 'ask_each_time',
+          token_ttl_seconds: 300,
+          risk_class: 'admin-critical'
+        },
+        expires_at: 1781953500,
+        correlation_id: 'corr-approval-1',
+        error: null
+      })
+      .register('Tooling.ConfirmExecution', {
+        ok: true,
+        approval_token: 'tool-token-1',
+        expires_at: 1781953500,
+        policy_decision_id: 'policy-1',
+        correlation_id: 'corr-approval-1',
+        error: null
+      })
+      .register('Gateway.AdminActionDraft', {
+        action_id: 'aa-tool',
+        nonce: 'nonce-tool',
+        digest: 'digest-tool',
+        method_id: 'Tooling.ExecuteTool',
+        affected_resources: ['tool:tool:remote-danger'],
+        required_phrase: 'CONFIRM',
+        required_reason: true,
+        required_reauth: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        expires_in_seconds: 300,
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+      .register('Gateway.AdminActionConfirm', {
+        action_id: 'aa-tool',
+        confirmation_token: 'admin-token-tool',
+        digest: 'digest-tool',
+        confirmed: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        audit_receipt: 'aar-tool',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+      .register('Tooling.ExecuteTool', (request) => ({
+        ok: true,
+        used_tool_approval_token: (request.payload as { approval_token?: string }).approval_token,
+        admin_header: request.headers?.['X-Aurora-AdminAction-Id']
+      }))
+    const client = new AuroraClient({ transport })
+
+    const approval = await client.approvals.request({
+      global_tool_id: 'tool:remote-danger',
+      provider_peer_id: 'peer-kitchen',
+      provider_service_instance_id: 'tooling-remote',
+      args_hash: 'sha256:danger-args',
+      redacted_args_preview: { target: 'garage', api_key: '[redacted]' },
+      risk_class: 'admin-critical',
+      requested_approval_scope: 'tool-args',
+      expected_audit_event: 'tooling.approval.approved',
+      args: { target: 'garage' }
+    })
+    const token = await client.approvals.approve({
+      approval_request_id: approval.approval_request_id!,
+      approver_principal_id: 'admin-1',
+      reason: 'Operator approved garage diagnostic'
+    })
+    const adminDraft = await client.admin.draft({
+      method_id: 'Tooling.ExecuteTool',
+      payload: {
+        global_tool_id: 'tool:remote-danger',
+        approval_token: token.approvalToken,
+        args: { target: 'garage' }
+      }
+    })
+    const adminConfirmation = await client.admin.confirm(adminDraft, {
+      reason: 'Dangerous tool requires admin confirmation',
+      reauthConfirmed: true
+    })
+    const execution = await client.admin.submit<{ ok: boolean; used_tool_approval_token: string; admin_header: string }>({
+      methodId: 'Tooling.ExecuteTool',
+      payload: {
+        global_tool_id: 'tool:remote-danger',
+        approval_token: token.approvalToken,
+        args: { target: 'garage' }
+      },
+      confirmation: adminConfirmation
+    })
+
+    expect(execution).toEqual({
+      ok: true,
+      used_tool_approval_token: 'tool-token-1',
+      admin_header: 'aa-tool'
+    })
+  })
+
+  it('classifies approval denial, expiry, replay, changed args, changed provider, and downgraded risk as typed errors', async () => {
+    const cases = [
+      ['approval_denied', 'permission'],
+      ['approval_request_expired', 'timeout'],
+      ['approval_request_replayed', 'validation'],
+      ['approval_token_args_hash_mismatch', 'validation'],
+      ['approval_token_provider_peer_id_mismatch', 'validation'],
+      ['approval_token_downgraded_risk', 'validation']
+    ] as const
+
+    for (const [backendError, expectedCode] of cases) {
+      const client = new AuroraClient({
+        transport: new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', {
+          ok: false,
+          approval_token: null,
+          expires_at: null,
+          policy_decision_id: null,
+          correlation_id: `corr-${backendError}`,
+          error: backendError
+        })
+      })
+
+      await expect(
+        client.approvals.confirm({
+          approval_request_id: `approval-${backendError}`,
+          approver_principal_id: 'admin-1'
+        })
+      ).rejects.toMatchObject({
+        code: expectedCode,
+        method: 'Tooling.ConfirmExecution',
+        correlationId: `corr-${backendError}`
+      })
+    }
+  })
+
+  it('returns controller result errors for auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport loss', async () => {
+    const cases = [
+      ['auth', 'Gateway.AdminActionDraft'],
+      ['permission', 'Gateway.AdminActionDraft'],
+      ['validation', 'Gateway.AdminActionDraft'],
+      ['timeout', 'Gateway.AdminActionDraft'],
+      ['unavailable_service', 'Gateway.AdminActionDraft'],
+      ['unsupported_feature', 'Gateway.AdminActionDraft'],
+      ['privacy_blocked', 'Gateway.AdminActionDraft'],
+      ['native_permission_missing', 'Gateway.AdminActionDraft']
+    ] as const
+
+    for (const [code, method] of cases) {
+      const client = new AuroraClient({
+        transport: new MockAuroraTransport({ fixtures: false }).fail(method, code, `failure ${code}`)
+      })
+      const result = await client.result(() =>
+        client.admin.draft({ method_id: 'Config.Set', payload: { key: 'x', value: true } })
+      )
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(code)
+    }
+
+    const lossClient = new AuroraClient({
+      transport: new MockAuroraTransport({ fixtures: false }).lose('Gateway.AdminActionDraft')
+    })
+    const loss = await lossClient.result(() =>
+      lossClient.admin.draft({ method_id: 'Config.Set', payload: { key: 'x', value: true } })
+    )
     expect(loss.ok).toBe(false)
     if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
@@ -1200,7 +1856,242 @@ describe('AuroraClient', () => {
       })
     )
   })
+
+  it('subscribes to mock event streams with filtered event envelopes', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-assistant-1' },
+      { id: '2', kind: 'tool.completed', payload: { ok: true }, tool_id: 'tool:notes' },
+      { id: '3', kind: 'ignored', payload: {} }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.streamAssistant(undefined, { kinds: ['assistant.delta', 'tool.completed'] }), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['assistant.delta', 'tool.completed'])
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        id: '1',
+        payload: { text: 'hel' },
+        audit: expect.objectContaining({
+          correlationId: 'corr-assistant-1',
+          eventKind: 'assistant.delta',
+          transport: 'mock'
+        })
+      })
+    )
+    expect(events[1]?.audit.toolId).toBe('tool:notes')
+  })
+
+  it('reconnects streams with last event backfill hints after transport loss', async () => {
+    let attempts = 0
+    const seenLastEventIds: Array<string | null | undefined> = []
+    const transport = new MockAuroraTransport().stream('health', async function* (request) {
+      attempts += 1
+      seenLastEventIds.push(request.lastEventId)
+      if (attempts === 1) {
+        yield { id: '1', kind: 'health.updated', payload: { status: 'starting' } }
+        throw new TypeError('mock stream dropped')
+      }
+      yield { id: '2', kind: 'health.updated', payload: { status: 'healthy' } }
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth({ reconnect: { maxAttempts: 1, initialDelayMs: 0 } }), 2)
+
+    expect(events.map((event) => event.id)).toEqual(['1', '2'])
+    expect(seenLastEventIds).toEqual([null, '1'])
+  })
+
+  it('settles a pending event iterator when an idle wrapped stream is closed', async () => {
+    const never = async function* () {
+      await new Promise(() => undefined)
+    }
+    const client = new AuroraClient({
+      transport: new MockAuroraTransport().stream('health', never)
+    })
+    const subscription = client.events.watchHealth()
+    const iterator = subscription[Symbol.asyncIterator]()
+
+    const pending = iterator.next().then(() => 'settled', () => 'rejected')
+    setTimeout(() => subscription.close('test-close'), 10)
+
+    await expect(raceWithTimeout(pending, 100)).resolves.toBe('settled')
+  })
+
+  it('classifies event stream unsupported and scripted failures', async () => {
+    const unsupported = new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async <TData = unknown>() => ({ data: {} as TData })
+      }
+    })
+    expect(() => unsupported.subscribe()).toThrow(AuroraError)
+
+    const failing = new AuroraClient({
+      transport: new MockAuroraTransport().failStream('config', 'permission', 'Forbidden stream')
+    })
+    await expect(collectEvents(failing.events.watchConfig(), 1)).rejects.toMatchObject({ code: 'permission' })
+  })
+
+  it('adapts HTTP SSE and WebSocket events into AuroraEvent envelopes', async () => {
+    let sse: { onmessage: ((event: MessageEvent<string>) => void) | null; onerror: ((event: Event) => void) | null; close: () => void } | null = null
+    const sseTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      eventSourceFactory: (url) => {
+        expect(url).toContain('/api/events?stream=health')
+        sse = { onmessage: null, onerror: null, close: () => undefined }
+        return sse
+      }
+    })
+    const sseClient = new AuroraClient({ transport: sseTransport })
+    const sseEvents = collectEvents(sseClient.events.watchHealth(), 1)
+    await Promise.resolve()
+    expect(sse).not.toBeNull()
+    const currentSse = sse!
+    currentSse.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ id: 'health-1', kind: 'health.updated', payload: { status: 'healthy' } }),
+        lastEventId: 'health-1'
+      })
+    )
+    expect((await sseEvents)[0]).toEqual(
+      expect.objectContaining({
+        id: 'health-1',
+        kind: 'health.updated',
+        payload: { status: 'healthy' }
+      })
+    )
+
+    let sent: string | null = null
+    let socket: { onmessage: ((event: MessageEvent<string>) => void) | null; onerror: ((event: Event) => void) | null; onclose: ((event: CloseEvent) => void) | null; send: (data: string) => void; close: () => void } | null = null
+    const wsTransport = new HttpGatewayTransport({
+      baseUrl: 'https://aurora.local',
+      webSocketFactory: (url) => {
+        expect(url.startsWith('wss://aurora.local/api/events?stream=assistant')).toBe(true)
+        socket = {
+          onmessage: null,
+          onerror: null,
+          onclose: null,
+          send: (data) => { sent = data },
+          close: () => undefined
+        }
+        return socket
+      }
+    })
+    const wsClient = new AuroraClient({ transport: wsTransport })
+    const wsEvents = collectEvents(wsClient.events.streamAssistant({ prompt: 'hello' }, { protocol: 'websocket' }), 1)
+    await Promise.resolve()
+    expect(JSON.parse(sent ?? '{}')).toEqual(expect.objectContaining({ stream: 'assistant' }))
+    expect(socket).not.toBeNull()
+    const currentSocket = socket!
+    currentSocket.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ id: 'assistant-1', kind: 'assistant.delta', payload: { text: 'hello' } })
+      })
+    )
+    expect((await wsEvents)[0]?.kind).toBe('assistant.delta')
+  })
+
+  it('settles a pending HTTP SSE iterator when the subscription is closed without another event', async () => {
+    let closed = false
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const sseTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      eventSourceFactory: () => {
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          close: () => { closed = true }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport: sseTransport })
+    const subscription = client.events.watchHealth()
+    const iterator = subscription[Symbol.asyncIterator]()
+
+    const pending = iterator.next().then(() => 'settled', () => 'rejected')
+    await sourceReadyPromise
+    subscription.close('test-close')
+
+    await expect(raceWithTimeout(pending, 100)).resolves.toBe('settled')
+    expect(closed).toBe(true)
+  })
+
+  it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
+    const tauri = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        expect(command).toBe('aurora_event_subscribe')
+        expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
+        return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+      }
+    })
+    const tauriClient = new AuroraClient({ transport: tauri })
+    const tauriEvents = await collectEvents(tauriClient.events.watchConfig(), 1)
+    expect(tauriEvents[0]).toEqual(
+      expect.objectContaining({
+        id: 'config-1',
+        audit: expect.objectContaining({
+          correlationId: 'corr-config',
+          transport: 'tauri-local'
+        })
+      })
+    )
+
+    const meshTransport = new MeshP2PTransport({
+      defaultPeerId: 'peer-kitchen',
+      bridge: {
+        async call() {
+          return { data: {} }
+        },
+        subscribe(request) {
+          expect(request.peerId).toBe('peer-kitchen')
+          return [{ id: 'mesh-1', kind: 'health.updated', payload: { peer: request.peerId } }]
+        }
+      }
+    })
+    const meshClient = new AuroraClient({ transport: meshTransport })
+    const meshEvents = await collectEvents(meshClient.events.watchHealth(), 1)
+    expect(meshEvents[0]).toEqual(
+      expect.objectContaining({
+        id: 'mesh-1',
+        payload: { peer: 'peer-kitchen' },
+        audit: expect.objectContaining({
+          targetPeerId: 'peer-kitchen',
+          transport: 'mesh'
+        })
+      })
+    )
+  })
 })
+
+async function collectEvents<TPayload>(
+  subscription: AsyncIterable<TPayload> & { close?: () => void },
+  count: number
+): Promise<TPayload[]> {
+  const events: TPayload[] = []
+  try {
+    for await (const event of subscription) {
+      events.push(event)
+      if (events.length >= count) break
+    }
+    return events
+  } finally {
+    subscription.close?.()
+  }
+}
+
+async function raceWithTimeout<TValue>(promise: Promise<TValue>, ms: number): Promise<TValue | 'timeout'> {
+  return Promise.race([
+    promise,
+    new Promise<'timeout'>((resolve) => {
+      setTimeout(() => resolve('timeout'), ms)
+    })
+  ])
+}
 
 describe('permissions', () => {
   it('matches backend permission semantics without lowercasing backend IDs', () => {

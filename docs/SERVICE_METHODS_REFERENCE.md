@@ -459,6 +459,12 @@ ToolingToolInfo(
     source_type="mesh_peer",                    # "local" | "mesh_peer"
     execution_location="remote",                # "local" | "remote"
     safety_class="standard",
+    risk_class="standard",                      # "standard" | "sensitive" | "dangerous"
+    data_egress=False,
+    mutating=False,
+    external=False,
+    admin=False,
+    privacy_hints=[],
     required_permissions=["Tooling.ExecuteTool"],
     confirmation_required=False,
     provenance={...},
@@ -479,6 +485,12 @@ remote tools, the LLM-visible name remains the collision-safe `name`, but the
 graph stores hidden binding metadata and executes with the tool's
 `global_tool_id` plus a `MeshAddressSelector` containing provider peer,
 service instance, and tool ID.
+
+Tool discovery also exposes policy-facing risk hints. `risk_class` is the
+canonical coarse risk label. `data_egress`, `mutating`, `external`, and `admin`
+identify privacy-relevant behavior that clients can render before execution.
+`privacy_hints` is a normalized list of additional labels such as
+`contains_user_data`, `risk:sensitive`, or `data_egress`.
 
 #### `Tooling.ExecuteTool` (Both)
 **Purpose**: Execute a provider-local or explicitly selected remote tool with
@@ -504,6 +516,14 @@ without invoking the tool. Every outcome writes an `Auth.StoreAuditEvent`
 record containing caller peer/principal, target/provider peer, tool identity,
 resource selector, correlation ID, status/error code, and a redacted argument
 hash rather than raw argument values.
+
+Tooling loads `services.tooling.approval_policy` from schema-backed config on
+startup and on `services` / `services.tooling` reloads. The policy supports
+default sharing/approval behavior plus first-match rules scoped by tool,
+toolkit, safety/operation class, caller peer/principal/device, provider peer,
+service instance, and route privacy class. Loading a valid policy records a
+`tooling.policy.loaded` audit event; invalid policy config is rejected without
+falling back to broad raw execution.
 
 ### Mesh Correlation Debugging
 
