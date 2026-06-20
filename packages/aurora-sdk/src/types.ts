@@ -1,7 +1,77 @@
+import type { AuroraError } from './errors.js'
+
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
 export interface JsonObject {
   [key: string]: JsonValue | undefined
+}
+
+export type AuroraTransportKind = 'http' | 'tauri-local' | 'mesh' | 'native-mobile' | 'mock' | string
+
+export interface RedactionMetadata {
+  secretsRedacted: boolean
+  redactedFields: string[]
+  source: 'backend' | 'transport' | 'sdk' | 'unknown'
+  warnings: string[]
+}
+
+export interface AuditReceipt {
+  correlationId: string | null
+  eventKind: string | null
+  peerId: string | null
+  principalId: string | null
+  targetPeerId: string | null
+  method: string | null
+  busTopic: string | null
+  toolId: string | null
+  resourceId: string | null
+  status: string | null
+  transport: AuroraTransportKind | null
+  redaction: RedactionMetadata
+}
+
+export interface AuroraRequest<TPayload = unknown> {
+  method: string
+  busTopic?: string | undefined
+  path?: string | undefined
+  payload?: TPayload | undefined
+  timeoutMs?: number | undefined
+  headers?: Record<string, string> | undefined
+  signal?: AbortSignal | undefined
+  audit?: Partial<AuditReceipt> | undefined
+}
+
+export interface AuroraTransportEnvelope<TData = unknown> {
+  data: TData
+  status?: number | undefined
+  headers?: Headers | Record<string, string> | undefined
+  audit?: Partial<AuditReceipt> | undefined
+}
+
+export interface AuroraResultSuccess<TData> {
+  ok: true
+  data: TData
+  audit: AuditReceipt
+}
+
+export interface AuroraResultFailure {
+  ok: false
+  error: AuroraError
+  audit: AuditReceipt
+}
+
+export type AuroraResult<TData> = AuroraResultSuccess<TData> | AuroraResultFailure
+
+export interface AuroraEvent<TPayload = unknown> {
+  id: string | null
+  kind: string
+  topic: string | null
+  method: string | null
+  busTopic: string | null
+  payload: TPayload
+  audit: AuditReceipt
+  redaction: RedactionMetadata
+  receivedAt: string
 }
 
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string
@@ -35,6 +105,22 @@ export interface GetRegistryResponse {
   method_count: number
 }
 
+export interface ServiceInfo {
+  module: string
+  version: string
+  summary: string
+  capabilities: string[]
+  method_count: number
+  last_seen: string
+  status: string
+  instance_id: string | null
+}
+
+export interface GetServicesResponse {
+  services: ServiceInfo[]
+  mode: string
+}
+
 export interface ServiceAnnouncement {
   module: string
   version: string
@@ -59,6 +145,84 @@ export interface MethodDescriptor {
   inputSchema: JsonObject | null
   outputSchema: JsonObject | null
   availableOverHttp: boolean
+}
+
+export interface GatewayBuiltinRouteDescriptor {
+  name: string
+  summary: string
+  routePath: string
+  httpMethods: string[]
+  routeKind: 'gateway_builtin'
+  exposure: 'gateway_builtin'
+  methodType: ContractMethodType
+  requiredPermissions: string[]
+}
+
+export type BackendInventoryRouteKind = 'dynamic' | 'internal_bus' | 'gateway_builtin' | string
+
+export interface BackendInventoryMethod {
+  module: string
+  name: string
+  summary?: string | null
+  bus_topic: string | null
+  routePath?: string | null
+  route_path?: string | null
+  route_kind?: BackendInventoryRouteKind
+  exposure: ContractExposure
+  method_type: ContractMethodType
+  required_perms: string[]
+  input_model?: string | null
+  output_model?: string | null
+  input_schema?: JsonObject | null
+  output_schema?: JsonObject | null
+  source?: string | null
+  source_file?: string | null
+}
+
+export interface GatewayBuiltinInventoryRoute {
+  name: string
+  summary?: string | null
+  routePath?: string | null
+  route_path?: string | null
+  http_methods: string[]
+  route_kind: 'gateway_builtin' | string
+  exposure: 'gateway_builtin' | string
+  method_type: ContractMethodType
+  required_perms: string[]
+}
+
+export interface BackendInventory {
+  generated_by?: string
+  method_count?: number
+  gateway_builtin_count?: number
+  methods: BackendInventoryMethod[]
+  gateway_builtins?: GatewayBuiltinInventoryRoute[]
+  import_errors?: Array<Record<string, JsonValue>>
+  ui_fixture_validation?: Record<string, JsonValue>
+}
+
+export interface GeneratedMethodDescriptor extends MethodDescriptor {
+  routeKind: BackendInventoryRouteKind
+  source: string | null
+  sourceFile: string | null
+}
+
+export interface BackendMethodTypeDescriptor<
+  TRequest = JsonObject,
+  TResponse = JsonObject
+> {
+  busTopic: string
+  requestModel: string | null
+  responseModel: string | null
+  requestSchema: JsonObject | null
+  responseSchema: JsonObject | null
+  descriptor: GeneratedMethodDescriptor
+}
+
+export interface BackendInventoryDescriptors {
+  methods: GeneratedMethodDescriptor[]
+  gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
+  methodTypes: Record<string, BackendMethodTypeDescriptor>
 }
 
 export type AvailabilityState =
@@ -196,6 +360,75 @@ export interface CapabilitySummary {
   routeBlockers: string[]
   selector: unknown
   raw: CapabilityActionInfo
+}
+
+export interface PeerSummary {
+  peerId: string
+  nodeName: string
+  lifecycleState: string
+  trustState: string
+  latencyMs: number | null
+  staleAgeSeconds: number | null
+  serviceCount: number
+  lastEvidenceSource: string
+}
+
+export interface NativeCapabilityState {
+  platform: string
+  availability: AvailabilityState
+  permissions: Record<string, boolean>
+  capabilityKeys: string[]
+  evidenceSource: string
+}
+
+export interface AdminOverviewServiceSummary {
+  module: string
+  version: string
+  status: string
+  methodCount: number
+  externalMethodCount: number
+  internalMethodCount: number
+  requiredPermissions: string[]
+  lastSeen: string
+}
+
+export interface AdminOverviewManifestInput {
+  registry: GetRegistryResponse
+  services?: GetServicesResponse | ServiceInfo[]
+  capabilityCatalog?: CapabilityCatalogResponse | null
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  nativeManifest?: NativeCapabilityManifest | null
+  peers?: PeerSummary[]
+  generatedAt?: string
+}
+
+export interface AdminOverviewManifest {
+  generatedAt: string
+  registryDigest: string
+  serviceMode: string
+  services: AdminOverviewServiceSummary[]
+  methods: MethodDescriptor[]
+  gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
+  capabilities: CapabilitySummary[]
+  native: NativeCapabilityState
+  peers: PeerSummary[]
+  unavailable: CapabilitySummary[]
+  internalOnly: MethodDescriptor[]
+  permissionCatalog: string[]
+  totals: {
+    services: number
+    methods: number
+    externalMethods: number
+    internalMethods: number
+    gatewayBuiltins: number
+    capabilityActions: number
+    peers: number
+  }
+  privacy: {
+    secretsRedacted: boolean
+    nativeStateInvented: false
+    peerStateInvented: false
+  }
 }
 
 export interface RouteExplainRequest {

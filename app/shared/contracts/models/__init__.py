@@ -73,6 +73,11 @@ from .auth import (
     WhoAmIRequest,
     WhoAmIResponse,
 )
+from .aurora import (
+    AuroraEventStreamEvent,
+    AuroraMethods,
+    AuroraModule,
+)
 from .common import (
     EmptyInput,
     EmptyOutput,
@@ -132,6 +137,10 @@ __all__ = [
     "EmptyInput",
     "EmptyOutput",
     "ErrorOutput",
+    # Aurora
+    "AuroraModule",
+    "AuroraMethods",
+    "AuroraEventStreamEvent",
     # TTS
     "TTSRequest",
     "TTSControl",

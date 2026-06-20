@@ -26,6 +26,7 @@ from app.shared.config.models import (
     MeshSharing,
 )
 from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods
+from app.shared.contracts.models.aurora import AuroraMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
@@ -51,6 +52,7 @@ from app.shared.contracts.models.gateway import (
     RouteExplainResponse,
     SupportBundleRedactionInfo,
 )
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.scheduler import SchedulerMethods
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.registry import method_contract
@@ -208,10 +210,14 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
         return "capability"
     if topic in {GatewayMethods.EXPLAIN_ROUTE}:
         return "route"
-    if topic.startswith("Mesh.") or topic in {AuthMethods.PAIRING_REQUESTED}:
+    if topic == OrchestratorMethods.RESPONSE:
+        return "assistant"
+    if topic == AuthMethods.PAIRING_REQUESTED:
+        return "pairing"
+    if topic.startswith("Mesh."):
         return "peer"
     if topic in {ConfigMethods.UPDATED, ConfigMethods.ERROR}:
-        return "admin_action"
+        return "config"
     if topic in {
         ToolingMethods.PREPARE_EXECUTION,
         ToolingMethods.REQUEST_APPROVAL,
@@ -624,7 +630,7 @@ class GatewayService(BaseService):
         return GatewayListEventsResponse(
             events=events[: data.limit],
             total=len(events),
-            subscription_topic=GatewayMethods.EVENT_STREAM,
+            subscription_topic=AuroraMethods.EVENT_STREAM,
             secrets_redacted=True,
         )
 
@@ -808,13 +814,13 @@ class GatewayService(BaseService):
 
     async def _capture_gateway_event(self, envelope: Envelope) -> None:
         """Capture bus events into a redacted normalized stream."""
-        if envelope.type == GatewayMethods.EVENT_STREAM:
+        if envelope.type == AuroraMethods.EVENT_STREAM:
             return
         event = _event_from_envelope(envelope)
         self._event_stream.appendleft(event)
         with contextlib.suppress(Exception):
             await self.bus.publish(
-                GatewayMethods.EVENT_STREAM,
+                AuroraMethods.EVENT_STREAM,
                 event,
                 event=True,
                 mesh=False,

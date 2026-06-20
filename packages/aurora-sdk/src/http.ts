@@ -1,4 +1,5 @@
 import { AuroraError, classifyHttpError } from './errors.js'
+import { auditFromHeaders } from './transport.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 
 export interface HttpTransportOptions {
@@ -49,13 +50,20 @@ export class HttpGatewayTransport implements AuroraTransport {
           status: response.status,
           method: request.method,
           busTopic: request.busTopic,
+          correlationId: auditFromHeaders(response.headers).correlationId ?? undefined,
           detail: readDetail(data)
         })
       }
       return {
         data: data as TData,
         status: response.status,
-        headers: response.headers
+        headers: response.headers,
+        audit: {
+          ...auditFromHeaders(response.headers),
+          method: request.method,
+          busTopic: request.busTopic ?? null,
+          transport: this.kind
+        }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {

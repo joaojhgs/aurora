@@ -5,8 +5,15 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  backendInventoryFixture,
+  buildAdminOverviewManifest,
   capabilityCatalogFixture,
+  createAuditReceipt,
+  createAuroraEvent,
+  describeBackendInventory,
   describeRegistry,
+  gatewayBuiltinRoutesFixture,
+  gatewayServicesFixture,
   gatewayRegistryFixture
 } from '../src/index.js'
 
@@ -97,6 +104,123 @@ describe('AuroraClient', () => {
     ])
   })
 
+  it('builds an admin overview manifest from backend evidence only', async () => {
+    const catalog = {
+      ...capabilityCatalogFixture,
+      actions: [
+        {
+          action_id: 'gateway-catalog',
+          module: 'Gateway',
+          method: 'GetCapabilityCatalog',
+          topic: 'Gateway.GetCapabilityCatalog',
+          tool_id: null,
+          resource_id: null,
+          provider_id: 'local:Gateway',
+          peer_id: 'local-peer',
+          provider_kind: 'local',
+          service_instance_id: 'gateway-local',
+          selector: { peer_id: 'local-peer', module: 'Gateway' },
+          bindability: 'available',
+          sdk_operation_kind: 'bus_method',
+          route_hints: [],
+          route_blockers: [],
+          summary: 'Capability catalog',
+          input_schema: null,
+          output_schema: null,
+          policy: {
+            required_permissions: ['Gateway.manage'],
+            trust_tier: 'local',
+            safety_class: 'admin',
+            explicit_selector_required: false,
+            consent_required: false,
+            privacy_indicator_required: false,
+            bandwidth_check_required: false,
+            approval_required: false,
+            selector_required: false,
+            mesh_visible: false,
+            local_only: false,
+            allowed_peers: null,
+            operation_class: 'admin',
+            resource_scope: null,
+            denial_reasons: []
+          },
+          freshness: {
+            source: 'registry',
+            manifest_time: null,
+            last_probe_age_s: null,
+            ttl_s: null,
+            stale: false,
+            registry_digest: 'fixture'
+          }
+        }
+      ]
+    }
+
+    const manifest = buildAdminOverviewManifest({
+      registry: gatewayRegistryFixture,
+      services: gatewayServicesFixture,
+      capabilityCatalog: catalog,
+      gatewayBuiltins: gatewayBuiltinRoutesFixture,
+      nativeManifest: null,
+      peers: [],
+      generatedAt: '2026-06-19T12:00:00Z'
+    })
+
+    expect(manifest.generatedAt).toBe('2026-06-19T12:00:00Z')
+    expect(manifest.serviceMode).toBe('threads')
+    expect(manifest.totals).toEqual(
+      expect.objectContaining({
+        services: 1,
+        methods: 2,
+        externalMethods: 1,
+        internalMethods: 1,
+        gatewayBuiltins: 2,
+        capabilityActions: 1
+      })
+    )
+    expect(manifest.services[0]).toEqual(
+      expect.objectContaining({
+        module: 'Gateway',
+        status: 'healthy',
+        requiredPermissions: ['Gateway.manage', 'Gateway.use']
+      })
+    )
+    expect(manifest.internalOnly).toHaveLength(1)
+    expect(manifest.internalOnly[0]?.busTopic).toBe('Gateway.InternalOnly')
+    expect(manifest.permissionCatalog).toEqual(['Auth.manage', 'Gateway.manage', 'Gateway.use'])
+    expect(manifest.native).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        evidenceSource: 'not-provided'
+      })
+    )
+    expect(manifest.privacy).toEqual({
+      secretsRedacted: true,
+      nativeStateInvented: false,
+      peerStateInvented: false
+    })
+  })
+
+  it('loads the admin overview manifest through the client namespace', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetServices', gatewayServicesFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+    const client = new AuroraClient({ transport })
+
+    const manifest = await client.adminOverview.getManifest({
+      gatewayBuiltins: gatewayBuiltinRoutesFixture,
+      generatedAt: '2026-06-19T12:00:00Z'
+    })
+
+    expect(manifest.registryDigest).toBe('fixture')
+    expect(manifest.gatewayBuiltins.map((route) => route.routePath)).toEqual([
+      '/api/admin/peers',
+      '/api/health'
+    ])
+    expect(manifest.native.availability).toBe('unsupported')
+  })
+
   it('returns classified result errors for permissions and transport loss', async () => {
     const permissionTransport = new MockAuroraTransport().fail('Gateway.GetRegistry', 'permission', 'Forbidden')
     const permissionClient = new AuroraClient({ transport: permissionTransport })
@@ -118,6 +242,80 @@ describe('AuroraClient', () => {
     if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
   })
 
+  it('normalizes successful results with audit and redaction metadata', async () => {
+    const transport = new MockAuroraTransport().register('Gateway.ExplainRoute', {
+      data: {
+        topic: 'TTS.Synthesize',
+        correlation_id: 'corr-route-1',
+        peer_id: 'local-peer',
+        target_peer_id: 'remote-peer',
+        method: 'ExplainRoute',
+        bus_topic: 'Gateway.ExplainRoute',
+        status: 'success',
+        secrets_redacted: true,
+        redacted_fields: ['selector.token']
+      },
+      audit: {
+        transport: 'mock'
+      },
+      status: 200
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.result(() => client.routes.explain({ topic: 'TTS.Synthesize' }))
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-route-1',
+          peerId: 'local-peer',
+          targetPeerId: 'remote-peer',
+          method: 'ExplainRoute',
+          busTopic: 'Gateway.ExplainRoute',
+          status: 'success',
+          transport: 'mock',
+          redaction: expect.objectContaining({
+            secretsRedacted: true,
+            redactedFields: ['selector.token'],
+            source: 'backend'
+          })
+        })
+      )
+    }
+  })
+
+  it('normalizes direct transport envelopes into one result shape', async () => {
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), {
+          status: 200,
+          headers: { 'x-correlation-id': 'corr-http-200' }
+        })
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.requestResult<{ digest: string }>('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.digest).toBe('fixture')
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-http-200',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          transport: 'http',
+          redaction: expect.objectContaining({
+            secretsRedacted: true,
+            source: 'sdk'
+          })
+        })
+      )
+    }
+  })
+
   it('classifies HTTP auth, validation, timeout, and unavailable service failures', async () => {
     const responses = [401, 422, 504, 503]
     const expected = ['auth', 'validation', 'timeout', 'unavailable_service']
@@ -132,6 +330,34 @@ describe('AuroraClient', () => {
 
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.error.code).toBe(expected[index])
+    }
+  })
+
+  it('preserves HTTP correlation headers on classified failures', async () => {
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { message: 'Forbidden' } }), {
+          status: 403,
+          headers: { 'x-correlation-id': 'corr-http-403' }
+        })
+    })
+    const client = new AuroraClient({ transport })
+    const result = await client.result(() => client.registry.getRegistry())
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.code).toBe('permission')
+      expect(result.error.correlationId).toBe('corr-http-403')
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-http-403',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          status: 'permission',
+          transport: 'http'
+        })
+      )
     }
   })
 
@@ -166,6 +392,216 @@ describe('AuroraClient', () => {
     expect(native.ok).toBe(false)
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
   })
+
+  it('tracks user, admin, mesh peer, system, expired, and revoked auth session states', () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    client.auth.updateFromLogin({
+      user_id: 'user-1',
+      username: 'Ada',
+      permissions: ['Gateway.use'],
+      is_admin: false,
+      expires_at: '2030-01-01T00:00:00Z'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-1',
+        principalName: 'Ada',
+        isAuthenticated: true,
+        isAdmin: false,
+        tokenExpiresAt: '2030-01-01T00:00:00Z'
+      })
+    )
+
+    client.auth.updateFromTokenValidation({
+      valid: true,
+      principal_id: 'admin-1',
+      principal_name: 'Owner',
+      permissions: ['Auth.manage'],
+      effective_perms: ['Auth.manage', 'Gateway.manage'],
+      is_admin: true,
+      source: 'http_bearer'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'admin',
+        principalId: 'admin-1',
+        isAdmin: true,
+        credentialKind: 'bearer_token',
+        effectivePermissions: ['Auth.manage', 'Gateway.manage']
+      })
+    )
+
+    client.auth.updateFromPairingExchange({
+      user_id: 'peer-principal-1',
+      device_id: 'device-1',
+      permissions: ['TTS.use'],
+      peer_id: 'peer-1',
+      node_name: 'Kitchen node'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'mesh_peer',
+        principalId: 'peer-principal-1',
+        peerId: 'peer-1',
+        nodeName: 'Kitchen node',
+        isMeshPeer: true,
+        credentialKind: 'mesh_peer_token'
+      })
+    )
+
+    client.auth.updateFromWhoAmI({
+      principal_id: 'system',
+      principal_name: 'SYSTEM',
+      permissions: ['*'],
+      effective_perms: ['*'],
+      is_admin: true,
+      source: 'api_key'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'api_key_system',
+        principalId: 'system',
+        isSystem: true,
+        isAdmin: true,
+        credentialKind: 'api_key'
+      })
+    )
+    expect(client.auth.hasPermission('Auth.DeletePrincipal')).toBe(true)
+
+    client.auth.setAuthenticated('user-2', ['Gateway.use'], '2020-01-01T00:00:00Z')
+    client.auth.refreshClock(new Date('2020-01-01T00:00:01Z'))
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'expired',
+        needsAuthentication: true,
+        isTerminal: true
+      })
+    )
+
+    client.auth.revoke('Token revoked by admin')
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'revoked',
+        reason: 'Token revoked by admin',
+        needsAuthentication: true
+      })
+    )
+  })
+
+  it('uses 401 and 403 results to update auth session without mutating on transport loss', async () => {
+    const authTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), {
+          status: 401
+        })
+    })
+    const authClient = new AuroraClient({ transport: authTransport })
+    authClient.auth.setAuthenticated('user-1', ['Gateway.use'])
+    const authResult = await authClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(authResult.ok).toBe(false)
+    expect(authClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'expired',
+        status: 401,
+        needsAuthentication: true
+      })
+    )
+
+    const permissionTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { code: 'permission_denied', message: 'Forbidden' } }), {
+          status: 403
+        })
+    })
+    const permissionClient = new AuroraClient({ transport: permissionTransport })
+    permissionClient.auth.setAuthenticated('user-2', ['Gateway.use'])
+    const permissionResult = await permissionClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(permissionResult.ok).toBe(false)
+    expect(permissionClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'forbidden',
+        status: 403,
+        isDenied: true,
+        isTerminal: true
+      })
+    )
+
+    const lossClient = new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async () => {
+          throw new TypeError('network unavailable')
+        }
+      }
+    })
+    lossClient.auth.setAuthenticated('user-3', ['Gateway.use'])
+    await lossClient.requestResult('Gateway.GetRegistry')
+
+    expect(lossClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-3'
+      })
+    )
+  })
+
+  it('builds canonical audit receipts and event envelopes from backend-shaped payloads', () => {
+    const receipt = createAuditReceipt({
+      correlation_id: 'corr-event-1',
+      event_kind: 'tool.executed',
+      principal_id: 'principal-1',
+      peer_id: 'local-peer',
+      target_peer_id: 'remote-peer',
+      method: 'ExecuteTool',
+      bus_topic: 'Tooling.ExecuteTool',
+      tool_id: 'tool:remote:file-search',
+      resource_id: 'resource:docs',
+      result: 'success',
+      secrets_redacted: true
+    })
+
+    expect(receipt).toEqual(
+      expect.objectContaining({
+        correlationId: 'corr-event-1',
+        eventKind: 'tool.executed',
+        principalId: 'principal-1',
+        peerId: 'local-peer',
+        targetPeerId: 'remote-peer',
+        method: 'ExecuteTool',
+        busTopic: 'Tooling.ExecuteTool',
+        toolId: 'tool:remote:file-search',
+        resourceId: 'resource:docs',
+        status: 'success'
+      })
+    )
+
+    const event = createAuroraEvent('tool.executed', {
+      id: 'event-1',
+      topic: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-event-1',
+      secrets_redacted: true
+    })
+
+    expect(event).toEqual(
+      expect.objectContaining({
+        id: 'event-1',
+        kind: 'tool.executed',
+        topic: 'Tooling.ExecuteTool',
+        busTopic: 'Tooling.ExecuteTool',
+        audit: expect.objectContaining({
+          correlationId: 'corr-event-1',
+          eventKind: 'tool.executed'
+        }),
+        redaction: expect.objectContaining({ secretsRedacted: true })
+      })
+    )
+  })
 })
 
 describe('descriptors', () => {
@@ -176,6 +612,63 @@ describe('descriptors', () => {
         busTopic: 'Gateway.GetRegistry'
       })
     )
+  })
+
+  it('ingests generated backend inventory without changing route or permission truth', () => {
+    const generated = describeBackendInventory(backendInventoryFixture)
+    const registryMethods = describeRegistry(gatewayRegistryFixture)
+    const generatedByTopic = new Map(generated.methods.map((method) => [method.busTopic, method]))
+
+    for (const registryMethod of registryMethods) {
+      const generatedMethod = generatedByTopic.get(registryMethod.busTopic)
+      expect(generatedMethod).toBeDefined()
+      expect(generatedMethod).toEqual(
+        expect.objectContaining({
+          busTopic: registryMethod.busTopic,
+          routePath: registryMethod.routePath,
+          requiredPermissions: registryMethod.requiredPermissions,
+          availableOverHttp: registryMethod.availableOverHttp
+        })
+      )
+    }
+
+    expect(generated.methodTypes['Gateway.GetRegistry']).toEqual(
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        requestModel: null,
+        responseModel: 'GetRegistryResponse',
+        responseSchema: expect.objectContaining({ title: 'GetRegistryResponse' })
+      })
+    )
+    expect(generated.gatewayBuiltins).toEqual([
+      expect.objectContaining({
+        routePath: '/api/registry',
+        httpMethods: ['GET'],
+        requiredPermissions: []
+      }),
+      expect.objectContaining({
+        routePath: '/api/admin/peers',
+        methodType: 'manage',
+        requiredPermissions: ['Auth.manage']
+      })
+    ])
+  })
+
+  it('rejects generated backend inventory methods without backend bus identity', () => {
+    expect(() =>
+      describeBackendInventory({
+        methods: [
+          {
+            module: 'Gateway',
+            name: 'Broken',
+            bus_topic: null,
+            exposure: 'external',
+            method_type: 'use',
+            required_perms: []
+          }
+        ]
+      })
+    ).toThrow('missing bus_topic')
   })
 
   it('can carry explicit AuroraError metadata', () => {

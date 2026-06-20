@@ -10,6 +10,9 @@ import pytest
 from app.messaging.bus import Envelope
 from app.services.auth.auth_manager import _audit_event_matches_trace
 from app.services.gateway.service import GatewayService, _event_from_envelope
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.aurora import AuroraMethods
+from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
     CapabilityCatalogResponse,
     CapabilityProviderInfo,
@@ -101,12 +104,12 @@ async def test_gateway_event_buffer_filters_by_peer_tool_and_policy():
 
     assert response.total == 1
     assert response.events[0].correlation_id == "corr-tool"
-    assert response.subscription_topic == GatewayMethods.EVENT_STREAM
+    assert response.subscription_topic == AuroraMethods.EVENT_STREAM
     assert response.secrets_redacted is True
 
 
 @pytest.mark.asyncio
-async def test_gateway_capture_republishes_normalized_event_stream():
+async def test_gateway_capture_republishes_normalized_aurora_event_stream():
     service = GatewayService()
     service.bus.publish = AsyncMock()
 
@@ -128,9 +131,27 @@ async def test_gateway_capture_republishes_normalized_event_stream():
     assert event.tool_id == "peer-tool:lookup"
     service.bus.publish.assert_awaited_once()
     topic, published_event = service.bus.publish.await_args.args
-    assert topic == GatewayMethods.EVENT_STREAM
+    assert topic == AuroraMethods.EVENT_STREAM
     assert published_event.correlation_id == "corr-capture"
     assert service.bus.publish.await_args.kwargs["mesh"] is False
+
+
+def test_gateway_event_categories_cover_config_and_pairing():
+    config_event = _event_from_envelope(
+        Envelope(
+            type=ConfigMethods.UPDATED,
+            payload={"key_path": "services.gateway.api.enabled"},
+        )
+    )
+    pairing_event = _event_from_envelope(
+        Envelope(
+            type=AuthMethods.PAIRING_REQUESTED,
+            payload={"device_name": "phone", "code": "123456"},
+        )
+    )
+
+    assert config_event.category == "config"
+    assert pairing_event.category == "pairing"
 
 
 @pytest.mark.asyncio

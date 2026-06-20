@@ -1,14 +1,27 @@
 import { AuthSession } from './session.js'
-import { captureResult, unsupportedTransport, type AuroraResponse, type AuroraTransport } from './transport.js'
+import {
+  auditFromHeaders,
+  captureResult,
+  createAuditReceipt,
+  normalizeError,
+  unsupportedTransport,
+  type AuroraResponse,
+  type AuroraTransport
+} from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
-import { summarizeCapabilities } from './capabilities.js'
+import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
 import type {
+  AdminOverviewManifest,
+  AdminOverviewManifestInput,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
   CapabilitySummary,
   GetRegistryResponse,
+  GetServicesResponse,
+  GatewayBuiltinRouteDescriptor,
   MethodDescriptor,
   NativeCapabilityManifest,
+  PeerSummary,
   RouteExplainRequest,
   RouteExplainResponse
 } from './types.js'
@@ -23,6 +36,7 @@ export class AuroraClient {
   readonly auth: AuthSession
   readonly registry: RegistryClient
   readonly capabilities: CapabilityClient
+  readonly adminOverview: AdminOverviewClient
   readonly routes: RouteClient
   readonly tools: ToolClient
   readonly native: NativeClient
@@ -34,6 +48,7 @@ export class AuroraClient {
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
     this.capabilities = new CapabilityClient(this)
+    this.adminOverview = new AdminOverviewClient(this)
     this.routes = new RouteClient(this)
     this.tools = new ToolClient(this)
     this.native = new NativeClient(this)
@@ -44,18 +59,65 @@ export class AuroraClient {
     payload?: TPayload,
     options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
   ): Promise<TData> {
-    const response = await this.transport.request<TData, TPayload>({
-      method,
-      busTopic: options.busTopic ?? method,
-      path: options.path,
-      payload,
-      timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
-    })
-    return response.data
+    try {
+      const response = await this.transport.request<TData, TPayload>({
+        method,
+        busTopic: options.busTopic ?? method,
+        path: options.path,
+        payload,
+        timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
+      })
+      return response.data
+    } catch (error) {
+      this.auth.applyError(normalizeError(error))
+      throw error
+    }
+  }
+
+  async requestResult<TData = unknown, TPayload = unknown>(
+    method: string,
+    payload?: TPayload,
+    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+  ): Promise<AuroraResponse<TData>> {
+    const busTopic = options.busTopic ?? method
+    try {
+      const response = await this.transport.request<TData, TPayload>({
+        method,
+        busTopic,
+        path: options.path,
+        payload,
+        timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
+      })
+      return {
+        ok: true,
+        data: response.data,
+        audit: createAuditReceipt(response.data, {
+          ...auditFromHeaders(response.headers),
+          ...response.audit,
+          method,
+          busTopic,
+          transport: this.transport.kind
+        })
+      }
+    } catch (error) {
+      const normalized = normalizeError(error)
+      this.auth.applyError(normalized)
+      return {
+        ok: false,
+        error: normalized,
+        audit: createAuditReceipt(normalized.detail, {
+          correlationId: normalized.correlationId ?? null,
+          method: normalized.method ?? method,
+          busTopic: normalized.busTopic ?? busTopic,
+          status: normalized.code,
+          transport: this.transport.kind
+        })
+      }
+    }
   }
 
   result<TData>(operation: () => Promise<TData>): Promise<AuroraResponse<TData>> {
-    return captureResult(operation)
+    return captureResult(operation, { transport: this.transport.kind })
   }
 }
 
@@ -63,11 +125,15 @@ export class RegistryClient {
   constructor(private readonly client: AuroraClient) {}
 
   getRegistry(): Promise<GetRegistryResponse> {
-    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: routePath('Gateway', 'GetRegistry') })
+    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: '/api/registry' })
   }
 
   async listMethods(): Promise<MethodDescriptor[]> {
     return describeRegistry(await this.getRegistry())
+  }
+
+  listServices(): Promise<GetServicesResponse> {
+    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, {}, { path: '/api/services' })
   }
 }
 
@@ -96,6 +162,35 @@ export class RouteClient {
       request,
       { path: routePath('Gateway', 'ExplainRoute') }
     )
+  }
+}
+
+export interface AdminOverviewManifestOptions {
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  nativeManifest?: NativeCapabilityManifest | null
+  peers?: PeerSummary[]
+  generatedAt?: string
+}
+
+export class AdminOverviewClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async getManifest(options: AdminOverviewManifestOptions = {}): Promise<AdminOverviewManifest> {
+    const [registry, services, capabilityCatalog] = await Promise.all([
+      this.client.registry.getRegistry(),
+      this.client.registry.listServices(),
+      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+    ])
+    const input: AdminOverviewManifestInput = {
+      registry,
+      services,
+      capabilityCatalog
+    }
+    if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
+    if (options.nativeManifest !== undefined) input.nativeManifest = options.nativeManifest
+    if (options.peers !== undefined) input.peers = options.peers
+    if (options.generatedAt !== undefined) input.generatedAt = options.generatedAt
+    return buildAdminOverviewManifest(input)
   }
 }
 
