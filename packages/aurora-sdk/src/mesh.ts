@@ -388,6 +388,7 @@ function meshError(
 function classifyMeshError(error: unknown): AuroraErrorCode {
   const code = readDetailCode(error)?.toLowerCase()
   const text = readMeshErrorMessage(error).toLowerCase()
+  if (code?.includes('native_permission') || text.includes('native permission')) return 'native_permission_missing'
   if (code?.includes('privacy') || text.includes('privacy')) return 'privacy_blocked'
   if (code?.includes('permission') || text.includes('permission') || text.includes('forbidden')) return 'permission'
   if (code?.includes('auth') || text.includes('auth')) return 'auth'
@@ -397,7 +398,6 @@ function classifyMeshError(error: unknown): AuroraErrorCode {
   if (code?.includes('unavailable') || code?.includes('no_route') || text.includes('unavailable') || text.includes('no route')) {
     return 'unavailable_service'
   }
-  if (code?.includes('native_permission') || text.includes('native permission')) return 'native_permission_missing'
   if (code?.includes('transport') || text.includes('datachannel') || text.includes('not connected')) return 'transport_loss'
   return 'unknown'
 }
