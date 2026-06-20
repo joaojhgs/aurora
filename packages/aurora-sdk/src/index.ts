@@ -22,6 +22,20 @@ export {
   privacyClassForAction,
   summarizeCapabilities
 } from './capabilities.js'
+export {
+  PERMISSION_ALL,
+  buildPermissionCatalog,
+  buildPermissionCatalogFromBackendInventory,
+  buildPermissionCatalogFromRegistry,
+  checkAccess,
+  hasPermission,
+  permissionDescription,
+  permissionGrantFor,
+  permissionLabel,
+  permissionsForMethod,
+  resolveEffectivePermissions,
+  wildcardIntersection
+} from './permissions.js'
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
   backendInventoryFixture,
@@ -33,6 +47,14 @@ export {
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './transport.js'
+export type {
+  EffectivePermissionInput,
+  PermissionAccessDecision,
+  PermissionCatalogEntry,
+  PermissionCatalogEntryKind,
+  PermissionCatalogInput,
+  PermissionRequirementSource
+} from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
 export type {
   AuthCredentialKind,

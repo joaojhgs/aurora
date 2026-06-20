@@ -1,4 +1,5 @@
 import { AuroraError } from './errors.js'
+import { hasPermission as hasEffectivePermission } from './permissions.js'
 
 export type AuthSessionState =
   | 'anonymous'
@@ -238,7 +239,7 @@ export class AuthSession {
   }
 
   hasPermission(permission: string): boolean {
-    return hasPermission(permission, this.snapshotValue.effectivePermissions)
+    return hasEffectivePermission(permission, this.snapshotValue.effectivePermissions)
   }
 
   updateFromLogin(response: LoginLikeResponse): void {
@@ -357,14 +358,6 @@ function cloneSnapshot(snapshot: AuthSessionSnapshot): AuthSessionSnapshot {
     permissions: [...snapshot.permissions],
     effectivePermissions: [...snapshot.effectivePermissions]
   }
-}
-
-function hasPermission(required: string, granted: string[]): boolean {
-  if (granted.includes('*')) return true
-  if (granted.includes(required)) return true
-  const [prefix] = required.split('.', 1)
-  if (prefix && granted.includes(`${prefix}.*`)) return true
-  return false
 }
 
 function isSystemSource(source: string | null | undefined): boolean {

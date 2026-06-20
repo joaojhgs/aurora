@@ -6,6 +6,9 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   backendInventoryFixture,
+  buildPermissionCatalog,
+  buildPermissionCatalogFromBackendInventory,
+  checkAccess,
   buildAdminOverviewManifest,
   capabilityCatalogFixture,
   createAuditReceipt,
@@ -14,7 +17,11 @@ import {
   describeRegistry,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
-  gatewayRegistryFixture
+  gatewayRegistryFixture,
+  hasPermission,
+  permissionLabel,
+  resolveEffectivePermissions,
+  wildcardIntersection
 } from '../src/index.js'
 
 describe('AuroraClient', () => {
@@ -599,6 +606,159 @@ describe('AuroraClient', () => {
           eventKind: 'tool.executed'
         }),
         redaction: expect.objectContaining({ secretsRedacted: true })
+      })
+    )
+  })
+})
+
+describe('permissions', () => {
+  it('matches backend permission semantics without lowercasing backend IDs', () => {
+    expect(hasPermission('Auth.DeletePrincipal', ['*'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.DeletePrincipal'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.*'])).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.manage'], 'manage')).toBe(true)
+    expect(hasPermission('Auth.DeletePrincipal', ['Auth.use'], 'manage')).toBe(false)
+    expect(hasPermission('Auth.DeletePrincipal', ['auth.*'])).toBe(false)
+
+    expect(checkAccess(['Gateway.use'], ['Gateway.GetRegistry'], 'use')).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        satisfied: ['Gateway.GetRegistry'],
+        missing: [],
+        grants: { 'Gateway.GetRegistry': 'Gateway.use' }
+      })
+    )
+
+    expect(checkAccess(['Gateway.use'], ['Gateway.InternalOnly'], 'manage')).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        missing: ['Gateway.InternalOnly'],
+        grants: { 'Gateway.InternalOnly': null }
+      })
+    )
+  })
+
+  it('resolves effective permissions with backend wildcard intersection rules', () => {
+    expect(resolveEffectivePermissions({
+      userPermissions: ['Gateway.use', 'Auth.manage'],
+      userIsAdmin: true,
+      tokenScopes: ['Gateway.use']
+    })).toEqual(['*'])
+
+    expect(resolveEffectivePermissions({
+      userPermissions: ['Gateway.use', 'Auth.manage'],
+      tokenScopes: ['all']
+    })).toEqual(['Auth.manage', 'Gateway.use'])
+
+    expect(wildcardIntersection(['TTS.Synthesize', 'DB.RagSearch'], ['TTS.*'])).toEqual(['TTS.Synthesize'])
+    expect(resolveEffectivePermissions({
+      userPermissions: ['TTS.*', 'Gateway.GetRegistry'],
+      tokenScopes: ['TTS.Synthesize', 'Gateway.*']
+    })).toEqual(['Gateway.GetRegistry', 'TTS.Synthesize'])
+  })
+
+  it('builds a permission catalog from generated backend inventory and gateway builtins', () => {
+    const catalog = buildPermissionCatalogFromBackendInventory(backendInventoryFixture)
+    const byId = new Map(catalog.map((entry) => [entry.id, entry]))
+
+    expect(byId.get('*')).toEqual(
+      expect.objectContaining({
+        label: 'Full access',
+        kind: 'all'
+      })
+    )
+    expect(byId.get('Gateway.use')).toEqual(
+      expect.objectContaining({
+        id: 'Gateway.use',
+        label: 'Use Gateway',
+        kind: 'method_type'
+      })
+    )
+    expect(byId.get('Gateway.manage')).toEqual(
+      expect.objectContaining({
+        id: 'Gateway.manage',
+        methodType: 'manage'
+      })
+    )
+    expect(byId.get('Auth.manage')).toEqual(
+      expect.objectContaining({
+        id: 'Auth.manage',
+        label: 'Manage Auth',
+        kind: 'method_type',
+        availableOverHttp: true,
+        requiredBy: [
+          expect.objectContaining({
+            method: 'list_peers',
+            routePath: '/api/admin/peers',
+            source: 'gateway_builtin'
+          })
+        ]
+      })
+    )
+    expect(catalog.map((entry) => entry.id)).toEqual(expect.arrayContaining(['Gateway.GetRegistry', 'Gateway.*']))
+    expect(permissionLabel('Tooling.use')).toBe('Use Tooling')
+  })
+
+  it('builds a registry-backed permission catalog through AuroraClient and preserves transport-loss failures', async () => {
+    const client = new AuroraClient({
+      transport: new MockAuroraTransport().register('Gateway.GetRegistry', gatewayRegistryFixture)
+    })
+    client.auth.updateFromTokenValidation({
+      valid: true,
+      principal_id: 'user-1',
+      permissions: ['Gateway.use'],
+      effective_perms: ['Gateway.use'],
+      is_admin: false
+    })
+
+    const catalog = await client.permissions.listCatalog({ gatewayBuiltins: gatewayBuiltinRoutesFixture })
+    expect(catalog.map((entry) => entry.id)).toEqual(expect.arrayContaining(['Gateway.use', 'Auth.manage']))
+    expect(client.permissions.has('Gateway.GetRegistry', 'use')).toBe(true)
+    expect(client.permissions.check(['Gateway.InternalOnly'], 'manage')).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        missing: ['Gateway.InternalOnly']
+      })
+    )
+
+    const result = await new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async () => {
+          throw new TypeError('registry offline')
+        }
+      }
+    }).result(async function loadPermissions() {
+      const failingClient = new AuroraClient({
+        transport: {
+          kind: 'mock',
+          request: async () => {
+            throw new TypeError('registry offline')
+          }
+        }
+      })
+      return failingClient.permissions.listCatalog()
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('transport_loss')
+  })
+
+  it('builds manual catalog entries from registry descriptors and builtins without invented IDs', () => {
+    const methods = describeRegistry(gatewayRegistryFixture)
+    const catalog = buildPermissionCatalog({ methods, gatewayBuiltins: gatewayBuiltinRoutesFixture })
+
+    expect(catalog.find((entry) => entry.id === 'Gateway.GetRegistry')).toEqual(
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        routePath: '/api/Gateway/GetRegistry',
+        availableOverHttp: true
+      })
+    )
+    expect(catalog.find((entry) => entry.id === 'Gateway.manage')).toEqual(
+      expect.objectContaining({
+        busTopic: null,
+        kind: 'method_type'
       })
     )
   })
