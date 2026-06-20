@@ -22,6 +22,7 @@ import type {
   CapabilityExplanation,
   CapabilityGraph,
   CapabilitySummary,
+  DeploymentTopologyResponse,
   GetRegistryResponse,
   GetServicesResponse,
   GatewayBuiltinRouteDescriptor,
@@ -172,6 +173,12 @@ export class RegistryClient {
     return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, undefined, {
       path: '/api/services',
       httpMethod: 'GET'
+    })
+  }
+
+  getDeploymentTopology(): Promise<DeploymentTopologyResponse> {
+    return this.client.request<DeploymentTopologyResponse>(GATEWAY_METHODS.getDeploymentTopology, undefined, {
+      path: routePath('Gateway', 'GetDeploymentTopology')
     })
   }
 }

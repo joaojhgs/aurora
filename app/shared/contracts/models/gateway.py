@@ -12,12 +12,12 @@ from typing import Any
 
 from pydantic import Field
 
-from app.shared.contracts.registry import IOModel
 from app.shared.contracts.models.aurora import (
     AuroraEventCategory,
     AuroraEventStreamEvent,
     AuroraMethods,
 )
+from app.shared.contracts.registry import IOModel
 
 # =============================================================================
 # Module Identifiers
@@ -47,6 +47,7 @@ class GatewayMethods:
     GET_REGISTRY = f"{GatewayModule.NAME}.GetRegistry"
     GET_SERVICES = f"{GatewayModule.NAME}.GetServices"
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
+    GET_DEPLOYMENT_TOPOLOGY = f"{GatewayModule.NAME}.GetDeploymentTopology"
     GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
@@ -177,6 +178,65 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class BusHealth(IOModel):
+    """Read-only message bus health and dependency state."""
+
+    backend: str = "unknown"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_available: bool | None = None
+    queue_lag_known: bool = False
+    queue_depth: int | None = None
+    published: int | None = None
+    delivered: int | None = None
+    retries: int | None = None
+    dead_letters: int | None = None
+    status: str = "unknown"
+    degraded_reasons: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ServiceProcessTopology(IOModel):
+    """Sanitized process/thread/container topology for one service."""
+
+    module: str
+    status: str = "unknown"
+    topology: str = "unknown"
+    instance_id: str | None = None
+    container_hint: str | None = None
+    process_hint: str | None = None
+    last_seen: str | None = None
+    stale: bool = False
+
+
+class ContainerTopologyHints(IOModel):
+    """Sanitized container/process-mode topology hints."""
+
+    orchestrator: str = "unknown"
+    compose_file: str | None = None
+    redis_service: str | None = None
+    gateway_service: str | None = None
+    config_service: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class DeploymentTopologyResponse(IOModel):
+    """Read-only deployment topology and bus health for UI/SDK consumers."""
+
+    architecture_mode: str = "threads"
+    runtime_mode: str = "local"
+    bus_backend: str = "LocalBus"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_queue_health: BusHealth = Field(default_factory=BusHealth)
+    service_process_topology: list[ServiceProcessTopology] = Field(default_factory=list)
+    container_topology_hints: ContainerTopologyHints = Field(default_factory=ContainerTopologyHints)
+    mode_capability_degradations: list[str] = Field(default_factory=list)
+    mesh_peer_topology_trusted: bool | None = None
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    secrets_redacted: bool = True
 
 
 class AdminActionHeaderNames(IOModel):

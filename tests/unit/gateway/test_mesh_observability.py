@@ -8,14 +8,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.messaging.bus import Envelope, QueryResult
+from app.messaging.local_bus import LocalBus
 from app.services.auth.auth_manager import _audit_event_matches_trace
 from app.services.gateway.service import (
     GatewayService,
     _diagnostic_redacted_copy,
     _event_from_envelope,
 )
-from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.aurora import AuroraMethods
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
     CapabilityCatalogResponse,
@@ -24,14 +26,15 @@ from app.shared.contracts.models.gateway import (
     GatewayMethods,
     GatewaySupportBundleRequest,
     GetMeshStatusResponse,
-    MethodInfo,
     MeshLocalStatus,
     MeshRouteDiagnostic,
+    MethodInfo,
     ServiceInfo,
 )
 from app.shared.contracts.models.stt import AudioSessionEvent
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
 from app.shared.contracts.registry import clear_registry, list_modules
+from app.shared.messaging.bus_init import set_bus
 
 
 def test_gateway_observability_contracts_are_registered():
@@ -45,11 +48,132 @@ def test_gateway_observability_contracts_are_registered():
     assert GatewayMethods.GET_REGISTRY in methods
     assert GatewayMethods.GET_SERVICES in methods
     assert GatewayMethods.GET_SERVICE_HEALTH in methods
+    assert GatewayMethods.GET_DEPLOYMENT_TOPOLOGY in methods
     assert methods[GatewayMethods.LIST_EVENTS].exposure == "external"
     assert methods[GatewayMethods.LIST_EVENTS].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE].method_type == "manage"
     assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
+    assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
     clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_deployment_topology_reports_thread_mode_without_redis():
+    bus = LocalBus(validate_topics=False)
+    set_bus(bus)
+    service = GatewayService()
+    service._mode = "threads"
+    service._get_services_snapshot = AsyncMock(
+        return_value=[
+            ServiceInfo(
+                module="Gateway",
+                version="0.1.0",
+                method_count=4,
+                last_seen="2026-06-20T00:00:00Z",
+                status="healthy",
+            )
+        ]
+    )
+    service.get_mesh_status = AsyncMock(return_value=GetMeshStatusResponse())
+
+    response = await service.get_deployment_topology(EmptyInput())
+
+    assert response.architecture_mode == "threads"
+    assert response.runtime_mode == "thread-local"
+    assert response.bus_backend == "LocalBus"
+    assert response.redis_url_redacted is None
+    assert response.redis_reachable is None
+    assert response.bullmq_queue_health.status == "healthy"
+    assert response.service_process_topology[0].topology == "thread"
+    assert "thread_mode_no_process_controls" in response.mode_capability_degradations
+    assert response.secrets_redacted is True
+
+
+class _FakeRedis:
+    def __init__(self, *, reachable: bool = True):
+        self.reachable = reachable
+
+    async def ping(self):
+        if not self.reachable:
+            raise ConnectionError("redis unavailable")
+        return True
+
+
+class BullMQBus:
+    redis_url = "redis://:secret-pass@redis.internal:6379/0"
+    _available = True
+
+    def __init__(self, *, reachable: bool = True):
+        self._fake_redis = _FakeRedis(reachable=reachable)
+
+    def get_stats(self):
+        return {"published": 10, "delivered": 8, "retries": 1, "dead_letters": 0}
+
+    async def _get_redis(self):
+        return self._fake_redis
+
+
+@pytest.mark.asyncio
+async def test_deployment_topology_reports_process_mode_and_redacts_redis_url():
+    bus = BullMQBus()
+    set_bus(bus)
+    service = GatewayService()
+    service._mode = "processes"
+    service._get_services_snapshot = AsyncMock(
+        return_value=[
+            ServiceInfo(
+                module="Gateway",
+                version="0.1.0",
+                method_count=4,
+                last_seen="2026-06-20T00:00:00Z",
+                status="healthy",
+            ),
+            ServiceInfo(
+                module="Auth",
+                version="0.1.0",
+                method_count=4,
+                last_seen="2026-06-20T00:00:00Z",
+                status="degraded",
+                instance_id="auth-a",
+            ),
+        ]
+    )
+    service.get_mesh_status = AsyncMock(return_value=GetMeshStatusResponse())
+
+    response = await service.get_deployment_topology(EmptyInput())
+    dumped = json.dumps(response.model_dump(mode="json"))
+
+    assert response.architecture_mode == "processes"
+    assert response.runtime_mode == "process-server"
+    assert response.bus_backend == "BullMQBus"
+    assert response.redis_reachable is True
+    assert response.redis_url_redacted == "redis://<redacted>@redis.internal:6379/0"
+    assert "secret-pass" not in dumped
+    assert response.bullmq_queue_health.status == "degraded"
+    assert "bullmq_queue_lag_unknown" in response.mode_capability_degradations
+    assert "process_registry_stale" in response.mode_capability_degradations
+    assert response.container_topology_hints.gateway_service == "gateway-service"
+    auth_topology = next(item for item in response.service_process_topology if item.module == "Auth")
+    assert auth_topology.container_hint == "auth-service"
+    assert auth_topology.stale is True
+
+
+@pytest.mark.asyncio
+async def test_deployment_topology_reports_redis_unreachable_without_secret_leakage():
+    bus = BullMQBus(reachable=False)
+    set_bus(bus)
+    service = GatewayService()
+    service._mode = "processes"
+    service._get_services_snapshot = AsyncMock(return_value=[])
+    service.get_mesh_status = AsyncMock(return_value=GetMeshStatusResponse())
+
+    response = await service.get_deployment_topology(EmptyInput())
+    dumped = json.dumps(response.model_dump(mode="json"))
+
+    assert response.redis_reachable is False
+    assert response.bullmq_queue_health.status == "unhealthy"
+    assert "redis_unreachable" in response.mode_capability_degradations
+    assert "secret-pass" not in dumped
 
 
 def test_event_normalization_redacts_payload_and_extracts_correlation():

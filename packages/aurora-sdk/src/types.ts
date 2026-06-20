@@ -122,6 +122,57 @@ export interface GetServicesResponse {
   mode: string
 }
 
+export interface BusHealth {
+  backend: string
+  redis_url_redacted: string | null
+  redis_reachable: boolean | null
+  bullmq_available: boolean | null
+  queue_lag_known: boolean
+  queue_depth: number | null
+  published: number | null
+  delivered: number | null
+  retries: number | null
+  dead_letters: number | null
+  status: string
+  degraded_reasons: string[]
+  error: string | null
+}
+
+export interface ServiceProcessTopology {
+  module: string
+  status: string
+  topology: string
+  instance_id: string | null
+  container_hint: string | null
+  process_hint: string | null
+  last_seen: string | null
+  stale: boolean
+}
+
+export interface ContainerTopologyHints {
+  orchestrator: string
+  compose_file: string | null
+  redis_service: string | null
+  gateway_service: string | null
+  config_service: string | null
+  notes: string[]
+}
+
+export interface DeploymentTopologyResponse {
+  architecture_mode: string
+  runtime_mode: string
+  bus_backend: string
+  redis_url_redacted: string | null
+  redis_reachable: boolean | null
+  bullmq_queue_health: BusHealth
+  service_process_topology: ServiceProcessTopology[]
+  container_topology_hints: ContainerTopologyHints
+  mode_capability_degradations: string[]
+  mesh_peer_topology_trusted: boolean | null
+  generated_at: string
+  secrets_redacted: boolean
+}
+
 export interface ServiceAnnouncement {
   module: string
   version: string

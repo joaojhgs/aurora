@@ -219,6 +219,21 @@ Key fields:
 - `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
 - `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
 
+#### Deployment Topology and Bus Health
+```
+POST /api/Gateway/GetDeploymentTopology
+```
+Returns a read-only, redacted deployment snapshot for admin, onboarding, and SDK clients.
+The response identifies the active architecture mode, bus backend, sanitized Redis URL,
+Redis reachability, BullMQ queue health fields, service process/thread topology, and
+container/process-mode hints. It also reports explicit degradation reason codes such as
+`redis_unreachable`, `bullmq_queue_lag_unknown`, `process_registry_stale`,
+`thread_mode_no_process_controls`, and `mesh_peer_topology_untrusted`.
+
+The endpoint never returns Redis credentials, tokens, host filesystem paths, peer secrets,
+or raw logs. Process-mode details come from Gateway registry announcements and bus runtime
+state; mesh peer topology is treated as untrusted unless future policy explicitly upgrades it.
+
 ### Service Endpoints
 
 All service methods with `exposure="external"` or `exposure="both"` are automatically exposed as:

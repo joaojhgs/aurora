@@ -62,6 +62,7 @@ export {
   cloneFixture,
   compareRegistryFixtureToBackendInventory,
   defaultMockAuroraFixtures,
+  deploymentTopologyFixture,
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
