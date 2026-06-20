@@ -16,6 +16,7 @@ export const GATEWAY_METHODS = {
   getServices: 'Gateway.GetServices',
   getServiceHealth: 'Gateway.GetServiceHealth',
   getDeploymentTopology: 'Gateway.GetDeploymentTopology',
+  getWebRTCDiagnostics: 'Gateway.GetWebRTCDiagnostics',
   getMeshStatus: 'Gateway.GetMeshStatus',
   getCapabilityGraph: 'Gateway.GetCapabilityGraph',
   getCapabilityCatalog: 'Gateway.GetCapabilityCatalog',

@@ -52,6 +52,7 @@ class GatewayMethods:
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
+    GET_WEBRTC_DIAGNOSTICS = f"{GatewayModule.NAME}.GetWebRTCDiagnostics"
     EVENT_STREAM = AuroraMethods.EVENT_STREAM
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
@@ -400,6 +401,73 @@ class GetMeshStatusResponse(IOModel):
     secrets_redacted: bool = True
 
 
+class WebRTCSignalingDiagnostic(IOModel):
+    """Safe signaling-plane status for WebRTC diagnostics."""
+
+    strategy: str = ""
+    connected: bool = False
+    encrypted_presence: bool = False
+    app_id_configured: bool = False
+    room_configured: bool = False
+    broker_count: int = 0
+    public_broker_warning: bool = False
+
+
+class WebRTCPeerDiagnostic(IOModel):
+    """Safe per-peer WebRTC, ICE, data-channel, and auth diagnostic state."""
+
+    signaling_peer_id: str
+    stable_peer_id: str
+    node_name: str = ""
+    connection_state: str = "unknown"
+    ice_connection_state: str = "unknown"
+    ice_gathering_state: str = "unknown"
+    signaling_state: str = "unknown"
+    data_channel_state: str = "unknown"
+    data_channel_label: str = ""
+    has_send_channel: bool = False
+    rtt_ms: float | None = None
+    auth_state: str = "unknown"
+    identity_source: str = ""
+    is_admin: bool = False
+    effective_permission_count: int = 0
+    pairing_active: bool = False
+    auth_timeout_pending: bool = False
+    pending_pairing_task: bool = False
+
+
+class WebRTCDiagnosticError(IOModel):
+    """Redacted recent WebRTC diagnostic error or lifecycle warning."""
+
+    timestamp: str
+    code: str
+    message: str
+    peer_id: str | None = None
+
+
+class WebRTCDiagnosticsResponse(IOModel):
+    """Read-only WebRTC, ICE, signaling, and DataChannel diagnostics."""
+
+    enabled: bool = False
+    started: bool = False
+    mesh_enabled: bool = False
+    local_signaling_peer_id: str | None = None
+    local_mesh_peer_id: str | None = None
+    local_node_name: str = ""
+    require_auth: bool = False
+    auth_timeout_seconds: float = 0.0
+    pairing_timeout_seconds: float = 0.0
+    app_layer_e2ee_enabled: bool = False
+    signaling: WebRTCSignalingDiagnostic = Field(default_factory=WebRTCSignalingDiagnostic)
+    peers: list[WebRTCPeerDiagnostic] = Field(default_factory=list)
+    connected_peer_count: int = 0
+    authenticated_peer_count: int = 0
+    pairing_peer_count: int = 0
+    pending_rpc_count: int = 0
+    recent_errors: list[WebRTCDiagnosticError] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
 GatewayEventStreamEvent = AuroraEventStreamEvent
 
 
@@ -473,6 +541,9 @@ class GatewaySupportBundleResponse(IOModel):
     services: list[ServiceInfo] = Field(default_factory=list)
     service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
     mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
+    webrtc_diagnostics: WebRTCDiagnosticsResponse = Field(
+        default_factory=WebRTCDiagnosticsResponse
+    )
     route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
     capability_catalog_summary: CapabilityCatalogSummary = Field(
         default_factory=CapabilityCatalogSummary

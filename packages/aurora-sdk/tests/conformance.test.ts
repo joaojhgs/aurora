@@ -18,6 +18,7 @@ import {
   nativeCapabilityManifestFixture,
   routeExplainFixture,
   toolCatalogFixture,
+  webrtcDiagnosticsFixture,
   type AuroraErrorCode,
   type AuroraTransportKind,
   type AuroraTransportRequest
@@ -27,6 +28,7 @@ type ConformanceMethod =
   | 'Gateway.GetRegistry'
   | 'Gateway.GetServices'
   | 'Gateway.GetDeploymentTopology'
+  | 'Gateway.GetWebRTCDiagnostics'
   | 'Gateway.GetCapabilityCatalog'
   | 'Gateway.ExplainRoute'
   | 'Tooling.GetToolCatalog'
@@ -121,6 +123,7 @@ describe('SDK transport conformance', () => {
       await expect(client.registry.getRegistry()).resolves.toEqual(gatewayRegistryFixture)
       await expect(client.registry.listServices()).resolves.toEqual(defaultMockAuroraFixtures.services)
       await expect(client.registry.getDeploymentTopology()).resolves.toEqual(deploymentTopologyFixture)
+      await expect(client.registry.getWebRTCDiagnostics()).resolves.toEqual(webrtcDiagnosticsFixture)
       await expect(client.capabilities.listCatalog({ include_unavailable: true })).resolves.toEqual(
         capabilityGraphCatalogFixture
       )
@@ -134,6 +137,12 @@ describe('SDK transport conformance', () => {
           expect.objectContaining({
             busTopic: 'Gateway.GetDeploymentTopology',
             routePath: '/api/Gateway/GetDeploymentTopology',
+            requiredPermissions: ['Gateway.manage'],
+            availableOverHttp: true
+          }),
+          expect.objectContaining({
+            busTopic: 'Gateway.GetWebRTCDiagnostics',
+            routePath: '/api/Gateway/GetWebRTCDiagnostics',
             requiredPermissions: ['Gateway.manage'],
             availableOverHttp: true
           }),
@@ -241,10 +250,11 @@ describe('SDK transport conformance', () => {
     expect(generated.methods.map((method) => method.busTopic)).toEqual([
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
+      'Gateway.GetWebRTCDiagnostics',
       'Gateway.InternalOnly'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 3, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 4, issues: [] })
   })
 })
 
@@ -373,6 +383,8 @@ function conformanceResponse(method: string): unknown {
       return cloneFixture(defaultMockAuroraFixtures.services)
     case 'Gateway.GetDeploymentTopology':
       return cloneFixture(deploymentTopologyFixture)
+    case 'Gateway.GetWebRTCDiagnostics':
+      return cloneFixture(webrtcDiagnosticsFixture)
     case 'Gateway.GetCapabilityCatalog':
       return cloneFixture(capabilityGraphCatalogFixture)
     case 'Gateway.ExplainRoute':
@@ -391,6 +403,7 @@ function hasConformanceResponse(method: string): method is ConformanceMethod {
     'Gateway.GetRegistry',
     'Gateway.GetServices',
     'Gateway.GetDeploymentTopology',
+    'Gateway.GetWebRTCDiagnostics',
     'Gateway.GetCapabilityCatalog',
     'Gateway.ExplainRoute',
     'Tooling.GetToolCatalog',
@@ -409,6 +422,8 @@ function methodFromUrl(url: string): ConformanceMethod | null {
       return 'Gateway.GetServices'
     case '/api/Gateway/GetDeploymentTopology':
       return 'Gateway.GetDeploymentTopology'
+    case '/api/Gateway/GetWebRTCDiagnostics':
+      return 'Gateway.GetWebRTCDiagnostics'
     case '/api/Gateway/GetCapabilityCatalog':
       return 'Gateway.GetCapabilityCatalog'
     case '/api/Gateway/ExplainRoute':

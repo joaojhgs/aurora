@@ -30,6 +30,7 @@ from app.shared.contracts.models.gateway import (
     MeshRouteDiagnostic,
     MethodInfo,
     ServiceInfo,
+    WebRTCDiagnosticsResponse,
 )
 from app.shared.contracts.models.stt import AudioSessionEvent
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
@@ -49,11 +50,16 @@ def test_gateway_observability_contracts_are_registered():
     assert GatewayMethods.GET_SERVICES in methods
     assert GatewayMethods.GET_SERVICE_HEALTH in methods
     assert GatewayMethods.GET_DEPLOYMENT_TOPOLOGY in methods
+    assert GatewayMethods.GET_WEBRTC_DIAGNOSTICS in methods
     assert methods[GatewayMethods.LIST_EVENTS].exposure == "external"
     assert methods[GatewayMethods.LIST_EVENTS].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE].method_type == "manage"
     assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "manage"
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == [
+        "Gateway.manage"
+    ]
     clear_registry()
 
 
@@ -382,6 +388,14 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
             routes=[MeshRouteDiagnostic(module="Tooling", decision_target="error")],
         )
     )
+    service.get_webrtc_diagnostics = AsyncMock(
+        return_value=WebRTCDiagnosticsResponse(
+            enabled=True,
+            started=True,
+            local_mesh_peer_id="local-peer",
+            connected_peer_count=1,
+        )
+    )
     service.get_capability_catalog = AsyncMock(
         return_value=CapabilityCatalogResponse(
             providers=[
@@ -421,6 +435,8 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert bundle.registry.digest == "digest-registry"
     assert bundle.services[0].module == "Gateway"
     assert bundle.service_health[0].status == "healthy"
+    assert bundle.webrtc_diagnostics.started is True
+    assert bundle.webrtc_diagnostics.connected_peer_count == 1
     assert bundle.native_capabilities[0].status == "unavailable"
     assert bundle.sidecar_logs[0].status == "metadata_only"
     assert bundle.audit_receipt and bundle.audit_receipt.startswith("support_bundle:")
@@ -443,6 +459,7 @@ async def test_support_bundle_surfaces_audit_storage_failure_without_raw_payload
     service = GatewayService()
     service.bus.request = AsyncMock(return_value=QueryResult(ok=False, error="audit offline"))
     service.get_mesh_status = AsyncMock(return_value=GetMeshStatusResponse())
+    service.get_webrtc_diagnostics = AsyncMock(return_value=WebRTCDiagnosticsResponse())
     service.get_capability_catalog = AsyncMock(return_value=CapabilityCatalogResponse())
     service._get_recent_audit_events = AsyncMock(return_value=[])
     service._get_gateway_config = AsyncMock(

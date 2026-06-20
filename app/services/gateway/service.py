@@ -67,6 +67,7 @@ from app.shared.contracts.models.gateway import (
     ServiceProcessTopology,
     SupportBundleDiagnosticItem,
     SupportBundleRedactionInfo,
+    WebRTCDiagnosticsResponse,
 )
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.scheduler import SchedulerMethods
@@ -750,6 +751,33 @@ class GatewayService(BaseService):
         )
 
     @method_contract(
+        method_id=GatewayMethods.GET_WEBRTC_DIAGNOSTICS,
+        summary="Get read-only WebRTC, ICE, and DataChannel diagnostics",
+        input_model=EmptyInput,
+        output_model=WebRTCDiagnosticsResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_webrtc_diagnostics(self, data: EmptyInput) -> WebRTCDiagnosticsResponse:
+        """Return a redacted diagnostic snapshot of WebRTC transport state."""
+        settings = await self._get_gateway_config()
+        if self._rtc_client is not None:
+            return self._rtc_client.get_diagnostics()
+        return WebRTCDiagnosticsResponse(
+            enabled=bool(settings.webrtc.enabled),
+            started=False,
+            mesh_enabled=bool(settings.mesh.enabled),
+            local_mesh_peer_id=self._mesh_peer_id,
+            local_node_name=settings.mesh.node_name,
+            require_auth=bool(settings.api.auth_enabled),
+            auth_timeout_seconds=settings.permissions.webrtc_auth_timeout_seconds,
+            pairing_timeout_seconds=settings.permissions.webrtc_pairing_timeout_seconds,
+            app_layer_e2ee_enabled=bool(settings.webrtc.enable_app_layer_e2ee),
+            secrets_redacted=True,
+        )
+
+    @method_contract(
         method_id=GatewayMethods.GET_CAPABILITY_GRAPH,
         summary="Get a redacted mesh capability graph",
         input_model=EmptyInput,
@@ -869,6 +897,7 @@ class GatewayService(BaseService):
         services = await self._get_services_snapshot()
         service_health = [self._service_health_response(service) for service in services]
         mesh_status = await self.get_mesh_status(EmptyInput())
+        webrtc_diagnostics = await self.get_webrtc_diagnostics(EmptyInput())
         catalog_summary = CapabilityCatalogSummary()
         if data.include_capability_catalog:
             catalog = await self.get_capability_catalog(
@@ -910,6 +939,7 @@ class GatewayService(BaseService):
             services=services,
             service_health=service_health,
             mesh_status=mesh_status,
+            webrtc_diagnostics=webrtc_diagnostics,
             route_diagnostics=mesh_status.routes,
             capability_catalog_summary=catalog_summary,
             recent_events=recent_events,

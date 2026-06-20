@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import json
 import uuid
+from collections import deque
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
@@ -13,6 +15,12 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, Identity
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import (
+    WebRTCDiagnosticError,
+    WebRTCDiagnosticsResponse,
+    WebRTCPeerDiagnostic,
+    WebRTCSignalingDiagnostic,
+)
 from app.shared.models.db import Token
 
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
@@ -27,6 +35,29 @@ if TYPE_CHECKING:
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
     from .signaling.base import SignalingAdapter
+
+
+def _diagnostic_float(value: float | None) -> float | None:
+    if value is None or value == float("inf") or value != value:
+        return None
+    return float(value)
+
+
+def _diagnostic_auth_state(identity: Identity) -> str:
+    if identity == ANONYMOUS:
+        return "anonymous"
+    if identity == OPEN_PEER:
+        return "open"
+    if identity.is_admin:
+        return "authenticated_admin"
+    return "authenticated"
+
+
+def _redact_diagnostic_message(message: str) -> str:
+    lowered = message.lower()
+    if any(part in lowered for part in ("token", "password", "secret", "key", "credential")):
+        return "redacted diagnostic event"
+    return message[:240]
 
 
 class RTCClient:
@@ -86,6 +117,7 @@ class RTCClient:
         self._stable_peer_sessions: dict[str, str] = {}
         # Per-peer human-readable names (Fix 6)
         self._peer_names: dict[str, str] = {}
+        self._diagnostic_errors: deque[WebRTCDiagnosticError] = deque(maxlen=50)
 
     _PUBLIC_BROKERS = {"broker.emqx.io", "test.mosquitto.org"}
 
@@ -345,6 +377,87 @@ class RTCClient:
             )
         return peers
 
+    def get_diagnostics(self) -> WebRTCDiagnosticsResponse:
+        """Return a redacted WebRTC/ICE/DataChannel diagnostic snapshot."""
+        signaling = WebRTCSignalingDiagnostic(
+            strategy=self._settings.webrtc.strategy,
+            connected=self._adapter is not None,
+            encrypted_presence=bool(self._settings.webrtc.encrypt_signaling),
+            app_id_configured=bool(self._settings.webrtc.app_id),
+            room_configured=bool(self._settings.webrtc.room),
+            broker_count=len(self._settings.signaling_mqtt.brokers),
+            public_broker_warning=bool(
+                {
+                    broker.split("://")[-1].split(":")[0].split("/")[0]
+                    for broker in self._settings.signaling_mqtt.brokers
+                }
+                & self._PUBLIC_BROKERS
+            ),
+        )
+
+        peers: list[WebRTCPeerDiagnostic] = []
+        authenticated_count = 0
+        for signaling_peer_id, pc in sorted(self._pcs.items()):
+            stable_peer_id = self._stable_peer_id_for_session(signaling_peer_id)
+            identity = self._peer_acl.get(signaling_peer_id) or self._peer_acl.get(
+                stable_peer_id,
+                ANONYMOUS,
+            )
+            if identity != ANONYMOUS:
+                authenticated_count += 1
+            channel = self._peer_data_channels.get(signaling_peer_id)
+            rtt_ms = None
+            if self._peer_registry:
+                peer_state = self._peer_registry.get_peer(stable_peer_id)
+                if peer_state:
+                    rtt_ms = _diagnostic_float(peer_state.latency_ms)
+
+            peers.append(
+                WebRTCPeerDiagnostic(
+                    signaling_peer_id=signaling_peer_id,
+                    stable_peer_id=stable_peer_id,
+                    node_name=self._peer_names.get(stable_peer_id, ""),
+                    connection_state=str(getattr(pc, "connectionState", "unknown")),
+                    ice_connection_state=str(getattr(pc, "iceConnectionState", "unknown")),
+                    ice_gathering_state=str(getattr(pc, "iceGatheringState", "unknown")),
+                    signaling_state=str(getattr(pc, "signalingState", "unknown")),
+                    data_channel_state=str(getattr(channel, "readyState", "unknown")),
+                    data_channel_label=str(getattr(channel, "label", "")),
+                    has_send_channel=signaling_peer_id in self._peer_send_fns,
+                    rtt_ms=rtt_ms,
+                    auth_state=_diagnostic_auth_state(identity),
+                    identity_source="" if identity == ANONYMOUS else identity.source,
+                    is_admin=False if identity == ANONYMOUS else identity.is_admin,
+                    effective_permission_count=0
+                    if identity == ANONYMOUS
+                    else len(identity.effective_perms),
+                    pairing_active=signaling_peer_id in self._peer_pairing_active,
+                    auth_timeout_pending=signaling_peer_id in self._peer_timeout_tasks,
+                    pending_pairing_task=signaling_peer_id in self._pairing_tasks,
+                )
+            )
+
+        return WebRTCDiagnosticsResponse(
+            enabled=bool(self._settings.webrtc.enabled),
+            started=self._adapter is not None,
+            mesh_enabled=self._mesh_enabled,
+            local_signaling_peer_id=self._peer_id,
+            local_mesh_peer_id=self._mesh_peer_id,
+            local_node_name=self._local_mesh_node_name(),
+            require_auth=self._require_auth,
+            auth_timeout_seconds=self._auth_timeout,
+            pairing_timeout_seconds=self._pairing_timeout,
+            app_layer_e2ee_enabled=bool(self._settings.webrtc.enable_app_layer_e2ee),
+            signaling=signaling,
+            peers=peers,
+            connected_peer_count=len(peers),
+            authenticated_peer_count=authenticated_count,
+            pairing_peer_count=len(self._peer_pairing_active),
+            pending_rpc_count=len(self._pending_rpc),
+            recent_errors=list(self._diagnostic_errors),
+            secrets_redacted=True,
+        )
+
     async def disconnect_peer(self, peer_id: str, by_principal_id: str | None = None) -> bool:
         """Force disconnect a peer."""
         session_peer_id = self._session_for_peer_id(peer_id)
@@ -436,6 +549,22 @@ class RTCClient:
                 details=details,
             )
 
+    def _record_diagnostic_error(
+        self,
+        code: str,
+        message: str,
+        peer_id: str | None = None,
+    ) -> None:
+        """Store a short redacted diagnostic error for operator snapshots."""
+        self._diagnostic_errors.appendleft(
+            WebRTCDiagnosticError(
+                timestamp=datetime.now(UTC).isoformat(),
+                code=code,
+                message=_redact_diagnostic_message(message),
+                peer_id=peer_id,
+            )
+        )
+
     # ── Mesh P2P helpers ─────────────────────────────────────────────────
 
     def _encode_datachannel_message(self, text: str) -> str | bytes:
@@ -477,6 +606,11 @@ class RTCClient:
                 return payload.decode()
             except Exception as e:
                 mode = "decrypt" if e2ee_enabled else "decode"
+                self._record_diagnostic_error(
+                    f"datachannel_{mode}_failed",
+                    f"Failed to {mode} DataChannel message",
+                    peer,
+                )
                 log_error(f"Failed to {mode} DataChannel message from {peer}: {e}")
                 return None
 
@@ -863,12 +997,22 @@ class RTCClient:
         msg = {"type": "call", "id": call_id, "method": method, "params": params}
         send_fn = self._peer_send_fns.get(self._session_for_peer_id(peer))
         if not send_fn:
+            self._record_diagnostic_error(
+                "datachannel_send_unavailable",
+                "No DataChannel send function is available for peer",
+                peer,
+            )
             self._pending_rpc.pop(call_id, None)
             return None
         try:
             send_fn(json.dumps(msg))
         except Exception as exc:
             self._pending_rpc.pop(call_id, None)
+            self._record_diagnostic_error(
+                "rpc_send_failed",
+                f"Failed to send RPC {method}",
+                peer,
+            )
             log_error(f"RTCClient: Failed to send RPC {method} to {peer}: {exc}")
             return None
 
@@ -876,6 +1020,11 @@ class RTCClient:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError:
             self._pending_rpc.pop(call_id, None)
+            self._record_diagnostic_error(
+                "rpc_timeout",
+                f"RPC {method} timed out",
+                peer,
+            )
             log_warning(f"RTCClient: RPC {method} to {peer} timed out")
             return None
 
@@ -906,6 +1055,11 @@ class RTCClient:
                 },
             )
             if not result or not result.get("code"):
+                self._record_diagnostic_error(
+                    "pairing_start_failed",
+                    "Pairing initiation failed",
+                    peer,
+                )
                 log_warning(f"Pairing initiation failed for peer {peer}: {result}")
                 return
 
@@ -956,6 +1110,11 @@ class RTCClient:
                 {"code": pairing_code},
             )
             if not exchange_result or not exchange_result.get("token"):
+                self._record_diagnostic_error(
+                    "pairing_exchange_failed",
+                    "Token exchange failed",
+                    peer,
+                )
                 log_warning(f"Token exchange failed for peer {peer[:8]}…")
                 return
 
@@ -1029,6 +1188,11 @@ class RTCClient:
         except asyncio.CancelledError:
             log_debug(f"Pairing task cancelled for peer {peer}")
         except Exception as exc:
+            self._record_diagnostic_error(
+                "pairing_flow_failed",
+                "Pairing flow failed",
+                peer,
+            )
             log_error(f"Pairing flow failed for peer {peer}: {exc}")
         finally:
             self._peer_pairing_active.discard(peer)
@@ -1195,15 +1359,26 @@ class RTCClient:
                                         f"Peer {peer[:8]}… pairing timeout expired "
                                         f"({self._pairing_timeout}s) — disconnecting"
                                     )
+                                    self._record_diagnostic_error(
+                                        "pairing_timeout",
+                                        "Pairing timeout expired",
+                                        peer,
+                                    )
                                     await self._audit(
                                         "peer.pairing_timeout", details={"peer_id": peer}
                                     )
                                     self._peer_pairing_active.discard(peer)
                                     chan.close()
                                 return
+
                             log_warning(
                                 f"Peer {peer} did not authenticate within "
                                 f"{self._auth_timeout}s — disconnecting"
+                            )
+                            self._record_diagnostic_error(
+                                "auth_timeout",
+                                "Peer did not authenticate within timeout",
+                                peer,
                             )
                             await self._audit("peer.auth_timeout", details={"peer_id": peer})
                             chan.close()
@@ -1317,6 +1492,11 @@ class RTCClient:
                                         f"Peer {peer} failed authentication with token: "
                                         f"{token_str[:8]}..."
                                     )
+                                    self._record_diagnostic_error(
+                                        "auth_failed",
+                                        "Peer failed token authentication",
+                                        peer,
+                                    )
                                     await self._audit(
                                         "peer.auth_failed",
                                         details={"peer_id": peer, "token_prefix": token_str[:8]},
@@ -1343,6 +1523,11 @@ class RTCClient:
                                     )
                                 else:
                                     log_warning(f"Peer {peer} failed re-authentication")
+                                    self._record_diagnostic_error(
+                                        "reauth_failed",
+                                        "Peer failed token re-authentication",
+                                        peer,
+                                    )
 
                             asyncio.create_task(reauth_peer())
                         return
@@ -1359,6 +1544,11 @@ class RTCClient:
                                     return
                             log_warning(
                                 f"Peer {peer} sent '{msg_type}' before authenticating — dropping"
+                            )
+                            self._record_diagnostic_error(
+                                "preauth_message_dropped",
+                                f"Peer sent {msg_type} before authenticating",
+                                peer,
                             )
                             return
 
@@ -1394,6 +1584,11 @@ class RTCClient:
                     else:
                         asyncio.create_task(handler.on_message(text))
                 except Exception as e:
+                    self._record_diagnostic_error(
+                        "message_handling_failed",
+                        "Error handling DataChannel message",
+                        peer,
+                    )
                     log_error(f"Error handling message from {peer}: {e}")
 
         setup_channel(channel, is_initiator=is_offer_initiator)

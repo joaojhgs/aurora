@@ -56,6 +56,12 @@ describe('AuroraClient', () => {
           availableOverHttp: true
         }),
         expect.objectContaining({
+          busTopic: 'Gateway.GetWebRTCDiagnostics',
+          routePath: '/api/Gateway/GetWebRTCDiagnostics',
+          requiredPermissions: ['Gateway.manage'],
+          availableOverHttp: true
+        }),
+        expect.objectContaining({
           busTopic: 'Gateway.InternalOnly',
           routePath: null,
           requiredPermissions: ['Gateway.manage'],
@@ -315,8 +321,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 1,
-        methods: 3,
-        externalMethods: 2,
+        methods: 4,
+        externalMethods: 3,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -2309,7 +2315,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 3,
+      checked: 4,
       issues: []
     })
 
