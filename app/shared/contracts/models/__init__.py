@@ -117,6 +117,17 @@ from .gateway import (
     SupportBundleRedactionInfo,
 )
 from .orchestrator import (
+    ModelRuntimeBenchmarkInfo,
+    ModelRuntimeCatalogRequest,
+    ModelRuntimeCatalogResponse,
+    ModelRuntimeFileInfo,
+    ModelRuntimeOperationRequest,
+    ModelRuntimeOperationResponse,
+    ModelRuntimeOperationStatusRequest,
+    ModelRuntimeProgressInfo,
+    ModelRuntimeProviderInfo,
+    ModelRuntimeRequest,
+    ModelRuntimeResponse,
     OrchestratorProcessRequest,
     OrchestratorResponse,
 )
@@ -165,6 +176,17 @@ __all__ = [
     # Orchestrator
     "OrchestratorProcessRequest",
     "OrchestratorResponse",
+    "ModelRuntimeBenchmarkInfo",
+    "ModelRuntimeCatalogRequest",
+    "ModelRuntimeCatalogResponse",
+    "ModelRuntimeFileInfo",
+    "ModelRuntimeOperationRequest",
+    "ModelRuntimeOperationResponse",
+    "ModelRuntimeOperationStatusRequest",
+    "ModelRuntimeProgressInfo",
+    "ModelRuntimeProviderInfo",
+    "ModelRuntimeRequest",
+    "ModelRuntimeResponse",
     # Gateway
     "GatewayModule",
     "GatewayMethods",

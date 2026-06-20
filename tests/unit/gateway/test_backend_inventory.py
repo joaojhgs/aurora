@@ -12,6 +12,7 @@ from app.services.gateway.auth import GatewayAuth
 from app.services.gateway.route_generator import RouteGenerator
 from app.shared.contracts.models.auth import AuthMethods, LoginRequest, LoginResponse
 from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from scripts.generate_backend_inventory import (
     build_inventory,
     validate_ui_fixture_references,
@@ -67,6 +68,28 @@ def test_backend_inventory_supports_admin_overview_manifest_contract():
     assert builtins["/api/routes"]["exposure"] == "gateway_builtin"
     assert builtins["/api/admin/peers"]["method_type"] == "manage"
     assert builtins["/api/admin/peers"]["required_perms"] == ["Auth.manage"]
+
+
+def test_backend_inventory_includes_model_runtime_contracts():
+    inventory = build_inventory()
+    methods = {method["bus_topic"]: method for method in inventory["methods"]}
+
+    read_method = methods[OrchestratorMethods.GET_MODEL_CATALOG]
+    assert read_method["routePath"] == "/api/Orchestrator/GetModelCatalog"
+    assert read_method["exposure"] == "external"
+    assert read_method["method_type"] == "use"
+    assert read_method["required_perms"] == ["Orchestrator.use"]
+    assert read_method["input_model"] == "ModelRuntimeCatalogRequest"
+    assert read_method["output_model"] == "ModelRuntimeCatalogResponse"
+
+    for topic in (
+        OrchestratorMethods.IMPORT_MODEL,
+        OrchestratorMethods.DOWNLOAD_MODEL,
+        OrchestratorMethods.BENCHMARK_MODEL,
+    ):
+        assert methods[topic]["exposure"] == "external"
+        assert methods[topic]["method_type"] == "manage"
+        assert methods[topic]["required_perms"] == ["Orchestrator.manage"]
 
 
 def test_ui_fixture_validation_fails_for_unmarked_missing_public_reference(tmp_path: Path):
