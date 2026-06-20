@@ -124,9 +124,20 @@ export function createEventSubscription<TPayload = unknown>(
 ): AuroraEventSubscription<TPayload> {
   let closed = false
   let resolveClosed: () => void = () => undefined
+  const activeIterators = new Set<AsyncIterator<AuroraEvent<TPayload>>>()
+  const closeWaiters: Array<() => void> = []
   const closedPromise = new Promise<void>((resolve) => {
     resolveClosed = resolve
   })
+  const settleClosed = () => {
+    if (closed) return
+    closed = true
+    resolveClosed()
+    closeWaiters.splice(0).forEach((resolve) => resolve())
+    for (const iterator of activeIterators) {
+      void iterator.return?.()
+    }
+  }
 
   return {
     get closed() {
@@ -134,20 +145,46 @@ export function createEventSubscription<TPayload = unknown>(
     },
     close(reason?: unknown) {
       if (closed) return
-      closed = true
       onClose?.(reason)
-      resolveClosed()
+      settleClosed()
     },
-    async *[Symbol.asyncIterator]() {
-      try {
-        for await (const event of source) {
-          if (closed) break
-          yield event
-        }
-      } finally {
-        if (!closed) {
-          closed = true
-          resolveClosed()
+    [Symbol.asyncIterator]() {
+      const iterator = source[Symbol.asyncIterator]()
+      activeIterators.add(iterator)
+      const nextWhenClosed = (): Promise<IteratorResult<AuroraEvent<TPayload>>> => {
+        if (closed) return Promise.resolve({ done: true, value: undefined })
+        return new Promise<IteratorResult<AuroraEvent<TPayload>>>((resolve) => {
+          closeWaiters.push(() => resolve({ done: true, value: undefined }))
+        })
+      }
+      const closeIterator = (reason?: unknown) => {
+        onClose?.(reason)
+        settleClosed()
+        activeIterators.delete(iterator)
+      }
+      return {
+        async next(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          if (closed) return { done: true, value: undefined }
+          try {
+            const result = await Promise.race([iterator.next(), nextWhenClosed()])
+            if (closed) return { done: true, value: undefined }
+            if (result.done) {
+              closeIterator()
+              return { done: true, value: undefined }
+            }
+            return result
+          } catch (error) {
+            closeIterator(error)
+            throw error
+          }
+        },
+        async return(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          closeIterator()
+          return { done: true, value: undefined }
+        },
+        async throw(error?: unknown): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          closeIterator(error)
+          throw error
         }
       }
     }
@@ -212,18 +249,24 @@ function subscribeWithReconnect<TEventPayload, TPayload>(
   const reconnect = normalizeReconnect(request.reconnect)
   const controller = new AbortController()
   const source = reconnect.maxAttempts === 0
-    ? singleStream<TEventPayload, TPayload>(transport, request)
+    ? singleStream<TEventPayload, TPayload>(transport, request, controller.signal)
     : reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal)
   return createEventSubscription(source, () => controller.abort())
 }
 
 async function* singleStream<TEventPayload, TPayload>(
   transport: AuroraEventStreamTransport,
-  request: AuroraStreamRequest<TPayload>
+  request: AuroraStreamRequest<TPayload>,
+  signal: AbortSignal
 ): AsyncIterable<AuroraEvent<TEventPayload>> {
   const subscription = await transport.subscribe<TEventPayload, TPayload>(request)
+  const iterator = subscription[Symbol.asyncIterator]()
   try {
-    for await (const event of subscription) yield event
+    while (!signal.aborted) {
+      const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
+      if (result.done || signal.aborted) return
+      yield result.value
+    }
   } finally {
     subscription.close()
   }
@@ -240,8 +283,12 @@ async function* reconnectingStream<TEventPayload, TPayload>(
   while (!signal.aborted) {
     const currentRequest = { ...request, lastEventId }
     const subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
+    const iterator = subscription[Symbol.asyncIterator]()
     try {
-      for await (const event of subscription) {
+      while (!signal.aborted) {
+        const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
+        if (result.done || signal.aborted) return
+        const event = result.value
         attempt = 0
         lastEventId = event.id ?? lastEventId
         yield event
@@ -252,8 +299,21 @@ async function* reconnectingStream<TEventPayload, TPayload>(
       attempt += 1
       if (attempt > reconnect.maxAttempts || signal.aborted) throw normalizeError(error)
       await delay(backoff(attempt, reconnect), signal)
+    } finally {
+      subscription.close()
     }
   }
+}
+
+function abortIteratorResult<TPayload>(signal: AbortSignal): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+  if (signal.aborted) return Promise.resolve({ done: true, value: undefined })
+  return new Promise<IteratorResult<AuroraEvent<TPayload>>>((resolve) => {
+    signal.addEventListener(
+      'abort',
+      () => resolve({ done: true, value: undefined }),
+      { once: true }
+    )
+  })
 }
 
 function normalizeReconnect(value: AuroraSubscribeOptions['reconnect']): NormalizedReconnectOptions {

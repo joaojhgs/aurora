@@ -1246,6 +1246,22 @@ describe('AuroraClient', () => {
     expect(seenLastEventIds).toEqual([null, '1'])
   })
 
+  it('settles a pending event iterator when an idle wrapped stream is closed', async () => {
+    const never = async function* () {
+      await new Promise(() => undefined)
+    }
+    const client = new AuroraClient({
+      transport: new MockAuroraTransport().stream('health', never)
+    })
+    const subscription = client.events.watchHealth()
+    const iterator = subscription[Symbol.asyncIterator]()
+
+    const pending = iterator.next().then(() => 'settled', () => 'rejected')
+    setTimeout(() => subscription.close('test-close'), 10)
+
+    await expect(raceWithTimeout(pending, 100)).resolves.toBe('settled')
+  })
+
   it('classifies event stream unsupported and scripted failures', async () => {
     const unsupported = new AuroraClient({
       transport: {
@@ -1320,6 +1336,35 @@ describe('AuroraClient', () => {
     expect((await wsEvents)[0]?.kind).toBe('assistant.delta')
   })
 
+  it('settles a pending HTTP SSE iterator when the subscription is closed without another event', async () => {
+    let closed = false
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const sseTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      eventSourceFactory: () => {
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          close: () => { closed = true }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport: sseTransport })
+    const subscription = client.events.watchHealth()
+    const iterator = subscription[Symbol.asyncIterator]()
+
+    const pending = iterator.next().then(() => 'settled', () => 'rejected')
+    await sourceReadyPromise
+    subscription.close('test-close')
+
+    await expect(raceWithTimeout(pending, 100)).resolves.toBe('settled')
+    expect(closed).toBe(true)
+  })
+
   it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
     const tauri = new TauriLocalTransport({
       invoke: async (command, args) => {
@@ -1381,6 +1426,15 @@ async function collectEvents<TPayload>(
   } finally {
     subscription.close?.()
   }
+}
+
+async function raceWithTimeout<TValue>(promise: Promise<TValue>, ms: number): Promise<TValue | 'timeout'> {
+  return Promise.race([
+    promise,
+    new Promise<'timeout'>((resolve) => {
+      setTimeout(() => resolve('timeout'), ms)
+    })
+  ])
 }
 
 describe('permissions', () => {
