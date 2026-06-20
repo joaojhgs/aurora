@@ -19,6 +19,7 @@ from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.bus import Envelope
+from app.services.gateway.admin_action import AdminActionManager
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
     Auth as AuthConfigModel,
@@ -30,6 +31,10 @@ from app.shared.contracts.models.aurora import AuroraMethods
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
+    AdminActionConfirmRequest,
+    AdminActionConfirmResponse,
+    AdminActionDraftRequest,
+    AdminActionDraftResponse,
     CapabilityCatalogRequest,
     CapabilityCatalogResponse,
     CapabilityCatalogSummary,
@@ -226,9 +231,13 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
         return "tool_approval"
     if topic in {ToolingMethods.EXECUTE_TOOL}:
         return "tool_execution"
-    if topic.startswith("AudioSession.") or topic.startswith("STTCoordinator.") or topic.startswith(
-        "Transcription."
-    ) or topic.startswith("WakeWord.") or topic.startswith("TTS."):
+    if (
+        topic.startswith("AudioSession.")
+        or topic.startswith("STTCoordinator.")
+        or topic.startswith("Transcription.")
+        or topic.startswith("WakeWord.")
+        or topic.startswith("TTS.")
+    ):
         return "audio"
     if topic.startswith("DB.RAG") or payload.get("namespace") or payload.get("data_scope"):
         return "data"
@@ -304,8 +313,7 @@ def _diagnostic_redacted_copy(value: Any) -> Any:
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
         return {
-            str(key): _diagnostic_redacted_value(str(key), nested)
-            for key, nested in value.items()
+            str(key): _diagnostic_redacted_value(str(key), nested) for key, nested in value.items()
         }
     if isinstance(value, list | tuple):
         return [_diagnostic_redacted_copy(item) for item in value]
@@ -393,10 +401,9 @@ class GatewayService(BaseService):
         self._mesh_peer_id = None
         self._runtime_config_lock = asyncio.Lock()
         self._audio_session_service = AudioSessionService()
-        self._event_stream: deque[GatewayEventStreamEvent] = deque(
-            maxlen=_EVENT_STREAM_MAXLEN
-        )
+        self._event_stream: deque[GatewayEventStreamEvent] = deque(maxlen=_EVENT_STREAM_MAXLEN)
         self._event_stream_subscription_topic = "*"
+        self._admin_action_manager = AdminActionManager()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
@@ -449,6 +456,48 @@ class GatewayService(BaseService):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_DRAFT,
+        name="AdminActionDraft",
+        summary="Draft a high-risk admin action before confirmation",
+        input_model=AdminActionDraftRequest,
+        output_model=AdminActionDraftResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_draft(
+        self,
+        data: AdminActionDraftRequest,
+        envelope: Envelope,
+    ) -> AdminActionDraftResponse:
+        """Return a short-lived nonce and digest for a high-risk admin action."""
+        return self._admin_action_manager.draft(
+            data,
+            principal_id=envelope.principal_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_CONFIRM,
+        name="AdminActionConfirm",
+        summary="Confirm a drafted admin action and issue a route submission token",
+        input_model=AdminActionConfirmRequest,
+        output_model=AdminActionConfirmResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_confirm(
+        self,
+        data: AdminActionConfirmRequest,
+        envelope: Envelope,
+    ) -> AdminActionConfirmResponse:
+        """Validate reauth/reason/phrase and return a single-use confirmation token."""
+        return self._admin_action_manager.confirm(
+            data,
+            principal_id=envelope.principal_id,
+        )
 
     @method_contract(
         method_id=GatewayMethods.GET_MESH_STATUS,
@@ -660,20 +709,15 @@ class GatewayService(BaseService):
             correlation_id=data.correlation_id,
             limit=max(data.event_limit, 1) if data.event_limit else 1,
         )
-        recent_events = [] if data.event_limit == 0 else self._filter_events(event_request)[
-            : data.event_limit
-        ]
+        recent_events = (
+            [] if data.event_limit == 0 else self._filter_events(event_request)[: data.event_limit]
+        )
         recent_audit_events = [
-            _diagnostic_redacted_copy(event)
-            for event in await self._get_recent_audit_events(data)
+            _diagnostic_redacted_copy(event) for event in await self._get_recent_audit_events(data)
         ]
         settings = await self._get_gateway_config()
 
-        correlation_ids = {
-            event.correlation_id
-            for event in recent_events
-            if event.correlation_id
-        }
+        correlation_ids = {event.correlation_id for event in recent_events if event.correlation_id}
         for audit_event in recent_audit_events:
             details = _details_dict(audit_event.get("details"))
             correlation_id = details.get("correlation_id")
@@ -1061,6 +1105,7 @@ class GatewayService(BaseService):
                 auth_enabled=auth_enabled,
                 auth_api_keys=auth_api_keys,
                 request_timeout=request_timeout,
+                admin_action_manager=self._admin_action_manager,
             )
 
             import uvicorn

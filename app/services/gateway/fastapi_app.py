@@ -28,6 +28,7 @@ from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMet
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+    from app.services.gateway.admin_action import AdminActionManager
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
@@ -41,6 +42,7 @@ def create_gateway_app(
     title: str = "Aurora Gateway API",
     version: str = "1.0.0",
     request_timeout: float = 30.0,
+    admin_action_manager: AdminActionManager | None = None,
 ) -> Any:
     """Create and configure the FastAPI application.
 
@@ -58,6 +60,7 @@ def create_gateway_app(
         title: API title for OpenAPI docs
         version: API version
         request_timeout: Default timeout for service requests
+        admin_action_manager: Short-lived AdminAction draft/confirmation store
 
     Returns:
         FastAPI application instance
@@ -135,6 +138,7 @@ def create_gateway_app(
         bus=bus,
         registry=registry,
         request_timeout=request_timeout,
+        admin_action_manager=admin_action_manager,
     )
 
     # Store references for lifecycle management

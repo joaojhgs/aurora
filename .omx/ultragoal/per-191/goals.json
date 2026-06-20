@@ -1,0 +1,20 @@
+{
+  "objective": "Complete PER-191 according to .omx/plans/PER-191-adminaction-enforcement.md",
+  "goals": [
+    {
+      "id": "PER-191-G001",
+      "title": "AdminAction contract and enforcement",
+      "status": "complete",
+      "objective": "Add typed AdminAction draft/confirm contracts, enforce confirmed nonces for generated high-risk routes, and audit before mutation forwarding.",
+      "evidence": "Added Gateway.AdminActionDraft/AdminActionConfirm contracts, process-local AdminActionManager, and generated-route enforcement with single-use confirmation token and audit receipt."
+    },
+    {
+      "id": "PER-191-G002",
+      "title": "Verification and handoff",
+      "status": "complete",
+      "objective": "Update focused tests/docs, run targeted verification, commit, open PR, and hand off to QA.",
+      "evidence": "Updated docs/GATEWAY.md and tests/unit/gateway/test_route_generator_adminaction.py; targeted pytest and ruff passed."
+    }
+  ]
+}
+
