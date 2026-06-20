@@ -254,6 +254,12 @@
         "required_capabilities": [],
         "require_explicit_selector": false
       },
+      "approval_policy": {
+        "default_share": true,
+        "default_approval_mode": "approve_all_local_safe",
+        "default_token_ttl_seconds": 300,
+        "rules": []
+      },
       "hardware_acceleration": {
         "ocr_bg": false,
         "ocr_curr": false

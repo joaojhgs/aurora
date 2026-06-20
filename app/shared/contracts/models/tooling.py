@@ -56,6 +56,8 @@ ToolingExecutionLocation = Literal["local", "remote"]
 
 ToolingSafetyClass = Literal["standard", "sensitive", "dangerous"]
 
+ToolingRiskClass = Literal["standard", "sensitive", "dangerous"]
+
 
 class ToolingGetToolsRequest(IOModel):
     """Request to get available tools."""
@@ -108,6 +110,12 @@ class ToolingToolInfo(IOModel):
     source_type: Literal["local", "mesh_peer"] = "local"
     execution_location: ToolingExecutionLocation = "local"
     safety_class: ToolingSafetyClass = "standard"
+    risk_class: ToolingRiskClass = "standard"
+    data_egress: bool = False
+    mutating: bool = False
+    external: bool = False
+    admin: bool = False
+    privacy_hints: list[str] = Field(default_factory=list)
     required_permissions: list[str] = Field(default_factory=list)
     confirmation_required: bool = False
     rate_limit_hints: ToolingRateLimitHints | None = None

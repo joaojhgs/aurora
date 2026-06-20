@@ -684,6 +684,52 @@ class MeshSharing(BaseConfigModel):
     """
 
 
+class ToolingApprovalPolicyRule(BaseConfigModel):
+    rule_id: str
+    """
+    Stable operator-defined rule identifier
+    """
+    share: bool | None = True
+    """
+    Whether matching tools are shared/discoverable/executable
+    """
+    approval_mode: (
+        Literal[
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only",
+        ]
+        | None
+    ) = "ask_each_time"
+    tool_name: str | None = None
+    global_tool_id: str | None = None
+    execution_location: Literal["local", "remote"] | None = None
+    source_type: Literal["core", "plugin", "mcp", "toolkit", "unknown"] | None = None
+    toolkit_name: str | None = None
+    safety_class: Literal["standard", "sensitive", "dangerous"] | None = None
+    operation_class: (
+        Literal["read", "write", "external", "admin", "hardware", "data-egress"] | None
+    ) = None
+    resource_namespace: str | None = None
+    hardware_target: str | None = None
+    data_scope: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
+    caller_device_id: str | None = None
+    provider_peer_id: str | None = None
+    provider_service_instance_id: str | None = None
+    route_privacy_class: str | None = None
+    token_ttl_seconds: int | None = Field(300, ge=1)
+    """
+    Approval token lifetime for this rule
+    """
+
+
 class Tts(BaseConfigModel):
     enabled: bool | None = False
     """
@@ -847,12 +893,52 @@ class Db(BaseConfigModel):
     """
 
 
+class Scheduler(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable scheduler service
+    """
+    mesh_sharing: MeshSharing | None = None
+
+
+class ToolingApprovalPolicy(BaseConfigModel):
+    default_share: bool | None = True
+    """
+    Whether tools are discoverable/executable unless a more specific rule overrides this
+    """
+    default_approval_mode: (
+        Literal[
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only",
+        ]
+        | None
+    ) = "approve_all_local_safe"
+    """
+    Default approval behavior when no scoped rule matches
+    """
+    default_token_ttl_seconds: int | None = Field(300, ge=1)
+    """
+    Default lifetime for approval tokens issued by matching rules
+    """
+    rules: list[ToolingApprovalPolicyRule] | None = Field([], validate_default=True)
+    """
+    First-match scoped sharing and approval rules. Unset fields act as wildcards.
+    """
+
+
 class Tooling(BaseConfigModel):
     enabled: bool | None = True
     """
     Enable tooling service
     """
     mesh_sharing: MeshSharing | None = None
+    approval_policy: ToolingApprovalPolicy | None = None
     hardware_acceleration: HardwareAcceleration | None = None
     """
     Hardware acceleration for OCR features
@@ -865,14 +951,6 @@ class Tooling(BaseConfigModel):
     """
     Plugin integrations
     """
-
-
-class Scheduler(BaseConfigModel):
-    enabled: bool | None = True
-    """
-    Enable scheduler service
-    """
-    mesh_sharing: MeshSharing | None = None
 
 
 class Services(BaseConfigModel):
