@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.messaging.bus import Envelope
+from app.messaging.bus import Envelope, QueryResult
 from app.services.auth.auth_manager import _audit_event_matches_trace
 from app.services.gateway.service import GatewayService, _event_from_envelope
 from app.shared.contracts.models.auth import AuthMethods
@@ -20,8 +20,10 @@ from app.shared.contracts.models.gateway import (
     GatewayMethods,
     GatewaySupportBundleRequest,
     GetMeshStatusResponse,
+    MethodInfo,
     MeshLocalStatus,
     MeshRouteDiagnostic,
+    ServiceInfo,
 )
 from app.shared.contracts.models.stt import AudioSessionEvent
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
@@ -36,9 +38,13 @@ def test_gateway_observability_contracts_are_registered():
 
     assert GatewayMethods.LIST_EVENTS in methods
     assert GatewayMethods.GET_SUPPORT_BUNDLE in methods
+    assert GatewayMethods.GET_REGISTRY in methods
+    assert GatewayMethods.GET_SERVICES in methods
+    assert GatewayMethods.GET_SERVICE_HEALTH in methods
     assert methods[GatewayMethods.LIST_EVENTS].exposure == "external"
     assert methods[GatewayMethods.LIST_EVENTS].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE].method_type == "manage"
+    assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
     clear_registry()
 
 
@@ -157,6 +163,46 @@ def test_gateway_event_categories_cover_config_and_pairing():
 @pytest.mark.asyncio
 async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     service = GatewayService()
+    service.bus.request = AsyncMock(
+        return_value=QueryResult(ok=True, data=SimpleNamespace(success=True))
+    )
+    service._registry_aggregator = SimpleNamespace(
+        get_registry_export=AsyncMock(
+            return_value={
+                "modules": [
+                    {
+                        "module": "Gateway",
+                        "version": "1.0.0",
+                        "summary": "gateway",
+                        "capabilities": ["http"],
+                        "methods": [
+                            MethodInfo(
+                                name="GetSupportBundle",
+                                bus_topic=GatewayMethods.GET_SUPPORT_BUNDLE,
+                                exposure="external",
+                                method_type="manage",
+                                required_perms=["Gateway.manage"],
+                            )
+                        ],
+                    }
+                ],
+                "digest": "digest-registry",
+                "service_count": 1,
+                "method_count": 1,
+            }
+        ),
+        get_services=AsyncMock(
+            return_value=[
+                ServiceInfo(
+                    module="Gateway",
+                    version="1.0.0",
+                    method_count=1,
+                    last_seen="2026-06-20T00:00:00Z",
+                    status="healthy",
+                )
+            ]
+        ),
+    )
     service._get_recent_audit_events = AsyncMock(
         return_value=[
             {
@@ -213,12 +259,41 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     )
 
     assert bundle.correlation_ids == ["corr-tool"]
+    assert bundle.registry.digest == "digest-registry"
+    assert bundle.services[0].module == "Gateway"
+    assert bundle.service_health[0].status == "healthy"
+    assert bundle.native_capabilities[0].status == "unavailable"
+    assert bundle.sidecar_logs[0].status == "metadata_only"
+    assert bundle.audit_receipt and bundle.audit_receipt.startswith("support_bundle:")
+    assert bundle.audit_error is None
     assert bundle.capability_catalog_summary.providers == 1
     assert bundle.route_diagnostics[0].module == "Tooling"
     dumped = bundle.model_dump_json()
     assert "raw-token" not in dumped
     assert "redis://localhost:6379" not in dumped
     assert "/models/private.bin" not in dumped
+    assert bundle.secrets_redacted is True
+    audit_request = service.bus.request.await_args.args[1]
+    assert service.bus.request.await_args.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    assert audit_request.event == "diagnostics.support_bundle.exported"
+    assert "digest-registry" in (audit_request.details or "")
+
+
+@pytest.mark.asyncio
+async def test_support_bundle_surfaces_audit_storage_failure_without_raw_payloads():
+    service = GatewayService()
+    service.bus.request = AsyncMock(return_value=QueryResult(ok=False, error="audit offline"))
+    service.get_mesh_status = AsyncMock(return_value=GetMeshStatusResponse())
+    service.get_capability_catalog = AsyncMock(return_value=CapabilityCatalogResponse())
+    service._get_recent_audit_events = AsyncMock(return_value=[])
+    service._get_gateway_config = AsyncMock(
+        return_value=SimpleNamespace(model_dump=lambda mode="json": {})
+    )
+
+    bundle = await service.get_support_bundle(GatewaySupportBundleRequest(event_limit=0))
+
+    assert bundle.audit_receipt is None
+    assert bundle.audit_error == "audit offline"
     assert bundle.secrets_redacted is True
 
 

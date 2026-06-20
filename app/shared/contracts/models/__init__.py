@@ -113,6 +113,7 @@ from .gateway import (
     ServiceDeparture,
     ServiceHeartbeat,
     ServiceInfo,
+    SupportBundleDiagnosticItem,
     SupportBundleRedactionInfo,
 )
 from .orchestrator import (
@@ -172,6 +173,7 @@ __all__ = [
     "GatewayListEventsResponse",
     "GatewaySupportBundleRequest",
     "GatewaySupportBundleResponse",
+    "SupportBundleDiagnosticItem",
     "SupportBundleRedactionInfo",
     "CapabilityCatalogSummary",
     "MethodInfo",

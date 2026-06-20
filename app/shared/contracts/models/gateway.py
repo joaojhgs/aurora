@@ -375,6 +375,16 @@ class SupportBundleRedactionInfo(IOModel):
     omitted_payloads: list[str] = Field(default_factory=list)
 
 
+class SupportBundleDiagnosticItem(IOModel):
+    """One redacted support-bundle diagnostic source."""
+
+    name: str
+    status: str = "unavailable"
+    source: str = ""
+    details: dict[str, Any] = Field(default_factory=dict)
+    redacted: bool = True
+
+
 class GatewaySupportBundleRequest(IOModel):
     """Request a redacted support bundle for diagnostics."""
 
@@ -399,6 +409,9 @@ class GatewaySupportBundleResponse(IOModel):
 
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     correlation_id: str | None = None
+    registry: GetRegistryResponse = Field(default_factory=GetRegistryResponse)
+    services: list[ServiceInfo] = Field(default_factory=list)
+    service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
     mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
     route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
     capability_catalog_summary: CapabilityCatalogSummary = Field(
@@ -406,8 +419,12 @@ class GatewaySupportBundleResponse(IOModel):
     )
     recent_events: list[GatewayEventStreamEvent] = Field(default_factory=list)
     recent_audit_events: list[dict[str, Any]] = Field(default_factory=list)
+    native_capabilities: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
+    sidecar_logs: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
     config_shape: dict[str, Any] = Field(default_factory=dict)
     correlation_ids: list[str] = Field(default_factory=list)
+    audit_receipt: str | None = None
+    audit_error: str | None = None
     redaction: SupportBundleRedactionInfo = Field(default_factory=SupportBundleRedactionInfo)
     secrets_redacted: bool = True
 
