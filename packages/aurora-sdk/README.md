@@ -210,23 +210,40 @@ Android/iOS features are enabled only when the native capability manifest and ba
 import {
   AuroraClient,
   MockAuroraTransport,
-  capabilityGraphCatalogFixture,
-  gatewayRegistryFixture
+  compareRegistryFixtureToBackendInventory,
+  gatewayRegistryFixture,
+  backendInventoryFixture
 } from '@aurora/client'
 
 const transport = new MockAuroraTransport()
-  .register('Gateway.GetRegistry', gatewayRegistryFixture)
-  .register('Gateway.GetCapabilityCatalog', capabilityGraphCatalogFixture)
 
 const client = new AuroraClient({ transport })
 const result = await client.result(() => client.registry.getRegistry())
+const catalog = await client.capabilities.listCatalog({ include_unavailable: true })
+const route = await client.routes.explain({ topic: 'TTS.Synthesize' })
+const native = await client.native.getManifest()
 const explanation = await client.capabilities.explain('tool:tool:notes')
 const permissionCatalog = await client.permissions.listCatalog()
 
 client.auth.setApiKeySystem()
 client.auth.snapshot().state // "api_key_system"
 explanation.providerCandidates.length // local and remote providers remain separate.
+compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture).ok // true
 ```
+
+`MockAuroraTransport` preloads deterministic backend-shaped fixtures for registry, services, capability catalog, route explain, native manifest, and tool catalog. The fixtures are based on `modules/ui-mock-reference/lib/aurora/data.ts` labels plus backend inventory shapes; they preserve backend method identity as `bus_topic` + method name and keep internal-only methods unavailable over HTTP.
+
+Use `MockAuroraTransport.empty()` when a test needs no handlers, or override/script individual methods:
+
+```ts
+const transport = new MockAuroraTransport()
+  .register('Gateway.GetRegistry', gatewayRegistryFixture)
+  .fail('Gateway.ExplainRoute', 'privacy_blocked', 'Explicit selector required')
+  .timeout('Tooling.GetToolCatalog')
+  .lose('Gateway.GetCapabilityCatalog')
+```
+
+The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
 
 ## Capability Graph
 

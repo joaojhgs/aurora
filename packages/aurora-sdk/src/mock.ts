@@ -1,4 +1,5 @@
 import { AuroraError, type AuroraErrorCode } from './errors.js'
+import { cloneFixture, defaultMockAuroraFixtures, type MockAuroraFixtureSet } from './fixtures.js'
 import type { AuroraTransportEnvelope } from './types.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 
@@ -10,9 +11,32 @@ export type MockRegistration<TPayload = unknown, TData = unknown> =
   | TData
   | AuroraTransportEnvelope<TData>
 
+export interface MockAuroraTransportOptions {
+  fixtures?: MockAuroraFixtureSet | false
+}
+
 export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
   private readonly handlers = new Map<string, MockHandler>()
+
+  constructor(options: MockAuroraTransportOptions = {}) {
+    const fixtures = options.fixtures === false ? null : options.fixtures ?? defaultMockAuroraFixtures
+    if (fixtures) this.registerFixtures(fixtures)
+  }
+
+  static empty(): MockAuroraTransport {
+    return new MockAuroraTransport({ fixtures: false })
+  }
+
+  registerFixtures(fixtures: MockAuroraFixtureSet): this {
+    return this
+      .register('Gateway.GetRegistry', () => cloneFixture(fixtures.registry))
+      .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
+      .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
+      .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
+      .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
+      .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+  }
 
   register<TPayload = unknown, TData = unknown>(
     method: string,
@@ -29,6 +53,18 @@ export class MockAuroraTransport implements AuroraTransport {
   fail(method: string, code: AuroraErrorCode, message: string): this {
     return this.register(method, () => {
       throw new AuroraError({ code, message, method })
+    })
+  }
+
+  lose(method: string, message = 'mock transport unavailable'): this {
+    return this.register(method, () => {
+      throw new TypeError(message)
+    })
+  }
+
+  timeout(method: string, message = 'mock request timed out'): this {
+    return this.register(method, () => {
+      throw new DOMException(message, 'AbortError')
     })
   }
 

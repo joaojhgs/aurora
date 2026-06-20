@@ -13,8 +13,10 @@ import {
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
   createAuroraEvent,
+  defaultMockAuroraFixtures,
   describeBackendInventory,
   describeRegistry,
   gatewayBuiltinRoutesFixture,
@@ -22,7 +24,9 @@ import {
   gatewayRegistryFixture,
   hasPermission,
   permissionLabel,
+  routeExplainFixture,
   resolveEffectivePermissions,
+  uiMockReferenceFixtureSummary,
   wildcardIntersection
 } from '../src/index.js'
 
@@ -349,6 +353,55 @@ describe('AuroraClient', () => {
     expect(manifest.native.availability).toBe('unsupported')
   })
 
+  it('preloads deterministic mock fixtures for offline SDK development', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const [registry, services, summaries, route, nativeManifest, toolCatalog] = await Promise.all([
+      client.registry.getRegistry(),
+      client.registry.listServices(),
+      client.capabilities.listSummaries({ include_unavailable: true }),
+      client.routes.explain({ topic: 'TTS.Synthesize' }),
+      client.native.getManifest(),
+      client.tools.listCatalog<typeof defaultMockAuroraFixtures.toolCatalog>()
+    ])
+
+    expect(registry.digest).toBe('fixture')
+    expect(services.services[0]?.module).toBe('Gateway')
+    expect(summaries.map((summary) => summary.availability)).toEqual(
+      expect.arrayContaining(['available-local', 'privacy-blocked', 'stale'])
+    )
+    expect(route).toEqual(routeExplainFixture)
+    expect(nativeManifest).toEqual(
+      expect.objectContaining({
+        platform: 'tauri-desktop',
+        permissions: expect.objectContaining({ microphone: false })
+      })
+    )
+    expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
+    expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
+  })
+
+  it('returns cloned fixture data so tests cannot mutate shared backend truth', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const registry = await client.registry.getRegistry()
+    registry.modules[0]!.methods[0]!.required_perms.push('mutated.permission')
+
+    await expect(client.registry.getRegistry()).resolves.toEqual(
+      expect.objectContaining({
+        modules: [
+          expect.objectContaining({
+            methods: [
+              expect.objectContaining({
+                required_perms: ['Gateway.use']
+              }),
+              expect.any(Object)
+            ]
+          })
+        ]
+      })
+    )
+  })
+
   it('returns classified result errors for permissions and transport loss', async () => {
     const permissionTransport = new MockAuroraTransport().fail('Gateway.GetRegistry', 'permission', 'Forbidden')
     const permissionClient = new AuroraClient({ transport: permissionTransport })
@@ -368,6 +421,25 @@ describe('AuroraClient', () => {
 
     expect(lossResult.ok).toBe(false)
     if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
+  })
+
+  it('scripts mock permission, timeout, and transport-loss failures by method', async () => {
+    const transport = new MockAuroraTransport()
+      .fail('Gateway.GetRegistry', 'permission', 'Forbidden')
+      .timeout('Gateway.GetServices')
+      .lose('Gateway.GetCapabilityCatalog', 'mock socket closed')
+    const client = new AuroraClient({ transport })
+
+    const permission = await client.requestResult('Gateway.GetRegistry')
+    const timeout = await client.requestResult('Gateway.GetServices')
+    const loss = await client.requestResult('Gateway.GetCapabilityCatalog')
+
+    expect(permission.ok).toBe(false)
+    if (!permission.ok) expect(permission.error.code).toBe('permission')
+    expect(timeout.ok).toBe(false)
+    if (!timeout.ok) expect(timeout.error.code).toBe('timeout')
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
 
   it('normalizes successful results with audit and redaction metadata', async () => {
@@ -599,7 +671,7 @@ describe('AuroraClient', () => {
   })
 
   it('classifies unsupported, privacy blocked, and native permission errors', async () => {
-    const unsupportedClient = new AuroraClient({ transport: new MockAuroraTransport() })
+    const unsupportedClient = new AuroraClient({ transport: MockAuroraTransport.empty() })
     const unsupported = await unsupportedClient.result(() => unsupportedClient.registry.getRegistry())
     expect(unsupported.ok).toBe(false)
     if (!unsupported.ok) expect(unsupported.error.code).toBe('unsupported_feature')
@@ -1040,6 +1112,45 @@ describe('descriptors', () => {
         routePath: '/api/admin/peers',
         methodType: 'manage',
         requiredPermissions: ['Auth.manage']
+      })
+    ])
+  })
+
+  it('compares registry fixtures against backend inventory snapshots', () => {
+    const comparison = compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture)
+
+    expect(comparison).toEqual({
+      ok: true,
+      checked: 2,
+      issues: []
+    })
+
+    const mismatched = compareRegistryFixtureToBackendInventory(
+      {
+        ...gatewayRegistryFixture,
+        modules: [
+          {
+            ...gatewayRegistryFixture.modules[0]!,
+            methods: [
+              {
+                ...gatewayRegistryFixture.modules[0]!.methods[0]!,
+                required_perms: ['gateway.use']
+              }
+            ]
+          }
+        ],
+        method_count: 1
+      },
+      backendInventoryFixture
+    )
+
+    expect(mismatched.ok).toBe(false)
+    expect(mismatched.issues).toEqual([
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        field: 'requiredPermissions',
+        fixture: ['gateway.use'],
+        inventory: ['Gateway.use']
       })
     ])
   })

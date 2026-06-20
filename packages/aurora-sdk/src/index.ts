@@ -42,10 +42,17 @@ export {
   backendInventoryFixture,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  cloneFixture,
+  compareRegistryFixtureToBackendInventory,
+  defaultMockAuroraFixtures,
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
-  gatewayServicesFixture
+  gatewayServicesFixture,
+  nativeCapabilityManifestFixture,
+  routeExplainFixture,
+  toolCatalogFixture,
+  uiMockReferenceFixtureSummary
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './transport.js'
@@ -59,6 +66,11 @@ export type {
 } from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
 export type { HttpTransportOptions } from './http.js'
+export type {
+  ContractFixtureComparison,
+  ContractFixtureComparisonIssue,
+  MockAuroraFixtureSet
+} from './fixtures.js'
 export type {
   AuthCredentialKind,
   AuthSessionIdentity,
