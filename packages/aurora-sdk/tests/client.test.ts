@@ -1200,7 +1200,188 @@ describe('AuroraClient', () => {
       })
     )
   })
+
+  it('subscribes to mock event streams with filtered event envelopes', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-assistant-1' },
+      { id: '2', kind: 'tool.completed', payload: { ok: true }, tool_id: 'tool:notes' },
+      { id: '3', kind: 'ignored', payload: {} }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.streamAssistant(undefined, { kinds: ['assistant.delta', 'tool.completed'] }), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['assistant.delta', 'tool.completed'])
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        id: '1',
+        payload: { text: 'hel' },
+        audit: expect.objectContaining({
+          correlationId: 'corr-assistant-1',
+          eventKind: 'assistant.delta',
+          transport: 'mock'
+        })
+      })
+    )
+    expect(events[1]?.audit.toolId).toBe('tool:notes')
+  })
+
+  it('reconnects streams with last event backfill hints after transport loss', async () => {
+    let attempts = 0
+    const seenLastEventIds: Array<string | null | undefined> = []
+    const transport = new MockAuroraTransport().stream('health', async function* (request) {
+      attempts += 1
+      seenLastEventIds.push(request.lastEventId)
+      if (attempts === 1) {
+        yield { id: '1', kind: 'health.updated', payload: { status: 'starting' } }
+        throw new TypeError('mock stream dropped')
+      }
+      yield { id: '2', kind: 'health.updated', payload: { status: 'healthy' } }
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth({ reconnect: { maxAttempts: 1, initialDelayMs: 0 } }), 2)
+
+    expect(events.map((event) => event.id)).toEqual(['1', '2'])
+    expect(seenLastEventIds).toEqual([null, '1'])
+  })
+
+  it('classifies event stream unsupported and scripted failures', async () => {
+    const unsupported = new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async <TData = unknown>() => ({ data: {} as TData })
+      }
+    })
+    expect(() => unsupported.subscribe()).toThrow(AuroraError)
+
+    const failing = new AuroraClient({
+      transport: new MockAuroraTransport().failStream('config', 'permission', 'Forbidden stream')
+    })
+    await expect(collectEvents(failing.events.watchConfig(), 1)).rejects.toMatchObject({ code: 'permission' })
+  })
+
+  it('adapts HTTP SSE and WebSocket events into AuroraEvent envelopes', async () => {
+    let sse: { onmessage: ((event: MessageEvent<string>) => void) | null; onerror: ((event: Event) => void) | null; close: () => void } | null = null
+    const sseTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      eventSourceFactory: (url) => {
+        expect(url).toContain('/api/events?stream=health')
+        sse = { onmessage: null, onerror: null, close: () => undefined }
+        return sse
+      }
+    })
+    const sseClient = new AuroraClient({ transport: sseTransport })
+    const sseEvents = collectEvents(sseClient.events.watchHealth(), 1)
+    await Promise.resolve()
+    expect(sse).not.toBeNull()
+    const currentSse = sse!
+    currentSse.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ id: 'health-1', kind: 'health.updated', payload: { status: 'healthy' } }),
+        lastEventId: 'health-1'
+      })
+    )
+    expect((await sseEvents)[0]).toEqual(
+      expect.objectContaining({
+        id: 'health-1',
+        kind: 'health.updated',
+        payload: { status: 'healthy' }
+      })
+    )
+
+    let sent: string | null = null
+    let socket: { onmessage: ((event: MessageEvent<string>) => void) | null; onerror: ((event: Event) => void) | null; onclose: ((event: CloseEvent) => void) | null; send: (data: string) => void; close: () => void } | null = null
+    const wsTransport = new HttpGatewayTransport({
+      baseUrl: 'https://aurora.local',
+      webSocketFactory: (url) => {
+        expect(url.startsWith('wss://aurora.local/api/events?stream=assistant')).toBe(true)
+        socket = {
+          onmessage: null,
+          onerror: null,
+          onclose: null,
+          send: (data) => { sent = data },
+          close: () => undefined
+        }
+        return socket
+      }
+    })
+    const wsClient = new AuroraClient({ transport: wsTransport })
+    const wsEvents = collectEvents(wsClient.events.streamAssistant({ prompt: 'hello' }, { protocol: 'websocket' }), 1)
+    await Promise.resolve()
+    expect(JSON.parse(sent ?? '{}')).toEqual(expect.objectContaining({ stream: 'assistant' }))
+    expect(socket).not.toBeNull()
+    const currentSocket = socket!
+    currentSocket.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ id: 'assistant-1', kind: 'assistant.delta', payload: { text: 'hello' } })
+      })
+    )
+    expect((await wsEvents)[0]?.kind).toBe('assistant.delta')
+  })
+
+  it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
+    const tauri = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        expect(command).toBe('aurora_event_subscribe')
+        expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
+        return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+      }
+    })
+    const tauriClient = new AuroraClient({ transport: tauri })
+    const tauriEvents = await collectEvents(tauriClient.events.watchConfig(), 1)
+    expect(tauriEvents[0]).toEqual(
+      expect.objectContaining({
+        id: 'config-1',
+        audit: expect.objectContaining({
+          correlationId: 'corr-config',
+          transport: 'tauri-local'
+        })
+      })
+    )
+
+    const meshTransport = new MeshP2PTransport({
+      defaultPeerId: 'peer-kitchen',
+      bridge: {
+        async call() {
+          return { data: {} }
+        },
+        subscribe(request) {
+          expect(request.peerId).toBe('peer-kitchen')
+          return [{ id: 'mesh-1', kind: 'health.updated', payload: { peer: request.peerId } }]
+        }
+      }
+    })
+    const meshClient = new AuroraClient({ transport: meshTransport })
+    const meshEvents = await collectEvents(meshClient.events.watchHealth(), 1)
+    expect(meshEvents[0]).toEqual(
+      expect.objectContaining({
+        id: 'mesh-1',
+        payload: { peer: 'peer-kitchen' },
+        audit: expect.objectContaining({
+          targetPeerId: 'peer-kitchen',
+          transport: 'mesh'
+        })
+      })
+    )
+  })
 })
+
+async function collectEvents<TPayload>(
+  subscription: AsyncIterable<TPayload> & { close?: () => void },
+  count: number
+): Promise<TPayload[]> {
+  const events: TPayload[] = []
+  try {
+    for await (const event of subscription) {
+      events.push(event)
+      if (events.length >= count) break
+    }
+    return events
+  } finally {
+    subscription.close?.()
+  }
+}
 
 describe('permissions', () => {
   it('matches backend permission semantics without lowercasing backend IDs', () => {

@@ -1,6 +1,12 @@
 import { AuroraError, readDetailCode, type AuroraErrorCode } from './errors.js'
+import {
+  createEventSubscription,
+  eventFromUnknown,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest
+} from './events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
-import type { AuditReceipt, AuroraTransportEnvelope, JsonObject } from './types.js'
+import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject } from './types.js'
 
 export type MeshPeerId = string
 
@@ -79,7 +85,16 @@ export interface MeshPeerBridge {
   call<TPayload = unknown>(
     request: MeshRpcRequest<TPayload>
   ): Promise<MeshRpcResponse<unknown> | AuroraTransportEnvelope<unknown> | unknown>
+  subscribe?<TEventPayload = unknown>(
+    request: MeshStreamRpcRequest
+  ): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
   getManifest?(peerId: string): Promise<MeshPeerManifest | null>
+}
+
+export interface MeshStreamRpcRequest extends AuroraStreamRequest {
+  peerId: string
+  selector?: MeshAddressSelector | undefined
+  candidates: MeshRouteCandidate[]
 }
 
 export interface MeshRouteResolver {
@@ -185,6 +200,49 @@ export class MeshP2PTransport implements AuroraTransport {
     return this.bridge.getManifest(peerId)
   }
 
+  async subscribe<TEventPayload = unknown>(
+    request: AuroraStreamRequest
+  ): Promise<AuroraEventSubscription<TEventPayload>> {
+    if (!this.bridge.subscribe) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'Mesh event subscriptions are not supported by this bridge.',
+        detail: { stream: request.stream, topics: request.topics }
+      })
+    }
+    const resolution = await this.resolveRoute({
+      method: request.stream,
+      busTopic: request.topics[0] ?? request.stream,
+      payload: request.payload,
+      timeoutMs: request.timeoutMs,
+      signal: request.signal,
+      audit: request.audit
+    })
+    if (resolution.privacyBlockedReason) {
+      throw new AuroraError({
+        code: 'privacy_blocked',
+        message: resolution.privacyBlockedReason,
+        detail: { stream: request.stream, selector: resolution.selector ?? null }
+      })
+    }
+    if (!resolution.peerId) {
+      throw new AuroraError({
+        code: 'unavailable_service',
+        message: resolution.unavailableReason ?? `No mesh provider for ${request.stream}`,
+        detail: { stream: request.stream, candidates: resolution.candidates ?? [] }
+      })
+    }
+    const candidates = normalizeCandidates(resolution, this.fallbackPeerIds)
+    const streamRequest: MeshStreamRpcRequest = {
+      ...request,
+      peerId: resolution.peerId,
+      candidates
+    }
+    if (resolution.selector) streamRequest.selector = resolution.selector
+    const source = this.bridge.subscribe<TEventPayload>(streamRequest)
+    return createEventSubscription(normalizeMeshEvents<TEventPayload>(source, request, resolution.peerId))
+  }
+
   private async resolveRoute(request: AuroraTransportRequest): Promise<MeshRouteResolution> {
     const resolved = this.routeResolver ? await this.routeResolver.resolve(request) : {}
     const selector = resolved.selector ?? selectorFromPayload(request.payload)
@@ -196,6 +254,23 @@ export class MeshP2PTransport implements AuroraTransport {
       selector,
       candidates
     }
+  }
+}
+
+async function* normalizeMeshEvents<TPayload>(
+  source: AsyncIterable<AuroraEvent<TPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TPayload> | Record<string, unknown>>,
+  request: AuroraStreamRequest,
+  targetPeerId: string
+): AsyncIterable<AuroraEvent<TPayload>> {
+  for await (const raw of source) {
+    yield eventFromUnknown<TPayload>(raw, {
+      kind: request.stream,
+      transport: 'mesh',
+      audit: {
+        ...request.audit,
+        targetPeerId
+      }
+    })
   }
 }
 

@@ -8,6 +8,7 @@ import {
   type AuroraResponse,
   type AuroraTransport
 } from './transport.js'
+import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
@@ -51,6 +52,7 @@ export class AuroraClient {
   readonly routes: RouteClient
   readonly tools: ToolClient
   readonly native: NativeClient
+  readonly events: EventStreamClient
   private readonly defaultTimeoutMs: number
 
   constructor(options: AuroraClientOptions) {
@@ -64,6 +66,7 @@ export class AuroraClient {
     this.routes = new RouteClient(this)
     this.tools = new ToolClient(this)
     this.native = new NativeClient(this)
+    this.events = new EventStreamClient(this.transport)
   }
 
   async request<TData = unknown, TPayload = unknown>(
@@ -132,6 +135,12 @@ export class AuroraClient {
 
   result<TData>(operation: () => Promise<TData>): Promise<AuroraResponse<TData>> {
     return captureResult(operation, { transport: this.transport.kind })
+  }
+
+  subscribe<TEventPayload = unknown, TPayload = unknown>(
+    options: AuroraSubscribeOptions<TPayload> = {}
+  ): AuroraEventSubscription<TEventPayload> {
+    return this.events.subscribe<TEventPayload, TPayload>(options)
   }
 }
 
