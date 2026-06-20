@@ -1,6 +1,7 @@
 export { AuroraClient } from './client.js'
 export { HttpGatewayTransport } from './http.js'
 export { MockAuroraTransport } from './mock.js'
+export { TauriLocalTransport } from './tauri.js'
 export { AuthSession } from './session.js'
 export { AuroraError, classifyHttpError } from './errors.js'
 export {
@@ -66,6 +67,20 @@ export type {
 } from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
 export type { HttpTransportOptions } from './http.js'
+export type {
+  LocalFilePickOptions,
+  LocalFilePickResult,
+  LocalFileReadOptions,
+  LocalFileReadResult,
+  LocalFileWriteOptions,
+  LocalFileWriteResult,
+  SecureStorageGetResult,
+  SecureStorageWriteResult,
+  TauriCommandNames,
+  TauriInvoke,
+  TauriLocalTransportOptions,
+  TauriSidecarStatus
+} from './tauri.js'
 export type {
   ContractFixtureComparison,
   ContractFixtureComparisonIssue,

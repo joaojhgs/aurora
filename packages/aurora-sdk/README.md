@@ -103,19 +103,20 @@ const effective = resolveEffectivePermissions({
 ## Tauri Local
 
 ```ts
-import type { AuroraTransport } from '@aurora/client'
-import { AuroraClient, buildCapabilityGraph } from '@aurora/client'
+import { AuroraClient, TauriLocalTransport, buildCapabilityGraph } from '@aurora/client'
 
-const tauriTransport: AuroraTransport = {
-  kind: 'tauri-local',
-  async request(request) {
-    return {
-      data: await window.__TAURI__.core.invoke('aurora_request', request)
-    }
+const transport = new TauriLocalTransport({
+  // Optional in tests; production Tauri shells can rely on window.__TAURI__.core.invoke.
+  invoke: window.__TAURI__.core.invoke,
+  commands: {
+    request: 'aurora_request',
+    sidecarStatus: 'aurora_sidecar_status',
+    nativeCapabilityManifest: 'aurora_native_capability_manifest'
   }
-}
+})
 
-const client = new AuroraClient({ transport: tauriTransport })
+const client = new AuroraClient({ transport })
+const sidecar = await transport.getSidecarStatus()
 const manifest = await client.native.getManifest()
 const catalog = await client.capabilities.listCatalog({ include_unavailable: true })
 const graph = buildCapabilityGraph({
@@ -137,6 +138,17 @@ client.auth.updateFromWhoAmI({
 ```
 
 Tauri commands must return backend/service evidence. Tauri IPC is not a second source of truth for Aurora service, mesh, auth, tool, DB, scheduler, or audio state.
+
+Local/native helpers stay outside React and Tauri imports so desktop and mobile shells can provide their own command bridge:
+
+```ts
+await transport.secureStorageSet('aurora.session', sessionHandle)
+const stored = await transport.secureStorageGet('aurora.session')
+const picked = await transport.pickLocalFile({ filters: [{ name: 'Audio', extensions: ['wav', 'mp3'] }] })
+const file = picked.cancelled ? null : await transport.readLocalFile(picked.paths[0]!, { encoding: 'base64' })
+```
+
+Internal bus access is explicit to the Tauri command implementation. The SDK preserves `method`, `busTopic`, payload, timeout, audit hints, permission casing, and returned correlation/redaction metadata when it invokes `aurora_request`.
 
 ## Mesh
 

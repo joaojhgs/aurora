@@ -5,6 +5,7 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  TauriLocalTransport,
   backendInventoryFixture,
   buildPermissionCatalog,
   buildPermissionCatalogFromBackendInventory,
@@ -23,6 +24,7 @@ import {
   gatewayServicesFixture,
   gatewayRegistryFixture,
   hasPermission,
+  nativeCapabilityManifestFixture,
   permissionLabel,
   routeExplainFixture,
   resolveEffectivePermissions,
@@ -700,6 +702,157 @@ describe('AuroraClient', () => {
     })
     expect(native.ok).toBe(false)
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
+  })
+
+  it('bridges SDK requests through Tauri invoke without rewriting method identity', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        return {
+          data: gatewayRegistryFixture,
+          status: 200,
+          audit: { correlationId: 'corr-tauri-registry' }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const registry = await client.registry.getRegistry()
+    const result = await client.requestResult('Gateway.GetRegistry')
+
+    expect(registry.digest).toBe('fixture')
+    expect(calls[0]).toEqual({
+      command: 'aurora_request',
+      args: {
+        request: expect.objectContaining({
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          path: '/api/registry',
+          httpMethod: 'GET'
+        })
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-tauri-registry',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          transport: 'tauri-local'
+        })
+      )
+    }
+  })
+
+  it('exposes Tauri native sidecar, secure storage, and local file helpers', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_sidecar_status':
+            return { running: true, mode: 'sidecar', pid: 42 }
+          case 'aurora_native_capability_manifest':
+            return nativeCapabilityManifestFixture
+          case 'aurora_secure_storage_get':
+            return { key: 'session', value: 'token-ref' }
+          case 'aurora_secure_storage_set':
+          case 'aurora_secure_storage_delete':
+            return { key: String(args?.key), ok: true }
+          case 'aurora_local_file_read':
+            return { path: String(args?.path), data: 'hello', encoding: 'utf-8' }
+          case 'aurora_local_file_write':
+            return { path: String(args?.path), ok: true, bytesWritten: 5 }
+          case 'aurora_local_file_pick':
+            return { paths: ['/tmp/a.txt'], cancelled: false }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getSidecarStatus()).resolves.toEqual(
+      expect.objectContaining({ running: true, mode: 'sidecar' })
+    )
+    await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
+    await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.readLocalFile('/tmp/a.txt')).resolves.toEqual({
+      path: '/tmp/a.txt',
+      data: 'hello',
+      encoding: 'utf-8'
+    })
+    await expect(transport.writeLocalFile('/tmp/a.txt', 'hello')).resolves.toEqual({
+      path: '/tmp/a.txt',
+      ok: true,
+      bytesWritten: 5
+    })
+    await expect(transport.pickLocalFile({ multiple: false })).resolves.toEqual({
+      paths: ['/tmp/a.txt'],
+      cancelled: false
+    })
+
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_sidecar_status',
+      'aurora_native_capability_manifest',
+      'aurora_secure_storage_get',
+      'aurora_secure_storage_set',
+      'aurora_secure_storage_delete',
+      'aurora_local_file_read',
+      'aurora_local_file_write',
+      'aurora_local_file_pick'
+    ])
+    expect(calls[3]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[6]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+  })
+
+  it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
+    const cases = [
+      [{ status: 401, detail: { message: 'auth required' } }, 'auth'],
+      [{ status: 403, detail: { message: 'forbidden' } }, 'permission'],
+      [{ detail: { code: 'validation_error', message: 'bad payload' } }, 'validation'],
+      [{ detail: { code: 'unavailable_service', message: 'service unavailable' } }, 'unavailable_service'],
+      [{ detail: { code: 'unsupported_feature', message: 'unsupported' } }, 'unsupported_feature'],
+      [{ detail: { reason_code: 'privacy_blocked', message: 'privacy blocked' } }, 'privacy_blocked'],
+      [{ detail: { code: 'native_permission_missing', message: 'native permission missing' } }, 'native_permission_missing']
+    ] as const
+
+    for (const [error, expected] of cases) {
+      const client = new AuroraClient({
+        transport: new TauriLocalTransport({
+          invoke: async () => {
+            throw error
+          }
+        })
+      })
+      const result = await client.requestResult('Gateway.GetRegistry')
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(expected)
+    }
+
+    const timeoutClient = new AuroraClient({
+      transport: new TauriLocalTransport({
+        defaultTimeoutMs: 1,
+        invoke: async () => new Promise(() => undefined)
+      })
+    })
+    const timeout = await timeoutClient.requestResult('Gateway.GetRegistry', undefined, { timeoutMs: 1 })
+    expect(timeout.ok).toBe(false)
+    if (!timeout.ok) expect(timeout.error.code).toBe('timeout')
+
+    const lossClient = new AuroraClient({
+      transport: new TauriLocalTransport({
+        invoke: async () => {
+          throw new TypeError('ipc closed')
+        }
+      })
+    })
+    const loss = await lossClient.requestResult('Gateway.GetRegistry')
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
 
   it('tracks user, admin, mesh peer, system, expired, and revoked auth session states', () => {
