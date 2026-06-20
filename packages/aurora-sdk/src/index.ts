@@ -17,7 +17,7 @@ export {
   privacyClassForAction,
   summarizeCapabilities
 } from './capabilities.js'
-export { captureResult, normalizeError } from './transport.js'
+export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
   capabilityCatalogFixture,
   emptyRegistryFixture,

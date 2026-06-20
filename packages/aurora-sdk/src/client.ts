@@ -1,5 +1,13 @@
 import { AuthSession } from './session.js'
-import { captureResult, unsupportedTransport, type AuroraResponse, type AuroraTransport } from './transport.js'
+import {
+  auditFromHeaders,
+  captureResult,
+  createAuditReceipt,
+  normalizeError,
+  unsupportedTransport,
+  type AuroraResponse,
+  type AuroraTransport
+} from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
 import type {
@@ -61,8 +69,49 @@ export class AuroraClient {
     return response.data
   }
 
+  async requestResult<TData = unknown, TPayload = unknown>(
+    method: string,
+    payload?: TPayload,
+    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+  ): Promise<AuroraResponse<TData>> {
+    const busTopic = options.busTopic ?? method
+    try {
+      const response = await this.transport.request<TData, TPayload>({
+        method,
+        busTopic,
+        path: options.path,
+        payload,
+        timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
+      })
+      return {
+        ok: true,
+        data: response.data,
+        audit: createAuditReceipt(response.data, {
+          ...auditFromHeaders(response.headers),
+          ...response.audit,
+          method,
+          busTopic,
+          transport: this.transport.kind
+        })
+      }
+    } catch (error) {
+      const normalized = normalizeError(error)
+      return {
+        ok: false,
+        error: normalized,
+        audit: createAuditReceipt(normalized.detail, {
+          correlationId: normalized.correlationId ?? null,
+          method: normalized.method ?? method,
+          busTopic: normalized.busTopic ?? busTopic,
+          status: normalized.code,
+          transport: this.transport.kind
+        })
+      }
+    }
+  }
+
   result<TData>(operation: () => Promise<TData>): Promise<AuroraResponse<TData>> {
-    return captureResult(operation)
+    return captureResult(operation, { transport: this.transport.kind })
   }
 }
 

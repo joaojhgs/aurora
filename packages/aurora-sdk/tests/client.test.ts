@@ -7,6 +7,8 @@ import {
   MockAuroraTransport,
   buildAdminOverviewManifest,
   capabilityCatalogFixture,
+  createAuditReceipt,
+  createAuroraEvent,
   describeRegistry,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
@@ -238,6 +240,80 @@ describe('AuroraClient', () => {
     if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
   })
 
+  it('normalizes successful results with audit and redaction metadata', async () => {
+    const transport = new MockAuroraTransport().register('Gateway.ExplainRoute', {
+      data: {
+        topic: 'TTS.Synthesize',
+        correlation_id: 'corr-route-1',
+        peer_id: 'local-peer',
+        target_peer_id: 'remote-peer',
+        method: 'ExplainRoute',
+        bus_topic: 'Gateway.ExplainRoute',
+        status: 'success',
+        secrets_redacted: true,
+        redacted_fields: ['selector.token']
+      },
+      audit: {
+        transport: 'mock'
+      },
+      status: 200
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.result(() => client.routes.explain({ topic: 'TTS.Synthesize' }))
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-route-1',
+          peerId: 'local-peer',
+          targetPeerId: 'remote-peer',
+          method: 'ExplainRoute',
+          busTopic: 'Gateway.ExplainRoute',
+          status: 'success',
+          transport: 'mock',
+          redaction: expect.objectContaining({
+            secretsRedacted: true,
+            redactedFields: ['selector.token'],
+            source: 'backend'
+          })
+        })
+      )
+    }
+  })
+
+  it('normalizes direct transport envelopes into one result shape', async () => {
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), {
+          status: 200,
+          headers: { 'x-correlation-id': 'corr-http-200' }
+        })
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.requestResult<{ digest: string }>('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.digest).toBe('fixture')
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-http-200',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          transport: 'http',
+          redaction: expect.objectContaining({
+            secretsRedacted: true,
+            source: 'sdk'
+          })
+        })
+      )
+    }
+  })
+
   it('classifies HTTP auth, validation, timeout, and unavailable service failures', async () => {
     const responses = [401, 422, 504, 503]
     const expected = ['auth', 'validation', 'timeout', 'unavailable_service']
@@ -252,6 +328,34 @@ describe('AuroraClient', () => {
 
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.error.code).toBe(expected[index])
+    }
+  })
+
+  it('preserves HTTP correlation headers on classified failures', async () => {
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { message: 'Forbidden' } }), {
+          status: 403,
+          headers: { 'x-correlation-id': 'corr-http-403' }
+        })
+    })
+    const client = new AuroraClient({ transport })
+    const result = await client.result(() => client.registry.getRegistry())
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.code).toBe('permission')
+      expect(result.error.correlationId).toBe('corr-http-403')
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-http-403',
+          method: 'Gateway.GetRegistry',
+          busTopic: 'Gateway.GetRegistry',
+          status: 'permission',
+          transport: 'http'
+        })
+      )
     }
   })
 
@@ -285,6 +389,58 @@ describe('AuroraClient', () => {
     })
     expect(native.ok).toBe(false)
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
+  })
+
+  it('builds canonical audit receipts and event envelopes from backend-shaped payloads', () => {
+    const receipt = createAuditReceipt({
+      correlation_id: 'corr-event-1',
+      event_kind: 'tool.executed',
+      principal_id: 'principal-1',
+      peer_id: 'local-peer',
+      target_peer_id: 'remote-peer',
+      method: 'ExecuteTool',
+      bus_topic: 'Tooling.ExecuteTool',
+      tool_id: 'tool:remote:file-search',
+      resource_id: 'resource:docs',
+      result: 'success',
+      secrets_redacted: true
+    })
+
+    expect(receipt).toEqual(
+      expect.objectContaining({
+        correlationId: 'corr-event-1',
+        eventKind: 'tool.executed',
+        principalId: 'principal-1',
+        peerId: 'local-peer',
+        targetPeerId: 'remote-peer',
+        method: 'ExecuteTool',
+        busTopic: 'Tooling.ExecuteTool',
+        toolId: 'tool:remote:file-search',
+        resourceId: 'resource:docs',
+        status: 'success'
+      })
+    )
+
+    const event = createAuroraEvent('tool.executed', {
+      id: 'event-1',
+      topic: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-event-1',
+      secrets_redacted: true
+    })
+
+    expect(event).toEqual(
+      expect.objectContaining({
+        id: 'event-1',
+        kind: 'tool.executed',
+        topic: 'Tooling.ExecuteTool',
+        busTopic: 'Tooling.ExecuteTool',
+        audit: expect.objectContaining({
+          correlationId: 'corr-event-1',
+          eventKind: 'tool.executed'
+        }),
+        redaction: expect.objectContaining({ secretsRedacted: true })
+      })
+    )
   })
 })
 
