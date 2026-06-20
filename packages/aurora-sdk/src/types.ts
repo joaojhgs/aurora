@@ -173,6 +173,65 @@ export interface DeploymentTopologyResponse {
   secrets_redacted: boolean
 }
 
+export interface WebRTCSignalingDiagnostic {
+  strategy: string
+  connected: boolean
+  encrypted_presence: boolean
+  app_id_configured: boolean
+  room_configured: boolean
+  broker_count: number
+  public_broker_warning: boolean
+}
+
+export interface WebRTCPeerDiagnostic {
+  signaling_peer_id: string
+  stable_peer_id: string
+  node_name: string
+  connection_state: string
+  ice_connection_state: string
+  ice_gathering_state: string
+  signaling_state: string
+  data_channel_state: string
+  data_channel_label: string
+  has_send_channel: boolean
+  rtt_ms: number | null
+  auth_state: string
+  identity_source: string
+  is_admin: boolean
+  effective_permission_count: number
+  pairing_active: boolean
+  auth_timeout_pending: boolean
+  pending_pairing_task: boolean
+}
+
+export interface WebRTCDiagnosticError {
+  timestamp: string
+  code: string
+  message: string
+  peer_id: string | null
+}
+
+export interface WebRTCDiagnosticsResponse {
+  enabled: boolean
+  started: boolean
+  mesh_enabled: boolean
+  local_signaling_peer_id: string | null
+  local_mesh_peer_id: string | null
+  local_node_name: string
+  require_auth: boolean
+  auth_timeout_seconds: number
+  pairing_timeout_seconds: number
+  app_layer_e2ee_enabled: boolean
+  signaling: WebRTCSignalingDiagnostic
+  peers: WebRTCPeerDiagnostic[]
+  connected_peer_count: number
+  authenticated_peer_count: number
+  pairing_peer_count: number
+  pending_rpc_count: number
+  recent_errors: WebRTCDiagnosticError[]
+  secrets_redacted: boolean
+}
+
 export interface ServiceAnnouncement {
   module: string
   version: string

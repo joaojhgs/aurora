@@ -66,6 +66,7 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  webrtcDiagnosticsFixture,
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,

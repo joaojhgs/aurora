@@ -10,7 +10,8 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   NativeCapabilityManifest,
-  RouteExplainResponse
+  RouteExplainResponse,
+  WebRTCDiagnosticsResponse
 } from './types.js'
 import { describeBackendInventory, describeRegistry } from './descriptors.js'
 
@@ -54,6 +55,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'GetWebRTCDiagnostics',
+          summary: 'Get read-only WebRTC, ICE, and DataChannel diagnostics',
+          bus_topic: 'Gateway.GetWebRTCDiagnostics',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'WebRTCDiagnosticsResponse',
+          required_perms: ['Gateway.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'InternalOnly',
           summary: 'Internal-only method',
           bus_topic: 'Gateway.InternalOnly',
@@ -70,7 +83,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
   ],
   digest: 'fixture',
   service_count: 1,
-  method_count: 3
+  method_count: 4
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -587,6 +600,63 @@ export const deploymentTopologyFixture: DeploymentTopologyResponse = {
   secrets_redacted: true
 }
 
+export const webrtcDiagnosticsFixture: WebRTCDiagnosticsResponse = {
+  enabled: true,
+  started: true,
+  mesh_enabled: true,
+  local_signaling_peer_id: 'signaling-local',
+  local_mesh_peer_id: 'local-peer',
+  local_node_name: 'aurora-prod-01',
+  require_auth: true,
+  auth_timeout_seconds: 10,
+  pairing_timeout_seconds: 300,
+  app_layer_e2ee_enabled: true,
+  signaling: {
+    strategy: 'mqtt',
+    connected: true,
+    encrypted_presence: true,
+    app_id_configured: true,
+    room_configured: true,
+    broker_count: 1,
+    public_broker_warning: false
+  },
+  peers: [
+    {
+      signaling_peer_id: 'session-peer',
+      stable_peer_id: 'stable-peer',
+      node_name: 'remote-node',
+      connection_state: 'connected',
+      ice_connection_state: 'completed',
+      ice_gathering_state: 'complete',
+      signaling_state: 'stable',
+      data_channel_state: 'open',
+      data_channel_label: 'aurora-rpc',
+      has_send_channel: true,
+      rtt_ms: 42.5,
+      auth_state: 'authenticated',
+      identity_source: 'webrtc_peer',
+      is_admin: false,
+      effective_permission_count: 1,
+      pairing_active: false,
+      auth_timeout_pending: false,
+      pending_pairing_task: false
+    }
+  ],
+  connected_peer_count: 1,
+  authenticated_peer_count: 1,
+  pairing_peer_count: 0,
+  pending_rpc_count: 0,
+  recent_errors: [
+    {
+      timestamp: '2026-06-19T00:00:00Z',
+      code: 'rpc_timeout',
+      message: 'RPC call timed out',
+      peer_id: 'stable-peer'
+    }
+  ],
+  secrets_redacted: true
+}
+
 export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
   {
     name: 'health_check',
@@ -612,7 +682,7 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 2,
+  method_count: 4,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -650,6 +720,26 @@ export const backendInventoryFixture: BackendInventory = {
       input_schema: null,
       output_schema: {
         title: 'DeploymentTopologyResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetWebRTCDiagnostics',
+      summary: 'Get read-only WebRTC, ICE, and DataChannel diagnostics',
+      bus_topic: 'Gateway.GetWebRTCDiagnostics',
+      routePath: '/api/Gateway/GetWebRTCDiagnostics',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Gateway.manage'],
+      input_model: 'EmptyInput',
+      output_model: 'WebRTCDiagnosticsResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'WebRTCDiagnosticsResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -820,6 +910,7 @@ export interface MockAuroraFixtureSet {
   registry: GetRegistryResponse
   services: GetServicesResponse
   deploymentTopology: DeploymentTopologyResponse
+  webrtcDiagnostics: WebRTCDiagnosticsResponse
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
@@ -832,6 +923,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   registry: gatewayRegistryFixture,
   services: gatewayServicesFixture,
   deploymentTopology: deploymentTopologyFixture,
+  webrtcDiagnostics: webrtcDiagnosticsFixture,
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,

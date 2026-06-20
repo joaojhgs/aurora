@@ -14,6 +14,11 @@ Organization:
 - auth.py: Auth service models
 """
 
+from .aurora import (
+    AuroraEventStreamEvent,
+    AuroraMethods,
+    AuroraModule,
+)
 from .auth import (
     AuditLogRequest,
     AuditLogResponse,
@@ -73,11 +78,6 @@ from .auth import (
     WhoAmIRequest,
     WhoAmIResponse,
 )
-from .aurora import (
-    AuroraEventStreamEvent,
-    AuroraMethods,
-    AuroraModule,
-)
 from .common import (
     EmptyInput,
     EmptyOutput,
@@ -115,6 +115,10 @@ from .gateway import (
     ServiceInfo,
     SupportBundleDiagnosticItem,
     SupportBundleRedactionInfo,
+    WebRTCDiagnosticError,
+    WebRTCDiagnosticsResponse,
+    WebRTCPeerDiagnostic,
+    WebRTCSignalingDiagnostic,
 )
 from .orchestrator import (
     ModelRuntimeBenchmarkInfo,
@@ -195,6 +199,10 @@ __all__ = [
     "GatewayListEventsResponse",
     "GatewaySupportBundleRequest",
     "GatewaySupportBundleResponse",
+    "WebRTCDiagnosticError",
+    "WebRTCDiagnosticsResponse",
+    "WebRTCPeerDiagnostic",
+    "WebRTCSignalingDiagnostic",
     "SupportBundleDiagnosticItem",
     "SupportBundleRedactionInfo",
     "CapabilityCatalogSummary",
