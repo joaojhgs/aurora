@@ -444,6 +444,68 @@ describe('AuroraClient', () => {
     }
   })
 
+  it('uses Gateway built-in GET routes with auth headers and no request body', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local/',
+      apiKey: 'test-api-key',
+      bearerToken: 'test-bearer-token',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(
+          JSON.stringify({
+            digest: 'fixture',
+            modules: [],
+            service_count: 0,
+            method_count: 0
+          }),
+          {
+            status: 200,
+            headers: { 'x-correlation-id': 'corr-http-registry' }
+          }
+        )
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await expect(client.registry.getRegistry()).resolves.toEqual(
+      expect.objectContaining({ digest: 'fixture' })
+    )
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://aurora.local/api/registry')
+    expect(calls[0]?.init.method).toBe('GET')
+    expect(calls[0]?.init.body).toBeUndefined()
+    expect(calls[0]?.init.headers).toEqual(
+      expect.objectContaining({
+        'X-API-Key': 'test-api-key',
+        Authorization: 'Bearer test-bearer-token',
+        'content-type': 'application/json'
+      })
+    )
+  })
+
+  it('posts dynamic generated route payloads by method identity when no explicit path is supplied', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(JSON.stringify({ route_decision: 'local', topic: 'TTS.Synthesize' }), {
+          status: 200
+        })
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await expect(client.request('TTS.Synthesize', { text: 'hello' })).resolves.toEqual(
+      expect.objectContaining({ route_decision: 'local' })
+    )
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://aurora.local/api/TTS/Synthesize')
+    expect(calls[0]?.init.method).toBe('POST')
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ text: 'hello' }))
+  })
+
   it('classifies HTTP auth, validation, timeout, and unavailable service failures', async () => {
     const responses = [401, 422, 504, 503]
     const expected = ['auth', 'validation', 'timeout', 'unavailable_service']
@@ -487,6 +549,53 @@ describe('AuroraClient', () => {
         })
       )
     }
+  })
+
+  it('classifies HTTP detail-code unsupported, privacy, and native permission failures', async () => {
+    const cases = [
+      [{ detail: { code: 'unsupported_feature', message: 'Unsupported method' } }, 'unsupported_feature'],
+      [{ detail: { reason_code: 'privacy_blocked', message: 'Explicit selector required' } }, 'privacy_blocked'],
+      [{ detail: { code: 'native_permission_missing', message: 'Native permission missing' } }, 'native_permission_missing']
+    ] as const
+
+    for (const [body, expected] of cases) {
+      const transport = new HttpGatewayTransport({
+        baseUrl: 'http://aurora.local',
+        fetchImpl: async () => new Response(JSON.stringify(body), { status: 428 })
+      })
+      const client = new AuroraClient({ transport })
+      const result = await client.requestResult('Gateway.ExplainRoute', { topic: 'TTS.Synthesize' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(expected)
+    }
+  })
+
+  it('classifies HTTP abort timeout and network send failures', async () => {
+    const timeoutTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      defaultTimeoutMs: 5,
+      fetchImpl: async () => {
+        throw new DOMException('Request aborted', 'AbortError')
+      }
+    })
+    const timeoutClient = new AuroraClient({ transport: timeoutTransport })
+    const timeoutResult = await timeoutClient.requestResult('Gateway.GetRegistry')
+
+    expect(timeoutResult.ok).toBe(false)
+    if (!timeoutResult.ok) expect(timeoutResult.error.code).toBe('timeout')
+
+    const lossTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () => {
+        throw new TypeError('fetch failed')
+      }
+    })
+    const lossClient = new AuroraClient({ transport: lossTransport })
+    const lossResult = await lossClient.requestResult('Gateway.GetRegistry')
+
+    expect(lossResult.ok).toBe(false)
+    if (!lossResult.ok) expect(lossResult.error.code).toBe('transport_loss')
   })
 
   it('classifies unsupported, privacy blocked, and native permission errors', async () => {

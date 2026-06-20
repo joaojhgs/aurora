@@ -12,7 +12,8 @@ import { AuroraClient, HttpGatewayTransport } from '@aurora/client'
 const client = new AuroraClient({
   transport: new HttpGatewayTransport({
     baseUrl: 'http://127.0.0.1:8000',
-    bearerToken: sessionToken
+    bearerToken: sessionToken,
+    defaultTimeoutMs: 15_000
   })
 })
 
@@ -38,6 +39,33 @@ if (client.auth.snapshot().state === 'admin') {
 client.permissions.check(['Auth.DeletePrincipal'], 'manage').allowed
 permissions.find((permission) => permission.id === 'Auth.manage')?.label
 tts.providerCandidates.map((candidate) => candidate.providerIdentity)
+```
+
+`HttpGatewayTransport` maps Gateway built-ins to their live HTTP routes:
+
+- `Gateway.GetRegistry` -> `GET /api/registry`
+- `Gateway.GetServices` -> `GET /api/services`
+- `Gateway.Health` / `Gateway.HealthCheck` -> `GET /api/health`
+- `Gateway.OpenAPI` -> `GET /api/openapi.json`
+
+Generated external service methods default to `POST /api/{Module}/{Method}` with a JSON payload, matching Gateway's dynamic route generator. Callers can still pass an explicit `path` and `httpMethod` through `client.request()` when a descriptor or gateway built-in requires it.
+
+API-key and bearer auth are transport options; token values are only placed in request headers:
+
+```ts
+const transport = new HttpGatewayTransport({
+  baseUrl: 'https://aurora.example',
+  apiKey: operatorApiKey,
+  bearerToken: sessionToken
+})
+
+const result = await new AuroraClient({ transport }).requestResult('TTS.Synthesize', {
+  text: 'Hello'
+})
+
+if (!result.ok && result.error.code === 'permission') {
+  result.audit.correlationId
+}
 ```
 
 ## Generated Backend Inventory

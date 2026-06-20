@@ -34,6 +34,7 @@ export interface AuroraRequest<TPayload = unknown> {
   method: string
   busTopic?: string | undefined
   path?: string | undefined
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | undefined
   payload?: TPayload | undefined
   timeoutMs?: number | undefined
   headers?: Record<string, string> | undefined

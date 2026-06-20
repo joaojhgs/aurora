@@ -47,24 +47,45 @@ export class AuroraError extends Error {
 export function classifyHttpError(status: number, detail: unknown): AuroraErrorCode {
   const detailCode = readDetailCode(detail)
   const normalizedCode = detailCode?.toLowerCase()
+  const normalizedText = readDetailText(detail).toLowerCase()
   if (status === 401) return 'auth'
   if (status === 403) return 'permission'
   if (status === 408 || status === 504) return 'timeout'
+  if (normalizedCode?.includes('native_permission') || normalizedText.includes('native permission')) {
+    return 'native_permission_missing'
+  }
+  if (normalizedCode?.includes('privacy') || normalizedText.includes('privacy')) return 'privacy_blocked'
+  if (normalizedCode?.includes('unsupported') || normalizedText.includes('unsupported')) return 'unsupported_feature'
+  if (normalizedCode?.includes('unavailable') || normalizedText.includes('unavailable')) return 'unavailable_service'
+  if (normalizedCode?.includes('validation') || normalizedText.includes('validation')) return 'validation'
+  if (normalizedCode?.includes('auth') || normalizedText.includes('authentication')) return 'auth'
   if (status === 400 || status === 422) return 'validation'
   if (status === 503) return 'unavailable_service'
-  if (status === 428 && normalizedCode?.includes('privacy')) return 'privacy_blocked'
   if (status === 428 || normalizedCode?.includes('permission')) return 'permission'
-  if (normalizedCode?.includes('unsupported')) return 'unsupported_feature'
-  if (normalizedCode?.includes('unavailable')) return 'unavailable_service'
-  if (normalizedCode?.includes('native_permission')) return 'native_permission_missing'
-  if (normalizedCode?.includes('privacy')) return 'privacy_blocked'
-  if (normalizedCode?.includes('validation')) return 'validation'
-  if (normalizedCode?.includes('auth')) return 'auth'
   return 'unknown'
 }
 
 export function readDetailCode(detail: unknown): string | null {
   if (typeof detail !== 'object' || detail === null) return null
-  const maybeCode = (detail as { code?: unknown }).code
+  const maybeCode =
+    (detail as { code?: unknown }).code ??
+    (detail as { error_code?: unknown }).error_code ??
+    (detail as { reason_code?: unknown }).reason_code ??
+    (detail as { reason?: unknown }).reason
   return typeof maybeCode === 'string' ? maybeCode : null
+}
+
+function readDetailText(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) return detail.map(readDetailText).join(' ')
+  if (typeof detail !== 'object' || detail === null) return ''
+  const values = [
+    (detail as { message?: unknown }).message,
+    (detail as { error?: unknown }).error,
+    (detail as { detail?: unknown }).detail,
+    (detail as { reason?: unknown }).reason,
+    (detail as { reason_code?: unknown }).reason_code,
+    (detail as { code?: unknown }).code
+  ]
+  return values.map(readDetailText).filter(Boolean).join(' ')
 }
