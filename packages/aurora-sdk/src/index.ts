@@ -56,6 +56,7 @@ export type {
   PermissionRequirementSource
 } from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
+export type { HttpTransportOptions } from './http.js'
 export type {
   AuthCredentialKind,
   AuthSessionIdentity,

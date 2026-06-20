@@ -67,13 +67,14 @@ export class AuroraClient {
   async request<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number } = {}
   ): Promise<TData> {
     try {
       const response = await this.transport.request<TData, TPayload>({
         method,
         busTopic: options.busTopic ?? method,
         path: options.path,
+        httpMethod: options.httpMethod,
         payload,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
@@ -87,7 +88,7 @@ export class AuroraClient {
   async requestResult<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number } = {}
   ): Promise<AuroraResponse<TData>> {
     const busTopic = options.busTopic ?? method
     try {
@@ -95,6 +96,7 @@ export class AuroraClient {
         method,
         busTopic,
         path: options.path,
+        httpMethod: options.httpMethod,
         payload,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
@@ -135,7 +137,10 @@ export class RegistryClient {
   constructor(private readonly client: AuroraClient) {}
 
   getRegistry(): Promise<GetRegistryResponse> {
-    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: '/api/registry' })
+    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, undefined, {
+      path: '/api/registry',
+      httpMethod: 'GET'
+    })
   }
 
   async listMethods(): Promise<MethodDescriptor[]> {
@@ -143,7 +148,10 @@ export class RegistryClient {
   }
 
   listServices(): Promise<GetServicesResponse> {
-    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, {}, { path: '/api/services' })
+    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, undefined, {
+      path: '/api/services',
+      httpMethod: 'GET'
+    })
   }
 }
 
