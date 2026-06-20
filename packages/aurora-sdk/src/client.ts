@@ -12,6 +12,7 @@ import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOp
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
+import { evaluateRoutePolicy } from './policy.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -28,7 +29,9 @@ import type {
   PeerSummary,
   ContractMethodType,
   RouteExplainRequest,
-  RouteExplainResponse
+  RouteExplainResponse,
+  RoutePolicyEvaluation,
+  RoutePolicyInput
 } from './types.js'
 import type {
   EffectivePermissionInput,
@@ -238,6 +241,25 @@ export class RouteClient {
       request,
       { path: routePath('Gateway', 'ExplainRoute') }
     )
+  }
+
+  async evaluatePolicy(input: Omit<RoutePolicyInput, 'route' | 'catalog' | 'transportKind'> & {
+    route?: RouteExplainResponse
+    catalog?: RoutePolicyInput['catalog']
+    routeRequest?: RouteExplainRequest
+  }): Promise<RoutePolicyEvaluation> {
+    const fallbackRouteRequest: RouteExplainRequest = {}
+    if (input.topic !== undefined) fallbackRouteRequest.topic = input.topic
+    if (input.method !== undefined) fallbackRouteRequest.method = input.method
+    if (input.selector !== undefined) fallbackRouteRequest.selector = input.selector
+    const route = input.route ?? await this.explain(input.routeRequest ?? fallbackRouteRequest)
+    const catalog = input.catalog ?? await this.client.capabilities.listCatalog({ include_unavailable: true })
+    return evaluateRoutePolicy({
+      ...input,
+      route,
+      catalog,
+      transportKind: this.client.transport.kind
+    })
   }
 }
 
