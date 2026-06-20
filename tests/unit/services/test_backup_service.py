@@ -8,6 +8,7 @@ import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.backup import BackupService
+from app.services.config.messages import GetConfigQuery
 from app.shared.contracts.registry import list_modules
 from app.shared.contracts.models.backup import (
     BackupCreateRequest,
@@ -95,7 +96,11 @@ async def test_create_list_and_verify_backup_manifest_redacts_storage(tmp_path, 
     assert verified.status == "ok"
     assert verified.verified is True
 
-    mock_bus.request.assert_any_await(ConfigMethods.GET, {"section": None}, timeout=10.0)
+    mock_bus.request.assert_any_await(
+        ConfigMethods.GET,
+        GetConfigQuery(section=None),
+        timeout=10.0,
+    )
 
 
 @pytest.mark.asyncio

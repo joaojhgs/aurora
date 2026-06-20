@@ -12,6 +12,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.services.config.messages import GetConfigQuery
 from app.shared.contracts.models.backup import (
     BackupComponentName,
     BackupComponentResult,
@@ -277,7 +278,11 @@ class BackupService(BaseService):
 
     async def _config_component(self) -> BackupComponentResult:
         try:
-            result = await self.bus.request(ConfigMethods.GET, {"section": None}, timeout=10.0)
+            result = await self.bus.request(
+                ConfigMethods.GET,
+                GetConfigQuery(section=None),
+                timeout=10.0,
+            )
             if not getattr(result, "ok", False):
                 return BackupComponentResult(
                     component="config",
