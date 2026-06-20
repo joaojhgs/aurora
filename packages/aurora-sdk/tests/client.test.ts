@@ -504,6 +504,76 @@ describe('AuroraClient', () => {
         actionId: 'tool-local-notes',
         toolId: 'tool:notes',
         argsHash: 'args-local-1',
+        approvalScopes: [{ scope: 'single', decision: 'approve' }],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'future-approve-all',
+            decision: 'approve',
+            providerId: 'local:TTS',
+            argsHash: 'args-local-1'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'tool-args',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS',
+            argsHash: 'different'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
+        approvalScopes: [
+          {
+            scope: 'local-safe-tools',
+            decision: 'approve',
+            toolId: 'tool:notes',
+            providerId: 'local:TTS'
+          }
+        ],
+        now: '2026-06-20T10:00:00Z'
+      })
+    ).resolves.toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    await expect(
+      client.routes.evaluatePolicy({
+        route,
+        catalog,
+        actionId: 'tool-local-notes',
+        toolId: 'tool:notes',
+        argsHash: 'args-local-1',
         payload: { token: 'must-not-render', operation: 'delete notes' },
         approvalScopes: [
           {
@@ -530,7 +600,7 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('rejects expired, denied, and mismatched remote approval scopes', () => {
+  it('requires scoped session, provider, and args evidence for remote approvals', () => {
     const remoteAllowedRoute = {
       ...routeExplainFixture,
       selected_target: 'remote',
@@ -574,9 +644,17 @@ describe('AuroraClient', () => {
       catalog,
       actionId: 'tts-remote-privacy-blocked',
       argsHash: 'args-remote-1',
+      sessionId: 'session-remote-1',
       selector: { peer_id: 'peer-studio-gpu', module: 'TTS' },
       now: '2026-06-20T10:00:00Z'
     }
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [{ scope: 'session', decision: 'approve' }]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
 
     expect(
       evaluateRoutePolicy({
@@ -585,13 +663,90 @@ describe('AuroraClient', () => {
           {
             scope: 'session',
             decision: 'approve',
+            sessionId: 'session-remote-1',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'other-session',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'peer-studio-gpu',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        approval: expect.objectContaining({ status: 'approved' })
+      })
+    )
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'peer-provider',
+            decision: 'approve',
+            peerId: 'other-peer',
+            providerId: 'mesh:studio-gpu:TTS',
+            expiresAt: '2026-06-20T10:05:00Z'
+          }
+        ]
+      })
+    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+
+    expect(
+      evaluateRoutePolicy({
+        ...base,
+        approvalScopes: [
+          {
+            scope: 'session',
+            decision: 'approve',
+            sessionId: 'session-remote-1',
             peerId: 'peer-studio-gpu',
             providerId: 'mesh:studio-gpu:TTS',
             expiresAt: '2026-06-20T09:59:00Z'
           }
         ]
       })
-    ).toEqual(expect.objectContaining({ allowed: false, reasonCode: 'approval_required' }))
+    ).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reasonCode: 'approval_required',
+        approval: expect.objectContaining({ status: 'expired' })
+      })
+    )
 
     expect(
       evaluateRoutePolicy({
@@ -613,6 +768,7 @@ describe('AuroraClient', () => {
           {
             scope: 'tool-args',
             decision: 'approve',
+            toolId: 'tool:remote-danger',
             peerId: 'other-peer',
             providerId: 'mesh:studio-gpu:TTS',
             argsHash: 'different'

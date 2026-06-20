@@ -712,6 +712,7 @@ export interface RoutePolicyInput {
   actionId?: string | null
   toolId?: string | null
   resourceId?: string | null
+  sessionId?: string | null
   argsHash?: string | null
   dataClasses?: PrivacyClass[]
   privacyClass?: PrivacyClass

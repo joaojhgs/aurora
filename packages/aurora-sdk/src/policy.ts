@@ -211,28 +211,95 @@ function evaluateApproval(
 ): RoutePolicyEvaluation['approval'] {
   if (!policy?.approval_required) return { required: false, status: 'not-required', scopes: [] }
   const now = Date.parse(input.now ?? new Date().toISOString())
-  const matchingScope = input.approvalScopes?.find((scope) => scopeMatches(scope, input, action, now)) ?? null
+  const scopes = input.approvalScopes ?? []
+  const matchingScope = scopes.find((scope) => scopeMatches(scope, input, action, now)) ?? null
   if (!matchingScope) {
-    return { required: true, status: 'required', scopes: input.approvalScopes ?? [] }
+    const hasExpiredScope = scopes.some((scope) => scope.decision === 'approve' && isExpired(scope, now))
+    return { required: true, status: hasExpiredScope ? 'expired' : 'required', scopes }
   }
   if (matchingScope.decision === 'deny' || matchingScope.decision === 'deny-all') {
-    return { required: true, status: 'rejected', scopes: input.approvalScopes ?? [], matchedScope: matchingScope }
+    return { required: true, status: 'rejected', scopes, matchedScope: matchingScope }
   }
-  return { required: true, status: 'approved', scopes: input.approvalScopes ?? [], matchedScope: matchingScope }
+  return { required: true, status: 'approved', scopes, matchedScope: matchingScope }
 }
 
 function scopeMatches(scope: ApprovalScope, input: RoutePolicyInput, action: CapabilityActionInfo | null, now: number): boolean {
-  if (scope.expiresAt && Date.parse(scope.expiresAt) <= now) return false
+  if (isExpired(scope, now)) return false
   if (scope.decision === 'deny-all') return true
   if (scope.decision !== 'approve') return false
+  if (!scope.scope) return false
   const peerId = input.route.selected_peer_id ?? action?.peer_id ?? null
   const providerId = input.route.selected_provider_id ?? action?.provider_id ?? null
-  if (scope.peerId && scope.peerId !== peerId) return false
-  if (scope.providerId && scope.providerId !== providerId) return false
-  if (scope.toolId && scope.toolId !== (input.toolId ?? action?.tool_id ?? null)) return false
-  if (scope.resourceId && scope.resourceId !== (input.resourceId ?? action?.resource_id ?? null)) return false
-  if (scope.argsHash && scope.argsHash !== input.argsHash) return false
+  const toolId = input.toolId ?? action?.tool_id ?? null
+  const resourceId = input.resourceId ?? action?.resource_id ?? null
+
+  switch (scope.scope) {
+    case 'single':
+      return Boolean(
+        scope.approvalId &&
+        scope.argsHash &&
+        input.argsHash &&
+        scope.argsHash === input.argsHash &&
+        targetMatches(scope, peerId, providerId) &&
+        actionIdentityMatches(scope, toolId, resourceId)
+      )
+    case 'tool-args':
+      return Boolean(
+        scope.toolId &&
+        toolId &&
+        scope.toolId === toolId &&
+        scope.argsHash &&
+        input.argsHash &&
+        scope.argsHash === input.argsHash &&
+        targetMatches(scope, peerId, providerId)
+      )
+    case 'peer-provider':
+      return Boolean(scope.peerId && scope.providerId && scope.peerId === peerId && scope.providerId === providerId)
+    case 'session':
+      return Boolean(
+        scope.sessionId &&
+        input.sessionId &&
+        scope.sessionId === input.sessionId &&
+        targetMatches(scope, peerId, providerId)
+      )
+    case 'local-safe-tools':
+      return localSafeToolScopeMatches(scope, input, action, toolId, providerId)
+    default:
+      return false
+  }
+}
+
+function isExpired(scope: ApprovalScope, now: number): boolean {
+  return Boolean(scope.expiresAt && Date.parse(scope.expiresAt) <= now)
+}
+
+function targetMatches(scope: ApprovalScope, peerId: string | null, providerId: string | null): boolean {
+  const peerMatches = Boolean(scope.peerId && peerId && scope.peerId === peerId)
+  const providerMatches = Boolean(scope.providerId && providerId && scope.providerId === providerId)
+  return peerMatches || providerMatches
+}
+
+function actionIdentityMatches(scope: ApprovalScope, toolId: string | null, resourceId: string | null): boolean {
+  if (scope.toolId) return Boolean(toolId && scope.toolId === toolId)
+  if (scope.resourceId) return Boolean(resourceId && scope.resourceId === resourceId)
   return true
+}
+
+function localSafeToolScopeMatches(
+  scope: ApprovalScope,
+  input: RoutePolicyInput,
+  action: CapabilityActionInfo | null,
+  toolId: string | null,
+  providerId: string | null
+): boolean {
+  if (!action || !toolId) return false
+  if (scope.toolId && scope.toolId !== toolId) return false
+  if (scope.providerId && scope.providerId !== providerId) return false
+  if (scope.sessionId && scope.sessionId !== input.sessionId) return false
+  const localTarget = input.route.selected_target === 'local' || action.provider_kind === 'local'
+  const safeClass = action.policy.safety_class === 'standard' && action.policy.operation_class !== 'admin'
+  const lowPrivacy = !HIGH_PRIVACY_CLASSES.includes(classifyPayloadPrivacy(input.payload, action.policy, action))
+  return localTarget && safeClass && lowPrivacy
 }
 
 function availabilityForPolicy(
