@@ -508,6 +508,125 @@ const transport = new MockAuroraTransport()
 
 The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
 
+## AdminAction And Tool Approval Controllers
+
+`client.admin` wraps the backend-enforced AdminAction draft/confirm/submit flow for admin-critical mutations. The SDK displays and returns backend-issued `action_id`, `nonce`, `digest`, expiry, required phrase, affected resources, confirmation token, and audit receipt; it does not compute or synthesize confirmation tokens.
+
+HTTP/server-web example:
+
+```ts
+const payload = { key: 'services.gateway.enabled', value: true }
+const draft = await client.admin.draft({
+  method_id: 'Config.Set',
+  payload,
+  affected_resources: ['key:services.gateway.enabled']
+})
+
+showAdminConfirmDialog({
+  method: draft.method_id,
+  digest: draft.digest,
+  affectedResources: draft.affected_resources,
+  expiresAt: draft.expires_at,
+  requiredPhrase: draft.required_phrase
+})
+
+const confirmation = await client.admin.confirm(draft, {
+  reason: 'Enable Gateway for local admin',
+  reauthConfirmed: recentAdminUnlock,
+  phrase: 'CONFIRM'
+})
+
+await client.admin.submit({
+  methodId: 'Config.Set',
+  payload,
+  confirmation
+})
+```
+
+Tauri local example:
+
+```ts
+const client = new AuroraClient({ transport: new TauriLocalTransport({ invoke }) })
+const result = await client.admin.execute({
+  methodId: 'Config.Rollback',
+  payload: { version_id: selectedVersionId },
+  reason: 'Rollback after failed plugin update',
+  reauthConfirmed: await nativeAdminUnlock()
+})
+
+result.confirmation.audit_receipt
+```
+
+Tauri/native bridges must forward AdminAction headers through their backend request command. They must not bypass Gateway enforcement with direct Python service calls.
+
+Mesh example:
+
+```ts
+const approval = await client.approvals.request({
+  global_tool_id: 'tool:remote-danger',
+  provider_peer_id: 'peer-kitchen',
+  provider_service_instance_id: 'tooling-remote',
+  args_hash: argsHash,
+  redacted_args_preview: { target: 'garage', api_key: '[redacted]' },
+  risk_class: 'admin-critical',
+  requested_approval_scope: 'tool-args',
+  expected_audit_event: 'tooling.approval.approved',
+  args: { target: 'garage' }
+})
+
+const token = await client.approvals.approve({
+  approval_request_id: approval.approval_request_id!,
+  approver_principal_id: client.auth.snapshot().principalId ?? 'operator',
+  reason: 'Operator approved one garage diagnostic run'
+})
+
+await client.requestResult('Tooling.ExecuteTool', {
+  global_tool_id: 'tool:remote-danger',
+  approval_token: token.approvalToken,
+  args: { target: 'garage' }
+})
+```
+
+Tool approvals are intentionally separate from AdminAction. A dangerous/admin tool can compose both: first get a backend-issued tool approval token through `client.approvals`, then wrap the final `Tooling.ExecuteTool` mutation in `client.admin.submit()` when backend policy marks the execution admin-critical.
+
+Native mobile example:
+
+```ts
+const mobileClient = new AuroraClient({ transport: nativeMobileTransport })
+const manifest = await mobileClient.native.getManifest()
+mobileClient.native.requirePermission('secureStorage', manifest)
+
+const draft = await mobileClient.admin.draft({
+  method_id: 'Auth.DeleteDevice',
+  payload: { device_id: lostDeviceId }
+})
+const confirmation = await mobileClient.admin.confirm(draft, {
+  reason: 'Revoke lost phone',
+  reauthConfirmed: await biometricAdminUnlock()
+})
+```
+
+Mock/test example:
+
+```ts
+const transport = new MockAuroraTransport({ fixtures: false })
+  .register('Gateway.AdminActionDraft', draftFixture)
+  .register('Gateway.AdminActionConfirm', confirmationFixture)
+  .register('Config.Set', { success: true })
+
+const client = new AuroraClient({ transport })
+const result = await client.result(() =>
+  client.admin.execute({
+    methodId: 'Config.Set',
+    payload: { key: 'ui.dark_mode', value: true },
+    reason: 'Test admin flow',
+    reauthConfirmed: true
+  })
+)
+```
+
+AdminAction and approval failures normalize into the shared SDK error codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Replay, changed args/provider, expired approval, and downgraded-risk responses become typed `AuroraError` failures instead of successful data objects.
+
 ## Capability Graph
 
 `client.capabilities.getGraph()` merges backend capability catalog actions, registry-only method exposure, native manifests, provider freshness, routeability, policy flags, and privacy/permission requirements into deterministic feature nodes. It preserves provider identity instead of collapsing local and remote providers:
