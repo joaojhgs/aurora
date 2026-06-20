@@ -29,7 +29,13 @@ from app.shared.contracts.models.auth import (
 )
 from app.shared.contracts.models.backup import BackupCreateRequest, BackupCreateResponse, BackupMethods
 from app.shared.contracts.models.common import EmptyInput
-from app.shared.contracts.models.config import ConfigMethods, ConfigSetRequest, ConfigSetResponse
+from app.shared.contracts.models.config import (
+    ConfigMethods,
+    ConfigRollbackRequest,
+    ConfigRollbackResponse,
+    ConfigSetRequest,
+    ConfigSetResponse,
+)
 from app.shared.contracts.models.gateway import MethodInfo
 
 
@@ -89,6 +95,21 @@ def _config_set_method() -> MethodInfo:
         output_model="ConfigSetResponse",
         input_schema=ConfigSetRequest.model_json_schema(),
         output_schema=ConfigSetResponse.model_json_schema(),
+    )
+
+
+def _config_rollback_method() -> MethodInfo:
+    return MethodInfo(
+        name="Rollback",
+        summary="Rollback config",
+        bus_topic=ConfigMethods.ROLLBACK,
+        exposure="external",
+        method_type="manage",
+        required_perms=[ConfigMethods.ROLLBACK],
+        input_model="ConfigRollbackRequest",
+        output_model="ConfigRollbackResponse",
+        input_schema=ConfigRollbackRequest.model_json_schema(),
+        output_schema=ConfigRollbackResponse.model_json_schema(),
     )
 
 
@@ -195,6 +216,24 @@ async def test_generated_config_set_requires_admin_action_headers(generated_rout
         response = await client.post(
             "/api/Config/Set",
             json={"key": "services.gateway.enabled", "value": True},
+        )
+
+    assert response.status_code == 428
+    assert response.json()["detail"]["code"] == "admin_action_required"
+    bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_config_rollback_requires_admin_action_headers(generated_route_app):
+    app, router, generator, bus, _manager = generated_route_app(
+        "Config", _config_rollback_method()
+    )
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/Config/Rollback",
+            json={"version_id": "cfgv_test"},
         )
 
     assert response.status_code == 428
