@@ -9,13 +9,15 @@ import {
   type AuroraTransport
 } from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
-import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
+import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
+  CapabilityExplanation,
+  CapabilityGraph,
   CapabilitySummary,
   GetRegistryResponse,
   GetServicesResponse,
@@ -160,6 +162,24 @@ export class CapabilityClient {
 
   async listSummaries(request: CapabilityCatalogRequest = {}): Promise<CapabilitySummary[]> {
     return summarizeCapabilities(await this.listCatalog(request))
+  }
+
+  async getGraph(
+    request: CapabilityCatalogRequest = { include_unavailable: true, include_internal: true }
+  ): Promise<CapabilityGraph> {
+    const [catalog, registry] = await Promise.all([
+      this.listCatalog(request),
+      this.client.registry.getRegistry()
+    ])
+    return buildCapabilityGraph({
+      catalog,
+      registry,
+      transportKind: this.client.transport.kind
+    })
+  }
+
+  async explain(featureId: string): Promise<CapabilityExplanation> {
+    return (await this.getGraph()).explain(featureId)
   }
 }
 

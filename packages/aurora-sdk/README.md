@@ -18,6 +18,8 @@ const client = new AuroraClient({
 
 const methods = await client.registry.listMethods()
 const catalog = await client.capabilities.listCatalog({ include_schemas: true })
+const graph = await client.capabilities.getGraph()
+const tts = graph.explain('method:TTS.Synthesize')
 const permissions = await client.permissions.listCatalog()
 const result = await client.result(() => client.registry.getRegistry())
 
@@ -35,6 +37,7 @@ if (client.auth.snapshot().state === 'admin') {
 
 client.permissions.check(['Auth.DeletePrincipal'], 'manage').allowed
 permissions.find((permission) => permission.id === 'Auth.manage')?.label
+tts.providerCandidates.map((candidate) => candidate.providerIdentity)
 ```
 
 ## Generated Backend Inventory
@@ -73,7 +76,7 @@ const effective = resolveEffectivePermissions({
 
 ```ts
 import type { AuroraTransport } from '@aurora/client'
-import { AuroraClient } from '@aurora/client'
+import { AuroraClient, buildCapabilityGraph } from '@aurora/client'
 
 const tauriTransport: AuroraTransport = {
   kind: 'tauri-local',
@@ -86,6 +89,12 @@ const tauriTransport: AuroraTransport = {
 
 const client = new AuroraClient({ transport: tauriTransport })
 const manifest = await client.native.getManifest()
+const catalog = await client.capabilities.listCatalog({ include_unavailable: true })
+const graph = buildCapabilityGraph({
+  catalog,
+  nativeManifest: manifest,
+  transportKind: client.transport.kind
+})
 const result = await client.result(() => client.native.getManifest())
 const canManageAuth = client.permissions.has('Auth.DeletePrincipal', 'manage')
 
@@ -109,8 +118,14 @@ const route = await client.routes.explain({
   selector: { peer_id: 'peer-123', module: 'TTS' }
 })
 
+const capability = await client.capabilities.explain('method:TTS.Synthesize')
+
 if (route.security_privacy_blockers.length > 0) {
   // Show the backend reason and keep execution disabled.
+}
+
+if (capability.selectorRequired && !capability.selectedProvider) {
+  // Ask the user to choose an eligible peer/provider before execution.
 }
 
 const result = await client.result(() => client.routes.explain({
@@ -136,6 +151,11 @@ Mesh UI should show selected provider peer, service instance, fallback behavior,
 ```ts
 const manifest = await client.native.getManifest()
 client.native.requirePermission('microphone', manifest)
+const nativeGraph = buildCapabilityGraph({
+  catalog: await client.capabilities.listCatalog({ include_unavailable: true }),
+  nativeManifest: manifest,
+  transportKind: client.transport.kind
+})
 const result = await client.result(() => client.native.getManifest())
 
 client.auth.updateFromTokenValidation({
@@ -159,18 +179,43 @@ Android/iOS features are enabled only when the native capability manifest and ba
 ## Mock Tests
 
 ```ts
-import { AuroraClient, MockAuroraTransport, gatewayRegistryFixture } from '@aurora/client'
+import {
+  AuroraClient,
+  MockAuroraTransport,
+  capabilityGraphCatalogFixture,
+  gatewayRegistryFixture
+} from '@aurora/client'
 
 const transport = new MockAuroraTransport()
   .register('Gateway.GetRegistry', gatewayRegistryFixture)
+  .register('Gateway.GetCapabilityCatalog', capabilityGraphCatalogFixture)
 
 const client = new AuroraClient({ transport })
 const result = await client.result(() => client.registry.getRegistry())
+const explanation = await client.capabilities.explain('tool:tool:notes')
 const permissionCatalog = await client.permissions.listCatalog()
 
 client.auth.setApiKeySystem()
 client.auth.snapshot().state // "api_key_system"
+explanation.providerCandidates.length // local and remote providers remain separate.
 ```
+
+## Capability Graph
+
+`client.capabilities.getGraph()` merges backend capability catalog actions, registry-only method exposure, native manifests, provider freshness, routeability, policy flags, and privacy/permission requirements into deterministic feature nodes. It preserves provider identity instead of collapsing local and remote providers:
+
+```ts
+const graph = await client.capabilities.getGraph()
+const notes = graph.explain('tool:tool:notes')
+
+notes.providerCandidates.map((candidate) => ({
+  provider: candidate.providerIdentity,
+  selectable: candidate.selectable,
+  reason: candidate.disabledReasons[0] ?? null
+}))
+```
+
+`graph.explain(featureId)` returns the selected provider, alternate providers, disabled reason, next repair action, selector/approval requirements, permission requirements, privacy class, and redaction evidence. Explicit selector and privacy requirements remain blocked until backend or native evidence satisfies them; the SDK does not silently fallback for safety-sensitive features.
 
 ## Auth Session State
 

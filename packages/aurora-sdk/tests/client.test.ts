@@ -10,6 +10,8 @@ import {
   buildPermissionCatalogFromBackendInventory,
   checkAccess,
   buildAdminOverviewManifest,
+  buildCapabilityGraph,
+  capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
   createAuditReceipt,
   createAuroraEvent,
@@ -109,6 +111,125 @@ describe('AuroraClient', () => {
         peerId: 'local-peer'
       })
     ])
+  })
+
+  it('builds a deterministic capability graph with separate local and remote providers', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: true },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    const tts = graph.byFeatureId['method:TTS.Synthesize']
+    expect(tts).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'local',
+        routeable: true
+      })
+    )
+    expect(tts?.providers.map((provider) => provider.providerIdentity)).toEqual([
+      'local',
+      'remote:kitchen-peer'
+    ])
+
+    const duplicatedTool = graph.byFeatureId['tool:tool:notes']
+    expect(duplicatedTool?.providers).toHaveLength(2)
+    expect(duplicatedTool?.providers.map((provider) => provider.providerIdentity)).toEqual([
+      'local',
+      'remote:kitchen-peer'
+    ])
+    expect(duplicatedTool?.selectedProvider?.providerIdentity).toBe('local')
+
+    const native = graph.byFeatureId['native:android:microphoneCapture']
+    expect(native).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android',
+        privacyClass: 'raw-audio'
+      })
+    )
+  })
+
+  it('explains policy, selector, stale, and unsupported capability states', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: false },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    const denied = graph.explain('tool:tool:garage-door')
+    expect(denied).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        selectorRequired: true,
+        approvalRequired: true,
+        nextRepairAction: 'choose a peer/provider'
+      })
+    )
+    expect(denied.providerCandidates[0]).toEqual(
+      expect.objectContaining({
+        providerIdentity: 'remote:den-peer',
+        selectable: false,
+        disabledReasons: expect.arrayContaining(['policy_denied'])
+      })
+    )
+
+    const stale = graph.explain('tool:tool:camera-snapshot')
+    expect(stale).toEqual(
+      expect.objectContaining({
+        state: 'stale',
+        routeable: false,
+        nextRepairAction: 'refresh peer manifest or reconnect provider'
+      })
+    )
+
+    const internalOnly = graph.explain('method:Gateway.InternalOnly')
+    expect(internalOnly).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        routeable: false,
+        nextRepairAction: 'use a local/Tauri transport with bus access or expose a backend contract'
+      })
+    )
+
+    const nativePermission = graph.explain('native:android:microphoneCapture')
+    expect(nativePermission).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        nextRepairAction: 'grant required native permission',
+        requiredPermissions: ['microphone']
+      })
+    )
+  })
+
+  it('loads capability graph explanations through the client namespace', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityGraphCatalogFixture)
+    const client = new AuroraClient({ transport })
+
+    const explanation = await client.capabilities.explain('tool:tool:file-search')
+
+    expect(explanation).toEqual(
+      expect.objectContaining({
+        state: 'available-remote',
+        routeable: true,
+        selectedProvider: expect.objectContaining({
+          providerIdentity: 'remote:kitchen-peer'
+        })
+      })
+    )
   })
 
   it('builds an admin overview manifest from backend evidence only', async () => {

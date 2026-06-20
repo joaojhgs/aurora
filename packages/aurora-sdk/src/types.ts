@@ -362,6 +362,106 @@ export interface CapabilitySummary {
   raw: CapabilityActionInfo
 }
 
+export type CapabilityProviderIdentity =
+  | 'local'
+  | `remote:${string}`
+  | `native:${string}`
+  | 'cloud'
+  | 'unavailable'
+  | 'blocked'
+  | string
+
+export interface CapabilityProviderCandidate {
+  id: string
+  featureId: string
+  providerIdentity: CapabilityProviderIdentity
+  providerId: string
+  providerKind: string
+  peerId: string | null
+  serviceInstanceId: string | null
+  module: string
+  method: string
+  busTopic: string | null
+  toolId: string | null
+  resourceId: string | null
+  availability: AvailabilityState
+  selectable: boolean
+  selected: boolean
+  trustTier: string
+  routeability: string
+  freshness: CapabilityFreshnessInfo
+  requiredPermissions: string[]
+  privacyClass: PrivacyClass
+  disabledReasons: string[]
+  requiredAction: string | null
+  selector: unknown
+  source: 'catalog' | 'registry' | 'native-manifest'
+  raw: CapabilityActionInfo | MethodDescriptor | null
+}
+
+export interface CapabilityGraphNode {
+  featureId: string
+  module: string
+  method: string
+  busTopic: string | null
+  kind: 'method' | 'tool' | 'resource' | 'native' | string
+  availability: AvailabilityState
+  privacyClass: PrivacyClass
+  providerIdentity: CapabilityProviderIdentity
+  selectedProvider: CapabilityProviderCandidate | null
+  providers: CapabilityProviderCandidate[]
+  alternateProviders: CapabilityProviderCandidate[]
+  requiredPermissions: string[]
+  disabledReason: string | null
+  requiredAction: string | null
+  freshness: CapabilityFreshnessInfo | null
+  selectorRequired: boolean
+  approvalRequired: boolean
+  routeable: boolean
+  trustTier: string | null
+  rawActions: CapabilityActionInfo[]
+}
+
+export interface CapabilityExplanation {
+  featureId: string
+  state: AvailabilityState
+  summary: string
+  selectedProvider: CapabilityProviderCandidate | null
+  providerCandidates: CapabilityProviderCandidate[]
+  alternateProviders: CapabilityProviderCandidate[]
+  disabledReason: string | null
+  nextRepairAction: string | null
+  selectorRequired: boolean
+  approvalRequired: boolean
+  routeable: boolean
+  requiredPermissions: string[]
+  privacyClass: PrivacyClass
+  evidence: {
+    generatedAt: string
+    secretsRedacted: boolean
+    sources: string[]
+  }
+}
+
+export interface CapabilityGraph {
+  generatedAt: string
+  localPeerId: string | null
+  localNodeName: string
+  secretsRedacted: boolean
+  nodes: CapabilityGraphNode[]
+  byFeatureId: Record<string, CapabilityGraphNode>
+  providerIndex: Record<string, string[]>
+  candidateProviderIndex: Record<string, string[]>
+  explain(featureId: string): CapabilityExplanation
+}
+
+export interface CapabilityGraphInput {
+  catalog: CapabilityCatalogResponse
+  registry?: GetRegistryResponse | null
+  nativeManifest?: NativeCapabilityManifest | null
+  transportKind?: AuroraTransportKind | null
+}
+
 export interface PeerSummary {
   peerId: string
   nodeName: string
