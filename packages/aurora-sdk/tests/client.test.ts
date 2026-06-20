@@ -839,6 +839,268 @@ describe('AuroraClient', () => {
     if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
   })
 
+  it('drafts, confirms, and submits AdminAction routes with backend-issued headers', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config-set',
+          nonce: 'nonce-config-set',
+          digest: 'digest-config-set',
+          method_id: 'Config.Set',
+          affected_resources: ['key:services.gateway.enabled'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(
+          expect.objectContaining({
+            action_id: 'aa-config-set',
+            nonce: 'nonce-config-set',
+            digest: 'digest-config-set',
+            reason: 'Enable Gateway for local admin',
+            reauth_confirmed: true,
+            phrase: 'CONFIRM'
+          })
+        )
+        return {
+          action_id: 'aa-config-set',
+          confirmation_token: 'token-config-set',
+          digest: 'digest-config-set',
+          confirmed: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          audit_receipt: 'aar-config-set',
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Config.Set', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, correlation_id: 'corr-config-set' }
+      })
+    const client = new AuroraClient({ transport })
+    const payload = { key: 'services.gateway.enabled', value: true }
+
+    const draft = await client.admin.draft({ method_id: 'Config.Set', payload })
+    const confirmation = await client.admin.confirm(draft, {
+      reason: 'Enable Gateway for local admin',
+      reauthConfirmed: true
+    })
+    const submitted = await client.admin.submit<{ success: boolean }>({
+      methodId: 'Config.Set',
+      payload,
+      confirmation
+    })
+
+    expect(submitted.success).toBe(true)
+    expect(calls.at(-1)).toEqual(
+      expect.objectContaining({
+        method: 'Config.Set',
+        payload,
+        headers: {
+          'X-Aurora-AdminAction-Id': 'aa-config-set',
+          'X-Aurora-AdminAction-Token': 'token-config-set',
+          'X-Aurora-AdminAction-Digest': 'digest-config-set'
+        }
+      })
+    )
+  })
+
+  it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.RequestApproval', {
+        ok: true,
+        approval_request_id: 'tool-approval-1',
+        policy_decision: {
+          decision_id: 'policy-1',
+          allowed: true,
+          approval_required: true,
+          approval_mode: 'ask_each_time',
+          token_ttl_seconds: 300,
+          risk_class: 'admin-critical'
+        },
+        expires_at: 1781953500,
+        correlation_id: 'corr-approval-1',
+        error: null
+      })
+      .register('Tooling.ConfirmExecution', {
+        ok: true,
+        approval_token: 'tool-token-1',
+        expires_at: 1781953500,
+        policy_decision_id: 'policy-1',
+        correlation_id: 'corr-approval-1',
+        error: null
+      })
+      .register('Gateway.AdminActionDraft', {
+        action_id: 'aa-tool',
+        nonce: 'nonce-tool',
+        digest: 'digest-tool',
+        method_id: 'Tooling.ExecuteTool',
+        affected_resources: ['tool:tool:remote-danger'],
+        required_phrase: 'CONFIRM',
+        required_reason: true,
+        required_reauth: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        expires_in_seconds: 300,
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+      .register('Gateway.AdminActionConfirm', {
+        action_id: 'aa-tool',
+        confirmation_token: 'admin-token-tool',
+        digest: 'digest-tool',
+        confirmed: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        audit_receipt: 'aar-tool',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+      .register('Tooling.ExecuteTool', (request) => ({
+        ok: true,
+        used_tool_approval_token: (request.payload as { approval_token?: string }).approval_token,
+        admin_header: request.headers?.['X-Aurora-AdminAction-Id']
+      }))
+    const client = new AuroraClient({ transport })
+
+    const approval = await client.approvals.request({
+      global_tool_id: 'tool:remote-danger',
+      provider_peer_id: 'peer-kitchen',
+      provider_service_instance_id: 'tooling-remote',
+      args_hash: 'sha256:danger-args',
+      redacted_args_preview: { target: 'garage', api_key: '[redacted]' },
+      risk_class: 'admin-critical',
+      requested_approval_scope: 'tool-args',
+      expected_audit_event: 'tooling.approval.approved',
+      args: { target: 'garage' }
+    })
+    const token = await client.approvals.approve({
+      approval_request_id: approval.approval_request_id!,
+      approver_principal_id: 'admin-1',
+      reason: 'Operator approved garage diagnostic'
+    })
+    const adminDraft = await client.admin.draft({
+      method_id: 'Tooling.ExecuteTool',
+      payload: {
+        global_tool_id: 'tool:remote-danger',
+        approval_token: token.approvalToken,
+        args: { target: 'garage' }
+      }
+    })
+    const adminConfirmation = await client.admin.confirm(adminDraft, {
+      reason: 'Dangerous tool requires admin confirmation',
+      reauthConfirmed: true
+    })
+    const execution = await client.admin.submit<{ ok: boolean; used_tool_approval_token: string; admin_header: string }>({
+      methodId: 'Tooling.ExecuteTool',
+      payload: {
+        global_tool_id: 'tool:remote-danger',
+        approval_token: token.approvalToken,
+        args: { target: 'garage' }
+      },
+      confirmation: adminConfirmation
+    })
+
+    expect(execution).toEqual({
+      ok: true,
+      used_tool_approval_token: 'tool-token-1',
+      admin_header: 'aa-tool'
+    })
+  })
+
+  it('classifies approval denial, expiry, replay, changed args, changed provider, and downgraded risk as typed errors', async () => {
+    const cases = [
+      ['approval_denied', 'permission'],
+      ['approval_request_expired', 'timeout'],
+      ['approval_request_replayed', 'validation'],
+      ['approval_token_args_hash_mismatch', 'validation'],
+      ['approval_token_provider_peer_id_mismatch', 'validation'],
+      ['approval_token_downgraded_risk', 'validation']
+    ] as const
+
+    for (const [backendError, expectedCode] of cases) {
+      const client = new AuroraClient({
+        transport: new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', {
+          ok: false,
+          approval_token: null,
+          expires_at: null,
+          policy_decision_id: null,
+          correlation_id: `corr-${backendError}`,
+          error: backendError
+        })
+      })
+
+      await expect(
+        client.approvals.confirm({
+          approval_request_id: `approval-${backendError}`,
+          approver_principal_id: 'admin-1'
+        })
+      ).rejects.toMatchObject({
+        code: expectedCode,
+        method: 'Tooling.ConfirmExecution',
+        correlationId: `corr-${backendError}`
+      })
+    }
+  })
+
+  it('returns controller result errors for auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport loss', async () => {
+    const cases = [
+      ['auth', 'Gateway.AdminActionDraft'],
+      ['permission', 'Gateway.AdminActionDraft'],
+      ['validation', 'Gateway.AdminActionDraft'],
+      ['timeout', 'Gateway.AdminActionDraft'],
+      ['unavailable_service', 'Gateway.AdminActionDraft'],
+      ['unsupported_feature', 'Gateway.AdminActionDraft'],
+      ['privacy_blocked', 'Gateway.AdminActionDraft'],
+      ['native_permission_missing', 'Gateway.AdminActionDraft']
+    ] as const
+
+    for (const [code, method] of cases) {
+      const client = new AuroraClient({
+        transport: new MockAuroraTransport({ fixtures: false }).fail(method, code, `failure ${code}`)
+      })
+      const result = await client.result(() =>
+        client.admin.draft({ method_id: 'Config.Set', payload: { key: 'x', value: true } })
+      )
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(code)
+    }
+
+    const lossClient = new AuroraClient({
+      transport: new MockAuroraTransport({ fixtures: false }).lose('Gateway.AdminActionDraft')
+    })
+    const loss = await lossClient.result(() =>
+      lossClient.admin.draft({ method_id: 'Config.Set', payload: { key: 'x', value: true } })
+    )
+    expect(loss.ok).toBe(false)
+    if (!loss.ok) expect(loss.error.code).toBe('transport_loss')
+  })
+
   it('normalizes successful results with audit and redaction metadata', async () => {
     const transport = new MockAuroraTransport().register('Gateway.ExplainRoute', {
       data: {

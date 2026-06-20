@@ -1,4 +1,5 @@
 export { AuroraClient } from './client.js'
+export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
@@ -71,6 +72,7 @@ export {
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
 export type * from './types.js'
+export type * from './admin.js'
 export type * from './transport.js'
 export type {
   AuroraEventStreamKind,

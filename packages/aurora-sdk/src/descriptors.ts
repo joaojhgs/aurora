@@ -20,7 +20,9 @@ export const GATEWAY_METHODS = {
   getCapabilityCatalog: 'Gateway.GetCapabilityCatalog',
   explainRoute: 'Gateway.ExplainRoute',
   listEvents: 'Gateway.ListEvents',
-  getSupportBundle: 'Gateway.GetSupportBundle'
+  getSupportBundle: 'Gateway.GetSupportBundle',
+  adminActionDraft: 'Gateway.AdminActionDraft',
+  adminActionConfirm: 'Gateway.AdminActionConfirm'
 } as const
 
 export const TOOLING_METHODS = {
