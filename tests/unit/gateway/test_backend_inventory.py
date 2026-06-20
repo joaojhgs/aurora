@@ -53,6 +53,7 @@ def test_backend_inventory_supports_admin_overview_manifest_contract():
 
     for topic in (
         GatewayMethods.GET_CAPABILITY_CATALOG,
+        GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
         GatewayMethods.EXPLAIN_ROUTE,
         GatewayMethods.GET_SUPPORT_BUNDLE,
     ):

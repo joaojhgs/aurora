@@ -16,6 +16,7 @@ import uuid
 from collections import deque
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.bus import Envelope
@@ -26,8 +27,8 @@ from app.shared.config.models import (
     Gateway as GatewayConfigModel,
     MeshSharing,
 )
-from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.aurora import AuroraMethods
+from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
@@ -35,18 +36,21 @@ from app.shared.contracts.models.gateway import (
     AdminActionConfirmResponse,
     AdminActionDraftRequest,
     AdminActionDraftResponse,
+    BusHealth,
     CapabilityCatalogRequest,
     CapabilityCatalogResponse,
     CapabilityCatalogSummary,
     CapabilityGraph,
+    ContainerTopologyHints,
+    DeploymentTopologyResponse,
     GatewayEventStreamEvent,
     GatewayListEventsRequest,
     GatewayListEventsResponse,
     GatewayMethods,
     GatewaySupportBundleRequest,
     GatewaySupportBundleResponse,
-    GetRegistryResponse,
     GetMeshStatusResponse,
+    GetRegistryResponse,
     GetServiceHealthRequest,
     GetServiceHealthResponse,
     GetServicesResponse,
@@ -60,6 +64,7 @@ from app.shared.contracts.models.gateway import (
     RouteExplainRequest,
     RouteExplainResponse,
     ServiceInfo,
+    ServiceProcessTopology,
     SupportBundleDiagnosticItem,
     SupportBundleRedactionInfo,
 )
@@ -114,6 +119,50 @@ def _config_secret_plain(val: Any) -> Any:
     if hasattr(val, "get_secret_value"):
         return val.get_secret_value()
     return val
+
+
+def _redact_url(url: str | None) -> str | None:
+    """Redact credentials and host detail from a dependency URL."""
+    if not url:
+        return None
+    try:
+        parsed = urlsplit(url)
+    except Exception:
+        return "redacted://<invalid>"
+    scheme = parsed.scheme or "redis"
+    host_hint = parsed.hostname or "configured-host"
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path if parsed.path not in {"", "/"} else ""
+    return urlunsplit((scheme, f"<redacted>@{host_hint}{port}", path, "", ""))
+
+
+def _bus_backend_name(bus: Any) -> str:
+    inner = getattr(bus, "_inner", None)
+    if inner is not None:
+        return f"{bus.__class__.__name__}({inner.__class__.__name__})"
+    return bus.__class__.__name__
+
+
+def _bus_health_target(bus: Any) -> Any:
+    return getattr(bus, "_inner", bus)
+
+
+def _compose_service_hint(module: str) -> str | None:
+    """Map public service modules to sanitized Compose service names."""
+    return {
+        "Auth": "auth-service",
+        "Backup": "backup-service",
+        "Config": "config-service",
+        "DB": "db-service",
+        "Gateway": "gateway-service",
+        "Orchestrator": "orchestrator-service",
+        "Scheduler": "scheduler-service",
+        "STTCoordinator": "stt-coordinator-service",
+        "TTS": "tts-service",
+        "Tooling": "tooling-service",
+        "Transcription": "stt-transcription-service",
+        "WakeWord": "stt-wakeword-service",
+    }.get(module)
 
 
 def _finite_float(value: float | None) -> float | None:
@@ -569,6 +618,53 @@ class GatewayService(BaseService):
             checks={"registry": "missing"},
             timestamp=datetime.now(UTC).isoformat(),
             error="service is not present in Gateway registry",
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
+        name="GetDeploymentTopology",
+        summary="Get sanitized deployment topology and message bus health",
+        input_model=EmptyInput,
+        output_model=DeploymentTopologyResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_deployment_topology(
+        self,
+        data: EmptyInput,
+    ) -> DeploymentTopologyResponse:
+        """Return architecture mode, bus health, and sanitized process topology."""
+        services = await self._get_services_snapshot()
+        bus_health = await self._build_bus_health()
+        mesh_status = await self.get_mesh_status(EmptyInput())
+        mode = self._mode
+
+        degradations = list(bus_health.degraded_reasons)
+        if mode == "threads":
+            degradations.append("thread_mode_no_process_controls")
+        if mode == "processes" and any(service.status != "healthy" for service in services):
+            degradations.append("process_registry_stale")
+        if mesh_status.peers:
+            degradations.append("mesh_peer_topology_untrusted")
+
+        runtime_mode = "process-server" if mode == "processes" else "thread-local"
+        if mesh_status.local.mesh_enabled:
+            runtime_mode = f"{runtime_mode}+mesh"
+
+        return DeploymentTopologyResponse(
+            architecture_mode=mode,
+            runtime_mode=runtime_mode,
+            bus_backend=_bus_backend_name(self.bus),
+            redis_url_redacted=bus_health.redis_url_redacted,
+            redis_reachable=bus_health.redis_reachable,
+            bullmq_queue_health=bus_health,
+            service_process_topology=self._build_service_process_topology(services),
+            container_topology_hints=self._container_topology_hints(),
+            mode_capability_degradations=sorted(set(degradations)),
+            mesh_peer_topology_trusted=False if mesh_status.peers else None,
+            generated_at=datetime.now(UTC).isoformat(),
+            secrets_redacted=True,
         )
 
     @method_contract(
@@ -1058,6 +1154,129 @@ class GatewayService(BaseService):
                 "contracts": "present" if service.method_count else "empty",
             },
             timestamp=datetime.now(UTC).isoformat(),
+        )
+
+    async def _build_bus_health(self) -> BusHealth:
+        """Build a non-mutating bus health snapshot."""
+        bus = _bus_health_target(self.bus)
+        backend = bus.__class__.__name__
+        stats = bus.get_stats() if hasattr(bus, "get_stats") else {}
+        degraded_reasons: list[str] = []
+
+        if backend == "LocalBus":
+            return BusHealth(
+                backend=backend,
+                redis_url_redacted=None,
+                redis_reachable=None,
+                bullmq_available=None,
+                queue_lag_known=True,
+                published=stats.get("published"),
+                delivered=stats.get("delivered"),
+                retries=stats.get("retries"),
+                dead_letters=stats.get("dead_letters"),
+                status="healthy",
+                degraded_reasons=[],
+            )
+
+        redis_url = getattr(bus, "redis_url", os.getenv("REDIS_URL"))
+        bullmq_available = getattr(bus, "_available", None)
+        redis_reachable: bool | None = None
+        error: str | None = None
+
+        if hasattr(bus, "_get_redis"):
+            try:
+                redis = await bus._get_redis()
+                redis_reachable = bool(await asyncio.wait_for(redis.ping(), timeout=1.0))
+            except Exception as exc:
+                redis_reachable = False
+                error = str(exc)
+                degraded_reasons.append("redis_unreachable")
+
+        queue_lag_known = False
+        queue_depth = None
+        degraded_reasons.append("bullmq_queue_lag_unknown")
+        if bullmq_available is False:
+            degraded_reasons.append("bullmq_unavailable")
+
+        dead_letters = stats.get("dead_letters")
+        if dead_letters:
+            degraded_reasons.append("bullmq_dead_letters_present")
+
+        status = "healthy"
+        if redis_reachable is False or bullmq_available is False:
+            status = "unhealthy"
+        elif degraded_reasons:
+            status = "degraded"
+
+        return BusHealth(
+            backend=backend,
+            redis_url_redacted=_redact_url(redis_url),
+            redis_reachable=redis_reachable,
+            bullmq_available=bullmq_available,
+            queue_lag_known=queue_lag_known,
+            queue_depth=queue_depth,
+            published=stats.get("published"),
+            delivered=stats.get("delivered"),
+            retries=stats.get("retries"),
+            dead_letters=dead_letters,
+            status=status,
+            degraded_reasons=sorted(set(degraded_reasons)),
+            error=error,
+        )
+
+    def _build_service_process_topology(
+        self,
+        services: list[ServiceInfo],
+    ) -> list[ServiceProcessTopology]:
+        """Convert registry services into a sanitized topology list."""
+        if self._mode == "threads":
+            return [
+                ServiceProcessTopology(
+                    module=service.module,
+                    status=service.status,
+                    topology="thread",
+                    instance_id=service.instance_id,
+                    process_hint="single-process",
+                    last_seen=service.last_seen,
+                    stale=False,
+                )
+                for service in sorted(services, key=lambda item: item.module)
+            ]
+
+        return [
+            ServiceProcessTopology(
+                module=service.module,
+                status=service.status,
+                topology="process",
+                instance_id=service.instance_id,
+                container_hint=_compose_service_hint(service.module),
+                process_hint="separate-service-process",
+                last_seen=service.last_seen,
+                stale=service.status in {"degraded", "unhealthy", "unknown"},
+            )
+            for service in sorted(services, key=lambda item: item.module)
+        ]
+
+    def _container_topology_hints(self) -> ContainerTopologyHints:
+        """Return static, non-secret topology hints for UI copy and diagnostics."""
+        if self._mode == "processes":
+            return ContainerTopologyHints(
+                orchestrator="docker-compose",
+                compose_file="docker-compose.process.yml",
+                redis_service="redis",
+                gateway_service="gateway-service",
+                config_service="config-service",
+                notes=[
+                    "process mode is orchestrated by Docker Compose or equivalent service runners",
+                    "Redis/BullMQ is required for cross-process bus delivery",
+                ],
+            )
+        return ContainerTopologyHints(
+            orchestrator="in-process-supervisor",
+            notes=[
+                "thread mode runs services in one Python process",
+                "process controls and per-container health are unsupported in thread mode",
+            ],
         )
 
     def _native_capability_diagnostics(self) -> list[SupportBundleDiagnosticItem]:

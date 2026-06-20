@@ -13,6 +13,7 @@ import {
   defaultMockAuroraFixtures,
   describeBackendInventory,
   describeRegistry,
+  deploymentTopologyFixture,
   gatewayRegistryFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
@@ -25,6 +26,7 @@ import {
 type ConformanceMethod =
   | 'Gateway.GetRegistry'
   | 'Gateway.GetServices'
+  | 'Gateway.GetDeploymentTopology'
   | 'Gateway.GetCapabilityCatalog'
   | 'Gateway.ExplainRoute'
   | 'Tooling.GetToolCatalog'
@@ -118,6 +120,7 @@ describe('SDK transport conformance', () => {
 
       await expect(client.registry.getRegistry()).resolves.toEqual(gatewayRegistryFixture)
       await expect(client.registry.listServices()).resolves.toEqual(defaultMockAuroraFixtures.services)
+      await expect(client.registry.getDeploymentTopology()).resolves.toEqual(deploymentTopologyFixture)
       await expect(client.capabilities.listCatalog({ include_unavailable: true })).resolves.toEqual(
         capabilityGraphCatalogFixture
       )
@@ -128,6 +131,12 @@ describe('SDK transport conformance', () => {
       expect(methods).toEqual(describeRegistry(gatewayRegistryFixture))
       expect(methods).toEqual(
         expect.arrayContaining([
+          expect.objectContaining({
+            busTopic: 'Gateway.GetDeploymentTopology',
+            routePath: '/api/Gateway/GetDeploymentTopology',
+            requiredPermissions: ['Gateway.manage'],
+            availableOverHttp: true
+          }),
           expect.objectContaining({
             busTopic: 'Gateway.GetRegistry',
             routePath: '/api/Gateway/GetRegistry',
@@ -229,9 +238,13 @@ describe('SDK transport conformance', () => {
     const comparison = compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture)
 
     expect(backendInventoryFixture.generated_by).toBe('scripts/generate_backend_inventory.py')
-    expect(generated.methods.map((method) => method.busTopic)).toEqual(['Gateway.GetRegistry', 'Gateway.InternalOnly'])
+    expect(generated.methods.map((method) => method.busTopic)).toEqual([
+      'Gateway.GetRegistry',
+      'Gateway.GetDeploymentTopology',
+      'Gateway.InternalOnly'
+    ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 2, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 3, issues: [] })
   })
 })
 
@@ -358,6 +371,8 @@ function conformanceResponse(method: string): unknown {
       return cloneFixture(gatewayRegistryFixture)
     case 'Gateway.GetServices':
       return cloneFixture(defaultMockAuroraFixtures.services)
+    case 'Gateway.GetDeploymentTopology':
+      return cloneFixture(deploymentTopologyFixture)
     case 'Gateway.GetCapabilityCatalog':
       return cloneFixture(capabilityGraphCatalogFixture)
     case 'Gateway.ExplainRoute':
@@ -375,6 +390,7 @@ function hasConformanceResponse(method: string): method is ConformanceMethod {
   return [
     'Gateway.GetRegistry',
     'Gateway.GetServices',
+    'Gateway.GetDeploymentTopology',
     'Gateway.GetCapabilityCatalog',
     'Gateway.ExplainRoute',
     'Tooling.GetToolCatalog',
@@ -391,6 +407,8 @@ function methodFromUrl(url: string): ConformanceMethod | null {
     case '/api/services':
     case '/api/Gateway/GetServices':
       return 'Gateway.GetServices'
+    case '/api/Gateway/GetDeploymentTopology':
+      return 'Gateway.GetDeploymentTopology'
     case '/api/Gateway/GetCapabilityCatalog':
       return 'Gateway.GetCapabilityCatalog'
     case '/api/Gateway/ExplainRoute':

@@ -5,6 +5,7 @@ import type {
   CapabilityFreshnessInfo,
   CapabilityPolicyDecisionInfo,
   CapabilityProviderInfo,
+  DeploymentTopologyResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
@@ -41,6 +42,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'GetDeploymentTopology',
+          summary: 'Get sanitized deployment topology and message bus health',
+          bus_topic: 'Gateway.GetDeploymentTopology',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'DeploymentTopologyResponse',
+          required_perms: ['Gateway.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'InternalOnly',
           summary: 'Internal-only method',
           bus_topic: 'Gateway.InternalOnly',
@@ -57,7 +70,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
   ],
   digest: 'fixture',
   service_count: 1,
-  method_count: 2
+  method_count: 3
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -516,12 +529,62 @@ export const gatewayServicesFixture: GetServicesResponse = {
       version: '0.1.0',
       summary: 'Gateway service',
       capabilities: ['registry'],
-      method_count: 2,
+      method_count: 3,
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: null
     }
   ]
+}
+
+export const deploymentTopologyFixture: DeploymentTopologyResponse = {
+  architecture_mode: 'threads',
+  runtime_mode: 'thread-local',
+  bus_backend: 'LocalBus',
+  redis_url_redacted: null,
+  redis_reachable: null,
+  bullmq_queue_health: {
+    backend: 'LocalBus',
+    redis_url_redacted: null,
+    redis_reachable: null,
+    bullmq_available: null,
+    queue_lag_known: true,
+    queue_depth: null,
+    published: 12,
+    delivered: 12,
+    retries: 0,
+    dead_letters: 0,
+    status: 'healthy',
+    degraded_reasons: [],
+    error: null
+  },
+  service_process_topology: [
+    {
+      module: 'Gateway',
+      status: 'healthy',
+      topology: 'thread',
+      instance_id: null,
+      container_hint: null,
+      process_hint: 'single-process',
+      last_seen: '2026-06-19T00:00:00Z',
+      stale: false
+    }
+  ],
+  container_topology_hints: {
+    orchestrator: 'in-process-supervisor',
+    compose_file: null,
+    redis_service: null,
+    gateway_service: null,
+    config_service: null,
+    notes: [
+      'thread mode runs services in one Python process',
+      'process controls and per-container health are unsupported in thread mode'
+    ]
+  },
+  mode_capability_degradations: ['thread_mode_no_process_controls'],
+  mesh_peer_topology_trusted: null,
+  generated_at: '2026-06-19T00:00:00Z',
+  secrets_redacted: true
 }
 
 export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
@@ -567,6 +630,26 @@ export const backendInventoryFixture: BackendInventory = {
       input_schema: null,
       output_schema: {
         title: 'GetRegistryResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetDeploymentTopology',
+      summary: 'Get sanitized deployment topology and message bus health',
+      bus_topic: 'Gateway.GetDeploymentTopology',
+      routePath: '/api/Gateway/GetDeploymentTopology',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Gateway.manage'],
+      input_model: 'EmptyInput',
+      output_model: 'DeploymentTopologyResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'DeploymentTopologyResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -736,6 +819,7 @@ export const uiMockReferenceFixtureSummary = {
 export interface MockAuroraFixtureSet {
   registry: GetRegistryResponse
   services: GetServicesResponse
+  deploymentTopology: DeploymentTopologyResponse
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
@@ -747,6 +831,7 @@ export interface MockAuroraFixtureSet {
 export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   registry: gatewayRegistryFixture,
   services: gatewayServicesFixture,
+  deploymentTopology: deploymentTopologyFixture,
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
