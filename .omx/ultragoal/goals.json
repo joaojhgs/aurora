@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T00:05:07.631Z",
+  "updatedAt": "2026-06-20T03:21:59.727Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -246,8 +246,20 @@
       "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was narrower than the aggregate Ultragoal objective. PER-189 implemented in commit 291b8a4 and PR https://github.com/joaojhgs/aurora/pull/66. Verification passed: pnpm --filter @aurora/client typecheck; pnpm --filter @aurora/client test; pnpm --filter @aurora/client build; /home/developer/.local/bin/uv run pytest tests/unit/gateway/test_backend_inventory.py tests/unit/gateway/test_capability_catalog.py -q; git diff --check. PR is draft/open/mergeable with no status checks reported.",
       "startedAt": "2026-06-19T23:55:42.575Z",
       "completedAt": "2026-06-20T00:05:07.631Z"
+    },
+    {
+      "id": "G023-per-190-unified-event-stream-contrac",
+      "title": "PER-190 unified event stream contract",
+      "objective": "Implement and verify PER-190 BE-003: product-level Aurora.EventStream typed contract, Gateway backfill/HTTP streaming surface, redaction/privacy behavior, tests, PR, and QA handoff.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-06-20T03:21:53.667Z",
+      "updatedAt": "2026-06-20T03:27:21.559Z",
+      "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was narrower than the aggregate Ultragoal objective. PER-190 implemented in commit 131f9f9 and PR https://github.com/joaojhgs/aurora/pull/69. Verification passed: /home/developer/.local/bin/uv run pytest tests/unit/gateway/test_mesh_observability.py tests/unit/gateway/test_event_stream_route.py -q; /home/developer/.local/bin/uv run python -m py_compile touched Python files; git diff --check. Ruff unavailable: uv run ruff failed to spawn and python -m ruff reported no module named ruff.",
+      "startedAt": "2026-06-20T03:21:59.727Z",
+      "completedAt": "2026-06-20T03:27:21.559Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G022-per-189-capability-manifest-contract"
+  "activeGoalId": "G023-per-190-unified-event-stream-contrac"
 }

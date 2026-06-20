@@ -8,11 +8,16 @@ This module defines the contracts for:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import Field
 
 from app.shared.contracts.registry import IOModel
+from app.shared.contracts.models.aurora import (
+    AuroraEventCategory,
+    AuroraEventStreamEvent,
+    AuroraMethods,
+)
 
 # =============================================================================
 # Module Identifiers
@@ -46,7 +51,7 @@ class GatewayMethods:
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
-    EVENT_STREAM = f"{GatewayModule.NAME}.EventStream"
+    EVENT_STREAM = AuroraMethods.EVENT_STREAM
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
 
@@ -278,49 +283,13 @@ class GetMeshStatusResponse(IOModel):
     secrets_redacted: bool = True
 
 
-GatewayEventCategory = Literal[
-    "capability",
-    "peer",
-    "route",
-    "tool_approval",
-    "tool_execution",
-    "data",
-    "audio",
-    "scheduler",
-    "admin_action",
-    "audit",
-    "service",
-    "unknown",
-]
-
-
-class GatewayEventStreamEvent(IOModel):
-    """Redacted normalized event visible to SDK/UI event subscribers."""
-
-    event_id: str
-    topic: str
-    category: GatewayEventCategory = "unknown"
-    action: str = ""
-    status: str = ""
-    severity: Literal["info", "warning", "error"] = "info"
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    correlation_id: str | None = None
-    source_peer_id: str | None = None
-    target_peer_id: str | None = None
-    provider_id: str | None = None
-    tool_id: str | None = None
-    resource_id: str | None = None
-    route: str | None = None
-    policy_decision_id: str | None = None
-    principal_id: str | None = None
-    redacted_payload: dict[str, Any] = Field(default_factory=dict)
-    payload_sha256: str = ""
+GatewayEventStreamEvent = AuroraEventStreamEvent
 
 
 class GatewayListEventsRequest(IOModel):
     """Query the bounded Gateway event buffer."""
 
-    categories: list[GatewayEventCategory] | None = None
+    categories: list[AuroraEventCategory] | None = None
     action: str | None = None
     status: str | None = None
     correlation_id: str | None = None
