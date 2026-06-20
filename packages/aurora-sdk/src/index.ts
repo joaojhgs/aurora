@@ -6,6 +6,15 @@ export { TauriLocalTransport } from './tauri.js'
 export { AuthSession } from './session.js'
 export { AuroraError, classifyHttpError } from './errors.js'
 export {
+  EventStreamClient,
+  createEventSubscription,
+  eventFromUnknown,
+  eventStreamUnsupported,
+  isEventStreamTransport,
+  normalizeStreamRequest,
+  parseSseEvent
+} from './events.js'
+export {
   GATEWAY_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
@@ -59,6 +68,15 @@ export {
 export type * from './types.js'
 export type * from './transport.js'
 export type {
+  AuroraEventStreamKind,
+  AuroraEventStreamTransport,
+  AuroraEventSubscription,
+  AuroraReconnectOptions,
+  AuroraStreamProtocol,
+  AuroraStreamRequest,
+  AuroraSubscribeOptions
+} from './events.js'
+export type {
   EffectivePermissionInput,
   PermissionAccessDecision,
   PermissionCatalogEntry,
@@ -67,7 +85,13 @@ export type {
   PermissionRequirementSource
 } from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
-export type { HttpTransportOptions } from './http.js'
+export type {
+  EventSourceFactory,
+  EventSourceLike,
+  HttpTransportOptions,
+  WebSocketFactory,
+  WebSocketLike
+} from './http.js'
 export type {
   MeshAddressSelector,
   MeshP2PTransportOptions,
@@ -78,7 +102,8 @@ export type {
   MeshRouteResolution,
   MeshRouteResolver,
   MeshRpcRequest,
-  MeshRpcResponse
+  MeshRpcResponse,
+  MeshStreamRpcRequest
 } from './mesh.js'
 export type {
   LocalFilePickOptions,

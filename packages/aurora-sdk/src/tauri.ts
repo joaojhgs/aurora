@@ -1,6 +1,12 @@
 import { AuroraError, classifyHttpError, readDetailCode, type AuroraErrorCode } from './errors.js'
+import {
+  createEventSubscription,
+  eventFromUnknown,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest
+} from './events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
-import type { AuditReceipt, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
+import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
 
@@ -14,6 +20,7 @@ export interface TauriCommandNames {
   localFileRead: string
   localFileWrite: string
   localFilePick: string
+  eventSubscribe: string
 }
 
 export interface TauriLocalTransportOptions {
@@ -84,7 +91,8 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageDelete: 'aurora_secure_storage_delete',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
-  localFilePick: 'aurora_local_file_pick'
+  localFilePick: 'aurora_local_file_pick',
+  eventSubscribe: 'aurora_event_subscribe'
 }
 
 export class TauriLocalTransport implements AuroraTransport {
@@ -158,6 +166,19 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<LocalFilePickResult>(this.commands.localFilePick, { options })
   }
 
+  async subscribe<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraStreamRequest<TPayload>
+  ): Promise<AuroraEventSubscription<TEventPayload>> {
+    const context: TauriInvokeContext = { method: this.commands.eventSubscribe }
+    if (request.topics[0] !== undefined) context.busTopic = request.topics[0]
+    const response = await this.invokeCommand<unknown>(
+      this.commands.eventSubscribe,
+      { [this.requestArgName]: request },
+      context
+    )
+    return createEventSubscription(normalizeTauriEvents<TEventPayload>(response, request))
+  }
+
   async invokeNative<TResponse = unknown>(
     command: string,
     args?: Record<string, unknown>
@@ -182,6 +203,36 @@ export class TauriLocalTransport implements AuroraTransport {
       })
     }
   }
+}
+
+async function* normalizeTauriEvents<TPayload>(
+  response: unknown,
+  request: AuroraStreamRequest
+): AsyncIterable<AuroraEvent<TPayload>> {
+  if (isAsyncIterable<AuroraEvent<TPayload> | Record<string, unknown>>(response)) {
+    for await (const raw of response) {
+      yield eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit })
+    }
+    return
+  }
+  if (isIterable<AuroraEvent<TPayload> | Record<string, unknown>>(response)) {
+    for (const raw of response) {
+      yield eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit })
+    }
+    return
+  }
+  throw new AuroraError({
+    code: 'unsupported_feature',
+    message: 'Tauri event subscribe command must return an iterable event stream.'
+  })
+}
+
+function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
+  return typeof value === 'object' && value !== null && Symbol.asyncIterator in value
+}
+
+function isIterable<T>(value: unknown): value is Iterable<T> {
+  return typeof value === 'object' && value !== null && Symbol.iterator in value
 }
 
 interface TauriInvokeContext {

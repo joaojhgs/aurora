@@ -232,6 +232,106 @@ client.permissions.check(['TTS.Synthesize'], 'use').allowed
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
 
+## Event Streams
+
+`client.events` provides one transport-independent event contract for assistant streaming, service health, config updates, pairing/admin/audit-style streams, and future BE-003 unified events. It returns an async iterable `AuroraEvent` subscription, preserving backend IDs, topics, correlation, peer/target peer, method/bus topic, status, and redaction metadata.
+
+```ts
+const subscription = client.events.streamAssistant({ prompt: 'Summarize status' }, {
+  reconnect: { maxAttempts: 3, initialDelayMs: 250 },
+  backfill: true
+})
+
+for await (const event of subscription) {
+  if (event.kind === 'assistant.delta') renderDelta(event.payload)
+  if (event.kind === 'tool.requested') showToolApproval(event.audit.toolId, event.audit.correlationId)
+}
+```
+
+HTTP transports support SSE by default and WebSocket when requested. The live backend path is intentionally configurable until the unified backend event contract lands:
+
+```ts
+const client = new AuroraClient({
+  transport: new HttpGatewayTransport({
+    baseUrl: 'https://aurora.example',
+    bearerToken: sessionToken,
+    eventStreamPath: '/api/events'
+  })
+})
+
+const health = client.events.watchHealth({
+  protocol: 'sse',
+  reconnect: true,
+  backfill: true
+})
+
+const assistant = client.events.streamAssistant({ prompt: 'Hello' }, {
+  protocol: 'websocket',
+  path: '/api/events'
+})
+```
+
+Tauri local shells expose the same API through an IPC command that returns backend/service event evidence:
+
+```ts
+const transport = new TauriLocalTransport({
+  invoke: window.__TAURI__.core.invoke,
+  commands: { eventSubscribe: 'aurora_event_subscribe' }
+})
+const client = new AuroraClient({ transport })
+
+for await (const event of client.events.watchConfig({ backfill: true })) {
+  event.audit.transport // "tauri-local"
+  event.audit.correlationId
+}
+```
+
+Mesh subscriptions are bridge-owned. The bridge may use WebRTC DataChannels, a local Gateway, or a native command, but it must return backend/peer event evidence:
+
+```ts
+const transport = new MeshP2PTransport({
+  defaultPeerId: 'peer-123',
+  bridge: {
+    async call(request) {
+      return meshRpc.call(request.peerId, request)
+    },
+    subscribe(request) {
+      return meshEvents.subscribe(request.peerId, {
+        stream: request.stream,
+        topics: request.topics,
+        lastEventId: request.lastEventId
+      })
+    }
+  }
+})
+
+const client = new AuroraClient({ transport })
+const events = client.events.watchHealth({ reconnect: true })
+```
+
+Native mobile shells use the same transport contract through their bridge layer. Android/iOS code should expose event support through a native/Tauri-style command only after the native manifest and backend route/policy evidence support the claimed feature:
+
+```ts
+const mobileClient = new AuroraClient({ transport: nativeMobileTransport })
+const configEvents = mobileClient.events.watchConfig({ kinds: ['config.updated'] })
+```
+
+Mocks can script success, failure, permission, and transport-loss paths deterministically:
+
+```ts
+const transport = new MockAuroraTransport()
+  .stream('assistant', [
+    { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-1' },
+    { id: '2', kind: 'assistant.delta', payload: { text: 'lo' }, correlation_id: 'corr-1' }
+  ])
+  .failStream('config', 'permission', 'Forbidden stream')
+
+const client = new AuroraClient({ transport })
+const stream = client.events.streamAssistant(undefined, { reconnect: true, backfill: true })
+```
+
+Reconnects carry the last delivered event ID back into the next transport subscription as `lastEventId`; `backfill` and `replayFrom` are request hints for transports/backends that support replay. The SDK does not invent event delivery, pairing success, health, config, tool execution, or audit state; it only normalizes events supplied by the selected transport.
+
 ## Native Mobile
 
 ```ts
