@@ -1,5 +1,6 @@
 export { AuroraClient } from './client.js'
 export { HttpGatewayTransport } from './http.js'
+export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
 export { TauriLocalTransport } from './tauri.js'
 export { AuthSession } from './session.js'
@@ -67,6 +68,18 @@ export type {
 } from './permissions.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
 export type { HttpTransportOptions } from './http.js'
+export type {
+  MeshAddressSelector,
+  MeshP2PTransportOptions,
+  MeshPeerBridge,
+  MeshPeerId,
+  MeshPeerManifest,
+  MeshRouteCandidate,
+  MeshRouteResolution,
+  MeshRouteResolver,
+  MeshRpcRequest,
+  MeshRpcResponse
+} from './mesh.js'
 export type {
   LocalFilePickOptions,
   LocalFilePickResult,
