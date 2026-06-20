@@ -1,14 +1,19 @@
 import { AuthSession } from './session.js'
 import { captureResult, unsupportedTransport, type AuroraResponse, type AuroraTransport } from './transport.js'
 import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
-import { summarizeCapabilities } from './capabilities.js'
+import { buildAdminOverviewManifest, summarizeCapabilities } from './capabilities.js'
 import type {
+  AdminOverviewManifest,
+  AdminOverviewManifestInput,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
   CapabilitySummary,
   GetRegistryResponse,
+  GetServicesResponse,
+  GatewayBuiltinRouteDescriptor,
   MethodDescriptor,
   NativeCapabilityManifest,
+  PeerSummary,
   RouteExplainRequest,
   RouteExplainResponse
 } from './types.js'
@@ -23,6 +28,7 @@ export class AuroraClient {
   readonly auth: AuthSession
   readonly registry: RegistryClient
   readonly capabilities: CapabilityClient
+  readonly adminOverview: AdminOverviewClient
   readonly routes: RouteClient
   readonly tools: ToolClient
   readonly native: NativeClient
@@ -34,6 +40,7 @@ export class AuroraClient {
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
     this.capabilities = new CapabilityClient(this)
+    this.adminOverview = new AdminOverviewClient(this)
     this.routes = new RouteClient(this)
     this.tools = new ToolClient(this)
     this.native = new NativeClient(this)
@@ -63,11 +70,15 @@ export class RegistryClient {
   constructor(private readonly client: AuroraClient) {}
 
   getRegistry(): Promise<GetRegistryResponse> {
-    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: routePath('Gateway', 'GetRegistry') })
+    return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, {}, { path: '/api/registry' })
   }
 
   async listMethods(): Promise<MethodDescriptor[]> {
     return describeRegistry(await this.getRegistry())
+  }
+
+  listServices(): Promise<GetServicesResponse> {
+    return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, {}, { path: '/api/services' })
   }
 }
 
@@ -96,6 +107,35 @@ export class RouteClient {
       request,
       { path: routePath('Gateway', 'ExplainRoute') }
     )
+  }
+}
+
+export interface AdminOverviewManifestOptions {
+  gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  nativeManifest?: NativeCapabilityManifest | null
+  peers?: PeerSummary[]
+  generatedAt?: string
+}
+
+export class AdminOverviewClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async getManifest(options: AdminOverviewManifestOptions = {}): Promise<AdminOverviewManifest> {
+    const [registry, services, capabilityCatalog] = await Promise.all([
+      this.client.registry.getRegistry(),
+      this.client.registry.listServices(),
+      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+    ])
+    const input: AdminOverviewManifestInput = {
+      registry,
+      services,
+      capabilityCatalog
+    }
+    if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
+    if (options.nativeManifest !== undefined) input.nativeManifest = options.nativeManifest
+    if (options.peers !== undefined) input.peers = options.peers
+    if (options.generatedAt !== undefined) input.generatedAt = options.generatedAt
+    return buildAdminOverviewManifest(input)
   }
 }
 
