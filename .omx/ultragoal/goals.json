@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T23:22:02.424Z",
+  "updatedAt": "2026-06-20T23:43:22.235Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -323,6 +323,17 @@
       "updatedAt": "2026-06-20T23:22:02.424Z",
       "evidence": "PER-202 implemented in commit 29a535e and PR https://github.com/joaojhgs/aurora/pull/90. Verification passed: scoped ruff, Supervisor unit tests 12 passed, Gateway AdminAction tests 9 passed, Supervisor schema generation, and git diff --check. PR is draft/open/mergeable with no checks reported.",
       "completedAt": "2026-06-20T23:22:02.424Z"
+    },
+    {
+      "id": "G030-per-204-memory-rag-provenance-contra",
+      "title": "PER-204 memory RAG provenance contracts",
+      "objective": "Finalize PER-204 / BE-017 by aligning memory/RAG provenance/export/delete contract docs with the existing backend governance implementation, then publish PR and QA handoff.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T23:43:22.235Z",
+      "updatedAt": "2026-06-20T23:46:08.529Z",
+      "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was issue-specific instead of the aggregate Ultragoal objective. PER-204 completed in commit 845e20d and draft PR https://github.com/joaojhgs/aurora/pull/92. Verification passed: git diff --check; /home/developer/.local/bin/uv run --extra test-unit --extra service-db --extra gateway pytest tests/unit/db/test_service.py tests/unit/gateway/test_route_generator_adminaction.py -q (29 passed, 3 existing deprecation warnings). Docs now align DB.RAGSearch as internal and expose policy-gated RAG namespace/search/provenance/export/import surfaces.",
+      "completedAt": "2026-06-20T23:46:08.529Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
