@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T05:59:09.772Z",
+  "updatedAt": "2026-06-20T07:15:11.839Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -268,6 +268,17 @@
       "createdAt": "2026-06-20T05:59:09.772Z",
       "updatedAt": "2026-06-20T05:59:09.772Z",
       "evidence": ".omx/plans/PER-192-diagnostics-support-bundle.md"
+    },
+    {
+      "id": "G025-per-193-backup-restore-contracts",
+      "title": "PER-193 backup restore contracts",
+      "objective": "Implement and verify PER-193 BE-006 backup/restore contracts for config, DB/RAG, and model state with manage permissions, AdminAction/audit behavior, tests, PR, and QA handoff without touching unrelated changes.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T07:06:05.901Z",
+      "updatedAt": "2026-06-20T07:15:11.839Z",
+      "evidence": "PER-193 implementation complete locally. Verification passed: /home/developer/.local/bin/uv run pytest tests/unit/services/test_backup_service.py tests/unit/gateway/test_route_generator_adminaction.py -q (12 passed); /home/developer/.local/bin/uv run python -m py_compile touched Python files; git diff --check. Ruff unavailable: uv run ruff failed to spawn because ruff is not installed.",
+      "completedAt": "2026-06-20T07:15:11.839Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",

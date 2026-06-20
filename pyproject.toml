@@ -669,6 +669,7 @@ service-tooling = "app.services.tooling.__main__:run"
 service-tts = "app.services.tts.__main__:run"
 service-auth = "app.services.auth.__main__:run"
 service-gateway = "app.services.gateway.__main__:run"
+service-backup = "app.services.backup.__main__:run"
 aurora-build = "scripts.build:main"
 aurora-setup = "scripts.setup:main"
 
