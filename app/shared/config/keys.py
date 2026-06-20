@@ -687,6 +687,25 @@ class _ServicesSttWakewordConfigPath(ConfigPath):
         return self
 
 
+class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
+    default_approval_mode: ConfigPath
+    default_share: ConfigPath
+    default_token_ttl_seconds: ConfigPath
+    rules: ConfigPath
+
+    def __new__(cls) -> _ServicesToolingApprovalPolicyConfigPath:
+        self = super().__new__(cls, "services.tooling.approval_policy")
+        self.default_approval_mode = ConfigPath(
+            "services.tooling.approval_policy.default_approval_mode"
+        )
+        self.default_share = ConfigPath("services.tooling.approval_policy.default_share")
+        self.default_token_ttl_seconds = ConfigPath(
+            "services.tooling.approval_policy.default_token_ttl_seconds"
+        )
+        self.rules = ConfigPath("services.tooling.approval_policy.rules")
+        return self
+
+
 class _ServicesToolingHardwareAccelerationConfigPath(ConfigPath):
     ocr_bg: ConfigPath
     ocr_curr: ConfigPath
@@ -898,6 +917,7 @@ class _ServicesSttConfigPath(ConfigPath):
 
 
 class _ServicesToolingConfigPath(ConfigPath):
+    approval_policy: _ServicesToolingApprovalPolicyConfigPath
     enabled: ConfigPath
     hardware_acceleration: _ServicesToolingHardwareAccelerationConfigPath
     mcp: _ServicesToolingMcpConfigPath
@@ -906,6 +926,7 @@ class _ServicesToolingConfigPath(ConfigPath):
 
     def __new__(cls) -> _ServicesToolingConfigPath:
         self = super().__new__(cls, "services.tooling")
+        self.approval_policy = _ServicesToolingApprovalPolicyConfigPath()
         self.enabled = ConfigPath("services.tooling.enabled")
         self.hardware_acceleration = _ServicesToolingHardwareAccelerationConfigPath()
         self.mcp = _ServicesToolingMcpConfigPath()
