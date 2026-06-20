@@ -12,12 +12,12 @@ from typing import Any
 
 from pydantic import Field
 
-from app.shared.contracts.registry import IOModel
 from app.shared.contracts.models.aurora import (
     AuroraEventCategory,
     AuroraEventStreamEvent,
     AuroraMethods,
 )
+from app.shared.contracts.registry import IOModel
 
 # =============================================================================
 # Module Identifiers
@@ -716,6 +716,11 @@ class RouteCandidateDecision(IOModel):
     active_calls: int = 0
     max_concurrent: int = 0
     available_capacity: int | None = None
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+    auth_rbac_state: str = "unknown"
+    transport: str = "unknown"
+    privacy_class: str = "public"
     blockers: list[RouteBlockerInfo] = Field(default_factory=list)
 
 

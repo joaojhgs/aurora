@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T09:11:07.253Z",
+  "updatedAt": "2026-06-20T22:13:02.760Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -301,6 +301,17 @@
       "updatedAt": "2026-06-20T09:11:07.253Z",
       "evidence": "PER-197 implemented in commit 2bcbe97 and PR https://github.com/joaojhgs/aurora/pull/80. Verification passed: targeted pytest 15 passed, py_compile passed, scoped git diff --check passed. Ruff unavailable: uv run ruff failed to spawn and python -m ruff reported no module named ruff.",
       "completedAt": "2026-06-20T09:11:07.253Z"
+    },
+    {
+      "id": "G028-per-200-be-013-route-explain-contrac",
+      "title": "PER-200 BE-013 route explain contract finish",
+      "objective": "Finalize and verify PER-200/BE-013 Gateway capability catalog and route explain contracts by adding missing route explain candidate policy, freshness, auth/RBAC, transport, and privacy-class fields; update focused tests and hand off to QA with PR evidence.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T22:04:40.729Z",
+      "updatedAt": "2026-06-20T22:13:02.760Z",
+      "evidence": "Route explain candidate policy/freshness/auth/transport/privacy fields implemented and verified: pytest target 15 passed; ruff passed; py_compile passed; git diff --check passed.",
+      "completedAt": "2026-06-20T22:13:02.760Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
