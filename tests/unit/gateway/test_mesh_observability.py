@@ -9,7 +9,11 @@ import pytest
 
 from app.messaging.bus import Envelope, QueryResult
 from app.services.auth.auth_manager import _audit_event_matches_trace
-from app.services.gateway.service import GatewayService, _event_from_envelope
+from app.services.gateway.service import (
+    GatewayService,
+    _diagnostic_redacted_copy,
+    _event_from_envelope,
+)
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.aurora import AuroraMethods
 from app.shared.contracts.models.config import ConfigMethods
@@ -77,6 +81,37 @@ def test_event_normalization_redacts_payload_and_extracts_correlation():
     assert "secret-token" not in dumped
     assert "/home/user/audio.wav" not in dumped
     assert event.payload_sha256
+
+
+def test_diagnostic_redaction_omits_personal_content_fields():
+    payload = {
+        "text": "call my doctor tomorrow",
+        "message": "private chat message",
+        "query": "sensitive RAG lookup",
+        "prompt": "personal assistant prompt",
+        "result": {"output": "private tool output"},
+        "safe_status": "denied",
+        "details": json.dumps(
+            {
+                "response": "assistant transcript",
+                "transcription": "wakeword captured speech",
+            }
+        ),
+    }
+
+    redacted = _diagnostic_redacted_copy(payload)
+    dumped = json.dumps(redacted)
+
+    assert "call my doctor" not in dumped
+    assert "private chat message" not in dumped
+    assert "sensitive RAG lookup" not in dumped
+    assert "personal assistant prompt" not in dumped
+    assert "private tool output" not in dumped
+    assert "assistant transcript" not in dumped
+    assert "wakeword captured speech" not in dumped
+    assert redacted["safe_status"] == "denied"
+    assert redacted["text"]["redacted"] is True
+    assert redacted["details"]["response"]["redacted"] is True
 
 
 @pytest.mark.asyncio
