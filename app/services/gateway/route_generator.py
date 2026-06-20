@@ -7,8 +7,6 @@ Uses lazy generation - routes are created when registry changes, not at startup.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
@@ -16,9 +14,18 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.services.gateway.admin_action import (
+    ADMIN_ACTION_DIGEST_HEADER,
+    ADMIN_ACTION_ID_HEADER,
+    ADMIN_ACTION_REQUIRED_HEADERS,
+    ADMIN_ACTION_TOKEN_HEADER,
+    AdminActionManager,
+    AdminActionReceipt,
+    admin_action_digest,
+)
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.config import ConfigMethods
-from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -55,54 +62,52 @@ _ADMIN_ACTION_REQUIRED_TOPICS = {
     ConfigMethods.SET_PLUGIN,
 }
 
-_ADMIN_ACTION_ID_HEADER = "X-Aurora-AdminAction-Id"
-_ADMIN_ACTION_DIGEST_HEADER = "X-Aurora-AdminAction-Digest"
-_ADMIN_ACTION_REASON_HEADER = "X-Aurora-AdminAction-Reason"
-_ADMIN_ACTION_REAUTH_HEADER = "X-Aurora-AdminAction-Reauth"
+_ADMIN_ACTION_EXEMPT_TOPICS = {
+    AuthMethods.AUDIT_LOG,
+    AuthMethods.LIST_DEVICES,
+    AuthMethods.LIST_PRINCIPALS,
+    AuthMethods.LIST_TOKENS,
+    GatewayMethods.ADMIN_ACTION_DRAFT,
+    GatewayMethods.ADMIN_ACTION_CONFIRM,
+    GatewayMethods.EXPLAIN_ROUTE,
+    GatewayMethods.GET_CAPABILITY_CATALOG,
+    GatewayMethods.GET_CAPABILITY_GRAPH,
+    GatewayMethods.GET_MESH_STATUS,
+    GatewayMethods.GET_SUPPORT_BUNDLE,
+    GatewayMethods.LIST_EVENTS,
+}
+
+_admin_action_digest = admin_action_digest
 
 
-def _admin_action_digest(topic: str, principal_id: str | None, payload: Any) -> str:
-    """Return the stable digest expected for a confirmed admin action."""
-    encoded = json.dumps(
-        {
-            "topic": topic,
-            "principal_id": principal_id,
-            "payload": payload or {},
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-
-
-def _admin_action_required(topic: str) -> bool:
-    return topic in _ADMIN_ACTION_REQUIRED_TOPICS
+def _admin_action_required(topic: str, method_type: str | None = None) -> bool:
+    if topic in _ADMIN_ACTION_EXEMPT_TOPICS:
+        return False
+    return topic in _ADMIN_ACTION_REQUIRED_TOPICS or method_type == "manage"
 
 
 async def _enforce_admin_action(
     bus: MessageBus,
+    manager: AdminActionManager,
     *,
     topic: str,
     principal_id: str | None,
     payload: dict[str, Any],
     headers: Mapping[str, str],
-) -> None:
+) -> AdminActionReceipt:
     """Require explicit AdminAction confirmation for high-risk generated routes."""
     from fastapi import HTTPException
 
-    action_id = headers.get(_ADMIN_ACTION_ID_HEADER, "").strip()
-    provided_digest = headers.get(_ADMIN_ACTION_DIGEST_HEADER, "").strip()
-    reason = headers.get(_ADMIN_ACTION_REASON_HEADER, "").strip()
-    reauth = headers.get(_ADMIN_ACTION_REAUTH_HEADER, "").strip().lower()
+    action_id = headers.get(ADMIN_ACTION_ID_HEADER, "").strip()
+    confirmation_token = headers.get(ADMIN_ACTION_TOKEN_HEADER, "").strip()
+    digest = headers.get(ADMIN_ACTION_DIGEST_HEADER, "").strip()
 
     missing = [
         name
         for name, value in (
-            (_ADMIN_ACTION_ID_HEADER, action_id),
-            (_ADMIN_ACTION_DIGEST_HEADER, provided_digest),
-            (_ADMIN_ACTION_REASON_HEADER, reason),
-            (_ADMIN_ACTION_REAUTH_HEADER, reauth),
+            (ADMIN_ACTION_ID_HEADER, action_id),
+            (ADMIN_ACTION_TOKEN_HEADER, confirmation_token),
+            (ADMIN_ACTION_DIGEST_HEADER, digest),
         )
         if not value
     ]
@@ -113,38 +118,31 @@ async def _enforce_admin_action(
                 "code": "admin_action_required",
                 "message": "AdminAction confirmation is required",
                 "missing_headers": missing,
+                "required_headers": list(ADMIN_ACTION_REQUIRED_HEADERS),
             },
         )
 
-    if reauth != "confirmed":
-        raise HTTPException(
-            status_code=428,
-            detail={
-                "code": "admin_action_reauth_required",
-                "message": "Recent admin reauthentication is required",
-            },
-        )
-
-    expected_digest = _admin_action_digest(topic, principal_id, payload)
-    if not hmac.compare_digest(provided_digest, expected_digest):
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "admin_action_digest_mismatch",
-                "message": "AdminAction digest does not match the request payload",
-            },
-        )
+    receipt = manager.consume(
+        action_id=action_id,
+        confirmation_token=confirmation_token,
+        digest=digest,
+        method_id=topic,
+        principal_id=principal_id,
+        payload=payload,
+    )
 
     details = {
-        "action_id": action_id,
+        "action_id": receipt.action_id,
+        "audit_receipt": receipt.audit_receipt,
         "topic": topic,
         "principal_id": principal_id,
-        "reason": reason,
-        "request_digest": expected_digest,
+        "reason": receipt.reason,
+        "request_digest": digest,
+        "affected_resources": receipt.affected_resources,
         "reauth_confirmed": True,
     }
     try:
-        await bus.request(
+        result = await bus.request(
             AuthMethods.STORE_AUDIT_EVENT,
             StoreAuditEventRequest(
                 event="admin.action.confirmed",
@@ -155,8 +153,20 @@ async def _enforce_admin_action(
             origin="internal",
             principal_id=principal_id,
         )
+        if hasattr(result, "ok") and not result.ok:
+            raise RuntimeError(result.error or "audit storage failed")
+        if hasattr(result, "data") and hasattr(result.data, "success") and not result.data.success:
+            raise RuntimeError(getattr(result.data, "message", None) or "audit storage failed")
     except Exception as exc:
         log_warning(f"Failed to audit AdminAction for {topic}: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "admin_action_audit_failed",
+                "message": "AdminAction audit storage failed; request was not forwarded",
+            },
+        ) from exc
+    return receipt
 
 
 def _resolve_refs(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -380,6 +390,7 @@ class RouteGenerator:
         bus: MessageBus,
         registry: RegistryAggregator,
         request_timeout: float = 30.0,
+        admin_action_manager: AdminActionManager | None = None,
     ):
         """Initialize the route generator.
 
@@ -391,6 +402,7 @@ class RouteGenerator:
         self._bus = bus
         self._registry = registry
         self._request_timeout = request_timeout
+        self._admin_action_manager = admin_action_manager or AdminActionManager()
 
         # Track generated routes per service
         self._service_routes: dict[str, list[str]] = {}
@@ -629,6 +641,7 @@ class RouteGenerator:
         request_model_cls.model_rebuild()
         method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
         route_bus = self._bus
+        admin_action_manager = self._admin_action_manager
 
         # Create handler factory to properly capture the model types
         def create_typed_handler(
@@ -664,9 +677,11 @@ class RouteGenerator:
                 # Use exclude_unset=True to only send fields that were explicitly
                 # provided, allowing the service's model to use its own defaults
                 payload = request_body.model_dump(exclude_unset=True) if request_body else {}
-                if _admin_action_required(method_id):
-                    await _enforce_admin_action(
+                admin_action_receipt = None
+                if _admin_action_required(method_id, method_info.method_type):
+                    admin_action_receipt = await _enforce_admin_action(
                         route_bus,
+                        admin_action_manager,
                         topic=method_id,
                         principal_id=pid,
                         payload=payload,
@@ -687,7 +702,12 @@ class RouteGenerator:
 
                 log_debug(f"typed_handler returning: {response_data}")
                 # Return JSONResponse to ensure proper serialization
-                return JSONResponse(content=response_data)
+                headers = {}
+                if admin_action_receipt:
+                    headers["X-Aurora-AdminAction-Audit-Receipt"] = (
+                        admin_action_receipt.audit_receipt
+                    )
+                return JSONResponse(content=response_data, headers=headers)
 
             # Explicitly set annotations to actual model classes (not strings)
             typed_handler.__annotations__ = {

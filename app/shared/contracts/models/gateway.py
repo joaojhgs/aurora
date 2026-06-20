@@ -49,6 +49,8 @@ class GatewayMethods:
     EVENT_STREAM = f"{GatewayModule.NAME}.EventStream"
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
+    ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
+    ADMIN_ACTION_CONFIRM = f"{GatewayModule.NAME}.AdminActionConfirm"
 
 
 # =============================================================================
@@ -170,6 +172,61 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class AdminActionHeaderNames(IOModel):
+    """HTTP headers used to submit a confirmed AdminAction."""
+
+    action_id: str = "X-Aurora-AdminAction-Id"
+    confirmation_token: str = "X-Aurora-AdminAction-Token"
+    digest: str = "X-Aurora-AdminAction-Digest"
+
+
+class AdminActionDraftRequest(IOModel):
+    """Request a short-lived draft for a high-risk admin action."""
+
+    method_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    affected_resources: list[str] = Field(default_factory=list)
+
+
+class AdminActionDraftResponse(IOModel):
+    """Draft details that a client must display before confirmation."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    method_id: str
+    affected_resources: list[str] = Field(default_factory=list)
+    required_phrase: str = "CONFIRM"
+    required_reason: bool = True
+    required_reauth: bool = True
+    expires_at: str
+    expires_in_seconds: int
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
+
+
+class AdminActionConfirmRequest(IOModel):
+    """Confirm a drafted AdminAction after reauth/reason collection."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    reason: str
+    reauth_confirmed: bool
+    phrase: str = "CONFIRM"
+
+
+class AdminActionConfirmResponse(IOModel):
+    """Single-use confirmation token for submitting the matching action."""
+
+    action_id: str
+    confirmation_token: str
+    digest: str
+    confirmed: bool = True
+    expires_at: str
+    audit_receipt: str
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
 
 
 class MeshLocalStatus(IOModel):
