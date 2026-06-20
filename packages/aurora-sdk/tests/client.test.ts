@@ -5,10 +5,12 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  backendInventoryFixture,
   buildAdminOverviewManifest,
   capabilityCatalogFixture,
   createAuditReceipt,
   createAuroraEvent,
+  describeBackendInventory,
   describeRegistry,
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
@@ -452,6 +454,63 @@ describe('descriptors', () => {
         busTopic: 'Gateway.GetRegistry'
       })
     )
+  })
+
+  it('ingests generated backend inventory without changing route or permission truth', () => {
+    const generated = describeBackendInventory(backendInventoryFixture)
+    const registryMethods = describeRegistry(gatewayRegistryFixture)
+    const generatedByTopic = new Map(generated.methods.map((method) => [method.busTopic, method]))
+
+    for (const registryMethod of registryMethods) {
+      const generatedMethod = generatedByTopic.get(registryMethod.busTopic)
+      expect(generatedMethod).toBeDefined()
+      expect(generatedMethod).toEqual(
+        expect.objectContaining({
+          busTopic: registryMethod.busTopic,
+          routePath: registryMethod.routePath,
+          requiredPermissions: registryMethod.requiredPermissions,
+          availableOverHttp: registryMethod.availableOverHttp
+        })
+      )
+    }
+
+    expect(generated.methodTypes['Gateway.GetRegistry']).toEqual(
+      expect.objectContaining({
+        busTopic: 'Gateway.GetRegistry',
+        requestModel: null,
+        responseModel: 'GetRegistryResponse',
+        responseSchema: expect.objectContaining({ title: 'GetRegistryResponse' })
+      })
+    )
+    expect(generated.gatewayBuiltins).toEqual([
+      expect.objectContaining({
+        routePath: '/api/registry',
+        httpMethods: ['GET'],
+        requiredPermissions: []
+      }),
+      expect.objectContaining({
+        routePath: '/api/admin/peers',
+        methodType: 'manage',
+        requiredPermissions: ['Auth.manage']
+      })
+    ])
+  })
+
+  it('rejects generated backend inventory methods without backend bus identity', () => {
+    expect(() =>
+      describeBackendInventory({
+        methods: [
+          {
+            module: 'Gateway',
+            name: 'Broken',
+            bus_topic: null,
+            exposure: 'external',
+            method_type: 'use',
+            required_perms: []
+          }
+        ]
+      })
+    ).toThrow('missing bus_topic')
   })
 
   it('can carry explicit AuroraError metadata', () => {
