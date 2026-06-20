@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-19T22:39:07.030Z",
+  "updatedAt": "2026-06-19T23:55:42.575Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -234,7 +234,19 @@
       "evidence": "PER-264 live proof completed with temporary Redis 7.2.5 at redis://127.0.0.1:6379. Required setup via /home/developer/.local/bin/uv sync --extra mode-processes --extra gateway --extra test-integration succeeded. Docker Compose Redis remained unavailable due /var/run/docker.sock permission denied, so non-Docker Redis was built/run from /tmp. REDIS_URL=redis://127.0.0.1:6379 /home/developer/.local/bin/uv run python scripts/mesh_gap_e2e_harness.py --mode process_bullmq_redis passed: status pass, 15 passed, 0 failed, 0 dependency_gap. REDIS_URL=redis://127.0.0.1:6379 /home/developer/.local/bin/uv run pytest tests/integration/messaging/test_bullmq_redis_roundtrip.py -q passed 2. Artifact inspection passed for .omx/reports/mesh-gap-e2e/latest/report.json, events.ndjson, support_bundle.json: no raw Redis URL, no secret-token, no /home/developer path, 37 correlated pass events, 15 bundle correlation ids, bundle redaction true.",
       "startedAt": "2026-06-19T22:34:12.687Z",
       "completedAt": "2026-06-19T22:39:07.030Z"
+    },
+    {
+      "id": "G022-per-189-capability-manifest-contract",
+      "title": "PER-189 capability manifest contract",
+      "objective": "Formalize and verify the PER-189 SDK-computed admin overview capability manifest contract from Gateway registry, services, capability catalog, gateway built-ins, native placeholders, and peer evidence; open a PR and hand off to QA.",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-06-19T23:55:30.747Z",
+      "updatedAt": "2026-06-19T23:55:42.575Z",
+      "evidence": ".omx/plans/PER-189-capability-manifest-contract.md and Multica PER-189 acceptance criteria",
+      "startedAt": "2026-06-19T23:55:42.575Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "activeGoalId": "G022-per-189-capability-manifest-contract"
 }

@@ -11,7 +11,7 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.auth import GatewayAuth
 from app.services.gateway.route_generator import RouteGenerator
 from app.shared.contracts.models.auth import AuthMethods, LoginRequest, LoginResponse
-from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
 from scripts.generate_backend_inventory import (
     build_inventory,
     validate_ui_fixture_references,
@@ -43,6 +43,30 @@ def test_backend_inventory_classifies_gateway_builtins_and_fixture_references():
     assert builtins["/api/health"]["route_kind"] == "gateway_builtin"
     assert builtins["/api/admin/peers"]["required_perms"] == ["Auth.manage"]
     assert inventory["ui_fixture_validation"]["ok"] is True
+
+
+def test_backend_inventory_supports_admin_overview_manifest_contract():
+    inventory = build_inventory()
+    methods = {method["bus_topic"]: method for method in inventory["methods"]}
+    builtins = {route["routePath"]: route for route in inventory["gateway_builtins"]}
+
+    for topic in (
+        GatewayMethods.GET_CAPABILITY_CATALOG,
+        GatewayMethods.EXPLAIN_ROUTE,
+        GatewayMethods.GET_SUPPORT_BUNDLE,
+    ):
+        assert topic in methods
+        assert methods[topic]["exposure"] == "external"
+        assert methods[topic]["method_type"] == "manage"
+        assert methods[topic]["required_perms"] == ["Gateway.manage"]
+        assert methods[topic]["routePath"] == f"/api/Gateway/{topic.split('.', 1)[1]}"
+
+    assert builtins["/api/health"]["method_type"] == "gateway"
+    assert builtins["/api/registry"]["route_kind"] == "gateway_builtin"
+    assert builtins["/api/services"]["route_kind"] == "gateway_builtin"
+    assert builtins["/api/routes"]["exposure"] == "gateway_builtin"
+    assert builtins["/api/admin/peers"]["method_type"] == "manage"
+    assert builtins["/api/admin/peers"]["required_perms"] == ["Auth.manage"]
 
 
 def test_ui_fixture_validation_fails_for_unmarked_missing_public_reference(tmp_path: Path):
