@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T09:02:28.018Z",
+  "updatedAt": "2026-06-20T09:11:07.253Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -295,11 +295,12 @@
       "id": "G027-per-197-config-schema-metadata-diff",
       "title": "PER-197 config schema metadata diff rollback",
       "objective": "Implement and verify PER-197 / BE-010 Config service backend contracts for UI-readable schema metadata, diff preview, version history, rollback, reload-impact preview, secret redaction, AdminAction-gated manage routes, tests, PR, and QA handoff without production UI wiring or unrelated changes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-06-20T09:02:28.018Z",
-      "updatedAt": "2026-06-20T09:02:28.018Z",
-      "evidence": ".omx/plans/PER-197-config-schema-metadata-diff-rollback.md"
+      "updatedAt": "2026-06-20T09:11:07.253Z",
+      "evidence": "PER-197 implemented in commit 2bcbe97 and PR https://github.com/joaojhgs/aurora/pull/80. Verification passed: targeted pytest 15 passed, py_compile passed, scoped git diff --check passed. Ruff unavailable: uv run ruff failed to spawn and python -m ruff reported no module named ruff.",
+      "completedAt": "2026-06-20T09:11:07.253Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
