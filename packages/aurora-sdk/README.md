@@ -153,6 +153,50 @@ Internal bus access is explicit to the Tauri command implementation. The SDK pre
 ## Mesh
 
 ```ts
+import { AuroraClient, MeshP2PTransport } from '@aurora/client'
+
+const transport = new MeshP2PTransport({
+  defaultPeerId: 'peer-123',
+  fallbackPeerIds: ['peer-456'],
+  routeResolver: async (request) => {
+    const selector = request.payload && typeof request.payload === 'object'
+      ? (request.payload as { selector?: { peer_id?: string } }).selector
+      : undefined
+    return {
+      peerId: selector?.peer_id ?? 'peer-123',
+      selector,
+      candidates: [
+        { peerId: 'peer-123', providerId: 'remote:TTS:peer-123', module: 'TTS', eligible: true },
+        { peerId: 'peer-456', providerId: 'remote:TTS:peer-456', module: 'TTS', eligible: true, fallback: true }
+      ],
+      fallbackAllowed: true
+    }
+  },
+  bridge: {
+    async call(request) {
+      // A WebRTC DataChannel, Tauri command, native mobile bridge, or test harness
+      // supplies this implementation. It must return backend/peer evidence.
+      return meshRpc.call(request.peerId, {
+        method: request.busTopic,
+        params: request.payload,
+        correlation_id: request.correlationId
+      })
+    }
+  }
+})
+
+const client = new AuroraClient({ transport })
+
+const synth = await client.requestResult('TTS.Synthesize', {
+  text: 'Hello',
+  selector: { peer_id: 'peer-123', module: 'TTS' }
+})
+
+if (synth.ok) {
+  synth.audit.targetPeerId
+  synth.audit.correlationId
+}
+
 const route = await client.routes.explain({
   topic: 'TTS.Synthesize',
   selector: { peer_id: 'peer-123', module: 'TTS' }
@@ -184,7 +228,9 @@ client.auth.updateFromPairingExchange({
 client.permissions.check(['TTS.Synthesize'], 'use').allowed
 ```
 
-Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
+`MeshP2PTransport` is an interface over peer RPC rather than a WebRTC implementation. The bridge owns DataChannel/native details; the SDK preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
+
+Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
 
 ## Native Mobile
 

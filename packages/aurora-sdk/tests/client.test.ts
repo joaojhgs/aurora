@@ -4,6 +4,7 @@ import {
   AuroraClient,
   AuroraError,
   HttpGatewayTransport,
+  MeshP2PTransport,
   MockAuroraTransport,
   TauriLocalTransport,
   backendInventoryFixture,
@@ -702,6 +703,141 @@ describe('AuroraClient', () => {
     })
     expect(native.ok).toBe(false)
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
+  })
+
+  it('routes SDK calls through a mesh peer bridge with selector, candidates, and audit metadata', async () => {
+    const calls: unknown[] = []
+    const transport = new MeshP2PTransport({
+      defaultPeerId: 'peer-kitchen',
+      fallbackPeerIds: ['peer-office'],
+      routeResolver: (request) => ({
+        peerId: 'peer-kitchen',
+        selector: { peer_id: 'peer-kitchen', module: 'TTS', service_instance_id: 'tts-remote' },
+        candidates: [
+          {
+            peerId: 'peer-kitchen',
+            providerId: 'remote:TTS:kitchen',
+            serviceInstanceId: 'tts-remote',
+            module: 'TTS',
+            eligible: true,
+            latencyMs: 12
+          }
+        ],
+        fallbackAllowed: true
+      }),
+      bridge: {
+        async call(request) {
+          calls.push(request)
+          return {
+            data: { ok: true, provider_peer_id: request.peerId },
+            correlationId: 'corr-mesh-1',
+            targetPeerId: request.peerId,
+            status: 'success',
+            secretsRedacted: true
+          }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.requestResult<{ ok: boolean }>('TTS.Synthesize', { text: 'hello' })
+
+    expect(result.ok).toBe(true)
+    expect(calls[0]).toEqual(
+      expect.objectContaining({
+        peerId: 'peer-kitchen',
+        method: 'TTS.Synthesize',
+        busTopic: 'TTS.Synthesize',
+        payload: { text: 'hello' },
+        selector: { peer_id: 'peer-kitchen', module: 'TTS', service_instance_id: 'tts-remote' },
+        candidates: expect.arrayContaining([
+          expect.objectContaining({ peerId: 'peer-kitchen', eligible: true }),
+          expect.objectContaining({ peerId: 'peer-office', fallback: true })
+        ])
+      })
+    )
+    if (result.ok) {
+      expect(result.audit).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-mesh-1',
+          method: 'TTS.Synthesize',
+          busTopic: 'TTS.Synthesize',
+          targetPeerId: 'peer-kitchen',
+          status: 'success',
+          transport: 'mesh'
+        })
+      )
+    }
+  })
+
+  it('derives mesh target peer from explicit payload selector without inventing route state', async () => {
+    const transport = new MeshP2PTransport({
+      bridge: {
+        async call(request) {
+          return { data: { peer: request.peerId }, targetPeerId: request.peerId }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.requestResult<{ peer: string }>('Tooling.ExecuteTool', {
+      mesh_selector: { peer_id: 'peer-den', tool_id: 'tool:remote:lights' },
+      args: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.peer).toBe('peer-den')
+  })
+
+  it('classifies mesh permission, validation, timeout, unavailable, privacy, unsupported, and transport-loss paths', async () => {
+    const cases = [
+      [{ error: { code: 'permission_denied', message: 'Forbidden' } }, 'permission'],
+      [{ error: { reason_code: 'validation_error', message: 'Invalid payload' } }, 'validation'],
+      [{ error: { reason_code: 'timeout', message: 'Remote timed out' } }, 'timeout'],
+      [{ error: { reason_code: 'no_route', message: 'No route to provider' } }, 'unavailable_service'],
+      [{ error: { reason_code: 'privacy_blocked', message: 'Explicit selector required' } }, 'privacy_blocked'],
+      [{ error: { code: 'unsupported_feature', message: 'Unsupported method' } }, 'unsupported_feature'],
+      [new TypeError('DataChannel closed'), 'transport_loss']
+    ] as const
+
+    for (const [bridgeResult, expected] of cases) {
+      const transport = new MeshP2PTransport({
+        defaultPeerId: 'peer-kitchen',
+        bridge: {
+          async call() {
+            if (bridgeResult instanceof Error) throw bridgeResult
+            return bridgeResult
+          }
+        }
+      })
+      const client = new AuroraClient({ transport })
+      const result = await client.requestResult('TTS.Synthesize', { text: 'hello' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error.code).toBe(expected)
+    }
+  })
+
+  it('blocks mesh requests when route resolution reports privacy or no eligible peer', async () => {
+    const privacyClient = new AuroraClient({
+      transport: new MeshP2PTransport({
+        bridge: { async call() { return { data: {} } } },
+        routeResolver: () => ({ privacyBlockedReason: 'selector required by policy' })
+      })
+    })
+    const privacy = await privacyClient.requestResult('TTS.Synthesize', { text: 'hello' })
+    expect(privacy.ok).toBe(false)
+    if (!privacy.ok) expect(privacy.error.code).toBe('privacy_blocked')
+
+    const unavailableClient = new AuroraClient({
+      transport: new MeshP2PTransport({
+        bridge: { async call() { return { data: {} } } },
+        routeResolver: () => ({ unavailableReason: 'stale_provider', candidates: [{ peerId: 'peer-old', eligible: false }] })
+      })
+    })
+    const unavailable = await unavailableClient.requestResult('TTS.Synthesize', { text: 'hello' })
+    expect(unavailable.ok).toBe(false)
+    if (!unavailable.ok) expect(unavailable.error.code).toBe('unavailable_service')
   })
 
   it('bridges SDK requests through Tauri invoke without rewriting method identity', async () => {
