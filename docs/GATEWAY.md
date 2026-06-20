@@ -234,6 +234,21 @@ The endpoint never returns Redis credentials, tokens, host filesystem paths, pee
 or raw logs. Process-mode details come from Gateway registry announcements and bus runtime
 state; mesh peer topology is treated as untrusted unless future policy explicitly upgrades it.
 
+#### WebRTC, ICE, and DataChannel Diagnostics
+```
+POST /api/Gateway/GetWebRTCDiagnostics
+```
+Returns a read-only, redacted WebRTC transport snapshot for admin diagnostics and UI
+degraded-state decisions. The response includes local WebRTC enablement, mesh peer identity,
+auth and pairing timeouts, signaling configuration health, connected peer counts, per-peer
+connection/ICE/signaling/data-channel states, RTT when known, auth state, pairing state, pending
+RPC count, and recent redacted error codes.
+
+The endpoint is registered as an external `manage` method requiring `Gateway.manage`. It does not
+return tokens, passwords, raw signaling payloads, decrypted data-channel messages, or peer secrets.
+Sensitive diagnostic messages are replaced with a generic redacted event marker before they are
+stored in the recent-error buffer.
+
 ### Service Endpoints
 
 All service methods with `exposure="external"` or `exposure="both"` are automatically exposed as:

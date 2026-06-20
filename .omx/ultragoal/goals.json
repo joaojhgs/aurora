@@ -303,7 +303,18 @@
       "completedAt": "2026-06-20T09:11:07.253Z"
     },
     {
-      "id": "G028-per-202-supervisor-service-controls",
+      "id": "G028-per-201-webrtc-diagnostics-contract",
+      "title": "PER-201 WebRTC diagnostics contract",
+      "objective": "Implement and verify PER-201 / BE-014: add typed, redacted WebRTC/ICE/data-channel diagnostics through Gateway.GetWebRTCDiagnostics, include support-bundle evidence, tests, PR, and QA handoff without production UI wiring or unrelated changes.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-20T22:03:35.338Z",
+      "updatedAt": "2026-06-20T22:17:55.169Z",
+      "evidence": "Implemented Gateway.GetWebRTCDiagnostics contract, RTCClient redacted diagnostics, support bundle integration, SDK fixtures/client/types, docs, and targeted Python/SDK tests.",
+      "completedAt": "2026-06-20T22:17:55.169Z"
+    },
+    {
+      "id": "G029-per-202-supervisor-service-controls",
       "title": "PER-202 supervisor service controls",
       "objective": "Implement and verify PER-202 / BE-015 by explicitly gating Supervisor start/stop/restart controls with typed availability state, internal-only manage contracts, docs, tests, PR, and QA handoff.",
       "status": "pending",
