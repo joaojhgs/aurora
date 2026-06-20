@@ -393,6 +393,164 @@ describe('AuroraClient', () => {
     if (!native.ok) expect(native.error.code).toBe('native_permission_missing')
   })
 
+  it('tracks user, admin, mesh peer, system, expired, and revoked auth session states', () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    client.auth.updateFromLogin({
+      user_id: 'user-1',
+      username: 'Ada',
+      permissions: ['Gateway.use'],
+      is_admin: false,
+      expires_at: '2030-01-01T00:00:00Z'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-1',
+        principalName: 'Ada',
+        isAuthenticated: true,
+        isAdmin: false,
+        tokenExpiresAt: '2030-01-01T00:00:00Z'
+      })
+    )
+
+    client.auth.updateFromTokenValidation({
+      valid: true,
+      principal_id: 'admin-1',
+      principal_name: 'Owner',
+      permissions: ['Auth.manage'],
+      effective_perms: ['Auth.manage', 'Gateway.manage'],
+      is_admin: true,
+      source: 'http_bearer'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'admin',
+        principalId: 'admin-1',
+        isAdmin: true,
+        credentialKind: 'bearer_token',
+        effectivePermissions: ['Auth.manage', 'Gateway.manage']
+      })
+    )
+
+    client.auth.updateFromPairingExchange({
+      user_id: 'peer-principal-1',
+      device_id: 'device-1',
+      permissions: ['TTS.use'],
+      peer_id: 'peer-1',
+      node_name: 'Kitchen node'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'mesh_peer',
+        principalId: 'peer-principal-1',
+        peerId: 'peer-1',
+        nodeName: 'Kitchen node',
+        isMeshPeer: true,
+        credentialKind: 'mesh_peer_token'
+      })
+    )
+
+    client.auth.updateFromWhoAmI({
+      principal_id: 'system',
+      principal_name: 'SYSTEM',
+      permissions: ['*'],
+      effective_perms: ['*'],
+      is_admin: true,
+      source: 'api_key'
+    })
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'api_key_system',
+        principalId: 'system',
+        isSystem: true,
+        isAdmin: true,
+        credentialKind: 'api_key'
+      })
+    )
+    expect(client.auth.hasPermission('Auth.DeletePrincipal')).toBe(true)
+
+    client.auth.setAuthenticated('user-2', ['Gateway.use'], '2020-01-01T00:00:00Z')
+    client.auth.refreshClock(new Date('2020-01-01T00:00:01Z'))
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'expired',
+        needsAuthentication: true,
+        isTerminal: true
+      })
+    )
+
+    client.auth.revoke('Token revoked by admin')
+    expect(client.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'revoked',
+        reason: 'Token revoked by admin',
+        needsAuthentication: true
+      })
+    )
+  })
+
+  it('uses 401 and 403 results to update auth session without mutating on transport loss', async () => {
+    const authTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), {
+          status: 401
+        })
+    })
+    const authClient = new AuroraClient({ transport: authTransport })
+    authClient.auth.setAuthenticated('user-1', ['Gateway.use'])
+    const authResult = await authClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(authResult.ok).toBe(false)
+    expect(authClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'expired',
+        status: 401,
+        needsAuthentication: true
+      })
+    )
+
+    const permissionTransport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ detail: { code: 'permission_denied', message: 'Forbidden' } }), {
+          status: 403
+        })
+    })
+    const permissionClient = new AuroraClient({ transport: permissionTransport })
+    permissionClient.auth.setAuthenticated('user-2', ['Gateway.use'])
+    const permissionResult = await permissionClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+
+    expect(permissionResult.ok).toBe(false)
+    expect(permissionClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'forbidden',
+        status: 403,
+        isDenied: true,
+        isTerminal: true
+      })
+    )
+
+    const lossClient = new AuroraClient({
+      transport: {
+        kind: 'mock',
+        request: async () => {
+          throw new TypeError('network unavailable')
+        }
+      }
+    })
+    lossClient.auth.setAuthenticated('user-3', ['Gateway.use'])
+    await lossClient.requestResult('Gateway.GetRegistry')
+
+    expect(lossClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-3'
+      })
+    )
+  })
+
   it('builds canonical audit receipts and event envelopes from backend-shaped payloads', () => {
     const receipt = createAuditReceipt({
       correlation_id: 'corr-event-1',

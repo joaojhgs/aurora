@@ -59,14 +59,19 @@ export class AuroraClient {
     payload?: TPayload,
     options: { path?: string; busTopic?: string; timeoutMs?: number } = {}
   ): Promise<TData> {
-    const response = await this.transport.request<TData, TPayload>({
-      method,
-      busTopic: options.busTopic ?? method,
-      path: options.path,
-      payload,
-      timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
-    })
-    return response.data
+    try {
+      const response = await this.transport.request<TData, TPayload>({
+        method,
+        busTopic: options.busTopic ?? method,
+        path: options.path,
+        payload,
+        timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
+      })
+      return response.data
+    } catch (error) {
+      this.auth.applyError(normalizeError(error))
+      throw error
+    }
   }
 
   async requestResult<TData = unknown, TPayload = unknown>(
@@ -96,6 +101,7 @@ export class AuroraClient {
       }
     } catch (error) {
       const normalized = normalizeError(error)
+      this.auth.applyError(normalized)
       return {
         ok: false,
         error: normalized,

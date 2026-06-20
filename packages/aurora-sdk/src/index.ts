@@ -34,3 +34,14 @@ export {
 export type * from './types.js'
 export type * from './transport.js'
 export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
+export type {
+  AuthCredentialKind,
+  AuthSessionIdentity,
+  AuthSessionListener,
+  AuthSessionSnapshot,
+  AuthSessionState,
+  LoginLikeResponse,
+  PairingExchangeLikeResponse,
+  ValidateTokenLikeResponse,
+  WhoAmILikeResponse
+} from './session.js'
