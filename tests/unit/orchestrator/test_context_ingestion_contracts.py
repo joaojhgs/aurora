@@ -3,31 +3,23 @@
 from __future__ import annotations
 
 import json
-import sys
-from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-graph_module = ModuleType("app.services.orchestrator.graph")
-graph_module.GraphOrchestrator = MagicMock()
-graph_module.set_orchestrator = MagicMock()
-sys.modules["app.services.orchestrator.graph"] = graph_module
-
-from app.services.orchestrator.service import OrchestratorService  # noqa: E402
-from app.shared.contracts.models.auth import AuthMethods  # noqa: E402
-from app.shared.contracts.models.db import DBMethods  # noqa: E402
-from app.shared.contracts.models.orchestrator import (  # noqa: E402
+from app.services.orchestrator.service import OrchestratorService
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.orchestrator import (
     AttachmentContextIngestRequest,
     AttachmentContextItem,
     OrchestratorMethods,
 )
-from app.shared.contracts.registry import all_contracts, clear_registry  # noqa: E402
+from app.shared.contracts.registry import all_contracts, clear_registry
 
 
 def _service_with_bus(bus: AsyncMock) -> OrchestratorService:
-    with patch("app.shared.services.base_service.get_bus_singleton", return_value=bus):
-        service = OrchestratorService()
+    service = OrchestratorService()
     service._bus = bus
     return service
 
@@ -49,23 +41,24 @@ async def test_ingest_context_redacts_and_stores_text_in_rag():
     bus.request = AsyncMock(return_value=None)
     service = _service_with_bus(bus)
 
-    response = await service.ingest_context(
-        AttachmentContextIngestRequest(
-            storage_policy="rag",
-            privacy_class="personal",
-            caller_principal_id="user-1",
-            correlation_id="corr-1",
-            policy_decision_id="policy-1",
-            items=[
-                AttachmentContextItem(
-                    kind="text",
-                    title="Notes",
-                    content_text="Keep this. api_key=sk-secret-value",
-                    metadata={"source": "unit"},
-                )
-            ],
+    with patch("app.shared.services.base_service.get_bus_singleton", return_value=bus):
+        response = await service.ingest_context(
+            AttachmentContextIngestRequest(
+                storage_policy="rag",
+                privacy_class="personal",
+                caller_principal_id="user-1",
+                correlation_id="corr-1",
+                policy_decision_id="policy-1",
+                items=[
+                    AttachmentContextItem(
+                        kind="text",
+                        title="Notes",
+                        content_text="Keep this. api_key=sk-secret-value",
+                        metadata={"source": "unit"},
+                    )
+                ],
+            )
         )
-    )
 
     assert response.accepted is True
     assert response.rejected is False
@@ -100,13 +93,14 @@ async def test_ingest_context_rejects_oversized_item_without_rag_store():
     bus.request = AsyncMock(return_value=None)
     service = _service_with_bus(bus)
 
-    response = await service.ingest_context(
-        AttachmentContextIngestRequest(
-            storage_policy="rag",
-            limits={"max_item_bytes": 4},
-            items=[AttachmentContextItem(kind="text", content_text="too large")],
+    with patch("app.shared.services.base_service.get_bus_singleton", return_value=bus):
+        response = await service.ingest_context(
+            AttachmentContextIngestRequest(
+                storage_policy="rag",
+                limits={"max_item_bytes": 4},
+                items=[AttachmentContextItem(kind="text", content_text="too large")],
+            )
         )
-    )
 
     assert response.accepted is False
     assert response.rejected is True
@@ -121,13 +115,14 @@ async def test_ingest_context_blocks_secret_privacy_class():
     bus.request = AsyncMock(return_value=None)
     service = _service_with_bus(bus)
 
-    response = await service.ingest_context(
-        AttachmentContextIngestRequest(
-            storage_policy="ephemeral",
-            privacy_class="credential",
-            items=[AttachmentContextItem(kind="text", content_text="password=secret")],
+    with patch("app.shared.services.base_service.get_bus_singleton", return_value=bus):
+        response = await service.ingest_context(
+            AttachmentContextIngestRequest(
+                storage_policy="ephemeral",
+                privacy_class="credential",
+                items=[AttachmentContextItem(kind="text", content_text="password=secret")],
+            )
         )
-    )
 
     assert response.accepted is False
     assert response.rejected_items[0].reason_code == "privacy_class_blocked"

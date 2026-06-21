@@ -2,20 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-graph_module = ModuleType("app.services.orchestrator.graph")
-graph_module.GraphOrchestrator = MagicMock()
-graph_module.set_orchestrator = MagicMock()
-sys.modules["app.services.orchestrator.graph"] = graph_module
-
-from app.services.orchestrator.service import OrchestratorService  # noqa: E402
-from app.shared.contracts.models.orchestrator import (  # noqa: E402
+from app.services.orchestrator.service import OrchestratorService
+from app.shared.contracts.models.orchestrator import (
     ModelRuntimeCatalogRequest,
     ModelRuntimeOperationRequest,
     ModelRuntimeOperationStatusRequest,
