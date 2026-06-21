@@ -17,6 +17,8 @@ import {
   buildOnboardingViewModel,
   RouteMatrix,
   StateSurface,
+  applyAssistantStreamDelta,
+  assistantControlsForRoute,
   assistantErrorMessage,
   buildShellSnapshot,
   errorShellSnapshot,
@@ -198,12 +200,86 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
+
+  it('keeps assistant stop capability disabled until Orchestrator.Interrupt evidence exists', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const assistantRoute = route(snapshot, 'assistant')
+    const controlsWithoutInterrupt = assistantControlsForRoute(assistantRoute, undefined, true)
+
+    expect(controlsWithoutInterrupt.canCancel).toBe(false)
+    expect(controlsWithoutInterrupt.cancelReason).toContain('missing Orchestrator.Interrupt')
+
+    const interruptRoute = {
+      ...assistantRoute,
+      item: {
+        ...assistantRoute.item,
+        id: 'assistant-cancel',
+        capabilityMethod: 'Interrupt'
+      },
+      disabled: false,
+      blockers: [],
+      state: 'available-local' as const
+    }
+    const controlsWithInterrupt = assistantControlsForRoute(assistantRoute, interruptRoute, true)
+
+    expect(controlsWithInterrupt.canCancel).toBe(true)
+    expect(controlsWithInterrupt.cancelReason).toContain('supported')
+  })
+
+  it('accumulates assistant stream deltas without replacing backend text with local-only state', () => {
+    const message = {
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Waiting for Aurora stream...',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }
+
+    const first = applyAssistantStreamDelta(message, streamUpdate('Hel'))
+    const second = applyAssistantStreamDelta(first, streamUpdate('lo'))
+
+    expect(first.text).toBe('Hel')
+    expect(second.text).toBe('Hello')
+    expect(second.status).toBe('streaming')
+  })
 })
 
 function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: string) {
   const match = snapshot.routes.find((candidate) => candidate.item.id === id)
   if (!match) throw new Error(`missing route ${id}`)
   return match
+}
+
+function streamUpdate(textDelta: string) {
+  return {
+    kind: 'delta' as const,
+    eventId: 'event-1',
+    sessionId: 'session-1',
+    text: textDelta,
+    textDelta,
+    modelLabel: null,
+    error: null,
+    audit: {
+      correlationId: 'corr-1',
+      eventKind: 'assistant.delta',
+      peerId: null,
+      principalId: null,
+      targetPeerId: null,
+      method: 'Orchestrator.ExternalUserInput',
+      busTopic: 'Orchestrator.ExternalUserInput',
+      toolId: null,
+      resourceId: null,
+      status: null,
+      transport: 'mock',
+      redaction: {
+        secretsRedacted: true,
+        redactedFields: [],
+        source: 'sdk' as const,
+        warnings: []
+      }
+    },
+    metadata: {}
+  }
 }
 
 function stateMatrixCatalog(): CapabilityCatalogResponse {

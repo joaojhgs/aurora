@@ -2108,6 +2108,105 @@ describe('AuroraClient', () => {
 })
 
 describe('AuroraClient assistant namespace', () => {
+  it('streams assistant deltas, final event evidence, and model metadata', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      { id: 's1', kind: 'assistant.delta', payload: { textDelta: 'Hel' }, correlation_id: 'corr-stream' },
+      { id: 's2', kind: 'assistant.delta', payload: { delta: 'lo' }, correlation_id: 'corr-stream' },
+      {
+        id: 's3',
+        kind: 'assistant.completed',
+        payload: { text: 'Hello', session_id: 'session-stream', metadata: { model: 'mock-stream' } },
+        correlation_id: 'corr-stream'
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 3)
+
+    expect(events.map((event) => event.kind)).toEqual(['delta', 'delta', 'completed'])
+    expect(events[0]?.textDelta).toBe('Hel')
+    expect(events[1]?.textDelta).toBe('lo')
+    expect(events[2]).toEqual(
+      expect.objectContaining({
+        eventId: 's3',
+        sessionId: 'session-stream',
+        text: 'Hello',
+        modelLabel: 'mock-stream',
+        audit: expect.objectContaining({ correlationId: 'corr-stream' })
+      })
+    )
+  })
+
+  it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'fallback please' }), 1)
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: 'fallback',
+        sessionId: 'mock-assistant-session',
+        text: 'Mock Aurora response to "fallback please"',
+        modelLabel: 'mock-local'
+      })
+    )
+  })
+
+  it('reports transport loss after the last streamed event instead of inventing completion', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
+      throw new TypeError('stream disconnected')
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 2)
+
+    expect(events[0]?.kind).toBe('delta')
+    expect(events[1]).toEqual(
+      expect.objectContaining({
+        kind: 'transport_lost',
+        error: expect.objectContaining({ code: 'transport_loss' })
+      })
+    )
+  })
+
+  it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.interrupt, (request) => {
+      capturedPayload = request.payload
+      return {
+        interrupt_id: 'interrupt-1',
+        status: 'interrupted',
+        requested_scopes: ['generation', 'session'],
+        results: [],
+        session_id: 'session-123',
+        request_id: 'request-123',
+        event_topic: 'Orchestrator.Interrupted',
+        audit_event: 'orchestrator.interrupt.requested',
+        idempotent: true,
+        secrets_redacted: true
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.cancel({
+      sessionId: 'session-123',
+      requestId: 'request-123',
+      scopes: ['generation', 'session']
+    })
+
+    expect(capturedPayload).toEqual({
+      scopes: ['generation', 'session'],
+      reason: 'user_interrupt',
+      session_id: 'session-123',
+      request_id: 'request-123'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected interrupt success')
+    expect(result.data.status).toBe('interrupted')
+  })
+
   it('sends text prompts through Orchestrator.ExternalUserInput and normalizes final responses', async () => {
     let capturedPayload: unknown
     const transport = new MockAuroraTransport()

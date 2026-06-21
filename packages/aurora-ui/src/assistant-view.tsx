@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { SendHorizontal } from 'lucide-react'
+import { RotateCcw, SendHorizontal, StopCircle, WifiOff } from 'lucide-react'
 import type {
   AssistantMessage as SdkAssistantMessage,
   AssistantRoutePolicy,
+  AssistantStreamUpdate,
   AuroraClient,
   AuroraError,
   AuroraResponse
@@ -15,10 +16,11 @@ import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 export interface AssistantViewProps {
   client: AuroraClient
   route: RouteAvailability
+  cancellationRoute?: RouteAvailability | undefined
   storageKey?: string
 }
 
-export type AssistantUiMessageStatus = 'sent' | 'sending' | 'failed'
+export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'failed' | 'cancelled'
 
 export interface AssistantUiMessage {
   id: string
@@ -34,18 +36,37 @@ export interface AssistantSessionSnapshot {
   messages: AssistantUiMessage[]
 }
 
+export type AssistantStreamStatus = 'idle' | 'streaming' | 'fallback' | 'lost' | 'cancelled'
+
+export interface AssistantStreamState {
+  status: AssistantStreamStatus
+  lastEventId: string | null
+  message: string | null
+}
+
+export interface AssistantControlState {
+  canSend: boolean
+  canCancel: boolean
+  cancelReason: string
+}
+
 const defaultStorageKey = 'aurora.assistant.session.v1'
 
-export function AssistantView({ client, route, storageKey = defaultStorageKey }: AssistantViewProps) {
+export function AssistantView({ client, route, cancellationRoute, storageKey = defaultStorageKey }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())
   const [text, setText] = useState('')
   const [lastResult, setLastResult] = useState<SdkAssistantMessage | null>(null)
   const [modelLabel, setModelLabel] = useState<string | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null)
+  const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
   const isSending = session.messages.some((message) => message.status === 'sending')
-  const canSend = !route.disabled && !isSending
+  const isStreaming = session.messages.some((message) => message.status === 'streaming')
+  const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming)
+  const canSend = controls.canSend
 
   useEffect(() => {
     setSession(loadAssistantSession(storageKey))
@@ -55,11 +76,16 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
     persistAssistantSession(storageKey, session)
   }, [session, storageKey])
 
+  useEffect(() => () => abortRef.current?.abort(), [])
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const prompt = text.trim()
     if (!prompt || !canSend) return
+    await startAssistantTurn(prompt)
+  }
 
+  async function startAssistantTurn(prompt: string, replayFrom: string | null = null) {
     const now = new Date().toISOString()
     const userMessage: AssistantUiMessage = {
       id: `user-${Date.now()}`,
@@ -71,24 +97,35 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
     const pendingMessage: AssistantUiMessage = {
       id: `assistant-pending-${Date.now()}`,
       role: 'assistant',
-      text: 'Waiting for Aurora response...',
+      text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
       createdAt: now,
-      status: 'sending'
+      status: 'streaming'
     }
 
     setText('')
+    setLastPrompt(prompt)
     setLastError(null)
+    setStreamState({ status: 'streaming', lastEventId: replayFrom, message: replayFrom ? 'Replaying from last known event.' : null })
     setSession((current) => ({
       ...current,
       messages: [...current.messages, userMessage, pendingMessage]
     }))
 
-    const result = await client.assistant.sendMessage({
+    const abort = new AbortController()
+    abortRef.current = abort
+    for await (const update of client.assistant.streamMessage({
       text: prompt,
       sessionId: session.sessionId,
-      routePolicy
-    })
-    applyAssistantResult(result, pendingMessage.id)
+      routePolicy,
+      signal: abort.signal,
+      replayFrom
+    })) {
+      applyAssistantStreamUpdate(update, pendingMessage.id)
+      if (update.kind === 'completed' || update.kind === 'failed' || update.kind === 'fallback' || update.kind === 'transport_lost') {
+        break
+      }
+    }
+    if (abortRef.current === abort) abortRef.current = null
   }
 
   function applyAssistantResult(result: AuroraResponse<import('@aurora/client').AssistantSendMessageResult>, pendingId: string) {
@@ -129,6 +166,123 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
     }))
   }
 
+  function applyAssistantStreamUpdate(update: AssistantStreamUpdate, pendingId: string) {
+    if (update.eventId) {
+      setStreamState((current) => ({ ...current, lastEventId: update.eventId }))
+    }
+    if (update.modelLabel) setModelLabel(update.modelLabel)
+    if (update.kind === 'transport_lost') {
+      const error = assistantErrorMessage(update.error ?? new Error('Assistant stream disconnected.'))
+      setLastError(error)
+      setStreamState((current) => ({
+        status: 'lost',
+        lastEventId: current.lastEventId,
+        message: 'Stream disconnected. Replay will request events after the last backend event when the transport supports it.'
+      }))
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: message.text.trim() ? message.text : error,
+                status: 'failed',
+                error
+              }
+            : message
+        )
+      }))
+      return
+    }
+    if (update.kind === 'failed') {
+      const error = assistantErrorMessage(update.error ?? new Error(update.text))
+      setLastError(error)
+      setStreamState((current) => ({ ...current, status: 'lost', message: error }))
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: error,
+                status: 'failed',
+                error
+              }
+            : message
+        )
+      }))
+      return
+    }
+    if (update.kind === 'fallback') {
+      setStreamState((current) => ({
+        status: 'fallback',
+        lastEventId: update.eventId ?? current.lastEventId,
+        message: 'Streaming was unavailable; Aurora returned a final non-streaming response.'
+      }))
+    }
+    if (update.kind === 'completed' || update.kind === 'fallback') {
+      setLastResult({
+        id: update.eventId ?? `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: update.text,
+        createdAt: new Date().toISOString()
+      })
+      setSession((current) => ({
+        sessionId: update.sessionId ?? current.sessionId ?? session.sessionId,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? {
+                id: update.eventId ?? message.id,
+                role: 'assistant',
+                text: update.text,
+                createdAt: message.createdAt,
+                status: 'sent'
+              }
+            : message
+        )
+      }))
+      if (update.kind === 'completed') {
+        setStreamState((current) => ({ ...current, status: 'idle', message: 'Final assistant event received.' }))
+      }
+      return
+    }
+    if (update.kind === 'delta') {
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId ? applyAssistantStreamDelta(message, update) : message
+        )
+      }))
+    }
+  }
+
+  async function onCancel() {
+    if (!controls.canCancel) return
+    abortRef.current?.abort()
+    const result = await client.assistant.cancel({
+      sessionId: session.sessionId,
+      reason: 'user_interrupt'
+    })
+    if (result.ok) {
+      setStreamState((current) => ({ ...current, status: 'cancelled', message: `Interrupt ${result.data.status}` }))
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.status === 'streaming' || message.status === 'sending'
+            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            : message
+        )
+      }))
+      return
+    }
+    setLastError(assistantErrorMessage(result.error))
+  }
+
+  async function retryLastPrompt(replay = false) {
+    if (!lastPrompt || !canSend) return
+    await startAssistantTurn(replay ? lastPrompt : lastPrompt, replay ? streamState.lastEventId : null)
+  }
+
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
       <header className="aui-assistant-header">
@@ -142,9 +296,21 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
           <EvidenceBadge label={route.providerLabel} />
           <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
           <EvidenceBadge label={client.transport.kind} />
+          <EvidenceBadge label={streamState.status === 'idle' ? 'stream ready' : `stream ${streamState.status}`} />
           {session.sessionId ? <EvidenceBadge label={`session ${session.sessionId}`} /> : null}
         </div>
       </header>
+
+      {streamState.status === 'lost' || streamState.status === 'fallback' ? (
+        <div className="aui-stream-banner" role="status" aria-live="polite">
+          <WifiOff size={17} aria-hidden />
+          <span>{streamState.message}</span>
+          <button type="button" onClick={() => void retryLastPrompt(true)} disabled={!lastPrompt || !canSend}>
+            <RotateCcw size={15} aria-hidden />
+            <span>Replay</span>
+          </button>
+        </div>
+      ) : null}
 
       <div className="aui-assistant-grid">
         <div className="aui-chat-panel" aria-live="polite">
@@ -166,6 +332,8 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
             <div><dt>Privacy</dt><dd>{route.item.privacyClass}</dd></div>
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
+            <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
+            <div><dt>Last stream event</dt><dd>{streamState.lastEventId ?? 'none'}</dd></div>
             <div><dt>Model</dt><dd>{modelLabel ?? (lastResult ? 'not reported' : 'pending backend response')}</dd></div>
           </dl>
           <p>{route.explanation}</p>
@@ -185,6 +353,14 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
           placeholder={route.disabled ? 'Assistant capability is unavailable' : 'Ask Aurora...'}
           rows={3}
         />
+        <button type="button" className="aui-secondary-button" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
+          <StopCircle size={17} aria-hidden />
+          <span>Stop</span>
+        </button>
+        <button type="button" className="aui-secondary-button" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
+          <RotateCcw size={17} aria-hidden />
+          <span>Retry</span>
+        </button>
         <button type="submit" disabled={!canSend || text.trim().length === 0} aria-label="Send assistant prompt">
           <SendHorizontal size={17} aria-hidden />
           <span>Send</span>
@@ -196,6 +372,10 @@ export function AssistantView({ client, route, storageKey = defaultStorageKey }:
 
 export function emptyAssistantSession(): AssistantSessionSnapshot {
   return { sessionId: null, messages: [] }
+}
+
+export function idleAssistantStreamState(): AssistantStreamState {
+  return { status: 'idle', lastEventId: null, message: null }
 }
 
 export function loadAssistantSession(storageKey: string): AssistantSessionSnapshot {
@@ -232,12 +412,58 @@ export function routePolicyFromRoute(route: RouteAvailability): AssistantRoutePo
   }
 }
 
-export function assistantErrorMessage(error: AuroraError): string {
-  if (error.code === 'timeout') return 'Aurora timed out before returning a final assistant response.'
-  if (error.code === 'auth' || error.code === 'permission') return 'Assistant request denied by authentication or permissions.'
-  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Assistant service is unavailable in this backend or deployment mode.'
-  if (error.code === 'privacy_blocked') return 'Assistant route is blocked by privacy policy until required consent or selector evidence exists.'
+export function assistantErrorMessage(error: AuroraError | Error): string {
+  if ('code' in error && error.code === 'timeout') return 'Aurora timed out before returning a final assistant response.'
+  if ('code' in error && (error.code === 'auth' || error.code === 'permission')) return 'Assistant request denied by authentication or permissions.'
+  if ('code' in error && (error.code === 'unavailable_service' || error.code === 'unsupported_feature')) return 'Assistant service is unavailable in this backend or deployment mode.'
+  if ('code' in error && error.code === 'privacy_blocked') return 'Assistant route is blocked by privacy policy until required consent or selector evidence exists.'
+  if ('code' in error && error.code === 'transport_loss') return 'Assistant stream disconnected before Aurora sent a final event.'
   return error.message || 'Assistant request failed.'
+}
+
+export function assistantControlsForRoute(
+  route: RouteAvailability,
+  cancellationRoute: RouteAvailability | undefined,
+  busy: boolean
+): AssistantControlState {
+  const canSend = !route.disabled && !busy
+  if (!busy) {
+    return {
+      canSend,
+      canCancel: false,
+      cancelReason: 'no active response'
+    }
+  }
+  if (!cancellationRoute) {
+    return {
+      canSend,
+      canCancel: false,
+      cancelReason: 'unsupported: missing Orchestrator.Interrupt capability evidence'
+    }
+  }
+  if (cancellationRoute.disabled) {
+    return {
+      canSend,
+      canCancel: false,
+      cancelReason: cancellationRoute.blockers.join(', ') || 'unsupported by backend capability state'
+    }
+  }
+  return {
+    canSend,
+    canCancel: true,
+    cancelReason: 'supported by Orchestrator.Interrupt'
+  }
+}
+
+export function applyAssistantStreamDelta(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
+  const currentText = message.text === 'Waiting for Aurora stream...' || message.text === 'Replaying stream from last backend event...'
+    ? ''
+    : message.text
+  return {
+    ...message,
+    text: `${currentText}${update.textDelta}`,
+    status: 'streaming'
+  }
 }
 
 function ChatBubble({ message }: { message: AssistantUiMessage }) {
@@ -260,6 +486,10 @@ function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
     (message.role === 'user' || message.role === 'assistant') &&
     typeof message.text === 'string' &&
     typeof message.createdAt === 'string' &&
-    (message.status === 'sent' || message.status === 'sending' || message.status === 'failed')
+    (message.status === 'sent' ||
+      message.status === 'sending' ||
+      message.status === 'streaming' ||
+      message.status === 'failed' ||
+      message.status === 'cancelled')
   )
 }
