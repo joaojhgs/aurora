@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-main",
+  "description": "Main Aurora desktop shell capability. Grants only the TAURI-001 SDK bridge, native manifest, sidecar health, shutdown, and minimal window/app/event primitives.",
+  "windows": ["main"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "aurora-request",
+    "aurora-native-capability-manifest",
+    "aurora-sidecar-status",
+    "aurora-shutdown"
+  ]
+}

@@ -12,6 +12,11 @@ from typing import Any
 
 from pydantic import Field
 
+from app.shared.contracts.models.aurora import (
+    AuroraEventCategory,
+    AuroraEventStreamEvent,
+    AuroraMethods,
+)
 from app.shared.contracts.registry import IOModel
 
 # =============================================================================
@@ -42,6 +47,17 @@ class GatewayMethods:
     GET_REGISTRY = f"{GatewayModule.NAME}.GetRegistry"
     GET_SERVICES = f"{GatewayModule.NAME}.GetServices"
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
+    GET_DEPLOYMENT_TOPOLOGY = f"{GatewayModule.NAME}.GetDeploymentTopology"
+    GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
+    GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
+    GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
+    EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
+    GET_WEBRTC_DIAGNOSTICS = f"{GatewayModule.NAME}.GetWebRTCDiagnostics"
+    EVENT_STREAM = AuroraMethods.EVENT_STREAM
+    LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
+    GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
+    ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
+    ADMIN_ACTION_CONFIRM = f"{GatewayModule.NAME}.AdminActionConfirm"
 
 
 # =============================================================================
@@ -163,6 +179,708 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class BusHealth(IOModel):
+    """Read-only message bus health and dependency state."""
+
+    backend: str = "unknown"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_available: bool | None = None
+    queue_lag_known: bool = False
+    queue_depth: int | None = None
+    published: int | None = None
+    delivered: int | None = None
+    retries: int | None = None
+    dead_letters: int | None = None
+    status: str = "unknown"
+    degraded_reasons: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ServiceProcessTopology(IOModel):
+    """Sanitized process/thread/container topology for one service."""
+
+    module: str
+    status: str = "unknown"
+    topology: str = "unknown"
+    instance_id: str | None = None
+    container_hint: str | None = None
+    process_hint: str | None = None
+    last_seen: str | None = None
+    stale: bool = False
+
+
+class ContainerTopologyHints(IOModel):
+    """Sanitized container/process-mode topology hints."""
+
+    orchestrator: str = "unknown"
+    compose_file: str | None = None
+    redis_service: str | None = None
+    gateway_service: str | None = None
+    config_service: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class DeploymentTopologyResponse(IOModel):
+    """Read-only deployment topology and bus health for UI/SDK consumers."""
+
+    architecture_mode: str = "threads"
+    runtime_mode: str = "local"
+    bus_backend: str = "LocalBus"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_queue_health: BusHealth = Field(default_factory=BusHealth)
+    service_process_topology: list[ServiceProcessTopology] = Field(default_factory=list)
+    container_topology_hints: ContainerTopologyHints = Field(default_factory=ContainerTopologyHints)
+    mode_capability_degradations: list[str] = Field(default_factory=list)
+    mesh_peer_topology_trusted: bool | None = None
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    secrets_redacted: bool = True
+
+
+class AdminActionHeaderNames(IOModel):
+    """HTTP headers used to submit a confirmed AdminAction."""
+
+    action_id: str = "X-Aurora-AdminAction-Id"
+    confirmation_token: str = "X-Aurora-AdminAction-Token"
+    digest: str = "X-Aurora-AdminAction-Digest"
+
+
+class AdminActionDraftRequest(IOModel):
+    """Request a short-lived draft for a high-risk admin action."""
+
+    method_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    affected_resources: list[str] = Field(default_factory=list)
+
+
+class AdminActionDraftResponse(IOModel):
+    """Draft details that a client must display before confirmation."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    method_id: str
+    affected_resources: list[str] = Field(default_factory=list)
+    required_phrase: str = "CONFIRM"
+    required_reason: bool = True
+    required_reauth: bool = True
+    expires_at: str
+    expires_in_seconds: int
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
+
+
+class AdminActionConfirmRequest(IOModel):
+    """Confirm a drafted AdminAction after reauth/reason collection."""
+
+    action_id: str
+    nonce: str
+    digest: str
+    reason: str
+    reauth_confirmed: bool
+    phrase: str = "CONFIRM"
+
+
+class AdminActionConfirmResponse(IOModel):
+    """Single-use confirmation token for submitting the matching action."""
+
+    action_id: str
+    confirmation_token: str
+    digest: str
+    confirmed: bool = True
+    expires_at: str
+    audit_receipt: str
+    confirmation_headers: AdminActionHeaderNames = Field(default_factory=AdminActionHeaderNames)
+
+
+class MeshLocalStatus(IOModel):
+    """Local mesh identity and runtime status."""
+
+    mesh_enabled: bool = False
+    mesh_started: bool = False
+    webrtc_started: bool = False
+    peer_id: str | None = None
+    node_name: str = ""
+    peer_selection: str = ""
+    version_policy: str = ""
+    shared_modules: list[str] = Field(default_factory=list)
+    routed_modules: list[str] = Field(default_factory=list)
+
+
+class MeshPeerServiceDiagnostic(IOModel):
+    """Diagnostic view of a service advertised by a mesh peer."""
+
+    module: str
+    version: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    method_names: list[str] = Field(default_factory=list)
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    digest: str = ""
+
+
+class MeshPeerCompatibilityDiagnostic(IOModel):
+    """Compatibility reports for a peer's manifest negotiation."""
+
+    local_compatible: list[str] = Field(default_factory=list)
+    local_incompatible: list[str] = Field(default_factory=list)
+    local_unused: list[str] = Field(default_factory=list)
+    remote_compatible: list[str] = Field(default_factory=list)
+    remote_incompatible: list[str] = Field(default_factory=list)
+    remote_unused: list[str] = Field(default_factory=list)
+
+
+class MeshPeerDiagnostic(IOModel):
+    """Runtime diagnostic view of one mesh peer."""
+
+    peer_id: str
+    node_name: str = ""
+    status: str = "unknown"
+    latency_ms: float | None = None
+    last_ping_age_s: float | None = None
+    last_manifest_age_s: float | None = None
+    active_calls: int = 0
+    services: list[MeshPeerServiceDiagnostic] = Field(default_factory=list)
+    compatibility: MeshPeerCompatibilityDiagnostic = Field(
+        default_factory=MeshPeerCompatibilityDiagnostic
+    )
+
+
+class MeshRouteProviderDiagnostic(IOModel):
+    """Why one peer is or is not eligible to provide a module."""
+
+    peer_id: str
+    node_name: str = ""
+    status: str = "unknown"
+    version: str = ""
+    latency_ms: float | None = None
+    active_calls: int = 0
+    max_concurrent: int = 0
+    eligible: bool = False
+    reason_code: str = ""
+    reason: str = ""
+
+
+class MeshRouteDiagnostic(IOModel):
+    """Diagnostic view of routing for one service module."""
+
+    module: str
+    configured: bool = False
+    share: bool = False
+    prefer: str = ""
+    fallback: str = ""
+    min_version: str | None = None
+    required_capabilities: list[str] = Field(default_factory=list)
+    decision_target: str = "local"
+    decision_peer_id: str | None = None
+    decision_version: str = ""
+    decision_latency_ms: float | None = None
+    reason: str = ""
+    providers: list[MeshRouteProviderDiagnostic] = Field(default_factory=list)
+
+
+class MeshCompatibilityFailure(IOModel):
+    """Flattened compatibility failure for operator scanning."""
+
+    peer_id: str
+    module: str
+    direction: str
+    reason: str = ""
+
+
+class GetMeshStatusResponse(IOModel):
+    """Read-only mesh status and route diagnostic dump."""
+
+    local: MeshLocalStatus = Field(default_factory=MeshLocalStatus)
+    peers: list[MeshPeerDiagnostic] = Field(default_factory=list)
+    routes: list[MeshRouteDiagnostic] = Field(default_factory=list)
+    compatibility_failures: list[MeshCompatibilityFailure] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
+class WebRTCSignalingDiagnostic(IOModel):
+    """Safe signaling-plane status for WebRTC diagnostics."""
+
+    strategy: str = ""
+    connected: bool = False
+    encrypted_presence: bool = False
+    app_id_configured: bool = False
+    room_configured: bool = False
+    broker_count: int = 0
+    public_broker_warning: bool = False
+
+
+class WebRTCPeerDiagnostic(IOModel):
+    """Safe per-peer WebRTC, ICE, data-channel, and auth diagnostic state."""
+
+    signaling_peer_id: str
+    stable_peer_id: str
+    node_name: str = ""
+    connection_state: str = "unknown"
+    ice_connection_state: str = "unknown"
+    ice_gathering_state: str = "unknown"
+    signaling_state: str = "unknown"
+    data_channel_state: str = "unknown"
+    data_channel_label: str = ""
+    has_send_channel: bool = False
+    rtt_ms: float | None = None
+    auth_state: str = "unknown"
+    identity_source: str = ""
+    is_admin: bool = False
+    effective_permission_count: int = 0
+    pairing_active: bool = False
+    auth_timeout_pending: bool = False
+    pending_pairing_task: bool = False
+
+
+class WebRTCDiagnosticError(IOModel):
+    """Redacted recent WebRTC diagnostic error or lifecycle warning."""
+
+    timestamp: str
+    code: str
+    message: str
+    peer_id: str | None = None
+
+
+class WebRTCDiagnosticsResponse(IOModel):
+    """Read-only WebRTC, ICE, signaling, and DataChannel diagnostics."""
+
+    enabled: bool = False
+    started: bool = False
+    mesh_enabled: bool = False
+    local_signaling_peer_id: str | None = None
+    local_mesh_peer_id: str | None = None
+    local_node_name: str = ""
+    require_auth: bool = False
+    auth_timeout_seconds: float = 0.0
+    pairing_timeout_seconds: float = 0.0
+    app_layer_e2ee_enabled: bool = False
+    signaling: WebRTCSignalingDiagnostic = Field(default_factory=WebRTCSignalingDiagnostic)
+    peers: list[WebRTCPeerDiagnostic] = Field(default_factory=list)
+    connected_peer_count: int = 0
+    authenticated_peer_count: int = 0
+    pairing_peer_count: int = 0
+    pending_rpc_count: int = 0
+    recent_errors: list[WebRTCDiagnosticError] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
+GatewayEventStreamEvent = AuroraEventStreamEvent
+
+
+class GatewayListEventsRequest(IOModel):
+    """Query the bounded Gateway event buffer."""
+
+    categories: list[AuroraEventCategory] | None = None
+    action: str | None = None
+    status: str | None = None
+    correlation_id: str | None = None
+    peer_id: str | None = None
+    provider_id: str | None = None
+    tool_id: str | None = None
+    route: str | None = None
+    policy_decision_id: str | None = None
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class GatewayListEventsResponse(IOModel):
+    """Response containing recent normalized Gateway events."""
+
+    events: list[GatewayEventStreamEvent] = Field(default_factory=list)
+    total: int = 0
+    subscription_topic: str = GatewayMethods.EVENT_STREAM
+    secrets_redacted: bool = True
+
+
+class SupportBundleRedactionInfo(IOModel):
+    """Redaction assertions for a support bundle."""
+
+    secrets_redacted: bool = True
+    redacted_fields: list[str] = Field(default_factory=list)
+    omitted_payloads: list[str] = Field(default_factory=list)
+
+
+class SupportBundleDiagnosticItem(IOModel):
+    """One redacted support-bundle diagnostic source."""
+
+    name: str
+    status: str = "unavailable"
+    source: str = ""
+    details: dict[str, Any] = Field(default_factory=dict)
+    redacted: bool = True
+
+
+class GatewaySupportBundleRequest(IOModel):
+    """Request a redacted support bundle for diagnostics."""
+
+    correlation_id: str | None = None
+    event_limit: int = Field(default=100, ge=0, le=500)
+    audit_limit: int = Field(default=50, ge=0, le=500)
+    include_capability_catalog: bool = True
+
+
+class CapabilityCatalogSummary(IOModel):
+    """Compact support-bundle summary of the capability catalog."""
+
+    providers: int = 0
+    actions: int = 0
+    resources: int = 0
+    modules: list[str] = Field(default_factory=list)
+    blocked_actions: int = 0
+
+
+class GatewaySupportBundleResponse(IOModel):
+    """Redacted operator support bundle."""
+
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    correlation_id: str | None = None
+    registry: GetRegistryResponse = Field(default_factory=GetRegistryResponse)
+    services: list[ServiceInfo] = Field(default_factory=list)
+    service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
+    mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
+    webrtc_diagnostics: WebRTCDiagnosticsResponse = Field(default_factory=WebRTCDiagnosticsResponse)
+    route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
+    capability_catalog_summary: CapabilityCatalogSummary = Field(
+        default_factory=CapabilityCatalogSummary
+    )
+    recent_events: list[GatewayEventStreamEvent] = Field(default_factory=list)
+    recent_audit_events: list[dict[str, Any]] = Field(default_factory=list)
+    native_capabilities: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
+    sidecar_logs: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
+    config_shape: dict[str, Any] = Field(default_factory=dict)
+    correlation_ids: list[str] = Field(default_factory=list)
+    audit_receipt: str | None = None
+    audit_error: str | None = None
+    redaction: SupportBundleRedactionInfo = Field(default_factory=SupportBundleRedactionInfo)
+    secrets_redacted: bool = True
+
+
+class CapabilityPolicyInfo(IOModel):
+    """Policy metadata attached to a capability graph node.
+
+    The graph is diagnostic and planning-oriented. Policy fields explain
+    constraints without embedding credentials or executable policy state.
+    """
+
+    trust_tier: str = "unknown"
+    safety_class: str = "standard"
+    required_perms: list[str] = Field(default_factory=list)
+    allowed_peers: list[str] | None = None
+    explicit_selector_required: bool = False
+    confirmation_required: bool = False
+    consent_required: bool = False
+    privacy_indicator_required: bool = False
+    bandwidth_check_required: bool = False
+    operation_class: str | None = None
+    resource_scope: str | None = None
+    rate_limit_key: str | None = None
+    mesh_visible: bool = False
+    local_only: bool = False
+
+
+class CapabilityAddressInfo(IOModel):
+    """Stable selector fields callers can use to address a capability."""
+
+    peer_id: str
+    module: str | None = None
+    service_instance_id: str | None = None
+    method: str | None = None
+    tool_id: str | None = None
+    resource_id: str | None = None
+    namespace: str | None = None
+
+
+class CapabilityProvenanceInfo(IOModel):
+    """Where graph data came from and how fresh it is."""
+
+    source: str = "unknown"
+    peer_id: str | None = None
+    manifest_timestamp: str | None = None
+    registry_digest: str = ""
+
+
+class CapabilityMethodInfo(IOModel):
+    """A callable method exposed by a service instance."""
+
+    method_id: str
+    module: str
+    name: str
+    bus_topic: str | None = None
+    exposure: str = "internal"
+    method_type: str = "use"
+    summary: str = ""
+    input_model: str | None = None
+    output_model: str | None = None
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityResourceInfo(IOModel):
+    """Explicitly addressable resource placeholder for future graph producers."""
+
+    resource_id: str
+    resource_type: str
+    owner_peer_id: str
+    service_instance_id: str | None = None
+    namespace: str | None = None
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityServiceInfo(IOModel):
+    """A service instance provided by the local node or a remote peer."""
+
+    service_instance_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    module: str
+    version: str = ""
+    summary: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    method_count: int = 0
+    methods: list[CapabilityMethodInfo] = Field(default_factory=list)
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    latency_ms: float | None = None
+    digest: str = ""
+    share: bool = False
+    routable: bool = False
+    route_blockers: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    address: CapabilityAddressInfo
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityPeerInfo(IOModel):
+    """Peer node in the capability graph."""
+
+    peer_id: str
+    node_name: str = ""
+    provider_kind: str = "remote"
+    status: str = "unknown"
+    latency_ms: float | None = None
+    service_instance_ids: list[str] = Field(default_factory=list)
+    policy: CapabilityPolicyInfo = Field(default_factory=CapabilityPolicyInfo)
+    provenance: CapabilityProvenanceInfo = Field(default_factory=CapabilityProvenanceInfo)
+
+
+class CapabilityGraph(IOModel):
+    """Read-only graph of mesh peers and addressable capabilities."""
+
+    local_peer_id: str | None = None
+    local_node_name: str = ""
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    peers: list[CapabilityPeerInfo] = Field(default_factory=list)
+    services: list[CapabilityServiceInfo] = Field(default_factory=list)
+    resources: list[CapabilityResourceInfo] = Field(default_factory=list)
+    provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    candidate_provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    selector_kinds: list[str] = Field(
+        default_factory=lambda: [
+            "peer_id",
+            "service_instance_id",
+            "module",
+            "method",
+            "tool_id",
+            "resource_id",
+            "namespace",
+        ]
+    )
+    secrets_redacted: bool = True
+
+
+class CapabilityFreshnessInfo(IOModel):
+    """Source and staleness metadata for catalog entries."""
+
+    source: str = "unknown"
+    manifest_time: str | None = None
+    last_probe_age_s: float | None = None
+    ttl_s: float | None = None
+    stale: bool = False
+    registry_digest: str = ""
+
+
+class CapabilityPolicyDecisionInfo(IOModel):
+    """Policy facts needed by SDK/UI bindability decisions."""
+
+    required_permissions: list[str] = Field(default_factory=list)
+    trust_tier: str = "unknown"
+    safety_class: str = "standard"
+    explicit_selector_required: bool = False
+    consent_required: bool = False
+    privacy_indicator_required: bool = False
+    bandwidth_check_required: bool = False
+    approval_required: bool = False
+    selector_required: bool = False
+    mesh_visible: bool = False
+    local_only: bool = False
+    allowed_peers: list[str] | None = None
+    operation_class: str | None = None
+    resource_scope: str | None = None
+    denial_reasons: list[str] = Field(default_factory=list)
+
+
+class CapabilityProviderInfo(IOModel):
+    """One local or remote provider for a capability module."""
+
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    node_name: str = ""
+    status: str = "unknown"
+    service_instance_id: str
+    module: str
+    version: str = ""
+    latency_ms: float | None = None
+    max_concurrent: int = 0
+    active_calls: int = 0
+    available_capacity: int | None = None
+    eligible: bool = False
+    reason_code: str = ""
+    reason: str = ""
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityActionInfo(IOModel):
+    """Executable or explainable capability action for SDK/UI consumers."""
+
+    action_id: str
+    module: str
+    method: str
+    topic: str | None = None
+    tool_id: str | None = None
+    resource_id: str | None = None
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    service_instance_id: str
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any
+    bindability: str = "unavailable"
+    sdk_operation_kind: str = "bus_method"
+    route_hints: list[str] = Field(default_factory=list)
+    route_blockers: list[str] = Field(default_factory=list)
+    summary: str = ""
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityCatalogResourceInfo(IOModel):
+    """Addressable resource advertised through the capability catalog."""
+
+    resource_id: str
+    resource_type: str
+    owner_peer_id: str
+    service_instance_id: str | None = None
+    namespace: str | None = None
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+
+
+class CapabilityCatalogRequest(IOModel):
+    """Request a canonical executable capability catalog."""
+
+    modules: list[str] | None = None
+    include_unavailable: bool = True
+    include_internal: bool = False
+    include_schemas: bool = True
+
+
+class CapabilityCatalogResponse(IOModel):
+    """Canonical SDK/UI capability catalog."""
+
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    local_peer_id: str | None = None
+    local_node_name: str = ""
+    providers: list[CapabilityProviderInfo] = Field(default_factory=list)
+    actions: list[CapabilityActionInfo] = Field(default_factory=list)
+    resources: list[CapabilityCatalogResourceInfo] = Field(default_factory=list)
+    provider_index: dict[str, list[str]] = Field(default_factory=dict)
+    action_index: dict[str, list[str]] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
+class RouteBlockerInfo(IOModel):
+    """Route blocker or selector validation problem."""
+
+    code: str
+    message: str
+    severity: str = "error"
+    provider_id: str | None = None
+    peer_id: str | None = None
+    security_privacy: bool = False
+
+
+class RouteCandidateDecision(IOModel):
+    """Eligibility and selection decision for one route candidate."""
+
+    provider_id: str
+    peer_id: str
+    provider_kind: str = "remote"
+    service_instance_id: str
+    module: str
+    version: str = ""
+    included: bool = False
+    selected: bool = False
+    reason_code: str = ""
+    reason: str = ""
+    latency_ms: float | None = None
+    active_calls: int = 0
+    max_concurrent: int = 0
+    available_capacity: int | None = None
+    policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
+    freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
+    auth_rbac_state: str = "unknown"
+    transport: str = "unknown"
+    privacy_class: str = "public"
+    blockers: list[RouteBlockerInfo] = Field(default_factory=list)
+
+
+class RouteExplainRequest(IOModel):
+    """Explain how Gateway would route a topic/module selector."""
+
+    topic: str | None = None
+    module: str | None = None
+    method: str | None = None
+    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
+    selector: Any | None = None
+    include_candidates: bool = True
+
+
+class RouteExplainResponse(IOModel):
+    """Route selection explanation for SDK route sheets."""
+
+    topic: str
+    module: str
+    selected_target: str = "local"
+    selected_peer_id: str | None = None
+    selected_service_instance_id: str | None = None
+    selected_provider_id: str | None = None
+    selector_valid: bool = True
+    selector_validation_code: str = ""
+    selector_validation_message: str = ""
+    fallback_behavior: str = ""
+    candidates: list[RouteCandidateDecision] = Field(default_factory=list)
+    blockers: list[RouteBlockerInfo] = Field(default_factory=list)
+    security_privacy_blockers: list[RouteBlockerInfo] = Field(default_factory=list)
+    secrets_redacted: bool = True
 
 
 class ServiceCountInfo(IOModel):

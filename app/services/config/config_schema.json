@@ -193,7 +193,7 @@
                 },
                 "enable_app_layer_e2ee": {
                   "type": "boolean",
-                  "description": "Enable application-layer end-to-end encryption",
+                  "description": "When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.",
                   "default": false
                 },
                 "stun_servers": {
@@ -243,7 +243,6 @@
               "description": "Enable authentication service",
               "default": false
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
             "api_keys": {
               "type": "array",
               "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
@@ -910,6 +909,7 @@
               "default": true
             },
             "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "approval_policy": { "$ref": "#/$defs/tooling_approval_policy" },
             "hardware_acceleration": {
               "type": "object",
               "description": "Hardware acceleration for OCR features",
@@ -1187,8 +1187,7 @@
               "type": "boolean",
               "description": "Enable config service",
               "default": true
-            },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" }
+            }
           }
         }
       }
@@ -1211,6 +1210,12 @@
           "description": "Maximum concurrent remote calls",
           "default": 10
         },
+        "allowed_peers": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Specific stable mesh peer IDs allowed to call this shared service. Null allows any authenticated peer.",
+          "default": null
+        },
         "prefer": {
           "type": "string",
           "enum": ["local", "network", "network_only", "local_only"],
@@ -1222,6 +1227,130 @@
           "enum": ["local", "network", "error", "none"],
           "description": "Fallback strategy",
           "default": "local"
+        },
+        "min_version": {
+          "type": ["string", "null"],
+          "description": "Minimum compatible remote service version required when routing to this service.",
+          "default": null
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Remote service capabilities required before this service may be selected as a mesh provider.",
+          "default": []
+        },
+        "require_explicit_selector": {
+          "type": "boolean",
+          "description": "Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.",
+          "default": false
+        }
+      }
+    },
+    "tooling_approval_policy": {
+      "type": "object",
+      "description": "Per-service, toolkit, tool, and peer approval policy for Tooling execution",
+      "additionalProperties": false,
+      "properties": {
+        "default_share": {
+          "type": "boolean",
+          "description": "Whether tools are discoverable/executable unless a more specific rule overrides this",
+          "default": true
+        },
+        "default_approval_mode": {
+          "type": "string",
+          "enum": [
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only"
+          ],
+          "description": "Default approval behavior when no scoped rule matches",
+          "default": "approve_all_local_safe"
+        },
+        "default_token_ttl_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Default lifetime for approval tokens issued by matching rules",
+          "default": 300
+        },
+        "rules": {
+          "type": "array",
+          "description": "First-match scoped sharing and approval rules. Unset fields act as wildcards.",
+          "default": [],
+          "items": { "$ref": "#/$defs/tooling_approval_policy_rule" }
+        }
+      }
+    },
+    "tooling_approval_policy_rule": {
+      "type": "object",
+      "description": "Scoped Tooling approval policy rule",
+      "required": ["rule_id"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "Stable operator-defined rule identifier"
+        },
+        "share": {
+          "type": "boolean",
+          "description": "Whether matching tools are shared/discoverable/executable",
+          "default": true
+        },
+        "approval_mode": {
+          "type": "string",
+          "enum": [
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only"
+          ],
+          "default": "ask_each_time"
+        },
+        "tool_name": { "type": ["string", "null"], "default": null },
+        "global_tool_id": { "type": ["string", "null"], "default": null },
+        "execution_location": {
+          "type": ["string", "null"],
+          "enum": ["local", "remote", null],
+          "default": null
+        },
+        "source_type": {
+          "type": ["string", "null"],
+          "enum": ["core", "plugin", "mcp", "toolkit", "unknown", null],
+          "default": null
+        },
+        "toolkit_name": { "type": ["string", "null"], "default": null },
+        "safety_class": {
+          "type": ["string", "null"],
+          "enum": ["standard", "sensitive", "dangerous", null],
+          "default": null
+        },
+        "operation_class": {
+          "type": ["string", "null"],
+          "enum": ["read", "write", "external", "admin", "hardware", "data-egress", null],
+          "default": null
+        },
+        "resource_namespace": { "type": ["string", "null"], "default": null },
+        "hardware_target": { "type": ["string", "null"], "default": null },
+        "data_scope": { "type": ["string", "null"], "default": null },
+        "caller_peer_id": { "type": ["string", "null"], "default": null },
+        "caller_principal_id": { "type": ["string", "null"], "default": null },
+        "caller_device_id": { "type": ["string", "null"], "default": null },
+        "provider_peer_id": { "type": ["string", "null"], "default": null },
+        "provider_service_instance_id": { "type": ["string", "null"], "default": null },
+        "route_privacy_class": { "type": ["string", "null"], "default": null },
+        "token_ttl_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Approval token lifetime for this rule",
+          "default": 300
         }
       }
     }

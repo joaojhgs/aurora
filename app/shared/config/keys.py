@@ -247,16 +247,28 @@ class _ServicesSttCoordinatorAudioInputConfigPath(ConfigPath):
 
 
 class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesSttCoordinatorMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.coordinator.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.stt.coordinator.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.stt.coordinator.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.stt.coordinator.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.stt.coordinator.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.coordinator.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.coordinator.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.stt.coordinator.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.stt.coordinator.mesh_sharing.share")
         return self
 
@@ -277,16 +289,28 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
 
 
 class _ServicesSttTranscriptionMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.transcription.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.stt.transcription.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.stt.transcription.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.stt.transcription.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.stt.transcription.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.transcription.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.transcription.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.stt.transcription.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.stt.transcription.mesh_sharing.share")
         return self
 
@@ -307,16 +331,28 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
 
 
 class _ServicesSttWakewordMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesSttWakewordMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.wakeword.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.stt.wakeword.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.stt.wakeword.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.stt.wakeword.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.stt.wakeword.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.stt.wakeword.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.wakeword.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.stt.wakeword.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.stt.wakeword.mesh_sharing.share")
         return self
 
@@ -409,36 +445,6 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
         return self
 
 
-class _ServicesAuthMeshSharingConfigPath(ConfigPath):
-    fallback: ConfigPath
-    max_concurrent: ConfigPath
-    prefer: ConfigPath
-    share: ConfigPath
-
-    def __new__(cls) -> _ServicesAuthMeshSharingConfigPath:
-        self = super().__new__(cls, "services.auth.mesh_sharing")
-        self.fallback = ConfigPath("services.auth.mesh_sharing.fallback")
-        self.max_concurrent = ConfigPath("services.auth.mesh_sharing.max_concurrent")
-        self.prefer = ConfigPath("services.auth.mesh_sharing.prefer")
-        self.share = ConfigPath("services.auth.mesh_sharing.share")
-        return self
-
-
-class _ServicesConfigMeshSharingConfigPath(ConfigPath):
-    fallback: ConfigPath
-    max_concurrent: ConfigPath
-    prefer: ConfigPath
-    share: ConfigPath
-
-    def __new__(cls) -> _ServicesConfigMeshSharingConfigPath:
-        self = super().__new__(cls, "services.config.mesh_sharing")
-        self.fallback = ConfigPath("services.config.mesh_sharing.fallback")
-        self.max_concurrent = ConfigPath("services.config.mesh_sharing.max_concurrent")
-        self.prefer = ConfigPath("services.config.mesh_sharing.prefer")
-        self.share = ConfigPath("services.config.mesh_sharing.share")
-        return self
-
-
 class _ServicesDbEmbeddingsConfigPath(ConfigPath):
     use_local: ConfigPath
 
@@ -449,16 +455,26 @@ class _ServicesDbEmbeddingsConfigPath(ConfigPath):
 
 
 class _ServicesDbMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesDbMeshSharingConfigPath:
         self = super().__new__(cls, "services.db.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.db.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.db.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.db.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.db.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.db.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.db.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath("services.db.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.db.mesh_sharing.share")
         return self
 
@@ -555,31 +571,55 @@ class _ServicesOrchestratorLlmConfigPath(ConfigPath):
 
 
 class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorMeshSharingConfigPath:
         self = super().__new__(cls, "services.orchestrator.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.orchestrator.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.orchestrator.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.orchestrator.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.orchestrator.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.orchestrator.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.orchestrator.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.orchestrator.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.orchestrator.mesh_sharing.share")
         return self
 
 
 class _ServicesSchedulerMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesSchedulerMeshSharingConfigPath:
         self = super().__new__(cls, "services.scheduler.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.scheduler.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.scheduler.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.scheduler.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.scheduler.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.scheduler.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.scheduler.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.scheduler.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.scheduler.mesh_sharing.share")
         return self
 
@@ -647,6 +687,25 @@ class _ServicesSttWakewordConfigPath(ConfigPath):
         return self
 
 
+class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
+    default_approval_mode: ConfigPath
+    default_share: ConfigPath
+    default_token_ttl_seconds: ConfigPath
+    rules: ConfigPath
+
+    def __new__(cls) -> _ServicesToolingApprovalPolicyConfigPath:
+        self = super().__new__(cls, "services.tooling.approval_policy")
+        self.default_approval_mode = ConfigPath(
+            "services.tooling.approval_policy.default_approval_mode"
+        )
+        self.default_share = ConfigPath("services.tooling.approval_policy.default_share")
+        self.default_token_ttl_seconds = ConfigPath(
+            "services.tooling.approval_policy.default_token_ttl_seconds"
+        )
+        self.rules = ConfigPath("services.tooling.approval_policy.rules")
+        return self
+
+
 class _ServicesToolingHardwareAccelerationConfigPath(ConfigPath):
     ocr_bg: ConfigPath
     ocr_curr: ConfigPath
@@ -670,16 +729,28 @@ class _ServicesToolingMcpConfigPath(ConfigPath):
 
 
 class _ServicesToolingMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesToolingMeshSharingConfigPath:
         self = super().__new__(cls, "services.tooling.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.tooling.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.tooling.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.tooling.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.tooling.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.tooling.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tooling.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath(
+            "services.tooling.mesh_sharing.required_capabilities"
+        )
         self.share = ConfigPath("services.tooling.mesh_sharing.share")
         return self
 
@@ -708,16 +779,26 @@ class _ServicesToolingPluginsConfigPath(ConfigPath):
 
 
 class _ServicesTtsMeshSharingConfigPath(ConfigPath):
+    allowed_peers: ConfigPath
     fallback: ConfigPath
     max_concurrent: ConfigPath
+    min_version: ConfigPath
     prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_capabilities: ConfigPath
     share: ConfigPath
 
     def __new__(cls) -> _ServicesTtsMeshSharingConfigPath:
         self = super().__new__(cls, "services.tts.mesh_sharing")
+        self.allowed_peers = ConfigPath("services.tts.mesh_sharing.allowed_peers")
         self.fallback = ConfigPath("services.tts.mesh_sharing.fallback")
         self.max_concurrent = ConfigPath("services.tts.mesh_sharing.max_concurrent")
+        self.min_version = ConfigPath("services.tts.mesh_sharing.min_version")
         self.prefer = ConfigPath("services.tts.mesh_sharing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tts.mesh_sharing.require_explicit_selector"
+        )
+        self.required_capabilities = ConfigPath("services.tts.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.tts.mesh_sharing.share")
         return self
 
@@ -728,7 +809,6 @@ class _ServicesAuthConfigPath(ConfigPath):
     audit_retention_days: ConfigPath
     default_pairing_permissions: ConfigPath
     enabled: ConfigPath
-    mesh_sharing: _ServicesAuthMeshSharingConfigPath
     pairing_code_expiry_minutes: ConfigPath
     pairing_max_attempts_per_ip: ConfigPath
     session_token_expiry_hours: ConfigPath
@@ -743,7 +823,6 @@ class _ServicesAuthConfigPath(ConfigPath):
         self.audit_retention_days = ConfigPath("services.auth.audit_retention_days")
         self.default_pairing_permissions = ConfigPath("services.auth.default_pairing_permissions")
         self.enabled = ConfigPath("services.auth.enabled")
-        self.mesh_sharing = _ServicesAuthMeshSharingConfigPath()
         self.pairing_code_expiry_minutes = ConfigPath("services.auth.pairing_code_expiry_minutes")
         self.pairing_max_attempts_per_ip = ConfigPath("services.auth.pairing_max_attempts_per_ip")
         self.session_token_expiry_hours = ConfigPath("services.auth.session_token_expiry_hours")
@@ -757,12 +836,10 @@ class _ServicesAuthConfigPath(ConfigPath):
 
 class _ServicesConfigConfigPath(ConfigPath):
     enabled: ConfigPath
-    mesh_sharing: _ServicesConfigMeshSharingConfigPath
 
     def __new__(cls) -> _ServicesConfigConfigPath:
         self = super().__new__(cls, "services.config")
         self.enabled = ConfigPath("services.config.enabled")
-        self.mesh_sharing = _ServicesConfigMeshSharingConfigPath()
         return self
 
 
@@ -840,6 +917,7 @@ class _ServicesSttConfigPath(ConfigPath):
 
 
 class _ServicesToolingConfigPath(ConfigPath):
+    approval_policy: _ServicesToolingApprovalPolicyConfigPath
     enabled: ConfigPath
     hardware_acceleration: _ServicesToolingHardwareAccelerationConfigPath
     mcp: _ServicesToolingMcpConfigPath
@@ -848,6 +926,7 @@ class _ServicesToolingConfigPath(ConfigPath):
 
     def __new__(cls) -> _ServicesToolingConfigPath:
         self = super().__new__(cls, "services.tooling")
+        self.approval_policy = _ServicesToolingApprovalPolicyConfigPath()
         self.enabled = ConfigPath("services.tooling.enabled")
         self.hardware_acceleration = _ServicesToolingHardwareAccelerationConfigPath()
         self.mcp = _ServicesToolingMcpConfigPath()

@@ -1,10 +1,19 @@
 # SDK-013 — Implement AdminAction client controller
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P1 — Transport-independent SDK and capability graph foundation
 - **Lane:** sdk
-- **Depends on:** SDK-001, SDK-003, BE-004
+- **Depends on:** SDK-001, SDK-003, BE-004, MESH-GAP-005
 - **Parallelizable with:** None
 - **Coverage matrix rows:** sdk.transport.client, gateway.method_exposure_matrix
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -24,7 +33,7 @@ All high-risk UI actions go through one backend-enforced controller.
 
 ## SDK integration details
 
-- Export `AuroraClient`, transport interfaces, generated method descriptors, capability graph, auth/session helpers, and test utilities.
+- Export `AuroraClient`, transport interfaces, generated method descriptors, executable capability catalog/graph projections, auth/session helpers, and test utilities.
 - Use strict TypeScript and no React dependency in the core package.
 
 ## Tauri/native integration details
@@ -79,3 +88,22 @@ All high-risk UI actions go through one backend-enforced controller.
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+AdminAction remains the controller for admin-critical mutations, but tool execution approval is broader than admin actions. Integrate with the mesh/local tool approval protocol from `MESH-GAP-005` without forcing every approval into an admin mutation shape.
+
+Additional requirements:
+
+- Add a distinct `ApprovalController`/approval sub-surface or extend AdminAction with a clearly separated approval mode for tool executions and route consent.
+- Support local/internal tool approvals and remote mesh tool approvals with the same token-bound semantics.
+- Approval requests must carry method/tool identity, provider/peer selector, args hash, redacted args preview, risk class, requested approval scope, TTL, and expected audit event.
+- Approval confirmations must return an opaque token/nonce and receipt metadata; UI must never synthesize approval tokens.
+- Approve-all scopes must be explicit and configurable: session, trusted peer, local-safe tools, or expiry window. There must also be deny-all and dry-run-only modes.
+- Admin-critical tool execution still escalates through AdminAction/reauth where backend policy says so.
+
+Additional acceptance criteria:
+
+- SDK tests prove AdminAction and tool approval are not conflated but can compose when a dangerous/admin tool requires both.
+- Replay, changed args, changed provider, expired token, and downgraded risk all fail with typed SDK errors.

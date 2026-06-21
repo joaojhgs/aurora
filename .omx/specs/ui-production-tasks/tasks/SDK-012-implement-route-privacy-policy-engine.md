@@ -1,10 +1,19 @@
 # SDK-012 — Implement route/privacy policy engine
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P1 — Transport-independent SDK and capability graph foundation
 - **Lane:** sdk
-- **Depends on:** SDK-001
+- **Depends on:** SDK-001, MESH-GAP-002, MESH-GAP-003, MESH-GAP-005
 - **Parallelizable with:** None
 - **Coverage matrix rows:** sdk.transport.client, gateway.method_exposure_matrix
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -24,7 +33,7 @@ RouteSheet and tool approvals show why a route is allowed or blocked.
 
 ## SDK integration details
 
-- Export `AuroraClient`, transport interfaces, generated method descriptors, capability graph, auth/session helpers, and test utilities.
+- Export `AuroraClient`, transport interfaces, generated method descriptors, executable capability catalog/graph projections, auth/session helpers, and test utilities.
 - Use strict TypeScript and no React dependency in the core package.
 
 ## Tauri/native integration details
@@ -79,3 +88,30 @@ RouteSheet and tool approvals show why a route is allowed or blocked.
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This task is now downstream of `MESH-GAP-002`, `MESH-GAP-003`, and `MESH-GAP-005`. It must make routing/privacy decisions for all provider types: local process/thread, HTTP server, Tauri native/local node, mesh peer, mobile native, and cloud fallback.
+
+Additional requirements:
+
+- Expose `client.routes.explain(request)` over `Gateway.ExplainRoute`; SDK route decisions must cite backend `selected`, `candidates`, `reason_code`, fallback, freshness, and explicit-selector blockers rather than recomputing mesh policy.
+- Expose Tooling preflight APIs with typed request/response wrappers:
+  - `client.tools.prepareExecution(request)` -> `Tooling.PrepareExecution`
+  - `client.tools.requestApproval(request)` -> `Tooling.RequestApproval`
+  - `client.tools.confirmExecution(request)` -> `Tooling.ConfirmExecution`
+  - `client.tools.execute(request)` -> `Tooling.ExecuteTool`
+- Preserve approval binding fields end to end: global tool ID, provider peer ID, service instance ID, route selector, args hash, resource selector hash, policy decision ID, approval request ID, approval token expiry, approver principal, and correlation ID.
+- Consume route explain output (`Gateway.ExplainRoute` / equivalent) rather than independently guessing backend routing decisions.
+- Model explicit resource selectors as required for tools, DB/RAG namespaces, audio/STT/TTS sessions, scheduler ownership, hardware/device access, model runtime selection, and admin mutations when policy marks them safety-sensitive.
+- Treat internal/local tools and remote mesh tools uniformly through the approval policy engine: both can require user approval, admin confirmation, dry-run preview, deny, or approve-all scope.
+- Add approval scope evaluation for: single execution, tool+args hash, peer/provider, session, local-safe tools, expiry window, and deny-all/default-block.
+- Generate redacted route previews that include provider, peer trust tier, data classes, egress destination, transport, expected persistence, and audit receipt target.
+- Never downgrade a policy denial into a generic unavailable state. UI needs the denial reason and repair path.
+
+Additional acceptance criteria:
+
+- `RouteSheet` and approval cards can show exact backend route decisions, not duplicated SDK guesses.
+- Tests cover local dangerous tool approval, remote dangerous tool approval, approve-all session behavior, expired approvals, route denial, replay/mismatched args rejection, and explicit selector missing errors.
+- SDK conformance tests cover HTTP transport, Tauri-local mock transport, and mesh mock transport for the four Tooling execution APIs and route explain.

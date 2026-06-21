@@ -27,7 +27,20 @@ from app.services.config.messages import (
     ValidateConfigResponse,
 )
 from app.shared.contracts.models.common import EmptyOutput
-from app.shared.contracts.models.config import ConfigMethods, ConfigModule
+from app.shared.contracts.models.config import (
+    ConfigDiffPreviewRequest,
+    ConfigDiffPreviewResponse,
+    ConfigMethods,
+    ConfigModule,
+    ConfigReloadImpactRequest,
+    ConfigReloadImpactResponse,
+    ConfigRollbackRequest,
+    ConfigRollbackResponse,
+    ConfigSchemaMetadataRequest,
+    ConfigSchemaMetadataResponse,
+    ConfigVersionHistoryRequest,
+    ConfigVersionHistoryResponse,
+)
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
@@ -160,6 +173,97 @@ class ConfigService(BaseService):
         errors = self.config_manager.validate_current_config()
         log_debug(f"Handled ValidateConfig query: {len(errors)} errors")
         return ValidateConfigResponse(errors=errors)
+
+    @method_contract(
+        method_id=ConfigMethods.GET_SCHEMA_METADATA,
+        summary="Get UI-readable config schema metadata",
+        input_model=ConfigSchemaMetadataRequest,
+        output_model=ConfigSchemaMetadataResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ConfigMethods.GET_SCHEMA_METADATA],
+    )
+    async def _handle_get_schema_metadata(
+        self, query: ConfigSchemaMetadataRequest
+    ) -> ConfigSchemaMetadataResponse:
+        """Handle schema metadata query with secret values redacted."""
+        fields = self.config_manager.get_schema_metadata(
+            section=query.section,
+            include_values=query.include_values,
+        )
+        return ConfigSchemaMetadataResponse(fields=fields, secrets_redacted=True)
+
+    @method_contract(
+        method_id=ConfigMethods.PREVIEW_DIFF,
+        summary="Preview a validated config diff without writing changes",
+        input_model=ConfigDiffPreviewRequest,
+        output_model=ConfigDiffPreviewResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ConfigMethods.PREVIEW_DIFF],
+    )
+    async def _handle_preview_diff(
+        self, query: ConfigDiffPreviewRequest
+    ) -> ConfigDiffPreviewResponse:
+        """Handle dry-run config diff preview."""
+        result = self.config_manager.preview_diff([change.model_dump() for change in query.changes])
+        return ConfigDiffPreviewResponse(**result)
+
+    @method_contract(
+        method_id=ConfigMethods.GET_VERSION_HISTORY,
+        summary="Get recent redacted config version history",
+        input_model=ConfigVersionHistoryRequest,
+        output_model=ConfigVersionHistoryResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ConfigMethods.GET_VERSION_HISTORY],
+    )
+    async def _handle_get_version_history(
+        self, query: ConfigVersionHistoryRequest
+    ) -> ConfigVersionHistoryResponse:
+        """Handle config version history query."""
+        versions = self.config_manager.get_version_history(
+            key_path=query.key_path,
+            limit=query.limit,
+        )
+        return ConfigVersionHistoryResponse(versions=versions, secrets_redacted=True)
+
+    @method_contract(
+        method_id=ConfigMethods.ROLLBACK,
+        summary="Rollback a config value to a previous version",
+        input_model=ConfigRollbackRequest,
+        output_model=ConfigRollbackResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=[ConfigMethods.ROLLBACK],
+    )
+    async def _handle_rollback(self, cmd: ConfigRollbackRequest) -> ConfigRollbackResponse:
+        """Handle config rollback command."""
+        try:
+            result = self.config_manager.rollback(cmd.version_id)
+            log_info(f"Rolled back config version: {cmd.version_id}")
+            return ConfigRollbackResponse(**result)
+        except Exception as e:
+            log_error(f"Error rolling back config version {cmd.version_id}: {e}")
+            return ConfigRollbackResponse(success=False, error=str(e))
+
+    @method_contract(
+        method_id=ConfigMethods.PREVIEW_RELOAD_IMPACT,
+        summary="Preview reload and restart impact for config paths",
+        input_model=ConfigReloadImpactRequest,
+        output_model=ConfigReloadImpactResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[ConfigMethods.PREVIEW_RELOAD_IMPACT],
+    )
+    async def _handle_preview_reload_impact(
+        self, query: ConfigReloadImpactRequest
+    ) -> ConfigReloadImpactResponse:
+        """Handle config reload/restart impact preview."""
+        key_paths = list(query.key_paths)
+        key_paths.extend(change.key_path for change in query.changes)
+        impacts = self.config_manager.get_reload_impact(sorted(set(key_paths)))
+        return ConfigReloadImpactResponse(impacts=impacts)
 
     @method_contract(
         method_id=ConfigMethods.GET_PLUGIN,

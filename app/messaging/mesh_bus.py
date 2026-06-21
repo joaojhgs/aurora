@@ -29,22 +29,72 @@ services work without any modification.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
-from app.messaging.bus import Handler, QueryResult
-
-if TYPE_CHECKING:
-    from app.messaging.bus import MessageBus
-    from app.services.gateway.config import MeshConfig
-    from app.services.gateway.mesh.peer_bridge import PeerBridge
-    from app.services.gateway.mesh.routing_table import RoutingTable
-
+from app.messaging.bus import Handler, MessageBus, QueryResult
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
 
 # Default remote call timeout in seconds (used when mesh_config has no override)
 _DEFAULT_REMOTE_TIMEOUT: float = 30.0
+
+
+class _RouteLike(Protocol):
+    target: str
+    peer_id: str | None
+    module: str
+    error_message: str | None
+
+
+class _PeerLike(Protocol):
+    peer_id: str
+
+
+class _RoutingTableLike(Protocol):
+    def resolve(
+        self,
+        topic: str,
+        *,
+        selector: MeshAddressSelector | None = None,
+    ) -> _RouteLike: ...
+
+    def resolve_fallback(
+        self,
+        topic: str,
+        *,
+        failed_peer_id: str,
+        selector: MeshAddressSelector | None = None,
+    ) -> _RouteLike: ...
+
+    def get_negotiated_peers(self) -> list[_PeerLike]: ...
+
+
+class _PeerBridgeLike(Protocol):
+    async def call(
+        self,
+        peer_id: str,
+        method: str,
+        params: BaseModel,
+        *,
+        timeout: float,
+        correlation_id: str | None = None,
+    ) -> QueryResult: ...
+
+    def fire_event(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: BaseModel,
+        *,
+        correlation_id: str | None = None,
+    ) -> None: ...
+
+
+class _MeshConfigLike(Protocol):
+    services: dict[str, Any]
 
 
 class MeshBus:
@@ -58,9 +108,9 @@ class MeshBus:
     def __init__(
         self,
         inner_bus: MessageBus,
-        routing_table: RoutingTable,
-        peer_bridge: PeerBridge | None,
-        mesh_config: MeshConfig,
+        routing_table: _RoutingTableLike,
+        peer_bridge: _PeerBridgeLike | None,
+        mesh_config: _MeshConfigLike,
     ) -> None:
         self._inner = inner_bus
         self._routing_table = routing_table
@@ -122,6 +172,7 @@ class MeshBus:
         """
         # Events always go local first
         if event:
+            event_correlation_id = correlation_id or get_payload_correlation_id(message)
             await self._inner.publish(
                 topic,
                 message,
@@ -133,7 +184,7 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
-                correlation_id=correlation_id,
+                correlation_id=event_correlation_id,
             )
             # Forward events to connected peers when mesh=True and module is shared
             if mesh and self._peer_bridge and origin != "mesh_forwarded":
@@ -147,6 +198,7 @@ class MeshBus:
                                 peer.peer_id,
                                 topic,
                                 message,
+                                correlation_id=event_correlation_id,
                             )
                         except Exception as exc:
                             log_debug(
@@ -155,10 +207,13 @@ class MeshBus:
             return
 
         # For commands, check routing
-        route = self._routing_table.resolve(topic)
+        selector = _extract_mesh_selector(message)
+        trace_id = ensure_correlation_id(message, correlation_id)
+        route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
             f"MeshBus: Routing command {topic} → target={route.target}, "
-            f"peer={route.peer_id or 'n/a'}, module={route.module}"
+            f"peer={route.peer_id or 'n/a'}, module={route.module}, "
+            f"correlation_id={trace_id}"
         )
 
         if route.target == "local":
@@ -173,7 +228,7 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
-                correlation_id=correlation_id,
+                correlation_id=trace_id,
             )
             return
 
@@ -185,6 +240,7 @@ class MeshBus:
                     topic,
                     message,
                     timeout=self._remote_timeout,
+                    correlation_id=trace_id,
                 )
             except Exception as e:
                 log_warning(f"MeshBus: Remote publish to {route.peer_id} failed: {e}")
@@ -203,7 +259,15 @@ class MeshBus:
             fallback = self._routing_table.resolve_fallback(
                 topic,
                 failed_peer_id=route.peer_id,
+                selector=selector,
             )
+            if fallback.target == "error":
+                raise RuntimeError(
+                    fallback.error_message or f"No fallback route available for {topic}"
+                )
+            if fallback.target == "none":
+                log_warning(f"MeshBus: No fallback route for {topic} (target=none)")
+                return
             if fallback.target == "local":
                 await self._inner.publish(
                     topic,
@@ -216,7 +280,7 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
-                    correlation_id=correlation_id,
+                    correlation_id=trace_id,
                 )
                 return
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
@@ -226,6 +290,7 @@ class MeshBus:
                         topic,
                         message,
                         timeout=self._remote_timeout,
+                        correlation_id=trace_id,
                     )
                 except Exception as e2:
                     log_warning(f"MeshBus: Fallback remote publish failed: {e2}")
@@ -252,12 +317,12 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
-                    correlation_id=correlation_id,
+                    correlation_id=trace_id,
                 )
                 return
 
         if route.target == "error":
-            raise RuntimeError(f"No remote peer available for {topic} and fallback=error")
+            raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
 
         if route.target == "none":
             log_warning(f"MeshBus: No route for {topic} (target=none), dropping command")
@@ -275,7 +340,7 @@ class MeshBus:
             max_attempts=max_attempts,
             reply_to=reply_to,
             principal_id=principal_id,
-            correlation_id=correlation_id,
+            correlation_id=trace_id,
         )
 
     # ── Request ──────────────────────────────────────────────────────────
@@ -291,6 +356,7 @@ class MeshBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> QueryResult:
         """Request with mesh routing.
 
@@ -308,10 +374,13 @@ class MeshBus:
         Returns:
             QueryResult containing the response data or error
         """
-        route = self._routing_table.resolve(topic)
+        selector = _extract_mesh_selector(message)
+        trace_id = ensure_correlation_id(message, correlation_id)
+        route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
             f"MeshBus: Routing request {topic} → target={route.target}, "
-            f"peer={route.peer_id or 'n/a'}, module={route.module}"
+            f"peer={route.peer_id or 'n/a'}, module={route.module}, "
+            f"correlation_id={trace_id}"
         )
 
         if route.target == "local":
@@ -324,6 +393,7 @@ class MeshBus:
                 ttl_ms=ttl_ms,
                 max_attempts=max_attempts,
                 principal_id=principal_id,
+                correlation_id=trace_id,
             )
 
         if route.target == "remote" and route.peer_id and self._peer_bridge:
@@ -334,6 +404,7 @@ class MeshBus:
                     topic,
                     message,
                     timeout=timeout,
+                    correlation_id=trace_id,
                 )
                 if result.ok:
                     return result
@@ -348,7 +419,15 @@ class MeshBus:
             fallback = self._routing_table.resolve_fallback(
                 topic,
                 failed_peer_id=route.peer_id,
+                selector=selector,
             )
+            if fallback.target == "error":
+                return QueryResult(
+                    ok=False,
+                    error=fallback.error_message or f"No fallback route available for {topic}",
+                )
+            if fallback.target == "none":
+                return QueryResult(ok=False, error=f"No fallback route available for {topic}")
             if fallback.target == "local":
                 log_debug(f"MeshBus: Falling back to local for {topic}")
                 return await self._inner.request(
@@ -360,6 +439,7 @@ class MeshBus:
                     ttl_ms=ttl_ms,
                     max_attempts=max_attempts,
                     principal_id=principal_id,
+                    correlation_id=trace_id,
                 )
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
                 try:
@@ -368,6 +448,7 @@ class MeshBus:
                         topic,
                         message,
                         timeout=timeout,
+                        correlation_id=trace_id,
                     )
                 except Exception as e2:
                     log_warning(f"MeshBus: Fallback remote request failed: {e2}")
@@ -381,10 +462,14 @@ class MeshBus:
                         ttl_ms=ttl_ms,
                         max_attempts=max_attempts,
                         principal_id=principal_id,
+                        correlation_id=trace_id,
                     )
 
         if route.target == "error":
-            return QueryResult(ok=False, error=f"No remote peer available for {topic}")
+            return QueryResult(
+                ok=False,
+                error=route.error_message or f"No remote peer available for {topic}",
+            )
 
         if route.target == "none":
             return QueryResult(ok=False, error=f"No route available for {topic}")
@@ -399,6 +484,7 @@ class MeshBus:
             ttl_ms=ttl_ms,
             max_attempts=max_attempts,
             principal_id=principal_id,
+            correlation_id=trace_id,
         )
 
     # ── Subscribe ────────────────────────────────────────────────────────
@@ -418,3 +504,14 @@ class MeshBus:
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Unsubscribe from the inner local bus."""
         self._inner.unsubscribe(topic, handler)
+
+
+def _extract_mesh_selector(message: BaseModel) -> MeshAddressSelector | None:
+    """Return a typed mesh selector from a bus payload when present."""
+
+    selector = getattr(message, "mesh_selector", None)
+    if isinstance(selector, MeshAddressSelector):
+        return selector
+    if isinstance(selector, dict):
+        return MeshAddressSelector.model_validate(selector)
+    return None

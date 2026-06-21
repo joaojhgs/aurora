@@ -433,8 +433,10 @@ async def _initiate_bilateral_pairing(self, peer: str, chan: Any) -> None:
 async def _on_peer_authenticated(self, peer: str, chan: Any, identity: Identity) -> None:
     """Called when a peer successfully authenticates to us.
     
-    If we have no saved credential for them (no inbound token),
-    start reverse pairing to get OUR token from THEIR auth service.
+    If we have no saved credential keyed to this remote stable peer_id
+    (no inbound token for this peer), start reverse pairing to get OUR token
+    from THEIR auth service. Credentials for other peers or legacy/default
+    fallback tokens must not suppress this step.
     """
     peer_record = await self._load_peer_record(peer)
     if not peer_record or not peer_record.get("inbound_token"):

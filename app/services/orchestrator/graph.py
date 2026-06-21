@@ -4,6 +4,7 @@ This module manages the conversational flow using LangGraph, coordinating
 between the chatbot agent and tool execution via the message bus.
 """
 
+import json
 from typing import Any, Literal, Union
 
 from langchain_core.messages import AnyMessage, ToolMessage
@@ -17,9 +18,13 @@ from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.agents.chatbot import chatbot
 from app.services.orchestrator.state import State
-from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.tooling import (
+    ToolingExecuteToolRequest,
+    ToolingMethods,
+    ToolingRequestApprovalRequest,
+)
 from app.shared.contracts.models.tts import TTSMethods
-from app.shared.messaging.models.tooling_models import ExecuteToolCommand
 from app.shared.messaging.models.tts_models import TTSRequest
 
 
@@ -100,12 +105,32 @@ class GraphOrchestrator:
             return {"messages": []}
 
         tool_messages = []
+        tool_bindings = state.get("tool_bindings", {})
+        approval_candidates = state.get("approval_candidates", {})
 
         # Execute each tool call via bus
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
+            candidate = (
+                approval_candidates.get(tool_name, {})
+                if isinstance(approval_candidates, dict)
+                else {}
+            )
+            if candidate:
+                tool_messages.append(
+                    await self._request_tool_approval(
+                        tool_name=tool_name,
+                        tool_args=tool_args,
+                        tool_call_id=tool_id,
+                        candidate=candidate,
+                    )
+                )
+                continue
+
+            binding = tool_bindings.get(tool_name, {}) if isinstance(tool_bindings, dict) else {}
+            request = self._tool_execution_request(tool_name, tool_args, binding)
 
             log_debug(f"Executing tool via bus: {tool_name} with args: {tool_args}")
 
@@ -113,7 +138,7 @@ class GraphOrchestrator:
                 # Send tool execution command via bus and wait for response
                 result = await self.bus.request(
                     ToolingMethods.EXECUTE_TOOL,
-                    ExecuteToolCommand(tool_name=tool_name, arguments=tool_args),
+                    request,
                     timeout=30.0,  # 30 second timeout for tool execution
                     priority=get_interactive_priority(),
                 )
@@ -150,6 +175,128 @@ class GraphOrchestrator:
                 )
 
         return {"messages": tool_messages}
+
+    async def _request_tool_approval(
+        self,
+        *,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        tool_call_id: str,
+        candidate: dict[str, Any],
+    ) -> ToolMessage:
+        """Create an approval request instead of executing a blocked tool."""
+
+        request = self._tool_approval_request(tool_name, tool_args, candidate)
+        log_debug(f"Requesting tool approval via bus: {tool_name}")
+
+        try:
+            result = await self.bus.request(
+                ToolingMethods.REQUEST_APPROVAL,
+                request,
+                timeout=10.0,
+                priority=get_interactive_priority(),
+            )
+        except Exception as e:
+            error_msg = f"Failed to request tool approval via bus: {str(e)}"
+            log_error(error_msg, exc_info=True)
+            return ToolMessage(
+                content=json.dumps(
+                    {
+                        "type": "tool_approval_request",
+                        "status": "failed",
+                        "tool_name": tool_name,
+                        "error": error_msg,
+                    },
+                    sort_keys=True,
+                ),
+                tool_call_id=tool_call_id,
+                name=tool_name,
+            )
+
+        approval_payload = self._approval_payload(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            candidate=candidate,
+            result_data=result.data if result.ok else None,
+            error=result.error if not result.ok else None,
+        )
+        return ToolMessage(
+            content=json.dumps(approval_payload, sort_keys=True),
+            tool_call_id=tool_call_id,
+            name=tool_name,
+        )
+
+    @staticmethod
+    def _tool_execution_request(
+        tool_name: str, tool_args: dict[str, Any], binding: dict[str, Any]
+    ) -> ToolingExecuteToolRequest:
+        """Build a Tooling execution request from hidden binding metadata."""
+
+        request_tool_name = binding.get("tool_name") or tool_name
+        mesh_selector_data = binding.get("mesh_selector")
+        mesh_selector = None
+        if isinstance(mesh_selector_data, dict):
+            mesh_selector = MeshAddressSelector(
+                **{key: value for key, value in mesh_selector_data.items() if value is not None}
+            )
+
+        return ToolingExecuteToolRequest(
+            tool_name=request_tool_name,
+            arguments=tool_args,
+            mesh_selector=mesh_selector,
+        )
+
+    @classmethod
+    def _tool_approval_request(
+        cls, tool_name: str, tool_args: dict[str, Any], candidate: dict[str, Any]
+    ) -> ToolingRequestApprovalRequest:
+        """Build a Tooling approval request from hidden candidate metadata."""
+
+        execution_request = cls._tool_execution_request(tool_name, tool_args, candidate)
+        return ToolingRequestApprovalRequest(**execution_request.model_dump())
+
+    @staticmethod
+    def _approval_payload(
+        *,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        candidate: dict[str, Any],
+        result_data: Any,
+        error: str | None,
+    ) -> dict[str, Any]:
+        """Return a structured UI/session approval card payload."""
+
+        if hasattr(result_data, "model_dump"):
+            data = result_data.model_dump()
+        elif isinstance(result_data, dict):
+            data = result_data
+        else:
+            data = {}
+
+        policy_decision = data.get("policy_decision") or {}
+        return {
+            "type": "tool_approval_request",
+            "status": "requested" if data.get("ok") else "failed",
+            "tool_name": tool_name,
+            "display_name": candidate.get("display_name") or tool_name,
+            "description": candidate.get("description") or "",
+            "arguments": tool_args,
+            "args_schema": candidate.get("args_schema") or {},
+            "approval_request_id": data.get("approval_request_id"),
+            "expires_at": data.get("expires_at"),
+            "correlation_id": data.get("correlation_id"),
+            "policy_decision_id": policy_decision.get("decision_id"),
+            "approval_mode": policy_decision.get("approval_mode"),
+            "reason_code": candidate.get("reason_code"),
+            "reason": error or data.get("error") or candidate.get("reason"),
+            "provider_peer_id": candidate.get("provider_peer_id"),
+            "provider_service_instance_id": candidate.get("provider_service_instance_id"),
+            "global_tool_id": candidate.get("global_tool_id"),
+            "mesh_selector": candidate.get("mesh_selector"),
+            "safety_class": candidate.get("safety_class"),
+            "execution_location": candidate.get("execution_location"),
+            "required_permissions": candidate.get("required_permissions") or [],
+        }
 
     def _tools_end_condition(
         self,

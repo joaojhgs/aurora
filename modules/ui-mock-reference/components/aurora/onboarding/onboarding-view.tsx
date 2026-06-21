@@ -2,7 +2,6 @@
 
 import { CheckCircle2, Cloud, Compass, Laptop, Network, Rocket, Smartphone, WifiOff } from 'lucide-react'
 import { PageHeader } from '@/components/aurora/page-header'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'

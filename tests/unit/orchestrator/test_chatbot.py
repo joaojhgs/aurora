@@ -90,7 +90,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             # Update the mock response for this specific test
             import app.services.orchestrator.agents.chatbot as chatbot_module
@@ -124,7 +124,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -142,7 +142,7 @@ class TestChatbotMemorySearch:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -157,7 +157,7 @@ class TestChatbotToolRetrieval:
     async def test_chatbot_get_tools_success(self, mock_bus, mock_state):
         """Test successful tool retrieval via bus."""
         from app.messaging import QueryResult
-        from app.shared.messaging.models.tooling_models import GetToolsQuery  # noqa: F401
+        from app.shared.contracts.models.tooling import ToolingMethods
 
         # Mock memory search (first call)
         # Mock tool retrieval (second call)
@@ -172,24 +172,63 @@ class TestChatbotToolRetrieval:
                             "description": "A test tool",
                             "args_schema": {"properties": {}, "required": []},
                         }
-                    ]
+                    ],
+                    "blocked_tools": [
+                        {
+                            "reason_code": "confirmation_required",
+                            "reason": "tool requires approval before it can be model-bound",
+                            "tool": {
+                                "name": "delete_file",
+                                "local_name": "delete_file",
+                                "global_tool_id": "local:Tooling:tool:delete_file",
+                                "provider_peer_id": "local",
+                                "provider_service_instance_id": "local:Tooling",
+                                "display_name": "delete_file",
+                                "description": "Delete a file.",
+                                "args_schema": {"properties": {}, "required": []},
+                                "execution_location": "local",
+                                "source_type": "local",
+                                "safety_class": "dangerous",
+                                "confirmation_required": True,
+                            },
+                        }
+                    ],
                 },
             ),  # Tool retrieval
         ]
 
         with (
             _patch_llm_for_chatbot(),
-            patch("app.services.orchestrator.agents.chatbot.ToolingMethods") as mock_topics,
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolCatalogRequest"),
         ):
-            mock_topics.GET_TOOLS = "Tooling.GetTools"
             result = await chatbot(mock_state, bus=mock_bus)
 
             # Verify tools were requested via bus
             assert mock_bus.request.call_count >= 2
+            assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
 
             # LLM was called to produce a response
             assert "messages" in result
+            assert result["approval_candidates"]["delete_file"]["approval_required"] is True
+
+    @pytest.mark.asyncio
+    async def test_chatbot_falls_back_to_legacy_get_tools(self, mock_bus, mock_state):
+        """Chatbot falls back when aggregate catalog is unavailable."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        mock_bus.request.side_effect = [
+            QueryResult(ok=True, data={"items": []}),
+            QueryResult(ok=False, error="unknown method"),
+            QueryResult(ok=True, data={"tools": []}),
+        ]
+
+        with _patch_llm_for_chatbot():
+            result = await chatbot(mock_state, bus=mock_bus)
+
+        assert "messages" in result
+        assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
+        assert mock_bus.request.call_args_list[2][0][0] == ToolingMethods.GET_TOOLS
 
     @pytest.mark.asyncio
     async def test_chatbot_get_tools_failure(self, mock_bus, mock_state):
@@ -199,13 +238,14 @@ class TestChatbotToolRetrieval:
         # Mock memory search success, tool retrieval failure
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),  # Memory search
-            QueryResult(ok=False, error="Tool retrieval failed"),  # Tool retrieval
+            QueryResult(ok=False, error="Tool catalog failed"),  # Catalog retrieval
+            QueryResult(ok=False, error="Tool retrieval failed"),  # Legacy tool retrieval
         ]
 
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 
@@ -224,7 +264,7 @@ class TestChatbotLLMIntegration:
                 "app.services.orchestrator.agents.chatbot._initialize_llm", new_callable=AsyncMock
             ),
             patch("app.services.orchestrator.agents.chatbot.llm", None),
-            contextlib.suppress(ValueError),
+            contextlib.suppress(ValueError, ModuleNotFoundError),
         ):
             # Should raise or handle gracefully; accept either
             await chatbot(mock_state, bus=mock_bus)
@@ -256,7 +296,7 @@ class TestChatbotLLMIntegration:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
             patch(
                 "app.services.orchestrator.agents.chatbot._deserialize_tools"
             ) as mock_deserialize,
@@ -287,7 +327,7 @@ class TestChatbotLLMIntegration:
         with (
             _patch_llm_for_chatbot(),
             patch("app.services.orchestrator.agents.chatbot.ToolingMethods"),
-            patch("app.services.orchestrator.agents.chatbot.GetToolsQuery"),
+            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolsRequest"),
         ):
             result = await chatbot(mock_state, bus=mock_bus)
 

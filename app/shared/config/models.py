@@ -128,7 +128,7 @@ class Webrtc(BaseConfigModel):
     """
     enable_app_layer_e2ee: bool | None = False
     """
-    Enable application-layer end-to-end encryption
+    When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.
     """
     stun_servers: list[str] | None = ["stun:stun.l.google.com:19302"]
     """
@@ -174,6 +174,53 @@ class Gateway(BaseConfigModel):
     signaling_mqtt: SignalingMqtt | None = None
     """
     MQTT signaling configuration for WebRTC
+    """
+
+
+class Auth(BaseConfigModel):
+    enabled: bool | None = False
+    """
+    Enable authentication service
+    """
+    api_keys: list[SecretStr] | None = []
+    """
+    List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)
+    """
+    token_expiry_days: int | None = Field(365, ge=1)
+    """
+    Default token expiry in days
+    """
+    session_token_expiry_hours: int | None = Field(24, ge=1)
+    """
+    Session token expiry in hours (for login)
+    """
+    pairing_code_expiry_minutes: int | None = Field(5, ge=1)
+    """
+    Pairing code expiry in minutes
+    """
+    pairing_max_attempts_per_ip: int | None = Field(5, ge=1)
+    """
+    Max pairing attempts per IP before rate limiting
+    """
+    default_pairing_permissions: list[str] | None = []
+    """
+    Default permissions assigned to new devices during pairing
+    """
+    webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
+    """
+    Timeout in seconds for WebRTC peer authentication
+    """
+    webrtc_pairing_timeout_seconds: float | None = Field(300.0, ge=10.0)
+    """
+    Timeout in seconds for peers in the pairing flow (awaiting human approval)
+    """
+    audit_enabled: bool | None = True
+    """
+    Enable audit logging of security events
+    """
+    audit_retention_days: int | None = Field(90, ge=1)
+    """
+    Audit log retention period in days
     """
 
 
@@ -595,6 +642,13 @@ class Plugins(BaseConfigModel):
     gcalendar: Gcalendar | None = None
 
 
+class Config(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable config service
+    """
+
+
 class MeshSharing(BaseConfigModel):
     share: bool | None = False
     """
@@ -604,6 +658,10 @@ class MeshSharing(BaseConfigModel):
     """
     Maximum concurrent remote calls
     """
+    allowed_peers: list[str] | None = None
+    """
+    Specific stable mesh peer IDs allowed to call this shared service. Null allows any authenticated peer.
+    """
     prefer: Literal["local", "network", "network_only", "local_only"] | None = "local"
     """
     Routing preference
@@ -612,53 +670,63 @@ class MeshSharing(BaseConfigModel):
     """
     Fallback strategy
     """
+    min_version: str | None = None
+    """
+    Minimum compatible remote service version required when routing to this service.
+    """
+    required_capabilities: list[str] | None = []
+    """
+    Remote service capabilities required before this service may be selected as a mesh provider.
+    """
+    require_explicit_selector: bool | None = False
+    """
+    Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
+    """
 
 
-class Auth(BaseConfigModel):
-    enabled: bool | None = False
+class ToolingApprovalPolicyRule(BaseConfigModel):
+    rule_id: str
     """
-    Enable authentication service
+    Stable operator-defined rule identifier
     """
-    mesh_sharing: MeshSharing | None = None
-    api_keys: list[SecretStr] | None = []
+    share: bool | None = True
     """
-    List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)
+    Whether matching tools are shared/discoverable/executable
     """
-    token_expiry_days: int | None = Field(365, ge=1)
+    approval_mode: (
+        Literal[
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only",
+        ]
+        | None
+    ) = "ask_each_time"
+    tool_name: str | None = None
+    global_tool_id: str | None = None
+    execution_location: Literal["local", "remote"] | None = None
+    source_type: Literal["core", "plugin", "mcp", "toolkit", "unknown"] | None = None
+    toolkit_name: str | None = None
+    safety_class: Literal["standard", "sensitive", "dangerous"] | None = None
+    operation_class: (
+        Literal["read", "write", "external", "admin", "hardware", "data-egress"] | None
+    ) = None
+    resource_namespace: str | None = None
+    hardware_target: str | None = None
+    data_scope: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
+    caller_device_id: str | None = None
+    provider_peer_id: str | None = None
+    provider_service_instance_id: str | None = None
+    route_privacy_class: str | None = None
+    token_ttl_seconds: int | None = Field(300, ge=1)
     """
-    Default token expiry in days
-    """
-    session_token_expiry_hours: int | None = Field(24, ge=1)
-    """
-    Session token expiry in hours (for login)
-    """
-    pairing_code_expiry_minutes: int | None = Field(5, ge=1)
-    """
-    Pairing code expiry in minutes
-    """
-    pairing_max_attempts_per_ip: int | None = Field(5, ge=1)
-    """
-    Max pairing attempts per IP before rate limiting
-    """
-    default_pairing_permissions: list[str] | None = []
-    """
-    Default permissions assigned to new devices during pairing
-    """
-    webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
-    """
-    Timeout in seconds for WebRTC peer authentication
-    """
-    webrtc_pairing_timeout_seconds: float | None = Field(300.0, ge=10.0)
-    """
-    Timeout in seconds for peers in the pairing flow (awaiting human approval)
-    """
-    audit_enabled: bool | None = True
-    """
-    Enable audit logging of security events
-    """
-    audit_retention_days: int | None = Field(90, ge=1)
-    """
-    Audit log retention period in days
+    Approval token lifetime for this rule
     """
 
 
@@ -825,12 +893,52 @@ class Db(BaseConfigModel):
     """
 
 
+class Scheduler(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable scheduler service
+    """
+    mesh_sharing: MeshSharing | None = None
+
+
+class ToolingApprovalPolicy(BaseConfigModel):
+    default_share: bool | None = True
+    """
+    Whether tools are discoverable/executable unless a more specific rule overrides this
+    """
+    default_approval_mode: (
+        Literal[
+            "deny_all",
+            "ask_each_time",
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_session",
+            "approve_all_for_peer",
+            "approve_all_local_safe",
+            "dry_run_only",
+        ]
+        | None
+    ) = "approve_all_local_safe"
+    """
+    Default approval behavior when no scoped rule matches
+    """
+    default_token_ttl_seconds: int | None = Field(300, ge=1)
+    """
+    Default lifetime for approval tokens issued by matching rules
+    """
+    rules: list[ToolingApprovalPolicyRule] | None = Field([], validate_default=True)
+    """
+    First-match scoped sharing and approval rules. Unset fields act as wildcards.
+    """
+
+
 class Tooling(BaseConfigModel):
     enabled: bool | None = True
     """
     Enable tooling service
     """
     mesh_sharing: MeshSharing | None = None
+    approval_policy: ToolingApprovalPolicy | None = None
     hardware_acceleration: HardwareAcceleration | None = None
     """
     Hardware acceleration for OCR features
@@ -843,22 +951,6 @@ class Tooling(BaseConfigModel):
     """
     Plugin integrations
     """
-
-
-class Scheduler(BaseConfigModel):
-    enabled: bool | None = True
-    """
-    Enable scheduler service
-    """
-    mesh_sharing: MeshSharing | None = None
-
-
-class Config(BaseConfigModel):
-    enabled: bool | None = True
-    """
-    Enable config service
-    """
-    mesh_sharing: MeshSharing | None = None
 
 
 class Services(BaseConfigModel):

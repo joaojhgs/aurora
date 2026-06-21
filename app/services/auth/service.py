@@ -22,6 +22,8 @@ from app.shared.contracts.models.auth import (
     DeviceListRequest,
     DeviceListResponse,
     DeviceResponse,
+    ListPendingPairingsRequest,
+    ListPendingPairingsResponse,
     LoginRequest,
     LoginResponse,
     LogoutRequest,
@@ -36,12 +38,15 @@ from app.shared.contracts.models.auth import (
     PairingApproveResponse,
     PairingConnectRequest,
     PairingConnectResponse,
+    PairingDenyRequest,
+    PairingDenyResponse,
     PairingExchangeRequest,
     PairingExchangeResponse,
     PairingStartRequest,
     PairingStartResponse,
     PasswordChangeRequest,
     PasswordChangeResponse,
+    PendingPairingEntry,
     PermissionPatchRequest,
     PermissionPatchResponse,
     PermissionSetRequest,
@@ -186,7 +191,7 @@ class AuthService(BaseService):
     # ── Login / Logout ───────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.Login",
+        method_id=AuthMethods.LOGIN,
         summary="Authenticate with username/password and receive a session token",
         input_model=LoginRequest,
         output_model=LoginResponse,
@@ -307,7 +312,7 @@ class AuthService(BaseService):
     # ── Pairing ──────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.PairingStart",
+        method_id=AuthMethods.PAIRING_START,
         summary="Start a device pairing request (returns 6-digit code)",
         input_model=PairingStartRequest,
         output_model=PairingStartResponse,
@@ -328,7 +333,31 @@ class AuthService(BaseService):
         return PairingStartResponse(code=code, expires_in_seconds=300)
 
     @method_contract(
-        method_id="Auth.PairingConnect",
+        method_id=AuthMethods.LIST_PENDING_PAIRINGS,
+        summary="List pending device and mesh pairing requests for authorized admins",
+        input_model=ListPendingPairingsRequest,
+        output_model=ListPendingPairingsResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Auth.manage"],
+    )
+    async def handle_list_pending_pairings(
+        self, data: ListPendingPairingsRequest, envelope: Envelope | None = None
+    ) -> ListPendingPairingsResponse:
+        pairings, expired_count = await self.manager.list_pending_pairings(
+            include_non_pending=data.include_non_pending
+        )
+        await self._audit_admin_pairing_queue_list(envelope, len(pairings), expired_count)
+        entries = [PendingPairingEntry(**pairing) for pairing in pairings]
+        return ListPendingPairingsResponse(
+            pairings=entries,
+            total=len(entries),
+            expired_count=expired_count,
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=AuthMethods.PAIRING_CONNECT,
         summary="Check the status of a pairing request",
         input_model=PairingConnectRequest,
         output_model=PairingConnectResponse,
@@ -348,12 +377,13 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.PairingApprove",
-        summary="Approve a pairing request (requires auth.approve permission)",
+        method_id=AuthMethods.PAIRING_APPROVE,
+        summary="Approve a pairing request",
         input_model=PairingApproveRequest,
         output_model=PairingApproveResponse,
         exposure="both",
         method_type="manage",
+        required_perms=["Auth.manage"],
     )
     async def handle_pairing_approve(
         self, data: PairingApproveRequest, envelope: Envelope | None = None
@@ -368,7 +398,27 @@ class AuthService(BaseService):
         return PairingApproveResponse(success=success)
 
     @method_contract(
-        method_id="Auth.PairingExchange",
+        method_id=AuthMethods.PAIRING_DENY,
+        summary="Deny a pending pairing request",
+        input_model=PairingDenyRequest,
+        output_model=PairingDenyResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Auth.manage"],
+    )
+    async def handle_pairing_deny(
+        self, data: PairingDenyRequest, envelope: Envelope | None = None
+    ) -> PairingDenyResponse:
+        denier_id = envelope.principal_id if envelope else "system"
+        success = await self.manager.deny_pairing(
+            data.code,
+            user_id=denier_id or "system",
+            reason=data.reason,
+        )
+        return PairingDenyResponse(success=success)
+
+    @method_contract(
+        method_id=AuthMethods.PAIRING_EXCHANGE,
         summary="Exchange an approved pairing code for a token",
         input_model=PairingExchangeRequest,
         output_model=PairingExchangeResponse,
@@ -388,6 +438,33 @@ class AuthService(BaseService):
             permissions=result.get("permissions", []),
             token_id=result.get("token_id", ""),
         )
+
+    async def _audit_admin_pairing_queue_list(
+        self,
+        envelope: Envelope | None,
+        count: int,
+        expired_count: int,
+    ) -> None:
+        try:
+            import json
+
+            await self.handle_store_audit_event(
+                StoreAuditEventRequest(
+                    event="auth.pairing.queue_listed",
+                    principal_id=(envelope.principal_id if envelope else None),
+                    details=json.dumps(
+                        {
+                            "count": count,
+                            "expired_count": expired_count,
+                            "secrets_redacted": True,
+                        },
+                        sort_keys=True,
+                    ),
+                    ip_address=None,
+                )
+            )
+        except Exception as e:
+            log_warning(f"Failed to audit pending pairing queue list: {e}")
 
     # ── Principal CRUD ───────────────────────────────────────────────────
 
@@ -731,6 +808,13 @@ class AuthService(BaseService):
             offset=data.offset,
             principal_id=data.principal_id,
             event=data.event,
+            correlation_id=data.correlation_id,
+            peer_id=data.peer_id,
+            provider_id=data.provider_id,
+            tool_id=data.tool_id,
+            action=data.action,
+            policy_decision_id=data.policy_decision_id,
+            route=data.route,
         )
         return AuditLogResponse(events=events, total=total)
 

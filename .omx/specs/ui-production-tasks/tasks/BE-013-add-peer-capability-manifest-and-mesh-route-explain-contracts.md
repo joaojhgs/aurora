@@ -1,10 +1,19 @@
 # BE-013 — Add peer capability manifest and mesh route explain contracts
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P2 — Backend contract and gateway/API gaps
 - **Lane:** backend/mesh
-- **Depends on:** BE-002
+- **Depends on:** BE-002, MESH-GAP-003
 - **Parallelizable with:** SDK-010, MESH-003
 - **Coverage matrix rows:** mesh.route.policy
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -23,7 +32,7 @@ Backend has a typed contract, route/exposure decision, permission model, audit/p
 
 ## SDK integration details
 
-- Update SDK generated descriptors and capability graph after backend contract lands.
+- Update SDK generated descriptors, executable capability catalog, and diagnostic graph projection after backend contract lands.
 - Classify unavailable/internal-only behavior explicitly.
 
 ## Tauri/native integration details
@@ -79,3 +88,20 @@ Backend has a typed contract, route/exposure decision, permission model, audit/p
 ## Handoff notes
 
 - No additional handoff notes at planning time.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This task is superseded/expanded by `MESH-GAP-003`: implement a typed capability catalog, not only a peer manifest.
+
+Additional backend requirements:
+
+- Add or finalize typed models for `CapabilityCatalogRequest/Response`, `CapabilityProviderInfo`, `CapabilityActionInfo`, `CapabilityResourceInfo`, `CapabilityPolicyDecisionInfo`, `CapabilityFreshnessInfo`, `RouteExplainRequest/Response`, `RouteCandidateDecision`, and `RouteBlockerInfo`.
+- Include local and remote providers in one catalog: services, methods, tools, model runtimes, data/RAG namespaces, audio devices/sessions, scheduler ownership, native platform capabilities, and diagnostics.
+- Route explain must include selected provider, rejected candidates, reasons, explicit selector status, freshness, policy state, auth/RBAC state, transport, latency/capacity, and privacy class.
+- Continue supporting existing `Gateway.GetCapabilityGraph` if present, but avoid naming collisions: graph can be derived/diagnostic, catalog is the executable SDK contract and must carry bindability/approval/selector state.
+- Add fixtures that the UI SDK can ingest without importing Python internals.
+
+Additional acceptance criteria:
+
+- `SDK-006`, `SDK-012`, `MESH-003`, `ADM-001`, and `QA-008` can be implemented against this contract without backend guesswork.

@@ -18,8 +18,9 @@ from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
-from .models import PeerManifest, PeerState
+from .models import PeerManifest, PeerServiceInfo, PeerState, ProviderCandidate
 
 if TYPE_CHECKING:
     from app.services.gateway.config import MeshConfig, MeshServiceConfig
@@ -342,68 +343,155 @@ class PeerRegistry:
         Returns:
             Best matching PeerState, or None if no suitable peer found
         """
-        from .version_compat import is_compatible
-
-        exclude_set = set(exclude or [])
-        candidates = []
-
-        for peer in self._peers.values():
-            if peer.peer_id in exclude_set:
-                continue
-            if peer.status != "negotiated" or not peer.manifest:
-                continue
-
-            # Find the matching service in manifest
-            svc_info = None
-            for svc in peer.manifest.shared_services:
-                if svc.module == module:
-                    svc_info = svc
-                    break
-            if not svc_info:
-                continue
-
-            # Check allowed_peers in sharing config
-            sharing = self._config.services.get(module)
-            if (
-                sharing
-                and sharing.allowed_peers is not None
-                and peer.peer_id not in sharing.allowed_peers
-            ):
-                continue
-
-            # Version compatibility check
-            if (
-                routing_config
-                and routing_config.min_version
-                and not is_compatible(
-                    routing_config.min_version,
-                    svc_info.version,
-                    version_policy,
-                    routing_config.min_version,
-                )
-            ):
-                continue
-
-            # Required capabilities check
-            if (
-                routing_config
-                and routing_config.required_capabilities
-                and not all(
-                    cap in svc_info.capabilities for cap in routing_config.required_capabilities
-                )
-            ):
-                continue
-
-            # Capacity check
-            if svc_info.max_concurrent > 0 and peer.active_calls >= svc_info.max_concurrent:
-                continue
-
-            candidates.append(peer)
+        candidates = [
+            candidate.peer
+            for candidate in self.get_provider_candidates(
+                module=module,
+                routing_config=routing_config,
+                version_policy=version_policy,
+                exclude=exclude,
+                include_ineligible=False,
+            )
+        ]
 
         if not candidates:
             return None
 
         return self._select_peer(candidates)
+
+    def get_provider_candidates(
+        self,
+        module: str,
+        routing_config: MeshServiceConfig | None = None,
+        version_policy: str = "compatible",
+        exclude: list[str] | None = None,
+        selector: MeshAddressSelector | None = None,
+        include_ineligible: bool = True,
+    ) -> list[ProviderCandidate]:
+        """Return provider candidates with eligibility diagnostics.
+
+        Unlike ``get_best_provider()``, this API preserves every peer that
+        advertises the requested module by default and explains why each
+        provider is included or excluded. It is the provider aggregation
+        surface for remote Tooling discovery and mesh diagnostics.
+        """
+        if routing_config is None:
+            routing_config = self._config.services.get(module)
+
+        selector_peer_id, selector_error = _selector_peer_id(selector, module)
+        candidates: list[ProviderCandidate] = []
+
+        for peer in self._peers.values():
+            service = self.get_peer_service(peer.peer_id, module)
+            if not service:
+                continue
+
+            candidate = self._evaluate_provider_candidate(
+                peer=peer,
+                service=service,
+                module=module,
+                routing_config=routing_config,
+                version_policy=version_policy,
+                exclude=set(exclude or []),
+                selector_peer_id=selector_peer_id,
+                selector_error=selector_error,
+            )
+            if include_ineligible or candidate.eligible:
+                candidates.append(candidate)
+
+        return candidates
+
+    def _evaluate_provider_candidate(
+        self,
+        *,
+        peer: PeerState,
+        service: PeerServiceInfo,
+        module: str,
+        routing_config: MeshServiceConfig | None,
+        version_policy: str,
+        exclude: set[str],
+        selector_peer_id: str | None,
+        selector_error: str | None,
+    ) -> ProviderCandidate:
+        if peer.peer_id in exclude:
+            return _candidate(peer, service, False, "excluded_peer", "peer excluded from selection")
+
+        if selector_error:
+            return _candidate(peer, service, False, "selector_conflict", selector_error)
+
+        if selector_peer_id and peer.peer_id != selector_peer_id:
+            return _candidate(
+                peer,
+                service,
+                False,
+                "selector_mismatch",
+                f"selector targets peer/provider '{selector_peer_id}'",
+            )
+
+        if peer.status != "negotiated":
+            return _candidate(
+                peer,
+                service,
+                False,
+                "peer_stale" if peer.status == "stale" else "peer_not_negotiated",
+                f"peer status is {peer.status}, not negotiated",
+            )
+
+        if (
+            routing_config
+            and routing_config.allowed_peers is not None
+            and peer.peer_id not in routing_config.allowed_peers
+        ):
+            return _candidate(
+                peer,
+                service,
+                False,
+                "peer_not_allowed",
+                "peer is not allowed by module policy",
+            )
+
+        if routing_config and routing_config.min_version:
+            from .version_compat import is_compatible
+
+            if not is_compatible(
+                routing_config.min_version,
+                service.version,
+                version_policy,
+                routing_config.min_version,
+            ):
+                return _candidate(
+                    peer,
+                    service,
+                    False,
+                    "incompatible_version",
+                    f"version {service.version} does not satisfy {routing_config.min_version}",
+                )
+
+        if routing_config and routing_config.required_capabilities:
+            missing = [
+                cap
+                for cap in routing_config.required_capabilities
+                if cap not in service.capabilities
+            ]
+            if missing:
+                return _candidate(
+                    peer,
+                    service,
+                    False,
+                    "missing_capabilities",
+                    f"missing required capabilities: {', '.join(missing)}",
+                )
+
+        if service.max_concurrent > 0 and peer.active_calls >= service.max_concurrent:
+            return _candidate(
+                peer,
+                service,
+                False,
+                "provider_at_capacity",
+                "provider is at capacity",
+            )
+
+        return _candidate(peer, service, True, "eligible", "eligible provider")
 
     # ── Peer selection ───────────────────────────────────────────────────
 
@@ -465,3 +553,64 @@ class PeerRegistry:
                         f"PeerRegistry: Peer {peer_id} marked stale "
                         f"(no ping response for {timeout}s)"
                     )
+
+
+def _candidate(
+    peer: PeerState,
+    service: PeerServiceInfo,
+    eligible: bool,
+    reason_code: str,
+    reason: str,
+) -> ProviderCandidate:
+    return ProviderCandidate(
+        peer=peer,
+        service=service,
+        eligible=eligible,
+        reason_code=reason_code,
+        reason=reason,
+    )
+
+
+def _selector_peer_id(
+    selector: MeshAddressSelector | None, module: str
+) -> tuple[str | None, str | None]:
+    """Resolve selector peer aliases into a single peer id."""
+    if not selector or not selector.has_routing_target():
+        return None, None
+
+    peer_ids: list[str] = []
+    for value, field_name in (
+        (selector.peer_id, "peer_id"),
+        (selector.provider_id, "provider_id"),
+        (selector.service_instance_id, "service_instance_id"),
+    ):
+        peer_id, error = _parse_selector_peer_id(value, field_name, module)
+        if error:
+            return None, error
+        if peer_id and peer_id not in peer_ids:
+            peer_ids.append(peer_id)
+
+    if len(peer_ids) > 1:
+        return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}"
+    return (peer_ids[0], None) if peer_ids else (None, None)
+
+
+def _parse_selector_peer_id(
+    value: str | None,
+    field_name: str,
+    module: str,
+) -> tuple[str | None, str | None]:
+    if not value:
+        return None, None
+    if ":" not in value:
+        return value, None
+
+    parts = value.split(":")
+    if len(parts) == 3 and parts[0] in {"local", "remote"}:
+        _, peer_id, service_module = parts
+    else:
+        peer_id, service_module = value.split(":", 1)
+
+    if service_module and service_module != module:
+        return None, f"{field_name} '{value}' targets {service_module}, not {module}"
+    return peer_id, None

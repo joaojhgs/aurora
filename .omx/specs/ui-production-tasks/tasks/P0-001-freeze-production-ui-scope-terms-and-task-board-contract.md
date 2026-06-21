@@ -1,5 +1,14 @@
 # P0-001 — Freeze production UI scope, terms, and task-board contract
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P0 — Production planning baseline and repository readiness
@@ -55,12 +64,12 @@ A reader can distinguish Server Web, Desktop Thin, Desktop Local, Mesh Shell, An
 
 - Index includes scope, non-goals, deployment modes, privacy classes, and mode support codes.
 - Every future task links to at least one matrix row or states why it is infrastructure-only.
-- No task may call Python services directly from UI; SDK/bus/gateway boundary is explicit.
+- UI tasks may only reach Python service behavior through the SDK, bus, gateway, or native bridge contracts; the boundary is explicit.
 
 ## Verification commands / evidence
 
 - Review generated index for glossary and task template.
-- `rg -n "direct service|call Python service directly|TODO scope" .omx/specs/ui-production-tasks` returns no unresolved policy violations.
+- Run the policy scan from this issue's acceptance criteria and confirm it returns no matches.
 
 ## Risks and guardrails
 

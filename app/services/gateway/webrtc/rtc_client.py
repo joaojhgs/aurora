@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import json
 import uuid
+from collections import deque
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
@@ -13,6 +15,12 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.services.gateway.acl.audit import audit_event
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, Identity
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import (
+    WebRTCDiagnosticError,
+    WebRTCDiagnosticsResponse,
+    WebRTCPeerDiagnostic,
+    WebRTCSignalingDiagnostic,
+)
 from app.shared.models.db import Token
 
 from ..utils.crypto import aead_open, aead_seal, derive_room_keys
@@ -29,6 +37,29 @@ if TYPE_CHECKING:
     from .signaling.base import SignalingAdapter
 
 
+def _diagnostic_float(value: float | None) -> float | None:
+    if value is None or value == float("inf") or value != value:
+        return None
+    return float(value)
+
+
+def _diagnostic_auth_state(identity: Identity) -> str:
+    if identity == ANONYMOUS:
+        return "anonymous"
+    if identity == OPEN_PEER:
+        return "open"
+    if identity.is_admin:
+        return "authenticated_admin"
+    return "authenticated"
+
+
+def _redact_diagnostic_message(message: str) -> str:
+    lowered = message.lower()
+    if any(part in lowered for part in ("token", "password", "secret", "key", "credential")):
+        return "redacted diagnostic event"
+    return message[:240]
+
+
 class RTCClient:
     def __init__(
         self,
@@ -43,7 +74,11 @@ class RTCClient:
         self._registry = registry
         self._auth_service = auth_service
         self._require_auth: bool = require_auth
+        # WebRTC/MQTT signaling session id. This may change on reconnect and
+        # must not be used for mesh policy, manifests, or persisted trust.
         self._peer_id = str(uuid.uuid4())
+        self._mesh_peer_id: str | None = None
+        self._mesh_node_name: str = ""
         self._keys = derive_room_keys(
             settings.webrtc.password, settings.webrtc.app_id, settings.webrtc.room
         )
@@ -76,8 +111,13 @@ class RTCClient:
         self._peer_send_fns: dict[str, Any] = {}
         # Per-peer DataChannel objects (for reverse-pairing / bilateral auth)
         self._peer_data_channels: dict[str, Any] = {}
+        # Active WebRTC session id -> stable mesh peer_id learned from auth/manifest.
+        self._peer_stable_ids: dict[str, str] = {}
+        # Stable mesh peer_id -> active WebRTC session id for transport sends.
+        self._stable_peer_sessions: dict[str, str] = {}
         # Per-peer human-readable names (Fix 6)
         self._peer_names: dict[str, str] = {}
+        self._diagnostic_errors: deque[WebRTCDiagnosticError] = deque(maxlen=50)
 
     _PUBLIC_BROKERS = {"broker.emqx.io", "test.mosquitto.org"}
 
@@ -86,6 +126,112 @@ class RTCClient:
         name = self._peer_names.get(peer, "")
         short = peer[:8]
         return f"{name} ({short})" if name else f"{short}…"
+
+    def set_mesh_identity(self, peer_id: str, node_name: str = "") -> None:
+        """Set this node's stable mesh identity.
+
+        ``_peer_id`` remains the ephemeral signaling/session id used by MQTT
+        and WebRTC. ``_mesh_peer_id`` is the durable policy identity used in
+        manifests, peer registry rows, saved credentials, and diagnostics.
+        """
+        self._mesh_peer_id = peer_id
+        self._mesh_node_name = node_name
+
+    def _local_mesh_peer_id(self) -> str:
+        return self._mesh_peer_id or self._peer_id
+
+    def _local_mesh_node_name(self) -> str:
+        return self._mesh_node_name or self._local_mesh_peer_id()
+
+    def _presence_metadata(self) -> dict[str, str]:
+        stable_peer_id = self._local_mesh_peer_id()
+        metadata = {
+            "stable_peer_id": stable_peer_id,
+            "mesh_peer_id": stable_peer_id,
+        }
+        node_name = self._local_mesh_node_name()
+        if node_name:
+            metadata["node_name"] = node_name
+            metadata["mesh_node_name"] = node_name
+        return metadata
+
+    async def refresh_presence(self) -> None:
+        """Re-publish retained signaling presence with current stable mesh identity."""
+        if not self._adapter:
+            return
+        s = self._settings
+        await self._adapter.join_room(
+            s.webrtc.app_id,
+            s.webrtc.room,
+            self._peer_id,
+            metadata=self._presence_metadata(),
+        )
+
+    def _stable_peer_id_for_session(self, peer: str) -> str:
+        return self._peer_stable_ids.get(peer, peer)
+
+    def _session_for_peer_id(self, peer_id: str) -> str:
+        return self._stable_peer_sessions.get(peer_id, peer_id)
+
+    def _remember_stable_peer_id(
+        self, session_peer_id: str, stable_peer_id: str | None, node_name: str = ""
+    ) -> str:
+        """Record a stable mesh peer_id for an active signaling session."""
+        stable = stable_peer_id or session_peer_id
+        if stable != session_peer_id:
+            self._peer_stable_ids[session_peer_id] = stable
+            self._stable_peer_sessions[stable] = session_peer_id
+        if node_name:
+            self._peer_names[stable] = node_name
+            self._peer_names[session_peer_id] = node_name
+        return stable
+
+    def _saved_auth_token_for_peer(self, peer: str) -> str | None:
+        """Return a saved token only when it can be scoped to this peer.
+
+        Per-peer credentials are keyed by stable mesh peer ID. A session-keyed
+        token is accepted for migration from older runtime state. The legacy
+        ``_default`` credential is only accepted when it is the sole saved
+        credential for the room; once peer-scoped credentials exist, using a
+        default token for an unknown peer is ambiguous and must fail safe.
+        """
+        stable_peer_id = self._stable_peer_id_for_session(peer)
+        candidate_keys = [stable_peer_id]
+        if peer != stable_peer_id:
+            candidate_keys.append(peer)
+
+        for key in candidate_keys:
+            token = self._saved_auth_tokens.get(key)
+            if token:
+                log_debug(
+                    f"Saved WebRTC token lookup hit for peer {peer[:8]}… "
+                    f"using credential key {key[:8]}…"
+                )
+                return token
+
+        peer_scoped_keys = [key for key in self._saved_auth_tokens if key != "_default"]
+        default_token = self._saved_auth_tokens.get("_default")
+        if default_token and not peer_scoped_keys:
+            log_info(
+                f"Using legacy default saved WebRTC token for peer {peer[:8]}…; "
+                "no peer-scoped credentials are loaded"
+            )
+            return default_token
+
+        if default_token and peer_scoped_keys:
+            log_warning(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); refusing legacy default because "
+                "peer-scoped credentials are loaded"
+            )
+        elif peer_scoped_keys:
+            log_info(
+                f"Saved WebRTC token lookup miss for peer {peer[:8]}… "
+                f"(stable={stable_peer_id[:8]}…); pairing is required"
+            )
+        else:
+            log_debug(f"No saved WebRTC token available for peer {peer[:8]}…")
+        return None
 
     def set_saved_auth_token(self, token: str | None) -> None:
         """Set a single saved auth token (legacy/fallback).
@@ -173,7 +319,12 @@ class RTCClient:
         self._adapter.on_message("candidate", self._on_candidate)
         self._adapter.on_message("broadcast", self._on_broadcast)
 
-        await self._adapter.join_room(s.webrtc.app_id, s.webrtc.room, self._peer_id)
+        await self._adapter.join_room(
+            s.webrtc.app_id,
+            s.webrtc.room,
+            self._peer_id,
+            metadata=self._presence_metadata(),
+        )
         log_info(f"RTCClient joined room {s.webrtc.room} as {self._peer_id}")
 
     async def close(self) -> None:
@@ -195,6 +346,8 @@ class RTCClient:
         self._saved_auth_tokens.clear()
         self._peer_send_fns.clear()
         self._peer_data_channels.clear()
+        self._peer_stable_ids.clear()
+        self._stable_peer_sessions.clear()
         self._peer_names.clear()
 
         if self._adapter:
@@ -210,9 +363,11 @@ class RTCClient:
         peers = []
         for peer_id, pc in self._pcs.items():
             identity = self._peer_acl.get(peer_id, ANONYMOUS)
+            stable_peer_id = self._stable_peer_id_for_session(peer_id)
             peers.append(
                 {
                     "peer_id": peer_id,
+                    "stable_peer_id": stable_peer_id,
                     "connection_state": pc.connectionState,
                     "principal_name": identity.principal_name,
                     "is_admin": identity.is_admin,
@@ -222,20 +377,107 @@ class RTCClient:
             )
         return peers
 
+    def get_diagnostics(self) -> WebRTCDiagnosticsResponse:
+        """Return a redacted WebRTC/ICE/DataChannel diagnostic snapshot."""
+        signaling = WebRTCSignalingDiagnostic(
+            strategy=self._settings.webrtc.strategy,
+            connected=self._adapter is not None,
+            encrypted_presence=bool(self._settings.webrtc.encrypt_signaling),
+            app_id_configured=bool(self._settings.webrtc.app_id),
+            room_configured=bool(self._settings.webrtc.room),
+            broker_count=len(self._settings.signaling_mqtt.brokers),
+            public_broker_warning=bool(
+                {
+                    broker.split("://")[-1].split(":")[0].split("/")[0]
+                    for broker in self._settings.signaling_mqtt.brokers
+                }
+                & self._PUBLIC_BROKERS
+            ),
+        )
+
+        peers: list[WebRTCPeerDiagnostic] = []
+        authenticated_count = 0
+        for signaling_peer_id, pc in sorted(self._pcs.items()):
+            stable_peer_id = self._stable_peer_id_for_session(signaling_peer_id)
+            identity = self._peer_acl.get(signaling_peer_id) or self._peer_acl.get(
+                stable_peer_id,
+                ANONYMOUS,
+            )
+            if identity != ANONYMOUS:
+                authenticated_count += 1
+            channel = self._peer_data_channels.get(signaling_peer_id)
+            rtt_ms = None
+            if self._peer_registry:
+                peer_state = self._peer_registry.get_peer(stable_peer_id)
+                if peer_state:
+                    rtt_ms = _diagnostic_float(peer_state.latency_ms)
+
+            peers.append(
+                WebRTCPeerDiagnostic(
+                    signaling_peer_id=signaling_peer_id,
+                    stable_peer_id=stable_peer_id,
+                    node_name=self._peer_names.get(stable_peer_id, ""),
+                    connection_state=str(getattr(pc, "connectionState", "unknown")),
+                    ice_connection_state=str(getattr(pc, "iceConnectionState", "unknown")),
+                    ice_gathering_state=str(getattr(pc, "iceGatheringState", "unknown")),
+                    signaling_state=str(getattr(pc, "signalingState", "unknown")),
+                    data_channel_state=str(getattr(channel, "readyState", "unknown")),
+                    data_channel_label=str(getattr(channel, "label", "")),
+                    has_send_channel=signaling_peer_id in self._peer_send_fns,
+                    rtt_ms=rtt_ms,
+                    auth_state=_diagnostic_auth_state(identity),
+                    identity_source="" if identity == ANONYMOUS else identity.source,
+                    is_admin=False if identity == ANONYMOUS else identity.is_admin,
+                    effective_permission_count=0
+                    if identity == ANONYMOUS
+                    else len(identity.effective_perms),
+                    pairing_active=signaling_peer_id in self._peer_pairing_active,
+                    auth_timeout_pending=signaling_peer_id in self._peer_timeout_tasks,
+                    pending_pairing_task=signaling_peer_id in self._pairing_tasks,
+                )
+            )
+
+        return WebRTCDiagnosticsResponse(
+            enabled=bool(self._settings.webrtc.enabled),
+            started=self._adapter is not None,
+            mesh_enabled=self._mesh_enabled,
+            local_signaling_peer_id=self._peer_id,
+            local_mesh_peer_id=self._mesh_peer_id,
+            local_node_name=self._local_mesh_node_name(),
+            require_auth=self._require_auth,
+            auth_timeout_seconds=self._auth_timeout,
+            pairing_timeout_seconds=self._pairing_timeout,
+            app_layer_e2ee_enabled=bool(self._settings.webrtc.enable_app_layer_e2ee),
+            signaling=signaling,
+            peers=peers,
+            connected_peer_count=len(peers),
+            authenticated_peer_count=authenticated_count,
+            pairing_peer_count=len(self._peer_pairing_active),
+            pending_rpc_count=len(self._pending_rpc),
+            recent_errors=list(self._diagnostic_errors),
+            secrets_redacted=True,
+        )
+
     async def disconnect_peer(self, peer_id: str, by_principal_id: str | None = None) -> bool:
         """Force disconnect a peer."""
-        pc = self._pcs.get(peer_id)
+        session_peer_id = self._session_for_peer_id(peer_id)
+        stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        pc = self._pcs.get(session_peer_id)
         if not pc:
             return False
-        identity = self._peer_acl.get(peer_id, ANONYMOUS)
+        identity = self._peer_acl.get(session_peer_id, ANONYMOUS)
         # Cancel auth timeout task if pending
-        timeout_task = self._peer_timeout_tasks.pop(peer_id, None)
+        timeout_task = self._peer_timeout_tasks.pop(session_peer_id, None)
         if timeout_task:
             timeout_task.cancel()
         await pc.close()
-        self._pcs.pop(peer_id, None)
+        self._pcs.pop(session_peer_id, None)
+        self._peer_acl.pop(session_peer_id, None)
         self._peer_acl.pop(peer_id, None)
+        self._peer_tokens.pop(session_peer_id, None)
         self._peer_tokens.pop(peer_id, None)
+        self._peer_stable_ids.pop(session_peer_id, None)
+        self._stable_peer_sessions.pop(stable_peer_id, None)
         log_info(f"Force disconnected peer {peer_id}")
 
         # Audit: peer force-disconnected
@@ -244,6 +486,7 @@ class RTCClient:
             identity.principal_id,
             {
                 "peer_id": peer_id,
+                "signaling_peer_id": session_peer_id,
                 "by_principal_id": by_principal_id,
             },
         )
@@ -257,6 +500,8 @@ class RTCClient:
         propagates through the intersection.
         """
         identity = self._peer_acl.get(peer_id)
+        if not identity:
+            identity = self._peer_acl.get(self._session_for_peer_id(peer_id))
         if not identity or identity == ANONYMOUS:
             return False
         # Re-load user and rebuild identity
@@ -267,7 +512,9 @@ class RTCClient:
 
         # Use the original token scopes, falling back to effective_perms
         # only if no token was stored (shouldn't happen in normal flow).
-        token = self._peer_tokens.get(peer_id)
+        token = self._peer_tokens.get(peer_id) or self._peer_tokens.get(
+            self._session_for_peer_id(peer_id)
+        )
         token_scopes = token.scopes or [] if token else list(identity.effective_perms)
 
         new_identity = build_identity(
@@ -280,6 +527,7 @@ class RTCClient:
             source="webrtc_peer",
         )
         self._peer_acl[peer_id] = new_identity
+        self._peer_acl[self._session_for_peer_id(peer_id)] = new_identity
         return True
 
     # ── Internal ─────────────────────────────────────────────────────────
@@ -301,19 +549,97 @@ class RTCClient:
                 details=details,
             )
 
+    def _record_diagnostic_error(
+        self,
+        code: str,
+        message: str,
+        peer_id: str | None = None,
+    ) -> None:
+        """Store a short redacted diagnostic error for operator snapshots."""
+        self._diagnostic_errors.appendleft(
+            WebRTCDiagnosticError(
+                timestamp=datetime.now(UTC).isoformat(),
+                code=code,
+                message=_redact_diagnostic_message(message),
+                peer_id=peer_id,
+            )
+        )
+
     # ── Mesh P2P helpers ─────────────────────────────────────────────────
+
+    def _encode_datachannel_message(self, text: str) -> str | bytes:
+        """Encode an outbound DataChannel JSON message for the configured mode."""
+        if not self._settings.webrtc.enable_app_layer_e2ee:
+            return text
+
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("DataChannel E2EE messages must be JSON objects") from exc
+        if not isinstance(obj, dict):
+            raise ValueError("DataChannel E2EE messages must be JSON objects")
+        return aead_seal(self._keys.k_data, obj)
+
+    def _decode_datachannel_message(
+        self,
+        peer: str,
+        message: str | bytes | bytearray | memoryview,
+    ) -> str | None:
+        """Decode an inbound DataChannel message according to the configured mode."""
+        e2ee_enabled = self._settings.webrtc.enable_app_layer_e2ee
+
+        if isinstance(message, str):
+            if e2ee_enabled:
+                log_warning(
+                    "RTCClient: Dropping plaintext DataChannel message from "
+                    f"{peer}; app-layer E2EE is enabled"
+                )
+                return None
+            return message
+
+        if isinstance(message, (bytes, bytearray, memoryview)):
+            payload = bytes(message)
+            try:
+                if e2ee_enabled:
+                    obj = aead_open(self._keys.k_data, payload)
+                    return json.dumps(obj)
+                return payload.decode()
+            except Exception as e:
+                mode = "decrypt" if e2ee_enabled else "decode"
+                self._record_diagnostic_error(
+                    f"datachannel_{mode}_failed",
+                    f"Failed to {mode} DataChannel message",
+                    peer,
+                )
+                log_error(f"Failed to {mode} DataChannel message from {peer}: {e}")
+                return None
+
+        log_warning(
+            "RTCClient: Dropping unsupported DataChannel message from "
+            f"{peer}: {type(message).__name__}"
+        )
+        return None
+
+    def _send_channel_text(self, channel: Any, text: str) -> bool:
+        """Send JSON text on a DataChannel after applying configured encoding."""
+        if channel.readyState != "open":
+            return False
+        channel.send(self._encode_datachannel_message(text))
+        return True
 
     def send_to_peer(self, peer_id: str, text: str) -> bool:
         """Send a text message to a specific peer via their DataChannel.
 
         Args:
             peer_id: Target peer identifier
-            text: JSON string to send
+            text: JSON string to send. When app-layer E2EE is enabled this
+                is sealed and sent as binary AEAD payload.
 
         Returns:
             True if the message was sent, False if peer not connected or send failed
         """
-        send_fn = self._peer_send_fns.get(peer_id)
+        session_peer_id = self._session_for_peer_id(peer_id)
+        send_fn = self._peer_send_fns.get(session_peer_id)
         if send_fn:
             try:
                 send_fn(text)
@@ -357,7 +683,7 @@ class RTCClient:
         from app.services.gateway.mesh.negotiation import generate_manifest, manifest_to_dict
 
         manifest = generate_manifest(
-            peer_id=self._peer_id,
+            peer_id=self._local_mesh_peer_id(),
             mesh_config=self._mesh_config,
             registry=self._registry,
         )
@@ -384,17 +710,23 @@ class RTCClient:
         if not manifest:
             log_warning(f"RTCClient: Invalid manifest from peer {peer_id}")
             return
+        stable_peer_id = self._remember_stable_peer_id(
+            peer_id,
+            manifest.peer_id,
+            manifest.node_name,
+        )
 
         # Update peer registry
         if self._peer_registry:
-            await self._peer_registry.update_manifest(peer_id, manifest)
+            await self._peer_registry.register_peer(stable_peer_id, manifest.node_name)
+            await self._peer_registry.update_manifest(stable_peer_id, manifest)
 
         # Send ACK
         if self._mesh_config:
             ack = generate_manifest_ack(manifest, self._mesh_config)
             ack_msg = manifest_ack_to_dict(ack)
-            self.send_to_peer(peer_id, json.dumps(ack_msg))
-            log_debug(f"RTCClient: Sent manifest ACK to peer {peer_id}")
+            self.send_to_peer(stable_peer_id, json.dumps(ack_msg))
+            log_debug(f"RTCClient: Sent manifest ACK to peer {stable_peer_id}")
 
     async def _on_manifest_ack(self, peer_id: str, data: dict) -> None:
         """Process an incoming manifest ACK from a peer.
@@ -590,6 +922,16 @@ class RTCClient:
         if not remote_peer or remote_peer == self._peer_id:
             return  # Ignore our own presence
 
+        remote_stable_peer_id = (
+            msg.get("stable_peer_id") or msg.get("mesh_peer_id") or msg.get("peer_stable_id")
+        )
+        remote_node_name = msg.get("node_name") or msg.get("mesh_node_name") or ""
+        if remote_stable_peer_id == self._local_mesh_peer_id():
+            log_debug(f"RTCClient: Ignoring stale self-presence from signaling peer {remote_peer}")
+            return
+        if remote_stable_peer_id:
+            self._remember_stable_peer_id(remote_peer, remote_stable_peer_id, remote_node_name)
+
         # Skip peers we already have a connection to
         if remote_peer in self._pcs:
             log_debug(f"RTCClient: Already connected to peer {remote_peer}, ignoring presence")
@@ -651,14 +993,24 @@ class RTCClient:
         self._pending_rpc[call_id] = future
 
         msg = {"type": "call", "id": call_id, "method": method, "params": params}
-        send_fn = self._peer_send_fns.get(peer)
+        send_fn = self._peer_send_fns.get(self._session_for_peer_id(peer))
         if not send_fn:
+            self._record_diagnostic_error(
+                "datachannel_send_unavailable",
+                "No DataChannel send function is available for peer",
+                peer,
+            )
             self._pending_rpc.pop(call_id, None)
             return None
         try:
             send_fn(json.dumps(msg))
         except Exception as exc:
             self._pending_rpc.pop(call_id, None)
+            self._record_diagnostic_error(
+                "rpc_send_failed",
+                f"Failed to send RPC {method}",
+                peer,
+            )
             log_error(f"RTCClient: Failed to send RPC {method} to {peer}: {exc}")
             return None
 
@@ -666,6 +1018,11 @@ class RTCClient:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError:
             self._pending_rpc.pop(call_id, None)
+            self._record_diagnostic_error(
+                "rpc_timeout",
+                f"RPC {method} timed out",
+                peer,
+            )
             log_warning(f"RTCClient: RPC {method} to {peer} timed out")
             return None
 
@@ -685,17 +1042,22 @@ class RTCClient:
             chan: The DataChannel to send messages on.
         """
         try:
-            device_name = f"aurora-mesh-{self._peer_id[:8]}"
+            device_name = f"aurora-mesh-{self._local_mesh_peer_id()[:8]}"
             result = await self._rpc_call(
                 peer,
-                "Auth.PairingStart",
+                AuthMethods.PAIRING_START,
                 {
                     "device_name": device_name,
-                    "remote_peer_id": self._peer_id,
+                    "remote_peer_id": self._local_mesh_peer_id(),
                     "remote_node_name": device_name,
                 },
             )
             if not result or not result.get("code"):
+                self._record_diagnostic_error(
+                    "pairing_start_failed",
+                    "Pairing initiation failed",
+                    peer,
+                )
                 log_warning(f"Pairing initiation failed for peer {peer}: {result}")
                 return
 
@@ -720,7 +1082,7 @@ class RTCClient:
 
                 poll_result = await self._rpc_call(
                     peer,
-                    "Auth.PairingConnect",
+                    AuthMethods.PAIRING_CONNECT,
                     {"code": pairing_code},
                 )
                 if not poll_result:
@@ -742,16 +1104,24 @@ class RTCClient:
             # Exchange for token
             exchange_result = await self._rpc_call(
                 peer,
-                "Auth.PairingExchange",
+                AuthMethods.PAIRING_EXCHANGE,
                 {"code": pairing_code},
             )
             if not exchange_result or not exchange_result.get("token"):
+                self._record_diagnostic_error(
+                    "pairing_exchange_failed",
+                    "Token exchange failed",
+                    peer,
+                )
                 log_warning(f"Token exchange failed for peer {peer[:8]}…")
                 return
 
             token = exchange_result["token"]
             remote_device_id = exchange_result.get("device_id")
             remote_user_id = exchange_result.get("user_id")
+            remote_stable_id = exchange_result.get("peer_id") or peer
+            remote_node_name = exchange_result.get("node_name") or device_name
+            self._remember_stable_peer_id(peer, remote_stable_id, remote_node_name)
 
             # ── Grant local trust to the remote peer BEFORE sending
             # the auth message.  Peer2 will validate our token and
@@ -778,22 +1148,23 @@ class RTCClient:
             # Send auth message with the new token
             auth_msg = {
                 "type": "auth",
-                "peer_name": self._peer_id,
+                "peer_name": self._local_mesh_node_name(),
+                "peer_id": self._local_mesh_peer_id(),
+                "signaling_peer_id": self._peer_id,
                 "token": token,
             }
-            chan.send(json.dumps(auth_msg))
+            self._send_channel_text(chan, json.dumps(auth_msg))
 
             # Register in mesh and exchange manifests (non-blocking)
             if self._mesh_enabled and self._peer_registry:
-                await self._peer_registry.register_peer(peer, peer)
-                await self._send_manifest(peer)
-                self._send_ping(peer)
+                await self._peer_registry.register_peer(remote_stable_id, remote_node_name)
+                await self._send_manifest(remote_stable_id)
+                self._send_ping(remote_stable_id)
 
             # Save token for future reconnections (persisted to DB)
             # Use the stable mesh peer_id from the exchange response when
             # available — this is the responder's mesh_identity.peer_id.
             # Falls back to the signaling session ID if not provided.
-            remote_stable_id = exchange_result.get("peer_id") or peer
             self._saved_auth_tokens[remote_stable_id] = token
             if self._on_token_saved:
                 try:
@@ -802,7 +1173,7 @@ class RTCClient:
                         remote_device_id=remote_device_id,
                         remote_user_id=remote_user_id,
                         remote_peer_id=remote_stable_id,
-                        remote_node_name=device_name,
+                        remote_node_name=remote_node_name,
                         permissions=remote_perms,
                     )
                     if asyncio.iscoroutine(cb_result) or asyncio.isfuture(cb_result):
@@ -815,6 +1186,11 @@ class RTCClient:
         except asyncio.CancelledError:
             log_debug(f"Pairing task cancelled for peer {peer}")
         except Exception as exc:
+            self._record_diagnostic_error(
+                "pairing_flow_failed",
+                "Pairing flow failed",
+                peer,
+            )
             log_error(f"Pairing flow failed for peer {peer}: {exc}")
         finally:
             self._peer_pairing_active.discard(peer)
@@ -827,12 +1203,14 @@ class RTCClient:
         This makes the mesh truly bilateral — each side has a token
         (and therefore a principal) on the other side.
         """
-        # Skip if we already have tokens from a prior pairing exchange
-        # (we initiated pairing earlier, so both sides already trust each other).
-        if self._saved_auth_tokens:
+        # Skip only if we already have a saved credential for this remote
+        # stable peer. A legacy/default token or another peer's token must not
+        # suppress reverse pairing for a newly authenticated peer.
+        stable_peer_id = self._stable_peer_id_for_session(peer)
+        if stable_peer_id in self._saved_auth_tokens:
             log_debug(
                 f"Reverse pairing skipped for {peer[:8]}… — "
-                f"we already hold {len(self._saved_auth_tokens)} saved token(s)"
+                f"saved token exists for stable peer {stable_peer_id}"
             )
             return
 
@@ -848,7 +1226,8 @@ class RTCClient:
 
         log_info(
             f"Phase 2: Initiating reverse pairing with peer {peer[:8]}… "
-            f"(they authenticated to us, now we authenticate to them)"
+            f"(stable_peer_id={stable_peer_id}; "
+            "they authenticated to us, now we authenticate to them)"
         )
 
         # Reuse the standard pairing flow — it will call PairingStart on the
@@ -871,8 +1250,7 @@ class RTCClient:
 
         def send_fn(text: str) -> None:
             try:
-                if channel.readyState == "open":
-                    channel.send(text)
+                self._send_channel_text(channel, text)
             except Exception:
                 log_debug(f"RTCClient: Failed to send to peer {peer} (channel closed)")
 
@@ -914,15 +1292,16 @@ class RTCClient:
                 if self._require_auth:
                     # If we have a saved token from a previous pairing exchange,
                     # send it immediately to authenticate as a returning peer.
-                    # Try the default token (works for single-peer mesh).
-                    saved_token = next(iter(self._saved_auth_tokens.values()), None)
+                    saved_token = self._saved_auth_token_for_peer(peer)
                     if saved_token:
                         auth_msg = {
                             "type": "auth",
-                            "peer_name": self._peer_id,
+                            "peer_name": self._local_mesh_node_name(),
+                            "peer_id": self._local_mesh_peer_id(),
+                            "signaling_peer_id": self._peer_id,
                             "token": saved_token,
                         }
-                        chan.send(json.dumps(auth_msg))
+                        self._send_channel_text(chan, json.dumps(auth_msg))
                         log_info(
                             f"Sent saved pairing token to peer {peer} "
                             "(returning peer — previously paired)"
@@ -978,15 +1357,26 @@ class RTCClient:
                                         f"Peer {peer[:8]}… pairing timeout expired "
                                         f"({self._pairing_timeout}s) — disconnecting"
                                     )
+                                    self._record_diagnostic_error(
+                                        "pairing_timeout",
+                                        "Pairing timeout expired",
+                                        peer,
+                                    )
                                     await self._audit(
                                         "peer.pairing_timeout", details={"peer_id": peer}
                                     )
                                     self._peer_pairing_active.discard(peer)
                                     chan.close()
                                 return
+
                             log_warning(
                                 f"Peer {peer} did not authenticate within "
                                 f"{self._auth_timeout}s — disconnecting"
+                            )
+                            self._record_diagnostic_error(
+                                "auth_timeout",
+                                "Peer did not authenticate within timeout",
+                                peer,
                             )
                             await self._audit("peer.auth_timeout", details={"peer_id": peer})
                             chan.close()
@@ -1000,34 +1390,16 @@ class RTCClient:
 
                     # Mesh: Auto-register and exchange manifests
                     if self._mesh_enabled and self._peer_registry:
-                        asyncio.create_task(self._peer_registry.register_peer(peer, ""))
-                        asyncio.create_task(self._send_manifest(peer))
-                        self._send_ping(peer)
+                        stable_peer_id = self._stable_peer_id_for_session(peer)
+                        asyncio.create_task(self._peer_registry.register_peer(stable_peer_id, ""))
+                        asyncio.create_task(self._send_manifest(stable_peer_id))
+                        self._send_ping(stable_peer_id)
 
             @chan.on("message")
             def on_message(message: str | bytes | bytearray | memoryview) -> None:
-                if isinstance(message, bytes):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, message)
-                            text = json.dumps(obj)
-                        else:
-                            text = message.decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                elif isinstance(message, (bytearray, memoryview)):
-                    try:
-                        if self._settings.webrtc.enable_app_layer_e2ee:
-                            obj = aead_open(self._keys.k_data, bytes(message))
-                            text = json.dumps(obj)
-                        else:
-                            text = bytes(message).decode()
-                    except Exception as e:
-                        log_error(f"Failed to decrypt/decode message from {peer}: {e}")
-                        return
-                else:
-                    text = message
+                text = self._decode_datachannel_message(peer, message)
+                if text is None:
+                    return
 
                 try:
                     obj = json.loads(text)
@@ -1067,15 +1439,25 @@ class RTCClient:
                                     )
                                     # Store node name for human-readable logging
                                     peer_name = obj.get("peer_name", "")
-                                    if peer_name:
-                                        self._peer_names[peer] = peer_name
+                                    stable_peer_id = self._remember_stable_peer_id(
+                                        peer,
+                                        obj.get("peer_id") or peer,
+                                        peer_name,
+                                    )
+                                    if peer in self._saved_auth_tokens:
+                                        self._saved_auth_tokens.setdefault(
+                                            stable_peer_id,
+                                            self._saved_auth_tokens[peer],
+                                        )
                                     log_info(
-                                        f"Peer {self._peer_label(peer)} authenticated as "
+                                        f"Peer {self._peer_label(stable_peer_id)} authenticated as "
                                         f"{identity.principal_name} "
                                         f"(perms={list(identity.effective_perms)})"
                                     )
                                     self._peer_acl[peer] = identity
+                                    self._peer_acl[stable_peer_id] = identity
                                     self._peer_tokens[peer] = token
+                                    self._peer_tokens[stable_peer_id] = token
                                     timeout_task = self._peer_timeout_tasks.pop(peer, None)
                                     if timeout_task:
                                         timeout_task.cancel()
@@ -1085,15 +1467,19 @@ class RTCClient:
                                         identity.principal_id,
                                         {
                                             "peer_id": peer,
+                                            "stable_peer_id": stable_peer_id,
                                             "principal_name": identity.principal_name,
                                         },
                                     )
 
                                     if self._mesh_enabled and self._peer_registry:
                                         node_name = obj.get("peer_name", "")
-                                        await self._peer_registry.register_peer(peer, node_name)
-                                        await self._send_manifest(peer)
-                                        self._send_ping(peer)
+                                        await self._peer_registry.register_peer(
+                                            stable_peer_id,
+                                            node_name,
+                                        )
+                                        await self._send_manifest(stable_peer_id)
+                                        self._send_ping(stable_peer_id)
 
                                         # Phase 2: bilateral pairing — now that they
                                         # authenticated to us, initiate reverse pairing
@@ -1101,7 +1487,13 @@ class RTCClient:
                                         asyncio.create_task(self._reverse_pairing(peer))
                                 else:
                                     log_warning(
-                                        f"Peer {peer} failed authentication with token: {token_str[:8]}..."
+                                        f"Peer {peer} failed authentication with token: "
+                                        f"{token_str[:8]}..."
+                                    )
+                                    self._record_diagnostic_error(
+                                        "auth_failed",
+                                        "Peer failed token authentication",
+                                        peer,
                                     )
                                     await self._audit(
                                         "peer.auth_failed",
@@ -1129,6 +1521,11 @@ class RTCClient:
                                     )
                                 else:
                                     log_warning(f"Peer {peer} failed re-authentication")
+                                    self._record_diagnostic_error(
+                                        "reauth_failed",
+                                        "Peer failed token re-authentication",
+                                        peer,
+                                    )
 
                             asyncio.create_task(reauth_peer())
                         return
@@ -1146,25 +1543,38 @@ class RTCClient:
                             log_warning(
                                 f"Peer {peer} sent '{msg_type}' before authenticating — dropping"
                             )
+                            self._record_diagnostic_error(
+                                "preauth_message_dropped",
+                                f"Peer sent {msg_type} before authenticating",
+                                peer,
+                            )
                             return
 
                     # Dispatch authenticated messages
                     if msg_type == "manifest":
                         asyncio.create_task(self._on_peer_manifest(peer, obj))
                     elif msg_type == "manifest_request":
-                        asyncio.create_task(self._send_manifest(peer))
+                        stable_peer_id = self._stable_peer_id_for_session(peer)
+                        asyncio.create_task(self._send_manifest(stable_peer_id))
                     elif msg_type == "manifest_ack":
-                        asyncio.create_task(self._on_manifest_ack(peer, obj))
+                        asyncio.create_task(
+                            self._on_manifest_ack(self._stable_peer_id_for_session(peer), obj)
+                        )
                     elif msg_type == "capacity_update":
-                        asyncio.create_task(self._on_capacity_update(peer, obj))
+                        asyncio.create_task(
+                            self._on_capacity_update(self._stable_peer_id_for_session(peer), obj)
+                        )
                     elif msg_type == "ping":
-                        self._send_pong(peer, obj)
+                        self._send_pong(self._stable_peer_id_for_session(peer), obj)
                     elif msg_type == "pong":
                         if self._peer_bridge:
-                            self._peer_bridge.on_pong(peer, obj)
+                            self._peer_bridge.on_pong(self._stable_peer_id_for_session(peer), obj)
                     elif msg_type in ("result", "error"):
                         if self._peer_bridge:
-                            self._peer_bridge.on_response(peer, obj)
+                            self._peer_bridge.on_response(
+                                self._stable_peer_id_for_session(peer),
+                                obj,
+                            )
                         else:
                             log_debug(
                                 f"RTCClient: Received {msg_type} but no PeerBridge configured"
@@ -1172,6 +1582,11 @@ class RTCClient:
                     else:
                         asyncio.create_task(handler.on_message(text))
                 except Exception as e:
+                    self._record_diagnostic_error(
+                        "message_handling_failed",
+                        "Error handling DataChannel message",
+                        peer,
+                    )
                     log_error(f"Error handling message from {peer}: {e}")
 
         setup_channel(channel, is_initiator=is_offer_initiator)
@@ -1203,6 +1618,7 @@ class RTCClient:
         async def on_connectionstatechange() -> None:
             log_debug(f"Connection state with {peer}: {pc.connectionState}")
             if pc.connectionState in ("failed", "closed"):
+                stable_peer_id = self._stable_peer_id_for_session(peer)
                 identity = self._peer_acl.get(peer, ANONYMOUS)
                 # Cancel pending auth timeout task
                 timeout_task = self._peer_timeout_tasks.pop(peer, None)
@@ -1218,17 +1634,26 @@ class RTCClient:
                         fut.set_result(None)
                 self._pcs.pop(peer, None)
                 self._peer_acl.pop(peer, None)
+                self._peer_acl.pop(stable_peer_id, None)
                 self._peer_tokens.pop(peer, None)
+                self._peer_tokens.pop(stable_peer_id, None)
                 self._peer_send_fns.pop(peer, None)
                 self._peer_data_channels.pop(peer, None)
                 self._peer_names.pop(peer, None)
+                self._peer_names.pop(stable_peer_id, None)
+                self._peer_stable_ids.pop(peer, None)
+                self._stable_peer_sessions.pop(stable_peer_id, None)
                 # Remove from mesh peer registry
                 if self._peer_registry:
-                    await self._peer_registry.remove_peer(peer)
+                    await self._peer_registry.remove_peer(stable_peer_id)
                 await self._audit(
                     "peer.disconnected",
                     identity.principal_id if identity != ANONYMOUS else None,
-                    {"peer_id": peer, "reason": pc.connectionState},
+                    {
+                        "peer_id": peer,
+                        "stable_peer_id": stable_peer_id,
+                        "reason": pc.connectionState,
+                    },
                 )
 
         return pc

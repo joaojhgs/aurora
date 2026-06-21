@@ -8,6 +8,7 @@ import pytest
 from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState
 from app.services.gateway.mesh.peer_registry import PeerRegistry
+from app.shared.contracts.models.mesh import MeshAddressSelector
 
 
 @pytest.fixture
@@ -44,6 +45,20 @@ def _make_manifest(peer_id, modules, version="1.0.0"):
         peer_id=peer_id,
         node_name=f"node-{peer_id}",
         shared_services=services,
+    )
+
+
+def _make_service(
+    module="TTS",
+    version="1.0.0",
+    capabilities=None,
+    max_concurrent=10,
+):
+    return PeerServiceInfo(
+        module=module,
+        version=version,
+        capabilities=capabilities or ["basic"],
+        max_concurrent=max_concurrent,
     )
 
 
@@ -258,6 +273,165 @@ class TestProviderQueries:
         svc = registry.get_peer_service("ghost", "TTS")
         assert svc is None
 
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_reports_multiple_overlapping_providers(self, registry):
+        for pid, latency in [("p1", 30.0), ("p2", 20.0), ("p3", 10.0)]:
+            await registry.register_peer(pid)
+            await registry.update_manifest(pid, _make_manifest(pid, ["TTS"]))
+            await registry.update_latency(pid, latency)
+
+        candidates = registry.get_provider_candidates("TTS")
+
+        assert [candidate.peer.peer_id for candidate in candidates] == ["p1", "p2", "p3"]
+        assert all(candidate.eligible for candidate in candidates)
+        assert {candidate.reason_code for candidate in candidates} == {"eligible"}
+
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_reports_exclusion_reason_codes(self, mesh_config):
+        mesh_config.services["Tooling"] = MeshServiceConfig(
+            prefer="network",
+            fallback="local",
+            allowed_peers=["allowed"],
+            min_version="1.0.0",
+            required_capabilities=["tools"],
+        )
+        registry = PeerRegistry(mesh_config)
+
+        peer_specs = [
+            ("allowed", _make_service("Tooling", version="1.2.0", capabilities=["tools"])),
+            ("old", _make_service("Tooling", version="0.9.0", capabilities=["tools"])),
+            ("missing-cap", _make_service("Tooling", version="1.2.0", capabilities=["basic"])),
+            ("full", _make_service("Tooling", version="1.2.0", capabilities=["tools"])),
+            ("excluded", _make_service("Tooling", version="1.2.0", capabilities=["tools"])),
+        ]
+        for peer_id, service in peer_specs:
+            await registry.register_peer(peer_id)
+            await registry.update_manifest(
+                peer_id,
+                PeerManifest(peer_id=peer_id, shared_services=[service]),
+            )
+
+        stale = registry.get_peer("full")
+        stale.status = "stale"
+
+        candidates = registry.get_provider_candidates("Tooling", exclude=["excluded"])
+        reason_codes = {candidate.peer.peer_id: candidate.reason_code for candidate in candidates}
+
+        assert reason_codes == {
+            "allowed": "eligible",
+            "old": "peer_not_allowed",
+            "missing-cap": "peer_not_allowed",
+            "full": "peer_stale",
+            "excluded": "excluded_peer",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_version_and_capability_filters_without_allowlist(
+        self, mesh_config
+    ):
+        mesh_config.services["Tooling"] = MeshServiceConfig(
+            prefer="network",
+            fallback="local",
+            min_version="1.0.0",
+            required_capabilities=["tools"],
+        )
+        registry = PeerRegistry(mesh_config)
+
+        peer_specs = [
+            ("eligible", _make_service("Tooling", version="1.2.0", capabilities=["tools"])),
+            ("old", _make_service("Tooling", version="0.9.0", capabilities=["tools"])),
+            ("missing-cap", _make_service("Tooling", version="1.2.0", capabilities=["basic"])),
+        ]
+        for peer_id, service in peer_specs:
+            await registry.register_peer(peer_id)
+            await registry.update_manifest(
+                peer_id,
+                PeerManifest(peer_id=peer_id, shared_services=[service]),
+            )
+
+        candidates = registry.get_provider_candidates("Tooling")
+        reason_codes = {candidate.peer.peer_id: candidate.reason_code for candidate in candidates}
+
+        assert reason_codes == {
+            "eligible": "eligible",
+            "old": "incompatible_version",
+            "missing-cap": "missing_capabilities",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_capacity_and_include_ineligible(self, registry):
+        await registry.register_peer("full")
+        await registry.update_manifest(
+            "full",
+            PeerManifest(
+                peer_id="full",
+                shared_services=[_make_service("TTS", max_concurrent=1)],
+            ),
+        )
+        registry.get_peer("full").active_calls = 1
+
+        all_candidates = registry.get_provider_candidates("TTS")
+        eligible_candidates = registry.get_provider_candidates("TTS", include_ineligible=False)
+
+        assert all_candidates[0].reason_code == "provider_at_capacity"
+        assert eligible_candidates == []
+
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_selector_narrows_provider(self, registry):
+        for pid in ["p1", "p2", "p3"]:
+            await registry.register_peer(pid)
+            await registry.update_manifest(pid, _make_manifest(pid, ["TTS"]))
+
+        selector = MeshAddressSelector(provider_id="p2")
+        candidates = registry.get_provider_candidates("TTS", selector=selector)
+        reason_codes = {candidate.peer.peer_id: candidate.reason_code for candidate in candidates}
+
+        assert reason_codes == {
+            "p1": "selector_mismatch",
+            "p2": "eligible",
+            "p3": "selector_mismatch",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_best_provider_uses_eligible_candidates_only(self, mesh_config):
+        mesh_config.services["Tooling"] = MeshServiceConfig(
+            prefer="network",
+            fallback="local",
+            min_version="1.0.0",
+            required_capabilities=["tools"],
+        )
+        registry = PeerRegistry(mesh_config)
+
+        peer_specs = [
+            (
+                "fast-ineligible",
+                1.0,
+                _make_service("Tooling", version="0.9.0", capabilities=["tools"]),
+            ),
+            (
+                "slow-eligible",
+                50.0,
+                _make_service("Tooling", version="1.2.0", capabilities=["tools"]),
+            ),
+            (
+                "fast-eligible",
+                10.0,
+                _make_service("Tooling", version="1.2.0", capabilities=["tools"]),
+            ),
+        ]
+        for peer_id, latency, service in peer_specs:
+            await registry.register_peer(peer_id)
+            await registry.update_manifest(
+                peer_id,
+                PeerManifest(peer_id=peer_id, shared_services=[service]),
+            )
+            await registry.update_latency(peer_id, latency)
+
+        best = registry.get_best_provider("Tooling")
+
+        assert best is not None
+        assert best.peer_id == "fast-eligible"
+
 
 class TestPeerSelection:
     """Tests for peer selection strategies."""
@@ -303,8 +477,8 @@ class TestStaleDetection:
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
         state = registry.get_peer("peer-1")
-        # Set last_ping far in the past
-        state.last_ping = time.monotonic() - 200
+        # Set last_ping beyond this registry's stale threshold.
+        state.last_ping = time.monotonic() - registry._config.stale_peer_timeout_s - 1.0
 
         await registry._check_stale_peers()
         assert registry.get_peer("peer-1").status == "stale"

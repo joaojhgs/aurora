@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Fingerprint, Lock, Mic, Moon, Network, ShieldCheck, Smartphone, Volume2, WandSparkles } from 'lucide-react'
+import { Bell, Fingerprint, Lock, Mic, Network, ShieldCheck, Smartphone, Volume2, WandSparkles } from 'lucide-react'
 import { PageHeader } from '@/components/aurora/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

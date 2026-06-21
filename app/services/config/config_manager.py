@@ -2,7 +2,10 @@ import contextlib
 import json
 import os
 import tempfile
+import uuid
 from collections.abc import Callable
+from copy import deepcopy
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from threading import RLock
@@ -39,6 +42,7 @@ class ConfigManager:
             self.config_lock = RLock()
             self._config = {}
             self._observers = []
+            self._version_history: list[dict[str, Any]] = []
             self._schema = self._get_config_schema()
             self.load_config()
             self.initialized = True
@@ -219,6 +223,7 @@ class ConfigManager:
 
             # Notify observers of the change
             self._notify_observers(key_path, old_value, value)
+            self._record_version(key_path, old_value, value)
             return {
                 "key_path": key_path,
                 "old_value": old_value,
@@ -377,6 +382,242 @@ class ConfigManager:
         with self.config_lock:
             config_copy = json.loads(json.dumps(self._to_json_safe(self._config)))
         return self._resolve_env_fallbacks(config_copy)
+
+    def get_schema_metadata(
+        self, section: str | None = None, include_values: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return UI-readable schema metadata with source, secrecy, and impact flags."""
+        self._schema = self._get_config_schema()
+        fields = []
+        metadata = self.get_field_metadata()
+        defaults = self._get_default_config()
+
+        for key_path in sorted(metadata):
+            if section and key_path != section and not key_path.startswith(f"{section}."):
+                continue
+            raw_meta = metadata[key_path]
+            secret = self._is_secret_path(key_path, raw_meta)
+            impact = self.get_reload_impact([key_path])[0]
+            default_value = self._lookup_path(defaults, key_path)
+            current_value = self.get(key_path, default_value)
+            field = {
+                "key_path": key_path,
+                "title": raw_meta.get("title"),
+                "description": raw_meta.get("description", ""),
+                "type": raw_meta.get("type", "string"),
+                "default": self._redact_value(default_value, secret),
+                "current_value": (
+                    self._redact_value(current_value, secret) if include_values else None
+                ),
+                "source_layer": self._source_layer_for_path(key_path, default_value),
+                "secret": secret,
+                "reload_required": impact["reload_required"],
+                "restart_required": impact["restart_required"],
+                "affected_services": impact["affected_services"],
+                "constraints": self._metadata_constraints(raw_meta),
+                "choices": raw_meta.get("choices"),
+            }
+            fields.append(field)
+        return fields
+
+    def preview_diff(self, changes: list[dict[str, Any]]) -> dict[str, Any]:
+        """Dry-run configuration changes and return a redacted diff plus validation errors."""
+        errors: list[str] = []
+        diffs: list[dict[str, Any]] = []
+        with self.config_lock:
+            candidate = deepcopy(self._config)
+            current = deepcopy(self._config)
+
+        for change in changes:
+            key_path = change["key_path"]
+            new_value = change.get("value")
+            old_value = self._lookup_path(current, key_path)
+            self._set_path(candidate, key_path, new_value)
+            secret = self._is_secret_path(key_path)
+            impact = self.get_reload_impact([key_path])[0]
+            diffs.append(
+                {
+                    "key_path": key_path,
+                    "old_value": self._redact_value(old_value, secret),
+                    "new_value": self._redact_value(new_value, secret),
+                    "changed": old_value != new_value,
+                    "source_layer": self._source_layer_for_path(key_path, old_value),
+                    "secret": secret,
+                    "reload_required": impact["reload_required"],
+                    "restart_required": impact["restart_required"],
+                    "affected_services": impact["affected_services"],
+                }
+            )
+
+        try:
+            self._validate_config(candidate)
+            self._validate_runtime_lifecycle_policy(candidate)
+        except (ValidationError, ValueError) as e:
+            errors.append(str(e))
+
+        return {"valid": not errors, "diffs": diffs, "errors": errors, "secrets_redacted": True}
+
+    def get_version_history(
+        self, key_path: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return recent redacted in-memory config version entries."""
+        safe_limit = max(1, min(limit, 100))
+        with self.config_lock:
+            entries = list(reversed(self._version_history))
+        if key_path:
+            entries = [entry for entry in entries if entry["key_path"] == key_path]
+        redacted = []
+        for entry in entries[:safe_limit]:
+            secret = self._is_secret_path(entry["key_path"])
+            redacted.append(
+                {
+                    "version_id": entry["version_id"],
+                    "timestamp": entry["timestamp"],
+                    "key_path": entry["key_path"],
+                    "old_value": self._redact_value(entry.get("old_value"), secret),
+                    "new_value": self._redact_value(entry.get("new_value"), secret),
+                    "affected_sections": entry.get("affected_sections", []),
+                    "secret": secret,
+                }
+            )
+        return redacted
+
+    def rollback(self, version_id: str) -> dict[str, Any]:
+        """Rollback a config path to the previous value captured by a version entry."""
+        with self.config_lock:
+            version = next(
+                (entry for entry in self._version_history if entry["version_id"] == version_id),
+                None,
+            )
+        if version is None:
+            raise ValueError(f"Unknown configuration version: {version_id}")
+
+        metadata = self.set(version["key_path"], deepcopy(version.get("old_value")))
+        secret = self._is_secret_path(version["key_path"])
+        return {
+            "success": True,
+            "version_id": version_id,
+            "key_path": version["key_path"],
+            "rolled_back_to": self._redact_value(version.get("old_value"), secret),
+            "affected_sections": metadata.get("affected_sections", []),
+            "secrets_redacted": True,
+        }
+
+    def get_reload_impact(self, key_paths: list[str]) -> list[dict[str, Any]]:
+        """Return reload/restart impact metadata for configuration paths."""
+        impacts = []
+        for key_path in key_paths:
+            affected_services = self._affected_services_for_key(key_path)
+            restart_required = self._restart_required_for_key(key_path)
+            impacts.append(
+                {
+                    "key_path": key_path,
+                    "reload_required": True,
+                    "restart_required": restart_required,
+                    "affected_services": affected_services,
+                    "reason": self._impact_reason(key_path, restart_required, affected_services),
+                }
+            )
+        return impacts
+
+    def _record_version(self, key_path: str, old_value: Any, new_value: Any) -> None:
+        self._version_history.append(
+            {
+                "version_id": f"cfgv_{uuid.uuid4().hex}",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "key_path": key_path,
+                "old_value": deepcopy(old_value),
+                "new_value": deepcopy(new_value),
+                "affected_sections": self._affected_sections_for_key(key_path),
+            }
+        )
+        self._version_history = self._version_history[-100:]
+
+    def _lookup_path(self, config: dict[str, Any], key_path: str, default: Any = None) -> Any:
+        value: Any = config
+        try:
+            for key in key_path.split("."):
+                value = value[key]
+            return deepcopy(value)
+        except (KeyError, TypeError):
+            return default
+
+    def _set_path(self, config: dict[str, Any], key_path: str, value: Any) -> None:
+        ref = config
+        keys = key_path.split(".")
+        for key in keys[:-1]:
+            ref = ref.setdefault(key, {})
+        ref[keys[-1]] = value
+
+    def _metadata_constraints(self, meta: dict[str, Any]) -> dict[str, Any]:
+        constraint_keys = (
+            "min",
+            "max",
+            "minimum",
+            "maximum",
+            "pattern",
+            "format",
+            "minLength",
+            "maxLength",
+        )
+        return {key: meta[key] for key in constraint_keys if key in meta}
+
+    def _is_secret_path(self, key_path: str, meta: dict[str, Any] | None = None) -> bool:
+        from app.services.config.env_config import SENSITIVE_KEYS
+
+        lowered = key_path.lower()
+        if key_path in SENSITIVE_KEYS:
+            return True
+        if meta and (meta.get("secret") is True or meta.get("sensitive") is True):
+            return True
+        secret_tokens = ("secret", "password", "token", "api_key", "private_key", "credential")
+        return any(token in lowered for token in secret_tokens)
+
+    def _redact_value(self, value: Any, secret: bool) -> Any:
+        if not secret:
+            return value
+        if value in (None, "", [], {}):
+            return None
+        return "[REDACTED]"
+
+    def _source_layer_for_path(self, key_path: str, default_value: Any = None) -> str:
+        with self.config_lock:
+            configured = self._lookup_path(self._config, key_path)
+        if self._is_value_set(configured):
+            return "config"
+        env_info = ENV_CONFIG_MAP.get(key_path)
+        if env_info:
+            env_var, _ = env_info
+            if os.environ.get(env_var):
+                return "env"
+        return "default" if default_value is not None else "unset"
+
+    def _affected_services_for_key(self, key_path: str) -> list[str]:
+        parts = key_path.split(".")
+        if len(parts) >= 2 and parts[0] == "services":
+            return [parts[1]]
+        if parts and parts[0] in {"ui", "system", "gateway"}:
+            return [parts[0]]
+        return [parts[0]] if parts else []
+
+    def _restart_required_for_key(self, key_path: str) -> bool:
+        restart_suffixes = (".enabled", ".host", ".port", ".token_secret", ".app_id")
+        restart_prefixes = (
+            "services.gateway.api",
+            "services.gateway.webrtc",
+            "services.gateway.mqtt",
+        )
+        return key_path.endswith(restart_suffixes) or key_path.startswith(restart_prefixes)
+
+    def _impact_reason(
+        self, key_path: str, restart_required: bool, affected_services: list[str]
+    ) -> str:
+        service_text = ", ".join(affected_services) if affected_services else "dependent services"
+        if restart_required:
+            return f"{key_path} changes startup or transport behavior for {service_text}"
+        return (
+            f"{key_path} can be applied through Config.Updated reload handling for {service_text}"
+        )
 
     def _resolve_env_fallbacks(self, config: dict[str, Any]) -> dict[str, Any]:
         """Merge env fallback values into config (config overrides env)."""

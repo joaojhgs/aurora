@@ -8,6 +8,7 @@ so the Auth service never directly imports from the DB service.
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -19,6 +20,10 @@ from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import MessageBus
 from app.shared.auth.identity import SYSTEM, Identity, build_identity
 from app.shared.auth.permissions import has_permission
+from app.shared.contracts.models.auth import (
+    AuthMethods,
+    PairingLifecycleEvent,
+)
 from app.shared.contracts.models.db import (
     DBAuditLogRequest,
     DBCountAuditEventsRequest,
@@ -534,6 +539,7 @@ class AuthManager:
             "device_name": device_name,
             "client_ip": client_ip,
             "status": "pending",
+            "created_at": datetime.now(),
             "expires_at": datetime.now() + timedelta(minutes=5),
             "approved_by": None,
             "remote_peer_id": remote_peer_id,
@@ -554,7 +560,7 @@ class AuthManager:
             await self.bus.publish(
                 AuthMethods.PAIRING_REQUESTED,
                 PairingRequestedEvent(
-                    code=pairing_code,
+                    code_sha256=hashlib.sha256(pairing_code.encode()).hexdigest(),
                     remote_peer_id=remote_peer_id,
                     remote_node_name=remote_node_name,
                     device_name=device_name,
@@ -569,13 +575,27 @@ class AuthManager:
 
         return pairing_code
 
+    async def list_pending_pairings(
+        self, include_non_pending: bool = False
+    ) -> tuple[list[dict[str, Any]], int]:
+        expired_count = await self._prune_expired_pairings()
+        pairings: list[dict[str, Any]] = []
+        for code, request in sorted(
+            self.pairing_requests.items(),
+            key=lambda item: item[1].get("created_at", item[1].get("expires_at", datetime.max)),
+        ):
+            if not include_non_pending and request.get("status") != "pending":
+                continue
+            pairings.append(self._pending_pairing_entry(code, request))
+        return pairings, expired_count
+
     async def connect_pairing(self, pairing_code: str) -> dict[str, Any] | None:
         request = self.pairing_requests.get(pairing_code)
         if not request:
             return None
 
         if request["expires_at"] < datetime.now():
-            del self.pairing_requests[pairing_code]
+            await self._expire_pairing(pairing_code, request)
             return None
 
         return request
@@ -592,7 +612,7 @@ class AuthManager:
             return False
 
         if request["expires_at"] < datetime.now():
-            del self.pairing_requests[pairing_code]
+            await self._expire_pairing(pairing_code, request)
             return False
 
         resolved_perms = (
@@ -604,6 +624,18 @@ class AuthManager:
         request["granted_permissions"] = resolved_perms
         request["granted_is_admin"] = is_admin
         log_info(f"Pairing code {pairing_code} approved by user {user_id}")
+        await self._publish_pairing_lifecycle_event(
+            AuthMethods.PAIRING_APPROVED,
+            pairing_code,
+            request,
+            actor_principal_id=user_id,
+        )
+        await self._audit_pairing_lifecycle(
+            "auth.pairing.approved",
+            pairing_code,
+            request,
+            actor_principal_id=user_id,
+        )
 
         # ── Sync to mesh_peers if this pairing is from a mesh peer ──
         remote_peer_id = request.get("remote_peer_id", "")
@@ -625,13 +657,47 @@ class AuthManager:
 
         return True
 
+    async def deny_pairing(
+        self,
+        pairing_code: str,
+        user_id: str,
+        reason: str = "",
+    ) -> bool:
+        request = self.pairing_requests.get(pairing_code)
+        if not request:
+            return False
+
+        if request["expires_at"] < datetime.now():
+            await self._expire_pairing(pairing_code, request)
+            return False
+
+        request["status"] = "denied"
+        request["denied_by"] = user_id
+        request["denied_reason"] = reason
+        await self._publish_pairing_lifecycle_event(
+            AuthMethods.PAIRING_DENIED,
+            pairing_code,
+            request,
+            actor_principal_id=user_id,
+            reason=reason,
+        )
+        await self._audit_pairing_lifecycle(
+            "auth.pairing.denied",
+            pairing_code,
+            request,
+            actor_principal_id=user_id,
+            reason=reason,
+        )
+        log_info(f"Pairing code {pairing_code} denied by user {user_id}")
+        return True
+
     async def exchange_pairing(self, pairing_code: str) -> dict[str, Any] | None:
         request = self.pairing_requests.get(pairing_code)
         if not request or request["status"] != "approved":
             return None
 
         if request["expires_at"] < datetime.now():
-            del self.pairing_requests[pairing_code]
+            await self._expire_pairing(pairing_code, request)
             return None
 
         granted_perms: list[str] = request.get("granted_permissions", [])
@@ -694,6 +760,19 @@ class AuthManager:
             except Exception as e:
                 log_warning(f"Failed to link outbound FKs to mesh_peers: {e}")
 
+        await self._publish_pairing_lifecycle_event(
+            AuthMethods.PAIRING_EXCHANGED,
+            pairing_code,
+            request,
+            actor_principal_id=request.get("approved_by"),
+        )
+        await self._audit_pairing_lifecycle(
+            "auth.pairing.exchanged",
+            pairing_code,
+            request,
+            actor_principal_id=request.get("approved_by"),
+        )
+
         del self.pairing_requests[pairing_code]
         if request["client_ip"] in self.pairing_attempts:
             del self.pairing_attempts[request["client_ip"]]
@@ -701,9 +780,11 @@ class AuthManager:
         # Include our stable mesh peer_id so the initiator can key
         # the saved credential by stable ID (not the transient signaling ID).
         local_peer_id = ""
+        local_node_name = ""
         try:
             identity = await self.load_mesh_identity()
             local_peer_id = identity.get("peer_id", "") or ""
+            local_node_name = identity.get("node_name", "") or ""
         except Exception:
             pass  # Non-fatal — initiator falls back to signaling ID
 
@@ -714,7 +795,117 @@ class AuthManager:
             "permissions": granted_perms,
             "token_id": token_id,
             "peer_id": local_peer_id,
+            "node_name": local_node_name,
         }
+
+    def _pending_pairing_entry(self, pairing_code: str, request: dict[str, Any]) -> dict[str, Any]:
+        expires_at = request.get("expires_at")
+        created_at = request.get("created_at")
+        return {
+            "request_id": request.get("id", ""),
+            "code": pairing_code,
+            "device_name": request.get("device_name", ""),
+            "client_ip": request.get("client_ip", ""),
+            "status": request.get("status", ""),
+            "created_at": created_at.isoformat() if isinstance(created_at, datetime) else "",
+            "expires_at": expires_at.isoformat() if isinstance(expires_at, datetime) else "",
+            "remote_peer_id": request.get("remote_peer_id", ""),
+            "remote_node_name": request.get("remote_node_name", ""),
+            "approved_by": request.get("approved_by"),
+            "denied_by": request.get("denied_by"),
+            "denied_reason": request.get("denied_reason", ""),
+            "granted_permissions": request.get("granted_permissions", []),
+            "granted_is_admin": request.get("granted_is_admin", False),
+        }
+
+    async def _prune_expired_pairings(self) -> int:
+        now = datetime.now()
+        expired = [
+            (code, request)
+            for code, request in list(self.pairing_requests.items())
+            if request.get("expires_at") and request["expires_at"] < now
+        ]
+        for code, request in expired:
+            await self._expire_pairing(code, request)
+        return len(expired)
+
+    async def _expire_pairing(self, pairing_code: str, request: dict[str, Any]) -> None:
+        await self._publish_pairing_lifecycle_event(
+            AuthMethods.PAIRING_EXPIRED,
+            pairing_code,
+            request,
+        )
+        await self._audit_pairing_lifecycle(
+            "auth.pairing.expired",
+            pairing_code,
+            request,
+        )
+        self.pairing_requests.pop(pairing_code, None)
+
+    async def _publish_pairing_lifecycle_event(
+        self,
+        topic: str,
+        pairing_code: str,
+        request: dict[str, Any],
+        actor_principal_id: str | None = None,
+        reason: str = "",
+    ) -> None:
+        try:
+            digest = hashlib.sha256(pairing_code.encode()).hexdigest()
+            event = PairingLifecycleEvent(
+                request_id=request.get("id", ""),
+                event_type=topic.split(".", 1)[1] if "." in topic else topic,
+                status=request.get("status", ""),
+                code_sha256=digest,
+                remote_peer_id=request.get("remote_peer_id", ""),
+                remote_node_name=request.get("remote_node_name", ""),
+                device_name=request.get("device_name", ""),
+                client_ip=request.get("client_ip", ""),
+                expires_at=request["expires_at"].isoformat()
+                if isinstance(request.get("expires_at"), datetime)
+                else "",
+                actor_principal_id=actor_principal_id,
+                reason=reason,
+            )
+            await self.bus.publish(topic, event, event=True, origin="internal")
+        except Exception as e:
+            log_warning(f"Failed to publish pairing lifecycle event {topic}: {e}")
+
+    async def _audit_pairing_lifecycle(
+        self,
+        event: str,
+        pairing_code: str,
+        request: dict[str, Any],
+        actor_principal_id: str | None = None,
+        reason: str = "",
+    ) -> None:
+        try:
+            digest = hashlib.sha256(pairing_code.encode()).hexdigest()
+            details = {
+                "request_id": request.get("id", ""),
+                "code_sha256": digest,
+                "device_name": request.get("device_name", ""),
+                "client_ip": request.get("client_ip", ""),
+                "status": request.get("status", ""),
+                "remote_peer_id": request.get("remote_peer_id", ""),
+                "remote_node_name": request.get("remote_node_name", ""),
+                "reason": reason,
+                "secrets_redacted": True,
+            }
+            from app.shared.contracts.models.auth import StoreAuditEventRequest
+
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=event,
+                    principal_id=actor_principal_id,
+                    details=json.dumps(details, sort_keys=True),
+                    ip_address=request.get("client_ip", ""),
+                ),
+                timeout=5.0,
+            )
+        except Exception as e:
+            log_warning(f"Failed to audit pairing lifecycle event {event}: {e}")
 
     def update_permission_defaults(self, default_perms: list[str]) -> None:
         self._default_device_permissions = list(default_perms)
@@ -929,7 +1120,39 @@ class AuthManager:
         offset: int = 0,
         principal_id: str | None = None,
         event: str | None = None,
+        correlation_id: str | None = None,
+        peer_id: str | None = None,
+        provider_id: str | None = None,
+        tool_id: str | None = None,
+        action: str | None = None,
+        policy_decision_id: str | None = None,
+        route: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
+        if any((correlation_id, peer_id, provider_id, tool_id, action, policy_decision_id, route)):
+            # Diagnostic mesh trace view: audit details are JSON strings stored in
+            # the audit_log table, so filter after retrieving a bounded window.
+            events = await self._get_audit_log(
+                limit=max(limit + offset, 1000),
+                offset=0,
+                principal_id=principal_id,
+                event=event,
+            )
+            filtered = [
+                audit_event
+                for audit_event in events
+                if _audit_event_matches_trace(
+                    audit_event,
+                    correlation_id=correlation_id,
+                    peer_id=peer_id,
+                    provider_id=provider_id,
+                    tool_id=tool_id,
+                    action=action,
+                    policy_decision_id=policy_decision_id,
+                    route=route,
+                )
+            ]
+            return filtered[offset : offset + limit], len(filtered)
+
         events = await self._get_audit_log(
             limit=limit, offset=offset, principal_id=principal_id, event=event
         )
@@ -1410,3 +1633,49 @@ class _MeshSQL:
             ),
             params=[token_id, device_id, user_id, peer_id],
         )
+
+
+def _audit_event_matches_trace(
+    audit_event: dict[str, Any],
+    *,
+    correlation_id: str | None = None,
+    peer_id: str | None = None,
+    provider_id: str | None = None,
+    tool_id: str | None = None,
+    action: str | None = None,
+    policy_decision_id: str | None = None,
+    route: str | None = None,
+) -> bool:
+    details = audit_event.get("details")
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except json.JSONDecodeError:
+            details = {}
+    if not isinstance(details, dict):
+        details = {}
+
+    filters = {
+        "correlation_id": correlation_id,
+        "peer_id": peer_id,
+        "provider_id": provider_id,
+        "tool_id": tool_id,
+        "action": action,
+        "policy_decision_id": policy_decision_id,
+        "route": route,
+    }
+    for key, expected in filters.items():
+        if expected and _detail_value(details, key) != expected:
+            return False
+    return True
+
+
+def _detail_value(details: dict[str, Any], key: str) -> str | None:
+    value = details.get(key)
+    if value is None and key == "peer_id":
+        value = details.get("source_peer_id") or details.get("target_peer_id")
+    if value is None and key == "tool_id":
+        value = details.get("global_tool_id") or details.get("tool_name")
+    if value is None and key == "route":
+        value = details.get("route_target") or details.get("route")
+    return str(value) if value is not None else None

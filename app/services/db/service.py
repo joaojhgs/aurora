@@ -9,7 +9,10 @@ This service:
 
 from __future__ import annotations
 
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope, QueryResult
@@ -54,10 +57,25 @@ from app.shared.contracts.models.db import (
     DBMethods,
     DBModule,
     DBRAGDeleteRequest,
+    DBRAGExportNamespaceRequest,
+    DBRAGExportNamespaceResponse,
+    DBRAGExportRecord,
+    DBRAGGetProvenanceRequest,
+    DBRAGGetProvenanceResponse,
     DBRAGGetRequest,
+    DBRAGImportNamespaceRequest,
+    DBRAGImportNamespaceResponse,
     DBRAGItemResponse,
+    DBRAGListNamespacesRequest,
+    DBRAGListNamespacesResponse,
     DBRAGListRequest,
     DBRAGListResponse,
+    DBRAGNamespaceInfo,
+    DBRAGNamespacePolicy,
+    DBRAGProvenance,
+    DBRAGProvenanceItem,
+    DBRAGSearchRemoteRequest,
+    DBRAGSearchRemoteResponse,
     DBRAGSearchRequest,
     DBRAGStoreRequest,
     DBRevokeTokenRequest,
@@ -140,6 +158,252 @@ class DBService(BaseService):
         # Database path changes would require restart, but that's handled by supervisor
         # Just log the reload event
         log_debug(f"DB service reloaded for section: {config_section}")
+
+    def _namespace_to_tuple(self, namespace: str | tuple[str, ...]) -> tuple[str, ...]:
+        """Normalize dotted or legacy pipe-delimited namespace strings."""
+        if isinstance(namespace, tuple):
+            return namespace
+        separator = "|" if "|" in namespace else "."
+        return tuple(part for part in namespace.split(separator) if part)
+
+    def _namespace_to_string(self, namespace: str | tuple[str, ...]) -> str:
+        """Normalize namespace values to the public dotted representation."""
+        if isinstance(namespace, tuple):
+            return ".".join(namespace)
+        return namespace.replace("|", ".")
+
+    def _now_iso(self) -> str:
+        return datetime.now(UTC).isoformat()
+
+    def _new_policy_decision_id(self, supplied: str | None = None) -> str:
+        return supplied or f"rag-policy-{uuid4()}"
+
+    def _new_correlation_id(self, supplied: str | None = None) -> str:
+        return supplied or f"rag-correlation-{uuid4()}"
+
+    def _namespace_policy(self, namespace: str) -> DBRAGNamespacePolicy:
+        """Return conservative policy metadata for a namespace."""
+        namespace = self._namespace_to_string(namespace)
+        if namespace.startswith(("auth", "mesh.credentials", "trust", "secrets")):
+            return DBRAGNamespacePolicy(
+                sharing_mode="never",
+                privacy_class="secret",
+                allowed_operations=[],
+                explicit_selector_required=True,
+                denial_reason="namespace is local-authoritative and cannot be shared",
+            )
+        if namespace.startswith("tools"):
+            return DBRAGNamespacePolicy(
+                sharing_mode="remote_query",
+                privacy_class="internal",
+                allowed_operations=["list", "search"],
+                explicit_selector_required=True,
+                export_supported=False,
+                import_supported=False,
+                delete_supported=False,
+            )
+        return DBRAGNamespacePolicy(
+            sharing_mode="export_import",
+            privacy_class="personal",
+            allowed_operations=["list", "search", "provenance", "export", "import"],
+            explicit_selector_required=True,
+            export_supported=True,
+            import_supported=True,
+            delete_supported=False,
+            requires_admin_approval=True,
+        )
+
+    def _selector_matches_namespace(self, namespace: str, selector: Any | None) -> bool:
+        if selector is None:
+            return False
+        expected = self._namespace_to_string(namespace)
+        resource_namespace = getattr(selector, "resource_namespace", None)
+        data_scope = getattr(selector, "data_scope", None)
+        return expected in {resource_namespace, data_scope}
+
+    def _is_remote_selector(self, selector: Any | None) -> bool:
+        if selector is None:
+            return False
+        return bool(getattr(selector, "peer_id", None) or getattr(selector, "provider_id", None))
+
+    def _validate_rag_access(
+        self,
+        namespace: str,
+        selector: Any | None,
+        *,
+        operation: str,
+        require_explicit_selector: bool = False,
+    ) -> tuple[bool, str | None, DBRAGNamespacePolicy]:
+        policy = self._namespace_policy(namespace)
+        if policy.sharing_mode == "never":
+            return False, policy.denial_reason, policy
+        if operation not in policy.allowed_operations:
+            return False, f"operation {operation} is not allowed for namespace {namespace}", policy
+        if (
+            (require_explicit_selector or self._is_remote_selector(selector))
+            and policy.explicit_selector_required
+            and not self._selector_matches_namespace(namespace, selector)
+        ):
+            return (
+                False,
+                "remote RAG access requires explicit mesh_selector.resource_namespace "
+                "or mesh_selector.data_scope matching the requested namespace",
+                policy,
+            )
+        return True, None, policy
+
+    def _extract_stored_provenance(self, value: Any) -> DBRAGProvenance | None:
+        if not isinstance(value, dict):
+            return None
+        raw = value.get("_aurora_provenance")
+        if not isinstance(raw, dict):
+            return None
+        try:
+            return DBRAGProvenance.model_validate(raw)
+        except Exception:
+            log_debug("Ignoring malformed stored RAG provenance metadata")
+            return None
+
+    def _build_provenance(
+        self,
+        *,
+        namespace: str,
+        key: str,
+        value: Any,
+        item: Any | None = None,
+        source_peer_id: str = "local",
+        owner_peer_id: str = "local",
+        origin_principal_id: str | None = None,
+        policy_decision_id: str,
+        correlation_id: str,
+    ) -> DBRAGProvenance:
+        stored = self._extract_stored_provenance(value)
+        if stored is not None:
+            return stored.model_copy(
+                update={
+                    "namespace": self._namespace_to_string(namespace),
+                    "record_id": key,
+                    "policy_decision_id": policy_decision_id,
+                    "correlation_id": correlation_id,
+                }
+            )
+
+        now = self._now_iso()
+        created_at = getattr(item, "created_at", None)
+        updated_at = getattr(item, "updated_at", None)
+        return DBRAGProvenance(
+            source_peer_id=source_peer_id,
+            owner_peer_id=owner_peer_id,
+            namespace=self._namespace_to_string(namespace),
+            record_id=key,
+            origin_principal_id=origin_principal_id or "redacted",
+            created_at=created_at.isoformat() if hasattr(created_at, "isoformat") else now,
+            updated_at=updated_at.isoformat() if hasattr(updated_at, "isoformat") else now,
+            policy_decision_id=policy_decision_id,
+            correlation_id=correlation_id,
+            tombstone=bool(value.get("_aurora_tombstone")) if isinstance(value, dict) else False,
+            deleted_at=value.get("_aurora_deleted_at") if isinstance(value, dict) else None,
+            deleted_by=value.get("_aurora_deleted_by") if isinstance(value, dict) else None,
+            delete_reason=value.get("_aurora_delete_reason") if isinstance(value, dict) else None,
+        )
+
+    def _redact_value(self, value: Any) -> tuple[Any, bool, list[str]]:
+        reasons: list[str] = []
+
+        def redact(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                redacted: dict[str, Any] = {}
+                for key, child in obj.items():
+                    lowered = key.lower()
+                    if lowered.startswith("_aurora_"):
+                        reasons.append("internal_metadata")
+                        continue
+                    if any(
+                        marker in lowered
+                        for marker in (
+                            "embedding",
+                            "vector",
+                            "token",
+                            "password",
+                            "secret",
+                            "credential",
+                            "private_key",
+                        )
+                    ):
+                        redacted[key] = "[redacted]"
+                        reasons.append(key)
+                        continue
+                    if lowered in {"path", "file_path", "source_path"} and isinstance(child, str):
+                        redacted[key] = "[redacted]"
+                        reasons.append(key)
+                        continue
+                    redacted[key] = redact(child)
+                return redacted
+            if isinstance(obj, list):
+                return [redact(item) for item in obj]
+            return obj
+
+        safe_value = redact(deepcopy(value))
+        return safe_value, bool(reasons), sorted(set(reasons))
+
+    def _to_provenance_item(
+        self,
+        item: Any,
+        *,
+        policy_decision_id: str,
+        correlation_id: str,
+        origin_principal_id: str | None = None,
+    ) -> DBRAGProvenanceItem:
+        value = item.value
+        search_score = None
+        if isinstance(value, dict) and "_search_score" in value:
+            value = deepcopy(value)
+            search_score = value.pop("_search_score")
+        namespace = self._namespace_to_string(item.namespace)
+        safe_value, redacted, reasons = self._redact_value(value)
+        provenance = self._build_provenance(
+            namespace=namespace,
+            key=item.key,
+            value=value,
+            item=item,
+            origin_principal_id=origin_principal_id,
+            policy_decision_id=policy_decision_id,
+            correlation_id=correlation_id,
+        )
+        return DBRAGProvenanceItem(
+            key=item.key,
+            value=safe_value,
+            namespace=namespace,
+            search_score=search_score,
+            provenance=provenance,
+            redacted=redacted,
+            redaction_reasons=reasons,
+        )
+
+    def _value_for_import(
+        self,
+        record: DBRAGExportRecord,
+        *,
+        target_namespace: str,
+        import_operation_id: str,
+    ) -> Any:
+        value = deepcopy(record.value)
+        if not isinstance(value, dict):
+            value = {"value": value}
+        provenance = record.provenance.model_copy(
+            update={
+                "namespace": target_namespace,
+                "imported_at": self._now_iso(),
+                "import_operation_id": import_operation_id,
+            }
+        )
+        value["_aurora_provenance"] = provenance.model_dump()
+        if provenance.tombstone:
+            value["_aurora_tombstone"] = True
+            value["_aurora_deleted_at"] = provenance.deleted_at
+            value["_aurora_deleted_by"] = provenance.deleted_by
+            value["_aurora_delete_reason"] = provenance.delete_reason
+        return value
 
     @method_contract(
         method_id=DBMethods.SAVE_MESSAGE,
@@ -395,12 +659,7 @@ class DBService(BaseService):
                 log_debug("Skipping RAG store because RAG stores are disabled or unavailable")
                 return EmptyOutput()
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(cmd.namespace, str):
-                namespace_tuple = tuple(cmd.namespace.split("."))
-            else:
-                namespace_tuple = cmd.namespace
+            namespace_tuple = self._namespace_to_tuple(cmd.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -429,12 +688,7 @@ class DBService(BaseService):
                 log_debug("Skipping RAG delete because RAG stores are disabled or unavailable")
                 return EmptyOutput()
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(cmd.namespace, str):
-                namespace_tuple = tuple(cmd.namespace.split("."))
-            else:
-                namespace_tuple = cmd.namespace
+            namespace_tuple = self._namespace_to_tuple(cmd.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -452,7 +706,7 @@ class DBService(BaseService):
         input_model=DBRAGSearchRequest,
         output_model=DBRAGListResponse,
         summary="Search RAG store",
-        exposure="both",
+        exposure="internal",
         method_type="use",
     )
     async def rag_search(self, query: DBRAGSearchRequest) -> DBRAGListResponse:
@@ -467,12 +721,7 @@ class DBService(BaseService):
                 )
                 return DBRAGListResponse(items=[])
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = self._namespace_to_tuple(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -523,12 +772,7 @@ class DBService(BaseService):
                 log_debug("Returning no RAG item because RAG stores are disabled or unavailable")
                 return None
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = self._namespace_to_tuple(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -568,12 +812,7 @@ class DBService(BaseService):
                 log_debug("Returning empty RAG list because RAG stores are disabled or unavailable")
                 return DBRAGListResponse(items=[])
 
-            # Convert string namespace to tuple (store expects tuple)
-            # Support both "tools" and "main.memories" formats
-            if isinstance(query.namespace, str):
-                namespace_tuple = tuple(query.namespace.split("."))
-            else:
-                namespace_tuple = query.namespace
+            namespace_tuple = self._namespace_to_tuple(query.namespace)
 
             # Get the appropriate store based on namespace
             store = self.rag_service.combined_store
@@ -599,6 +838,360 @@ class DBService(BaseService):
         except Exception as e:
             log_error(f"Error listing RAG items: {e}", exc_info=True)
             return DBRAGListResponse(items=[])
+
+    @method_contract(
+        method_id=DBMethods.RAG_LIST_NAMESPACES,
+        input_model=DBRAGListNamespacesRequest,
+        output_model=DBRAGListNamespacesResponse,
+        summary="List policy-aware RAG namespaces",
+        exposure="both",
+        method_type="use",
+        required_perms=["DB.RAGSearch"],
+    )
+    async def rag_list_namespaces(
+        self, query: DBRAGListNamespacesRequest
+    ) -> DBRAGListNamespacesResponse:
+        """Return local RAG namespace catalog entries with sharing policy metadata."""
+        try:
+            known_namespaces = ["main.memories", "tools"]
+            namespaces: list[DBRAGNamespaceInfo] = []
+            for namespace in known_namespaces:
+                if query.namespace_prefix and not namespace.startswith(query.namespace_prefix):
+                    continue
+                policy = self._namespace_policy(namespace)
+                record_count: int | None = None
+                availability = "available" if self.rag_service.is_initialized else "unavailable"
+                if self.rag_service.is_initialized:
+                    try:
+                        items = self.rag_service.combined_store.retrieve_items(
+                            self._namespace_to_tuple(namespace), limit=1_000, offset=0
+                        )
+                        record_count = len(items)
+                    except Exception:
+                        availability = "unavailable"
+                namespaces.append(
+                    DBRAGNamespaceInfo(
+                        namespace=namespace,
+                        source_peer_id="local",
+                        owner_peer_id="local",
+                        provider_peer_id="local",
+                        availability=availability,
+                        policy=policy,
+                        record_count=record_count,
+                    )
+                )
+            return DBRAGListNamespacesResponse(namespaces=namespaces)
+        except Exception as e:
+            log_error(f"Error listing RAG namespaces: {e}", exc_info=True)
+            return DBRAGListNamespacesResponse(namespaces=[])
+
+    @method_contract(
+        method_id=DBMethods.RAG_SEARCH_REMOTE,
+        input_model=DBRAGSearchRemoteRequest,
+        output_model=DBRAGSearchRemoteResponse,
+        summary="Policy-enforced remote RAG search",
+        exposure="both",
+        method_type="use",
+        required_perms=["DB.RAGSearch"],
+    )
+    async def rag_search_remote(self, query: DBRAGSearchRemoteRequest) -> DBRAGSearchRemoteResponse:
+        """Search RAG with explicit remote namespace policy and provenance."""
+        policy_decision_id = self._new_policy_decision_id(query.policy_decision_id)
+        correlation_id = self._new_correlation_id(query.correlation_id)
+        allowed, denial_reason, _policy = self._validate_rag_access(
+            query.namespace,
+            query.mesh_selector,
+            operation="search",
+            require_explicit_selector=True,
+        )
+        if not allowed:
+            return DBRAGSearchRemoteResponse(
+                decision="denied",
+                items=[],
+                denial_reason=denial_reason,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        if not self.rag_service.is_initialized:
+            return DBRAGSearchRemoteResponse(
+                decision="unavailable",
+                items=[],
+                denial_reason="RAG stores are disabled or unavailable",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+
+        try:
+            namespace_tuple = self._namespace_to_tuple(query.namespace)
+            store = self.rag_service.combined_store
+            items = store.search(
+                namespace_tuple, query=query.query, limit=query.limit, offset=query.offset
+            )
+            provenance_items = [
+                self._to_provenance_item(
+                    item,
+                    policy_decision_id=policy_decision_id,
+                    correlation_id=correlation_id,
+                    origin_principal_id=query.caller_principal_id,
+                )
+                for item in items
+            ]
+            return DBRAGSearchRemoteResponse(
+                decision="allowed",
+                items=provenance_items,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        except Exception as e:
+            log_error(f"Error in remote RAG search: {e}", exc_info=True)
+            return DBRAGSearchRemoteResponse(
+                decision="unavailable",
+                items=[],
+                denial_reason="RAG search failed",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+
+    @method_contract(
+        method_id=DBMethods.RAG_GET_PROVENANCE,
+        input_model=DBRAGGetProvenanceRequest,
+        output_model=DBRAGGetProvenanceResponse,
+        summary="Get RAG item provenance",
+        exposure="both",
+        method_type="use",
+        required_perms=["DB.RAGSearch"],
+    )
+    async def rag_get_provenance(
+        self, query: DBRAGGetProvenanceRequest
+    ) -> DBRAGGetProvenanceResponse:
+        """Return provenance for one RAG item without exposing raw internal metadata."""
+        allowed, denial_reason, _policy = self._validate_rag_access(
+            query.namespace, query.mesh_selector, operation="provenance"
+        )
+        if not allowed:
+            return DBRAGGetProvenanceResponse(
+                provenance=None, decision="denied", denial_reason=denial_reason
+            )
+        if not self.rag_service.is_initialized:
+            return DBRAGGetProvenanceResponse(
+                provenance=None,
+                decision="unavailable",
+                denial_reason="RAG stores are disabled or unavailable",
+            )
+
+        try:
+            namespace_tuple = self._namespace_to_tuple(query.namespace)
+            item = self.rag_service.combined_store.get(namespace_tuple, query.key)
+            if item is None:
+                return DBRAGGetProvenanceResponse(
+                    provenance=None, decision="unavailable", denial_reason="record not found"
+                )
+            policy_decision_id = self._new_policy_decision_id()
+            correlation_id = self._new_correlation_id(query.correlation_id)
+            provenance = self._build_provenance(
+                namespace=query.namespace,
+                key=query.key,
+                value=item.value,
+                item=item,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+            return DBRAGGetProvenanceResponse(provenance=provenance)
+        except Exception as e:
+            log_error(f"Error getting RAG provenance: {e}", exc_info=True)
+            return DBRAGGetProvenanceResponse(
+                provenance=None, decision="unavailable", denial_reason="provenance lookup failed"
+            )
+
+    @method_contract(
+        method_id=DBMethods.RAG_EXPORT_NAMESPACE,
+        input_model=DBRAGExportNamespaceRequest,
+        output_model=DBRAGExportNamespaceResponse,
+        summary="Export a RAG namespace snapshot with provenance",
+        exposure="both",
+        method_type="manage",
+        required_perms=["DB.manage"],
+    )
+    async def rag_export_namespace(
+        self, query: DBRAGExportNamespaceRequest
+    ) -> DBRAGExportNamespaceResponse:
+        """Export a bounded, redacted RAG namespace snapshot."""
+        policy_decision_id = self._new_policy_decision_id(query.policy_decision_id)
+        correlation_id = self._new_correlation_id(query.correlation_id)
+        namespace = self._namespace_to_string(query.namespace)
+        allowed, denial_reason, _policy = self._validate_rag_access(
+            namespace, query.mesh_selector, operation="export"
+        )
+        if not allowed:
+            return DBRAGExportNamespaceResponse(
+                decision="denied",
+                namespace=namespace,
+                source_peer_id="local",
+                owner_peer_id="local",
+                records=[],
+                denial_reason=denial_reason,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        if not self.rag_service.is_initialized:
+            return DBRAGExportNamespaceResponse(
+                decision="unavailable",
+                namespace=namespace,
+                source_peer_id="local",
+                owner_peer_id="local",
+                records=[],
+                denial_reason="RAG stores are disabled or unavailable",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+
+        try:
+            items = self.rag_service.combined_store.retrieve_items(
+                self._namespace_to_tuple(namespace), limit=query.limit, offset=query.offset
+            )
+            records: list[DBRAGExportRecord] = []
+            tombstone_count = 0
+            for item in items:
+                provenance_item = self._to_provenance_item(
+                    item,
+                    policy_decision_id=policy_decision_id,
+                    correlation_id=correlation_id,
+                    origin_principal_id=query.caller_principal_id,
+                )
+                if provenance_item.provenance.tombstone:
+                    tombstone_count += 1
+                    if not query.include_tombstones:
+                        continue
+                records.append(
+                    DBRAGExportRecord(
+                        key=provenance_item.key,
+                        value=provenance_item.value,
+                        provenance=provenance_item.provenance,
+                        redacted=provenance_item.redacted,
+                        redaction_reasons=provenance_item.redaction_reasons,
+                    )
+                )
+            return DBRAGExportNamespaceResponse(
+                decision="allowed",
+                namespace=namespace,
+                source_peer_id="local",
+                owner_peer_id="local",
+                records=records,
+                tombstone_count=tombstone_count,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        except Exception as e:
+            log_error(f"Error exporting RAG namespace: {e}", exc_info=True)
+            return DBRAGExportNamespaceResponse(
+                decision="unavailable",
+                namespace=namespace,
+                source_peer_id="local",
+                owner_peer_id="local",
+                records=[],
+                denial_reason="RAG namespace export failed",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+
+    @method_contract(
+        method_id=DBMethods.RAG_IMPORT_NAMESPACE,
+        input_model=DBRAGImportNamespaceRequest,
+        output_model=DBRAGImportNamespaceResponse,
+        summary="Import a RAG namespace snapshot with provenance",
+        exposure="both",
+        method_type="manage",
+        required_perms=["DB.manage"],
+    )
+    async def rag_import_namespace(
+        self, cmd: DBRAGImportNamespaceRequest
+    ) -> DBRAGImportNamespaceResponse:
+        """Import a provenance-preserving RAG namespace snapshot."""
+        policy_decision_id = self._new_policy_decision_id(cmd.policy_decision_id)
+        correlation_id = self._new_correlation_id(cmd.correlation_id)
+        import_operation_id = f"rag-import-{uuid4()}"
+        target_namespace = self._namespace_to_string(cmd.target_namespace)
+        allowed, denial_reason, _policy = self._validate_rag_access(
+            target_namespace, cmd.mesh_selector, operation="import"
+        )
+        if not allowed:
+            return DBRAGImportNamespaceResponse(
+                decision="denied",
+                imported_count=0,
+                skipped_count=len(cmd.records),
+                target_namespace=target_namespace,
+                import_operation_id=import_operation_id,
+                denial_reason=denial_reason,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        if not self.rag_service.is_initialized:
+            return DBRAGImportNamespaceResponse(
+                decision="unavailable",
+                imported_count=0,
+                skipped_count=len(cmd.records),
+                target_namespace=target_namespace,
+                import_operation_id=import_operation_id,
+                denial_reason="RAG stores are disabled or unavailable",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+
+        try:
+            target_tuple = self._namespace_to_tuple(target_namespace)
+            existing = self.rag_service.combined_store.retrieve_items(
+                target_tuple, limit=1, offset=0
+            )
+            if existing and not cmd.allow_owner_overwrite:
+                return DBRAGImportNamespaceResponse(
+                    decision="conflict",
+                    imported_count=0,
+                    skipped_count=len(cmd.records),
+                    target_namespace=target_namespace,
+                    import_operation_id=import_operation_id,
+                    denial_reason=(
+                        "target namespace already has records; set allow_owner_overwrite "
+                        "to import intentionally"
+                    ),
+                    policy_decision_id=policy_decision_id,
+                    correlation_id=correlation_id,
+                )
+
+            imported = 0
+            skipped = 0
+            store = self.rag_service.combined_store
+            for record in cmd.records:
+                if record.provenance.owner_peer_id != cmd.owner_peer_id:
+                    skipped += 1
+                    continue
+                value = self._value_for_import(
+                    record,
+                    target_namespace=target_namespace,
+                    import_operation_id=import_operation_id,
+                )
+                store.put(target_tuple, record.key, value, index=True)
+                imported += 1
+            return DBRAGImportNamespaceResponse(
+                decision="allowed",
+                imported_count=imported,
+                skipped_count=skipped,
+                target_namespace=target_namespace,
+                import_operation_id=import_operation_id,
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
+        except Exception as e:
+            log_error(f"Error importing RAG namespace: {e}", exc_info=True)
+            return DBRAGImportNamespaceResponse(
+                decision="unavailable",
+                imported_count=0,
+                skipped_count=len(cmd.records),
+                target_namespace=target_namespace,
+                import_operation_id=import_operation_id,
+                denial_reason="RAG namespace import failed",
+                policy_decision_id=policy_decision_id,
+                correlation_id=correlation_id,
+            )
 
     # ── User CRUD ────────────────────────────────────────────────────────
 

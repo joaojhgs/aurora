@@ -7,18 +7,111 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import json
+import math
 import os
+import time
+import uuid
+from collections import deque
+from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging.bus import Envelope
+from app.services.gateway.admin_action import AdminActionManager
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
     Auth as AuthConfigModel,
     Gateway as GatewayConfigModel,
     MeshSharing,
 )
-from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.aurora import AuroraMethods
+from app.shared.contracts.models.auth import AuditLogRequest, AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.config import ConfigMethods
+from app.shared.contracts.models.gateway import (
+    AdminActionConfirmRequest,
+    AdminActionConfirmResponse,
+    AdminActionDraftRequest,
+    AdminActionDraftResponse,
+    BusHealth,
+    CapabilityCatalogRequest,
+    CapabilityCatalogResponse,
+    CapabilityCatalogSummary,
+    CapabilityGraph,
+    ContainerTopologyHints,
+    DeploymentTopologyResponse,
+    GatewayEventStreamEvent,
+    GatewayListEventsRequest,
+    GatewayListEventsResponse,
+    GatewayMethods,
+    GatewaySupportBundleRequest,
+    GatewaySupportBundleResponse,
+    GetMeshStatusResponse,
+    GetRegistryResponse,
+    GetServiceHealthRequest,
+    GetServiceHealthResponse,
+    GetServicesResponse,
+    MeshCompatibilityFailure,
+    MeshLocalStatus,
+    MeshPeerCompatibilityDiagnostic,
+    MeshPeerDiagnostic,
+    MeshPeerServiceDiagnostic,
+    MeshRouteDiagnostic,
+    MeshRouteProviderDiagnostic,
+    RouteExplainRequest,
+    RouteExplainResponse,
+    ServiceInfo,
+    ServiceProcessTopology,
+    SupportBundleDiagnosticItem,
+    SupportBundleRedactionInfo,
+    WebRTCDiagnosticsResponse,
+)
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.registry import method_contract
+from app.shared.mesh.tracing import get_payload_correlation_id
 from app.shared.services.base_service import BaseService
+
+_EVENT_STREAM_MAXLEN = 500
+_DIAGNOSTIC_REDACT_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "args",
+    "argument",
+    "audio",
+    "auth",
+    "bearer",
+    "content",
+    "cookie",
+    "credential",
+    "data",
+    "directory",
+    "file",
+    "input",
+    "jwt",
+    "key",
+    "message",
+    "model",
+    "output",
+    "password",
+    "path",
+    "prompt",
+    "query",
+    "rag",
+    "redis_url",
+    "response",
+    "result",
+    "secret",
+    "speech",
+    "text",
+    "token",
+    "transcript",
+    "url",
+)
 
 
 def _config_secret_plain(val: Any) -> Any:
@@ -29,6 +122,324 @@ def _config_secret_plain(val: Any) -> Any:
     return val
 
 
+def _redact_url(url: str | None) -> str | None:
+    """Redact credentials and host detail from a dependency URL."""
+    if not url:
+        return None
+    try:
+        parsed = urlsplit(url)
+    except Exception:
+        return "redacted://<invalid>"
+    scheme = parsed.scheme or "redis"
+    host_hint = parsed.hostname or "configured-host"
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path if parsed.path not in {"", "/"} else ""
+    return urlunsplit((scheme, f"<redacted>@{host_hint}{port}", path, "", ""))
+
+
+def _bus_backend_name(bus: Any) -> str:
+    inner = getattr(bus, "_inner", None)
+    if inner is not None:
+        return f"{bus.__class__.__name__}({inner.__class__.__name__})"
+    return bus.__class__.__name__
+
+
+def _bus_health_target(bus: Any) -> Any:
+    return getattr(bus, "_inner", bus)
+
+
+def _compose_service_hint(module: str) -> str | None:
+    """Map public service modules to sanitized Compose service names."""
+    return {
+        "Auth": "auth-service",
+        "Backup": "backup-service",
+        "Config": "config-service",
+        "DB": "db-service",
+        "Gateway": "gateway-service",
+        "Orchestrator": "orchestrator-service",
+        "Scheduler": "scheduler-service",
+        "STTCoordinator": "stt-coordinator-service",
+        "TTS": "tts-service",
+        "Tooling": "tooling-service",
+        "Transcription": "stt-transcription-service",
+        "WakeWord": "stt-wakeword-service",
+    }.get(module)
+
+
+def _finite_float(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _age_seconds(now: float, timestamp: float | None) -> float | None:
+    if not timestamp or timestamp <= 0:
+        return None
+    return max(now - timestamp, 0.0)
+
+
+def _peer_service(peer: Any, module: str) -> Any | None:
+    manifest = getattr(peer, "manifest", None)
+    if not manifest:
+        return None
+    for svc in manifest.shared_services:
+        if svc.module == module:
+            return svc
+    return None
+
+
+def _route_reason(
+    *,
+    module: str,
+    config: Any | None,
+    decision_target: str,
+    providers: list[MeshRouteProviderDiagnostic],
+    selected_peer_id: str | None,
+    peer_selection: str,
+) -> str:
+    if config is None:
+        return "no mesh routing config; local delivery is used"
+    if config.prefer == "local_only":
+        return "configured local_only"
+    if config.prefer == "local":
+        return "configured local preference"
+    if decision_target == "remote" and selected_peer_id:
+        return f"selected peer {selected_peer_id} using {peer_selection} policy"
+    if decision_target == "local":
+        if not providers:
+            return f"no peer advertises {module}; fallback={config.fallback} selected local"
+        rejected = [p.reason for p in providers if not p.eligible]
+        detail = "; ".join(sorted(set(rejected))) if rejected else "no eligible remote provider"
+        return f"{detail}; fallback={config.fallback} selected local"
+    if decision_target == "error":
+        return "no eligible remote provider and fallback=error"
+    if decision_target == "none":
+        return "no eligible remote provider and local fallback is disabled"
+    return f"route target is {decision_target}"
+
+
+def _event_from_envelope(envelope: Envelope) -> GatewayEventStreamEvent:
+    payload = _payload_dict(envelope.payload)
+    redacted_payload = _diagnostic_redacted_copy(payload)
+    correlation_id = (
+        envelope.correlation_id
+        or get_payload_correlation_id(envelope.payload)
+        or _string_value(payload, "correlation_id")
+    )
+    return GatewayEventStreamEvent(
+        event_id=str(uuid.uuid4()),
+        topic=envelope.type,
+        category=_event_category(envelope.type, payload),
+        action=_event_action(envelope.type, payload),
+        status=_event_status(envelope.type, payload),
+        severity=_event_severity(envelope.type, payload),
+        timestamp=envelope.timestamp.isoformat(),
+        correlation_id=correlation_id,
+        source_peer_id=_first_string(
+            payload,
+            "source_peer_id",
+            "caller_peer_id",
+            "peer_id",
+            "owner_peer_id",
+        ),
+        target_peer_id=_first_string(
+            payload,
+            "target_peer_id",
+            "provider_peer_id",
+            "target_peer",
+        ),
+        provider_id=_first_string(
+            payload,
+            "provider_id",
+            "provider_service_instance_id",
+            "service_instance_id",
+        ),
+        tool_id=_first_string(payload, "global_tool_id", "tool_id", "tool_name"),
+        resource_id=_first_string(payload, "resource_id", "resource_namespace", "namespace"),
+        route=_first_string(payload, "route", "route_target", "selected_target"),
+        policy_decision_id=_first_string(payload, "policy_decision_id", "decision_id"),
+        principal_id=envelope.principal_id
+        or _first_string(payload, "principal_id", "caller_principal_id", "owner_principal_id"),
+        redacted_payload=redacted_payload if isinstance(redacted_payload, dict) else {},
+        payload_sha256=_payload_hash(redacted_payload),
+    )
+
+
+def _event_category(topic: str, payload: dict[str, Any]) -> str:
+    if topic in {
+        GatewayMethods.SERVICE_ANNOUNCE,
+        GatewayMethods.SERVICE_DEPART,
+        GatewayMethods.SERVICE_HEARTBEAT,
+    }:
+        return "service"
+    if topic in {
+        GatewayMethods.GET_CAPABILITY_GRAPH,
+        GatewayMethods.GET_CAPABILITY_CATALOG,
+    }:
+        return "capability"
+    if topic in {GatewayMethods.EXPLAIN_ROUTE}:
+        return "route"
+    if topic == OrchestratorMethods.RESPONSE:
+        return "assistant"
+    if topic in {
+        AuthMethods.PAIRING_REQUESTED,
+        AuthMethods.PAIRING_APPROVED,
+        AuthMethods.PAIRING_DENIED,
+        AuthMethods.PAIRING_EXPIRED,
+        AuthMethods.PAIRING_EXCHANGED,
+    }:
+        return "pairing"
+    if topic.startswith("Mesh."):
+        return "peer"
+    if topic in {ConfigMethods.UPDATED, ConfigMethods.ERROR}:
+        return "config"
+    if topic in {
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.REQUEST_APPROVAL,
+        ToolingMethods.CONFIRM_EXECUTION,
+    }:
+        return "tool_approval"
+    if topic in {ToolingMethods.EXECUTE_TOOL}:
+        return "tool_execution"
+    if (
+        topic.startswith("AudioSession.")
+        or topic.startswith("STTCoordinator.")
+        or topic.startswith("Transcription.")
+        or topic.startswith("WakeWord.")
+        or topic.startswith("TTS.")
+    ):
+        return "audio"
+    if topic.startswith("DB.RAG") or payload.get("namespace") or payload.get("data_scope"):
+        return "data"
+    if topic in {SchedulerMethods.JOB_FIRED, SchedulerMethods.JOB_COMPLETED}:
+        return "scheduler"
+    if topic == AuthMethods.STORE_AUDIT_EVENT:
+        return "audit"
+    return "unknown"
+
+
+def _event_action(topic: str, payload: dict[str, Any]) -> str:
+    if payload.get("action"):
+        return str(payload["action"])
+    if payload.get("event_type"):
+        return str(payload["event_type"])
+    return topic.split(".", 1)[1] if "." in topic else topic
+
+
+def _event_status(topic: str, payload: dict[str, Any]) -> str:
+    if payload.get("status"):
+        return str(payload["status"])
+    if payload.get("success") is True or payload.get("ok") is True:
+        return "success"
+    if payload.get("success") is False or payload.get("ok") is False:
+        return "failed"
+    if topic == GatewayMethods.SERVICE_DEPART:
+        return "disconnected"
+    if topic == GatewayMethods.SERVICE_ANNOUNCE:
+        return "connected"
+    if payload.get("approved") is True:
+        return "approved"
+    if payload.get("approved") is False:
+        return "denied"
+    return ""
+
+
+def _event_severity(topic: str, payload: dict[str, Any]) -> str:
+    status = _event_status(topic, payload)
+    if status in {"failed", "denied", "expired"} or payload.get("error"):
+        return "error"
+    if "stale" in status or "fallback" in status:
+        return "warning"
+    return "info"
+
+
+def _payload_dict(payload: Any) -> dict[str, Any]:
+    if hasattr(payload, "model_dump"):
+        value = payload.model_dump(mode="json")
+    elif isinstance(payload, dict):
+        value = payload
+    else:
+        value = {"value": str(payload)}
+    return value if isinstance(value, dict) else {"value": value}
+
+
+def _model_dump(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return value
+
+
+def _details_dict(details: Any) -> dict[str, Any]:
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except json.JSONDecodeError:
+            return {}
+    return details if isinstance(details, dict) else {}
+
+
+def _diagnostic_redacted_copy(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {
+            str(key): _diagnostic_redacted_value(str(key), nested) for key, nested in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_diagnostic_redacted_copy(item) for item in value]
+    return value
+
+
+def _diagnostic_redacted_value(key: str, value: Any) -> Any:
+    if key == "details" and isinstance(value, str):
+        details = _details_dict(value)
+        if details:
+            return _diagnostic_redacted_copy(details)
+    if _is_diagnostic_secret_key(key):
+        digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
+        return {"redacted": True, "sha256": digest}
+    return _diagnostic_redacted_copy(value)
+
+
+def _is_diagnostic_secret_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(part in normalized for part in _DIAGNOSTIC_REDACT_KEY_PARTS)
+
+
+def _first_string(payload: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = _string_value(payload, key)
+        if value:
+            return value
+    return None
+
+
+def _string_value(payload: dict[str, Any], key: str) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    return str(value)
+
+
+def _payload_hash(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _catalog_summary(catalog: CapabilityCatalogResponse) -> CapabilityCatalogSummary:
+    modules = sorted({provider.module for provider in catalog.providers})
+    blocked_actions = sum(1 for action in catalog.actions if action.route_blockers)
+    return CapabilityCatalogSummary(
+        providers=len(catalog.providers),
+        actions=len(catalog.actions),
+        resources=len(catalog.resources),
+        modules=modules,
+        blocked_actions=blocked_actions,
+    )
+
+
 class GatewayService(BaseService):
     """Gateway Service for Aurora.
 
@@ -37,6 +448,8 @@ class GatewayService(BaseService):
 
     def __init__(self):
         """Initialize the gateway service."""
+        from app.services.gateway.audio_session import AudioSessionService
+
         super().__init__(
             module="Gateway",
             summary="HTTP API Gateway for Aurora services",
@@ -57,19 +470,32 @@ class GatewayService(BaseService):
         self._mesh_latency_monitor = None
         self._mesh_announcer = None
         self._mesh_bus = None
+        self._mesh_peer_id = None
         self._runtime_config_lock = asyncio.Lock()
+        self._audio_session_service = AudioSessionService()
+        self._event_stream: deque[GatewayEventStreamEvent] = deque(maxlen=_EVENT_STREAM_MAXLEN)
+        self._event_stream_subscription_topic = "*"
+        self._admin_action_manager = AdminActionManager()
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
+        self.bus.subscribe(self._event_stream_subscription_topic, self._capture_gateway_event)
+        await self._audio_session_service.start()
         await self._start_gateway()
         await self._start_webrtc()
         await self._start_mesh()
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
+        with contextlib.suppress(Exception):
+            self.bus.unsubscribe(
+                self._event_stream_subscription_topic,
+                self._capture_gateway_event,
+            )
         await self._stop_mesh()
         await self._stop_webrtc()
         await self._stop_gateway()
+        await self._audio_session_service.stop()
         # Ensure registry aggregator is stopped if it was created
         if self._registry_aggregator:
             await self._registry_aggregator.stop()
@@ -102,6 +528,873 @@ class GatewayService(BaseService):
             await self._reload_gateway_config()
             await self._reload_auth_config()
             await self._reload_mesh_config()
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_DRAFT,
+        name="AdminActionDraft",
+        summary="Draft a high-risk admin action before confirmation",
+        input_model=AdminActionDraftRequest,
+        output_model=AdminActionDraftResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_draft(
+        self,
+        data: AdminActionDraftRequest,
+        envelope: Envelope,
+    ) -> AdminActionDraftResponse:
+        """Return a short-lived nonce and digest for a high-risk admin action."""
+        return self._admin_action_manager.draft(
+            data,
+            principal_id=envelope.principal_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.ADMIN_ACTION_CONFIRM,
+        name="AdminActionConfirm",
+        summary="Confirm a drafted admin action and issue a route submission token",
+        input_model=AdminActionConfirmRequest,
+        output_model=AdminActionConfirmResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def admin_action_confirm(
+        self,
+        data: AdminActionConfirmRequest,
+        envelope: Envelope,
+    ) -> AdminActionConfirmResponse:
+        """Validate reauth/reason/phrase and return a single-use confirmation token."""
+        return self._admin_action_manager.confirm(
+            data,
+            principal_id=envelope.principal_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_REGISTRY,
+        name="GetRegistry",
+        summary="Get the aggregated service contract registry",
+        input_model=EmptyInput,
+        output_model=GetRegistryResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_registry(self, data: EmptyInput) -> GetRegistryResponse:
+        """Return the current Gateway registry export."""
+        return await self._get_registry_export()
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SERVICES,
+        name="GetServices",
+        summary="Get known Gateway services and health states",
+        input_model=EmptyInput,
+        output_model=GetServicesResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_services(self, data: EmptyInput) -> GetServicesResponse:
+        """Return known services from the Gateway registry aggregator."""
+        services = await self._get_services_snapshot()
+        return GetServicesResponse(services=services, mode=self._mode)
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SERVICE_HEALTH,
+        name="GetServiceHealth",
+        summary="Get a single service health summary",
+        input_model=GetServiceHealthRequest,
+        output_model=GetServiceHealthResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_service_health(
+        self,
+        data: GetServiceHealthRequest,
+    ) -> GetServiceHealthResponse:
+        """Return a service health summary without probing service internals."""
+        services = await self._get_services_snapshot()
+        for service in services:
+            if service.module == data.module:
+                return self._service_health_response(service)
+        return GetServiceHealthResponse(
+            module=data.module,
+            status="unknown",
+            checks={"registry": "missing"},
+            timestamp=datetime.now(UTC).isoformat(),
+            error="service is not present in Gateway registry",
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
+        name="GetDeploymentTopology",
+        summary="Get sanitized deployment topology and message bus health",
+        input_model=EmptyInput,
+        output_model=DeploymentTopologyResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_deployment_topology(
+        self,
+        data: EmptyInput,
+    ) -> DeploymentTopologyResponse:
+        """Return architecture mode, bus health, and sanitized process topology."""
+        services = await self._get_services_snapshot()
+        bus_health = await self._build_bus_health()
+        mesh_status = await self.get_mesh_status(EmptyInput())
+        mode = self._mode
+
+        degradations = list(bus_health.degraded_reasons)
+        if mode == "threads":
+            degradations.append("thread_mode_no_process_controls")
+        if mode == "processes" and any(service.status != "healthy" for service in services):
+            degradations.append("process_registry_stale")
+        if mesh_status.peers:
+            degradations.append("mesh_peer_topology_untrusted")
+
+        runtime_mode = "process-server" if mode == "processes" else "thread-local"
+        if mesh_status.local.mesh_enabled:
+            runtime_mode = f"{runtime_mode}+mesh"
+
+        return DeploymentTopologyResponse(
+            architecture_mode=mode,
+            runtime_mode=runtime_mode,
+            bus_backend=_bus_backend_name(self.bus),
+            redis_url_redacted=bus_health.redis_url_redacted,
+            redis_reachable=bus_health.redis_reachable,
+            bullmq_queue_health=bus_health,
+            service_process_topology=self._build_service_process_topology(services),
+            container_topology_hints=self._container_topology_hints(),
+            mode_capability_degradations=sorted(set(degradations)),
+            mesh_peer_topology_trusted=False if mesh_status.peers else None,
+            generated_at=datetime.now(UTC).isoformat(),
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_MESH_STATUS,
+        summary="Get read-only mesh status and routing diagnostics",
+        input_model=EmptyInput,
+        output_model=GetMeshStatusResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_mesh_status(self, data: EmptyInput) -> GetMeshStatusResponse:
+        """Return a redacted diagnostic snapshot of mesh state and routing."""
+        settings = await self._get_gateway_config()
+        mesh_config = settings.mesh
+        registry = self._mesh_peer_registry
+        routing_table = self._mesh_routing_table
+
+        shared_modules = sorted(
+            module for module, service in mesh_config.services.items() if service.share
+        )
+        routed_modules = sorted(
+            module
+            for module, service in mesh_config.services.items()
+            if service.prefer not in ("local", "local_only")
+        )
+
+        peers = registry.get_all_peers() if registry else []
+        local = MeshLocalStatus(
+            mesh_enabled=mesh_config.enabled,
+            mesh_started=self._mesh_bus is not None,
+            webrtc_started=self._rtc_client is not None,
+            peer_id=self._mesh_peer_id,
+            node_name=mesh_config.node_name,
+            peer_selection=mesh_config.peer_selection,
+            version_policy=mesh_config.version_policy,
+            shared_modules=shared_modules,
+            routed_modules=routed_modules,
+        )
+
+        peer_diagnostics = [
+            self._build_peer_diagnostic(peer, mesh_config)
+            for peer in sorted(peers, key=lambda p: p.peer_id)
+        ]
+
+        route_modules = set(mesh_config.services.keys())
+        for peer in peers:
+            if peer.manifest:
+                route_modules.update(svc.module for svc in peer.manifest.shared_services)
+
+        route_diagnostics = [
+            self._build_route_diagnostic(module, mesh_config, registry, routing_table)
+            for module in sorted(route_modules)
+        ]
+
+        compatibility_failures: list[MeshCompatibilityFailure] = []
+        for peer in peer_diagnostics:
+            for module in peer.compatibility.local_incompatible:
+                compatibility_failures.append(
+                    MeshCompatibilityFailure(
+                        peer_id=peer.peer_id,
+                        module=module,
+                        direction="local_view_of_remote",
+                        reason="remote service failed local version/capability requirements",
+                    )
+                )
+            for module in peer.compatibility.remote_incompatible:
+                compatibility_failures.append(
+                    MeshCompatibilityFailure(
+                        peer_id=peer.peer_id,
+                        module=module,
+                        direction="remote_view_of_local",
+                        reason="local service failed remote version/capability requirements",
+                    )
+                )
+
+        return GetMeshStatusResponse(
+            local=local,
+            peers=peer_diagnostics,
+            routes=route_diagnostics,
+            compatibility_failures=compatibility_failures,
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_WEBRTC_DIAGNOSTICS,
+        summary="Get read-only WebRTC, ICE, and DataChannel diagnostics",
+        input_model=EmptyInput,
+        output_model=WebRTCDiagnosticsResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_webrtc_diagnostics(self, data: EmptyInput) -> WebRTCDiagnosticsResponse:
+        """Return a redacted diagnostic snapshot of WebRTC transport state."""
+        settings = await self._get_gateway_config()
+        if self._rtc_client is not None:
+            return self._rtc_client.get_diagnostics()
+        return WebRTCDiagnosticsResponse(
+            enabled=bool(settings.webrtc.enabled),
+            started=False,
+            mesh_enabled=bool(settings.mesh.enabled),
+            local_mesh_peer_id=self._mesh_peer_id,
+            local_node_name=settings.mesh.node_name,
+            require_auth=bool(settings.api.auth_enabled),
+            auth_timeout_seconds=settings.permissions.webrtc_auth_timeout_seconds,
+            pairing_timeout_seconds=settings.permissions.webrtc_pairing_timeout_seconds,
+            app_layer_e2ee_enabled=bool(settings.webrtc.enable_app_layer_e2ee),
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_CAPABILITY_GRAPH,
+        summary="Get a redacted mesh capability graph",
+        input_model=EmptyInput,
+        output_model=CapabilityGraph,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_capability_graph(self, data: EmptyInput) -> CapabilityGraph:
+        """Return a first-class capability graph without credential-bearing fields."""
+        from app.services.gateway.mesh.capability_graph import build_capability_graph
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        peers = self._mesh_peer_registry.get_all_peers() if self._mesh_peer_registry else []
+        return build_capability_graph(
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            peers=peers,
+            local_peer_id=self._mesh_peer_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_CAPABILITY_CATALOG,
+        summary="Get canonical executable capability catalog",
+        input_model=CapabilityCatalogRequest,
+        output_model=CapabilityCatalogResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_capability_catalog(
+        self,
+        data: CapabilityCatalogRequest,
+    ) -> CapabilityCatalogResponse:
+        """Return a product-facing local + remote capability catalog."""
+        from app.services.gateway.mesh.capability_catalog import build_capability_catalog
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        peers = self._mesh_peer_registry.get_all_peers() if self._mesh_peer_registry else []
+        return build_capability_catalog(
+            request=data,
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            peers=peers,
+            local_peer_id=self._mesh_peer_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.EXPLAIN_ROUTE,
+        summary="Explain mesh route selection and provider eligibility",
+        input_model=RouteExplainRequest,
+        output_model=RouteExplainResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def explain_route(self, data: RouteExplainRequest) -> RouteExplainResponse:
+        """Return selected target, candidates, and route blockers for a selector."""
+        from app.services.gateway.mesh.capability_catalog import explain_route
+
+        settings = await self._get_gateway_config()
+        local_services = {}
+        if self._registry_aggregator:
+            local_services = self._registry_aggregator.snapshot_services()
+
+        return explain_route(
+            request=data,
+            mesh_config=settings.mesh,
+            local_services=local_services,
+            registry=self._mesh_peer_registry,
+            routing_table=self._mesh_routing_table,
+            local_peer_id=self._mesh_peer_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.LIST_EVENTS,
+        summary="List recent normalized Gateway event stream entries",
+        input_model=GatewayListEventsRequest,
+        output_model=GatewayListEventsResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def list_events(self, data: GatewayListEventsRequest) -> GatewayListEventsResponse:
+        """Return recent redacted event stream entries for UI/SDK backfill."""
+        events = self._filter_events(data)
+        return GatewayListEventsResponse(
+            events=events[: data.limit],
+            total=len(events),
+            subscription_topic=AuroraMethods.EVENT_STREAM,
+            secrets_redacted=True,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.GET_SUPPORT_BUNDLE,
+        summary="Get a redacted Gateway and mesh support bundle",
+        input_model=GatewaySupportBundleRequest,
+        output_model=GatewaySupportBundleResponse,
+        exposure="external",
+        method_type="manage",
+        required_perms=["Gateway.manage"],
+    )
+    async def get_support_bundle(
+        self,
+        data: GatewaySupportBundleRequest,
+    ) -> GatewaySupportBundleResponse:
+        """Return redacted diagnostics for route, mesh, audit, and config debugging."""
+        registry_export = await self._get_registry_export()
+        services = await self._get_services_snapshot()
+        service_health = [self._service_health_response(service) for service in services]
+        mesh_status = await self.get_mesh_status(EmptyInput())
+        webrtc_diagnostics = await self.get_webrtc_diagnostics(EmptyInput())
+        catalog_summary = CapabilityCatalogSummary()
+        if data.include_capability_catalog:
+            catalog = await self.get_capability_catalog(
+                CapabilityCatalogRequest(include_schemas=False)
+            )
+            catalog_summary = _catalog_summary(catalog)
+
+        event_request = GatewayListEventsRequest(
+            correlation_id=data.correlation_id,
+            limit=max(data.event_limit, 1) if data.event_limit else 1,
+        )
+        recent_events = (
+            [] if data.event_limit == 0 else self._filter_events(event_request)[: data.event_limit]
+        )
+        recent_audit_events = [
+            _diagnostic_redacted_copy(event) for event in await self._get_recent_audit_events(data)
+        ]
+        settings = await self._get_gateway_config()
+
+        correlation_ids = {event.correlation_id for event in recent_events if event.correlation_id}
+        for audit_event in recent_audit_events:
+            details = _details_dict(audit_event.get("details"))
+            correlation_id = details.get("correlation_id")
+            if correlation_id:
+                correlation_ids.add(str(correlation_id))
+
+        audit_receipt, audit_error = await self._audit_support_bundle_export(
+            correlation_id=data.correlation_id,
+            registry=registry_export,
+            services=services,
+            event_count=len(recent_events),
+            audit_event_count=len(recent_audit_events),
+        )
+
+        return GatewaySupportBundleResponse(
+            generated_at=datetime.now(UTC).isoformat(),
+            correlation_id=data.correlation_id,
+            registry=registry_export,
+            services=services,
+            service_health=service_health,
+            mesh_status=mesh_status,
+            webrtc_diagnostics=webrtc_diagnostics,
+            route_diagnostics=mesh_status.routes,
+            capability_catalog_summary=catalog_summary,
+            recent_events=recent_events,
+            recent_audit_events=recent_audit_events,
+            native_capabilities=self._native_capability_diagnostics(),
+            sidecar_logs=self._sidecar_log_diagnostics(),
+            config_shape=_diagnostic_redacted_copy(_model_dump(settings)),
+            correlation_ids=sorted(correlation_ids),
+            audit_receipt=audit_receipt,
+            audit_error=audit_error,
+            redaction=SupportBundleRedactionInfo(
+                secrets_redacted=True,
+                redacted_fields=list(_DIAGNOSTIC_REDACT_KEY_PARTS),
+                omitted_payloads=[
+                    "raw audio",
+                    "unredacted tool arguments",
+                    "RAG contents",
+                    "tokens and credentials",
+                ],
+            ),
+            secrets_redacted=True,
+        )
+
+    def _build_peer_diagnostic(self, peer: Any, mesh_config: Any) -> MeshPeerDiagnostic:
+        """Serialize peer state without credential-bearing fields."""
+        from app.services.gateway.mesh.negotiation import generate_manifest_ack
+
+        now = time.monotonic()
+        manifest = peer.manifest
+        local_ack = generate_manifest_ack(manifest, mesh_config) if manifest else None
+
+        services: list[MeshPeerServiceDiagnostic] = []
+        if manifest:
+            for svc in manifest.shared_services:
+                available_capacity = None
+                if svc.max_concurrent > 0:
+                    available_capacity = max(svc.max_concurrent - peer.active_calls, 0)
+                services.append(
+                    MeshPeerServiceDiagnostic(
+                        module=svc.module,
+                        version=svc.version,
+                        capabilities=list(svc.capabilities),
+                        method_names=sorted(m.name for m in svc.methods),
+                        max_concurrent=svc.max_concurrent,
+                        active_calls=peer.active_calls,
+                        available_capacity=available_capacity,
+                        digest=svc.digest,
+                    )
+                )
+
+        return MeshPeerDiagnostic(
+            peer_id=peer.peer_id,
+            node_name=peer.node_name,
+            status=peer.status,
+            latency_ms=_finite_float(peer.latency_ms),
+            last_ping_age_s=_age_seconds(now, peer.last_ping),
+            last_manifest_age_s=_age_seconds(now, peer.last_manifest),
+            active_calls=peer.active_calls,
+            services=services,
+            compatibility=MeshPeerCompatibilityDiagnostic(
+                local_compatible=list(local_ack.compatible_services) if local_ack else [],
+                local_incompatible=list(local_ack.incompatible_services) if local_ack else [],
+                local_unused=list(local_ack.unused_services) if local_ack else [],
+                remote_compatible=list(peer.remote_compatible),
+                remote_incompatible=list(peer.remote_incompatible),
+                remote_unused=list(peer.remote_unused),
+            ),
+        )
+
+    def _build_route_diagnostic(
+        self,
+        module: str,
+        mesh_config: Any,
+        registry: Any,
+        routing_table: Any,
+    ) -> MeshRouteDiagnostic:
+        """Explain the current route decision and peer eligibility for a module."""
+        config = mesh_config.services.get(module)
+        route = None
+        if routing_table:
+            route = routing_table.resolve(f"{module}.Diagnostic")
+
+        providers: list[MeshRouteProviderDiagnostic] = []
+        if registry:
+            candidates = registry.get_provider_candidates(
+                module=module,
+                routing_config=config,
+                version_policy=mesh_config.version_policy,
+                include_ineligible=True,
+            )
+            for candidate in sorted(candidates, key=lambda c: c.peer.peer_id):
+                providers.append(
+                    MeshRouteProviderDiagnostic(
+                        peer_id=candidate.peer.peer_id,
+                        node_name=candidate.peer.node_name,
+                        status=candidate.peer.status,
+                        version=candidate.service.version,
+                        latency_ms=_finite_float(candidate.peer.latency_ms),
+                        active_calls=candidate.peer.active_calls,
+                        max_concurrent=candidate.service.max_concurrent,
+                        eligible=candidate.eligible,
+                        reason_code=candidate.reason_code,
+                        reason=candidate.reason,
+                    )
+                )
+
+        decision_target = route.target if route else "local"
+        reason = _route_reason(
+            module=module,
+            config=config,
+            decision_target=decision_target,
+            providers=providers,
+            selected_peer_id=route.peer_id if route else None,
+            peer_selection=mesh_config.peer_selection,
+        )
+
+        return MeshRouteDiagnostic(
+            module=module,
+            configured=config is not None,
+            share=bool(config.share) if config else False,
+            prefer=config.prefer if config else "",
+            fallback=config.fallback if config else "",
+            min_version=config.min_version if config else None,
+            required_capabilities=list(config.required_capabilities) if config else [],
+            decision_target=decision_target,
+            decision_peer_id=route.peer_id if route else None,
+            decision_version=route.version if route else "",
+            decision_latency_ms=_finite_float(route.latency_ms) if route else None,
+            reason=reason,
+            providers=providers,
+        )
+
+    async def _capture_gateway_event(self, envelope: Envelope) -> None:
+        """Capture bus events into a redacted normalized stream."""
+        if envelope.type == AuroraMethods.EVENT_STREAM:
+            return
+        event = _event_from_envelope(envelope)
+        self._event_stream.appendleft(event)
+        with contextlib.suppress(Exception):
+            await self.bus.publish(
+                AuroraMethods.EVENT_STREAM,
+                event,
+                event=True,
+                mesh=False,
+                origin="internal",
+                correlation_id=event.correlation_id,
+            )
+
+    def _filter_events(
+        self,
+        request: GatewayListEventsRequest,
+    ) -> list[GatewayEventStreamEvent]:
+        categories = set(request.categories or [])
+        events: list[GatewayEventStreamEvent] = []
+        for event in list(self._event_stream):
+            if categories and event.category not in categories:
+                continue
+            if request.action and event.action != request.action:
+                continue
+            if request.status and event.status != request.status:
+                continue
+            if request.correlation_id and event.correlation_id != request.correlation_id:
+                continue
+            if request.provider_id and event.provider_id != request.provider_id:
+                continue
+            if request.tool_id and event.tool_id != request.tool_id:
+                continue
+            if request.route and event.route != request.route:
+                continue
+            if (
+                request.policy_decision_id
+                and event.policy_decision_id != request.policy_decision_id
+            ):
+                continue
+            if request.peer_id and request.peer_id not in {
+                event.source_peer_id,
+                event.target_peer_id,
+            }:
+                continue
+            events.append(event)
+        return events
+
+    async def _get_recent_audit_events(
+        self,
+        request: GatewaySupportBundleRequest,
+    ) -> list[dict[str, Any]]:
+        if request.audit_limit <= 0:
+            return []
+        try:
+            result = await self.bus.request(
+                AuthMethods.AUDIT_LOG,
+                AuditLogRequest(
+                    limit=request.audit_limit,
+                    correlation_id=request.correlation_id,
+                ),
+                timeout=5.0,
+                origin="internal",
+            )
+        except Exception as exc:
+            log_warning(f"Support bundle audit fetch failed: {exc}")
+            return []
+        if not result.ok or not result.data:
+            return []
+        data = result.data
+        if hasattr(data, "events"):
+            events = data.events
+        elif isinstance(data, dict):
+            events = data.get("events", [])
+        else:
+            events = []
+        return [_diagnostic_redacted_copy(event) for event in events]
+
+    async def _get_registry_export(self) -> GetRegistryResponse:
+        """Return registry export, or an empty typed response when unavailable."""
+        if not self._registry_aggregator:
+            return GetRegistryResponse()
+        try:
+            export = await self._registry_aggregator.get_registry_export()
+        except Exception as exc:
+            log_warning(f"Support bundle registry export failed: {exc}")
+            return GetRegistryResponse()
+        return GetRegistryResponse.model_validate(export)
+
+    async def _get_services_snapshot(self) -> list[ServiceInfo]:
+        """Return known services from the registry aggregator."""
+        if not self._registry_aggregator:
+            return []
+        try:
+            return await self._registry_aggregator.get_services()
+        except Exception as exc:
+            log_warning(f"Support bundle service snapshot failed: {exc}")
+            return []
+
+    def _service_health_response(self, service: ServiceInfo) -> GetServiceHealthResponse:
+        """Convert registry service status into the support-bundle health shape."""
+        return GetServiceHealthResponse(
+            module=service.module,
+            status=service.status,
+            checks={
+                "registry": "present",
+                "heartbeat": service.status,
+                "contracts": "present" if service.method_count else "empty",
+            },
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+
+    async def _build_bus_health(self) -> BusHealth:
+        """Build a non-mutating bus health snapshot."""
+        bus = _bus_health_target(self.bus)
+        backend = bus.__class__.__name__
+        stats = bus.get_stats() if hasattr(bus, "get_stats") else {}
+        degraded_reasons: list[str] = []
+
+        if backend == "LocalBus":
+            return BusHealth(
+                backend=backend,
+                redis_url_redacted=None,
+                redis_reachable=None,
+                bullmq_available=None,
+                queue_lag_known=True,
+                published=stats.get("published"),
+                delivered=stats.get("delivered"),
+                retries=stats.get("retries"),
+                dead_letters=stats.get("dead_letters"),
+                status="healthy",
+                degraded_reasons=[],
+            )
+
+        redis_url = getattr(bus, "redis_url", os.getenv("REDIS_URL"))
+        bullmq_available = getattr(bus, "_available", None)
+        redis_reachable: bool | None = None
+        error: str | None = None
+
+        if hasattr(bus, "_get_redis"):
+            try:
+                redis = await bus._get_redis()
+                redis_reachable = bool(await asyncio.wait_for(redis.ping(), timeout=1.0))
+            except Exception as exc:
+                redis_reachable = False
+                error = str(exc)
+                degraded_reasons.append("redis_unreachable")
+
+        queue_lag_known = False
+        queue_depth = None
+        degraded_reasons.append("bullmq_queue_lag_unknown")
+        if bullmq_available is False:
+            degraded_reasons.append("bullmq_unavailable")
+
+        dead_letters = stats.get("dead_letters")
+        if dead_letters:
+            degraded_reasons.append("bullmq_dead_letters_present")
+
+        status = "healthy"
+        if redis_reachable is False or bullmq_available is False:
+            status = "unhealthy"
+        elif degraded_reasons:
+            status = "degraded"
+
+        return BusHealth(
+            backend=backend,
+            redis_url_redacted=_redact_url(redis_url),
+            redis_reachable=redis_reachable,
+            bullmq_available=bullmq_available,
+            queue_lag_known=queue_lag_known,
+            queue_depth=queue_depth,
+            published=stats.get("published"),
+            delivered=stats.get("delivered"),
+            retries=stats.get("retries"),
+            dead_letters=dead_letters,
+            status=status,
+            degraded_reasons=sorted(set(degraded_reasons)),
+            error=error,
+        )
+
+    def _build_service_process_topology(
+        self,
+        services: list[ServiceInfo],
+    ) -> list[ServiceProcessTopology]:
+        """Convert registry services into a sanitized topology list."""
+        if self._mode == "threads":
+            return [
+                ServiceProcessTopology(
+                    module=service.module,
+                    status=service.status,
+                    topology="thread",
+                    instance_id=service.instance_id,
+                    process_hint="single-process",
+                    last_seen=service.last_seen,
+                    stale=False,
+                )
+                for service in sorted(services, key=lambda item: item.module)
+            ]
+
+        return [
+            ServiceProcessTopology(
+                module=service.module,
+                status=service.status,
+                topology="process",
+                instance_id=service.instance_id,
+                container_hint=_compose_service_hint(service.module),
+                process_hint="separate-service-process",
+                last_seen=service.last_seen,
+                stale=service.status in {"degraded", "unhealthy", "unknown"},
+            )
+            for service in sorted(services, key=lambda item: item.module)
+        ]
+
+    def _container_topology_hints(self) -> ContainerTopologyHints:
+        """Return static, non-secret topology hints for UI copy and diagnostics."""
+        if self._mode == "processes":
+            return ContainerTopologyHints(
+                orchestrator="docker-compose",
+                compose_file="docker-compose.process.yml",
+                redis_service="redis",
+                gateway_service="gateway-service",
+                config_service="config-service",
+                notes=[
+                    "process mode is orchestrated by Docker Compose or equivalent service runners",
+                    "Redis/BullMQ is required for cross-process bus delivery",
+                ],
+            )
+        return ContainerTopologyHints(
+            orchestrator="in-process-supervisor",
+            notes=[
+                "thread mode runs services in one Python process",
+                "process controls and per-container health are unsupported in thread mode",
+            ],
+        )
+
+    def _native_capability_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
+        """Expose native capability state without inventing platform support."""
+        return [
+            SupportBundleDiagnosticItem(
+                name="native_capability_manifest",
+                status="unavailable",
+                source="tauri/native manifest",
+                details={
+                    "reason": "no native manifest is registered in this backend runtime",
+                    "backend_coverage": "deferred",
+                },
+            )
+        ]
+
+    def _sidecar_log_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
+        """Expose sidecar log availability without reading local files or secrets."""
+        return [
+            SupportBundleDiagnosticItem(
+                name="gateway_sidecar_logs",
+                status="metadata_only",
+                source="gateway runtime",
+                details={
+                    "reason": "no sidecar log collector is registered; raw logs are omitted",
+                    "omitted_payloads": ["host paths", "tokens", "raw audio", "personal content"],
+                },
+            )
+        ]
+
+    async def _audit_support_bundle_export(
+        self,
+        *,
+        correlation_id: str | None,
+        registry: GetRegistryResponse,
+        services: list[ServiceInfo],
+        event_count: int,
+        audit_event_count: int,
+    ) -> tuple[str | None, str | None]:
+        """Store a redacted audit event for diagnostics bundle generation."""
+        receipt = f"support_bundle:{uuid.uuid4()}"
+        details = {
+            "audit_receipt": receipt,
+            "correlation_id": correlation_id,
+            "registry_digest": registry.digest,
+            "service_count": len(services),
+            "method_count": registry.method_count,
+            "event_count": event_count,
+            "audit_event_count": audit_event_count,
+            "secrets_redacted": True,
+            "omitted_payloads": [
+                "raw audio",
+                "unredacted tool arguments",
+                "RAG contents",
+                "tokens and credentials",
+            ],
+        }
+        try:
+            result = await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event="diagnostics.support_bundle.exported",
+                    principal_id=None,
+                    details=json.dumps(details, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:
+            log_warning(f"Support bundle audit storage failed: {exc}")
+            return None, str(exc)
+        if hasattr(result, "ok") and not result.ok:
+            error = result.error or "audit storage failed"
+            log_warning(f"Support bundle audit storage failed: {error}")
+            return None, error
+        data = getattr(result, "data", None)
+        if hasattr(data, "success") and not data.success:
+            error = getattr(data, "message", None) or "audit storage failed"
+            log_warning(f"Support bundle audit storage failed: {error}")
+            return None, error
+        return receipt, None
 
     async def _get_gateway_config(self) -> Any:
         """Get gateway configuration from ConfigService.
@@ -272,6 +1565,7 @@ class GatewayService(BaseService):
                 auth_enabled=auth_enabled,
                 auth_api_keys=auth_api_keys,
                 request_timeout=request_timeout,
+                admin_action_manager=self._admin_action_manager,
             )
 
             import uvicorn
@@ -524,6 +1818,7 @@ class GatewayService(BaseService):
 
             # ── Fix 1: Stable peer_id from DB ────────────────────────────
             peer_id = await self._get_or_create_peer_id(mesh_config)
+            self._mesh_peer_id = peer_id
 
             # Create mesh components
             self._mesh_peer_registry = PeerRegistry(mesh_config)
@@ -589,6 +1884,10 @@ class GatewayService(BaseService):
             self._mesh_peer_registry.on_peer_status_changed = _on_peer_status_changed
 
             # Configure RTCClient for mesh
+            self._rtc_client.set_mesh_identity(
+                peer_id=peer_id,
+                node_name=mesh_config.node_name or "",
+            )
             self._rtc_client.configure_mesh(
                 mesh_config=mesh_config,
                 peer_registry=self._mesh_peer_registry,
@@ -617,8 +1916,25 @@ class GatewayService(BaseService):
                     log_info(f"Loaded {len(creds)} inbound credential(s) for room '{room_name}'")
                 else:
                     log_debug(f"No inbound credentials for room '{room_name}'")
+                    from app.shared.contracts.models.auth import MeshCredentialLoadRequest
+
+                    legacy_resp = await self.bus.request(
+                        AuthMethods.LOAD_MESH_CREDENTIAL,
+                        MeshCredentialLoadRequest(room_name=room_name),
+                        timeout=5.0,
+                    )
+                    legacy_data = legacy_resp.data if hasattr(legacy_resp, "data") else legacy_resp
+                    legacy_token = (
+                        legacy_data.get("token")
+                        if isinstance(legacy_data, dict)
+                        else getattr(legacy_data, "token", None)
+                    )
+                    if legacy_token:
+                        self._rtc_client.set_saved_auth_token(legacy_token)
+                        log_info(f"Loaded legacy mesh credential for room '{room_name}'")
             except Exception as e:
                 log_warning(f"Could not load mesh credentials: {e}")
+            await self._rtc_client.refresh_presence()
 
             # ── Fix 3: Per-peer persist callback ─────────────────────────
             bus_ref = self.bus  # capture for closure
@@ -800,6 +2116,7 @@ class GatewayService(BaseService):
                 set_bus(inner)
                 set_shared_bus(inner)
                 self._mesh_bus = None
+                self._mesh_peer_id = None
 
             # Stop background tasks
             if self._mesh_announcer:

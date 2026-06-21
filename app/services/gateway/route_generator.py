@@ -7,13 +7,25 @@ Uses lazy generation - routes are created when registry changes, not at startup.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.shared.contracts.models.gateway import MethodInfo
+from app.services.gateway.admin_action import (
+    ADMIN_ACTION_DIGEST_HEADER,
+    ADMIN_ACTION_ID_HEADER,
+    ADMIN_ACTION_REQUIRED_HEADERS,
+    ADMIN_ACTION_TOKEN_HEADER,
+    AdminActionManager,
+    AdminActionReceipt,
+    admin_action_digest,
+)
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.config import ConfigMethods
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -29,6 +41,132 @@ class DynamicModelBase(BaseModel):
     # Use "ignore" to silently drop extra fields without adding
     # additionalProperties to the schema (avoids additionalProp1 in Swagger)
     model_config = ConfigDict(extra="ignore")
+
+
+_ADMIN_ACTION_REQUIRED_TOPICS = {
+    AuthMethods.CREATE_PRINCIPAL,
+    AuthMethods.UPDATE_PRINCIPAL,
+    AuthMethods.DELETE_PRINCIPAL,
+    AuthMethods.SET_PERMISSIONS,
+    AuthMethods.PATCH_PERMISSIONS,
+    AuthMethods.CHANGE_PASSWORD,
+    AuthMethods.CREATE_TOKEN,
+    AuthMethods.UPDATE_TOKEN_SCOPES,
+    AuthMethods.REVOKE_TOKEN,
+    AuthMethods.DELETE_DEVICE,
+    AuthMethods.MESH_APPROVE_PEER,
+    AuthMethods.MESH_DENY_PEER,
+    AuthMethods.MESH_UPDATE_PEER_PERMISSIONS,
+    AuthMethods.MESH_REMOVE_PEER,
+    ConfigMethods.SET,
+    ConfigMethods.SET_PLUGIN,
+}
+
+_ADMIN_ACTION_EXEMPT_TOPICS = {
+    AuthMethods.AUDIT_LOG,
+    AuthMethods.LIST_DEVICES,
+    AuthMethods.LIST_PRINCIPALS,
+    AuthMethods.LIST_TOKENS,
+    GatewayMethods.ADMIN_ACTION_DRAFT,
+    GatewayMethods.ADMIN_ACTION_CONFIRM,
+    GatewayMethods.EXPLAIN_ROUTE,
+    GatewayMethods.GET_CAPABILITY_CATALOG,
+    GatewayMethods.GET_CAPABILITY_GRAPH,
+    GatewayMethods.GET_MESH_STATUS,
+    GatewayMethods.GET_SUPPORT_BUNDLE,
+    GatewayMethods.LIST_EVENTS,
+}
+
+_admin_action_digest = admin_action_digest
+
+
+def _admin_action_required(topic: str, method_type: str | None = None) -> bool:
+    if topic in _ADMIN_ACTION_EXEMPT_TOPICS:
+        return False
+    return topic in _ADMIN_ACTION_REQUIRED_TOPICS or method_type == "manage"
+
+
+async def _enforce_admin_action(
+    bus: MessageBus,
+    manager: AdminActionManager,
+    *,
+    topic: str,
+    principal_id: str | None,
+    payload: dict[str, Any],
+    headers: Mapping[str, str],
+) -> AdminActionReceipt:
+    """Require explicit AdminAction confirmation for high-risk generated routes."""
+    from fastapi import HTTPException
+
+    action_id = headers.get(ADMIN_ACTION_ID_HEADER, "").strip()
+    confirmation_token = headers.get(ADMIN_ACTION_TOKEN_HEADER, "").strip()
+    digest = headers.get(ADMIN_ACTION_DIGEST_HEADER, "").strip()
+
+    missing = [
+        name
+        for name, value in (
+            (ADMIN_ACTION_ID_HEADER, action_id),
+            (ADMIN_ACTION_TOKEN_HEADER, confirmation_token),
+            (ADMIN_ACTION_DIGEST_HEADER, digest),
+        )
+        if not value
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "code": "admin_action_required",
+                "message": "AdminAction confirmation is required",
+                "missing_headers": missing,
+                "required_headers": list(ADMIN_ACTION_REQUIRED_HEADERS),
+            },
+        )
+
+    receipt = manager.consume(
+        action_id=action_id,
+        confirmation_token=confirmation_token,
+        digest=digest,
+        method_id=topic,
+        principal_id=principal_id,
+        payload=payload,
+    )
+
+    details = {
+        "action_id": receipt.action_id,
+        "audit_receipt": receipt.audit_receipt,
+        "topic": topic,
+        "principal_id": principal_id,
+        "reason": receipt.reason,
+        "request_digest": digest,
+        "affected_resources": receipt.affected_resources,
+        "reauth_confirmed": True,
+    }
+    try:
+        result = await bus.request(
+            AuthMethods.STORE_AUDIT_EVENT,
+            StoreAuditEventRequest(
+                event="admin.action.confirmed",
+                principal_id=principal_id,
+                details=json.dumps(details, sort_keys=True),
+            ),
+            timeout=5.0,
+            origin="internal",
+            principal_id=principal_id,
+        )
+        if hasattr(result, "ok") and not result.ok:
+            raise RuntimeError(result.error or "audit storage failed")
+        if hasattr(result, "data") and hasattr(result.data, "success") and not result.data.success:
+            raise RuntimeError(getattr(result.data, "message", None) or "audit storage failed")
+    except Exception as exc:
+        log_warning(f"Failed to audit AdminAction for {topic}: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "admin_action_audit_failed",
+                "message": "AdminAction audit storage failed; request was not forwarded",
+            },
+        ) from exc
+    return receipt
 
 
 def _resolve_refs(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -252,6 +390,7 @@ class RouteGenerator:
         bus: MessageBus,
         registry: RegistryAggregator,
         request_timeout: float = 30.0,
+        admin_action_manager: AdminActionManager | None = None,
     ):
         """Initialize the route generator.
 
@@ -263,6 +402,7 @@ class RouteGenerator:
         self._bus = bus
         self._registry = registry
         self._request_timeout = request_timeout
+        self._admin_action_manager = admin_action_manager or AdminActionManager()
 
         # Track generated routes per service
         self._service_routes: dict[str, list[str]] = {}
@@ -388,8 +528,7 @@ class RouteGenerator:
 
         async def handler(request: Any = None, principal_id: str | None = None) -> dict[str, Any]:
             """Handle API request by forwarding to service via bus."""
-            from fastapi import HTTPException, Request
-            from pydantic import BaseModel
+            from fastapi import HTTPException
 
             # Check if service is available
             if not registry.is_service_available(module_name):
@@ -500,6 +639,9 @@ class RouteGenerator:
 
         # Rebuild model to ensure it's fully defined
         request_model_cls.model_rebuild()
+        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
+        route_bus = self._bus
+        admin_action_manager = self._admin_action_manager
 
         # Create handler factory to properly capture the model types
         def create_typed_handler(
@@ -508,7 +650,7 @@ class RouteGenerator:
             scopes: list[str],
             method_type: str = "use",
         ) -> Callable:
-            from fastapi import Security
+            from fastapi import Request, Security
 
             from app.services.gateway.auth import create_scoped_auth_check
 
@@ -523,6 +665,7 @@ class RouteGenerator:
                 return _auth
 
             async def typed_handler(
+                http_request: Request,
                 request_body: req_model,
                 _auth: Any = Security(auth_dependency),  # noqa: B008
             ) -> dict[str, Any]:  # type: ignore[valid-type]
@@ -533,10 +676,19 @@ class RouteGenerator:
 
                 # Use exclude_unset=True to only send fields that were explicitly
                 # provided, allowing the service's model to use its own defaults
-                result = await inner_handler(
-                    request_body.model_dump(exclude_unset=True) if request_body else {},
-                    principal_id=pid,
-                )
+                payload = request_body.model_dump(exclude_unset=True) if request_body else {}
+                admin_action_receipt = None
+                if _admin_action_required(method_id, method_info.method_type):
+                    admin_action_receipt = await _enforce_admin_action(
+                        route_bus,
+                        admin_action_manager,
+                        topic=method_id,
+                        principal_id=pid,
+                        payload=payload,
+                        headers=http_request.headers,
+                    )
+
+                result = await inner_handler(payload, principal_id=pid)
                 # Return the raw result dict - don't filter through response model
                 # This preserves all fields from the service response
                 if result is None:
@@ -550,16 +702,21 @@ class RouteGenerator:
 
                 log_debug(f"typed_handler returning: {response_data}")
                 # Return JSONResponse to ensure proper serialization
-                return JSONResponse(content=response_data)
+                headers = {}
+                if admin_action_receipt:
+                    headers["X-Aurora-AdminAction-Audit-Receipt"] = (
+                        admin_action_receipt.audit_receipt
+                    )
+                return JSONResponse(content=response_data, headers=headers)
 
             # Explicitly set annotations to actual model classes (not strings)
             typed_handler.__annotations__ = {
+                "http_request": Request,
                 "request_body": req_model,
                 "return": dict[str, Any],
             }
             return typed_handler
 
-        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
         scopes = list(method_info.required_perms) if method_info.required_perms else []
 
         wrapped_handler = create_typed_handler(

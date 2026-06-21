@@ -7,6 +7,7 @@ import pytest
 
 from app.services.db.models import Token
 from app.services.gateway.acl.identity import ANONYMOUS, Identity
+from app.services.gateway.mesh.models import PeerManifest
 from app.services.gateway.webrtc.rtc_client import RTCClient
 
 
@@ -47,6 +48,7 @@ def mock_deps():
     settings.webrtc.stun_servers = ["stun:stun.l.google.com:19302"]
     settings.webrtc.turn_servers = []
     settings.webrtc.enable_app_layer_e2ee = False
+    settings.webrtc.encrypt_signaling = False
 
     bus = MagicMock()
     registry = MagicMock()
@@ -82,6 +84,229 @@ async def test_rtc_client_handshake_on_open(mock_deps):
         assert msg["peer_name"] == client._peer_id
         # No auto-auth mechanism — token is a standard DB token from pairing
         assert msg.get("mechanism") != "mesh_shared_secret"
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_sends_stable_mesh_identity_in_saved_token_auth(mock_deps):
+    """Reconnect auth advertises stable mesh identity, not signaling session id."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client.set_mesh_identity("stable-local-peer", "local-node")
+    client._remember_stable_peer_id("session-peer", "stable-remote-peer", "remote-node")
+    client._saved_auth_tokens["stable-remote-peer"] = "stable-peer-token"
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("session-peer")
+        mock_channel.emit("open")
+
+        msg = json.loads(mock_channel.sent_messages[0])
+        assert msg["type"] == "auth"
+        assert msg["token"] == "stable-peer-token"
+        assert msg["peer_id"] == "stable-local-peer"
+        assert msg["peer_name"] == "local-node"
+        assert msg["signaling_peer_id"] == client._peer_id
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_presence_identity_selects_saved_token_for_new_session(mock_deps):
+    """Presence stable ID lets a new signaling session reuse the right peer token."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "local-node")
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "stable-remote-peer-a": "token-for-remote-a",
+        "stable-remote-peer-b": "token-for-remote-b",
+    }
+    client.connect_to = AsyncMock()
+
+    remote_session = "new-session-peer"
+    assert remote_session not in client._peer_stable_ids
+
+    await client._on_presence(
+        json.dumps(
+            {
+                "type": "presence",
+                "app_id": settings.webrtc.app_id,
+                "room": settings.webrtc.room,
+                "peer_id": remote_session,
+                "stable_peer_id": "stable-remote-peer-a",
+                "node_name": "remote-node-a",
+            }
+        ).encode()
+    )
+
+    assert client._peer_stable_ids[remote_session] == "stable-remote-peer-a"
+    client.connect_to.assert_awaited_once_with(remote_session)
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc(remote_session, is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert remote_session not in client._pairing_tasks
+        assert len(mock_channel.sent_messages) == 1
+        msg = json.loads(mock_channel.sent_messages[0])
+        assert msg["type"] == "auth"
+        assert msg["token"] == "token-for-remote-a"
+        assert msg["peer_id"] == "stable-local-peer"
+        assert msg["peer_name"] == "local-node"
+        assert msg["signaling_peer_id"] == "local-session"
+
+
+@pytest.mark.asyncio
+async def test_reverse_pairing_skips_only_current_stable_peer_token(mock_deps):
+    """Reverse pairing skip is scoped to the authenticated remote stable peer."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    channel = MockDataChannel()
+    client._peer_data_channels["session-peer-a"] = channel
+    client._remember_stable_peer_id("session-peer-a", "stable-peer-a")
+    client._saved_auth_tokens["stable-peer-a"] = "token-for-peer-a"
+    client._initiate_pairing = AsyncMock()
+
+    await client._reverse_pairing("session-peer-a")
+
+    client._initiate_pairing.assert_not_awaited()
+    assert "session-peer-a" not in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_reverse_pairing_starts_for_new_peer_despite_other_saved_tokens(mock_deps):
+    """A saved/default token for peer A must not suppress reverse pairing for peer B."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    channel = MockDataChannel()
+    client._peer_data_channels["session-peer-b"] = channel
+    client._remember_stable_peer_id("session-peer-a", "stable-peer-a")
+    client._remember_stable_peer_id("session-peer-b", "stable-peer-b")
+    client._saved_auth_tokens["stable-peer-a"] = "token-for-peer-a"
+    client._saved_auth_tokens["_default"] = "legacy-default-token"
+    client._initiate_pairing = AsyncMock()
+
+    await client._reverse_pairing("session-peer-b")
+
+    task = client._pairing_tasks["session-peer-b"]
+    await task
+    client._initiate_pairing.assert_awaited_once_with("session-peer-b", channel)
+
+
+async def test_rtc_client_unknown_peer_does_not_receive_unrelated_saved_token(mock_deps):
+    """Unknown sessions fail safe when multiple peer-scoped tokens are loaded."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "stable-remote-peer-a": "token-for-remote-a",
+        "stable-remote-peer-b": "token-for-remote-b",
+    }
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert mock_channel.sent_messages == []
+        assert "unknown-session-peer" in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_legacy_default_token_used_only_when_unambiguous(mock_deps):
+    """A sole legacy `_default` token remains usable for single-peer migration."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {"_default": "legacy-room-token"}
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert len(mock_channel.sent_messages) == 1
+        msg = json.loads(mock_channel.sent_messages[0])
+        assert msg["type"] == "auth"
+        assert msg["token"] == "legacy-room-token"
+        assert "unknown-session-peer" not in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_default_token_not_used_when_peer_tokens_exist(mock_deps):
+    """A legacy default plus peer tokens is ambiguous without an exact peer hit."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._system_token = "system-token"
+    client._saved_auth_tokens = {
+        "_default": "legacy-room-token",
+        "stable-remote-peer-a": "token-for-remote-a",
+    }
+
+    mock_pc = MagicMock()
+    mock_channel = MockDataChannel()
+    mock_pc.createDataChannel.return_value = mock_channel
+
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
+        await client._ensure_pc("unknown-session-peer", is_offer_initiator=True)
+        mock_channel.emit("open")
+
+        assert mock_channel.sent_messages == []
+        assert "unknown-session-peer" in client._pairing_tasks
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_manifest_uses_stable_local_identity(mock_deps):
+    """Manifest exchange exposes stable local mesh identity."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service)
+    client.set_mesh_identity("stable-local-peer", "local-node")
+    client._mesh_config = MagicMock(node_name="local-node", services={})
+
+    sent_messages: list[dict[str, Any]] = []
+    client._peer_send_fns["session-peer"] = lambda text: sent_messages.append(json.loads(text))
+    client._stable_peer_sessions["stable-remote-peer"] = "session-peer"
+
+    await client._send_manifest("stable-remote-peer")
+
+    assert sent_messages[0]["type"] == "manifest"
+    assert sent_messages[0]["peer_id"] == "stable-local-peer"
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_incoming_manifest_registers_stable_remote_peer(mock_deps):
+    """Remote manifest peer_id becomes the registry/policy key."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service)
+    client._mesh_config = MagicMock(services={}, version_policy="compatible")
+    client._peer_registry = AsyncMock()
+    client._peer_send_fns["session-peer"] = MagicMock()
+
+    manifest = PeerManifest(peer_id="stable-remote-peer", node_name="remote-node")
+    await client._on_peer_manifest(
+        "session-peer",
+        {"type": "manifest", **manifest.model_dump(mode="json")},
+    )
+
+    client._peer_registry.register_peer.assert_awaited_with(
+        "stable-remote-peer",
+        "remote-node",
+    )
+    client._peer_registry.update_manifest.assert_awaited()
+    assert client._peer_stable_ids["session-peer"] == "stable-remote-peer"
+    assert client._stable_peer_sessions["stable-remote-peer"] == "session-peer"
 
 
 @pytest.mark.asyncio

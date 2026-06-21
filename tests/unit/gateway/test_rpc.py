@@ -7,6 +7,13 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.scheduler import (
+    SchedulerCancelJobRequest,
+    SchedulerListJobsRequest,
+    SchedulerMethods,
+    SchedulerScheduleJobRequest,
+)
+from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
 
 
 @pytest.fixture
@@ -106,13 +113,183 @@ async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
     )
 
     mock_bus.request.assert_called_once_with(
-        "Svc.Greet", {"name": "Alice"}, timeout=30.0, origin="external", principal_id="peer-user"
+        "Svc.Greet",
+        {"name": "Alice"},
+        timeout=30.0,
+        origin="external",
+        principal_id="peer-user",
+        correlation_id="req-123",
     )
 
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "result"
     assert response["id"] == "req-123"
     assert response["result"] == {"greeting": "hello"}
+
+
+@pytest.mark.asyncio
+async def test_handle_tooling_execute_injects_trusted_remote_provenance(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "ExecuteTool"
+    method_info.bus_topic = ToolingMethods.EXECUTE_TOOL
+    method_info.input_model = ToolingExecuteToolRequest
+    method_info.required_perms = []
+    method_info.method_type = "use"
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-123",
+                "method": ToolingMethods.EXECUTE_TOOL,
+                "params": {
+                    "tool_name": "switch_on",
+                    "arguments": {"target": "lamp"},
+                    "caller_peer_id": "spoofed",
+                    "caller_principal_id": "spoofed-principal",
+                },
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    typed_request = mock_bus.request.call_args.args[1]
+    assert isinstance(typed_request, ToolingExecuteToolRequest)
+    assert typed_request.caller_peer_id == "remote-peer"
+    assert typed_request.caller_principal_id == "peer-user"
+    assert typed_request.correlation_id == "rpc-123"
+    assert mock_bus.request.call_args.kwargs["correlation_id"] == "rpc-123"
+
+
+@pytest.mark.asyncio
+async def test_handle_call_uses_explicit_correlation_id(
+    rpc_handler,
+    mock_registry,
+    mock_bus,
+):
+    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"greeting": "hello"})
+
+    await rpc_handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-transport-id",
+                "correlation_id": "trace-abc",
+                "method": "Svc.Greet",
+                "params": {"name": "Alice"},
+            }
+        )
+    )
+
+    assert mock_bus.request.call_args.kwargs["correlation_id"] == "trace-abc"
+    response = json.loads(rpc_handler._send.call_args[0][0])
+    assert response["id"] == "rpc-transport-id"
+
+
+@pytest.mark.parametrize(
+    ("topic", "method_name", "input_model", "params"),
+    [
+        (
+            SchedulerMethods.SCHEDULE,
+            "Schedule",
+            SchedulerScheduleJobRequest,
+            {
+                "name": "spoof schedule",
+                "action": "noop",
+                "schedule": "* * * * *",
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+                "correlation_id": "spoofed-correlation",
+            },
+        ),
+        (
+            SchedulerMethods.CANCEL,
+            "Cancel",
+            SchedulerCancelJobRequest,
+            {
+                "job_id": "job-1",
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+            },
+        ),
+        (
+            SchedulerMethods.LIST_JOBS,
+            "ListJobs",
+            SchedulerListJobsRequest,
+            {
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    topic,
+    method_name,
+    input_model,
+    params,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = method_name
+    method_info.bus_topic = topic
+    method_info.input_model = input_model
+    method_info.required_perms = []
+    method_info.method_type = "use"
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Scheduler", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="real-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-456",
+                "method": topic,
+                "params": params,
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    typed_request = mock_bus.request.call_args.args[1]
+    assert isinstance(typed_request, input_model)
+    assert typed_request.caller_peer_id == "real-peer"
+    assert typed_request.caller_principal_id == "peer-user"
+    if topic == SchedulerMethods.SCHEDULE:
+        assert typed_request.correlation_id == "rpc-456"
 
 
 @pytest.mark.asyncio
@@ -129,6 +306,7 @@ async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
     assert response["error"]["message"] == "Something went wrong"
+    assert response["correlation_id"] == "1"
 
 
 @pytest.mark.asyncio
@@ -145,6 +323,51 @@ async def test_handle_call_timeout(rpc_handler, mock_registry, mock_bus):
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
     assert response["error"]["code"] == 504
+    assert response["correlation_id"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_handle_call_forbidden_audits_redacted_correlation(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    audit_fn = AsyncMock()
+    method_info = MethodInfo(name="Secret", required_perms=["admin"])
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        audit_fn=audit_fn,
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "rpc-1",
+                "correlation_id": "trace-denied",
+                "method": "Svc.Secret",
+                "params": {"api_key": "super-secret", "safe": "value"},
+            }
+        )
+    )
+
+    audit_fn.assert_awaited_once()
+    event, principal_id, details = audit_fn.await_args.args
+    assert event == "access.denied.rpc"
+    assert principal_id == "peer-user"
+    assert details["peer_id"] == "remote-peer"
+    assert details["correlation_id"] == "trace-denied"
+    assert details["reason"] == "permission_denied"
+    assert details["details"]["params"]["api_key"]["redacted"] is True
+    assert details["details"]["params"]["safe"] == "value"
 
 
 @pytest.mark.asyncio
@@ -370,6 +593,131 @@ async def test_mesh_gate_capacity_exceeded(
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
     assert resp["error"]["code"] == 429
+
+
+@pytest.mark.asyncio
+async def test_mesh_gate_blocks_broad_auth_admin_when_not_shared(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    """Auth admin methods are not routed unless Auth is explicitly shared."""
+    admin_identity = Identity(
+        principal_id="admin",
+        principal_name="admin",
+        is_admin=True,
+        effective_perms=frozenset(["*"]),
+        source="webrtc_peer",
+    )
+    acl_provider = MagicMock(return_value=admin_identity)
+    mesh_config = _make_mesh_config(enabled=True, sharing={})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        acl_provider,
+        mesh_config=mesh_config,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "auth-admin",
+                "method": "Auth.ListPrincipals",
+                "params": {},
+            }
+        )
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert "not shared" in resp["error"]["message"]
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mesh_gate_blocks_config_mutation_when_not_shared(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    """Config mutation is not transparently routed by default."""
+    admin_identity = Identity(
+        principal_id="admin",
+        principal_name="admin",
+        is_admin=True,
+        effective_perms=frozenset(["*"]),
+        source="webrtc_peer",
+    )
+    acl_provider = MagicMock(return_value=admin_identity)
+    mesh_config = _make_mesh_config(enabled=True, sharing={})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        acl_provider,
+        mesh_config=mesh_config,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "config-set",
+                "method": "Config.Set",
+                "params": {"key_path": "services.gateway.enabled", "value": True},
+            }
+        )
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert "not shared" in resp["error"]["message"]
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_explicit_auth_share_still_requires_method_permissions(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    """An explicit Auth share does not bypass normal Auth method permissions."""
+    mesh_config = _make_mesh_config(
+        enabled=True,
+        sharing={"Auth": _make_sharing_entry(share=True)},
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=mesh_config,
+    )
+    method_info = MethodInfo(
+        name="ListPrincipals",
+        required_perms=["Auth.manage"],
+        method_type="manage",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Auth",
+        version="1.0",
+        methods=[method_info],
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "auth-shared", "method": "Auth.ListPrincipals"})
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert resp["error"]["message"] == "Forbidden"
+    mock_bus.request.assert_not_called()
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,19 @@
 # BE-017 — Add memory/RAG provenance, export, and delete contracts
 
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.
+
 ## Execution metadata
 
 - **Phase:** P2 — Backend contract and gateway/API gaps
 - **Lane:** backend/db-rag
-- **Depends on:** P0-002, BE-004
+- **Depends on:** P0-002, BE-004, MESH-GAP-007
 - **Parallelizable with:** BE-006, UIA-006
 - **Coverage matrix rows:** assistant.memory_rag, admin.backup_restore
 - **Isolation rule:** implement this task through its declared contracts and SDK surfaces only; do not make unrelated production changes.
@@ -20,7 +29,7 @@ Users can inspect memory/RAG provenance, understand what context was used, expor
 ## Backend/API implementation details
 
 - Inventory existing `DBMethods.RAG_SEARCH`, `RAG_GET`, `RAG_DELETE`, store/list behavior, and exposure levels before changing any route.
-- Decide explicit public/manage contracts for memory list/search/get/provenance/export/delete, or mark each unsupported state in capability graph.
+- Decide explicit public/manage contracts for memory list/search/get/provenance/export/import/delete/tombstone behavior, or mark each unsupported state in the executable capability catalog.
 - Wrap delete/export/manage operations in AdminAction/audit where user data or admin-critical data is affected.
 - Add provenance fields: source type, namespace, key/id, created/updated when available, privacy class, retention policy, embedding/model metadata when safe, and citation/source links when available.
 - Do not expose raw embeddings, secret namespaces, private filesystem paths, or unrelated users/peers memory data.
@@ -28,7 +37,7 @@ Users can inspect memory/RAG provenance, understand what context was used, expor
 ## SDK integration details
 
 - Add SDK types for `MemoryItem`, `RagProvenance`, `MemoryExport`, retention/deletion results, and degraded unsupported states.
-- Capability graph must distinguish `search_only`, `provenance_available`, `delete_available`, `export_available`, and `retention_policy_available`.
+- Capability catalog must distinguish `search_only`, `provenance_available`, `delete_available`, `export_available`, `import_available`, `tombstone_supported`, and `retention_policy_available`.
 
 ## Tauri/native integration details
 
@@ -80,3 +89,22 @@ Users can inspect memory/RAG provenance, understand what context was used, expor
 ## Handoff notes
 
 - Added by full coverage review after Critic rejection identified this backend contract as implicit/weak.
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production gap addendum
+
+This task is expanded by `MESH-GAP-007` for remote DB/RAG usage.
+
+Additional backend requirements:
+
+- Add remote RAG namespace/catalog contracts that list namespace owner, peer/provider, sharing policy, privacy class, freshness, embedding/model compatibility, allowed operations, and export/delete support.
+- Add explicit `mesh_selector`/resource selector support to allowed read/query operations where remote execution is supported.
+- Add export/import contracts for user-approved sharing of RAG/memory subsets; raw DB write/admin operations remain non-default and AdminAction-gated.
+- Define tombstone/delete semantics for any exported/imported namespace; UI must not promise delete propagation unless backend exposes it.
+- Include provenance in every remote RAG result: peer/provider, namespace, source document/conversation, privacy class, route path, audit/correlation ID, and redaction status.
+- Add denial reasons for unavailable namespace, incompatible embeddings, insufficient permission, explicit selector missing, and policy block.
+
+Additional acceptance criteria:
+
+- UI can safely show remote memory search results without implying local ownership.
+- Export/import/delete flows are auditable and cannot run via transparent fallback.

@@ -1,0 +1,46 @@
+.ata-page-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.ata-panel {
+  border: 1px solid var(--aui-border);
+  border-radius: 8px;
+  background: var(--aui-surface);
+  padding: 18px;
+}
+
+.ata-panel h2 {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+}
+
+.ata-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.ata-facts div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) 1fr;
+  gap: 12px;
+}
+
+.ata-facts dt {
+  color: var(--aui-muted);
+}
+
+.ata-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ata-secondary {
+  border: 1px solid var(--aui-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--aui-text);
+  min-height: 40px;
+  padding: 0 14px;
+}

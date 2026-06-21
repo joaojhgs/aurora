@@ -24,6 +24,7 @@ Aurora consists of the following services:
    - Message history management
    - RAG (Retrieval-Augmented Generation) storage
    - Cron job storage
+   - Mesh data sharing is policy-gated; see [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md)
 
 3. **OrchestratorService** (`app/services/orchestrator/`)
    - LangGraph agent coordination
@@ -593,6 +594,7 @@ sequenceDiagram
 
 - [GATEWAY.md](./GATEWAY.md): Complete gateway documentation
 - [MESSAGING_ARCHITECTURE.md](./MESSAGING_ARCHITECTURE.md): Detailed message bus documentation
+- [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md): Mesh DB/data sharing modes and per-domain ownership policy
 - [TESTING_PROCESS_MODE.md](./TESTING_PROCESS_MODE.md): Process mode testing guide
 - [README.process-mode.md](../README.process-mode.md): Process mode overview
 - [TECHSTACK.md](./TECHSTACK.md): Technology stack details

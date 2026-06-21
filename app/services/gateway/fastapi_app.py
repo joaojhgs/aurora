@@ -12,19 +12,23 @@ contracts via RouteGenerator.
 
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.helpers.aurora_logger import log_error, log_info
-from app.services.gateway.auth import check_auth_enabled
+from app.services.gateway.auth import check_auth_enabled, create_scoped_auth_check
 from app.services.gateway.dependencies import get_rtc_client
+from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+    from app.services.gateway.admin_action import AdminActionManager
     from app.services.gateway.registry_aggregator import RegistryAggregator
 
 
@@ -38,6 +42,7 @@ def create_gateway_app(
     title: str = "Aurora Gateway API",
     version: str = "1.0.0",
     request_timeout: float = 30.0,
+    admin_action_manager: AdminActionManager | None = None,
 ) -> Any:
     """Create and configure the FastAPI application.
 
@@ -55,6 +60,7 @@ def create_gateway_app(
         title: API title for OpenAPI docs
         version: API version
         request_timeout: Default timeout for service requests
+        admin_action_manager: Short-lived AdminAction draft/confirmation store
 
     Returns:
         FastAPI application instance
@@ -90,8 +96,10 @@ def create_gateway_app(
             "| Bearer Token | `Authorization: Bearer <token>` "
             "| `Authorization: Bearer eyJ…` |\n\n"
             'Use the **Authorize** button above to set credentials for "Try it out".\n\n'
-            "Endpoints under *Auth → Pairing* (`/start`, `/connect`, `/exchange`) "
-            "and `/login` do **not** require authentication."
+            "Canonical public auth routes are `POST /api/Auth/Login`, "
+            "`POST /api/Auth/PairingStart`, `POST /api/Auth/PairingConnect`, "
+            "and `POST /api/Auth/PairingExchange`. When auth is enabled, these "
+            "routes run as an anonymous caller, not as the system principal."
         ),
         docs_url="/api/docs",
         redoc_url="/api/redoc",
@@ -130,6 +138,7 @@ def create_gateway_app(
         bus=bus,
         registry=registry,
         request_timeout=request_timeout,
+        admin_action_manager=admin_action_manager,
     )
 
     # Store references for lifecycle management
@@ -225,6 +234,61 @@ def create_gateway_app(
         mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads")
 
         return GetServicesResponse(services=services, mode=mode)
+
+    stream_events_auth = Security(
+        create_scoped_auth_check(method_type="manage"),
+        scopes=["Gateway.manage"],
+    )
+
+    @app.get(
+        "/api/events/stream",
+        tags=["Gateway"],
+        summary="Stream unified Aurora events",
+        response_class=StreamingResponse,
+        responses={
+            200: {
+                "description": "Server-sent event stream of Aurora.EventStream envelopes",
+                "content": {"text/event-stream": {"schema": {"type": "string"}}},
+            }
+        },
+    )
+    async def stream_events(
+        _auth: Any = stream_events_auth,
+    ) -> StreamingResponse:
+        """Stream normalized event envelopes as Server-Sent Events."""
+        queue: asyncio.Queue[AuroraEventStreamEvent] = asyncio.Queue(maxsize=100)
+
+        async def on_event(envelope: Any) -> None:
+            payload = envelope.payload
+            if not isinstance(payload, AuroraEventStreamEvent):
+                payload = AuroraEventStreamEvent.model_validate(payload)
+            try:
+                queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                await queue.get()
+                queue.task_done()
+                queue.put_nowait(payload)
+
+        async def event_generator():
+            bus.subscribe(AuroraMethods.EVENT_STREAM, on_event)
+            try:
+                while True:
+                    event = await queue.get()
+                    payload = event.model_dump(mode="json")
+                    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+                    yield f"event: {event.category}\ndata: {data}\n\n"
+                    queue.task_done()
+            finally:
+                bus.unsubscribe(AuroraMethods.EVENT_STREAM, on_event)
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Aurora-Event-Topic": AuroraMethods.EVENT_STREAM,
+            },
+        )
 
     @app.get(
         "/api/services/{module_name}",

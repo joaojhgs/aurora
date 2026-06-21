@@ -45,7 +45,9 @@ class AuthMethods:
     PAIRING_START = f"{AuthModule.NAME}.PairingStart"
     PAIRING_CONNECT = f"{AuthModule.NAME}.PairingConnect"
     PAIRING_APPROVE = f"{AuthModule.NAME}.PairingApprove"
+    PAIRING_DENY = f"{AuthModule.NAME}.PairingDeny"
     PAIRING_EXCHANGE = f"{AuthModule.NAME}.PairingExchange"
+    LIST_PENDING_PAIRINGS = f"{AuthModule.NAME}.ListPendingPairings"
 
     # Principal management
     LIST_PRINCIPALS = f"{AuthModule.NAME}.ListPrincipals"
@@ -73,6 +75,10 @@ class AuthMethods:
 
     # Events (broadcast, not request/response)
     PAIRING_REQUESTED = f"{AuthModule.NAME}.PairingRequested"
+    PAIRING_APPROVED = f"{AuthModule.NAME}.PairingApproved"
+    PAIRING_DENIED = f"{AuthModule.NAME}.PairingDenied"
+    PAIRING_EXPIRED = f"{AuthModule.NAME}.PairingExpired"
+    PAIRING_EXCHANGED = f"{AuthModule.NAME}.PairingExchanged"
 
     # Mesh credential storage
     SAVE_MESH_CREDENTIAL = f"{AuthModule.NAME}.SaveMeshCredential"
@@ -203,6 +209,15 @@ class PairingApproveResponse(BaseModel):
     success: bool
 
 
+class PairingDenyRequest(BaseModel):
+    code: str
+    reason: str = ""
+
+
+class PairingDenyResponse(BaseModel):
+    success: bool
+
+
 class PairingExchangeRequest(BaseModel):
     code: str
 
@@ -213,6 +228,50 @@ class PairingExchangeResponse(BaseModel):
     user_id: str
     permissions: list[Permission] = Field(default_factory=list)
     token_id: str = ""  # Internal token row ID (for mesh_peers FK)
+    peer_id: str = ""  # Stable mesh peer_id of the issuer, when available
+    node_name: str = ""  # Human-readable mesh node name of the issuer
+
+
+class PendingPairingEntry(BaseModel):
+    request_id: str
+    code: str
+    device_name: str
+    client_ip: str
+    status: str
+    expires_at: str
+    created_at: str = ""
+    remote_peer_id: str = ""
+    remote_node_name: str = ""
+    approved_by: str | None = None
+    denied_by: str | None = None
+    denied_reason: str = ""
+    granted_permissions: list[Permission] = Field(default_factory=list)
+    granted_is_admin: bool = False
+
+
+class ListPendingPairingsRequest(BaseModel):
+    include_non_pending: bool = False
+
+
+class ListPendingPairingsResponse(BaseModel):
+    pairings: list[PendingPairingEntry] = Field(default_factory=list)
+    total: int = 0
+    expired_count: int = 0
+    secrets_redacted: bool = True
+
+
+class PairingLifecycleEvent(BaseModel):
+    request_id: str
+    event_type: str
+    status: str
+    code_sha256: str = ""
+    remote_peer_id: str = ""
+    remote_node_name: str = ""
+    device_name: str = ""
+    client_ip: str = ""
+    expires_at: str = ""
+    actor_principal_id: str | None = None
+    reason: str = ""
 
 
 # ── Principal CRUD ───────────────────────────────────────────────────────
@@ -402,6 +461,13 @@ class AuditLogRequest(BaseModel):
     offset: int = 0
     principal_id: str | None = None
     event: str | None = None
+    correlation_id: str | None = None
+    peer_id: str | None = None
+    provider_id: str | None = None
+    tool_id: str | None = None
+    action: str | None = None
+    policy_decision_id: str | None = None
+    route: str | None = None
 
 
 class AuditLogResponse(BaseModel):

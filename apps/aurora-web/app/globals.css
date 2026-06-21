@@ -1,0 +1,56 @@
+.aw-page-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.aw-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.aw-panel {
+  border: 1px solid var(--aui-border);
+  border-radius: .5rem;
+  background: var(--aui-surface);
+  padding: 1rem;
+}
+
+.aw-panel h2 {
+  margin: 0 0 .7rem;
+  font-size: 1rem;
+}
+
+.aw-panel p {
+  margin: 0;
+  color: var(--aui-muted);
+  line-height: 1.55;
+}
+
+.aw-facts {
+  display: grid;
+  gap: .65rem;
+  margin: 0;
+}
+
+.aw-facts div {
+  display: grid;
+  gap: .2rem;
+}
+
+.aw-facts dt {
+  color: var(--aui-muted);
+  font-size: .75rem;
+}
+
+.aw-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .aw-page-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

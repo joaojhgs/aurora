@@ -1,0 +1,190 @@
+[
+  {
+    "id": "MESH-GAP-EPIC",
+    "title": "[MESH-GAP][EPIC] Production cross-peer capability fabric completion",
+    "phase": "EPIC",
+    "labels": [
+      "mesh",
+      "mesh-gap",
+      "mesh-production",
+      "epic"
+    ],
+    "summary": "Parent issue for converting the mesh roadmap primitives into a production-grade local+remote capability fabric.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/00-mesh-gap-epic-mesh-gap-epic-production-cross-peer-capability-fabric-completion.md",
+    "depends_on": "None"
+  },
+  {
+    "id": "MESH-GAP-001",
+    "title": "[MESH-GAP][P0] Normalize branch state and verify mesh primitive baseline",
+    "phase": "P0",
+    "labels": [
+      "mesh",
+      "mesh-gap",
+      "release-readiness",
+      "tests"
+    ],
+    "summary": "Choose canonical implementation branch, reconcile stale local state, and lock current primitive behavior with tests before new work.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/01-mesh-gap-001-mesh-gap-p0-normalize-branch-state-and-verify-mesh-primitive-baseline.md",
+    "depends_on": "None"
+  },
+  {
+    "id": "MESH-GAP-002",
+    "title": "[MESH-GAP][P1] Complete mesh config parity and explicit-selector enforcement policy",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "config",
+      "security",
+      "selector-policy"
+    ],
+    "summary": "Make generated config match runtime mesh policy fields and enforce explicit selectors for safety-sensitive operations.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/02-mesh-gap-002-mesh-gap-p1-complete-mesh-config-parity-and-explicit-selector-enforcement-policy.md",
+    "depends_on": "MESH-GAP-001"
+  },
+  {
+    "id": "MESH-GAP-003",
+    "title": "[MESH-GAP][P1] Define typed capability catalog and route-explain backend contracts",
+    "phase": "P1",
+    "labels": [
+      "mesh",
+      "gateway",
+      "contracts",
+      "capability-catalog"
+    ],
+    "summary": "Create first-class executable capability catalog and route-explain contracts that UI/SDK can consume.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/03-mesh-gap-003-mesh-gap-p1-define-typed-capability-catalog-and-route-explain-backend-contracts.md",
+    "depends_on": "MESH-GAP-001"
+  },
+  {
+    "id": "MESH-GAP-004",
+    "title": "[MESH-GAP][P2] Implement aggregate local-plus-remote Tooling catalog and provider fanout",
+    "phase": "P2",
+    "labels": [
+      "mesh",
+      "tooling",
+      "provider-aggregation",
+      "orchestrator"
+    ],
+    "summary": "Replace one-provider Tooling discovery with a catalog that includes local tools plus all authorized remote peer tools and blocked reasons.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/04-mesh-gap-004-mesh-gap-p2-implement-aggregate-local-plus-remote-tooling-catalog-and-provider-fanout.md",
+    "depends_on": "MESH-GAP-002, MESH-GAP-003"
+  },
+  {
+    "id": "MESH-GAP-005",
+    "title": "[MESH-GAP][P2] Implement tool sharing policy and approval protocol for local and mesh tools",
+    "phase": "P2",
+    "labels": [
+      "tooling",
+      "security",
+      "approval",
+      "adminaction",
+      "mesh"
+    ],
+    "summary": "Add configurable per-tool sharing and approval flow covering both internal/local tools and remote peer tools, including approve-all modes.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/05-mesh-gap-005-mesh-gap-p2-implement-tool-sharing-policy-and-approval-protocol-for-local-and-mesh-tools.md",
+    "depends_on": "MESH-GAP-002, MESH-GAP-003"
+  },
+  {
+    "id": "MESH-GAP-006",
+    "title": "[MESH-GAP][P3] Integrate Orchestrator and SDK with capability catalog, aggregate tools, and approval interrupts",
+    "phase": "P3",
+    "labels": [
+      "orchestrator",
+      "sdk",
+      "tooling",
+      "approval",
+      "mesh"
+    ],
+    "summary": "Make model/tool binding and SDK APIs consume the aggregate catalog and route approval requests instead of direct one-provider Tooling calls.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/06-mesh-gap-006-mesh-gap-p3-integrate-orchestrator-and-sdk-with-capability-catalog-aggregate-tools-and-app.md",
+    "depends_on": "MESH-GAP-004, MESH-GAP-005"
+  },
+  {
+    "id": "MESH-GAP-007",
+    "title": "[MESH-GAP][P3] Implement DB/RAG remote query, namespace catalog, export/import policy, and provenance",
+    "phase": "P3",
+    "labels": [
+      "db",
+      "rag",
+      "memory",
+      "mesh",
+      "privacy"
+    ],
+    "summary": "Move DB/RAG beyond policy docs by adding explicit query/export/import/provenance contracts and enforcement.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/07-mesh-gap-007-mesh-gap-p3-implement-db-rag-remote-query-namespace-catalog-export-import-policy-and-prove.md",
+    "depends_on": "MESH-GAP-002, MESH-GAP-003"
+  },
+  {
+    "id": "MESH-GAP-008",
+    "title": "[MESH-GAP][P3] Harden audio/STT/TTS mesh boundaries with explicit session consent and event streaming",
+    "phase": "P3",
+    "labels": [
+      "audio",
+      "stt",
+      "tts",
+      "mesh",
+      "privacy"
+    ],
+    "summary": "Keep batch audio operations shareable while gating live mic/wakeword/streaming/playback behind explicit target, consent, indicators, and event contracts.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/08-mesh-gap-008-mesh-gap-p3-harden-audio-stt-tts-mesh-boundaries-with-explicit-session-consent-and-event-s.md",
+    "depends_on": "MESH-GAP-002, MESH-GAP-003"
+  },
+  {
+    "id": "MESH-GAP-009",
+    "title": "[MESH-GAP][P3] Implement scheduler delegation plus Auth/Config admin boundary hardening",
+    "phase": "P3",
+    "labels": [
+      "scheduler",
+      "auth",
+      "config",
+      "adminaction",
+      "mesh-security"
+    ],
+    "summary": "Make remote scheduler ownership explicit and keep Auth/Config as admin surfaces, not transparent mesh services.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/09-mesh-gap-009-mesh-gap-p3-implement-scheduler-delegation-plus-auth-config-admin-boundary-hardening.md",
+    "depends_on": "MESH-GAP-002, MESH-GAP-003, MESH-GAP-005"
+  },
+  {
+    "id": "MESH-GAP-010",
+    "title": "[MESH-GAP][P4] Add unified mesh events, audit views, diagnostics, and support bundles",
+    "phase": "P4",
+    "labels": [
+      "mesh",
+      "observability",
+      "events",
+      "audit",
+      "diagnostics"
+    ],
+    "summary": "Make capability, route, approval, audio, and data changes observable to UI/SDK and operators.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/10-mesh-gap-010-mesh-gap-p4-add-unified-mesh-events-audit-views-diagnostics-and-support-bundles.md",
+    "depends_on": "MESH-GAP-003, MESH-GAP-005"
+  },
+  {
+    "id": "MESH-GAP-011",
+    "title": "[MESH-GAP][P4] Build production two-peer E2E harness for mesh capability fabric",
+    "phase": "P4",
+    "labels": [
+      "mesh",
+      "e2e",
+      "qa",
+      "production-flow"
+    ],
+    "summary": "Prove the full production flow with two peers across pairing, catalog, approvals, tools, data, audio, scheduler, Auth/Config boundaries, and UI/SDK events.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/11-mesh-gap-011-mesh-gap-p4-build-production-two-peer-e2e-harness-for-mesh-capability-fabric.md",
+    "depends_on": "MESH-GAP-004, MESH-GAP-005, MESH-GAP-006, MESH-GAP-007, MESH-GAP-008, MESH-GAP-009, MESH-GAP-010"
+  },
+  {
+    "id": "MESH-GAP-012",
+    "title": "[MESH-GAP][P5] Refresh UI/SDK task specs for mesh capability catalog and approval flows",
+    "phase": "P5",
+    "labels": [
+      "ui",
+      "sdk",
+      "mesh",
+      "planning-sync"
+    ],
+    "summary": "Update existing UI production tasks so they depend on the new mesh-gap contracts and include approval UI for local and remote tools.",
+    "description_file": ".omx/multica/mesh-production-gap-tasks/12-mesh-gap-012-mesh-gap-p5-refresh-ui-sdk-task-specs-for-mesh-capability-catalog-and-approval-flows.md",
+    "depends_on": "MESH-GAP-003, MESH-GAP-005"
+  }
+]

@@ -14,16 +14,16 @@ import asyncio
 import contextlib
 import logging
 import signal
-from typing import Any
+from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
-from app.messaging import Envelope
 from app.messaging.bus import MessageBus
 from app.messaging.bus_runtime import set_bus
 from app.messaging.local_bus import LocalBus
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.supervisor import (
     GetStatusResponse,
+    ServiceControlAvailability,
     ServiceControlCommand,
     ServiceControlResponse,
     ServiceStatus,
@@ -55,6 +55,55 @@ class Supervisor(BaseService):
         self.shutdown_event = asyncio.Event()
         self._mode = "threads"  # "threads" or "processes"
         self.process_launcher = None  # ProcessLauncher instance for processes mode
+
+    def _control_capabilities(self) -> list[ServiceControlAvailability]:
+        """Return current service-control support advertised to UI/SDK clients."""
+        reason = (
+            "Supervisor lifecycle mutation is intentionally disabled until a safe "
+            "per-service executor, dependency ordering, and self-protection policy land."
+        )
+        return [
+            ServiceControlAvailability(
+                operation="restart",
+                method_id=SupervisorMethods.RESTART_SERVICE,
+                required_perms=[SupervisorMethods.RESTART_SERVICE],
+                reason=reason,
+            ),
+            ServiceControlAvailability(
+                operation="stop",
+                method_id=SupervisorMethods.STOP_SERVICE,
+                required_perms=[SupervisorMethods.STOP_SERVICE],
+                reason=reason,
+            ),
+            ServiceControlAvailability(
+                operation="start",
+                method_id=SupervisorMethods.START_SERVICE,
+                required_perms=[SupervisorMethods.START_SERVICE],
+                reason=reason,
+            ),
+        ]
+
+    def _control_capability_map(self) -> dict[str, ServiceControlAvailability]:
+        return {cap.operation: cap for cap in self._control_capabilities()}
+
+    def _gated_control_response(
+        self,
+        operation: Literal["restart", "stop", "start"],
+        data: ServiceControlCommand,
+    ) -> ServiceControlResponse:
+        """Return explicit disabled-state response for service control commands."""
+        return ServiceControlResponse(
+            success=False,
+            operation=operation,
+            service_name=data.service_name,
+            status="unsupported",
+            control_state="internal_only",
+            admin_action_required=True,
+            message=(
+                f"Supervisor {operation} is intentionally gated as internal-only and "
+                "unsupported until safe lifecycle orchestration is implemented."
+            ),
+        )
 
     async def initialize(self) -> None:
         """Initialize the supervisor and message bus."""
@@ -137,6 +186,7 @@ class Supervisor(BaseService):
 
         # Import services
         from app.services.auth import AuthService
+        from app.services.backup import BackupService
         from app.services.config import ConfigService
         from app.services.db import DBService
         from app.services.gateway import GatewayService
@@ -153,6 +203,7 @@ class Supervisor(BaseService):
         config_service = ConfigService()
         db_service = DBService()
         auth_service = AuthService()
+        backup_service = BackupService()
         tooling_service = ToolingService()
         scheduler_service = SchedulerService()
         orchestrator_service = OrchestratorService()
@@ -187,6 +238,16 @@ class Supervisor(BaseService):
             log_info("✓ Auth service started")
         except Exception as e:
             log_error(f"Failed to start Auth service: {e}", exc_info=True)
+            raise
+
+        # Start Backup service (depends on Config and DB contracts)
+        try:
+            log_info("Starting Backup service...")
+            await backup_service.start()
+            self.services.append(backup_service)
+            log_info("✓ Backup service started")
+        except Exception as e:
+            log_error(f"Failed to start Backup service: {e}", exc_info=True)
             raise
 
         # Start Tooling service (needs DB to be ready for tool sync)
@@ -251,6 +312,7 @@ class Supervisor(BaseService):
             ("ConfigService", "app.services.config"),
             ("DBService", "app.services.db"),
             ("AuthService", "app.services.auth"),
+            ("BackupService", "app.services.backup"),
             ("ToolingService", "app.services.tooling"),
             ("SchedulerService", "app.services.scheduler"),
             ("OrchestratorService", "app.services.orchestrator"),
@@ -453,6 +515,8 @@ class Supervisor(BaseService):
     async def _handle_get_status(self, request: EmptyInput) -> GetStatusResponse:
         """Handle GetStatus query."""
         statuses = []
+        control_capabilities = self._control_capabilities()
+        control_map = self._control_capability_map()
         for service in self.services:
             # Basic status check
             is_running = getattr(service, "_started", False)
@@ -460,9 +524,20 @@ class Supervisor(BaseService):
                 service, "module", getattr(service, "service_name", str(type(service).__name__))
             )
 
-            statuses.append(ServiceStatus(name=name, running=is_running, details={}))
+            statuses.append(
+                ServiceStatus(
+                    name=name,
+                    running=is_running,
+                    details={},
+                    controls=control_map,
+                )
+            )
 
-        return GetStatusResponse(services=statuses, mode=self._mode)
+        return GetStatusResponse(
+            services=statuses,
+            mode=self._mode,
+            control_capabilities=control_capabilities,
+        )
 
     @method_contract(
         method_id=SupervisorMethods.RESTART_SERVICE,
@@ -470,14 +545,38 @@ class Supervisor(BaseService):
         input_model=ServiceControlCommand,
         output_model=ServiceControlResponse,
         exposure="internal",
+        method_type="manage",
+        required_perms=[SupervisorMethods.RESTART_SERVICE],
     )
-    async def _handle_restart_service(
-        self, data: ServiceControlCommand, *, envelope: Envelope | None = None
-    ) -> ServiceControlResponse:
+    async def _handle_restart_service(self, data: ServiceControlCommand) -> ServiceControlResponse:
         """Handle RestartService command."""
-        # TODO: Implement service restart logic
-        # For now, just return success
-        return ServiceControlResponse(success=True, message="Not implemented yet")
+        return self._gated_control_response("restart", data)
+
+    @method_contract(
+        method_id=SupervisorMethods.STOP_SERVICE,
+        summary="Stop a specific service",
+        input_model=ServiceControlCommand,
+        output_model=ServiceControlResponse,
+        exposure="internal",
+        method_type="manage",
+        required_perms=[SupervisorMethods.STOP_SERVICE],
+    )
+    async def _handle_stop_service(self, data: ServiceControlCommand) -> ServiceControlResponse:
+        """Handle StopService command."""
+        return self._gated_control_response("stop", data)
+
+    @method_contract(
+        method_id=SupervisorMethods.START_SERVICE,
+        summary="Start a specific service",
+        input_model=ServiceControlCommand,
+        output_model=ServiceControlResponse,
+        exposure="internal",
+        method_type="manage",
+        required_perms=[SupervisorMethods.START_SERVICE],
+    )
+    async def _handle_start_service(self, data: ServiceControlCommand) -> ServiceControlResponse:
+        """Handle StartService command."""
+        return self._gated_control_response("start", data)
 
 
 # Convenience function for running supervisor

@@ -35,6 +35,7 @@ def _load_all_method_classes() -> tuple[type, ...]:
     """Lazy-import all *Methods classes to avoid circular imports."""
     from app.shared.contracts.models.audio import AudioInputMethods
     from app.shared.contracts.models.auth import AuthMethods
+    from app.shared.contracts.models.backup import BackupMethods
     from app.shared.contracts.models.config import ConfigMethods
     from app.shared.contracts.models.db import DBMethods
     from app.shared.contracts.models.gateway import GatewayMethods
@@ -52,6 +53,7 @@ def _load_all_method_classes() -> tuple[type, ...]:
     return (
         AudioInputMethods,
         AuthMethods,
+        BackupMethods,
         ConfigMethods,
         DBMethods,
         GatewayMethods,

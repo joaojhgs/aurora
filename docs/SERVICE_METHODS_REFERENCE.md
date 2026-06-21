@@ -15,6 +15,7 @@ This document provides a comprehensive reference of all service methods in Auror
 - [Orchestrator Service](#orchestrator-service)
 - [Scheduler Service](#scheduler-service)
 - [DB Service](#db-service)
+- [DB/Data Sharing Policy](#dbdata-sharing-policy)
 - [Tooling Service](#tooling-service)
 - [Config Service](#config-service)
 - [Gateway Service](#gateway-service)
@@ -329,11 +330,11 @@ Job scheduling using cron expressions.
 
 | Method ID | Summary | Input | Output | Exposure |
 |-----------|---------|-------|--------|----------|
-| `Scheduler.Schedule` | Schedule a new job | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both** |
-| `Scheduler.Cancel` | Cancel a job | `SchedulerCancelJobRequest` | `EmptyOutput` | **both** |
-| `Scheduler.Pause` | Pause a job | `SchedulerPauseJobRequest` | `EmptyOutput` | **internal** |
-| `Scheduler.Resume` | Resume a paused job | `SchedulerResumeJobRequest` | `EmptyOutput` | **internal** |
-| `Scheduler.ListJobs` | List all scheduled jobs | `SchedulerListJobsRequest` | `SchedulerListJobsResponse` | **both** |
+| `Scheduler.Schedule` | Schedule a new job | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.Cancel` | Cancel a job | `SchedulerCancelJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.Pause` | Pause a job | `SchedulerPauseJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
+| `Scheduler.Resume` | Resume a paused job | `SchedulerResumeJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
+| `Scheduler.ListJobs` | List all scheduled jobs | `SchedulerListJobsRequest` | `SchedulerListJobsResponse` | **both, use** |
 
 ### Method Details
 
@@ -341,10 +342,22 @@ Job scheduling using cron expressions.
 ```python
 # Input
 SchedulerScheduleJobRequest(
-    name: str,           # Job name
-    schedule: str,       # Cron expression (e.g., "0 9 * * *")
-    action: str,         # Action to execute
-    enabled: bool = True # Whether job is active
+    name: str,                         # Job name
+    schedule: str,                     # Cron expression (e.g., "0 9 * * *")
+    action: str,                       # Action to execute
+    enabled: bool = True,              # Whether job is active
+    timezone: str | None = None,       # UI/operator timezone when known
+    source: str | None = None,         # Originating surface, e.g. admin-ui
+    privacy_class: str | None = None,  # Defaults to sensitive when omitted
+    namespace: str | None = None,      # Owner/resource namespace, defaults to local
+    owner_peer_id: str | None = None,  # Peer that owns the job
+    owner_principal_id: str | None = None,  # Principal that owns the job
+    target_selector: MeshAddressSelector | None = None,  # Explicit remote target/resource
+    delegated_permissions: list[str] = [],
+    policy_decision_id: str | None = None,
+    correlation_id: str | None = None,
+    caller_peer_id: str | None = None,       # Injected for mesh callers
+    caller_principal_id: str | None = None   # Injected for mesh callers
 )
 ```
 
@@ -354,7 +367,12 @@ SchedulerScheduleJobRequest(
 SchedulerListJobsRequest(
     enabled_only: bool = False,  # Filter by active jobs
     limit: int = 100,            # Max results
-    offset: int = 0              # Pagination offset
+    offset: int = 0,             # Pagination offset
+    namespace: str | None = None,
+    owner_peer_id: str | None = None,
+    owner_principal_id: str | None = None,
+    caller_peer_id: str | None = None,
+    caller_principal_id: str | None = None
 )
 
 # Output
@@ -363,6 +381,30 @@ SchedulerListJobsResponse(
     total: int                      # Total count
 )
 ```
+
+Remote scheduler calls are ownership-scoped. Mesh callers may only list or
+cancel/pause/resume jobs owned by their injected `caller_peer_id`/
+`caller_principal_id`; local callers can still list local jobs and may apply
+explicit filters. Scheduler jobs carry namespace, owner, target selector,
+delegated permissions, policy decision ID, correlation ID, timezone, source,
+failure count, and privacy class where available through creation, listing,
+job-fired events, completion events, and audit records.
+
+`Scheduler.Schedule`, `Scheduler.Cancel`, `Scheduler.Pause`, and
+`Scheduler.Resume` are `method_type="manage"` contracts with specific
+permissions matching their method IDs. Generated Gateway routes require the
+AdminAction draft/confirm/audit envelope before forwarding these mutations.
+The Scheduler service also writes scheduler-specific Auth audit events for
+allowed, denied, blocked, unsupported, and failed management decisions.
+
+Pause/resume are intentionally exposed as degraded capability states until the
+CronService can guarantee safe pause and resume semantics without losing
+scheduler context. `Scheduler.ListJobs` returns `action_support` entries that
+mark `pause` and `resume` as `supported=False`, `status="unsupported"`, and
+`reason="scheduler_pause_resume_unsupported"`. Direct calls to
+`Scheduler.Pause` or `Scheduler.Resume` return `SchedulerActionResponse` with
+`ok=False` and audit `scheduler.pause.unsupported` or
+`scheduler.resume.unsupported` rather than silently mutating or recreating jobs.
 
 ---
 
@@ -380,14 +422,43 @@ Database operations for messages and RAG storage.
 | `DB.DeleteCronJob` | Delete a cron job | `DBDeleteCronJobRequest` | `EmptyOutput` | **internal** |
 | `DB.RAGStore` | Store RAG item | `DBRAGStoreRequest` | `EmptyOutput` | **internal** |
 | `DB.RAGDelete` | Delete RAG item | `DBRAGDeleteRequest` | `EmptyOutput` | **internal** |
-| `DB.RAGSearch` | Search RAG store | `DBRAGSearchRequest` | `DBRAGListResponse` | **both** |
+| `DB.RAGSearch` | Search RAG store for internal service callers | `DBRAGSearchRequest` | `DBRAGListResponse` | **internal** |
 | `DB.RAGGet` | Get RAG item | `DBRAGGetRequest` | `DBRAGItemResponse` | **internal** |
 | `DB.RAGList` | List RAG items | `DBRAGListRequest` | `DBRAGListResponse` | **internal** |
+| `DB.RAGListNamespaces` | List policy-aware RAG namespace capabilities | `DBRAGListNamespacesRequest` | `DBRAGListNamespacesResponse` | **both** |
+| `DB.RAGSearchRemote` | Search RAG with explicit mesh selector, policy decision, provenance, and redaction | `DBRAGSearchRemoteRequest` | `DBRAGSearchRemoteResponse` | **both** |
+| `DB.RAGGetProvenance` | Get one RAG record's provenance without exposing internal metadata | `DBRAGGetProvenanceRequest` | `DBRAGGetProvenanceResponse` | **both** |
+| `DB.RAGExportNamespace` | Export a bounded, redacted namespace snapshot with provenance and tombstones | `DBRAGExportNamespaceRequest` | `DBRAGExportNamespaceResponse` | **both, manage** |
+| `DB.RAGImportNamespace` | Import a provenance-preserving namespace snapshot | `DBRAGImportNamespaceRequest` | `DBRAGImportNamespaceResponse` | **both, manage** |
 
 ### Why Some Are Internal
 
 - **Write operations** (`SaveMessage`, `RAGStore`, etc.): Internal services control data integrity
-- **Read operations** (`GetMessages`, `RAGSearch`): Safe for external read access
+- **Direct RAG item operations** (`RAGSearch`, `RAGGet`, `RAGList`, `RAGDelete`): Internal-only so generated clients cannot bypass namespace policy, provenance, redaction, or AdminAction controls.
+- **Governance operations** (`RAGListNamespaces`, `RAGSearchRemote`, `RAGGetProvenance`, `RAGExportNamespace`, `RAGImportNamespace`): External clients use these capability-gated surfaces. Export/import are `manage` operations and require the Gateway AdminAction confirmation/audit envelope.
+- **Delete support**: User-visible RAG delete is capability-gated as unsupported for the current `main.memories`/`tools` policies. `RAGDelete` remains internal for service-owned cleanup only.
+
+### DB/Data Sharing Policy
+
+Mesh DB/data sharing is governed by [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md).
+Current `both` DB methods are query surfaces, not replication contracts. Raw SQL
+through `DB.ExecuteSQL` is internal-only and must not be exposed through mesh RPC,
+export/import, or sync features.
+
+Memory/RAG sharing uses explicit namespace policy instead of transparent fallback:
+
+- Remote search requires a `mesh_selector.resource_namespace` or `mesh_selector.data_scope`
+  matching the requested namespace.
+- Results include policy and correlation IDs, peer/owner provenance, tombstone
+  metadata when present, and redaction status.
+- Raw embeddings, secret-like fields, private filesystem paths, credentials, and
+  `_aurora_*` internal metadata are redacted from export/search payloads.
+- Secret/local-authoritative namespaces return denial metadata rather than records.
+
+Scheduler `both` methods are similarly ownership-sensitive: remote scheduling,
+canceling, and listing must use explicit peer/resource selection and policy. DB
+cron-job persistence remains internal scheduler storage, not a cross-peer data
+sharing mechanism.
 
 ---
 
@@ -403,6 +474,113 @@ Tool management and execution.
 | `Tooling.GetMCPStatus` | Get MCP server status | `ToolingGetMCPStatusRequest` | `ToolingGetMCPStatusResponse` | **both** |
 | `Tooling.ReloadMCP` | Reload MCP tools | `ToolingReloadMCPRequest` | `EmptyOutput` | **internal** |
 | `Tooling.ExecuteTool` | Execute a tool | `ToolingExecuteToolRequest` | `ToolingExecuteToolResponse` | **both** |
+
+### Method Details
+
+#### `Tooling.GetTools` (Both)
+**Purpose**: Return bindable tool schemas with stable local/mesh identity metadata.
+
+```python
+# Output item
+ToolingToolInfo(
+    name="raspi-lab_switch_on",                 # Bindable, collision-safe name
+    local_name="switch_on",                     # Provider-local tool name
+    global_tool_id="raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+    provider_peer_id="raspi-lab",
+    provider_service_instance_id="remote:raspi-lab:Tooling",
+    namespace="raspi-lab",
+    display_name="raspi-lab.switch_on",         # Human-facing name
+    aliases=["switch_on"],
+    description="Switch on a target.",
+    args_schema={"type": "object", "properties": {...}},
+    source_type="mesh_peer",                    # "local" | "mesh_peer"
+    execution_location="remote",                # "local" | "remote"
+    safety_class="standard",
+    risk_class="standard",                      # "standard" | "sensitive" | "dangerous"
+    data_egress=False,
+    mutating=False,
+    external=False,
+    admin=False,
+    privacy_hints=[],
+    required_permissions=["Tooling.ExecuteTool"],
+    confirmation_required=False,
+    provenance={...},
+)
+```
+
+Local-only discovery remains backward compatible: `name` is still the local
+tool name. Provider-selected mesh discovery namespaces `name`, for example
+`raspi-lab_switch_on` and `workstation_switch_on`, while `display_name` keeps
+the user-facing `raspi-lab.switch_on` / `workstation.switch_on` form.
+
+The Orchestrator binds local tools and remote tools marked
+`execution_location="remote"`, `safety_class="standard"`, and
+`confirmation_required=False` into the same LLM planning context. Remote
+sensitive, dangerous, or confirmation-required tools are hidden from automatic
+model selection until an explicit confirmation flow is available. For bound
+remote tools, the LLM-visible name remains the collision-safe `name`, but the
+graph stores hidden binding metadata and executes with the tool's
+`global_tool_id` plus a `MeshAddressSelector` containing provider peer,
+service instance, and tool ID.
+
+Tool discovery also exposes policy-facing risk hints. `risk_class` is the
+canonical coarse risk label. `data_egress`, `mutating`, `external`, and `admin`
+identify privacy-relevant behavior that clients can render before execution.
+`privacy_hints` is a normalized list of additional labels such as
+`contains_user_data`, `risk:sensitive`, or `data_egress`.
+
+#### `Tooling.ExecuteTool` (Both)
+**Purpose**: Execute a provider-local or explicitly selected remote tool with
+policy checks and audit provenance.
+
+```python
+ToolingExecuteToolRequest(
+    tool_name="raspi-lab_switch_on",            # local name, namespaced name, or global_tool_id
+    arguments={"target": "lamp"},
+    mesh_selector=MeshAddressSelector(peer_id="raspi-lab", tool_id="..."),
+    resource_selector=ToolingResourceSelector(hardware_target="lamp"),
+    confirmed=True,
+    dry_run=False,
+    correlation_id="rpc-123",
+    caller_peer_id="workstation",              # injected by WebRTC RPC for remote callers
+    caller_principal_id="peer-principal",      # injected by WebRTC RPC for remote callers
+)
+```
+
+Remote sensitive/dangerous tools require an explicit resource selector and
+confirmation before invocation. `dry_run=True` records the requested execution
+without invoking the tool. Every outcome writes an `Auth.StoreAuditEvent`
+record containing caller peer/principal, target/provider peer, tool identity,
+resource selector, correlation ID, status/error code, and a redacted argument
+hash rather than raw argument values.
+
+Tooling loads `services.tooling.approval_policy` from schema-backed config on
+startup and on `services` / `services.tooling` reloads. The policy supports
+default sharing/approval behavior plus first-match rules scoped by tool,
+toolkit, safety/operation class, caller peer/principal/device, provider peer,
+service instance, and route privacy class. Loading a valid policy records a
+`tooling.policy.loaded` audit event; invalid policy config is rejected without
+falling back to broad raw execution.
+
+### Mesh Correlation Debugging
+
+Mesh-routed requests carry a single `correlation_id` from local route
+resolution through PeerBridge JSON-RPC, the receiving RPC handler, the remote
+bus envelope, service execution, audit records, and the response/error path.
+If a remote action fails, search logs for that ID, then query the audit log:
+
+```python
+AuditLogRequest(
+    event="access.denied.rpc",      # or "mesh.rpc.timeout" / "mesh.rpc.error"
+    correlation_id="trace-123",
+    peer_id="remote-peer",
+)
+```
+
+Audit entries include method, peer, status/reason, correlation ID, and redacted
+diagnostic details. Secret-like parameter keys are replaced with hashes so
+operators can correlate repeated failures without exposing tokens, credentials,
+passwords, cookies, or API keys.
 
 ---
 
@@ -519,6 +697,20 @@ Service lifecycle management.
 |-----------|---------|-------|--------|----------|
 | `Supervisor.GetStatus` | Get all service status | `EmptyInput` | `GetStatusResponse` | **both** |
 | `Supervisor.RestartService` | Restart a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StopService` | Stop a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StartService` | Start a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+
+`Supervisor.GetStatus` includes `control_capabilities` and per-service `controls`
+metadata for `restart`, `stop`, and `start`. These controls currently report
+`supported=false`, `state="internal_only"`, `exposure="internal"`, and
+`method_type="manage"` so SDK/UI consumers can keep service lifecycle buttons
+disabled instead of simulating success.
+
+The control command handlers intentionally return `success=false` with
+`status="unsupported"` and `control_state="internal_only"` until a safe
+per-service lifecycle executor exists. If these controls are ever exposed through
+Gateway-generated HTTP routes, their `method_type="manage"` metadata requires the
+AdminAction draft/confirm/audit envelope before forwarding.
 
 ---
 
@@ -538,10 +730,16 @@ These methods are exposed via HTTP POST at `/api/{service}/{method}`:
 | Orchestrator | ExternalUserInput | `POST /api/orchestrator/externaluserinput` |
 | Scheduler | Schedule | `POST /api/scheduler/schedule` |
 | Scheduler | Cancel | `POST /api/scheduler/cancel` |
+| Scheduler | Pause | `POST /api/scheduler/pause` |
+| Scheduler | Resume | `POST /api/scheduler/resume` |
 | Scheduler | ListJobs | `POST /api/scheduler/listjobs` |
 | DB | GetMessages | `POST /api/db/getmessages` |
 | DB | GetMessagesForDate | `POST /api/db/getmessagesfordate` |
-| DB | RAGSearch | `POST /api/db/ragsearch` |
+| DB | RAGListNamespaces | `POST /api/db/raglistnamespaces` |
+| DB | RAGSearchRemote | `POST /api/db/ragsearchremote` |
+| DB | RAGGetProvenance | `POST /api/db/raggetprovenance` |
+| DB | RAGExportNamespace | `POST /api/db/ragexportnamespace` |
+| DB | RAGImportNamespace | `POST /api/db/ragimportnamespace` |
 | Tooling | GetTools | `POST /api/tooling/gettools` |
 | Tooling | GetToolByName | `POST /api/tooling/gettoolbyname` |
 | Tooling | GetStats | `POST /api/tooling/getstats` |
@@ -577,7 +775,9 @@ These are only accessible via the message bus:
 | DB | RAG write methods | Data integrity |
 | Tooling | ReloadMCP | Administrative operation |
 | Config | ReloadService | Administrative operation |
-| Supervisor | RestartService | Administrative operation |
+| Supervisor | RestartService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StopService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StartService | Internal-only; currently returns unsupported gated response |
 
 ---
 

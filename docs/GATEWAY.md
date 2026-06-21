@@ -103,6 +103,7 @@ The gateway is configured in `config.json`:
 - **webrtc.room**: Room name (auto-generated if `"default"` or empty)
 - **webrtc.password**: Room password (auto-generated if empty; required when auth is enabled)
 - **webrtc.encrypt_signaling**: Encrypt MQTT presence with AEAD (default: `false`)
+- **webrtc.enable_app_layer_e2ee**: Encrypt WebRTC DataChannel JSON messages with AEAD in addition to WebRTC DTLS (default: `false`). When enabled, both peers must enable it and share the same room password-derived data key; plaintext DataChannel messages are dropped instead of downgraded.
 
 ### Dynamic Configuration
 
@@ -191,6 +192,63 @@ Returns all available API routes grouped by service.
 }
 ```
 
+#### Mesh Status and Route Diagnostics
+```
+POST /api/Gateway/GetMeshStatus
+```
+Returns a read-only, redacted diagnostic snapshot of mesh state. The response includes local
+mesh identity, whether WebRTC/mesh components are started, connected peer lifecycle state,
+negotiated peer services, capacity and active calls, recent ping/latency age, compatibility
+ACK results, and per-module route decisions.
+
+The diagnostic output is designed to answer questions such as which peer provides `Tooling`,
+`DB`, or `TTS`, why a route selected local or remote delivery, and which version/capability
+checks made a peer ineligible. Credential-bearing configuration is not included; the response
+does not expose tokens, API keys, MQTT passwords, WebRTC room passwords, or raw secrets.
+
+Example:
+```bash
+curl -X POST http://localhost:8000/api/Gateway/GetMeshStatus \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Key fields:
+- `local`: local mesh enable/start state, stable peer id, node name, shared modules, and routed modules.
+- `peers`: peer status, negotiated services, service capacity, active calls, latency, and compatibility reports.
+- `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
+- `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
+
+#### Deployment Topology and Bus Health
+```
+POST /api/Gateway/GetDeploymentTopology
+```
+Returns a read-only, redacted deployment snapshot for admin, onboarding, and SDK clients.
+The response identifies the active architecture mode, bus backend, sanitized Redis URL,
+Redis reachability, BullMQ queue health fields, service process/thread topology, and
+container/process-mode hints. It also reports explicit degradation reason codes such as
+`redis_unreachable`, `bullmq_queue_lag_unknown`, `process_registry_stale`,
+`thread_mode_no_process_controls`, and `mesh_peer_topology_untrusted`.
+
+The endpoint never returns Redis credentials, tokens, host filesystem paths, peer secrets,
+or raw logs. Process-mode details come from Gateway registry announcements and bus runtime
+state; mesh peer topology is treated as untrusted unless future policy explicitly upgrades it.
+
+#### WebRTC, ICE, and DataChannel Diagnostics
+```
+POST /api/Gateway/GetWebRTCDiagnostics
+```
+Returns a read-only, redacted WebRTC transport snapshot for admin diagnostics and UI
+degraded-state decisions. The response includes local WebRTC enablement, mesh peer identity,
+auth and pairing timeouts, signaling configuration health, connected peer counts, per-peer
+connection/ICE/signaling/data-channel states, RTT when known, auth state, pairing state, pending
+RPC count, and recent redacted error codes.
+
+The endpoint is registered as an external `manage` method requiring `Gateway.manage`. It does not
+return tokens, passwords, raw signaling payloads, decrypted data-channel messages, or peer secrets.
+Sensitive diagnostic messages are replaced with a generic redacted event marker before they are
+stored in the recent-error buffer.
+
 ### Service Endpoints
 
 All service methods with `exposure="external"` or `exposure="both"` are automatically exposed as:
@@ -198,6 +256,103 @@ All service methods with `exposure="external"` or `exposure="both"` are automati
 ```
 POST /api/{ServiceName}/{MethodName}
 ```
+
+Service and method path segments use the canonical PascalCase contract names
+from the service registry. SDKs should prefer these generated paths and should
+not infer lowercase route names from bus topics.
+
+### Supervisor Service Controls
+
+`Supervisor.GetStatus` is exposed as `POST /api/Supervisor/GetStatus` and
+returns service status plus machine-readable service-control availability.
+`Supervisor.RestartService`, `Supervisor.StopService`, and
+`Supervisor.StartService` are registered typed contracts, but intentionally
+remain `exposure="internal"`, `method_type="manage"`, and `supported=false`.
+Their handlers return `success=false`, `status="unsupported"`, and
+`control_state="internal_only"` until Aurora has a safe per-service lifecycle
+executor.
+
+Because the control methods are internal-only, Gateway does not generate public
+HTTP routes for them. SDK/UI clients must treat the `GetStatus` control metadata
+as the source of truth and keep lifecycle buttons disabled. If a future task
+externalizes these manage routes, Gateway's AdminAction draft/confirm/audit
+enforcement applies before any service mutation is forwarded.
+
+### AdminAction Draft / Confirm Enforcement
+
+Generated routes for high-risk admin mutations require a server-issued
+AdminAction confirmation before the route is forwarded to the service bus.
+This applies to explicit high-risk Auth/Config routes and to generated
+`method_type="manage"` routes except read-only diagnostics such as registry,
+capability, route explain, event list, support bundle, and audit-log reads.
+
+The typed Gateway contract exposes the preflight flow:
+
+| Method ID | HTTP route | Purpose |
+|-----------|------------|---------|
+| `Gateway.AdminActionDraft` | `POST /api/Gateway/AdminActionDraft` | Create a short-lived draft containing `action_id`, `nonce`, `digest`, affected resources, required phrase/reason/reauth flags, expiry, and required header names. |
+| `Gateway.AdminActionConfirm` | `POST /api/Gateway/AdminActionConfirm` | Confirm the draft with nonce, digest, reason, confirmation phrase, and recent reauth evidence; returns a single-use confirmation token and audit receipt ID. |
+
+To submit the protected generated route, clients must include:
+
+```text
+X-Aurora-AdminAction-Id: <action_id>
+X-Aurora-AdminAction-Token: <confirmation_token>
+X-Aurora-AdminAction-Digest: <digest>
+```
+
+The Gateway verifies that the confirmation token is unexpired, single-use,
+bound to the authenticated principal, route method ID, and exact request
+payload digest. Raw payload fields such as `confirmed=true` and legacy
+reason/reauth headers do not bypass this enforcement. Before forwarding the
+mutation, Gateway stores an `Auth.StoreAuditEvent` record containing the action
+ID, audit receipt, reason, digest, affected resources, and principal. If audit
+storage fails, the mutation is not forwarded. Successful protected route
+responses include `X-Aurora-AdminAction-Audit-Receipt`.
+
+### Diagnostics Support Bundle
+
+The typed `Gateway.GetSupportBundle` contract is exposed at:
+
+```text
+POST /api/Gateway/GetSupportBundle
+```
+
+It requires `Gateway.manage` and returns a redacted diagnostics bundle for
+operator support and admin UI export flows. The bundle includes:
+
+- registry inventory and service health derived from the Gateway registry;
+- mesh status and route diagnostics;
+- capability catalog counts without sensitive schemas by default;
+- recent normalized Gateway events and recent audit metadata;
+- explicit native-capability and sidecar-log diagnostic states;
+- config metadata with secrets, tokens, URLs, paths, audio, transcripts, RAG
+  content, and tool arguments redacted or omitted;
+- a best-effort `diagnostics.support_bundle.exported` audit receipt, plus
+  `audit_error` when audit storage is unavailable.
+
+Raw audio, full transcripts, token values, credential material, unredacted tool
+arguments, RAG contents, host paths, and raw sidecar logs are not included in
+this contract. Future workflows that deliberately include those payloads must
+use an admin-critical confirmation flow and a separate typed contract.
+
+### Public Auth Endpoints
+
+The canonical public Auth endpoints are generated from `Auth` service
+contracts:
+
+| Method ID | HTTP route | Public behavior |
+|-----------|------------|-----------------|
+| `Auth.Login` | `POST /api/Auth/Login` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingStart` | `POST /api/Auth/PairingStart` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingConnect` | `POST /api/Auth/PairingConnect` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+| `Auth.PairingExchange` | `POST /api/Auth/PairingExchange` | Bypasses credential requirement and runs as `ANONYMOUS`. |
+
+When gateway auth is enabled, these routes are public but do not receive
+`SYSTEM` privileges. `SYSTEM` is reserved for auth-disabled mode and validated
+API-key calls. Lowercase legacy paths such as `/api/auth/login` may exist for
+compatibility in older deployments, but SDK descriptors should advertise the
+canonical generated PascalCase routes.
 
 #### Example: Orchestrator.ExternalUserInput
 
@@ -393,7 +548,7 @@ Schemas are extracted from service method contracts:
 
 ### API Key Authentication
 
-When enabled, all requests (except `/api/health`) require an API key:
+When enabled, protected requests require an API key or bearer token:
 
 ```bash
 curl -X POST http://localhost:8000/api/Orchestrator/ExternalUserInput \
@@ -409,6 +564,10 @@ The following endpoints bypass authentication:
 - `/api/docs`
 - `/api/redoc`
 - `/api/openapi.json`
+- `POST /api/Auth/Login`
+- `POST /api/Auth/PairingStart`
+- `POST /api/Auth/PairingConnect`
+- `POST /api/Auth/PairingExchange`
 
 ## WebRTC Authentication & Pairing
 
@@ -451,6 +610,15 @@ When `api.auth_enabled` is `true`, the RTCClient enforces a strict auth gate:
 When `api.auth_enabled` is `false`:
 - Peers receive the `OPEN_PEER` identity immediately (full permissions).
 - No auth message is sent, no timeout, no auth gate.
+
+### DataChannel Encryption Modes
+
+WebRTC DataChannels are protected in transit by WebRTC DTLS. Aurora can also add an optional application-layer encryption step for every JSON message sent through the `aurora-rpc` DataChannel:
+
+- `webrtc.enable_app_layer_e2ee=false` (default): auth messages, JSON-RPC calls/responses, manifests, ping/pong, capacity updates, and mesh events are sent as JSON text over the DTLS-protected DataChannel.
+- `webrtc.enable_app_layer_e2ee=true`: those same JSON messages are sealed with AES-GCM using the room password-derived DataChannel key and sent as binary frames.
+
+The mode is strict. A peer with app-layer E2EE enabled drops plaintext DataChannel messages, and a peer with it disabled cannot decode encrypted binary frames. This avoids silent downgrade behavior; paired peers must use matching `enable_app_layer_e2ee`, `webrtc.app_id`, `webrtc.room`, and `webrtc.password` values.
 
 ### Bilateral Mesh Pairing
 
@@ -670,4 +838,3 @@ Gateway components are tested in `tests/unit/app/test_gateway.py`:
 - [Peer Pairing Flow](../docs/PEER_PAIRING_FLOW.md)
 - [Mesh Pairing Fix Plan](../docs/MESH_PAIRING_FIX_PLAN.md)
 - [Service Contracts](../app/shared/contracts/README.md)
-

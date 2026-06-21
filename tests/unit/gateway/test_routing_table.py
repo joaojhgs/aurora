@@ -6,6 +6,9 @@ from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState, RouteDecision
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 
 class TestExtractModule:
@@ -30,7 +33,9 @@ def mesh_config():
             "TTS": MeshServiceConfig(prefer="network", fallback="local"),
             "DB": MeshServiceConfig(prefer="local"),
             "STT": MeshServiceConfig(prefer="network_only", fallback="error"),
+            "Transcription": MeshServiceConfig(prefer="network", fallback="local"),
             "Scheduler": MeshServiceConfig(prefer="local_only"),
+            "Tooling": MeshServiceConfig(prefer="local", require_explicit_selector=True),
         },
     )
 
@@ -45,9 +50,11 @@ def routing_table(mesh_config, peer_registry):
     return RoutingTable(mesh_config, peer_registry)
 
 
-def _make_negotiated_peer(peer_id, modules, latency_ms=50.0):
+def _make_negotiated_peer(peer_id, modules, latency_ms=50.0, *, max_concurrent=10):
     """Create a negotiated PeerState with given modules."""
-    services = [PeerServiceInfo(module=m, version="1.0.0") for m in modules]
+    services = [
+        PeerServiceInfo(module=m, version="1.0.0", max_concurrent=max_concurrent) for m in modules
+    ]
     manifest = PeerManifest(peer_id=peer_id, shared_services=services)
     return PeerState(
         peer_id=peer_id,
@@ -78,7 +85,7 @@ class TestRoutingTableResolve:
     @pytest.mark.asyncio
     async def test_prefer_network_no_peer_falls_back_to_local(self, routing_table):
         """No peers registered, so network preference falls back."""
-        route = routing_table.resolve("TTS.Request")
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
         assert route.target == "local"
         assert route.module == "TTS"
 
@@ -89,7 +96,7 @@ class TestRoutingTableResolve:
         await peer_registry.update_manifest("peer-1", peer.manifest)
         await peer_registry.update_latency("peer-1", 20.0)
 
-        route = routing_table.resolve("TTS.Request")
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
         assert route.target == "remote"
         assert route.peer_id == "peer-1"
         assert route.module == "TTS"
@@ -108,16 +115,178 @@ class TestRoutingTableResolve:
         await peer_registry.register_peer("peer-1")
         await peer_registry.update_manifest("peer-1", peer.manifest)
 
-        route = routing_table.resolve("TTS.Request", exclude=["peer-1"])
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE, exclude=["peer-1"])
         # Peer excluded, no other peers → fallback
         assert route.target == "local"
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_overrides_local_preference(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("peer-1", ["DB"], latency_ms=15.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        await peer_registry.update_latency("peer-1", 15.0)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1", resource_namespace="journal"),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "peer-1"
+        assert route.selector.resource_namespace == "journal"
+
+    @pytest.mark.asyncio
+    async def test_explicit_missing_peer_returns_actionable_error(self, routing_table):
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="missing-peer"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_not_found"
+        assert "missing-peer" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_not_allowed_returns_unauthorized(self, mesh_config, peer_registry):
+        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", allowed_peers=["peer-2"])
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(provider_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_unauthorized"
+
+    @pytest.mark.asyncio
+    async def test_explicit_stale_peer_returns_actionable_error(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        peer_registry.get_peer("peer-1").status = "stale"
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_peer_stale"
+        assert "not negotiated" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_version_mismatch_returns_actionable_error(
+        self, mesh_config, peer_registry
+    ):
+        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", min_version="2.0.0")
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_incompatible_version"
+        assert "2.0.0" in route.error_message
+
+    @pytest.mark.asyncio
+    async def test_explicit_peer_capacity_returns_actionable_error(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("peer-1", ["DB"], max_concurrent=1)
+        peer.active_calls = 1
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        peer_registry.get_peer("peer-1").active_calls = 1
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_provider_at_capacity"
+        assert "at capacity" in route.error_message
+
+    def test_policy_can_require_explicit_selector(self, routing_table):
+        route = routing_table.resolve("Tooling.ExecuteTool")
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_remote_playback_requires_explicit_selector(self, routing_table):
+        route = routing_table.resolve(TTSMethods.REQUEST)
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_batch_synthesize_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
+
+        assert route.target == "local"
+        assert route.module == "TTS"
+
+    def test_streaming_transcription_requires_explicit_selector(self, routing_table):
+        route = routing_table.resolve(TranscriptionMethods.PROCESS_AUDIO)
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+
+    def test_batch_transcription_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(TranscriptionMethods.TRANSCRIBE)
+
+        assert route.target == "local"
+        assert route.module == "Transcription"
+
+    def test_batch_wakeword_detect_can_use_transparent_routing(self, routing_table):
+        route = routing_table.resolve(WakeWordMethods.DETECT)
+
+        assert route.target == "local"
+        assert route.module == "WakeWord"
+
+    @pytest.mark.asyncio
+    async def test_explicit_audio_selector_routes_to_selected_peer(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("speaker-peer", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("speaker-peer")
+        await peer_registry.update_manifest("speaker-peer", peer.manifest)
+
+        route = routing_table.resolve(
+            TTSMethods.REQUEST,
+            selector=MeshAddressSelector(
+                peer_id="speaker-peer",
+                hardware_target="living-room-speaker",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "speaker-peer"
+        assert route.selector.hardware_target == "living-room-speaker"
+
+    def test_conflicting_explicit_selectors_return_error(self, routing_table):
+        route = routing_table.resolve(
+            "Tooling.ExecuteTool",
+            selector=MeshAddressSelector(peer_id="peer-1", provider_id="peer-2"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_conflict"
 
 
 class TestRoutingTableResolveFallback:
     """Tests for RoutingTable.resolve_fallback()."""
 
     def test_fallback_local(self, routing_table):
-        route = routing_table.resolve_fallback("TTS.Request", failed_peer_id="peer-1")
+        route = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
         assert route.target == "local"
 
     @pytest.mark.asyncio
@@ -135,7 +304,7 @@ class TestRoutingTableResolveFallback:
             await peer_registry.update_manifest(pid, manifest)
             await peer_registry.update_latency(pid, lat)
 
-        fallback = routing_table.resolve_fallback("TTS.Request", failed_peer_id="peer-1")
+        fallback = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
         assert fallback.target == "remote"
         assert fallback.peer_id == "peer-2"
 

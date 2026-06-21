@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-sidecar-status"
+description = "Allow the frontend SDK adapter to read non-secret local sidecar health."
+commands.allow = ["aurora_sidecar_status"]

@@ -162,6 +162,39 @@ The mesh layer adds two additional tables that track this instance's stable iden
 - **Peer records never expire.** Even if a pairing code times out, the `mesh_peers` row persists with `outbound_status = 'pending'`. An admin can always approve later via the Peer Management API.
 - **`mesh_identity`** ensures a stable `peer_id` across restarts, preventing tie-breaker instability.
 
+### Stable Identity vs Signaling Session IDs
+
+WebRTC signaling peers also have a per-session MQTT/WebRTC identifier used for
+presence, SDP, ICE, and DataChannel transport addressing. That value is allowed
+to change on reconnect and is not a trust or policy identity. Mesh manifests,
+`mesh_peers` rows, saved inbound credentials, peer permissions, and diagnostics
+use the stable `mesh_identity.peer_id` instead. `RTCClient` keeps a runtime
+mapping from active signaling session ID to stable peer ID so routed mesh calls
+can use stable peer IDs while DataChannel sends still target the live session.
+
+---
+
+## Auth and Config Mesh Exposure Boundaries
+
+Auth and Config are not ordinary transparent mesh providers. Gateway does not wire
+`services.auth` or `services.config` into `gateway.mesh.services`, and the config
+schema intentionally does not expose `services.auth.mesh_sharing` or
+`services.config.mesh_sharing`.
+
+Exposure categories:
+
+| Category | Methods / data | Mesh behavior |
+|----------|----------------|---------------|
+| Pairing/login infrastructure | `Auth.PairingStart`, `Auth.PairingConnect`, `Auth.PairingExchange`, `Auth.Login` | Allowed through the WebRTC RPC infrastructure bypass so unauthenticated peers can pair or authenticate. |
+| Local peer administration | Auth mesh peer list/get/approve/deny/update/remove contracts | Local admin surface with normal permissions; not advertised as a shareable mesh provider by default. |
+| Broad Auth administration | Principals, tokens, permissions, devices, audit log, password changes | Not transparently routed by default. |
+| Config diagnostics and mutation | Config get/validate/plugin reads, Config set/plugin writes | Not transparently routed by default. |
+| Secrets and credentials | API keys, token hashes, inbound mesh tokens, raw credential material | Never shared as mesh data or ordinary RPC payloads. |
+
+If a future remote-admin policy intentionally exposes any Auth or Config surface,
+it must be explicit, peer-scoped, permission-checked, and audited. A generic
+service-sharing toggle is not enough to make Auth or Config safe to route.
+
 ---
 
 ## Pairing Flow (Step-by-Step)
@@ -420,7 +453,7 @@ Phase 2 (`_reverse_pairing`) is automatically triggered inside `validate_peer()`
 2. `validate_peer()` validates the token, builds an `Identity`, and stores it in `_peer_acl`.
 3. If mesh is enabled, the peer is registered in `PeerRegistry` and manifests are exchanged.
 4. `_reverse_pairing(peer)` is called as an `asyncio.create_task()`.
-5. `_reverse_pairing()` checks if we already have an auth token (meaning we initiated the forward pairing). If so, it skips — the reverse direction is not needed because we already hold a token.
+5. `_reverse_pairing()` checks if we already have an auth token for that remote peer's stable `peer_id` (meaning we initiated the forward pairing with this same peer). If so, it skips — the reverse direction is not needed because we already hold a peer-specific token. Legacy/default tokens or tokens for other peers do not suppress reverse pairing for this peer.
 6. If we don't have a token, it calls `_initiate_pairing(peer, chan)` which runs the standard 4-phase flow (PairingStart → PairingConnect → PairingExchange) on the **remote peer's** auth service via DataChannel RPC.
 
 ### Partial Completion
@@ -1232,7 +1265,7 @@ Paired Device            MQTT Broker              RTCClient (Gateway)
 | `webrtc.room` | WebRTC room name. If set to `"default"` or empty, a random room name is auto-generated on startup and persisted to config. |
 | `webrtc.password` | Shared secret used to derive AEAD keys for signaling encryption. If empty and auth is enabled, startup is blocked with an error. If empty and auth is disabled, a warning is logged. Auto-generated if empty on startup. |
 | `webrtc.encrypt_signaling` | When `true`, MQTT presence announcements are AEAD-encrypted using room key derivatives. Receivers fall back to plaintext if decryption fails. |
-| `webrtc.enable_app_layer_e2ee` | When `true`, DataChannel messages are additionally encrypted with AEAD. |
+| `webrtc.enable_app_layer_e2ee` | When `true`, all Aurora DataChannel JSON messages are additionally sealed with AEAD and sent as binary frames. Both peers must enable it and derive the same room data key; plaintext messages are dropped rather than downgraded. When `false`, DataChannel messages are JSON text protected by WebRTC DTLS. |
 
 ---
 
@@ -1349,6 +1382,31 @@ Peer selection among multiple providers uses the configured `peer_selection` str
 - `lowest_latency`: Pick the peer with the lowest measured RTT.
 - `round_robin`: Rotate among available peers.
 - `random`: Random selection.
+
+### Hybrid Addressing
+
+Mesh routing supports two addressing modes:
+
+- **Transparent module routing** remains the default for low-risk, local-like service dependencies. Existing callers that publish or request `TTS.Request`, `Orchestrator.UserInput`, or similar module topics without a selector continue to use the module's `prefer`, `fallback`, version, capability, latency, and capacity policy.
+- **Explicit selector routing** is used when a caller must choose the remote authority or resource. Typed payloads can include `mesh_selector` with `peer_id`, `provider_id`, `service_instance_id`, `resource_namespace`, `tool_id`, `hardware_target`, or `data_scope`. `peer_id`, `provider_id`, and `service_instance_id` are binding route targets; `resource_namespace`, `tool_id`, `hardware_target`, and `data_scope` preserve the caller's resource intent for policy and audit surfaces.
+
+When an explicit selector names a peer/provider, `RoutingTable.resolve()` validates that the peer exists, is negotiated, is allowed by per-service policy, shares the requested module, satisfies version/capability requirements, and has capacity. Selector failures return actionable error codes such as `selector_peer_not_found`, `selector_peer_unauthorized`, `selector_peer_stale`, `selector_service_missing`, or `selector_incompatible_capabilities`.
+
+Per-service mesh config can set `require_explicit_selector: true` for safety-sensitive categories. This is intended for tools, DB/data namespaces, hardware controls, scheduler ownership, remote playback, and privacy-sensitive data. Transparent routing is still appropriate for low-risk module dependencies where any compatible provider can satisfy the request.
+
+Explicit selector routes do not silently fall back to a different peer or local service after selector validation or target transport failure. A caller that chooses a specific tool/resource/provider receives an error if that target cannot satisfy the call.
+
+#### Audio Sharing Boundaries
+
+Audio capabilities use narrower defaults than generic module routing:
+
+- `TTS.Synthesize` can be shared as a lower-risk batch operation because it returns generated audio data to the caller and does not play sound on the provider device.
+- `Transcription.Transcribe` can be shared as a lower-risk batch operation because the caller submits a bounded audio payload and receives text.
+- `TTS.Request` and playback controls target a provider's physical output device, so network-preferred routing requires an explicit selector such as `peer_id` plus `hardware_target`.
+- Live microphone, wakeword, and streaming transcription paths require an explicit selector, local consent, visible privacy indicators, and bandwidth/capacity checks before they are enabled for remote use.
+- Raw microphone or wakeword streaming should remain local-only unless an operator explicitly configures mesh sharing and a UI flow obtains target-device consent.
+
+Capability graph policy metadata exposes these boundaries with `operation_class`, `resource_scope`, `explicit_selector_required`, `consent_required`, `privacy_indicator_required`, and `bandwidth_check_required` fields. These fields are diagnostic and client-facing; routing enforcement still depends on explicit selectors and per-service mesh policy.
 
 ### Event Forwarding
 

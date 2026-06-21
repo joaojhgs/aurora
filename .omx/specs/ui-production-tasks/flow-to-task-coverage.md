@@ -1,6 +1,6 @@
 # Aurora UI Flow-to-Task Coverage Crosswalk
 
-Date: 2026-06-14  
+Date: 2026-06-14
 Purpose: maps product/user flows, current mock references, missing visual/runtime states, and production task IDs. This is the task-board bridge between UI/UX specs, the mock reference, backend gaps, and isolated implementation cards.
 
 ## Rule
@@ -16,16 +16,16 @@ If a future task implements one of these flows, it must link both the flow row h
 | Android assistant invocation | `components/aurora/settings/settings-permissions-view.tsx` Android states; `components/aurora/onboarding/onboarding-view.tsx` | Role unavailable, package not qualified, user denied, OEM/profile blocked, fallback entrypoint chosen | `AND-004`, `AND-006`, `UI-004`, `QA-002` |
 | iOS invocation | `components/aurora/settings/settings-permissions-view.tsx` iOS states; `components/aurora/onboarding/onboarding-view.tsx` | Shortcut/App Intent return path, share extension intake, no Siri replacement copy, background limitations | `IOS-003`, `IOS-004`, `IOS-006`, `UI-004`, `QA-002` |
 | Route/privacy preview | `components/aurora/assistant/route-sheet.tsx`; `lib/aurora/data.ts` route fixtures | Policy save errors, peer permission failure, transport lost, route override confirmation, redacted preview mismatch | `UI-005`, `SDK-012`, `BE-013`, `MESH-003` |
-| Tool approval and result lifecycle | `components/aurora/assistant/tool-call-card.tsx`; `modules/ui-mock-reference/app/(cockpit)/tools/page.tsx`; `components/aurora/admin-confirm-dialog.tsx` | Schema validation, editable inputs, deny reason, execution progress, result/error, audit receipt | `UIA-003`, `SDK-013`, `BE-011`, `ADM-007` |
+| Tool approval and result lifecycle | `components/aurora/assistant/tool-call-card.tsx`; `modules/ui-mock-reference/app/(cockpit)/tools/page.tsx`; `components/aurora/admin-confirm-dialog.tsx` | Aggregate local+remote catalog, schema validation, editable inputs, deny reason, token-bound approval, execution progress, result/error, audit receipt | `UIA-003`, `SDK-013`, `BE-011`, `ADM-007`, `MESH-GAP-004`, `MESH-GAP-005`, `MESH-GAP-006` |
 | Attachments/share/context intake | `components/aurora/assistant/assistant-view.tsx` composer; `route-sheet.tsx`; mobile onboarding/settings | File type unsupported, upload progress, privacy classification, native share source, scan/redaction failure | `UIA-005`, `BE-008`, `AND-006`, `IOS-004` |
-| History, memory, RAG provenance | `modules/ui-mock-reference/app/(cockpit)/memory/page.tsx`; `lib/aurora/types.ts` Conversation/ChatMessage | Delete preview, export, retention edit, RAG source detail, mobile local-vector unsupported state | `UIA-006`, `SDK-007`, `QA-003` |
-| Admin overview/capability graph | `components/aurora/admin/overview.tsx`; `components/aurora/capability-drawer.tsx` | Non-admin locked/read-only, expired auth, unknown/loading capabilities, repair action failures | `ADM-001`, `UI-002`, `SDK-006` |
+| History, memory, RAG provenance | `modules/ui-mock-reference/app/(cockpit)/memory/page.tsx`; `lib/aurora/types.ts` Conversation/ChatMessage | Namespace selector, provenance, tombstones, delete preview, export/import, retention edit, RAG source detail, mobile local-vector unsupported state | `UIA-006`, `BE-017`, `SDK-007`, `QA-003`, `MESH-GAP-007` |
+| Admin overview/capability catalog/graph | `components/aurora/admin/overview.tsx`; `components/aurora/capability-drawer.tsx` | Non-admin locked/read-only, expired auth, unknown/loading capabilities, executable catalog blockers, repair action failures | `ADM-001`, `UI-002`, `SDK-006`, `MESH-GAP-003` |
 | Services and contract explorer | `components/aurora/admin/services-view.tsx`; `components/aurora/admin/secondary-surface.tsx` ContractsPanel | Health-check loading/error, start/stop unsupported, schema detail drawer, safe invoke console, redacted results | `ADM-002`, `BE-015`, `SDK-002`, `P0-002` |
 | RBAC principals/roles/permissions | `components/aurora/admin/rbac-view.tsx`; `components/aurora/admin-confirm-dialog.tsx` | Create/edit/delete wizards, cascade previews, effective diff, conflict, audit unavailable | `ADM-003`, `SDK-005`, `SDK-013`, `BE-004` |
 | Tokens | `components/aurora/admin/tokens-view.tsx`; `admin-confirm-dialog.tsx` | Create wizard, one-time reveal, scope editor, revoke impact, credential redaction | `ADM-004`, `SDK-013`, `BE-004` |
 | Devices/sessions | `components/aurora/admin/devices-view.tsx`; `settings-permissions-view.tsx` | Device detail drawer, active sessions, token binding, session invalidation, platform capability detail | `ADM-005`, `SDK-004`, `BE-004` |
 | Config editor/diff/rollback | `components/aurora/admin/config-view.tsx`; `components/aurora/diff-viewer.tsx` | Validation errors, env read-only explanation, conflict/merge, rollback, reload impact | `ADM-006`, `BE-010`, `SDK-013` |
-| Plugins/MCP/tools admin | `components/aurora/admin/secondary-surface.tsx` PluginsPanel; `modules/ui-mock-reference/app/(cockpit)/tools/page.tsx` | Install/update trust/signing, config validation, internal-only reload explanation, marketplace absent state | `ADM-007`, `BE-011`, `SDK-007` |
+| Plugins/MCP/tools admin | `components/aurora/admin/secondary-surface.tsx` PluginsPanel; `modules/ui-mock-reference/app/(cockpit)/tools/page.tsx` | Per-tool/toolkit/MCP sharing policy, approval mode, install/update trust/signing, config validation, internal-only reload explanation, marketplace absent state | `ADM-007`, `BE-011`, `SDK-007`, `MESH-GAP-004`, `MESH-GAP-005` |
 | Pairing queue | `components/aurora/admin/secondary-surface.tsx` PairingPanel | Expired code, duplicate device, denied request, invalid permission template, audit unavailable | `ADM-011`, `BE-012`, `MESH-001` |
 | Mesh peers and route policy | `components/aurora/mesh/mesh-view.tsx`; `components/aurora/assistant/route-sheet.tsx` | Persisted peer vs live WebRTC split, ICE failures, route diagnostics detail, sensitive data blocked | `MESH-001`, `MESH-002`, `MESH-003`, `MESH-004`, `BE-013`, `BE-014` |
 | Audit log | `components/aurora/admin/audit-view.tsx` | Event detail drawer, export confirmation/redaction choices, missing audit receipt blocker | `ADM-008`, `BE-004`, `QA-003` |
@@ -43,3 +43,24 @@ If a future task implements one of these flows, it must link both the flow row h
 | Transport parity release gate | The same core assistant/admin flows must pass or provide a justified skip across LocalBus thread mode, BullMQ/Redis process mode, HTTP Gateway thin mode, Tauri local mode, and Mesh/WebRTC mode. | `modules/ui-mock-reference/README.md`, `modules/ui-mock-reference/lib/aurora/data.ts`, `modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx` | `QA-008`, `QA-002`, `SDK-014`, `MESH-004`, `BE-016` |
 | Memory/RAG governance: provenance, delete, export, retention | User can inspect where memory/RAG context came from, delete/export only when authorized, and see unsupported states where backend does not expose item-level governance. | `modules/ui-mock-reference/app/(cockpit)/memory/page.tsx`, `modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx` | `BE-017`, `UIA-006`, `SDK-006`, `QA-003` |
 | Scheduler admin management | Admin can list jobs and only use schedule/cancel/pause/resume actions that backend exposes with AdminAction/audit. Internal-only pause/resume remain disabled with explanation. | `modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx`, `modules/ui-mock-reference/components/aurora/admin/services-view.tsx`, `modules/ui-mock-reference/app/(cockpit)/admin/page.tsx` | `BE-018`, `ADM-012`, `SDK-013`, `QA-003` |
+
+<!-- MESH-PRODUCTION-GAP-ADDENDUM -->
+## Mesh production E2E flow addendum
+
+The following flows must be explicitly covered before UI production wiring is considered complete:
+
+- User asks assistant to run a tool that exists locally and on a peer: UI shows provider candidates, route explain, explicit selector if required, approval card if needed, and provider-specific result/audit receipt.
+- User asks assistant to run a dangerous internal/local tool: same approval harness as mesh tools, including approve once/approve-all/session/dry-run/deny.
+- User searches memory across a remote RAG namespace: UI shows namespace selector, provenance, policy/permission state, and export/import approval if requested.
+- User starts remote STT: UI asks consent, shows local capture vs remote processing, streams partial/final events, and supports revoke/cancel.
+- Admin configures tool sharing: UI sets per-tool/per-peer policy, approval mode, TTL, and audit expectations.
+- Admin explains a route: UI displays selected/rejected provider candidates with backend reasons.
+- QA runs two-peer harness: tests verify aggregate catalog, approval token binding, route explain, RAG provenance, audio consent, scheduler delegation, and diagnostics/audit.
+
+<!-- UI-BRANCH-POLICY -->
+## UI branch and sequencing policy
+
+- **Target implementation branch:** `feat/ui-multi-platform-integration`.
+- Do not start production UI implementation from these tasks until the mesh-gap sequence is complete through `MESH-GAP-011` and `MESH-GAP-012` has refreshed UI/SDK tasks against the finalized mesh contracts.
+- The UI branch should be created from the accepted `feat/mesh-full-services-integrations` result, not from stale `main` or the old migration branch.
+- UI tasks may only be used as planning/reference before that gate; production wiring waits for final capability catalog, route explain, aggregate tooling, approval protocol, data/RAG, audio, scheduler, audit, and diagnostics contracts.

@@ -1,14 +1,15 @@
 import os
 from datetime import datetime
 
-from langchain_core.tools import StructuredTool
-from pydantic import create_model
-
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.state import State
+from app.services.orchestrator.tool_bindings import (
+    build_tool_approval_candidates,
+    build_tool_bindings,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
@@ -26,9 +27,12 @@ from app.shared.config.models import (
     ThirdParty,
 )
 from app.shared.contracts.models.db import DBMethods
-from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tooling import (
+    ToolingGetToolCatalogRequest,
+    ToolingGetToolsRequest,
+    ToolingMethods,
+)
 from app.shared.messaging.models.db_models import RAGSearchQuery
-from app.shared.messaging.models.tooling_models import GetToolsQuery
 
 config_api = ConfigAPI()
 
@@ -304,118 +308,11 @@ async def _initialize_llm() -> None:
         log_error(f"❌ Failed to initialize LLM with provider: {provider}")
 
 
-def _deserialize_tools(tool_schemas: list[dict]) -> list[StructuredTool]:
-    """Deserialize tool schemas received from ToolingService via bus into LangChain StructuredTool objects.
+def _deserialize_tools(tool_schemas: list[dict]):
+    """Backward-compatible tool deserialization wrapper."""
 
-    This function reconstructs LangChain tools from serialized data (name, description, argument descriptions)
-    that was sent through the bus. The bus remains agnostic - it just transported the data.
-
-    Args:
-        tool_schemas: List of serialized tool schemas from ToolingService (name, description, args_schema)
-
-    Returns:
-        List of LangChain StructuredTool objects that can be bound to LLM
-    """
-    from pydantic import Field
-
-    tools = []
-
-    for schema in tool_schemas:
-        try:
-            tool_name = schema.get("name", "unknown_tool")
-            tool_description = schema.get("description", "")
-            args_schema_dict = schema.get("args_schema", {})
-
-            # Create a Pydantic model from the JSON schema
-            # If the schema has properties, create a model with those fields
-            if (
-                args_schema_dict
-                and isinstance(args_schema_dict, dict)
-                and "properties" in args_schema_dict
-            ):
-                properties = args_schema_dict["properties"]
-                required_fields = args_schema_dict.get("required", [])
-
-                # Build field definitions for create_model
-                field_defs = {}
-                if properties:  # Only iterate if properties is not empty
-                    for field_name, field_info in properties.items():
-                        field_type = _json_schema_type_to_python(field_info.get("type", "string"))
-                        field_description = field_info.get("description", "")
-
-                        # Check if field is required
-                        if field_name in required_fields:
-                            # Required field - use Ellipsis (...) with Field description if available
-                            if field_description:
-                                field_defs[field_name] = (
-                                    field_type,
-                                    Field(..., description=field_description),
-                                )
-                            else:
-                                field_defs[field_name] = (field_type, ...)
-                        else:
-                            # Optional field - use Field with default None and description if available
-                            if field_description:
-                                field_defs[field_name] = (
-                                    field_type,
-                                    Field(default=None, description=field_description),
-                                )
-                            else:
-                                field_defs[field_name] = (field_type, None)
-
-                # Create the Pydantic model dynamically (empty field_defs creates empty model)
-                args_model = create_model(f"{tool_name}Args", **field_defs)
-            else:
-                # No arguments
-                args_model = create_model(f"{tool_name}Args")
-
-            # Create a dummy function for the tool (execution happens via bus)
-            # Use a factory function to properly capture tool_name and avoid B023
-            def _create_dummy_func(name: str):
-                def func(**kwargs):
-                    raise NotImplementedError(
-                        f"Tool {name} should be executed via message bus, not directly"
-                    )
-
-                return func
-
-            dummy_func = _create_dummy_func(tool_name)
-
-            # Create the StructuredTool
-            tool = StructuredTool(
-                name=tool_name,
-                description=tool_description,
-                func=dummy_func,
-                args_schema=args_model,
-            )
-
-            tools.append(tool)
-
-        except Exception as e:
-            log_warning(f"Failed to deserialize tool schema: {e}")
-            continue
-
+    tools, _ = build_tool_bindings(tool_schemas)
     return tools
-
-
-def _json_schema_type_to_python(json_type: str) -> type:
-    """Convert JSON schema type to Python type.
-
-    Args:
-        json_type: JSON schema type string
-
-    Returns:
-        Corresponding Python type
-    """
-    type_mapping = {
-        "string": str,
-        "number": float,
-        "integer": int,
-        "boolean": bool,
-        "array": list,
-        "object": dict,
-    }
-    return type_mapping.get(json_type, str)
 
 
 # Def the chatbot node
@@ -474,16 +371,27 @@ async def chatbot(state: State, bus: MessageBus):
     # It might need adjusting depending on how much plugins you are using as
     # well, +plugins = +tools to load
 
-    # Get tools via message bus (from ToolingService)
-
-    # Request tools from ToolingService via bus
+    # Request safe aggregate tools from ToolingService via bus.
     result = await bus.request(
-        ToolingMethods.GET_TOOLS,
-        GetToolsQuery(query=state["messages"][-1].content, top_k=10),
+        ToolingMethods.GET_TOOL_CATALOG,
+        ToolingGetToolCatalogRequest(query=state["messages"][-1].content, top_k=10),
         timeout=5.0,
         priority=get_interactive_priority(),
     )
+    if not result.ok:
+        log_warning(
+            "Tool catalog retrieval failed; falling back to legacy Tooling.GetTools: "
+            f"{result.error}"
+        )
+        result = await bus.request(
+            ToolingMethods.GET_TOOLS,
+            ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
+            timeout=5.0,
+            priority=get_interactive_priority(),
+        )
 
+    tool_bindings = {}
+    approval_candidates = {}
     if not result.ok:
         log_error(f"Failed to get tools from ToolingService: {result.error}")
         tools = []
@@ -498,7 +406,10 @@ async def chatbot(state: State, bus: MessageBus):
             tool_schemas = result.data.get("tools", [])
             if not tool_schemas:
                 log_warning("No tools returned from ToolingService")
-            tools = _deserialize_tools(tool_schemas)
+            tools, tool_bindings = build_tool_bindings(tool_schemas)
+            approval_candidates = build_tool_approval_candidates(
+                result.data.get("blocked_tools", [])
+            )
             log_debug(f"Loaded {len(tools)} tools for LLM binding")
         else:
             log_error(f"Unexpected result.data type: {type(result.data)}")
@@ -529,5 +440,7 @@ async def chatbot(state: State, bus: MessageBus):
                     *state["messages"][-4:],
                 ]
             )
-        ]
+        ],
+        "tool_bindings": tool_bindings,
+        "approval_candidates": approval_candidates,
     }

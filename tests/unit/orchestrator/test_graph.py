@@ -1,5 +1,6 @@
 """Unit tests for GraphOrchestrator."""
 
+import json
 import sys
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -120,11 +121,198 @@ class TestGraphOrchestratorToolExecution:
 
         # Verify tool was executed via bus
         mock_bus.request.assert_called_once()
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "test_tool"
+        assert request.mesh_selector is None
 
         # Verify result contains tool messages
         assert "messages" in result
         assert len(result["messages"]) == 1
         assert isinstance(result["messages"][0], ToolMessage)
+
+    @pytest.mark.asyncio
+    async def test_execute_remote_tool_uses_hidden_provider_binding(
+        self, graph_orchestrator, mock_bus
+    ):
+        """Remote tool selections execute with global ID and mesh selector."""
+        from langchain_core.messages import AIMessage
+
+        from app.messaging import QueryResult
+
+        mock_bus.request.return_value = QueryResult(ok=True, data="remote result")
+
+        ai_message = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "raspi-lab_switch_on",
+                    "args": {"target": "lamp"},
+                    "id": "tool_remote",
+                }
+            ],
+        )
+        state = State(
+            messages=[ai_message],
+            tool_bindings={
+                "raspi-lab_switch_on": {
+                    "tool_name": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    "global_tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    "mesh_selector": {
+                        "peer_id": "raspi-lab",
+                        "provider_id": "raspi-lab",
+                        "service_instance_id": "remote:raspi-lab:Tooling",
+                        "tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
+                    },
+                }
+            },
+        )
+
+        result = await graph_orchestrator._execute_tools_via_bus(state)
+
+        mock_bus.request.assert_called_once()
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "raspi-lab:remote_raspi-lab_Tooling:tool:switch_on"
+        assert request.mesh_selector.peer_id == "raspi-lab"
+        assert request.mesh_selector.service_instance_id == "remote:raspi-lab:Tooling"
+        assert request.mesh_selector.tool_id == request.tool_name
+        assert result["messages"][0].content == "remote result"
+
+    @pytest.mark.asyncio
+    async def test_approval_required_remote_tool_requests_approval(
+        self, graph_orchestrator, mock_bus
+    ):
+        """Blocked remote tool selections create approval interrupts."""
+        from langchain_core.messages import AIMessage
+
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        mock_bus.request.return_value = QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "approval_request_id": "approval-123",
+                "expires_at": 12345.0,
+                "correlation_id": "corr-123",
+                "policy_decision": {
+                    "decision_id": "decision-123",
+                    "approval_mode": "ask_each_time",
+                },
+            },
+        )
+
+        ai_message = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "raspi-lab_unlock_door",
+                    "args": {"door": "front"},
+                    "id": "tool_approval",
+                }
+            ],
+        )
+        state = State(
+            messages=[ai_message],
+            approval_candidates={
+                "raspi-lab_unlock_door": {
+                    "tool_name": "raspi-lab:remote_raspi-lab_Tooling:tool:unlock_door",
+                    "global_tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:unlock_door",
+                    "provider_peer_id": "raspi-lab",
+                    "provider_service_instance_id": "remote:raspi-lab:Tooling",
+                    "display_name": "raspi-lab.unlock_door",
+                    "description": "Unlock a door.",
+                    "args_schema": {"type": "object", "properties": {}},
+                    "execution_location": "remote",
+                    "safety_class": "dangerous",
+                    "required_permissions": ["Tooling.ExecuteTool"],
+                    "reason_code": "confirmation_required",
+                    "reason": "approval required",
+                    "mesh_selector": {
+                        "peer_id": "raspi-lab",
+                        "provider_id": "raspi-lab",
+                        "service_instance_id": "remote:raspi-lab:Tooling",
+                        "tool_id": "raspi-lab:remote_raspi-lab_Tooling:tool:unlock_door",
+                    },
+                }
+            },
+        )
+
+        result = await graph_orchestrator._execute_tools_via_bus(state)
+
+        mock_bus.request.assert_called_once()
+        assert mock_bus.request.await_args.args[0] == ToolingMethods.REQUEST_APPROVAL
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "raspi-lab:remote_raspi-lab_Tooling:tool:unlock_door"
+        assert request.arguments == {"door": "front"}
+        assert request.mesh_selector.peer_id == "raspi-lab"
+        payload = json.loads(result["messages"][0].content)
+        assert payload["type"] == "tool_approval_request"
+        assert payload["status"] == "requested"
+        assert payload["approval_request_id"] == "approval-123"
+        assert payload["policy_decision_id"] == "decision-123"
+        assert payload["provider_peer_id"] == "raspi-lab"
+        assert payload["global_tool_id"] == request.tool_name
+
+    @pytest.mark.asyncio
+    async def test_approval_required_local_tool_requests_approval(
+        self, graph_orchestrator, mock_bus
+    ):
+        """Local approval-required tools use the same interrupt path."""
+        from langchain_core.messages import AIMessage
+
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        mock_bus.request.return_value = QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "approval_request_id": "local-approval",
+                "correlation_id": "local-corr",
+                "policy_decision": {
+                    "decision_id": "local-decision",
+                    "approval_mode": "allow_once",
+                },
+            },
+        )
+
+        ai_message = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "delete_file",
+                    "args": {"path": "/tmp/example"},
+                    "id": "tool_local_approval",
+                }
+            ],
+        )
+        state = State(
+            messages=[ai_message],
+            approval_candidates={
+                "delete_file": {
+                    "tool_name": "delete_file",
+                    "global_tool_id": "local:Tooling:tool:delete_file",
+                    "provider_peer_id": "local",
+                    "provider_service_instance_id": "local:Tooling",
+                    "display_name": "delete_file",
+                    "execution_location": "local",
+                    "safety_class": "dangerous",
+                    "reason_code": "confirmation_required",
+                    "reason": "approval required",
+                }
+            },
+        )
+
+        result = await graph_orchestrator._execute_tools_via_bus(state)
+
+        mock_bus.request.assert_called_once()
+        assert mock_bus.request.await_args.args[0] == ToolingMethods.REQUEST_APPROVAL
+        request = mock_bus.request.await_args.args[1]
+        assert request.tool_name == "delete_file"
+        assert request.mesh_selector is None
+        payload = json.loads(result["messages"][0].content)
+        assert payload["approval_request_id"] == "local-approval"
+        assert payload["execution_location"] == "local"
 
     @pytest.mark.asyncio
     async def test_execute_tools_no_tool_calls(self, graph_orchestrator):
