@@ -11,6 +11,8 @@ This service:
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,8 +26,17 @@ from app.messaging import (
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
 from app.shared.config.interface import ConfigAPI
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.db import DBMethods, DBRAGStoreRequest
 from app.shared.contracts.models.orchestrator import (
+    AttachmentContextIngestRequest,
+    AttachmentContextIngestResponse,
+    AttachmentContextItem,
+    AttachmentContextItemResult,
+    AttachmentContextPrivacyClass,
+    AttachmentContextStatus,
+    AttachmentContextStoragePolicy,
     ModelRuntimeBenchmarkInfo,
     ModelRuntimeCatalogRequest,
     ModelRuntimeCatalogResponse,
@@ -54,6 +65,12 @@ from app.shared.contracts.models.tts import TTSMethods, TTSRequest
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 from app.shared.services.base_service import BaseService
+
+_SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"), "credential"),
+    (re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{16,}"), "bearer_token"),
+    (re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"), "api_key"),
+)
 
 
 # Service implementation
@@ -218,6 +235,166 @@ class OrchestratorService(BaseService):
                 session_id=cmd.session_id,
                 metadata={"source": "external", "error": True},
             )
+
+    @method_contract(
+        method_id=OrchestratorMethods.INGEST_CONTEXT,
+        summary="Ingest assistant attachment and shared context metadata",
+        input_model=AttachmentContextIngestRequest,
+        output_model=AttachmentContextIngestResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def ingest_context(
+        self, data: AttachmentContextIngestRequest
+    ) -> AttachmentContextIngestResponse:
+        """Accept redacted text context for assistant use with policy and audit metadata."""
+        correlation_id = data.correlation_id or f"context-{uuid4().hex[:12]}"
+        accepted_items: list[AttachmentContextItemResult] = []
+        rejected_items: list[AttachmentContextItemResult] = []
+        total_bytes = 0
+
+        if len(data.items) > data.limits.max_items:
+            response = self._context_response(
+                data=data,
+                accepted_items=[],
+                rejected_items=[
+                    self._context_result(
+                        item=AttachmentContextItem(kind="text"),
+                        index=0,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="too_many_items",
+                        message=f"Context item count exceeds limit {data.limits.max_items}",
+                    )
+                ],
+                total_bytes=0,
+                correlation_id=correlation_id,
+            )
+            await self._audit_context_ingestion(data, response)
+            return response
+
+        for index, item in enumerate(data.items):
+            item_bytes = self._context_item_size(item)
+            total_bytes += item_bytes
+
+            if data.storage_policy == "reject":
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="storage_policy_reject",
+                        message="Storage policy rejects attachment/context ingestion",
+                    )
+                )
+                continue
+
+            if data.privacy_class in {"secret", "credential", "raw-audio"}:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="privacy_class_blocked",
+                        message="Privacy class is not accepted for assistant context ingestion",
+                    )
+                )
+                continue
+
+            if item_bytes > data.limits.max_item_bytes:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="item_too_large",
+                        message=f"Context item exceeds limit {data.limits.max_item_bytes} bytes",
+                    )
+                )
+                continue
+
+            if total_bytes > data.limits.max_total_bytes:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="total_too_large",
+                        message=f"Context batch exceeds limit {data.limits.max_total_bytes} bytes",
+                    )
+                )
+                continue
+
+            text = self._context_item_text(item)
+            if not text:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="unsupported",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="no_text_context",
+                        message="Only text-like attachment/context content is supported",
+                    )
+                )
+                continue
+
+            sanitized_text, redaction_reasons = self._sanitize_context_text(
+                text,
+                max_chars=data.limits.max_text_chars,
+            )
+            status: AttachmentContextStatus = "redacted" if redaction_reasons else "accepted"
+            result = self._context_result(
+                item=item,
+                index=index,
+                status=status,
+                storage_policy=data.storage_policy,
+                privacy_class=data.privacy_class,
+                accepted_bytes=item_bytes,
+                redacted=bool(redaction_reasons),
+                redaction_reasons=redaction_reasons,
+                message="Context accepted for assistant use",
+            )
+
+            if data.storage_policy == "rag":
+                stored_key = await self._store_context_in_rag(
+                    data=data,
+                    item=item,
+                    item_id=result.item_id,
+                    text=sanitized_text,
+                    redacted=bool(redaction_reasons),
+                    redaction_reasons=redaction_reasons,
+                    correlation_id=correlation_id,
+                )
+                result.status = "stored"
+                result.stored_namespace = data.namespace
+                result.stored_key = stored_key
+
+            accepted_items.append(result)
+
+        response = self._context_response(
+            data=data,
+            accepted_items=accepted_items,
+            rejected_items=rejected_items,
+            total_bytes=total_bytes,
+            correlation_id=correlation_id,
+        )
+        await self._audit_context_ingestion(data, response)
+        return response
 
     @method_contract(
         method_id=OrchestratorMethods.TOOL_RESULT,
@@ -666,6 +843,158 @@ class OrchestratorService(BaseService):
         )
         self._model_runtime_operations[operation.operation_id] = operation
         return operation
+
+    def _context_item_size(self, item: AttachmentContextItem) -> int:
+        if item.size_bytes is not None:
+            return max(0, item.size_bytes)
+        text = self._context_item_text(item)
+        return len(text.encode("utf-8"))
+
+    def _context_item_text(self, item: AttachmentContextItem) -> str:
+        if item.content_text:
+            return item.content_text
+        if item.kind == "url" and item.url:
+            return f"{item.title or item.url}\n{item.url}"
+        return ""
+
+    def _sanitize_context_text(self, text: str, *, max_chars: int) -> tuple[str, list[str]]:
+        reasons: list[str] = []
+        sanitized = text[:max_chars]
+        if len(text) > max_chars:
+            reasons.append("truncated")
+        for pattern, reason in _SECRET_PATTERNS:
+            sanitized, count = pattern.subn("[REDACTED]", sanitized)
+            if count:
+                reasons.append(reason)
+        return sanitized, sorted(set(reasons))
+
+    def _context_result(
+        self,
+        *,
+        item: AttachmentContextItem,
+        index: int,
+        status: AttachmentContextStatus,
+        storage_policy: AttachmentContextStoragePolicy,
+        privacy_class: AttachmentContextPrivacyClass,
+        accepted_bytes: int = 0,
+        redacted: bool = False,
+        redaction_reasons: list[str] | None = None,
+        reason_code: str | None = None,
+        message: str = "",
+    ) -> AttachmentContextItemResult:
+        return AttachmentContextItemResult(
+            item_id=f"context-{index}-{uuid4().hex[:12]}",
+            kind=item.kind,
+            status=status,
+            storage_policy=storage_policy,
+            privacy_class=privacy_class,
+            accepted_bytes=accepted_bytes,
+            redacted=redacted,
+            redaction_reasons=redaction_reasons or [],
+            reason_code=reason_code,
+            message=message,
+        )
+
+    def _context_response(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        accepted_items: list[AttachmentContextItemResult],
+        rejected_items: list[AttachmentContextItemResult],
+        total_bytes: int,
+        correlation_id: str,
+    ) -> AttachmentContextIngestResponse:
+        return AttachmentContextIngestResponse(
+            accepted=bool(accepted_items),
+            rejected=bool(rejected_items),
+            total_items=len(data.items),
+            accepted_items=accepted_items,
+            rejected_items=rejected_items,
+            total_bytes=total_bytes,
+            storage_policy=data.storage_policy,
+            privacy_class=data.privacy_class,
+            correlation_id=correlation_id,
+            secrets_redacted=True,
+        )
+
+    async def _store_context_in_rag(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        item: AttachmentContextItem,
+        item_id: str,
+        text: str,
+        redacted: bool,
+        redaction_reasons: list[str],
+        correlation_id: str,
+    ) -> str:
+        stored_key = item_id
+        value = {
+            "text": text,
+            "kind": item.kind,
+            "title": item.title,
+            "filename": item.filename,
+            "url": item.url,
+            "mime_type": item.mime_type,
+            "privacy_class": data.privacy_class,
+            "source": item.source.model_dump(exclude_none=True),
+            "metadata": item.metadata,
+            "redacted": redacted,
+            "redaction_reasons": redaction_reasons,
+            "policy_decision_id": data.policy_decision_id,
+            "correlation_id": correlation_id,
+            "schema_version": "assistant-context.v1",
+        }
+        await self.bus.request(
+            DBMethods.RAG_STORE,
+            DBRAGStoreRequest(
+                key=stored_key,
+                value=json.dumps(value, sort_keys=True),
+                namespace=data.namespace,
+            ),
+            timeout=10.0,
+            origin="internal",
+            principal_id=data.caller_principal_id,
+            correlation_id=correlation_id,
+        )
+        return stored_key
+
+    async def _audit_context_ingestion(
+        self,
+        data: AttachmentContextIngestRequest,
+        response: AttachmentContextIngestResponse,
+    ) -> None:
+        details = {
+            "session_id": data.session_id,
+            "namespace": data.namespace,
+            "storage_policy": data.storage_policy,
+            "privacy_class": data.privacy_class,
+            "policy_decision_id": data.policy_decision_id,
+            "correlation_id": response.correlation_id,
+            "total_items": response.total_items,
+            "accepted_count": len(response.accepted_items),
+            "rejected_count": len(response.rejected_items),
+            "total_bytes": response.total_bytes,
+            "redacted_count": sum(1 for item in response.accepted_items if item.redacted),
+            "rejection_codes": [
+                item.reason_code for item in response.rejected_items if item.reason_code
+            ],
+        }
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=response.audit_event,
+                    principal_id=data.caller_principal_id,
+                    details=json.dumps(details, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+                principal_id=data.caller_principal_id,
+                correlation_id=response.correlation_id,
+            )
+        except Exception as e:
+            log_error(f"Failed to audit context ingestion: {e}", exc_info=True)
 
 
 def _utc_now() -> str:
