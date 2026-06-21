@@ -179,6 +179,96 @@ export interface AssistantCancelRequest {
   reason?: string
 }
 
+export type AttachmentContextKind = 'text' | 'url' | 'file' | 'image'
+export type AttachmentContextPrivacyClass = Exclude<PrivacyClass, 'admin-critical'>
+export type AttachmentContextSourceChannel =
+  | 'chat'
+  | 'api'
+  | 'desktop'
+  | 'mobile_share_sheet'
+  | 'deep_link'
+  | 'browser_extension'
+export type AttachmentContextStoragePolicy = 'ephemeral' | 'rag' | 'reject'
+export type AttachmentContextStatus =
+  | 'accepted'
+  | 'stored'
+  | 'rejected'
+  | 'redacted'
+  | 'unsupported'
+
+export interface AttachmentContextLimits {
+  max_items: number
+  max_item_bytes: number
+  max_total_bytes: number
+  max_text_chars: number
+}
+
+export interface AttachmentContextSource {
+  channel: AttachmentContextSourceChannel
+  display_name?: string | null
+  uri?: string | null
+  mime_type?: string | null
+  platform?: string | null
+  originating_app?: string | null
+  shared_at?: string | null
+  principal_id?: string | null
+  device_id?: string | null
+  peer_id?: string | null
+}
+
+export interface AttachmentContextItem {
+  kind: AttachmentContextKind
+  content_text?: string | null
+  url?: string | null
+  title?: string | null
+  filename?: string | null
+  mime_type?: string | null
+  size_bytes?: number | null
+  source?: Partial<AttachmentContextSource> | null
+  metadata?: JsonObject
+}
+
+export interface AttachmentContextIngestRequest {
+  items: AttachmentContextItem[]
+  session_id?: string | null
+  namespace?: string
+  storage_policy?: AttachmentContextStoragePolicy
+  privacy_class?: AttachmentContextPrivacyClass
+  caller_principal_id?: string | null
+  correlation_id?: string | null
+  policy_decision_id?: string | null
+  limits?: Partial<AttachmentContextLimits>
+}
+
+export interface AttachmentContextItemResult {
+  item_id: string
+  kind: AttachmentContextKind
+  status: AttachmentContextStatus
+  storage_policy: AttachmentContextStoragePolicy
+  privacy_class: AttachmentContextPrivacyClass
+  accepted_bytes: number
+  stored_namespace: string | null
+  stored_key: string | null
+  redacted: boolean
+  redaction_reasons: string[]
+  reason_code: string | null
+  message: string
+}
+
+export interface AttachmentContextIngestResponse {
+  accepted: boolean
+  rejected: boolean
+  total_items: number
+  accepted_items: AttachmentContextItemResult[]
+  rejected_items: AttachmentContextItemResult[]
+  total_bytes: number
+  storage_policy: AttachmentContextStoragePolicy
+  privacy_class: AttachmentContextPrivacyClass
+  audit_event: string
+  correlation_id: string | null
+  secrets_redacted: boolean
+}
+
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string
 export type ContractMethodType = 'use' | 'manage' | 'event' | 'gateway' | string
 

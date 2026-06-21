@@ -23,9 +23,14 @@ import {
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
+  attachmentStatusFromBackend,
+  attachmentToContextItem,
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  contextIngestOutcomeIndex,
+  isAcceptedContextStatus,
+  mapContextIngestOutcomesByPendingIndex,
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
@@ -131,6 +136,13 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('personal')
     expect(markup).toContain('Start with a prompt')
     expect(markup).toContain('Ask Aurora...')
+    expect(markup).toContain('Attachments and shared content')
+    expect(markup).toContain('Privacy label')
+    expect(markup).toContain('Share source')
+    expect(markup).toContain('Add URL')
+    expect(markup).toContain('Add files or images')
+    expect(markup).toContain('Native mobile share payloads remain disabled')
+    expect(markup).toContain('0 context ready')
 
     const disabledMarkup = renderToStaticMarkup(
       <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={assistantRoute} />
@@ -139,7 +151,95 @@ describe('Aurora production shell', () => {
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
   })
 
+  it('maps assistant attachment drafts to backend context payloads and statuses', () => {
+    const item = attachmentToContextItem({
+      id: 'context-1',
+      kind: 'url',
+      label: 'docs.example',
+      detail: 'https://docs.example/context',
+      contentText: null,
+      url: 'https://docs.example/context',
+      filename: null,
+      mimeType: 'text/uri-list',
+      sizeBytes: 28,
+      sourceChannel: 'mobile_share_sheet',
+      sourceDisplayName: 'mobile share sheet',
+      privacyClass: 'sensitive',
+      status: 'staged',
+      progress: 0,
+      message: 'Staged for backend validation.',
+      reasonCode: null,
+      redacted: false
+    })
 
+    expect(item).toEqual(
+      expect.objectContaining({
+        kind: 'url',
+        url: 'https://docs.example/context',
+        title: 'docs.example',
+        source: expect.objectContaining({
+          channel: 'mobile_share_sheet',
+          display_name: 'mobile share sheet'
+        }),
+        metadata: expect.objectContaining({
+          ui_status: 'staged',
+          route_privacy_class: 'sensitive'
+        })
+      })
+    )
+    expect(attachmentStatusFromBackend('accepted')).toBe('accepted')
+    expect(attachmentStatusFromBackend('stored')).toBe('stored')
+    expect(attachmentStatusFromBackend('redacted')).toBe('redacted')
+    expect(attachmentStatusFromBackend('unsupported')).toBe('unsupported')
+    expect(attachmentStatusFromBackend('rejected')).toBe('rejected')
+    expect(isAcceptedContextStatus('accepted')).toBe(true)
+    expect(isAcceptedContextStatus('unsupported')).toBe(false)
+  })
+
+  it('maps production context ingest item ids back to pending attachments', () => {
+    const outcomes = mapContextIngestOutcomesByPendingIndex({
+      accepted_items: [
+        {
+          item_id: 'context-0-abc123def456',
+          kind: 'url',
+          status: 'accepted',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 64,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: null,
+          message: 'URL accepted'
+        }
+      ],
+      rejected_items: [
+        {
+          item_id: 'context-1-fedcba654321',
+          kind: 'image',
+          status: 'unsupported',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 0,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: 'unsupported_type',
+          message: 'Images are not supported by this route.'
+        }
+      ]
+    })
+
+    expect(contextIngestOutcomeIndex('context-0-abc123def456')).toBe(0)
+    expect(contextIngestOutcomeIndex('context-1-fedcba654321')).toBe(1)
+    expect(contextIngestOutcomeIndex('mock-context-2')).toBe(2)
+    expect(contextIngestOutcomeIndex('context-abc123def456')).toBeNull()
+    expect(outcomes.get(0)?.status).toBe('accepted')
+    expect(outcomes.get(1)?.status).toBe('unsupported')
+    expect(outcomes.get(1)?.reason_code).toBe('unsupported_type')
+  })
 
   it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })

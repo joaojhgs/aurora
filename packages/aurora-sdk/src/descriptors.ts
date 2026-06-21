@@ -47,6 +47,7 @@ export const TOOLING_METHODS = {
 export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
   externalUserInput: 'Orchestrator.ExternalUserInput',
+  ingestContext: 'Orchestrator.IngestContext',
   interrupt: 'Orchestrator.Interrupt',
   toolResult: 'Orchestrator.ToolResult',
   response: 'Orchestrator.Response'

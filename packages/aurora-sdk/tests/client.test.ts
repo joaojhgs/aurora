@@ -98,6 +98,32 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('advertises assistant context ingestion from backend inventory descriptors', () => {
+    const descriptors = describeBackendInventory(backendInventoryFixture)
+
+    expect(descriptors.methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          busTopic: ORCHESTRATOR_METHODS.ingestContext,
+          routePath: '/api/Orchestrator/IngestContext',
+          exposure: 'external',
+          methodType: 'use',
+          requiredPermissions: ['Orchestrator.use'],
+          inputModel: 'AttachmentContextIngestRequest',
+          outputModel: 'AttachmentContextIngestResponse',
+          availableOverHttp: true,
+          routeKind: 'dynamic'
+        })
+      ])
+    )
+    expect(descriptors.methodTypes[ORCHESTRATOR_METHODS.ingestContext]).toEqual(
+      expect.objectContaining({
+        requestModel: 'AttachmentContextIngestRequest',
+        responseModel: 'AttachmentContextIngestResponse'
+      })
+    )
+  })
+
   it('summarizes capability catalog responses without inventing state', async () => {
     const catalog = {
       ...capabilityCatalogFixture,
@@ -424,6 +450,78 @@ describe('AuroraClient', () => {
     )
     expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
+  })
+
+  it('ingests assistant attachment context through the typed SDK namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [
+          {
+            kind: 'text',
+            content_text: 'Screenshot OCR with password=redacted by backend',
+            title: 'Screenshot OCR',
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          },
+          {
+            kind: 'image',
+            filename: 'screen.png',
+            mime_type: 'image/png',
+            size_bytes: 42_000,
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          }
+        ],
+        privacy_class: 'personal',
+        storage_policy: 'ephemeral',
+        limits: { max_item_bytes: 262_144 }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: true,
+          rejected: true,
+          accepted_items: [
+            expect.objectContaining({
+              kind: 'text',
+              status: 'redacted',
+              redacted: true,
+              privacy_class: 'personal'
+            })
+          ],
+          rejected_items: [
+            expect.objectContaining({
+              kind: 'image',
+              status: 'unsupported',
+              reason_code: 'no_text_context'
+            })
+          ],
+          secrets_redacted: true
+        })
+      })
+    )
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [{ kind: 'text', content_text: 'token body' }],
+        privacy_class: 'credential'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: false,
+          rejected: true,
+          rejected_items: [
+            expect.objectContaining({
+              status: 'rejected',
+              reason_code: 'privacy_class_blocked'
+            })
+          ]
+        })
+      })
+    )
   })
 
   it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {

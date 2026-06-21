@@ -7,6 +7,14 @@ import {
 } from './events.js'
 import { cloneFixture, defaultMockAuroraFixtures, type MockAuroraFixtureSet } from './fixtures.js'
 import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
+import type {
+  AttachmentContextIngestRequest,
+  AttachmentContextIngestResponse,
+  AttachmentContextItem,
+  AttachmentContextItemResult,
+  AttachmentContextPrivacyClass,
+  AttachmentContextStoragePolicy
+} from './types.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 
 export type MockHandler<TPayload = unknown, TData = unknown> = (
@@ -48,6 +56,7 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Orchestrator.IngestContext', (request) => mockIngestContext(request.payload))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
         session_id: mockSessionId(request.payload),
@@ -154,6 +163,148 @@ function mockSessionId(payload: unknown): string {
     if (typeof sessionId === 'string' && sessionId.trim()) return sessionId
   }
   return 'mock-assistant-session'
+}
+
+function mockIngestContext(payload: unknown): AttachmentContextIngestResponse {
+  const request = normalizeIngestRequest(payload)
+  const acceptedItems: AttachmentContextItemResult[] = []
+  const rejectedItems: AttachmentContextItemResult[] = []
+  let totalBytes = 0
+
+  request.items.forEach((item, index) => {
+    const itemBytes = contextItemSize(item)
+    totalBytes += itemBytes
+    const base = contextResult(item, index, request.storage_policy, request.privacy_class, itemBytes)
+
+    if (request.storage_policy === 'reject') {
+      rejectedItems.push({
+        ...base,
+        status: 'rejected',
+        reason_code: 'storage_policy_reject',
+        message: 'Storage policy rejects attachment/context ingestion'
+      })
+      return
+    }
+
+    if (['secret', 'credential', 'raw-audio'].includes(request.privacy_class)) {
+      rejectedItems.push({
+        ...base,
+        status: 'rejected',
+        reason_code: 'privacy_class_blocked',
+        message: 'Privacy class is not accepted for assistant context ingestion'
+      })
+      return
+    }
+
+    if (itemBytes > request.limits.max_item_bytes) {
+      rejectedItems.push({
+        ...base,
+        status: 'rejected',
+        reason_code: 'item_too_large',
+        message: `Context item exceeds limit ${request.limits.max_item_bytes} bytes`
+      })
+      return
+    }
+
+    if (totalBytes > request.limits.max_total_bytes) {
+      rejectedItems.push({
+        ...base,
+        status: 'rejected',
+        reason_code: 'total_too_large',
+        message: `Context batch exceeds limit ${request.limits.max_total_bytes} bytes`
+      })
+      return
+    }
+
+    if (!contextText(item)) {
+      rejectedItems.push({
+        ...base,
+        status: 'unsupported',
+        reason_code: 'no_text_context',
+        message: 'Only text-like attachment/context content is supported'
+      })
+      return
+    }
+
+    const redacted = contextText(item).includes('sk-') || contextText(item).includes('password')
+    acceptedItems.push({
+      ...base,
+      status: redacted ? 'redacted' : request.storage_policy === 'rag' ? 'stored' : 'accepted',
+      stored_namespace: request.storage_policy === 'rag' ? request.namespace : null,
+      stored_key: request.storage_policy === 'rag' ? `mock-context-${index}` : null,
+      redacted,
+      redaction_reasons: redacted ? ['secret_pattern'] : [],
+      message: 'Context accepted for assistant use'
+    })
+  })
+
+  return {
+    accepted: acceptedItems.length > 0,
+    rejected: rejectedItems.length > 0,
+    total_items: request.items.length,
+    accepted_items: acceptedItems,
+    rejected_items: rejectedItems,
+    total_bytes: totalBytes,
+    storage_policy: request.storage_policy,
+    privacy_class: request.privacy_class,
+    audit_event: 'assistant.context.ingested',
+    correlation_id: request.correlation_id ?? 'mock-context-correlation',
+    secrets_redacted: true
+  }
+}
+
+function normalizeIngestRequest(payload: unknown): Required<Pick<
+  AttachmentContextIngestRequest,
+  'items' | 'namespace' | 'storage_policy' | 'privacy_class'
+>> & Pick<AttachmentContextIngestRequest, 'correlation_id'> & {
+  limits: Required<NonNullable<AttachmentContextIngestRequest['limits']>>
+} {
+  const input = typeof payload === 'object' && payload !== null ? payload as AttachmentContextIngestRequest : { items: [] }
+  return {
+    items: Array.isArray(input.items) ? input.items : [],
+    namespace: input.namespace ?? 'assistant.attachments',
+    storage_policy: input.storage_policy ?? 'ephemeral',
+    privacy_class: input.privacy_class ?? 'personal',
+    correlation_id: input.correlation_id ?? null,
+    limits: {
+      max_items: input.limits?.max_items ?? 8,
+      max_item_bytes: input.limits?.max_item_bytes ?? 262_144,
+      max_total_bytes: input.limits?.max_total_bytes ?? 1_048_576,
+      max_text_chars: input.limits?.max_text_chars ?? 120_000
+    }
+  }
+}
+
+function contextResult(
+  item: AttachmentContextItem,
+  index: number,
+  storagePolicy: AttachmentContextStoragePolicy,
+  privacyClass: AttachmentContextPrivacyClass,
+  acceptedBytes: number
+): AttachmentContextItemResult {
+  return {
+    item_id: `mock-context-${index}`,
+    kind: item.kind,
+    status: 'accepted',
+    storage_policy: storagePolicy,
+    privacy_class: privacyClass,
+    accepted_bytes: acceptedBytes,
+    stored_namespace: null,
+    stored_key: null,
+    redacted: false,
+    redaction_reasons: [],
+    reason_code: null,
+    message: ''
+  }
+}
+
+function contextItemSize(item: AttachmentContextItem): number {
+  if (typeof item.size_bytes === 'number') return item.size_bytes
+  return new TextEncoder().encode(contextText(item)).length
+}
+
+function contextText(item: AttachmentContextItem): string {
+  return item.content_text ?? item.url ?? item.title ?? ''
 }
 
 async function* normalizeMockEvents<TPayload>(

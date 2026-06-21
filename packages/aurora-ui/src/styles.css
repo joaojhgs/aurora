@@ -152,6 +152,28 @@ button, input, select, textarea { font: inherit; }
 .aui-route-sheet-footer .aui-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.45rem; color: var(--aui-ink); font-weight: 750; }
 .aui-route-sheet-footer .aui-button:disabled { cursor: not-allowed; opacity: .58; }
 .aui-route-sheet-footer p { color: var(--aui-danger); font-size: .84rem; }
+.aui-attachment-panel { display: grid; gap: .8rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-attachment-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-attachment-head h2 { margin: .15rem 0 0; font-size: 1rem; }
+.aui-attachment-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; align-items: end; }
+.aui-attachment-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-attachment-controls input, .aui-attachment-controls textarea, .aui-attachment-controls select { width: 100%; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); text-transform: none; }
+.aui-inline-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .45rem; align-items: stretch; }
+.aui-inline-action button, .aui-file-picker { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .45rem; padding: .55rem .75rem; background: var(--aui-surface-2); color: var(--aui-primary); font-weight: 750; text-transform: none; }
+.aui-inline-action button:disabled, .aui-file-picker:has(input:disabled) { cursor: not-allowed; opacity: .58; }
+.aui-file-picker { position: relative; align-self: end; min-width: 0; cursor: pointer; }
+.aui-file-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.aui-attachment-note { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-attachment-empty { display: grid; min-height: 3.4rem; place-items: center; border: 1px dashed var(--aui-border); border-radius: .5rem; color: var(--aui-muted); }
+.aui-attachment-list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.aui-attachment-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .6rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .65rem; background: color-mix(in srgb, var(--aui-surface-2) 55%, white); }
+.aui-attachment-item strong, .aui-attachment-item span, .aui-attachment-item small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-attachment-item span, .aui-attachment-item small { color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
+.aui-attachment-item button { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-muted); }
+.aui-attachment-rejected, .aui-attachment-error { border-color: color-mix(in srgb, var(--aui-danger) 35%, var(--aui-border)); }
+.aui-attachment-unsupported { border-color: color-mix(in srgb, var(--aui-muted) 50%, var(--aui-border)); opacity: .88; }
+.aui-attachment-uploading { border-color: color-mix(in srgb, var(--aui-warning) 40%, var(--aui-border)); }
+.aui-attachment-item progress { width: 100%; height: .55rem; margin-top: .4rem; accent-color: var(--aui-primary); }
 .aui-assistant-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: .65rem; align-items: end; padding: .75rem; }
 .aui-assistant-form label { grid-column: 1 / -1; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
 .aui-assistant-form textarea { min-height: 5.2rem; resize: vertical; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .7rem; background: var(--aui-surface); color: var(--aui-ink); }
@@ -225,6 +247,11 @@ button, input, select, textarea { font: inherit; }
   .aui-assistant-badges { justify-content: flex-start; }
   .aui-stream-banner { align-items: flex-start; flex-wrap: wrap; }
   .aui-stream-banner button { margin-left: 0; }
+  .aui-attachment-head { display: grid; }
+  .aui-attachment-controls { grid-template-columns: minmax(0, 1fr); }
+  .aui-inline-action { grid-template-columns: minmax(0, 1fr); }
+  .aui-attachment-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .aui-attachment-item .aui-badge { grid-column: 1; width: fit-content; }
   .aui-assistant-form { grid-template-columns: minmax(0, 1fr); }
   .aui-assistant-form button { width: 100%; }
   .aui-chat-bubble { max-width: 100%; }
