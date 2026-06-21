@@ -217,7 +217,9 @@ async def test_route_explain_reports_selected_remote_stale_denied_and_local_cand
         request=RouteExplainRequest(topic="Tooling.Execute"),
         mesh_config=mesh_config,
         local_services={
-            "Tooling": ServiceAnnouncement(module="Tooling", version="local", methods=[])
+            "Tooling": ServiceAnnouncement(
+                module="Tooling", version="local", methods=[_method("Tooling")]
+            )
         },
         registry=registry,
         routing_table=routing_table,
@@ -231,10 +233,22 @@ async def test_route_explain_reports_selected_remote_stale_denied_and_local_cand
 
     by_peer = {candidate.peer_id: candidate for candidate in response.candidates}
     assert by_peer["local-peer"].included is True
+    assert by_peer["local-peer"].transport == "local_bus"
+    assert by_peer["local-peer"].privacy_class == "personal"
+    assert by_peer["local-peer"].auth_rbac_state == "permission_required"
     assert by_peer["peer-a"].selected is True
+    assert by_peer["peer-a"].transport == "mesh_webrtc"
+    assert by_peer["peer-a"].policy.required_permissions == ["Tooling.Execute"]
+    assert by_peer["peer-a"].policy.approval_required is True
+    assert by_peer["peer-a"].freshness.source == "remote_manifest"
+    assert by_peer["peer-a"].privacy_class == "personal"
+    assert by_peer["peer-a"].auth_rbac_state == "permission_required"
     assert by_peer["peer-denied"].reason_code == "peer_not_allowed"
     assert by_peer["peer-denied"].blockers[0].security_privacy is True
+    assert by_peer["peer-denied"].policy.denial_reasons == ["peer_not_allowed"]
+    assert by_peer["peer-denied"].auth_rbac_state == "blocked"
     assert by_peer["peer-stale"].reason_code == "peer_stale"
+    assert by_peer["peer-stale"].freshness.stale is True
 
 
 @pytest.mark.asyncio
@@ -428,6 +442,37 @@ def test_catalog_exposes_audio_streaming_as_consent_required_and_batch_detect_in
     assert batch_detect.policy.consent_required is False
     assert batch_detect.policy.operation_class == "wakeword_detection"
     assert batch_detect.bindability == "model-bindable"
+
+
+def test_route_explain_reports_audio_privacy_candidate_policy():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"WakeWord": MeshServiceConfig(share=True, prefer="local")},
+    )
+    local_services = {
+        "WakeWord": ServiceAnnouncement(
+            module="WakeWord",
+            version="1.0.0",
+            methods=[_method_from_topic(WakeWordMethods.PROCESS_AUDIO)],
+        )
+    }
+
+    response = explain_route(
+        request=RouteExplainRequest(topic=WakeWordMethods.PROCESS_AUDIO),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        local_peer_id="local-peer",
+    )
+
+    candidate = response.candidates[0]
+    assert candidate.selected is True
+    assert candidate.transport == "local_bus"
+    assert candidate.policy.consent_required is True
+    assert candidate.policy.privacy_indicator_required is True
+    assert candidate.policy.operation_class == "wakeword_streaming"
+    assert candidate.privacy_class == "raw-audio"
+    assert candidate.auth_rbac_state == "permission_required"
 
 
 @pytest.mark.asyncio
