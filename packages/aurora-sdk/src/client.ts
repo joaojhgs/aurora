@@ -11,7 +11,7 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
-import { describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
+import { AUTH_METHODS, describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
@@ -19,6 +19,17 @@ import { SchedulerClient } from './scheduler.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
+  AuthLoginRequest,
+  AuthLoginResponse,
+  AuthPairingConnectRequest,
+  AuthPairingConnectResponse,
+  AuthPairingExchangeRequest,
+  AuthPairingExchangeResponse,
+  AuthPairingStartRequest,
+  AuthPairingStartResponse,
+  AuthValidateTokenRequest,
+  AuthValidateTokenResponse,
+  AuthWhoAmIResponse,
   AssistantSendMessageRequest,
   AssistantSendMessageResult,
   CapabilityCatalogRequest,
@@ -58,6 +69,7 @@ export class AuroraClient {
   readonly transport: AuroraTransport
   readonly auth: AuthSession
   readonly registry: RegistryClient
+  readonly authApi: AuthApiClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
@@ -76,6 +88,7 @@ export class AuroraClient {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
+    this.authApi = new AuthApiClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
@@ -163,6 +176,66 @@ export class AuroraClient {
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
     return this.events.subscribe<TEventPayload, TPayload>(options)
+  }
+}
+
+export class AuthApiClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async login(payload: AuthLoginRequest): Promise<AuroraResponse<AuthLoginResponse>> {
+    const result = await this.client.requestResult<AuthLoginResponse, AuthLoginRequest>(
+      AUTH_METHODS.login,
+      payload,
+      { path: routePath('Auth', 'Login') }
+    )
+    if (result.ok) this.client.auth.updateFromLogin(result.data)
+    return result
+  }
+
+  async validateToken(payload: AuthValidateTokenRequest): Promise<AuroraResponse<AuthValidateTokenResponse>> {
+    const result = await this.client.requestResult<AuthValidateTokenResponse, AuthValidateTokenRequest>(
+      AUTH_METHODS.validateToken,
+      payload,
+      { path: routePath('Auth', 'ValidateToken') }
+    )
+    if (result.ok) this.client.auth.updateFromTokenValidation(result.data)
+    return result
+  }
+
+  async whoAmI(): Promise<AuroraResponse<AuthWhoAmIResponse>> {
+    const result = await this.client.requestResult<AuthWhoAmIResponse>(
+      AUTH_METHODS.whoAmI,
+      undefined,
+      { path: routePath('Auth', 'WhoAmI') }
+    )
+    if (result.ok) this.client.auth.updateFromWhoAmI(result.data)
+    return result
+  }
+
+  pairingStart(payload: AuthPairingStartRequest): Promise<AuroraResponse<AuthPairingStartResponse>> {
+    return this.client.requestResult<AuthPairingStartResponse, AuthPairingStartRequest>(
+      AUTH_METHODS.pairingStart,
+      payload,
+      { path: routePath('Auth', 'PairingStart') }
+    )
+  }
+
+  pairingConnect(payload: AuthPairingConnectRequest): Promise<AuroraResponse<AuthPairingConnectResponse>> {
+    return this.client.requestResult<AuthPairingConnectResponse, AuthPairingConnectRequest>(
+      AUTH_METHODS.pairingConnect,
+      payload,
+      { path: routePath('Auth', 'PairingConnect') }
+    )
+  }
+
+  async pairingExchange(payload: AuthPairingExchangeRequest): Promise<AuroraResponse<AuthPairingExchangeResponse>> {
+    const result = await this.client.requestResult<AuthPairingExchangeResponse, AuthPairingExchangeRequest>(
+      AUTH_METHODS.pairingExchange,
+      payload,
+      { path: routePath('Auth', 'PairingExchange') }
+    )
+    if (result.ok) this.client.auth.updateFromPairingExchange(result.data)
+    return result
   }
 }
 

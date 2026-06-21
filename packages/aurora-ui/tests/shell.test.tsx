@@ -13,6 +13,8 @@ import {
 import {
   AppShell,
   AssistantView,
+  OnboardingView,
+  buildOnboardingViewModel,
   RouteMatrix,
   StateSurface,
   assistantErrorMessage,
@@ -123,6 +125,66 @@ describe('Aurora production shell', () => {
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+
+
+  it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
+
+    expect(markup).toContain('Connect Aurora')
+    expect(markup).toContain('Server Web')
+    expect(markup).toContain('Desktop Local')
+    expect(markup).toContain('Mesh Peer')
+    expect(markup).toContain('Android Thin')
+    expect(markup).toContain('iOS Thin')
+    expect(markup).toContain('Offline Local')
+    expect(markup).toContain('Gateway or local node URL')
+    expect(markup).toContain('Login or restore')
+    expect(markup).toContain('Pairing code')
+    expect(markup).toContain('development fixture only')
+  })
+
+  it('maps auth session matrix into onboarding availability without inventing success', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+
+    expect(buildOnboardingViewModel({ client, snapshot }).authState).toBe('pending')
+
+    client.auth.updateFromLogin({
+      user_id: 'admin-1',
+      username: 'admin',
+      permissions: ['Gateway.use'],
+      effective_perms: ['Gateway.use'],
+      is_admin: false
+    })
+    expect(buildOnboardingViewModel({ client, snapshot }).authState).toBe('available-local')
+
+    client.auth.expire('Token expired')
+    const expired = buildOnboardingViewModel({ client, snapshot })
+    expect(expired.authState).toBe('denied')
+    expect(expired.authExplanation).toContain('Token expired')
+
+    client.auth.updateFromTokenValidation({ valid: true, source: 'auth_disabled', permissions: ['*'], effective_perms: ['*'] })
+    const system = buildOnboardingViewModel({ client, snapshot })
+    expect(system.authState).toBe('degraded')
+    expect(system.authExplanation).toContain('SYSTEM/API-key mode')
+  })
+
+  it('keeps invalid endpoints and SDK errors visible in onboarding state', async () => {
+    const client = new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry') })
+    const snapshot = await buildShellSnapshot(client)
+    const model = buildOnboardingViewModel({ client, snapshot, endpoint: 'ftp://not-supported' })
+
+    expect(snapshot.loadState).toBe('error')
+    expect(model.endpointState).toBe('denied')
+    expect(model.endpointEvidence).toContain('could not load')
+
+    const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
+    expect(markup).toContain('AuroraClient error')
+    expect(markup).toContain('Capability state could not be loaded from AuroraClient')
   })
 
   it('builds assistant route policy and user-facing SDK error messages from backend evidence', async () => {

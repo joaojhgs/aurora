@@ -143,3 +143,48 @@ button, input, select, textarea { font: inherit; }
   .aui-assistant-form button { width: 100%; }
   .aui-chat-bubble { max-width: 100%; }
 }
+
+.aui-onboarding { display: grid; gap: 1rem; }
+.aui-onboarding-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-onboarding-header h1 { margin: .15rem 0 0; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.08; }
+.aui-onboarding-header p { max-width: 48rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-onboarding-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(17rem, .75fr); gap: .85rem; align-items: start; }
+.aui-onboarding-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-onboarding-panel h2 { margin: 0; font-size: 1rem; }
+.aui-onboarding-panel p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-onboarding-panel label { color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-onboarding-panel input { min-height: 2.6rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); }
+.aui-mode-panel { grid-row: span 2; }
+.aui-mode-list { display: grid; gap: .55rem; }
+.aui-mode-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: center; width: 100%; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .7rem; background: var(--aui-surface); color: var(--aui-ink); text-align: left; }
+.aui-mode-card.active { border-color: color-mix(in srgb, var(--aui-primary) 45%, var(--aui-border)); background: color-mix(in srgb, var(--aui-primary) 7%, white); }
+.aui-mode-card:disabled { cursor: not-allowed; opacity: .62; }
+.aui-mode-card strong, .aui-mode-card small, .aui-mode-card em { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-mode-card small, .aui-mode-card em { color: var(--aui-muted); font-size: .78rem; font-style: normal; line-height: 1.35; }
+.aui-mode-card em { grid-column: 2 / -1; }
+.aui-onboarding-form { display: grid; gap: .5rem; }
+.aui-onboarding-form + .aui-onboarding-form { border-top: 1px solid var(--aui-border); padding-top: .75rem; }
+.aui-onboarding-form button, .aui-primary-action { display: inline-flex; align-items: center; justify-content: center; width: fit-content; min-height: 2.55rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); border-radius: .45rem; padding: .55rem .85rem; background: var(--aui-primary); color: white; font-weight: 750; }
+.aui-onboarding-form button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-onboarding-facts { display: grid; gap: .5rem; margin: 0; }
+.aui-onboarding-facts div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .55rem; }
+.aui-onboarding-facts dt { color: var(--aui-muted); font-size: .75rem; }
+.aui-onboarding-facts dd { margin: 0; overflow-wrap: anywhere; }
+.aui-state-line { display: flex; align-items: center; gap: .45rem; }
+.aui-state-line span { min-width: 0; overflow-wrap: anywhere; }
+.aui-onboarding-list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.aui-onboarding-list li { display: flex; gap: .45rem; align-items: flex-start; color: var(--aui-muted); line-height: 1.4; }
+.aui-onboarding-message { border: 1px solid color-mix(in srgb, var(--aui-info) 25%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-info) 8%, white); color: var(--aui-info); padding: .8rem; }
+
+@media (max-width: 1100px) {
+  .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-mode-panel { grid-row: auto; }
+}
+
+@media (max-width: 680px) {
+  .aui-onboarding-header { display: grid; }
+  .aui-onboarding-facts div { grid-template-columns: minmax(0, 1fr); }
+  .aui-mode-card { grid-template-columns: auto minmax(0, 1fr); }
+  .aui-mode-card .aui-badge { grid-column: 2; width: fit-content; }
+  .aui-mode-card em { grid-column: 1 / -1; }
+}

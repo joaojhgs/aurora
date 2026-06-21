@@ -1,4 +1,5 @@
 import type { AuroraError } from './errors.js'
+import type { LoginLikeResponse, PairingExchangeLikeResponse, ValidateTokenLikeResponse, WhoAmILikeResponse } from './session.js'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -150,6 +151,55 @@ export interface GetRegistryResponse {
   digest: string
   service_count: number
   method_count: number
+}
+
+
+export interface AuthLoginRequest {
+  username: string
+  password: string
+}
+
+export interface AuthLoginResponse extends LoginLikeResponse {
+  token: string
+}
+
+export interface AuthValidateTokenRequest {
+  token: string
+}
+
+export type AuthValidateTokenResponse = ValidateTokenLikeResponse
+
+export type AuthWhoAmIResponse = WhoAmILikeResponse
+
+export interface AuthPairingStartRequest {
+  device_name: string
+  client_ip?: string
+  remote_peer_id?: string
+  remote_node_name?: string
+}
+
+export interface AuthPairingStartResponse {
+  code: string
+  expires_in_seconds: number
+}
+
+export interface AuthPairingConnectRequest {
+  code: string
+}
+
+export interface AuthPairingConnectResponse {
+  request_id: string
+  device_name: string
+  status: string
+}
+
+export interface AuthPairingExchangeRequest {
+  code: string
+}
+
+export interface AuthPairingExchangeResponse extends PairingExchangeLikeResponse {
+  token: string
+  token_id?: string
 }
 
 export interface PendingPairingEntry {

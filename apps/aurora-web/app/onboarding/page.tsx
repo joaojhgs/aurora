@@ -1,11 +1,7 @@
-import { AuroraRoutePage } from '../page-content'
+import { getShellSnapshot } from '../shell-state'
+import { OnboardingClientPage } from '../onboarding-client'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="onboarding"
-      title="Onboarding"
-      description="Connection and pairing flows remain pending until Auth session and pairing queue contracts are wired through the SDK."
-    />
-  )
+export default async function Page() {
+  const snapshot = await getShellSnapshot()
+  return <OnboardingClientPage snapshot={snapshot} />
 }

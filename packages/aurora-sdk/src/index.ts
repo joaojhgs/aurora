@@ -22,6 +22,7 @@ export {
   parseSseEvent
 } from './events.js'
 export {
+  AUTH_METHODS,
   GATEWAY_METHODS,
   ORCHESTRATOR_METHODS,
   TOOLING_METHODS,

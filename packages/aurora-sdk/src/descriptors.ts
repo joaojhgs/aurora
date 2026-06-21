@@ -27,6 +27,15 @@ export const GATEWAY_METHODS = {
   adminActionConfirm: 'Gateway.AdminActionConfirm'
 } as const
 
+export const AUTH_METHODS = {
+  login: 'Auth.Login',
+  validateToken: 'Auth.ValidateToken',
+  whoAmI: 'Auth.WhoAmI',
+  pairingStart: 'Auth.PairingStart',
+  pairingConnect: 'Auth.PairingConnect',
+  pairingExchange: 'Auth.PairingExchange'
+} as const
+
 export const TOOLING_METHODS = {
   listCatalog: 'Tooling.GetToolCatalog',
   prepareExecution: 'Tooling.PrepareExecution',
