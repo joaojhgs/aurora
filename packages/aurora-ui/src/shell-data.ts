@@ -7,7 +7,13 @@ import type {
   CapabilityProviderCandidate,
   NativeCapabilityManifest
 } from '@aurora/client'
-import { auroraNavSections, navItemSnapshot, type AuroraNavItem, type AuroraNavItemSnapshot } from './nav'
+import {
+  auroraAssistantCancellationItem,
+  auroraNavSections,
+  navItemSnapshot,
+  type AuroraNavItem,
+  type AuroraNavItemSnapshot
+} from './nav'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
 
@@ -58,6 +64,7 @@ export interface AuroraShellSnapshot {
   nativePlatform: string
   nativeAvailable: boolean
   routes: RouteAvailability[]
+  assistantCancellationRoute: RouteAvailability | null
   error: string | null
 }
 
@@ -75,6 +82,7 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativePlatform: 'unknown',
   nativeAvailable: false,
   routes: [],
+  assistantCancellationRoute: null,
   error: null
 }
 
@@ -98,6 +106,11 @@ export function snapshotFromGraph(
   const routes = auroraNavSections.flatMap((section) =>
     section.items.map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
   )
+  const assistantCancellationRoute = routeAvailability(
+    auroraAssistantCancellationItem,
+    graph.explain(featureIdForNavItem(auroraAssistantCancellationItem)),
+    native
+  )
   return {
     loadState: 'ready',
     nodeName: graph.localNodeName || 'Aurora node',
@@ -112,6 +125,7 @@ export function snapshotFromGraph(
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
     routes,
+    assistantCancellationRoute,
     error: null
   }
 }
@@ -134,6 +148,21 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
         requiresAdminAction: item.methodType === 'manage'
       }))
   )
+  const assistantCancellationRoute: RouteAvailability = {
+    item: navItemSnapshot(auroraAssistantCancellationItem),
+    state: 'unsupported',
+    explanation: 'Capability state could not be loaded from AuroraClient.',
+    providerLabel: 'No backend evidence',
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    candidateProviders: [],
+    evidenceSources: ['AuroraClient error'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: false
+  }
   return {
     ...loadingShellSnapshot,
     loadState: 'error',
@@ -143,7 +172,8 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     routeCount: routes.length,
     blockedCount: routes.length,
     error: errorMessage(error),
-    routes
+    routes,
+    assistantCancellationRoute
   }
 }
 

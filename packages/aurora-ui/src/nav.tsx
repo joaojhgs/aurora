@@ -89,6 +89,19 @@ export const auroraMobileTabs = [
   auroraNavSections[2]!.items[3]!
 ]
 
+export const auroraAssistantCancellationItem = item(
+  'assistant-cancel',
+  'Assistant cancellation',
+  '/',
+  Sparkles,
+  'Orchestrator',
+  'Interrupt',
+  'use',
+  'personal',
+  'unsupported',
+  'UIA-002'
+)
+
 export function getAuroraNavItem(id: string): AuroraNavItem | undefined {
   for (const section of auroraNavSections) {
     const match = section.items.find((item) => item.id === id)

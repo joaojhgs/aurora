@@ -248,10 +248,19 @@ function subscribeWithReconnect<TEventPayload, TPayload>(
   if (!isEventStreamTransport(transport)) throw eventStreamUnsupported(transport.kind)
   const reconnect = normalizeReconnect(request.reconnect)
   const controller = new AbortController()
+  const abortFromCaller = () => controller.abort()
+  if (request.signal?.aborted) {
+    controller.abort()
+  } else {
+    request.signal?.addEventListener('abort', abortFromCaller, { once: true })
+  }
   const source = reconnect.maxAttempts === 0
     ? singleStream<TEventPayload, TPayload>(transport, request, controller.signal)
     : reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal)
-  return createEventSubscription(source, () => controller.abort())
+  return createEventSubscription(source, () => {
+    request.signal?.removeEventListener('abort', abortFromCaller)
+    controller.abort()
+  })
 }
 
 async function* singleStream<TEventPayload, TPayload>(

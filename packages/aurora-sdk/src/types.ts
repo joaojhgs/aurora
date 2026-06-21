@@ -106,6 +106,12 @@ export interface AssistantSendMessageRequest {
   timeoutMs?: number
 }
 
+export interface AssistantStreamMessageRequest extends AssistantSendMessageRequest {
+  signal?: AbortSignal
+  lastEventId?: string | null
+  replayFrom?: string | null
+}
+
 export interface AssistantMessage {
   id: string
   role: 'user' | 'assistant'
@@ -120,6 +126,57 @@ export interface AssistantSendMessageResult {
   modelLabel: string | null
   privacyClass: PrivacyClass
   metadata: JsonObject
+}
+
+export type AssistantStreamUpdateKind = 'delta' | 'completed' | 'failed' | 'tool' | 'transport_lost' | 'fallback'
+
+export interface AssistantStreamUpdate {
+  kind: AssistantStreamUpdateKind
+  eventId: string | null
+  sessionId: string | null
+  text: string
+  textDelta: string
+  modelLabel: string | null
+  error: AuroraError | null
+  audit: AuditReceipt
+  metadata: JsonObject
+}
+
+export type OrchestratorInterruptScope = 'generation' | 'tool_call' | 'tts_playback' | 'session'
+export type OrchestratorInterruptStatus = 'cancelled' | 'no_active_work' | 'not_supported' | 'failed'
+
+export interface OrchestratorInterruptRequest {
+  scopes?: OrchestratorInterruptScope[]
+  session_id?: string | null
+  request_id?: string | null
+  reason?: string
+}
+
+export interface OrchestratorInterruptScopeResult {
+  scope: OrchestratorInterruptScope
+  status: OrchestratorInterruptStatus
+  message: string
+  cancelled_count: number
+}
+
+export interface OrchestratorInterruptResponse {
+  interrupt_id: string
+  status: string
+  requested_scopes: OrchestratorInterruptScope[]
+  results: OrchestratorInterruptScopeResult[]
+  session_id: string | null
+  request_id: string | null
+  event_topic: string
+  audit_event: string
+  idempotent: boolean
+  secrets_redacted: boolean
+}
+
+export interface AssistantCancelRequest {
+  sessionId?: string | null
+  requestId?: string | null
+  scopes?: OrchestratorInterruptScope[]
+  reason?: string
 }
 
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string

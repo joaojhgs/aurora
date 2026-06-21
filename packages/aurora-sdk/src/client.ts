@@ -16,6 +16,17 @@ import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { SchedulerClient } from './scheduler.js'
+import {
+  loadToolApprovalCards,
+  normalizeToolCatalog,
+  submitToolDenialDecision,
+  submitToolApprovalDecision,
+  type ToolApprovalCardModel,
+  type ToolApprovalDenialInput,
+  type ToolApprovalDecisionInput,
+  type ToolApprovalDecisionResult,
+  type ToolCatalogResponse
+} from './tools.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -32,6 +43,9 @@ import type {
   AuthWhoAmIResponse,
   AssistantSendMessageRequest,
   AssistantSendMessageResult,
+  AssistantCancelRequest,
+  AssistantStreamMessageRequest,
+  AssistantStreamUpdate,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
   CapabilityExplanation,
@@ -45,6 +59,8 @@ import type {
   NativeCapabilityManifest,
   OrchestratorProcessRequest,
   OrchestratorResponse,
+  OrchestratorInterruptRequest,
+  OrchestratorInterruptResponse,
   PeerSummary,
   ContractMethodType,
   RouteExplainRequest,
@@ -421,6 +437,86 @@ export class AssistantClient {
       }
     }
   }
+
+  async *streamMessage(input: AssistantStreamMessageRequest): AsyncIterable<AssistantStreamUpdate> {
+    const text = input.text.trim()
+    if (!text) {
+      yield streamFailure(
+        new AuroraError({
+          code: 'validation',
+          message: 'Assistant message text is required.',
+          method: ORCHESTRATOR_METHODS.externalUserInput,
+          busTopic: ORCHESTRATOR_METHODS.externalUserInput
+        }),
+        this.client.transport.kind
+      )
+      return
+    }
+
+    const payload: OrchestratorProcessRequest = {
+      text,
+      source: 'external'
+    }
+    if (input.sessionId !== undefined) payload.session_id = input.sessionId
+
+    let sawEvent = false
+    try {
+      const stream = this.client.events.streamAssistant<Record<string, unknown>, OrchestratorProcessRequest>(payload, {
+        signal: input.signal,
+        lastEventId: input.lastEventId ?? null,
+        replayFrom: input.replayFrom ?? input.lastEventId ?? null,
+        reconnect: { maxAttempts: 1, initialDelayMs: 250, maxDelayMs: 1_000 },
+        audit: {
+          method: ORCHESTRATOR_METHODS.externalUserInput,
+          busTopic: ORCHESTRATOR_METHODS.externalUserInput,
+          transport: this.client.transport.kind
+        }
+      })
+      for await (const event of stream) {
+        sawEvent = true
+        yield assistantStreamUpdateFromEvent(event)
+      }
+    } catch (error) {
+      const normalized = normalizeError(error)
+      this.client.auth.applyError(normalized)
+      if (input.signal?.aborted) return
+      if (sawEvent) {
+        yield streamFailure(normalized, this.client.transport.kind, 'transport_lost')
+        return
+      }
+
+      const fallback = await this.sendMessage(input)
+      if (fallback.ok) {
+        yield {
+          kind: 'fallback',
+          eventId: fallback.data.response.id,
+          sessionId: fallback.data.sessionId,
+          text: fallback.data.response.text,
+          textDelta: fallback.data.response.text,
+          modelLabel: fallback.data.modelLabel,
+          error: null,
+          audit: fallback.audit,
+          metadata: fallback.data.metadata
+        }
+        return
+      }
+      yield streamFailure(fallback.error, this.client.transport.kind, 'fallback')
+    }
+  }
+
+  cancel(input: AssistantCancelRequest = {}): Promise<AuroraResponse<OrchestratorInterruptResponse>> {
+    const payload: OrchestratorInterruptRequest = {
+      scopes: input.scopes ?? ['generation', 'tool_call', 'tts_playback', 'session'],
+      reason: input.reason ?? 'user_interrupt'
+    }
+    if (input.sessionId !== undefined) payload.session_id = input.sessionId
+    if (input.requestId !== undefined) payload.request_id = input.requestId
+    return this.client.requestResult<OrchestratorInterruptResponse, OrchestratorInterruptRequest>(
+      ORCHESTRATOR_METHODS.interrupt,
+      payload,
+      { path: routePath('Orchestrator', 'Interrupt') }
+    )
+  }
 }
 
 export interface AdminOverviewManifestOptions {
@@ -433,6 +529,114 @@ export interface AdminOverviewManifestOptions {
 function metadataString(metadata: OrchestratorResponse['metadata'] | undefined, key: string): string | null {
   const value = metadata?.[key]
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<Record<string, unknown>>): AssistantStreamUpdate {
+  const payload = event.payload ?? {}
+  const text = streamText(payload)
+  const metadata = streamMetadata(payload)
+  const sessionId = streamString(payload, 'session_id', 'sessionId') ?? null
+  const modelLabel = metadataString(metadata, 'model') ?? metadataString(metadata, 'provider')
+  if (event.kind === 'assistant.completed') {
+    return {
+      kind: 'completed',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: text,
+      modelLabel,
+      error: null,
+      audit: event.audit,
+      metadata
+    }
+  }
+  if (event.kind === 'assistant.failed') {
+    return {
+      kind: 'failed',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: '',
+      modelLabel,
+      error: new AuroraError({
+        code: 'unavailable_service',
+        message: text || 'Assistant stream failed.',
+        detail: payload,
+        correlationId: event.audit.correlationId ?? undefined,
+        method: event.method ?? ORCHESTRATOR_METHODS.externalUserInput,
+        busTopic: event.busTopic ?? ORCHESTRATOR_METHODS.externalUserInput
+      }),
+      audit: event.audit,
+      metadata
+    }
+  }
+  if (event.kind.startsWith('tool.')) {
+    return {
+      kind: 'tool',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: '',
+      modelLabel,
+      error: null,
+      audit: event.audit,
+      metadata
+    }
+  }
+  return {
+    kind: 'delta',
+    eventId: event.id,
+    sessionId,
+    text,
+    textDelta: streamString(payload, 'delta', 'text_delta', 'textDelta') ?? text,
+    modelLabel,
+    error: null,
+    audit: event.audit,
+    metadata
+  }
+}
+
+function streamFailure(
+  error: AuroraError,
+  transport: string,
+  kind: 'failed' | 'transport_lost' | 'fallback' = 'failed'
+): AssistantStreamUpdate {
+  return {
+    kind,
+    eventId: null,
+    sessionId: null,
+    text: error.message,
+    textDelta: '',
+    modelLabel: null,
+    error,
+    audit: createAuditReceipt(error.detail, {
+      correlationId: error.correlationId ?? null,
+      method: error.method ?? ORCHESTRATOR_METHODS.externalUserInput,
+      busTopic: error.busTopic ?? ORCHESTRATOR_METHODS.externalUserInput,
+      status: error.code,
+      transport
+    }),
+    metadata: {}
+  }
+}
+
+function streamText(payload: Record<string, unknown>): string {
+  return streamString(payload, 'text', 'content', 'message', 'delta', 'text_delta', 'textDelta') ?? ''
+}
+
+function streamMetadata(payload: Record<string, unknown>): Record<string, import('./types.js').JsonValue | undefined> {
+  const metadata = payload.metadata
+  return typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
+    ? metadata as Record<string, import('./types.js').JsonValue | undefined>
+    : {}
+}
+
+function streamString(payload: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return null
 }
 
 function stableSessionId(): string {
@@ -464,10 +668,27 @@ export class AdminOverviewClient {
 export class ToolClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog<TResponse = unknown>(request: Record<string, unknown> = {}): Promise<TResponse> {
+  listCatalog<TResponse = ToolCatalogResponse>(request: Record<string, unknown> = {}): Promise<TResponse> {
     return this.client.request<TResponse>(TOOLING_METHODS.listCatalog, request, {
       path: routePath('Tooling', 'GetToolCatalog')
     })
+  }
+
+  async listApprovalCards(request: Record<string, unknown> = {}): Promise<ToolApprovalCardModel[]> {
+    const catalog = await this.listCatalog<ToolCatalogResponse>(request)
+    return normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind })
+  }
+
+  loadApprovalCards(): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
+    return loadToolApprovalCards(this.client)
+  }
+
+  submitApprovalDecision(input: ToolApprovalDecisionInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolApprovalDecision(this.client, input)
+  }
+
+  submitDenialDecision(input: ToolApprovalDenialInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolDenialDecision(this.client, input)
   }
 
   prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
