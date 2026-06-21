@@ -19,8 +19,10 @@ import { SchedulerClient } from './scheduler.js'
 import {
   loadToolApprovalCards,
   normalizeToolCatalog,
+  submitToolDenialDecision,
   submitToolApprovalDecision,
   type ToolApprovalCardModel,
+  type ToolApprovalDenialInput,
   type ToolApprovalDecisionInput,
   type ToolApprovalDecisionResult,
   type ToolCatalogResponse
@@ -683,6 +685,10 @@ export class ToolClient {
 
   submitApprovalDecision(input: ToolApprovalDecisionInput): Promise<ToolApprovalDecisionResult> {
     return submitToolApprovalDecision(this.client, input)
+  }
+
+  submitDenialDecision(input: ToolApprovalDenialInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolDenialDecision(this.client, input)
   }
 
   prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {

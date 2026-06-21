@@ -29,8 +29,10 @@ import {
   hasPermission,
   nativeCapabilityManifestFixture,
   permissionLabel,
+  normalizeToolCatalog,
   routeExplainFixture,
   resolveEffectivePermissions,
+  toolCatalogFixture,
   uiMockReferenceFixtureSummary,
   wildcardIntersection
 } from '../src/index.js'
@@ -1068,6 +1070,48 @@ describe('AuroraClient', () => {
       ok: true,
       used_tool_approval_token: 'tool-token-1',
       admin_header: 'aa-tool'
+    })
+  })
+
+  it('submits tool denial decisions through the backend approval confirmation path', async () => {
+    let confirmationPayload: unknown = null
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.ConfirmExecution', (request) => {
+        confirmationPayload = request.payload
+        return {
+          ok: true,
+          approval_token: null,
+          expires_at: null,
+          policy_decision_id: 'policy-local-danger',
+          correlation_id: 'corr-local-danger-denied',
+          error: null
+        }
+      })
+    const client = new AuroraClient({ transport })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    const result = await client.tools.submitDenialDecision({
+      tool,
+      approverPrincipalId: 'admin-1',
+      reason: 'Operator denied config mutation'
+    })
+
+    expect(confirmationPayload).toEqual({
+      approval_request_id: 'approval-local-danger',
+      approver_principal_id: 'admin-1',
+      approve: false,
+      reason: 'Operator denied config mutation',
+      correlation_id: 'corr-local-danger'
+    })
+    expect(result).toEqual({
+      toolId: 'tool:local:filesystem.writeConfig',
+      approvalRequestId: 'approval-local-danger',
+      approvalToken: null,
+      correlationId: 'corr-local-danger-denied',
+      policyDecisionId: 'policy-local-danger',
+      approved: false,
+      audit: null
     })
   })
 

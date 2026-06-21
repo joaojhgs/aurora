@@ -190,11 +190,20 @@ export interface ToolApprovalDecisionInput {
   dryRun?: boolean
 }
 
+export interface ToolApprovalDenialInput {
+  tool: ToolApprovalCardModel
+  approverPrincipalId: string
+  reason: string
+  selectedProviderId?: string | null | undefined
+}
+
 export interface ToolApprovalDecisionResult {
   toolId: string
   approvalRequestId: string | null
   approvalToken: string | null
   correlationId: string | null
+  policyDecisionId: string | null
+  approved: boolean
   audit: AuditReceipt | null
 }
 
@@ -226,32 +235,11 @@ export async function submitToolApprovalDecision(
   client: AuroraClient,
   input: ToolApprovalDecisionInput
 ): Promise<ToolApprovalDecisionResult> {
-  const selectedProvider =
-    input.selectedProviderId !== undefined
-      ? input.tool.providers.find((provider) => provider.id === input.selectedProviderId)
-      : input.tool.providers.find((provider) => provider.selectable) ?? input.tool.providers[0]
-
-  if (input.tool.providerSelectorRequired && !selectedProvider) {
-    throw new AuroraError({
-      code: 'validation',
-      message: 'A backend-accepted provider selector is required before this tool can be approved.',
-      method: TOOLING_METHODS.requestApproval,
-      detail: { toolId: input.tool.id }
-    })
-  }
-
-  const approval = await client.approvals.request({
-    global_tool_id: input.tool.id,
-    provider_peer_id: selectedProvider?.providerPeerId ?? input.tool.providerPeerId,
-    provider_service_instance_id: selectedProvider?.serviceInstanceId ?? input.tool.serviceInstanceId,
-    mesh_selector: input.tool.meshSelector,
-    resource_selector: input.tool.resourceSelector,
-    args_hash: input.tool.argsHash,
-    redacted_args_preview: input.tool.argsPreview,
-    risk_class: input.tool.riskClass,
-    requested_approval_scope: input.scope,
-    expected_audit_event: input.tool.auditDestination,
-    dry_run: input.dryRun ?? input.tool.dryRunRequired
+  const approval = await requestToolApproval(client, {
+    tool: input.tool,
+    scope: input.scope,
+    selectedProviderId: input.selectedProviderId,
+    dryRun: input.dryRun
   })
   if (!approval.approval_request_id) {
     return {
@@ -259,6 +247,8 @@ export async function submitToolApprovalDecision(
       approvalRequestId: null,
       approvalToken: null,
       correlationId: approval.correlation_id,
+      policyDecisionId: approval.policy_decision.decision_id ?? input.tool.policyDecisionId,
+      approved: false,
       audit: null
     }
   }
@@ -274,8 +264,92 @@ export async function submitToolApprovalDecision(
     approvalRequestId: approval.approval_request_id,
     approvalToken: token.approvalToken,
     correlationId: token.correlationId ?? approval.correlation_id,
+    policyDecisionId: token.policyDecisionId ?? approval.policy_decision.decision_id ?? input.tool.policyDecisionId,
+    approved: true,
     audit: null
   }
+}
+
+export async function submitToolDenialDecision(
+  client: AuroraClient,
+  input: ToolApprovalDenialInput
+): Promise<ToolApprovalDecisionResult> {
+  const approval = input.tool.approvalRequestId
+    ? null
+    : await requestToolApproval(client, {
+      tool: input.tool,
+      scope: input.tool.requestedApprovalScope ?? 'once',
+      selectedProviderId: input.selectedProviderId,
+      dryRun: input.tool.dryRunRequired
+    })
+  const approvalRequestId = input.tool.approvalRequestId ?? approval?.approval_request_id ?? null
+  if (!approvalRequestId) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'A backend approval request ID is required before this tool can be denied.',
+      method: TOOLING_METHODS.confirmExecution,
+      correlationId: input.tool.correlationId ?? approval?.correlation_id ?? undefined,
+      detail: { toolId: input.tool.id }
+    })
+  }
+
+  const confirmation = await client.approvals.confirm({
+    approval_request_id: approvalRequestId,
+    approver_principal_id: input.approverPrincipalId,
+    approve: false,
+    reason: input.reason,
+    correlation_id: input.tool.correlationId ?? approval?.correlation_id ?? null
+  })
+  return {
+    toolId: input.tool.id,
+    approvalRequestId,
+    approvalToken: confirmation.approval_token,
+    correlationId: confirmation.correlation_id ?? input.tool.correlationId ?? approval?.correlation_id ?? null,
+    policyDecisionId: confirmation.policy_decision_id ?? approval?.policy_decision.decision_id ?? input.tool.policyDecisionId,
+    approved: false,
+    audit: null
+  }
+}
+
+async function requestToolApproval(
+  client: AuroraClient,
+  input: {
+    tool: ToolApprovalCardModel
+    scope: ToolApprovalScope
+    selectedProviderId?: string | null | undefined
+    dryRun?: boolean | undefined
+  }
+) {
+  const selectedProvider = selectedToolProvider(input.tool, input.selectedProviderId)
+  if (input.tool.providerSelectorRequired && !selectedProvider) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'A backend-accepted provider selector is required before this tool can be approved.',
+      method: TOOLING_METHODS.requestApproval,
+      detail: { toolId: input.tool.id }
+    })
+  }
+
+  return client.approvals.request({
+    global_tool_id: input.tool.id,
+    provider_peer_id: selectedProvider?.providerPeerId ?? input.tool.providerPeerId,
+    provider_service_instance_id: selectedProvider?.serviceInstanceId ?? input.tool.serviceInstanceId,
+    mesh_selector: input.tool.meshSelector,
+    resource_selector: input.tool.resourceSelector,
+    args_hash: input.tool.argsHash,
+    redacted_args_preview: input.tool.argsPreview,
+    risk_class: input.tool.riskClass,
+    requested_approval_scope: input.scope,
+    expected_audit_event: input.tool.auditDestination,
+    dry_run: input.dryRun ?? input.tool.dryRunRequired
+  })
+}
+
+function selectedToolProvider(tool: ToolApprovalCardModel, selectedProviderId: string | null | undefined) {
+  if (selectedProviderId !== undefined && selectedProviderId !== null) {
+    return tool.providers.find((provider) => provider.id === selectedProviderId)
+  }
+  return tool.providers.find((provider) => provider.selectable) ?? tool.providers[0]
 }
 
 function normalizeToolEntry(

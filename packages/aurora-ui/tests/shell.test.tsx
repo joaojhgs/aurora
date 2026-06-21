@@ -22,6 +22,7 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
   buildShellSnapshot,
@@ -327,6 +328,65 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('capability_not_advertised')
     expect(markup).toContain('Route state')
     expect(markup).toContain('unsupported')
+  })
+
+  it('submits tool denial through the SDK backend path and returns correlation evidence', async () => {
+    let confirmationPayload: unknown = null
+    const transport = new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', (request) => {
+      confirmationPayload = request.payload
+      return {
+        ok: true,
+        approval_token: null,
+        expires_at: null,
+        policy_decision_id: 'policy-local-danger',
+        correlation_id: 'corr-denied-ui',
+        error: null
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    const result = await submitToolDenialAction({
+      client,
+      tool,
+      reason: 'User rejected risky config write'
+    })
+
+    expect(confirmationPayload).toMatchObject({
+      approval_request_id: 'approval-local-danger',
+      approve: false,
+      reason: 'User rejected risky config write',
+      correlation_id: 'corr-local-danger'
+    })
+    expect(result.approved).toBe(false)
+    expect(result.correlationId).toBe('corr-denied-ui')
+    expect(result.policyDecisionId).toBe('policy-local-danger')
+  })
+
+  it('surfaces SDK denial failures from the tool denial action', async () => {
+    const client = new AuroraClient({
+      transport: new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', {
+        ok: false,
+        approval_token: null,
+        expires_at: null,
+        policy_decision_id: null,
+        correlation_id: 'corr-denied-error',
+        error: 'approval_denied'
+      })
+    })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    await expect(submitToolDenialAction({
+      client,
+      tool,
+      reason: 'User rejected risky config write'
+    })).rejects.toMatchObject({
+      code: 'permission',
+      method: 'Tooling.ConfirmExecution',
+      correlationId: 'corr-denied-error'
+    })
   })
 })
 

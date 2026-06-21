@@ -9,6 +9,7 @@ export {
 export {
   loadToolApprovalCards,
   normalizeToolCatalog,
+  submitToolDenialDecision,
   submitToolApprovalDecision
 } from './tools.js'
 export { HttpGatewayTransport } from './http.js'

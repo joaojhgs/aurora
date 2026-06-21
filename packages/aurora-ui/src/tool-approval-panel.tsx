@@ -6,6 +6,7 @@ import type {
   AuroraClient,
   AuroraResponse,
   ToolApprovalCardModel,
+  ToolApprovalDecisionResult,
   ToolApprovalScope
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
@@ -23,6 +24,13 @@ export interface ToolApprovalPanelState {
   error: string | null
   selectedProviders: Record<string, string>
   decisionMessages: Record<string, string>
+}
+
+export interface ToolDenialActionInput {
+  client: AuroraClient
+  tool: ToolApprovalCardModel
+  selectedProviderId?: string | undefined
+  reason?: string
 }
 
 export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalPanelProps) {
@@ -89,14 +97,35 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
     }
   }
 
-  function deny(tool: ToolApprovalCardModel) {
+  async function deny(tool: ToolApprovalCardModel) {
+    const selectedProviderId = state.selectedProviders[tool.id]
     setState((current) => ({
       ...current,
       decisionMessages: {
         ...current.decisionMessages,
-        [tool.id]: 'Denied locally in the approval UI; backend confirmation is required when a request ID is present.'
+        [tool.id]: 'Submitting backend denial...'
       }
     }))
+    try {
+      const result = await submitToolDenialAction({
+        client,
+        tool,
+        selectedProviderId,
+        reason: `Denied ${tool.name} from Aurora UI`
+      })
+      setState((current) => ({
+        ...current,
+        decisionMessages: {
+          ...current.decisionMessages,
+          [tool.id]: denialResultMessage(result)
+        }
+      }))
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        decisionMessages: { ...current.decisionMessages, [tool.id]: errorMessage(error) }
+      }))
+    }
   }
 
   function selectProvider(tool: ToolApprovalCardModel, providerId: string) {
@@ -169,6 +198,22 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
   )
 }
 
+export function submitToolDenialAction({
+  client,
+  tool,
+  selectedProviderId,
+  reason = `Denied ${tool.name} from Aurora UI`
+}: ToolDenialActionInput): Promise<ToolApprovalDecisionResult> {
+  const request = {
+    tool,
+    approverPrincipalId: client.auth.snapshot().principalId ?? 'current-principal',
+    reason
+  }
+  return client.tools.submitDenialDecision(
+    selectedProviderId ? { ...request, selectedProviderId } : request
+  )
+}
+
 function ToolApprovalCard({
   tool,
   selectedProviderId,
@@ -193,6 +238,7 @@ function ToolApprovalCard({
   const blocked = routeDisabled || tool.state === 'unavailable' || tool.state === 'denied' || tool.state === 'expired' || tool.state === 'replay-rejected'
   const approveDisabled = blocked || selectorMissing || tool.state === 'dry-run-only'
   const dryRunDisabled = blocked || selectorMissing || !tool.dryRunSupported
+  const denyDisabled = blocked || selectorMissing
   const adminLabel = tool.requiresAdminAction ? 'AdminAction required' : 'tool approval'
 
   return (
@@ -256,7 +302,7 @@ function ToolApprovalCard({
           <FlaskConical size={15} aria-hidden />
           Dry run
         </button>
-        <button type="button" className="aui-secondary-action" disabled={blocked} onClick={onDeny}>
+        <button type="button" className="aui-secondary-action" disabled={denyDisabled} onClick={onDeny}>
           <X size={15} aria-hidden />
           Deny
         </button>
@@ -361,4 +407,10 @@ function toolErrorMessage(result: AuroraResponse<unknown>): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Tool approval action failed.'
+}
+
+function denialResultMessage(result: ToolApprovalDecisionResult): string {
+  const correlation = result.correlationId ?? 'pending'
+  const policy = result.policyDecisionId ? `, policy ${result.policyDecisionId}` : ''
+  return `Denied with correlation ${correlation}${policy}`
 }
