@@ -235,6 +235,11 @@ def create_gateway_app(
 
         return GetServicesResponse(services=services, mode=mode)
 
+    stream_events_auth = Security(
+        create_scoped_auth_check(method_type="manage"),
+        scopes=["Gateway.manage"],
+    )
+
     @app.get(
         "/api/events/stream",
         tags=["Gateway"],
@@ -248,10 +253,7 @@ def create_gateway_app(
         },
     )
     async def stream_events(
-        _auth: Any = Security(  # noqa: B008
-            create_scoped_auth_check(method_type="manage"),
-            scopes=["Gateway.manage"],
-        ),
+        _auth: Any = stream_events_auth,
     ) -> StreamingResponse:
         """Stream normalized event envelopes as Server-Sent Events."""
         queue: asyncio.Queue[AuroraEventStreamEvent] = asyncio.Queue(maxsize=100)

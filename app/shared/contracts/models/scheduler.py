@@ -34,6 +34,9 @@ class SchedulerScheduleJobRequest(IOModel):
     schedule: str  # Cron expression
     action: str
     enabled: bool = True
+    timezone: str | None = None
+    source: str | None = None
+    privacy_class: str | None = None
     namespace: str | None = None
     owner_peer_id: str | None = None
     owner_principal_id: str | None = None
@@ -61,12 +64,22 @@ class SchedulerPauseJobRequest(IOModel):
     """Request to pause a scheduled job."""
 
     job_id: int | str
+    namespace: str | None = None
+    owner_peer_id: str | None = None
+    owner_principal_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class SchedulerResumeJobRequest(IOModel):
     """Request to resume a paused job."""
 
     job_id: int | str
+    namespace: str | None = None
+    owner_peer_id: str | None = None
+    owner_principal_id: str | None = None
+    caller_peer_id: str | None = None
+    caller_principal_id: str | None = None
 
 
 class SchedulerListJobsRequest(IOModel):
@@ -80,6 +93,26 @@ class SchedulerListJobsRequest(IOModel):
     owner_principal_id: str | None = None
     caller_peer_id: str | None = None
     caller_principal_id: str | None = None
+
+
+class SchedulerActionSupport(IOModel):
+    """Capability state for one scheduler job action."""
+
+    action: str
+    supported: bool
+    status: str = "supported"
+    reason: str | None = None
+
+
+class SchedulerActionResponse(IOModel):
+    """Response for scheduler job management actions."""
+
+    ok: bool
+    status: str
+    job_id: str
+    action: str
+    reason: str | None = None
+    audit_event: str | None = None
 
 
 class SchedulerJobInfo(IOModel):
@@ -103,6 +136,12 @@ class SchedulerJobInfo(IOModel):
     delegated_approval_token_present: bool = False
     correlation_id: str | None = None
     blocked_reason: str | None = None
+    timezone: str | None = None
+    source: str = "scheduler"
+    failure_count: int = 0
+    privacy_class: str = "sensitive"
+    last_error: str | None = None
+    action_support: list[SchedulerActionSupport] = Field(default_factory=list)
 
 
 class SchedulerListJobsResponse(IOModel):

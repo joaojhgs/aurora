@@ -1,5 +1,11 @@
 export { AuroraClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
+export {
+  SCHEDULER_METHODS,
+  SchedulerClient,
+  normalizeSchedulerActionSupport,
+  normalizeSchedulerJob
+} from './scheduler.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
@@ -17,6 +23,7 @@ export {
 } from './events.js'
 export {
   GATEWAY_METHODS,
+  ORCHESTRATOR_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,
@@ -75,6 +82,7 @@ export {
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './admin.js'
+export type * from './scheduler.js'
 export type * from './transport.js'
 export type {
   AuroraEventStreamKind,

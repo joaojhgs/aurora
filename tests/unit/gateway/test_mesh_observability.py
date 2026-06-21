@@ -16,7 +16,7 @@ from app.services.gateway.service import (
     _event_from_envelope,
 )
 from app.shared.contracts.models.aurora import AuroraMethods
-from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.auth import AuthMethods, PairingLifecycleEvent
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import (
@@ -57,9 +57,7 @@ def test_gateway_observability_contracts_are_registered():
     assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "manage"
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == [
-        "Gateway.manage"
-    ]
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.manage"]
     clear_registry()
 
 
@@ -159,7 +157,9 @@ async def test_deployment_topology_reports_process_mode_and_redacts_redis_url():
     assert "bullmq_queue_lag_unknown" in response.mode_capability_degradations
     assert "process_registry_stale" in response.mode_capability_degradations
     assert response.container_topology_hints.gateway_service == "gateway-service"
-    auth_topology = next(item for item in response.service_process_topology if item.module == "Auth")
+    auth_topology = next(
+        item for item in response.service_process_topology if item.module == "Auth"
+    )
     assert auth_topology.container_hint == "auth-service"
     assert auth_topology.stale is True
 
@@ -317,12 +317,39 @@ def test_gateway_event_categories_cover_config_and_pairing():
     pairing_event = _event_from_envelope(
         Envelope(
             type=AuthMethods.PAIRING_REQUESTED,
-            payload={"device_name": "phone", "code": "123456"},
+            payload={
+                "device_name": "phone",
+                "code_sha256": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+            },
         )
     )
 
     assert config_event.category == "config"
     assert pairing_event.category == "pairing"
+    assert "123456" not in json.dumps(pairing_event.redacted_payload)
+
+
+def test_pairing_lifecycle_event_stream_omits_raw_pairing_code():
+    raw_code = "123456"
+    event = _event_from_envelope(
+        Envelope(
+            type=AuthMethods.PAIRING_DENIED,
+            payload=PairingLifecycleEvent(
+                request_id="pair-1",
+                event_type="PairingDenied",
+                status="denied",
+                code_sha256="8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+                device_name="phone",
+                actor_principal_id="admin-1",
+            ),
+        )
+    )
+
+    dumped = json.dumps(event.redacted_payload, sort_keys=True)
+    assert event.category == "pairing"
+    assert "code_sha256" in event.redacted_payload
+    assert raw_code not in dumped
+    assert 'code": ' not in dumped
 
 
 @pytest.mark.asyncio

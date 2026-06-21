@@ -1,4 +1,5 @@
 import { AuthSession } from './session.js'
+import { AuroraError } from './errors.js'
 import {
   auditFromHeaders,
   captureResult,
@@ -10,13 +11,16 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
-import { describeRegistry, GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
+import { describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
+import { SchedulerClient } from './scheduler.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
+  AssistantSendMessageRequest,
+  AssistantSendMessageResult,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
   CapabilityExplanation,
@@ -28,6 +32,8 @@ import type {
   GatewayBuiltinRouteDescriptor,
   MethodDescriptor,
   NativeCapabilityManifest,
+  OrchestratorProcessRequest,
+  OrchestratorResponse,
   PeerSummary,
   ContractMethodType,
   RouteExplainRequest,
@@ -56,7 +62,9 @@ export class AuroraClient {
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
   readonly routes: RouteClient
+  readonly assistant: AssistantClient
   readonly tools: ToolClient
+  readonly scheduler: SchedulerClient
   readonly admin: AdminActionClient
   readonly approvals: ApprovalClient
   readonly native: NativeClient
@@ -72,7 +80,9 @@ export class AuroraClient {
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
+    this.assistant = new AssistantClient(this)
     this.tools = new ToolClient(this)
+    this.scheduler = new SchedulerClient(this)
     this.admin = new AdminActionClient(this)
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
@@ -284,11 +294,76 @@ export class RouteClient {
   }
 }
 
+export class AssistantClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  async sendMessage(input: AssistantSendMessageRequest): Promise<AuroraResponse<AssistantSendMessageResult>> {
+    const text = input.text.trim()
+    if (!text) {
+      return this.client.result<AssistantSendMessageResult>(() => {
+        throw new AuroraError({
+          code: 'validation',
+          message: 'Assistant message text is required.',
+          method: ORCHESTRATOR_METHODS.externalUserInput,
+          busTopic: ORCHESTRATOR_METHODS.externalUserInput
+        })
+      })
+    }
+
+    const payload: OrchestratorProcessRequest = {
+      text,
+      source: 'external'
+    }
+    if (input.sessionId !== undefined) payload.session_id = input.sessionId
+
+    const requestOptions: { path: string; timeoutMs?: number } = {
+      path: routePath('Orchestrator', 'ExternalUserInput')
+    }
+    if (input.timeoutMs !== undefined) requestOptions.timeoutMs = input.timeoutMs
+
+    const response = await this.client.requestResult<OrchestratorResponse, OrchestratorProcessRequest>(
+      ORCHESTRATOR_METHODS.externalUserInput,
+      payload,
+      requestOptions
+    )
+
+    if (!response.ok) return response
+
+    const sessionId = response.data.session_id ?? input.sessionId ?? stableSessionId()
+    return {
+      ok: true,
+      audit: response.audit,
+      data: {
+        sessionId,
+        response: {
+          id: response.audit.correlationId ?? `assistant-${Date.now()}`,
+          role: 'assistant',
+          text: response.data.text,
+          createdAt: new Date().toISOString()
+        },
+        routePolicy: input.routePolicy ?? null,
+        modelLabel: metadataString(response.data.metadata, 'model') ?? metadataString(response.data.metadata, 'provider'),
+        privacyClass: input.routePolicy?.privacyClass ?? 'personal',
+        metadata: response.data.metadata ?? {}
+      }
+    }
+  }
+}
+
 export interface AdminOverviewManifestOptions {
   gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
   nativeManifest?: NativeCapabilityManifest | null
   peers?: PeerSummary[]
   generatedAt?: string
+}
+
+function metadataString(metadata: OrchestratorResponse['metadata'] | undefined, key: string): string | null {
+  const value = metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function stableSessionId(): string {
+  return `assistant-session-${Date.now().toString(36)}`
 }
 
 export class AdminOverviewClient {

@@ -248,6 +248,7 @@ describe('SDK transport conformance', () => {
 
     expect(backendInventoryFixture.generated_by).toBe('scripts/generate_backend_inventory.py')
     expect(generated.methods.map((method) => method.busTopic)).toEqual([
+      'Auth.ListPendingPairings',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',

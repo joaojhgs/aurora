@@ -35,6 +35,13 @@ export const TOOLING_METHODS = {
   executeTool: 'Tooling.ExecuteTool'
 } as const
 
+export const ORCHESTRATOR_METHODS = {
+  userInput: 'Orchestrator.UserInput',
+  externalUserInput: 'Orchestrator.ExternalUserInput',
+  toolResult: 'Orchestrator.ToolResult',
+  response: 'Orchestrator.Response'
+} as const
+
 export const ORCHESTRATOR_MODEL_METHODS = {
   getRuntime: 'Orchestrator.GetModelRuntime',
   getCatalog: 'Orchestrator.GetModelCatalog',

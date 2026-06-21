@@ -48,6 +48,14 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Orchestrator.ExternalUserInput', (request) => ({
+        text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
+        session_id: mockSessionId(request.payload),
+        metadata: {
+          model: 'mock-local',
+          provider: 'mock-orchestrator'
+        }
+      }))
   }
 
   register<TPayload = unknown, TData = unknown>(
@@ -132,6 +140,20 @@ export class MockAuroraTransport implements AuroraTransport {
       | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
     return createEventSubscription(normalizeMockEvents<TEventPayload>(source, request))
   }
+}
+
+function mockPromptText(payload: unknown): string {
+  if (typeof payload !== 'object' || payload === null) return 'prompt'
+  const text = (payload as { text?: unknown }).text
+  return typeof text === 'string' && text.trim() ? text.trim() : 'prompt'
+}
+
+function mockSessionId(payload: unknown): string {
+  if (typeof payload === 'object' && payload !== null) {
+    const sessionId = (payload as { session_id?: unknown }).session_id
+    if (typeof sessionId === 'string' && sessionId.trim()) return sessionId
+  }
+  return 'mock-assistant-session'
 }
 
 async function* normalizeMockEvents<TPayload>(

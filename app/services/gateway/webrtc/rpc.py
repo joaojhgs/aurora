@@ -120,8 +120,7 @@ class RPCHandler:
             return
 
         log_debug(
-            f"RPCHandler: Received forwarded event {topic} "
-            f"correlation_id={correlation_id or 'n/a'}"
+            f"RPCHandler: Received forwarded event {topic} correlation_id={correlation_id or 'n/a'}"
         )
         try:
             payload: Any = params
@@ -307,16 +306,18 @@ class RPCHandler:
                     module_for_capacity, max_concurrent - active, max_concurrent
                 )
         try:
-            log_debug(
-                f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}"
-            )
+            log_debug(f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}")
             typed_params = params
             if isinstance(params, dict):
-                if topic in {
-                    AudioSessionMethods.PREPARE,
-                    TranscriptionMethods.PROCESS_AUDIO,
-                    WakeWordMethods.PROCESS_AUDIO,
-                } or topic == ToolingMethods.EXECUTE_TOOL:
+                if (
+                    topic
+                    in {
+                        AudioSessionMethods.PREPARE,
+                        TranscriptionMethods.PROCESS_AUDIO,
+                        WakeWordMethods.PROCESS_AUDIO,
+                    }
+                    or topic == ToolingMethods.EXECUTE_TOOL
+                ):
                     params = {
                         **params,
                         "caller_peer_id": self._peer_id,

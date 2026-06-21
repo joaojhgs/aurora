@@ -433,9 +433,7 @@ class ToolingService(BaseService):
             "mesh_data_scope": mesh_selector.get("data_scope"),
             "mesh_tool_id": mesh_selector.get("tool_id"),
         }
-        serialized = json.dumps(
-            selector_fields, sort_keys=True, default=str, separators=(",", ":")
-        )
+        serialized = json.dumps(selector_fields, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     @classmethod
@@ -748,7 +746,7 @@ class ToolingService(BaseService):
                         reason_code=block_reason[0],
                         reason=block_reason[1],
                     )
-            )
+                )
             return
         tools.append(tool)
 
@@ -812,9 +810,7 @@ class ToolingService(BaseService):
     def _tool_admin(tool: Any, operation_class: str) -> bool:
         return bool(getattr(tool, "admin", False)) or operation_class == "admin"
 
-    def _tool_privacy_hints(
-        self, tool: Any, safety_class: str, operation_class: str
-    ) -> list[str]:
+    def _tool_privacy_hints(self, tool: Any, safety_class: str, operation_class: str) -> list[str]:
         raw_hints = getattr(tool, "privacy_hints", None)
         hints: list[str] = []
         if isinstance(raw_hints, (list, tuple, set)):
@@ -918,9 +914,7 @@ class ToolingService(BaseService):
 
     @staticmethod
     def _policy_rule_matches(rule: ToolingSharingPolicyRule, context: dict[str, Any]) -> bool:
-        rule_fields = rule.model_dump(
-            exclude={"share", "approval_mode", "token_ttl_seconds"}
-        )
+        rule_fields = rule.model_dump(exclude={"share", "approval_mode", "token_ttl_seconds"})
         for field_name, rule_value in rule_fields.items():
             if field_name == "rule_id" or rule_value is None:
                 continue

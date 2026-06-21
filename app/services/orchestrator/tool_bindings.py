@@ -31,9 +31,7 @@ def build_tool_bindings(
             continue
 
         try:
-            bindable_name = _unique_tool_name(
-                str(schema.get("name") or "unknown_tool"), bindings
-            )
+            bindable_name = _unique_tool_name(str(schema.get("name") or "unknown_tool"), bindings)
             tool = _structured_tool_from_schema(schema, bindable_name)
             tools.append(tool)
             bindings[bindable_name] = _execution_binding(schema, bindable_name)
@@ -82,29 +80,30 @@ def _is_safe_to_bind(schema: dict[str, Any]) -> bool:
     return safety_class == "standard" and not confirmation_required
 
 
-def _requires_approval_interrupt(
-    schema: dict[str, Any], blocked_metadata: dict[str, Any]
-) -> bool:
+def _requires_approval_interrupt(schema: dict[str, Any], blocked_metadata: dict[str, Any]) -> bool:
     """Return whether a blocked catalog tool should surface as an approval card."""
 
     safety_class = schema.get("safety_class") or "standard"
     reason_code = blocked_metadata.get("reason_code")
-    return bool(schema.get("confirmation_required")) or safety_class in {
-        "sensitive",
-        "dangerous",
-    } or reason_code in {
-        "confirmation_required",
-        "safety_class_sensitive",
-        "safety_class_dangerous",
-        "approval_required",
-    }
+    return (
+        bool(schema.get("confirmation_required"))
+        or safety_class
+        in {
+            "sensitive",
+            "dangerous",
+        }
+        or reason_code
+        in {
+            "confirmation_required",
+            "safety_class_sensitive",
+            "safety_class_dangerous",
+            "approval_required",
+        }
+    )
 
 
 def _is_remote_tool(schema: dict[str, Any]) -> bool:
-    return (
-        schema.get("execution_location") == "remote"
-        or schema.get("source_type") == "mesh_peer"
-    )
+    return schema.get("execution_location") == "remote" or schema.get("source_type") == "mesh_peer"
 
 
 def _unique_tool_name(candidate: str, existing: dict[str, ToolBinding]) -> str:
@@ -119,9 +118,7 @@ def _unique_tool_name(candidate: str, existing: dict[str, ToolBinding]) -> str:
     return f"{candidate}_{suffix}"
 
 
-def _structured_tool_from_schema(
-    schema: dict[str, Any], bindable_name: str
-) -> StructuredTool:
+def _structured_tool_from_schema(schema: dict[str, Any], bindable_name: str) -> StructuredTool:
     args_schema = _args_model_from_json_schema(
         bindable_name, schema.get("args_schema") or schema.get("schema") or {}
     )
@@ -161,16 +158,10 @@ def _args_model_from_json_schema(bindable_name: str, args_schema: dict[str, Any]
         field_description = field_info.get("description", "")
 
         if field_name in required_fields:
-            field_default = (
-                Field(..., description=field_description)
-                if field_description
-                else ...
-            )
+            field_default = Field(..., description=field_description) if field_description else ...
         else:
             field_default = (
-                Field(default=None, description=field_description)
-                if field_description
-                else None
+                Field(default=None, description=field_description) if field_description else None
             )
         field_defs[field_name] = (field_type, field_default)
 

@@ -541,9 +541,7 @@ class GatewaySupportBundleResponse(IOModel):
     services: list[ServiceInfo] = Field(default_factory=list)
     service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
     mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
-    webrtc_diagnostics: WebRTCDiagnosticsResponse = Field(
-        default_factory=WebRTCDiagnosticsResponse
-    )
+    webrtc_diagnostics: WebRTCDiagnosticsResponse = Field(default_factory=WebRTCDiagnosticsResponse)
     route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
     capability_catalog_summary: CapabilityCatalogSummary = Field(
         default_factory=CapabilityCatalogSummary

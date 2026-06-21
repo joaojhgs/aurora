@@ -10,9 +10,13 @@ This service:
 
 from __future__ import annotations
 
+import asyncio
+import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -22,8 +26,18 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
-from app.shared.contracts.models.common import EmptyOutput
+from app.shared.config.interface import ConfigAPI
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.db import DBMethods, DBRAGStoreRequest
 from app.shared.contracts.models.orchestrator import (
+    AttachmentContextIngestRequest,
+    AttachmentContextIngestResponse,
+    AttachmentContextItem,
+    AttachmentContextItemResult,
+    AttachmentContextPrivacyClass,
+    AttachmentContextStatus,
+    AttachmentContextStoragePolicy,
     ModelRuntimeBenchmarkInfo,
     ModelRuntimeCatalogRequest,
     ModelRuntimeCatalogResponse,
@@ -35,6 +49,12 @@ from app.shared.contracts.models.orchestrator import (
     ModelRuntimeProviderInfo,
     ModelRuntimeRequest,
     ModelRuntimeResponse,
+    OrchestratorEvents,
+    OrchestratorInterruptedEvent,
+    OrchestratorInterruptRequest,
+    OrchestratorInterruptResponse,
+    OrchestratorInterruptScope,
+    OrchestratorInterruptScopeResult,
     OrchestratorMethods,
     OrchestratorModule,
     OrchestratorProcessRequest,
@@ -42,10 +62,20 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorToolResultRequest,
 )
 from app.shared.contracts.models.stt import STTMethods
+from app.shared.contracts.models.tts import TTSMethods, TTSRequest
 from app.shared.contracts.registry import method_contract
-from app.shared.config.interface import ConfigAPI
 from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 from app.shared.services.base_service import BaseService
+
+_SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"), "credential"),
+    (re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{16,}"), "bearer_token"),
+    (re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"), "api_key"),
+)
+_SENSITIVE_METADATA_KEY_PATTERN = re.compile(
+    r"(?i)(api[_-]?key|auth|authorization|bearer|cookie|credential|password|secret|signature|token)"
+)
+_URI_IN_TEXT_PATTERN = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s'\"]+", re.IGNORECASE)
 
 
 # Service implementation
@@ -68,6 +98,8 @@ class OrchestratorService(BaseService):
         )
         self.orchestrator: GraphOrchestrator | None = None
         self._model_runtime_operations: dict[str, ModelRuntimeOperationResponse] = {}
+        self._generation_tasks: dict[asyncio.Task, str | None] = {}
+        self._generation_lock = asyncio.Lock()
 
     async def on_start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
@@ -89,6 +121,7 @@ class OrchestratorService(BaseService):
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
         self.bus.unsubscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
+        await self._cancel_generation_tasks(session_id=None)
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -209,6 +242,168 @@ class OrchestratorService(BaseService):
             )
 
     @method_contract(
+        method_id=OrchestratorMethods.INGEST_CONTEXT,
+        summary="Ingest assistant attachment and shared context metadata",
+        input_model=AttachmentContextIngestRequest,
+        output_model=AttachmentContextIngestResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def ingest_context(
+        self, data: AttachmentContextIngestRequest
+    ) -> AttachmentContextIngestResponse:
+        """Accept redacted text context for assistant use with policy and audit metadata."""
+        correlation_id = data.correlation_id or f"context-{uuid4().hex[:12]}"
+        accepted_items: list[AttachmentContextItemResult] = []
+        rejected_items: list[AttachmentContextItemResult] = []
+        total_bytes = 0
+
+        if len(data.items) > data.limits.max_items:
+            response = self._context_response(
+                data=data,
+                accepted_items=[],
+                rejected_items=[
+                    self._context_result(
+                        item=AttachmentContextItem(kind="text"),
+                        index=0,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="too_many_items",
+                        message=f"Context item count exceeds limit {data.limits.max_items}",
+                    )
+                ],
+                total_bytes=0,
+                correlation_id=correlation_id,
+            )
+            await self._audit_context_ingestion(data, response)
+            return response
+
+        for index, item in enumerate(data.items):
+            item_bytes = self._context_item_size(item)
+            total_bytes += item_bytes
+
+            if data.storage_policy == "reject":
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="storage_policy_reject",
+                        message="Storage policy rejects attachment/context ingestion",
+                    )
+                )
+                continue
+
+            if data.privacy_class in {"secret", "credential", "raw-audio"}:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="privacy_class_blocked",
+                        message="Privacy class is not accepted for assistant context ingestion",
+                    )
+                )
+                continue
+
+            if item_bytes > data.limits.max_item_bytes:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="item_too_large",
+                        message=f"Context item exceeds limit {data.limits.max_item_bytes} bytes",
+                    )
+                )
+                continue
+
+            if total_bytes > data.limits.max_total_bytes:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="rejected",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        accepted_bytes=item_bytes,
+                        reason_code="total_too_large",
+                        message=f"Context batch exceeds limit {data.limits.max_total_bytes} bytes",
+                    )
+                )
+                continue
+
+            text = self._context_item_text(item)
+            if not text:
+                rejected_items.append(
+                    self._context_result(
+                        item=item,
+                        index=index,
+                        status="unsupported",
+                        storage_policy=data.storage_policy,
+                        privacy_class=data.privacy_class,
+                        reason_code="no_text_context",
+                        message="Only text-like attachment/context content is supported",
+                    )
+                )
+                continue
+
+            sanitized_text, redaction_reasons = self._sanitize_context_text(
+                text,
+                max_chars=data.limits.max_text_chars,
+            )
+            status: AttachmentContextStatus = "redacted" if redaction_reasons else "accepted"
+            result = self._context_result(
+                item=item,
+                index=index,
+                status=status,
+                storage_policy=data.storage_policy,
+                privacy_class=data.privacy_class,
+                accepted_bytes=item_bytes,
+                redacted=bool(redaction_reasons),
+                redaction_reasons=redaction_reasons,
+                message="Context accepted for assistant use",
+            )
+
+            if data.storage_policy == "rag":
+                stored_key, final_redaction_reasons = await self._store_context_in_rag(
+                    data=data,
+                    item=item,
+                    item_id=result.item_id,
+                    text=sanitized_text,
+                    redacted=bool(redaction_reasons),
+                    redaction_reasons=redaction_reasons,
+                    correlation_id=correlation_id,
+                )
+                result.status = "stored"
+                result.stored_namespace = data.namespace
+                result.stored_key = stored_key
+                result.redaction_reasons = final_redaction_reasons
+                result.redacted = bool(final_redaction_reasons)
+
+            accepted_items.append(result)
+
+        response = self._context_response(
+            data=data,
+            accepted_items=accepted_items,
+            rejected_items=rejected_items,
+            total_bytes=total_bytes,
+            correlation_id=correlation_id,
+        )
+        await self._audit_context_ingestion(data, response)
+        return response
+
+    @method_contract(
         method_id=OrchestratorMethods.TOOL_RESULT,
         summary="Process tool execution result",
         input_model=OrchestratorToolResultRequest,
@@ -233,6 +428,128 @@ class OrchestratorService(BaseService):
             return EmptyOutput()
 
     @method_contract(
+        method_id=OrchestratorMethods.INTERRUPT,
+        summary="Interrupt active assistant generation, tool work, TTS playback, or a session",
+        input_model=OrchestratorInterruptRequest,
+        output_model=OrchestratorInterruptResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def interrupt_assistant(
+        self,
+        data: OrchestratorInterruptRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorInterruptResponse:
+        """Handle an idempotent assistant interrupt request."""
+        interrupt_id = f"interrupt-{uuid4().hex[:12]}"
+        scopes = _dedupe_scopes(data.scopes)
+        results: list[OrchestratorInterruptScopeResult] = []
+
+        generation_cancelled_by_session = False
+        for scope in scopes:
+            if scope == "generation":
+                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled" if cancelled else "no_active_work",
+                        cancelled_count=cancelled,
+                        message=(
+                            f"Cancelled {cancelled} active generation task(s)"
+                            if cancelled
+                            else "No active generation task matched the interrupt request"
+                        ),
+                    )
+                )
+            elif scope == "tool_call":
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="no_active_work",
+                        message=(
+                            "No separately cancellable tool call is active; graph-level "
+                            "generation cancellation covers current tool-bound runs"
+                        ),
+                    )
+                )
+            elif scope == "tts_playback":
+                await self.bus.publish(
+                    TTSMethods.STOP,
+                    EmptyInput(),
+                    event=False,
+                    priority=get_interactive_priority(),
+                    origin="internal",
+                    correlation_id=getattr(envelope, "correlation_id", None),
+                    principal_id=getattr(envelope, "principal_id", None),
+                )
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled",
+                        cancelled_count=1,
+                        message="TTS stop command sent",
+                    )
+                )
+            elif scope == "session":
+                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled" if cancelled else "no_active_work",
+                        cancelled_count=cancelled,
+                        message=(
+                            f"Cancelled {cancelled} active session task(s)"
+                            if cancelled
+                            else "No active session task matched the interrupt request"
+                        ),
+                    )
+                )
+
+        if generation_cancelled_by_session:
+            log_info(
+                f"Orchestrator interrupt {interrupt_id} cancelled generation "
+                f"for session={data.session_id or '*'}"
+            )
+
+        status = _interrupt_status(results)
+        response = OrchestratorInterruptResponse(
+            interrupt_id=interrupt_id,
+            status=status,
+            requested_scopes=scopes,
+            results=results,
+            session_id=data.session_id,
+            request_id=data.request_id,
+            audit_event="orchestrator.interrupt.requested",
+            idempotent=True,
+            secrets_redacted=True,
+        )
+        await self.bus.publish(
+            OrchestratorEvents.INTERRUPTED,
+            OrchestratorInterruptedEvent(
+                interrupt_id=response.interrupt_id,
+                status=response.status,
+                requested_scopes=response.requested_scopes,
+                results=response.results,
+                session_id=response.session_id,
+                request_id=response.request_id,
+                reason=data.reason,
+                principal_id=getattr(envelope, "principal_id", None),
+                audit_event=response.audit_event,
+                secrets_redacted=True,
+            ),
+            event=True,
+            mesh=True,
+            priority=get_interactive_priority(),
+            origin="internal",
+            correlation_id=getattr(envelope, "correlation_id", None),
+            principal_id=getattr(envelope, "principal_id", None),
+        )
+        return response
+
+    @method_contract(
         method_id=OrchestratorMethods.GET_MODEL_RUNTIME,
         summary="Get current model runtime state",
         input_model=ModelRuntimeRequest,
@@ -250,7 +567,11 @@ class OrchestratorService(BaseService):
         provider = None
         if data.provider_id:
             provider = next(
-                (candidate for candidate in catalog.providers if candidate.provider_id == data.provider_id),
+                (
+                    candidate
+                    for candidate in catalog.providers
+                    if candidate.provider_id == data.provider_id
+                ),
                 None,
             )
         elif catalog.selected_provider_id:
@@ -378,6 +699,9 @@ class OrchestratorService(BaseService):
         Returns:
             Response text if return_response is True, else None
         """
+        current_task = asyncio.current_task()
+        if current_task is not None:
+            await self._track_generation_task(current_task, session_id)
         try:
             log_debug(f"Processing input from {source}: {text}")
 
@@ -412,9 +736,6 @@ class OrchestratorService(BaseService):
                 )
 
                 # Send TTS request to speak the response
-                from app.shared.contracts.models.tts import TTSMethods
-                from app.shared.messaging.models.tts_models import TTSRequest
-
                 await self.bus.publish(
                     TTSMethods.REQUEST,
                     TTSRequest(text=response_text, interrupt=True),
@@ -427,12 +748,49 @@ class OrchestratorService(BaseService):
             if return_response:
                 return response_text
 
+        except asyncio.CancelledError:
+            log_info(f"Orchestrator input processing interrupted for session={session_id}")
+            if return_response:
+                return "Interrupted"
         except Exception as e:
             log_error(f"Error processing input: {e}", exc_info=True)
             if return_response:
                 return f"Error: {e!s}"
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
 
         return None
+
+    async def _track_generation_task(
+        self,
+        task: asyncio.Task,
+        session_id: str | None,
+    ) -> None:
+        async with self._generation_lock:
+            self._generation_tasks[task] = session_id
+
+    async def _untrack_generation_task(self, task: asyncio.Task) -> None:
+        async with self._generation_lock:
+            self._generation_tasks.pop(task, None)
+
+    async def _cancel_generation_tasks(self, session_id: str | None) -> int:
+        current_task = asyncio.current_task()
+        async with self._generation_lock:
+            candidates = [
+                task
+                for task, task_session_id in self._generation_tasks.items()
+                if task is not current_task
+                and not task.done()
+                and (session_id is None or task_session_id == session_id)
+            ]
+
+        for task in candidates:
+            task.cancel()
+
+        if candidates:
+            await asyncio.gather(*candidates, return_exceptions=True)
+        return len(candidates)
 
     async def _build_model_runtime_catalog(
         self,
@@ -497,9 +855,299 @@ class OrchestratorService(BaseService):
         self._model_runtime_operations[operation.operation_id] = operation
         return operation
 
+    def _context_item_size(self, item: AttachmentContextItem) -> int:
+        if item.size_bytes is not None:
+            return max(0, item.size_bytes)
+        text = self._context_item_text(item)
+        return len(text.encode("utf-8"))
+
+    def _context_item_text(self, item: AttachmentContextItem) -> str:
+        if item.content_text:
+            return item.content_text
+        if item.kind == "url" and item.url:
+            return f"{item.title or item.url}\n{item.url}"
+        return ""
+
+    def _sanitize_context_text(self, text: str, *, max_chars: int) -> tuple[str, list[str]]:
+        reasons: list[str] = []
+        sanitized = text[:max_chars]
+        if len(text) > max_chars:
+            reasons.append("truncated")
+        for pattern, reason in _SECRET_PATTERNS:
+            sanitized, count = pattern.subn("[REDACTED]", sanitized)
+            if count:
+                reasons.append(reason)
+        uri_reasons: list[str] = []
+
+        def sanitize_uri_match(match: re.Match[str]) -> str:
+            sanitized_uri, match_reasons = self._sanitize_context_uri(match.group(0))
+            uri_reasons.extend(f"embedded_{reason}" for reason in match_reasons)
+            return sanitized_uri or "[REDACTED]"
+
+        sanitized = _URI_IN_TEXT_PATTERN.sub(sanitize_uri_match, sanitized)
+        reasons.extend(uri_reasons)
+        return sanitized, sorted(set(reasons))
+
+    def _sanitize_context_scalar(self, value: str | None) -> tuple[str | None, list[str]]:
+        if value is None:
+            return None, []
+        sanitized, reasons = self._sanitize_context_text(value, max_chars=len(value))
+        return sanitized, reasons
+
+    def _sanitize_context_uri(self, uri: str | None) -> tuple[str | None, list[str]]:
+        if not uri:
+            return uri, []
+
+        reasons: list[str] = []
+        parsed = urlsplit(uri)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            netloc = parsed.hostname or ""
+            if parsed.port is not None:
+                netloc = f"{netloc}:{parsed.port}"
+            origin = urlunsplit((parsed.scheme, netloc, "", "", ""))
+            if parsed.username or parsed.password:
+                reasons.append("uri_credentials")
+            if parsed.query:
+                reasons.append("uri_query")
+            if parsed.fragment:
+                reasons.append("uri_fragment")
+            path_reasons = self._sanitize_context_text(
+                parsed.path,
+                max_chars=len(parsed.path),
+            )[1]
+            if path_reasons:
+                reasons.extend(f"uri_{reason}" for reason in path_reasons)
+            if reasons:
+                return f"{origin}/[REDACTED]", sorted(set(reasons))
+            return urlunsplit((parsed.scheme, netloc, parsed.path, "", "")), []
+
+        if parsed.scheme == "file" or uri.startswith(("/", "~")) or "\\" in uri:
+            return "[REDACTED_PATH]", ["local_path"]
+
+        if parsed.scheme:
+            return f"{parsed.scheme}://[REDACTED]", ["uri_provenance"]
+
+        sanitized, scalar_reasons = self._sanitize_context_scalar(uri)
+        return sanitized, scalar_reasons
+
+    def _sanitize_context_metadata(self, value: Any) -> tuple[Any, list[str]]:
+        reasons: list[str] = []
+        if isinstance(value, dict):
+            sanitized: dict[str, Any] = {}
+            for raw_key, raw_value in value.items():
+                key = str(raw_key)
+                if _SENSITIVE_METADATA_KEY_PATTERN.search(key):
+                    reasons.append("metadata_key")
+                    continue
+                sanitized_value, value_reasons = self._sanitize_context_metadata(raw_value)
+                reasons.extend(value_reasons)
+                sanitized[key] = sanitized_value
+            return sanitized, sorted(set(reasons))
+        if isinstance(value, list):
+            sanitized_items: list[Any] = []
+            for item in value:
+                sanitized_item, item_reasons = self._sanitize_context_metadata(item)
+                reasons.extend(item_reasons)
+                sanitized_items.append(sanitized_item)
+            return sanitized_items, sorted(set(reasons))
+        if isinstance(value, str):
+            if "://" in value or value.startswith(("/", "~")) or "\\" in value:
+                sanitized_uri, uri_reasons = self._sanitize_context_uri(value)
+                return sanitized_uri, uri_reasons
+            sanitized_scalar, scalar_reasons = self._sanitize_context_scalar(value)
+            return sanitized_scalar, scalar_reasons
+        return value, []
+
+    def _context_rag_value(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        item: AttachmentContextItem,
+        text: str,
+        redacted: bool,
+        redaction_reasons: list[str],
+        correlation_id: str,
+    ) -> tuple[dict[str, Any], list[str]]:
+        storage_reasons: list[str] = []
+        title, title_reasons = self._sanitize_context_scalar(item.title)
+        filename, filename_reasons = self._sanitize_context_uri(item.filename)
+        url, url_reasons = self._sanitize_context_uri(item.url)
+        source, source_reasons = self._sanitize_context_metadata(
+            item.source.model_dump(exclude_none=True)
+        )
+        metadata, metadata_reasons = self._sanitize_context_metadata(item.metadata)
+        storage_reasons.extend(f"title_{reason}" for reason in title_reasons)
+        storage_reasons.extend(f"filename_{reason}" for reason in filename_reasons)
+        storage_reasons.extend(f"url_{reason}" for reason in url_reasons)
+        storage_reasons.extend(f"source_{reason}" for reason in source_reasons)
+        storage_reasons.extend(f"metadata_{reason}" for reason in metadata_reasons)
+        final_reasons = sorted(set(redaction_reasons + storage_reasons))
+        value = {
+            "text": text,
+            "kind": item.kind,
+            "title": title,
+            "filename": filename,
+            "url": url,
+            "mime_type": item.mime_type,
+            "privacy_class": data.privacy_class,
+            "source": source,
+            "metadata": metadata,
+            "redacted": redacted or bool(storage_reasons),
+            "redaction_reasons": final_reasons,
+            "policy_decision_id": data.policy_decision_id,
+            "correlation_id": correlation_id,
+            "schema_version": "assistant-context.v1",
+        }
+        return value, final_reasons
+
+    def _context_result(
+        self,
+        *,
+        item: AttachmentContextItem,
+        index: int,
+        status: AttachmentContextStatus,
+        storage_policy: AttachmentContextStoragePolicy,
+        privacy_class: AttachmentContextPrivacyClass,
+        accepted_bytes: int = 0,
+        redacted: bool = False,
+        redaction_reasons: list[str] | None = None,
+        reason_code: str | None = None,
+        message: str = "",
+    ) -> AttachmentContextItemResult:
+        return AttachmentContextItemResult(
+            item_id=f"context-{index}-{uuid4().hex[:12]}",
+            kind=item.kind,
+            status=status,
+            storage_policy=storage_policy,
+            privacy_class=privacy_class,
+            accepted_bytes=accepted_bytes,
+            redacted=redacted,
+            redaction_reasons=redaction_reasons or [],
+            reason_code=reason_code,
+            message=message,
+        )
+
+    def _context_response(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        accepted_items: list[AttachmentContextItemResult],
+        rejected_items: list[AttachmentContextItemResult],
+        total_bytes: int,
+        correlation_id: str,
+    ) -> AttachmentContextIngestResponse:
+        return AttachmentContextIngestResponse(
+            accepted=bool(accepted_items),
+            rejected=bool(rejected_items),
+            total_items=len(data.items),
+            accepted_items=accepted_items,
+            rejected_items=rejected_items,
+            total_bytes=total_bytes,
+            storage_policy=data.storage_policy,
+            privacy_class=data.privacy_class,
+            correlation_id=correlation_id,
+            secrets_redacted=True,
+        )
+
+    async def _store_context_in_rag(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        item: AttachmentContextItem,
+        item_id: str,
+        text: str,
+        redacted: bool,
+        redaction_reasons: list[str],
+        correlation_id: str,
+    ) -> tuple[str, list[str]]:
+        stored_key = item_id
+        value, final_redaction_reasons = self._context_rag_value(
+            data=data,
+            item=item,
+            text=text,
+            redacted=redacted,
+            redaction_reasons=redaction_reasons,
+            correlation_id=correlation_id,
+        )
+        await self.bus.request(
+            DBMethods.RAG_STORE,
+            DBRAGStoreRequest(
+                key=stored_key,
+                value=json.dumps(value, sort_keys=True),
+                namespace=data.namespace,
+            ),
+            timeout=10.0,
+            origin="internal",
+            principal_id=data.caller_principal_id,
+            correlation_id=correlation_id,
+        )
+        return stored_key, final_redaction_reasons
+
+    async def _audit_context_ingestion(
+        self,
+        data: AttachmentContextIngestRequest,
+        response: AttachmentContextIngestResponse,
+    ) -> None:
+        details = {
+            "session_id": data.session_id,
+            "namespace": data.namespace,
+            "storage_policy": data.storage_policy,
+            "privacy_class": data.privacy_class,
+            "policy_decision_id": data.policy_decision_id,
+            "correlation_id": response.correlation_id,
+            "total_items": response.total_items,
+            "accepted_count": len(response.accepted_items),
+            "rejected_count": len(response.rejected_items),
+            "total_bytes": response.total_bytes,
+            "redacted_count": sum(1 for item in response.accepted_items if item.redacted),
+            "rejection_codes": [
+                item.reason_code for item in response.rejected_items if item.reason_code
+            ],
+        }
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=response.audit_event,
+                    principal_id=data.caller_principal_id,
+                    details=json.dumps(details, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+                principal_id=data.caller_principal_id,
+                correlation_id=response.correlation_id,
+            )
+        except Exception as e:
+            log_error(f"Failed to audit context ingestion: {e}", exc_info=True)
+
 
 def _utc_now() -> str:
     return datetime.utcnow().isoformat()
+
+
+def _dedupe_scopes(
+    scopes: list[OrchestratorInterruptScope],
+) -> list[OrchestratorInterruptScope]:
+    seen: set[str] = set()
+    deduped: list[OrchestratorInterruptScope] = []
+    for scope in scopes:
+        if scope in seen:
+            continue
+        seen.add(scope)
+        deduped.append(scope)
+    return deduped
+
+
+def _interrupt_status(results: list[OrchestratorInterruptScopeResult]) -> str:
+    if not results:
+        return "no_op"
+    if any(result.status == "failed" for result in results):
+        return "partial" if any(result.status == "cancelled" for result in results) else "failed"
+    if any(result.status == "cancelled" for result in results):
+        return "interrupted"
+    if all(result.status == "no_active_work" for result in results):
+        return "no_active_work"
+    return "not_supported"
 
 
 def _configured_model_providers(
@@ -511,10 +1159,10 @@ def _configured_model_providers(
 ) -> list[ModelRuntimeProviderInfo]:
     third_party = llm_config.get("third_party") or {}
     local = llm_config.get("local") or {}
-    openai_options = ((third_party.get("openai") or {}).get("options") or {})
-    hf_endpoint_options = ((third_party.get("huggingface_endpoint") or {}).get("options") or {})
-    hf_pipeline_options = ((local.get("huggingface_pipeline") or {}).get("options") or {})
-    llama_options = ((local.get("llama_cpp") or {}).get("options") or {})
+    openai_options = (third_party.get("openai") or {}).get("options") or {}
+    hf_endpoint_options = (third_party.get("huggingface_endpoint") or {}).get("options") or {}
+    hf_pipeline_options = (local.get("huggingface_pipeline") or {}).get("options") or {}
+    llama_options = (local.get("llama_cpp") or {}).get("options") or {}
 
     return [
         _provider_info(
@@ -571,9 +1219,7 @@ def _configured_model_providers(
             },
             capabilities=["chat", "local_execution"],
             health="available" if hf_pipeline_options.get("model") else "misconfigured",
-            health_reason=None
-            if hf_pipeline_options.get("model")
-            else "model is not configured",
+            health_reason=None if hf_pipeline_options.get("model") else "model is not configured",
             operations=operations,
         ),
         _provider_info(
@@ -650,8 +1296,12 @@ def _provider_info(
 def _provider_index(providers: list[ModelRuntimeProviderInfo]) -> dict[str, list[str]]:
     return {
         "all": [provider.provider_id for provider in providers],
-        "local": [provider.provider_id for provider in providers if provider.provider_type == "local"],
-        "cloud": [provider.provider_id for provider in providers if provider.provider_type == "cloud"],
+        "local": [
+            provider.provider_id for provider in providers if provider.provider_type == "local"
+        ],
+        "cloud": [
+            provider.provider_id for provider in providers if provider.provider_type == "cloud"
+        ],
         "selected": [provider.provider_id for provider in providers if provider.selected],
     }
 
@@ -713,7 +1363,11 @@ def _operation_progress(
     operations: list[ModelRuntimeOperationResponse],
 ) -> ModelRuntimeProgressInfo:
     operation = next(
-        (candidate for candidate in reversed(operations) if candidate.operation_type == operation_type),
+        (
+            candidate
+            for candidate in reversed(operations)
+            if candidate.operation_type == operation_type
+        ),
         None,
     )
     if operation is None:
@@ -736,7 +1390,11 @@ def _benchmark_progress(
     operations: list[ModelRuntimeOperationResponse],
 ) -> ModelRuntimeBenchmarkInfo:
     operation = next(
-        (candidate for candidate in reversed(operations) if candidate.operation_type == "benchmark"),
+        (
+            candidate
+            for candidate in reversed(operations)
+            if candidate.operation_type == "benchmark"
+        ),
         None,
     )
     if operation is None:

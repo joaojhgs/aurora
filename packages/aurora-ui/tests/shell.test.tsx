@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
+  AuroraError,
   MockAuroraTransport,
   capabilityCatalogFixture,
   cloneFixture,
@@ -11,10 +12,13 @@ import {
 } from '@aurora/client'
 import {
   AppShell,
+  AssistantView,
   RouteMatrix,
   StateSurface,
+  assistantErrorMessage,
   buildShellSnapshot,
-  errorShellSnapshot
+  errorShellSnapshot,
+  routePolicyFromRoute
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -90,6 +94,47 @@ describe('Aurora production shell', () => {
     )
     expect(markup).toContain('Gateway unavailable')
     expect(markup).toContain('AuroraClient error')
+  })
+
+  it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const assistantRoute = route(snapshot, 'assistant')
+    const enabledRoute = {
+      ...assistantRoute,
+      state: 'available-local' as const,
+      disabled: false,
+      providerLabel: 'local / Orchestrator.ExternalUserInput',
+      blockers: [],
+      routeable: true
+    }
+    const markup = renderToStaticMarkup(
+      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={enabledRoute} />
+    )
+
+    expect(markup).toContain('Text chat')
+    expect(markup).toContain('local / Orchestrator.ExternalUserInput')
+    expect(markup).toContain('model pending')
+    expect(markup).toContain('personal')
+    expect(markup).toContain('Start with a prompt')
+    expect(markup).toContain('Ask Aurora...')
+
+    const disabledMarkup = renderToStaticMarkup(
+      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={assistantRoute} />
+    )
+    expect(disabledMarkup).toContain('Assistant send is disabled')
+    expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('builds assistant route policy and user-facing SDK error messages from backend evidence', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const assistantRoute = route(snapshot, 'assistant')
+    const policy = routePolicyFromRoute(assistantRoute)
+
+    expect(policy.routeState).toBe(assistantRoute.state)
+    expect(policy.privacyClass).toBe('personal')
+    expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'slow' }))).toContain('timed out')
+    expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
+    expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 })
 

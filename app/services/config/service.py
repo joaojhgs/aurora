@@ -206,9 +206,7 @@ class ConfigService(BaseService):
         self, query: ConfigDiffPreviewRequest
     ) -> ConfigDiffPreviewResponse:
         """Handle dry-run config diff preview."""
-        result = self.config_manager.preview_diff(
-            [change.model_dump() for change in query.changes]
-        )
+        result = self.config_manager.preview_diff([change.model_dump() for change in query.changes])
         return ConfigDiffPreviewResponse(**result)
 
     @method_contract(
