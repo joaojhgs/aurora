@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, Paperclip, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, WifiOff } from 'lucide-react'
+import { Link, Mic, Paperclip, Radio, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, Volume2, WifiOff } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -16,7 +16,7 @@ import type {
   AuroraError,
   AuroraResponse
 } from '@aurora/client'
-import type { RouteAvailability } from './shell-data'
+import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
@@ -24,6 +24,11 @@ export interface AssistantViewProps {
   client: AuroraClient
   route: RouteAvailability
   cancellationRoute?: RouteAvailability | undefined
+  voiceRoutes?: AssistantVoiceRoutes | undefined
+  nativePlatform?: string | undefined
+  nativeAvailable?: boolean | undefined
+  nativePermissions?: Array<{ name: string; granted: boolean }> | undefined
+  nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
   storageKey?: string
 }
 
@@ -87,6 +92,51 @@ export interface AssistantAttachmentDraft {
   redacted: boolean
 }
 
+export type VoiceCaptureStatus = 'idle' | 'listening' | 'permission-denied' | 'no-device' | 'error'
+
+export interface VoiceCapabilityChip {
+  id: string
+  label: string
+  state: RouteAvailability['state']
+  privacyClass: 'public' | 'personal' | 'sensitive' | 'secret' | 'raw-audio' | 'credential' | 'admin-critical'
+  providerLabel: string
+  detail: string
+  blockers: string[]
+  evidence: string[]
+}
+
+export interface VoiceControlModel {
+  id: string
+  label: string
+  state: RouteAvailability['state']
+  enabled: boolean
+  reason: string
+  route: RouteAvailability | null
+}
+
+export interface VoiceEventRow {
+  id: string
+  label: string
+  state: RouteAvailability['state']
+  detail: string
+}
+
+export interface AssistantVoiceModel {
+  captureStatus: VoiceCaptureStatus
+  consentGranted: boolean
+  privacyClass: 'raw-audio'
+  retentionPolicy: string
+  sessionTtl: string
+  transport: string
+  targetLabel: string
+  chips: VoiceCapabilityChip[]
+  controls: VoiceControlModel[]
+  events: VoiceEventRow[]
+  routeSheetRoute: RouteAvailability
+  remoteAudioRoute: RouteAvailability
+  waveformBars: number[]
+}
+
 const defaultStorageKey = 'aurora.assistant.session.v1'
 const defaultContextLimits = {
   max_items: 8,
@@ -95,7 +145,17 @@ const defaultContextLimits = {
   max_text_chars: 120_000
 }
 
-export function AssistantView({ client, route, cancellationRoute, storageKey = defaultStorageKey }: AssistantViewProps) {
+export function AssistantView({
+  client,
+  route,
+  cancellationRoute,
+  voiceRoutes,
+  nativePlatform = 'not available',
+  nativeAvailable = false,
+  nativePermissions = [],
+  nativeCapabilities = [],
+  storageKey = defaultStorageKey
+}: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())
   const [text, setText] = useState('')
   const [urlDraft, setUrlDraft] = useState('')
@@ -108,8 +168,11 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastPrompt, setLastPrompt] = useState<string | null>(null)
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
+  const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
+  const [voiceCaptureStatus, setVoiceCaptureStatus] = useState<VoiceCaptureStatus>('idle')
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const voiceStreamRef = useRef<MediaStream | null>(null)
   const activePendingIdRef = useRef<string | null>(null)
   const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
   const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
@@ -123,6 +186,30 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     attachment.status === 'staged' || attachment.status === 'error'
   )
   const contextSummary = summarizeAttachments(attachments)
+  const voiceModel = useMemo(
+    () => buildAssistantVoiceModel({
+      client,
+      route,
+      voiceRoutes,
+      nativePlatform,
+      nativeAvailable,
+      nativePermissions,
+      nativeCapabilities,
+      captureStatus: voiceCaptureStatus,
+      consentGranted: voiceConsentGranted
+    }),
+    [
+      client,
+      route,
+      voiceRoutes,
+      nativePlatform,
+      nativeAvailable,
+      nativePermissions,
+      nativeCapabilities,
+      voiceCaptureStatus,
+      voiceConsentGranted
+    ]
+  )
 
   useEffect(() => {
     setSession(loadAssistantSession(storageKey))
@@ -132,7 +219,10 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     persistAssistantSession(storageKey, session)
   }, [session, storageKey])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => () => {
+    abortRef.current?.abort()
+    stopLocalCapture()
+  }, [])
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -448,6 +538,31 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     setAttachments((current) => current.filter((attachment) => attachment.id !== id))
   }
 
+  async function toggleLocalCapture() {
+    if (voiceCaptureStatus === 'listening') {
+      stopLocalCapture()
+      setVoiceCaptureStatus('idle')
+      return
+    }
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceCaptureStatus('no-device')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      voiceStreamRef.current = stream
+      setVoiceCaptureStatus('listening')
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : ''
+      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'error')
+    }
+  }
+
+  function stopLocalCapture() {
+    voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+    voiceStreamRef.current = null
+  }
+
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
       <header className="aui-assistant-header">
@@ -526,6 +641,14 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
           />
         </aside>
       </div>
+
+      <VoiceModePanel
+        client={client}
+        model={voiceModel}
+        captureStatus={voiceCaptureStatus}
+        onToggleCapture={() => void toggleLocalCapture()}
+        onToggleConsent={() => setVoiceConsentGranted((current) => !current)}
+      />
 
       <section className="aui-attachment-panel" aria-labelledby="assistant-context-title">
         <div className="aui-attachment-head">
@@ -667,6 +790,216 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
           <span>Send</span>
         </button>
       </form>
+    </section>
+  )
+}
+
+export function buildAssistantVoiceModel(input: {
+  client: AuroraClient
+  route: RouteAvailability
+  voiceRoutes?: AssistantVoiceRoutes | undefined
+  nativePlatform?: string | undefined
+  nativeAvailable?: boolean | undefined
+  nativePermissions?: Array<{ name: string; granted: boolean }> | undefined
+  nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
+  captureStatus: VoiceCaptureStatus
+  consentGranted: boolean
+}): AssistantVoiceModel {
+  const transcription = input.voiceRoutes?.transcription ?? missingVoiceRoute('voice-transcription', 'Remote transcription', 'Transcription.Transcribe', 'raw-audio')
+  const wakeProcess = input.voiceRoutes?.wakeProcess ?? missingVoiceRoute('voice-wake-process', 'Wake audio processing', 'WakeWord.ProcessAudio', 'raw-audio')
+  const wakeControl = input.voiceRoutes?.wakeControl ?? missingVoiceRoute('voice-wake-control', 'Wake foreground control', 'WakeWord.Control', 'raw-audio')
+  const ttsSynthesize = input.voiceRoutes?.ttsSynthesize ?? missingVoiceRoute('voice-tts-synthesize', 'TTS synthesis', 'TTS.Synthesize', 'personal')
+  const ttsStop = input.voiceRoutes?.ttsStop ?? missingVoiceRoute('voice-tts-stop', 'TTS playback stop', 'TTS.Stop', 'personal')
+  const nativeCapture = nativeCaptureState(input.nativeAvailable ?? false, input.nativePlatform ?? 'not available', input.nativePermissions ?? [], input.nativeCapabilities ?? [])
+  const browserCaptureState = browserCaptureAvailability(input.client.transport.kind, input.captureStatus)
+  const remoteAudioRoute = remoteAudioRouteFor(transcription, ttsSynthesize, wakeProcess)
+
+  return {
+    captureStatus: input.captureStatus,
+    consentGranted: input.consentGranted,
+    privacyClass: 'raw-audio',
+    retentionPolicy: remoteAudioRoute.disabled ? 'not retained: route unavailable' : 'transient unless backend retention policy says otherwise',
+    sessionTtl: input.consentGranted ? 'current UI session' : 'consent not granted',
+    transport: input.client.transport.kind,
+    targetLabel: remoteAudioRoute.providerLabel,
+    chips: [
+      {
+        id: 'browser-capture',
+        label: 'Browser capture',
+        state: browserCaptureState.state,
+        privacyClass: 'raw-audio',
+        providerLabel: browserCaptureState.providerLabel,
+        detail: browserCaptureState.detail,
+        blockers: browserCaptureState.blockers,
+        evidence: [input.client.transport.kind, 'browser getUserMedia']
+      },
+      nativeCapture,
+      voiceChip('remote-processing', 'Remote processing', transcription, 'raw-audio', input.consentGranted
+        ? 'Remote STT route has UI session consent.'
+        : 'Remote STT route requires consent before audio leaves this device.'),
+      voiceChip('wake', 'Wake and background', wakeControl.disabled ? wakeProcess : wakeControl, 'raw-audio', wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)),
+      voiceChip('tts', 'TTS synthesis', ttsSynthesize, 'personal', 'Batch synthesis is separate from playback hardware control.'),
+      voiceChip('playback', 'Local playback', ttsStop, 'personal', 'Playback stop/control is separate from remote synthesis.')
+    ],
+    controls: [
+      {
+        id: 'push-to-talk',
+        label: input.captureStatus === 'listening' ? 'Stop local capture' : 'Push to talk',
+        state: browserCaptureState.state,
+        enabled: browserCaptureState.state !== 'unsupported',
+        reason: browserCaptureState.detail,
+        route: null
+      },
+      {
+        id: 'remote-consent',
+        label: input.consentGranted ? 'Revoke audio consent' : 'Grant session consent',
+        state: remoteAudioRoute.disabled ? remoteAudioRoute.state : input.consentGranted ? 'available-local' : 'privacy-blocked',
+        enabled: !remoteAudioRoute.disabled || remoteAudioRoute.state === 'privacy-blocked',
+        reason: input.consentGranted
+          ? 'Consent can be revoked before starting another remote audio session.'
+          : 'Required before raw audio is routed to a remote peer/provider.',
+        route: remoteAudioRoute
+      },
+      voiceAction('remote-transcription', 'Start transcription', transcription, input.captureStatus, input.consentGranted),
+      voiceAction('wakeword', 'Wake foreground', wakeControl.disabled ? wakeProcess : wakeControl, input.captureStatus, input.consentGranted),
+      voiceAction('tts-synthesize', 'Synthesize speech', ttsSynthesize, input.captureStatus, input.consentGranted),
+      voiceAction('playback-stop', 'Stop playback', ttsStop, input.captureStatus, input.consentGranted)
+    ],
+    events: voiceEventRows(input.captureStatus, transcription),
+    routeSheetRoute: remoteAudioRoute,
+    remoteAudioRoute,
+    waveformBars: waveformBars(input.captureStatus)
+  }
+}
+
+function VoiceModePanel({
+  client,
+  model,
+  captureStatus,
+  onToggleCapture,
+  onToggleConsent
+}: {
+  client: AuroraClient
+  model: AssistantVoiceModel
+  captureStatus: VoiceCaptureStatus
+  onToggleCapture: () => void
+  onToggleConsent: () => void
+}) {
+  return (
+    <section className="aui-voice-panel" aria-labelledby="assistant-voice-title">
+      <header className="aui-voice-header">
+        <div>
+          <p className="aui-kicker">Voice</p>
+          <h2 id="assistant-voice-title">Voice modes</h2>
+        </div>
+        <div className="aui-assistant-badges" aria-label="Voice evidence">
+          <PrivacyBadge privacy={model.privacyClass} />
+          <EvidenceBadge label={model.transport} />
+          <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
+          <EvidenceBadge label={model.targetLabel} />
+        </div>
+      </header>
+
+      <div className="aui-voice-chip-grid" aria-label="Voice mode capability states">
+        {model.chips.map((chip) => (
+          <article key={chip.id} className="aui-voice-chip">
+            <header>
+              <strong>{chip.label}</strong>
+              <StatusBadge state={chip.state} />
+            </header>
+            <p>{chip.detail}</p>
+            <div className="aui-settings-inline">
+              <PrivacyBadge privacy={chip.privacyClass} />
+              <EvidenceBadge label={chip.providerLabel} />
+            </div>
+            <small>{chip.blockers.length > 0 ? chip.blockers.join(', ') : chip.evidence.join(', ')}</small>
+          </article>
+        ))}
+      </div>
+
+      <div className="aui-voice-body">
+        <section className="aui-voice-controls" aria-labelledby="voice-controls-title">
+          <h3 id="voice-controls-title">Session controls</h3>
+          <div className="aui-waveform" role="img" aria-label={`Capture state ${captureStatus}`}>
+            {model.waveformBars.map((height, index) => (
+              <span key={`${height}-${index}`} style={{ height: `${height}%` }} />
+            ))}
+          </div>
+          <div className="aui-voice-action-grid">
+            {model.controls.map((control) => {
+              const isCapture = control.id === 'push-to-talk'
+              const isConsent = control.id === 'remote-consent'
+              return (
+                <button
+                  key={control.id}
+                  type="button"
+                  disabled={!control.enabled}
+                  onClick={isCapture ? onToggleCapture : isConsent ? onToggleConsent : undefined}
+                >
+                  {isCapture ? <Mic size={16} aria-hidden /> : control.id.includes('tts') || control.id.includes('playback') ? <Volume2 size={16} aria-hidden /> : <Radio size={16} aria-hidden />}
+                  <span>{control.label}</span>
+                </button>
+              )
+            })}
+          </div>
+          <ul className="aui-voice-reasons" aria-live="polite">
+            {model.controls.map((control) => (
+              <li key={control.id}>
+                <StatusBadge state={control.state} />
+                <span>{control.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <aside className="aui-voice-privacy" aria-label="Audio route privacy details">
+          <h3>Audio privacy</h3>
+          <dl>
+            <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
+            <div><dt>Peer/provider</dt><dd>{model.targetLabel}</dd></div>
+            <div><dt>Transport</dt><dd>{model.transport}</dd></div>
+            <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
+            <div><dt>Session TTL</dt><dd>{model.sessionTtl}</dd></div>
+          </dl>
+          <RouteSheet
+            client={client}
+            title="Audio route and consent"
+            description="Raw audio leaves the local device only when the selected route, consent, privacy indicator, and target policy allow it."
+            payload={{
+              audio_privacy_class: model.privacyClass,
+              capture_state: model.captureStatus,
+              retention_policy: model.retentionPolicy,
+              session_ttl: model.sessionTtl
+            }}
+            routeRequest={{
+              topic: model.routeSheetRoute.item.capabilityMethod
+                ? `${model.routeSheetRoute.item.capabilityModule}.${model.routeSheetRoute.item.capabilityMethod}`
+                : model.routeSheetRoute.item.capabilityModule,
+              method: model.routeSheetRoute.item.capabilityMethod ?? null,
+              include_candidates: true
+            }}
+            dataClasses={['raw-audio', model.routeSheetRoute.item.privacyClass]}
+            privacyClass="raw-audio"
+            consentGranted={model.consentGranted}
+            privacyIndicatorShown={model.captureStatus === 'listening' || model.consentGranted}
+            auditReceiptTarget={model.targetLabel}
+            requiresAdminAction={model.routeSheetRoute.requiresAdminAction}
+          />
+        </aside>
+      </div>
+
+      <section className="aui-voice-events" aria-labelledby="voice-events-title">
+        <h3 id="voice-events-title">Voice event stream</h3>
+        <ul>
+          {model.events.map((event) => (
+            <li key={event.id}>
+              <StatusBadge state={event.state} />
+              <strong>{event.label}</strong>
+              <span>{event.detail}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </section>
   )
 }
@@ -908,6 +1241,237 @@ function attachmentStateBadge(status: AttachmentTrayStatus) {
   if (status === 'uploading' || status === 'staged') return 'pending' as const
   if (status === 'unsupported') return 'unsupported' as const
   return 'denied' as const
+}
+
+function missingVoiceRoute(
+  id: string,
+  label: string,
+  capability: string,
+  privacyClass: VoiceCapabilityChip['privacyClass']
+): RouteAvailability {
+  const [capabilityModule, capabilityMethod] = capability.split('.')
+  return {
+    item: {
+      id,
+      label,
+      href: '/',
+      capabilityModule: capabilityModule ?? capability,
+      capabilityMethod: capabilityMethod ?? capability,
+      methodType: 'use' as const,
+      privacyClass,
+      fallbackState: 'unsupported' as const,
+      adminGated: false,
+      expectedTask: 'UIA-004'
+    },
+    state: 'unsupported',
+    explanation: `${capability} capability evidence is not available in the SDK snapshot.`,
+    providerLabel: 'UIA-004 pending',
+    blockers: ['capability_not_advertised'],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['missing voice route'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: false
+  }
+}
+
+function nativeCaptureState(
+  nativeAvailable: boolean,
+  nativePlatform: string,
+  nativePermissions: Array<{ name: string; granted: boolean }>,
+  nativeCapabilities: Array<{ name: string; enabled: boolean }>
+): VoiceCapabilityChip {
+  const permission = nativePermissions.find((entry) => voiceNativeKey(entry.name))
+  const capability = nativeCapabilities.find((entry) => voiceNativeKey(entry.name))
+  const state = !nativeAvailable
+    ? 'unsupported'
+    : permission && !permission.granted
+      ? 'privacy-blocked'
+      : capability?.enabled
+        ? 'available-local'
+        : 'unsupported'
+  return {
+    id: 'native-capture',
+    label: 'Native capture',
+    state,
+    privacyClass: 'raw-audio',
+    providerLabel: nativeAvailable ? `native:${nativePlatform}` : 'native manifest missing',
+    detail: state === 'available-local'
+      ? 'SDK native manifest reports microphone or voice capture support.'
+      : state === 'privacy-blocked'
+        ? 'Native capture is blocked until the platform microphone permission is granted.'
+        : 'Tauri, Android, and iOS capture stay disabled until native manifest support lands.',
+    blockers: state === 'available-local' ? [] : [permission && !permission.granted ? `native permission missing: ${permission.name}` : 'native voice capture unavailable'],
+    evidence: nativeAvailable ? ['native-manifest'] : []
+  }
+}
+
+function voiceNativeKey(name: string): boolean {
+  const normalized = name.toLowerCase()
+  return normalized.includes('microphone') || normalized.includes('voice') || normalized.includes('audio')
+}
+
+function browserCaptureAvailability(
+  transportKind: string,
+  captureStatus: VoiceCaptureStatus
+): Pick<VoiceCapabilityChip, 'state' | 'providerLabel' | 'detail' | 'blockers'> {
+  if (transportKind === 'tauri-local' || transportKind === 'native-mobile') {
+    return {
+      state: 'unsupported',
+      providerLabel: transportKind,
+      detail: 'Native capture must come from the SDK native manifest for this transport.',
+      blockers: ['native_manifest_required']
+    }
+  }
+  if (captureStatus === 'listening') {
+    return {
+      state: 'available-local',
+      providerLabel: 'browser getUserMedia',
+      detail: 'Local browser microphone stream is active on this device.',
+      blockers: []
+    }
+  }
+  if (captureStatus === 'permission-denied') {
+    return {
+      state: 'denied',
+      providerLabel: 'browser getUserMedia',
+      detail: 'Browser microphone permission was denied.',
+      blockers: ['browser_microphone_permission_denied']
+    }
+  }
+  if (captureStatus === 'no-device') {
+    return {
+      state: 'unsupported',
+      providerLabel: 'browser getUserMedia',
+      detail: 'This runtime did not expose a browser microphone device API.',
+      blockers: ['browser_microphone_api_missing']
+    }
+  }
+  if (captureStatus === 'error') {
+    return {
+      state: 'degraded',
+      providerLabel: 'browser getUserMedia',
+      detail: 'Browser microphone capture failed; retry or inspect device settings.',
+      blockers: ['browser_microphone_error']
+    }
+  }
+  return {
+    state: 'pending',
+    providerLabel: 'browser getUserMedia',
+    detail: 'Local capture waits for the browser permission prompt.',
+    blockers: []
+  }
+}
+
+function voiceChip(
+  id: string,
+  label: string,
+  route: RouteAvailability,
+  privacyClass: VoiceCapabilityChip['privacyClass'],
+  detail: string
+): VoiceCapabilityChip {
+  return {
+    id,
+    label,
+    state: route.state,
+    privacyClass,
+    providerLabel: route.providerLabel,
+    detail,
+    blockers: route.blockers,
+    evidence: route.evidenceSources
+  }
+}
+
+function wakeDetail(nativePlatform: string, wakeControl: RouteAvailability, wakeProcess: RouteAvailability): string {
+  if (nativePlatform.toLowerCase().includes('ios')) {
+    return 'iOS wake/background assistant behavior remains foreground-only or app-owned unless native capability evidence proves otherwise.'
+  }
+  if (nativePlatform.toLowerCase().includes('android')) {
+    return 'Android wake/background behavior requires foreground service and native plugin evidence.'
+  }
+  if (!wakeControl.disabled) return 'Wake control is foreground-capable through backend route evidence.'
+  if (!wakeProcess.disabled) return 'Wake audio processing exists, but foreground/background control is not advertised.'
+  return 'Wakeword remains unsupported until backend and native capture capability evidence exists.'
+}
+
+function remoteAudioRouteFor(...routes: RouteAvailability[]): RouteAvailability {
+  return routes.find((route) => route.state === 'available-remote' || route.state === 'privacy-blocked') ??
+    routes.find((route) => !route.disabled) ??
+    routes[0]!
+}
+
+function voiceAction(
+  id: string,
+  label: string,
+  route: RouteAvailability,
+  captureStatus: VoiceCaptureStatus,
+  consentGranted: boolean
+): VoiceControlModel {
+  if (route.disabled) {
+    return {
+      id,
+      label,
+      state: route.state,
+      enabled: false,
+      reason: route.blockers.join(', ') || route.explanation,
+      route
+    }
+  }
+  if ((route.state === 'available-remote' || route.selectorRequired) && !consentGranted) {
+    return {
+      id,
+      label,
+      state: 'privacy-blocked',
+      enabled: false,
+      reason: 'Grant session consent before routing microphone/audio work to a remote peer.',
+      route
+    }
+  }
+  if ((id === 'remote-transcription' || id === 'wakeword') && captureStatus !== 'listening') {
+    return {
+      id,
+      label,
+      state: 'pending',
+      enabled: false,
+      reason: 'Start local capture before creating an audio session.',
+      route
+    }
+  }
+  return {
+    id,
+    label,
+    state: route.state,
+    enabled: false,
+    reason: 'Capability route is visible; typed audio session start/status SDK wiring is still required before dispatch.',
+    route
+  }
+}
+
+function voiceEventRows(captureStatus: VoiceCaptureStatus, transcription: RouteAvailability): VoiceEventRow[] {
+  const captureFailure: VoiceEventRow | null =
+    captureStatus === 'permission-denied'
+      ? { id: 'permission-loss', label: 'Local permission loss', state: 'denied', detail: 'Browser or native microphone permission was lost or denied.' }
+      : captureStatus === 'no-device' || captureStatus === 'error'
+        ? { id: 'capture-error', label: 'Capture error', state: captureStatus === 'no-device' ? 'unsupported' : 'degraded', detail: 'Local capture failed before audio could be routed.' }
+        : null
+  return [
+    { id: 'partial', label: 'Partial transcription', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Incremental text remains tied to backend stream events.' },
+    { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription backend evidence.' },
+    { id: 'timeout', label: 'Timeout', state: 'degraded', detail: 'Timeouts remain visible as retryable voice session outcomes.' },
+    { id: 'cancelled', label: 'Cancelled', state: 'pending', detail: 'Cancellation must revoke or stop the current audio session.' },
+    { id: 'remote-denied', label: 'Remote denial', state: 'denied', detail: 'Policy, selector, or peer denial is shown without silent fallback.' },
+    { id: 'peer-disconnect', label: 'Peer disconnect', state: 'stale', detail: 'Remote peer loss makes the current provider unselectable.' },
+    ...(captureFailure ? [captureFailure] : [])
+  ]
+}
+
+function waveformBars(captureStatus: VoiceCaptureStatus): number[] {
+  if (captureStatus === 'listening') return [24, 48, 72, 52, 84, 38, 64, 46, 76, 30, 58, 42]
+  if (captureStatus === 'permission-denied' || captureStatus === 'error') return [18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18]
+  return [12, 20, 14, 22, 16, 18, 12, 20, 14, 22, 16, 18]
 }
 
 function sourceLabel(source: AttachmentContextSourceChannel): string {

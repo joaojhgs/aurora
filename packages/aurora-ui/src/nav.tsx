@@ -102,6 +102,69 @@ export const auroraAssistantCancellationItem = item(
   'UIA-002'
 )
 
+export const auroraAssistantVoiceItems = {
+  transcription: item(
+    'voice-transcription',
+    'Remote transcription',
+    '/',
+    Sparkles,
+    'Transcription',
+    'Transcribe',
+    'use',
+    'raw-audio',
+    'unsupported',
+    'UIA-004'
+  ),
+  wakeProcess: item(
+    'voice-wake-process',
+    'Wake audio processing',
+    '/',
+    Sparkles,
+    'WakeWord',
+    'ProcessAudio',
+    'use',
+    'raw-audio',
+    'unsupported',
+    'UIA-004'
+  ),
+  wakeControl: item(
+    'voice-wake-control',
+    'Wake foreground control',
+    '/',
+    Sparkles,
+    'WakeWord',
+    'Control',
+    'use',
+    'raw-audio',
+    'unsupported',
+    'UIA-004'
+  ),
+  ttsSynthesize: item(
+    'voice-tts-synthesize',
+    'TTS synthesis',
+    '/',
+    Sparkles,
+    'TTS',
+    'Synthesize',
+    'use',
+    'personal',
+    'unsupported',
+    'UIA-004'
+  ),
+  ttsStop: item(
+    'voice-tts-stop',
+    'TTS playback stop',
+    '/',
+    Sparkles,
+    'TTS',
+    'Stop',
+    'use',
+    'personal',
+    'unsupported',
+    'UIA-004'
+  )
+} as const
+
 export function getAuroraNavItem(id: string): AuroraNavItem | undefined {
   for (const section of auroraNavSections) {
     const match = section.items.find((item) => item.id === id)
