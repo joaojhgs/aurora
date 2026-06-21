@@ -47,10 +47,12 @@ class GatewayMethods:
     GET_REGISTRY = f"{GatewayModule.NAME}.GetRegistry"
     GET_SERVICES = f"{GatewayModule.NAME}.GetServices"
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
+    GET_DEPLOYMENT_TOPOLOGY = f"{GatewayModule.NAME}.GetDeploymentTopology"
     GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
+    GET_WEBRTC_DIAGNOSTICS = f"{GatewayModule.NAME}.GetWebRTCDiagnostics"
     EVENT_STREAM = AuroraMethods.EVENT_STREAM
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
@@ -177,6 +179,65 @@ class GetServiceHealthResponse(IOModel):
     checks: dict[str, str] = Field(default_factory=dict)  # Component name -> status
     timestamp: str = ""
     error: str | None = None
+
+
+class BusHealth(IOModel):
+    """Read-only message bus health and dependency state."""
+
+    backend: str = "unknown"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_available: bool | None = None
+    queue_lag_known: bool = False
+    queue_depth: int | None = None
+    published: int | None = None
+    delivered: int | None = None
+    retries: int | None = None
+    dead_letters: int | None = None
+    status: str = "unknown"
+    degraded_reasons: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ServiceProcessTopology(IOModel):
+    """Sanitized process/thread/container topology for one service."""
+
+    module: str
+    status: str = "unknown"
+    topology: str = "unknown"
+    instance_id: str | None = None
+    container_hint: str | None = None
+    process_hint: str | None = None
+    last_seen: str | None = None
+    stale: bool = False
+
+
+class ContainerTopologyHints(IOModel):
+    """Sanitized container/process-mode topology hints."""
+
+    orchestrator: str = "unknown"
+    compose_file: str | None = None
+    redis_service: str | None = None
+    gateway_service: str | None = None
+    config_service: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class DeploymentTopologyResponse(IOModel):
+    """Read-only deployment topology and bus health for UI/SDK consumers."""
+
+    architecture_mode: str = "threads"
+    runtime_mode: str = "local"
+    bus_backend: str = "LocalBus"
+    redis_url_redacted: str | None = None
+    redis_reachable: bool | None = None
+    bullmq_queue_health: BusHealth = Field(default_factory=BusHealth)
+    service_process_topology: list[ServiceProcessTopology] = Field(default_factory=list)
+    container_topology_hints: ContainerTopologyHints = Field(default_factory=ContainerTopologyHints)
+    mode_capability_degradations: list[str] = Field(default_factory=list)
+    mesh_peer_topology_trusted: bool | None = None
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    secrets_redacted: bool = True
 
 
 class AdminActionHeaderNames(IOModel):
@@ -340,6 +401,73 @@ class GetMeshStatusResponse(IOModel):
     secrets_redacted: bool = True
 
 
+class WebRTCSignalingDiagnostic(IOModel):
+    """Safe signaling-plane status for WebRTC diagnostics."""
+
+    strategy: str = ""
+    connected: bool = False
+    encrypted_presence: bool = False
+    app_id_configured: bool = False
+    room_configured: bool = False
+    broker_count: int = 0
+    public_broker_warning: bool = False
+
+
+class WebRTCPeerDiagnostic(IOModel):
+    """Safe per-peer WebRTC, ICE, data-channel, and auth diagnostic state."""
+
+    signaling_peer_id: str
+    stable_peer_id: str
+    node_name: str = ""
+    connection_state: str = "unknown"
+    ice_connection_state: str = "unknown"
+    ice_gathering_state: str = "unknown"
+    signaling_state: str = "unknown"
+    data_channel_state: str = "unknown"
+    data_channel_label: str = ""
+    has_send_channel: bool = False
+    rtt_ms: float | None = None
+    auth_state: str = "unknown"
+    identity_source: str = ""
+    is_admin: bool = False
+    effective_permission_count: int = 0
+    pairing_active: bool = False
+    auth_timeout_pending: bool = False
+    pending_pairing_task: bool = False
+
+
+class WebRTCDiagnosticError(IOModel):
+    """Redacted recent WebRTC diagnostic error or lifecycle warning."""
+
+    timestamp: str
+    code: str
+    message: str
+    peer_id: str | None = None
+
+
+class WebRTCDiagnosticsResponse(IOModel):
+    """Read-only WebRTC, ICE, signaling, and DataChannel diagnostics."""
+
+    enabled: bool = False
+    started: bool = False
+    mesh_enabled: bool = False
+    local_signaling_peer_id: str | None = None
+    local_mesh_peer_id: str | None = None
+    local_node_name: str = ""
+    require_auth: bool = False
+    auth_timeout_seconds: float = 0.0
+    pairing_timeout_seconds: float = 0.0
+    app_layer_e2ee_enabled: bool = False
+    signaling: WebRTCSignalingDiagnostic = Field(default_factory=WebRTCSignalingDiagnostic)
+    peers: list[WebRTCPeerDiagnostic] = Field(default_factory=list)
+    connected_peer_count: int = 0
+    authenticated_peer_count: int = 0
+    pairing_peer_count: int = 0
+    pending_rpc_count: int = 0
+    recent_errors: list[WebRTCDiagnosticError] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
 GatewayEventStreamEvent = AuroraEventStreamEvent
 
 
@@ -413,6 +541,9 @@ class GatewaySupportBundleResponse(IOModel):
     services: list[ServiceInfo] = Field(default_factory=list)
     service_health: list[GetServiceHealthResponse] = Field(default_factory=list)
     mesh_status: GetMeshStatusResponse = Field(default_factory=GetMeshStatusResponse)
+    webrtc_diagnostics: WebRTCDiagnosticsResponse = Field(
+        default_factory=WebRTCDiagnosticsResponse
+    )
     route_diagnostics: list[MeshRouteDiagnostic] = Field(default_factory=list)
     capability_catalog_summary: CapabilityCatalogSummary = Field(
         default_factory=CapabilityCatalogSummary

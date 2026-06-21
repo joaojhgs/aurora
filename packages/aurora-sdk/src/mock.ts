@@ -42,6 +42,8 @@ export class MockAuroraTransport implements AuroraTransport {
     return this
       .register('Gateway.GetRegistry', () => cloneFixture(fixtures.registry))
       .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
+      .register('Gateway.GetDeploymentTopology', () => cloneFixture(fixtures.deploymentTopology))
+      .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))

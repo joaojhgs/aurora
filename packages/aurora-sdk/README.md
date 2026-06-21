@@ -508,6 +508,14 @@ const transport = new MockAuroraTransport()
 
 The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
 
+## Transport Conformance
+
+SDK transport conformance tests run the same `AuroraClient` behavior against mock, HTTP Gateway, Tauri command mocks, and mesh bridge mocks. The matrix covers registry descriptors, service lists, capability catalog, route explain, tool catalog, unsupported internal-only methods, normalized result/audit envelopes, transport loss, and the shared error taxonomy: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, and `native_permission_missing`.
+
+The conformance suite also compares `gatewayRegistryFixture` against `backendInventoryFixture`, which represents the generated `scripts/generate_backend_inventory.py` backend inventory shape. This keeps fixture method identity, route path, exposure, `method_type`, permission casing, and HTTP availability aligned with backend truth.
+
+Core `@aurora/client` remains runtime-independent: it has no React, Next.js, or Tauri runtime dependency. Tauri and native-mobile behavior enter through injected transport/manifest adapters, while production screens consume the SDK public API instead of importing fixtures, direct `fetch`, or Tauri `invoke`.
+
 ## AdminAction And Tool Approval Controllers
 
 `client.admin` wraps the backend-enforced AdminAction draft/confirm/submit flow for admin-critical mutations. The SDK displays and returns backend-issued `action_id`, `nonce`, `digest`, expiry, required phrase, affected resources, confirmation token, and audit receipt; it does not compute or synthesize confirmation tokens.

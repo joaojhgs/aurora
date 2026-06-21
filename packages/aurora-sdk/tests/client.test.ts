@@ -41,20 +41,34 @@ describe('AuroraClient', () => {
 
     const methods = await client.registry.listMethods()
 
-    expect(methods).toEqual([
-      expect.objectContaining({
-        busTopic: 'Gateway.GetRegistry',
-        routePath: '/api/Gateway/GetRegistry',
-        requiredPermissions: ['Gateway.use'],
-        availableOverHttp: true
-      }),
-      expect.objectContaining({
-        busTopic: 'Gateway.InternalOnly',
-        routePath: null,
-        requiredPermissions: ['Gateway.manage'],
-        availableOverHttp: false
-      })
-    ])
+    expect(methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          busTopic: 'Gateway.GetRegistry',
+          routePath: '/api/Gateway/GetRegistry',
+          requiredPermissions: ['Gateway.use'],
+          availableOverHttp: true
+        }),
+        expect.objectContaining({
+          busTopic: 'Gateway.GetDeploymentTopology',
+          routePath: '/api/Gateway/GetDeploymentTopology',
+          requiredPermissions: ['Gateway.manage'],
+          availableOverHttp: true
+        }),
+        expect.objectContaining({
+          busTopic: 'Gateway.GetWebRTCDiagnostics',
+          routePath: '/api/Gateway/GetWebRTCDiagnostics',
+          requiredPermissions: ['Gateway.manage'],
+          availableOverHttp: true
+        }),
+        expect.objectContaining({
+          busTopic: 'Gateway.InternalOnly',
+          routePath: null,
+          requiredPermissions: ['Gateway.manage'],
+          availableOverHttp: false
+        })
+      ])
+    )
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -307,8 +321,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 1,
-        methods: 2,
-        externalMethods: 1,
+        methods: 4,
+        externalMethods: 3,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -787,12 +801,12 @@ describe('AuroraClient', () => {
       expect.objectContaining({
         modules: [
           expect.objectContaining({
-            methods: [
+            methods: expect.arrayContaining([
               expect.objectContaining({
+                bus_topic: 'Gateway.GetRegistry',
                 required_perms: ['Gateway.use']
-              }),
-              expect.any(Object)
-            ]
+              })
+            ])
           })
         ]
       })
@@ -2301,7 +2315,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 2,
+      checked: 4,
       issues: []
     })
 

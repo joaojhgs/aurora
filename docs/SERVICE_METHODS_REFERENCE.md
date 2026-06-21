@@ -402,14 +402,21 @@ Database operations for messages and RAG storage.
 | `DB.DeleteCronJob` | Delete a cron job | `DBDeleteCronJobRequest` | `EmptyOutput` | **internal** |
 | `DB.RAGStore` | Store RAG item | `DBRAGStoreRequest` | `EmptyOutput` | **internal** |
 | `DB.RAGDelete` | Delete RAG item | `DBRAGDeleteRequest` | `EmptyOutput` | **internal** |
-| `DB.RAGSearch` | Search RAG store | `DBRAGSearchRequest` | `DBRAGListResponse` | **both** |
+| `DB.RAGSearch` | Search RAG store for internal service callers | `DBRAGSearchRequest` | `DBRAGListResponse` | **internal** |
 | `DB.RAGGet` | Get RAG item | `DBRAGGetRequest` | `DBRAGItemResponse` | **internal** |
 | `DB.RAGList` | List RAG items | `DBRAGListRequest` | `DBRAGListResponse` | **internal** |
+| `DB.RAGListNamespaces` | List policy-aware RAG namespace capabilities | `DBRAGListNamespacesRequest` | `DBRAGListNamespacesResponse` | **both** |
+| `DB.RAGSearchRemote` | Search RAG with explicit mesh selector, policy decision, provenance, and redaction | `DBRAGSearchRemoteRequest` | `DBRAGSearchRemoteResponse` | **both** |
+| `DB.RAGGetProvenance` | Get one RAG record's provenance without exposing internal metadata | `DBRAGGetProvenanceRequest` | `DBRAGGetProvenanceResponse` | **both** |
+| `DB.RAGExportNamespace` | Export a bounded, redacted namespace snapshot with provenance and tombstones | `DBRAGExportNamespaceRequest` | `DBRAGExportNamespaceResponse` | **both, manage** |
+| `DB.RAGImportNamespace` | Import a provenance-preserving namespace snapshot | `DBRAGImportNamespaceRequest` | `DBRAGImportNamespaceResponse` | **both, manage** |
 
 ### Why Some Are Internal
 
 - **Write operations** (`SaveMessage`, `RAGStore`, etc.): Internal services control data integrity
-- **Read operations** (`GetMessages`, `RAGSearch`): Safe for external read access
+- **Direct RAG item operations** (`RAGSearch`, `RAGGet`, `RAGList`, `RAGDelete`): Internal-only so generated clients cannot bypass namespace policy, provenance, redaction, or AdminAction controls.
+- **Governance operations** (`RAGListNamespaces`, `RAGSearchRemote`, `RAGGetProvenance`, `RAGExportNamespace`, `RAGImportNamespace`): External clients use these capability-gated surfaces. Export/import are `manage` operations and require the Gateway AdminAction confirmation/audit envelope.
+- **Delete support**: User-visible RAG delete is capability-gated as unsupported for the current `main.memories`/`tools` policies. `RAGDelete` remains internal for service-owned cleanup only.
 
 ### DB/Data Sharing Policy
 
@@ -417,6 +424,16 @@ Mesh DB/data sharing is governed by [DATA_SHARING_POLICY.md](./DATA_SHARING_POLI
 Current `both` DB methods are query surfaces, not replication contracts. Raw SQL
 through `DB.ExecuteSQL` is internal-only and must not be exposed through mesh RPC,
 export/import, or sync features.
+
+Memory/RAG sharing uses explicit namespace policy instead of transparent fallback:
+
+- Remote search requires a `mesh_selector.resource_namespace` or `mesh_selector.data_scope`
+  matching the requested namespace.
+- Results include policy and correlation IDs, peer/owner provenance, tombstone
+  metadata when present, and redaction status.
+- Raw embeddings, secret-like fields, private filesystem paths, credentials, and
+  `_aurora_*` internal metadata are redacted from export/search payloads.
+- Secret/local-authoritative namespaces return denial metadata rather than records.
 
 Scheduler `both` methods are similarly ownership-sensitive: remote scheduling,
 canceling, and listing must use explicit peer/resource selection and policy. DB
@@ -660,6 +677,20 @@ Service lifecycle management.
 |-----------|---------|-------|--------|----------|
 | `Supervisor.GetStatus` | Get all service status | `EmptyInput` | `GetStatusResponse` | **both** |
 | `Supervisor.RestartService` | Restart a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StopService` | Stop a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+| `Supervisor.StartService` | Start a service | `ServiceControlCommand` | `ServiceControlResponse` | **internal** |
+
+`Supervisor.GetStatus` includes `control_capabilities` and per-service `controls`
+metadata for `restart`, `stop`, and `start`. These controls currently report
+`supported=false`, `state="internal_only"`, `exposure="internal"`, and
+`method_type="manage"` so SDK/UI consumers can keep service lifecycle buttons
+disabled instead of simulating success.
+
+The control command handlers intentionally return `success=false` with
+`status="unsupported"` and `control_state="internal_only"` until a safe
+per-service lifecycle executor exists. If these controls are ever exposed through
+Gateway-generated HTTP routes, their `method_type="manage"` metadata requires the
+AdminAction draft/confirm/audit envelope before forwarding.
 
 ---
 
@@ -682,7 +713,11 @@ These methods are exposed via HTTP POST at `/api/{service}/{method}`:
 | Scheduler | ListJobs | `POST /api/scheduler/listjobs` |
 | DB | GetMessages | `POST /api/db/getmessages` |
 | DB | GetMessagesForDate | `POST /api/db/getmessagesfordate` |
-| DB | RAGSearch | `POST /api/db/ragsearch` |
+| DB | RAGListNamespaces | `POST /api/db/raglistnamespaces` |
+| DB | RAGSearchRemote | `POST /api/db/ragsearchremote` |
+| DB | RAGGetProvenance | `POST /api/db/raggetprovenance` |
+| DB | RAGExportNamespace | `POST /api/db/ragexportnamespace` |
+| DB | RAGImportNamespace | `POST /api/db/ragimportnamespace` |
 | Tooling | GetTools | `POST /api/tooling/gettools` |
 | Tooling | GetToolByName | `POST /api/tooling/gettoolbyname` |
 | Tooling | GetStats | `POST /api/tooling/getstats` |
@@ -718,7 +753,9 @@ These are only accessible via the message bus:
 | DB | RAG write methods | Data integrity |
 | Tooling | ReloadMCP | Administrative operation |
 | Config | ReloadService | Administrative operation |
-| Supervisor | RestartService | Administrative operation |
+| Supervisor | RestartService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StopService | Internal-only; currently returns unsupported gated response |
+| Supervisor | StartService | Internal-only; currently returns unsupported gated response |
 
 ---
 

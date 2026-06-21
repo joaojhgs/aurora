@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-shutdown"
+description = "Allow the main window to request a clean Aurora shell shutdown."
+commands.allow = ["aurora_shutdown"]

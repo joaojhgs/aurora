@@ -219,6 +219,36 @@ Key fields:
 - `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
 - `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
 
+#### Deployment Topology and Bus Health
+```
+POST /api/Gateway/GetDeploymentTopology
+```
+Returns a read-only, redacted deployment snapshot for admin, onboarding, and SDK clients.
+The response identifies the active architecture mode, bus backend, sanitized Redis URL,
+Redis reachability, BullMQ queue health fields, service process/thread topology, and
+container/process-mode hints. It also reports explicit degradation reason codes such as
+`redis_unreachable`, `bullmq_queue_lag_unknown`, `process_registry_stale`,
+`thread_mode_no_process_controls`, and `mesh_peer_topology_untrusted`.
+
+The endpoint never returns Redis credentials, tokens, host filesystem paths, peer secrets,
+or raw logs. Process-mode details come from Gateway registry announcements and bus runtime
+state; mesh peer topology is treated as untrusted unless future policy explicitly upgrades it.
+
+#### WebRTC, ICE, and DataChannel Diagnostics
+```
+POST /api/Gateway/GetWebRTCDiagnostics
+```
+Returns a read-only, redacted WebRTC transport snapshot for admin diagnostics and UI
+degraded-state decisions. The response includes local WebRTC enablement, mesh peer identity,
+auth and pairing timeouts, signaling configuration health, connected peer counts, per-peer
+connection/ICE/signaling/data-channel states, RTT when known, auth state, pairing state, pending
+RPC count, and recent redacted error codes.
+
+The endpoint is registered as an external `manage` method requiring `Gateway.manage`. It does not
+return tokens, passwords, raw signaling payloads, decrypted data-channel messages, or peer secrets.
+Sensitive diagnostic messages are replaced with a generic redacted event marker before they are
+stored in the recent-error buffer.
+
 ### Service Endpoints
 
 All service methods with `exposure="external"` or `exposure="both"` are automatically exposed as:
@@ -230,6 +260,23 @@ POST /api/{ServiceName}/{MethodName}
 Service and method path segments use the canonical PascalCase contract names
 from the service registry. SDKs should prefer these generated paths and should
 not infer lowercase route names from bus topics.
+
+### Supervisor Service Controls
+
+`Supervisor.GetStatus` is exposed as `POST /api/Supervisor/GetStatus` and
+returns service status plus machine-readable service-control availability.
+`Supervisor.RestartService`, `Supervisor.StopService`, and
+`Supervisor.StartService` are registered typed contracts, but intentionally
+remain `exposure="internal"`, `method_type="manage"`, and `supported=false`.
+Their handlers return `success=false`, `status="unsupported"`, and
+`control_state="internal_only"` until Aurora has a safe per-service lifecycle
+executor.
+
+Because the control methods are internal-only, Gateway does not generate public
+HTTP routes for them. SDK/UI clients must treat the `GetStatus` control metadata
+as the source of truth and keep lifecycle buttons disabled. If a future task
+externalizes these manage routes, Gateway's AdminAction draft/confirm/audit
+enforcement applies before any service mutation is forwarded.
 
 ### AdminAction Draft / Confirm Enforcement
 

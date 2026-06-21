@@ -22,6 +22,7 @@ import type {
   CapabilityExplanation,
   CapabilityGraph,
   CapabilitySummary,
+  DeploymentTopologyResponse,
   GetRegistryResponse,
   GetServicesResponse,
   GatewayBuiltinRouteDescriptor,
@@ -32,7 +33,8 @@ import type {
   RouteExplainRequest,
   RouteExplainResponse,
   RoutePolicyEvaluation,
-  RoutePolicyInput
+  RoutePolicyInput,
+  WebRTCDiagnosticsResponse
 } from './types.js'
 import type {
   EffectivePermissionInput,
@@ -172,6 +174,18 @@ export class RegistryClient {
     return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, undefined, {
       path: '/api/services',
       httpMethod: 'GET'
+    })
+  }
+
+  getDeploymentTopology(): Promise<DeploymentTopologyResponse> {
+    return this.client.request<DeploymentTopologyResponse>(GATEWAY_METHODS.getDeploymentTopology, undefined, {
+      path: routePath('Gateway', 'GetDeploymentTopology')
+    })
+  }
+
+  getWebRTCDiagnostics(): Promise<WebRTCDiagnosticsResponse> {
+    return this.client.request<WebRTCDiagnosticsResponse>(GATEWAY_METHODS.getWebRTCDiagnostics, undefined, {
+      path: routePath('Gateway', 'GetWebRTCDiagnostics')
     })
   }
 }

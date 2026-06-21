@@ -1,6 +1,6 @@
 """Supervisor service contract models."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,21 @@ class ServiceStatus(BaseModel):
     running: bool
     uptime_seconds: float = 0.0
     details: dict[str, Any] = Field(default_factory=dict)
+    controls: dict[str, "ServiceControlAvailability"] = Field(default_factory=dict)
+
+
+class ServiceControlAvailability(IOModel):
+    """Machine-readable availability for a Supervisor service control."""
+
+    operation: Literal["restart", "stop", "start"]
+    method_id: str
+    supported: bool = False
+    state: Literal["available", "unsupported", "internal_only"] = "internal_only"
+    exposure: Literal["internal", "external", "both"] = "internal"
+    method_type: Literal["manage"] = "manage"
+    required_perms: list[str] = Field(default_factory=list)
+    admin_action_required: bool = True
+    reason: str = ""
 
 
 class GetStatusResponse(IOModel):
@@ -40,6 +55,7 @@ class GetStatusResponse(IOModel):
 
     services: list[ServiceStatus]
     mode: str  # "threads" or "processes"
+    control_capabilities: list[ServiceControlAvailability] = Field(default_factory=list)
 
 
 class ServiceControlCommand(IOModel):
@@ -54,3 +70,8 @@ class ServiceControlResponse(IOModel):
 
     success: bool
     message: str | None = None
+    operation: Literal["restart", "stop", "start"] | None = None
+    service_name: str | None = None
+    status: Literal["accepted", "unsupported", "internal_only", "not_found"] = "unsupported"
+    control_state: Literal["available", "unsupported", "internal_only"] = "internal_only"
+    admin_action_required: bool = True

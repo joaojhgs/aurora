@@ -5,11 +5,13 @@ import type {
   CapabilityFreshnessInfo,
   CapabilityPolicyDecisionInfo,
   CapabilityProviderInfo,
+  DeploymentTopologyResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
   NativeCapabilityManifest,
-  RouteExplainResponse
+  RouteExplainResponse,
+  WebRTCDiagnosticsResponse
 } from './types.js'
 import { describeBackendInventory, describeRegistry } from './descriptors.js'
 
@@ -41,6 +43,30 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'GetDeploymentTopology',
+          summary: 'Get sanitized deployment topology and message bus health',
+          bus_topic: 'Gateway.GetDeploymentTopology',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'DeploymentTopologyResponse',
+          required_perms: ['Gateway.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'GetWebRTCDiagnostics',
+          summary: 'Get read-only WebRTC, ICE, and DataChannel diagnostics',
+          bus_topic: 'Gateway.GetWebRTCDiagnostics',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'WebRTCDiagnosticsResponse',
+          required_perms: ['Gateway.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'InternalOnly',
           summary: 'Internal-only method',
           bus_topic: 'Gateway.InternalOnly',
@@ -57,7 +83,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
   ],
   digest: 'fixture',
   service_count: 1,
-  method_count: 2
+  method_count: 4
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -516,12 +542,119 @@ export const gatewayServicesFixture: GetServicesResponse = {
       version: '0.1.0',
       summary: 'Gateway service',
       capabilities: ['registry'],
-      method_count: 2,
+      method_count: 3,
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: null
     }
   ]
+}
+
+export const deploymentTopologyFixture: DeploymentTopologyResponse = {
+  architecture_mode: 'threads',
+  runtime_mode: 'thread-local',
+  bus_backend: 'LocalBus',
+  redis_url_redacted: null,
+  redis_reachable: null,
+  bullmq_queue_health: {
+    backend: 'LocalBus',
+    redis_url_redacted: null,
+    redis_reachable: null,
+    bullmq_available: null,
+    queue_lag_known: true,
+    queue_depth: null,
+    published: 12,
+    delivered: 12,
+    retries: 0,
+    dead_letters: 0,
+    status: 'healthy',
+    degraded_reasons: [],
+    error: null
+  },
+  service_process_topology: [
+    {
+      module: 'Gateway',
+      status: 'healthy',
+      topology: 'thread',
+      instance_id: null,
+      container_hint: null,
+      process_hint: 'single-process',
+      last_seen: '2026-06-19T00:00:00Z',
+      stale: false
+    }
+  ],
+  container_topology_hints: {
+    orchestrator: 'in-process-supervisor',
+    compose_file: null,
+    redis_service: null,
+    gateway_service: null,
+    config_service: null,
+    notes: [
+      'thread mode runs services in one Python process',
+      'process controls and per-container health are unsupported in thread mode'
+    ]
+  },
+  mode_capability_degradations: ['thread_mode_no_process_controls'],
+  mesh_peer_topology_trusted: null,
+  generated_at: '2026-06-19T00:00:00Z',
+  secrets_redacted: true
+}
+
+export const webrtcDiagnosticsFixture: WebRTCDiagnosticsResponse = {
+  enabled: true,
+  started: true,
+  mesh_enabled: true,
+  local_signaling_peer_id: 'signaling-local',
+  local_mesh_peer_id: 'local-peer',
+  local_node_name: 'aurora-prod-01',
+  require_auth: true,
+  auth_timeout_seconds: 10,
+  pairing_timeout_seconds: 300,
+  app_layer_e2ee_enabled: true,
+  signaling: {
+    strategy: 'mqtt',
+    connected: true,
+    encrypted_presence: true,
+    app_id_configured: true,
+    room_configured: true,
+    broker_count: 1,
+    public_broker_warning: false
+  },
+  peers: [
+    {
+      signaling_peer_id: 'session-peer',
+      stable_peer_id: 'stable-peer',
+      node_name: 'remote-node',
+      connection_state: 'connected',
+      ice_connection_state: 'completed',
+      ice_gathering_state: 'complete',
+      signaling_state: 'stable',
+      data_channel_state: 'open',
+      data_channel_label: 'aurora-rpc',
+      has_send_channel: true,
+      rtt_ms: 42.5,
+      auth_state: 'authenticated',
+      identity_source: 'webrtc_peer',
+      is_admin: false,
+      effective_permission_count: 1,
+      pairing_active: false,
+      auth_timeout_pending: false,
+      pending_pairing_task: false
+    }
+  ],
+  connected_peer_count: 1,
+  authenticated_peer_count: 1,
+  pairing_peer_count: 0,
+  pending_rpc_count: 0,
+  recent_errors: [
+    {
+      timestamp: '2026-06-19T00:00:00Z',
+      code: 'rpc_timeout',
+      message: 'RPC call timed out',
+      peer_id: 'stable-peer'
+    }
+  ],
+  secrets_redacted: true
 }
 
 export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
@@ -549,7 +682,7 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 2,
+  method_count: 4,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -567,6 +700,46 @@ export const backendInventoryFixture: BackendInventory = {
       input_schema: null,
       output_schema: {
         title: 'GetRegistryResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetDeploymentTopology',
+      summary: 'Get sanitized deployment topology and message bus health',
+      bus_topic: 'Gateway.GetDeploymentTopology',
+      routePath: '/api/Gateway/GetDeploymentTopology',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Gateway.manage'],
+      input_model: 'EmptyInput',
+      output_model: 'DeploymentTopologyResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'DeploymentTopologyResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetWebRTCDiagnostics',
+      summary: 'Get read-only WebRTC, ICE, and DataChannel diagnostics',
+      bus_topic: 'Gateway.GetWebRTCDiagnostics',
+      routePath: '/api/Gateway/GetWebRTCDiagnostics',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Gateway.manage'],
+      input_model: 'EmptyInput',
+      output_model: 'WebRTCDiagnosticsResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'WebRTCDiagnosticsResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -736,6 +909,8 @@ export const uiMockReferenceFixtureSummary = {
 export interface MockAuroraFixtureSet {
   registry: GetRegistryResponse
   services: GetServicesResponse
+  deploymentTopology: DeploymentTopologyResponse
+  webrtcDiagnostics: WebRTCDiagnosticsResponse
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
@@ -747,6 +922,8 @@ export interface MockAuroraFixtureSet {
 export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   registry: gatewayRegistryFixture,
   services: gatewayServicesFixture,
+  deploymentTopology: deploymentTopologyFixture,
+  webrtcDiagnostics: webrtcDiagnosticsFixture,
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
