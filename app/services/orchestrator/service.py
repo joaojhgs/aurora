@@ -16,6 +16,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -71,6 +72,10 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{16,}"), "bearer_token"),
     (re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"), "api_key"),
 )
+_SENSITIVE_METADATA_KEY_PATTERN = re.compile(
+    r"(?i)(api[_-]?key|auth|authorization|bearer|cookie|credential|password|secret|signature|token)"
+)
+_URI_IN_TEXT_PATTERN = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s'\"]+", re.IGNORECASE)
 
 
 # Service implementation
@@ -371,7 +376,7 @@ class OrchestratorService(BaseService):
             )
 
             if data.storage_policy == "rag":
-                stored_key = await self._store_context_in_rag(
+                stored_key, final_redaction_reasons = await self._store_context_in_rag(
                     data=data,
                     item=item,
                     item_id=result.item_id,
@@ -383,6 +388,8 @@ class OrchestratorService(BaseService):
                 result.status = "stored"
                 result.stored_namespace = data.namespace
                 result.stored_key = stored_key
+                result.redaction_reasons = final_redaction_reasons
+                result.redacted = bool(final_redaction_reasons)
 
             accepted_items.append(result)
 
@@ -870,7 +877,128 @@ class OrchestratorService(BaseService):
             sanitized, count = pattern.subn("[REDACTED]", sanitized)
             if count:
                 reasons.append(reason)
+        uri_reasons: list[str] = []
+
+        def sanitize_uri_match(match: re.Match[str]) -> str:
+            sanitized_uri, match_reasons = self._sanitize_context_uri(match.group(0))
+            uri_reasons.extend(f"embedded_{reason}" for reason in match_reasons)
+            return sanitized_uri or "[REDACTED]"
+
+        sanitized = _URI_IN_TEXT_PATTERN.sub(sanitize_uri_match, sanitized)
+        reasons.extend(uri_reasons)
         return sanitized, sorted(set(reasons))
+
+    def _sanitize_context_scalar(self, value: str | None) -> tuple[str | None, list[str]]:
+        if value is None:
+            return None, []
+        sanitized, reasons = self._sanitize_context_text(value, max_chars=len(value))
+        return sanitized, reasons
+
+    def _sanitize_context_uri(self, uri: str | None) -> tuple[str | None, list[str]]:
+        if not uri:
+            return uri, []
+
+        reasons: list[str] = []
+        parsed = urlsplit(uri)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            netloc = parsed.hostname or ""
+            if parsed.port is not None:
+                netloc = f"{netloc}:{parsed.port}"
+            origin = urlunsplit((parsed.scheme, netloc, "", "", ""))
+            if parsed.username or parsed.password:
+                reasons.append("uri_credentials")
+            if parsed.query:
+                reasons.append("uri_query")
+            if parsed.fragment:
+                reasons.append("uri_fragment")
+            path_reasons = self._sanitize_context_text(
+                parsed.path,
+                max_chars=len(parsed.path),
+            )[1]
+            if path_reasons:
+                reasons.extend(f"uri_{reason}" for reason in path_reasons)
+            if reasons:
+                return f"{origin}/[REDACTED]", sorted(set(reasons))
+            return urlunsplit((parsed.scheme, netloc, parsed.path, "", "")), []
+
+        if parsed.scheme == "file" or uri.startswith(("/", "~")) or "\\" in uri:
+            return "[REDACTED_PATH]", ["local_path"]
+
+        if parsed.scheme:
+            return f"{parsed.scheme}://[REDACTED]", ["uri_provenance"]
+
+        sanitized, scalar_reasons = self._sanitize_context_scalar(uri)
+        return sanitized, scalar_reasons
+
+    def _sanitize_context_metadata(self, value: Any) -> tuple[Any, list[str]]:
+        reasons: list[str] = []
+        if isinstance(value, dict):
+            sanitized: dict[str, Any] = {}
+            for raw_key, raw_value in value.items():
+                key = str(raw_key)
+                if _SENSITIVE_METADATA_KEY_PATTERN.search(key):
+                    reasons.append("metadata_key")
+                    continue
+                sanitized_value, value_reasons = self._sanitize_context_metadata(raw_value)
+                reasons.extend(value_reasons)
+                sanitized[key] = sanitized_value
+            return sanitized, sorted(set(reasons))
+        if isinstance(value, list):
+            sanitized_items: list[Any] = []
+            for item in value:
+                sanitized_item, item_reasons = self._sanitize_context_metadata(item)
+                reasons.extend(item_reasons)
+                sanitized_items.append(sanitized_item)
+            return sanitized_items, sorted(set(reasons))
+        if isinstance(value, str):
+            if "://" in value or value.startswith(("/", "~")) or "\\" in value:
+                sanitized_uri, uri_reasons = self._sanitize_context_uri(value)
+                return sanitized_uri, uri_reasons
+            sanitized_scalar, scalar_reasons = self._sanitize_context_scalar(value)
+            return sanitized_scalar, scalar_reasons
+        return value, []
+
+    def _context_rag_value(
+        self,
+        *,
+        data: AttachmentContextIngestRequest,
+        item: AttachmentContextItem,
+        text: str,
+        redacted: bool,
+        redaction_reasons: list[str],
+        correlation_id: str,
+    ) -> tuple[dict[str, Any], list[str]]:
+        storage_reasons: list[str] = []
+        title, title_reasons = self._sanitize_context_scalar(item.title)
+        filename, filename_reasons = self._sanitize_context_uri(item.filename)
+        url, url_reasons = self._sanitize_context_uri(item.url)
+        source, source_reasons = self._sanitize_context_metadata(
+            item.source.model_dump(exclude_none=True)
+        )
+        metadata, metadata_reasons = self._sanitize_context_metadata(item.metadata)
+        storage_reasons.extend(f"title_{reason}" for reason in title_reasons)
+        storage_reasons.extend(f"filename_{reason}" for reason in filename_reasons)
+        storage_reasons.extend(f"url_{reason}" for reason in url_reasons)
+        storage_reasons.extend(f"source_{reason}" for reason in source_reasons)
+        storage_reasons.extend(f"metadata_{reason}" for reason in metadata_reasons)
+        final_reasons = sorted(set(redaction_reasons + storage_reasons))
+        value = {
+            "text": text,
+            "kind": item.kind,
+            "title": title,
+            "filename": filename,
+            "url": url,
+            "mime_type": item.mime_type,
+            "privacy_class": data.privacy_class,
+            "source": source,
+            "metadata": metadata,
+            "redacted": redacted or bool(storage_reasons),
+            "redaction_reasons": final_reasons,
+            "policy_decision_id": data.policy_decision_id,
+            "correlation_id": correlation_id,
+            "schema_version": "assistant-context.v1",
+        }
+        return value, final_reasons
 
     def _context_result(
         self,
@@ -931,24 +1059,16 @@ class OrchestratorService(BaseService):
         redacted: bool,
         redaction_reasons: list[str],
         correlation_id: str,
-    ) -> str:
+    ) -> tuple[str, list[str]]:
         stored_key = item_id
-        value = {
-            "text": text,
-            "kind": item.kind,
-            "title": item.title,
-            "filename": item.filename,
-            "url": item.url,
-            "mime_type": item.mime_type,
-            "privacy_class": data.privacy_class,
-            "source": item.source.model_dump(exclude_none=True),
-            "metadata": item.metadata,
-            "redacted": redacted,
-            "redaction_reasons": redaction_reasons,
-            "policy_decision_id": data.policy_decision_id,
-            "correlation_id": correlation_id,
-            "schema_version": "assistant-context.v1",
-        }
+        value, final_redaction_reasons = self._context_rag_value(
+            data=data,
+            item=item,
+            text=text,
+            redacted=redacted,
+            redaction_reasons=redaction_reasons,
+            correlation_id=correlation_id,
+        )
         await self.bus.request(
             DBMethods.RAG_STORE,
             DBRAGStoreRequest(
@@ -961,7 +1081,7 @@ class OrchestratorService(BaseService):
             principal_id=data.caller_principal_id,
             correlation_id=correlation_id,
         )
-        return stored_key
+        return stored_key, final_redaction_reasons
 
     async def _audit_context_ingestion(
         self,
