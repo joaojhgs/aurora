@@ -5,6 +5,7 @@ import { Link, Paperclip, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2,
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
+  AttachmentContextItemResult,
   AttachmentContextPrivacyClass,
   AttachmentContextSourceChannel,
   AttachmentContextStatus,
@@ -235,11 +236,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     pending: AssistantAttachmentDraft[],
     response: AttachmentContextIngestResponse
   ) {
-    const outcomes = new Map(
-      [...response.accepted_items, ...response.rejected_items]
-        .map((outcome) => [Number(outcome.item_id.split('-').at(-1)), outcome] as const)
-        .filter(([index]) => Number.isFinite(index))
-    )
+    const outcomes = mapContextIngestOutcomesByPendingIndex(response)
     setAttachments((current) =>
       current.map((attachment) => {
         const pendingIndex = pending.findIndex((candidate) => candidate.id === attachment.id)
@@ -706,6 +703,26 @@ export function attachmentStatusFromBackend(status: AttachmentContextStatus): At
 
 export function isAcceptedContextStatus(status: AttachmentContextStatus): boolean {
   return status === 'accepted' || status === 'redacted' || status === 'stored'
+}
+
+export function contextIngestOutcomeIndex(itemId: string): number | null {
+  const productionMatch = /^context-(\d+)-.+$/.exec(itemId)
+  if (productionMatch) return Number(productionMatch[1])
+  const mockMatch = /^mock-context-(\d+)$/.exec(itemId)
+  if (mockMatch) return Number(mockMatch[1])
+  return null
+}
+
+export function mapContextIngestOutcomesByPendingIndex(
+  response: Pick<AttachmentContextIngestResponse, 'accepted_items' | 'rejected_items'>
+): Map<number, AttachmentContextItemResult> {
+  const outcomes = new Map<number, AttachmentContextItemResult>()
+  for (const outcome of [...response.accepted_items, ...response.rejected_items]) {
+    const index = contextIngestOutcomeIndex(outcome.item_id)
+    if (index === null) continue
+    outcomes.set(index, outcome)
+  }
+  return outcomes
 }
 
 export function emptyAssistantSession(): AssistantSessionSnapshot {

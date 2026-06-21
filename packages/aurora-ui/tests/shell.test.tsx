@@ -28,7 +28,9 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  contextIngestOutcomeIndex,
   isAcceptedContextStatus,
+  mapContextIngestOutcomesByPendingIndex,
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
@@ -194,7 +196,50 @@ describe('Aurora production shell', () => {
     expect(isAcceptedContextStatus('unsupported')).toBe(false)
   })
 
+  it('maps production context ingest item ids back to pending attachments', () => {
+    const outcomes = mapContextIngestOutcomesByPendingIndex({
+      accepted_items: [
+        {
+          item_id: 'context-0-abc123def456',
+          kind: 'url',
+          status: 'accepted',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 64,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: null,
+          message: 'URL accepted'
+        }
+      ],
+      rejected_items: [
+        {
+          item_id: 'context-1-fedcba654321',
+          kind: 'image',
+          status: 'unsupported',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 0,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: 'unsupported_type',
+          message: 'Images are not supported by this route.'
+        }
+      ]
+    })
 
+    expect(contextIngestOutcomeIndex('context-0-abc123def456')).toBe(0)
+    expect(contextIngestOutcomeIndex('context-1-fedcba654321')).toBe(1)
+    expect(contextIngestOutcomeIndex('mock-context-2')).toBe(2)
+    expect(contextIngestOutcomeIndex('context-abc123def456')).toBeNull()
+    expect(outcomes.get(0)?.status).toBe('accepted')
+    expect(outcomes.get(1)?.status).toBe('unsupported')
+    expect(outcomes.get(1)?.reason_code).toBe('unsupported_type')
+  })
 
   it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
