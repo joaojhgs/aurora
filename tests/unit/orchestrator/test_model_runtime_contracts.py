@@ -74,15 +74,11 @@ def test_model_runtime_contracts_register_with_permissions():
 
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].exposure == "external"
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].method_type == "use"
-    assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].required_perms == [
-        "Orchestrator.use"
-    ]
+    assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].required_perms == ["Orchestrator.use"]
 
     assert contracts[OrchestratorMethods.IMPORT_MODEL].exposure == "external"
     assert contracts[OrchestratorMethods.IMPORT_MODEL].method_type == "manage"
-    assert contracts[OrchestratorMethods.IMPORT_MODEL].required_perms == [
-        "Orchestrator.manage"
-    ]
+    assert contracts[OrchestratorMethods.IMPORT_MODEL].required_perms == ["Orchestrator.manage"]
     assert contracts[OrchestratorMethods.DOWNLOAD_MODEL].method_type == "manage"
     assert contracts[OrchestratorMethods.BENCHMARK_MODEL].method_type == "manage"
 

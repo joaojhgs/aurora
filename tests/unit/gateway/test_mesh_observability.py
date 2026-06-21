@@ -57,9 +57,7 @@ def test_gateway_observability_contracts_are_registered():
     assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "manage"
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == [
-        "Gateway.manage"
-    ]
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.manage"]
     clear_registry()
 
 
@@ -159,7 +157,9 @@ async def test_deployment_topology_reports_process_mode_and_redacts_redis_url():
     assert "bullmq_queue_lag_unknown" in response.mode_capability_degradations
     assert "process_registry_stale" in response.mode_capability_degradations
     assert response.container_topology_hints.gateway_service == "gateway-service"
-    auth_topology = next(item for item in response.service_process_topology if item.module == "Auth")
+    auth_topology = next(
+        item for item in response.service_process_topology if item.module == "Auth"
+    )
     assert auth_topology.container_hint == "auth-service"
     assert auth_topology.stale is True
 

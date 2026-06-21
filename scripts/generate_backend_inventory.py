@@ -45,8 +45,7 @@ SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
 )
 
 SERVICE_SOURCES: tuple[Path, ...] = tuple(
-    REPO_ROOT / (module_path.replace(".", "/") + ".py")
-    for _, module_path, _ in SERVICE_CLASSES
+    REPO_ROOT / (module_path.replace(".", "/") + ".py") for _, module_path, _ in SERVICE_CLASSES
 )
 
 STATIC_ONLY_SERVICES = {"Config"}

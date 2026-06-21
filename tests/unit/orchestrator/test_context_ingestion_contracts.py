@@ -67,7 +67,9 @@ async def test_ingest_context_redacts_and_stores_text_in_rag():
     assert response.accepted_items[0].redacted is True
     assert "credential" in response.accepted_items[0].redaction_reasons
 
-    rag_call = next(call for call in bus.request.await_args_list if call.args[0] == DBMethods.RAG_STORE)
+    rag_call = next(
+        call for call in bus.request.await_args_list if call.args[0] == DBMethods.RAG_STORE
+    )
     rag_request = rag_call.args[1]
     stored = json.loads(rag_request.value)
     assert rag_request.namespace == "assistant.attachments"
@@ -76,7 +78,9 @@ async def test_ingest_context_redacts_and_stores_text_in_rag():
     assert stored["source"]["channel"] == "api"
 
     audit_call = next(
-        call for call in bus.request.await_args_list if call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+        call
+        for call in bus.request.await_args_list
+        if call.args[0] == AuthMethods.STORE_AUDIT_EVENT
     )
     audit_request = audit_call.args[1]
     audit_details = json.loads(audit_request.details)
@@ -106,7 +110,9 @@ async def test_ingest_context_rejects_oversized_item_without_rag_store():
     assert response.rejected is True
     assert response.rejected_items[0].reason_code == "item_too_large"
     assert all(call.args[0] != DBMethods.RAG_STORE for call in bus.request.await_args_list)
-    assert any(call.args[0] == AuthMethods.STORE_AUDIT_EVENT for call in bus.request.await_args_list)
+    assert any(
+        call.args[0] == AuthMethods.STORE_AUDIT_EVENT for call in bus.request.await_args_list
+    )
 
 
 @pytest.mark.asyncio

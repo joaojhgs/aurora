@@ -560,7 +560,11 @@ class OrchestratorService(BaseService):
         provider = None
         if data.provider_id:
             provider = next(
-                (candidate for candidate in catalog.providers if candidate.provider_id == data.provider_id),
+                (
+                    candidate
+                    for candidate in catalog.providers
+                    if candidate.provider_id == data.provider_id
+                ),
                 None,
             )
         elif catalog.selected_provider_id:
@@ -1035,10 +1039,10 @@ def _configured_model_providers(
 ) -> list[ModelRuntimeProviderInfo]:
     third_party = llm_config.get("third_party") or {}
     local = llm_config.get("local") or {}
-    openai_options = ((third_party.get("openai") or {}).get("options") or {})
-    hf_endpoint_options = ((third_party.get("huggingface_endpoint") or {}).get("options") or {})
-    hf_pipeline_options = ((local.get("huggingface_pipeline") or {}).get("options") or {})
-    llama_options = ((local.get("llama_cpp") or {}).get("options") or {})
+    openai_options = (third_party.get("openai") or {}).get("options") or {}
+    hf_endpoint_options = (third_party.get("huggingface_endpoint") or {}).get("options") or {}
+    hf_pipeline_options = (local.get("huggingface_pipeline") or {}).get("options") or {}
+    llama_options = (local.get("llama_cpp") or {}).get("options") or {}
 
     return [
         _provider_info(
@@ -1095,9 +1099,7 @@ def _configured_model_providers(
             },
             capabilities=["chat", "local_execution"],
             health="available" if hf_pipeline_options.get("model") else "misconfigured",
-            health_reason=None
-            if hf_pipeline_options.get("model")
-            else "model is not configured",
+            health_reason=None if hf_pipeline_options.get("model") else "model is not configured",
             operations=operations,
         ),
         _provider_info(
@@ -1174,8 +1176,12 @@ def _provider_info(
 def _provider_index(providers: list[ModelRuntimeProviderInfo]) -> dict[str, list[str]]:
     return {
         "all": [provider.provider_id for provider in providers],
-        "local": [provider.provider_id for provider in providers if provider.provider_type == "local"],
-        "cloud": [provider.provider_id for provider in providers if provider.provider_type == "cloud"],
+        "local": [
+            provider.provider_id for provider in providers if provider.provider_type == "local"
+        ],
+        "cloud": [
+            provider.provider_id for provider in providers if provider.provider_type == "cloud"
+        ],
         "selected": [provider.provider_id for provider in providers if provider.selected],
     }
 
@@ -1237,7 +1243,11 @@ def _operation_progress(
     operations: list[ModelRuntimeOperationResponse],
 ) -> ModelRuntimeProgressInfo:
     operation = next(
-        (candidate for candidate in reversed(operations) if candidate.operation_type == operation_type),
+        (
+            candidate
+            for candidate in reversed(operations)
+            if candidate.operation_type == operation_type
+        ),
         None,
     )
     if operation is None:
@@ -1260,7 +1270,11 @@ def _benchmark_progress(
     operations: list[ModelRuntimeOperationResponse],
 ) -> ModelRuntimeBenchmarkInfo:
     operation = next(
-        (candidate for candidate in reversed(operations) if candidate.operation_type == "benchmark"),
+        (
+            candidate
+            for candidate in reversed(operations)
+            if candidate.operation_type == "benchmark"
+        ),
         None,
     )
     if operation is None:

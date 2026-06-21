@@ -165,7 +165,9 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
             mode_id="process_bullmq_redis",
             status="pass",
             assertion=scenario.assertion,
-            evidence={"transport_path": "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"},
+            evidence={
+                "transport_path": "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            },
             correlation_id=f"process_bullmq_redis-{scenario.scenario_id}",
         )
         for scenario in SCENARIOS

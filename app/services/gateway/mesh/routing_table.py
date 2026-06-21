@@ -411,13 +411,15 @@ def _selector_target(
     if len(peer_ids) > 1:
         return None, f"selector names multiple peer/provider targets: {', '.join(peer_ids)}", None
     if len(provider_kinds) > 1:
-        return None, (
-            f"selector names multiple provider kinds: {', '.join(provider_kinds)}"
-        ), None
-    return (peer_ids[0], None, provider_kinds[0] if provider_kinds else None) if peer_ids else (
-        None,
-        None,
-        None,
+        return None, (f"selector names multiple provider kinds: {', '.join(provider_kinds)}"), None
+    return (
+        (peer_ids[0], None, provider_kinds[0] if provider_kinds else None)
+        if peer_ids
+        else (
+            None,
+            None,
+            None,
+        )
     )
 
 
@@ -439,9 +441,7 @@ def _parse_selector_target(
         peer_id, service_module = value.split(":", 1)
 
     if service_module and service_module != module:
-        return None, (
-            f"{field_name} '{value}' targets {service_module}, not {module}"
-        ), None
+        return None, (f"{field_name} '{value}' targets {service_module}, not {module}"), None
     return peer_id, None, provider_kind
 
 

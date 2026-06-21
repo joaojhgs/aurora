@@ -361,7 +361,9 @@ def _local_candidate(
         max_concurrent=service.max_concurrent if service else 0,
         available_capacity=service.available_capacity if service else None,
         policy=policy,
-        freshness=_freshness(service) if service else CapabilityFreshnessInfo(source="local_registry"),
+        freshness=_freshness(service)
+        if service
+        else CapabilityFreshnessInfo(source="local_registry"),
         auth_rbac_state=_auth_rbac_state(policy=policy, blockers=[], included=True),
         transport="local_bus",
         privacy_class=_privacy_class(policy),

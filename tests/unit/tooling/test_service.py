@@ -1099,9 +1099,7 @@ class TestToolingSharingPolicyAndApproval:
         mock_tool.ainvoke.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_raw_confirmed_does_not_bypass_approval_token(
-        self, tooling_service, mock_bus
-    ):
+    async def test_raw_confirmed_does_not_bypass_approval_token(self, tooling_service, mock_bus):
         """Raw confirmed=true is denied for approval-required remote tools."""
         from app.shared.contracts.models.tooling import (
             ToolingExecuteToolRequest,
@@ -1230,9 +1228,7 @@ class TestToolingSharingPolicyAndApproval:
         assert response.error_code == expected_error
 
     @pytest.mark.asyncio
-    async def test_token_resource_mismatch_and_expiry_are_denied(
-        self, tooling_service, mock_bus
-    ):
+    async def test_token_resource_mismatch_and_expiry_are_denied(self, tooling_service, mock_bus):
         """Resource selector changes and expired tokens fail closed."""
         from app.shared.contracts.models.tooling import (
             ToolingRequestApprovalRequest,
@@ -1373,9 +1369,7 @@ class TestToolingSharingPolicyAndApproval:
         assert "tooling.execute" in event_names
 
     @pytest.mark.asyncio
-    async def test_config_loaded_policy_enforces_peer_scoped_rule(
-        self, tooling_service, mock_bus
-    ):
+    async def test_config_loaded_policy_enforces_peer_scoped_rule(self, tooling_service, mock_bus):
         """Schema-backed approval_policy loads into runtime sharing enforcement."""
         from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
 

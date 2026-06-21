@@ -748,7 +748,9 @@ class TranscriptionService(BaseService):
                 status="denied",
                 payload={"reason": "consent_token_required"},
             )
-            raise PermissionError("Transcription.ProcessAudio requires an audio session consent token")
+            raise PermissionError(
+                "Transcription.ProcessAudio requires an audio session consent token"
+            )
 
         self._validate_streaming_audio_sample(chunk)
         result = await self.bus.request(

@@ -267,7 +267,6 @@ async def test_rtc_client_default_token_not_used_when_peer_tokens_exist(mock_dep
         assert "unknown-session-peer" in client._pairing_tasks
 
 
-
 @pytest.mark.asyncio
 async def test_rtc_client_manifest_uses_stable_local_identity(mock_deps):
     """Manifest exchange exposes stable local mesh identity."""

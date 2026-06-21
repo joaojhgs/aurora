@@ -229,9 +229,7 @@ async def test_generated_config_set_requires_admin_action_headers(generated_rout
 
 @pytest.mark.asyncio
 async def test_generated_config_rollback_requires_admin_action_headers(generated_route_app):
-    app, router, generator, bus, _manager = generated_route_app(
-        "Config", _config_rollback_method()
-    )
+    app, router, generator, bus, _manager = generated_route_app("Config", _config_rollback_method())
     await _start_app(app, router, generator)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

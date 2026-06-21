@@ -616,8 +616,7 @@ class ConfigManager:
         if restart_required:
             return f"{key_path} changes startup or transport behavior for {service_text}"
         return (
-            f"{key_path} can be applied through Config.Updated reload handling "
-            f"for {service_text}"
+            f"{key_path} can be applied through Config.Updated reload handling for {service_text}"
         )
 
     def _resolve_env_fallbacks(self, config: dict[str, Any]) -> dict[str, Any]:
