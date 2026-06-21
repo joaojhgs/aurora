@@ -20,6 +20,8 @@ from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.scheduler import (
+    SchedulerActionResponse,
+    SchedulerActionSupport,
     SchedulerCancelJobRequest,
     SchedulerJobCompletedEvent,
     SchedulerJobFiredEvent,
@@ -41,6 +43,8 @@ _scheduler_service_instance: SchedulerService | None = None
 DEFAULT_SCHEDULER_NAMESPACE = "local"
 DEFAULT_SCHEDULER_OWNER_PEER = "local"
 DEFAULT_SCHEDULER_OWNER_PRINCIPAL = "system"
+DEFAULT_SCHEDULER_PRIVACY_CLASS = "sensitive"
+PAUSE_RESUME_UNSUPPORTED_REASON = "scheduler_pause_resume_unsupported"
 DELEGATED_APPROVAL_REQUIRED_REASON = "delegated_approval_token_required"
 DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON = (
     "delegated_orchestrator_execution_boundary_unsupported"
@@ -141,11 +145,20 @@ class SchedulerService(BaseService):
             "correlation_id": cmd.correlation_id,
             "caller_peer_id": cmd.caller_peer_id,
             "caller_principal_id": cmd.caller_principal_id,
+            "timezone": cmd.timezone,
+            "source": cmd.source or "scheduler",
+            "privacy_class": cmd.privacy_class or DEFAULT_SCHEDULER_PRIVACY_CLASS,
             "blocked_reason": None,
         }
 
     def _request_scope(
-        self, cmd: SchedulerCancelJobRequest | SchedulerListJobsRequest
+        self,
+        cmd: (
+            SchedulerCancelJobRequest
+            | SchedulerListJobsRequest
+            | SchedulerPauseJobRequest
+            | SchedulerResumeJobRequest
+        ),
     ) -> dict[str, Any]:
         return {
             "namespace": cmd.namespace,
@@ -173,6 +186,9 @@ class SchedulerService(BaseService):
             "correlation_id": context.get("correlation_id"),
             "caller_peer_id": context.get("caller_peer_id"),
             "caller_principal_id": context.get("caller_principal_id"),
+            "timezone": context.get("timezone"),
+            "source": context.get("source") or "scheduler",
+            "privacy_class": context.get("privacy_class") or DEFAULT_SCHEDULER_PRIVACY_CLASS,
             "blocked_reason": context.get("blocked_reason"),
         }
 
@@ -228,6 +244,9 @@ class SchedulerService(BaseService):
             "policy_decision_id": context.get("policy_decision_id"),
             "correlation_id": context.get("correlation_id"),
             "delegated_permissions": context.get("delegated_permissions") or [],
+            "timezone": context.get("timezone"),
+            "source": context.get("source"),
+            "privacy_class": context.get("privacy_class") or DEFAULT_SCHEDULER_PRIVACY_CLASS,
             "delegated_approval_token_present": bool(context.get("delegated_approval_token")),
             "reason": reason,
         }
@@ -243,6 +262,28 @@ class SchedulerService(BaseService):
             )
         except Exception as exc:
             log_warning(f"Failed to write scheduler audit event {event}: {exc}")
+
+    def _action_support(self, job: Any) -> list[SchedulerActionSupport]:
+        """Return UI-visible action capability states for a scheduler job."""
+        actions = [SchedulerActionSupport(action="cancel", supported=True)]
+        if getattr(job, "is_active", False):
+            actions.extend(
+                [
+                    SchedulerActionSupport(
+                        action="pause",
+                        supported=False,
+                        status="unsupported",
+                        reason=PAUSE_RESUME_UNSUPPORTED_REASON,
+                    ),
+                    SchedulerActionSupport(
+                        action="resume",
+                        supported=False,
+                        status="unsupported",
+                        reason=PAUSE_RESUME_UNSUPPORTED_REASON,
+                    ),
+                ]
+            )
+        return actions
 
     async def on_start(self) -> None:
         """Start the scheduler service."""
@@ -280,6 +321,7 @@ class SchedulerService(BaseService):
         output_model=EmptyOutput,
         exposure="both",
         method_type="manage",
+        required_perms=[SchedulerMethods.SCHEDULE],
     )
     async def schedule_job(self, cmd: SchedulerScheduleJobRequest) -> EmptyOutput:
         """Handle schedule job command."""
@@ -372,6 +414,7 @@ class SchedulerService(BaseService):
         output_model=EmptyOutput,
         exposure="both",
         method_type="manage",
+        required_perms=[SchedulerMethods.CANCEL],
     )
     async def cancel_job(self, cmd: SchedulerCancelJobRequest) -> EmptyOutput:
         """Handle cancel job command."""
@@ -436,81 +479,125 @@ class SchedulerService(BaseService):
         method_id=SchedulerMethods.PAUSE,
         summary="Pause a scheduled job",
         input_model=SchedulerPauseJobRequest,
-        output_model=EmptyOutput,
-        exposure="internal",
+        output_model=SchedulerActionResponse,
+        exposure="both",
         method_type="manage",
+        required_perms=[SchedulerMethods.PAUSE],
     )
-    async def pause_job(self, cmd: SchedulerPauseJobRequest) -> EmptyOutput:
-        """Handle pause job command."""
+    async def pause_job(self, cmd: SchedulerPauseJobRequest) -> SchedulerActionResponse:
+        """Return an audited unsupported response for pause semantics."""
+        job_id_str = str(cmd.job_id)
         try:
-            log_info(f"Pausing job: {cmd.job_id}")
+            log_info(f"Pause requested for job: {cmd.job_id}")
+            job = await self.cron_service.get_job(job_id_str)
+            context = self._job_context(job) if job else self._request_scope(cmd)
+            scope = self._request_scope(cmd)
+            if job and not self._scope_allows_job(context, scope):
+                await self._audit_scheduler_event(
+                    "scheduler.pause.denied",
+                    context,
+                    status="denied",
+                    job_id=job_id_str,
+                    reason="owner_scope_mismatch",
+                )
+                return SchedulerActionResponse(
+                    ok=False,
+                    status="denied",
+                    job_id=job_id_str,
+                    action="pause",
+                    reason="owner_scope_mismatch",
+                    audit_event="scheduler.pause.denied",
+                )
 
-            # Pause job via CronService
-            job_id_str = str(cmd.job_id)
-            success = await self.cron_service.pause_job(job_id_str)
-
-            if success:
-                log_debug(f"Job {cmd.job_id} paused successfully")
-            else:
-                log_warning(f"Failed to pause job {cmd.job_id}")
-
-            return EmptyOutput()
+            reason = "job_not_found" if job is None else PAUSE_RESUME_UNSUPPORTED_REASON
+            event = "scheduler.pause.denied" if job is None else "scheduler.pause.unsupported"
+            await self._audit_scheduler_event(
+                event,
+                context,
+                status="unsupported" if job else "denied",
+                job_id=job_id_str,
+                reason=reason,
+            )
+            return SchedulerActionResponse(
+                ok=False,
+                status="unsupported" if job else "not_found",
+                job_id=job_id_str,
+                action="pause",
+                reason=reason,
+                audit_event=event,
+            )
 
         except Exception as e:
             log_error(f"Error pausing job: {e}", exc_info=True)
-            return EmptyOutput()
+            return SchedulerActionResponse(
+                ok=False,
+                status="failed",
+                job_id=job_id_str,
+                action="pause",
+                reason=str(e),
+            )
 
     @method_contract(
         method_id=SchedulerMethods.RESUME,
         summary="Resume a paused job",
         input_model=SchedulerResumeJobRequest,
-        output_model=EmptyOutput,
-        exposure="internal",
+        output_model=SchedulerActionResponse,
+        exposure="both",
         method_type="manage",
+        required_perms=[SchedulerMethods.RESUME],
     )
-    async def resume_job(self, cmd: SchedulerResumeJobRequest) -> EmptyOutput:
-        """Handle resume job command."""
+    async def resume_job(self, cmd: SchedulerResumeJobRequest) -> SchedulerActionResponse:
+        """Return an audited unsupported response for resume semantics."""
+        job_id_str = str(cmd.job_id)
         try:
-            log_info(f"Resuming job: {cmd.job_id}")
-
-            # Resume job via CronService (unpause)
-            # Note: CronService doesn't have explicit resume, but we can
-            # cancel the paused job and reschedule it
-            job_id_str = str(cmd.job_id)
-
-            # Get the job from tracking
-            if job_id_str in self._jobs:
-                original_cmd = self._jobs[job_id_str]
-
-                # Cancel the paused job
-                await self.cron_service.cancel_job(job_id_str)
-
-                # Reschedule it (effectively resuming)
-                new_job_id = await self.cron_service.schedule_from_text(
-                    text=original_cmd.schedule,
-                    callback="app.scheduler.service.fire_scheduled_job",
-                    job_name=original_cmd.name,
-                    callback_args={
-                        "job_name": original_cmd.name,
-                        "action": original_cmd.action,
-                    },
+            log_info(f"Resume requested for job: {cmd.job_id}")
+            job = await self.cron_service.get_job(job_id_str)
+            context = self._job_context(job) if job else self._request_scope(cmd)
+            scope = self._request_scope(cmd)
+            if job and not self._scope_allows_job(context, scope):
+                await self._audit_scheduler_event(
+                    "scheduler.resume.denied",
+                    context,
+                    status="denied",
+                    job_id=job_id_str,
+                    reason="owner_scope_mismatch",
+                )
+                return SchedulerActionResponse(
+                    ok=False,
+                    status="denied",
+                    job_id=job_id_str,
+                    action="resume",
+                    reason="owner_scope_mismatch",
+                    audit_event="scheduler.resume.denied",
                 )
 
-                if new_job_id:
-                    # Update tracking with new job_id
-                    self._jobs.pop(job_id_str, None)
-                    self._jobs[new_job_id] = original_cmd
-                    log_debug(f"Job {cmd.job_id} resumed successfully with new ID: {new_job_id}")
-                else:
-                    log_warning(f"Failed to resume job {cmd.job_id}")
-            else:
-                log_warning(f"Job {cmd.job_id} not found in tracking")
-
-            return EmptyOutput()
+            reason = "job_not_found" if job is None else PAUSE_RESUME_UNSUPPORTED_REASON
+            event = "scheduler.resume.denied" if job is None else "scheduler.resume.unsupported"
+            await self._audit_scheduler_event(
+                event,
+                context,
+                status="unsupported" if job else "denied",
+                job_id=job_id_str,
+                reason=reason,
+            )
+            return SchedulerActionResponse(
+                ok=False,
+                status="unsupported" if job else "not_found",
+                job_id=job_id_str,
+                action="resume",
+                reason=reason,
+                audit_event=event,
+            )
 
         except Exception as e:
             log_error(f"Error resuming job: {e}", exc_info=True)
-            return EmptyOutput()
+            return SchedulerActionResponse(
+                ok=False,
+                status="failed",
+                job_id=job_id_str,
+                action="resume",
+                reason=str(e),
+            )
 
     @method_contract(
         method_id=SchedulerMethods.LIST_JOBS,
@@ -519,6 +606,7 @@ class SchedulerService(BaseService):
         output_model=SchedulerListJobsResponse,
         exposure="both",
         method_type="use",
+        required_perms=[SchedulerMethods.LIST_JOBS],
     )
     async def list_jobs(self, query: SchedulerListJobsRequest) -> SchedulerListJobsResponse:
         """List all scheduled jobs.
@@ -573,6 +661,19 @@ class SchedulerService(BaseService):
                     delegated_approval_token_present=bool(context.get("delegated_approval_token")),
                     correlation_id=context["correlation_id"],
                     blocked_reason=context.get("blocked_reason"),
+                    timezone=context.get("timezone"),
+                    source=context.get("source") or job.callback_module or "scheduler",
+                    failure_count=getattr(job, "retry_count", 0) or 0,
+                    privacy_class=context.get("privacy_class") or DEFAULT_SCHEDULER_PRIVACY_CLASS,
+                    last_error=(
+                        job.last_run_result
+                        if (
+                            (hasattr(job.status, "value") and job.status.value == "failed")
+                            or str(job.status) == "failed"
+                        )
+                        else None
+                    ),
+                    action_support=self._action_support(job),
                 )
                 job_infos.append(job_info)
 

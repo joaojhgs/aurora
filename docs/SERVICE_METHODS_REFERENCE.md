@@ -330,11 +330,11 @@ Job scheduling using cron expressions.
 
 | Method ID | Summary | Input | Output | Exposure |
 |-----------|---------|-------|--------|----------|
-| `Scheduler.Schedule` | Schedule a new job | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both** |
-| `Scheduler.Cancel` | Cancel a job | `SchedulerCancelJobRequest` | `EmptyOutput` | **both** |
-| `Scheduler.Pause` | Pause a job | `SchedulerPauseJobRequest` | `EmptyOutput` | **internal** |
-| `Scheduler.Resume` | Resume a paused job | `SchedulerResumeJobRequest` | `EmptyOutput` | **internal** |
-| `Scheduler.ListJobs` | List all scheduled jobs | `SchedulerListJobsRequest` | `SchedulerListJobsResponse` | **both** |
+| `Scheduler.Schedule` | Schedule a new job | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.Cancel` | Cancel a job | `SchedulerCancelJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.Pause` | Pause a job | `SchedulerPauseJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
+| `Scheduler.Resume` | Resume a paused job | `SchedulerResumeJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
+| `Scheduler.ListJobs` | List all scheduled jobs | `SchedulerListJobsRequest` | `SchedulerListJobsResponse` | **both, use** |
 
 ### Method Details
 
@@ -346,6 +346,9 @@ SchedulerScheduleJobRequest(
     schedule: str,                     # Cron expression (e.g., "0 9 * * *")
     action: str,                       # Action to execute
     enabled: bool = True,              # Whether job is active
+    timezone: str | None = None,       # UI/operator timezone when known
+    source: str | None = None,         # Originating surface, e.g. admin-ui
+    privacy_class: str | None = None,  # Defaults to sensitive when omitted
     namespace: str | None = None,      # Owner/resource namespace, defaults to local
     owner_peer_id: str | None = None,  # Peer that owns the job
     owner_principal_id: str | None = None,  # Principal that owns the job
@@ -380,11 +383,28 @@ SchedulerListJobsResponse(
 ```
 
 Remote scheduler calls are ownership-scoped. Mesh callers may only list or
-cancel jobs owned by their injected `caller_peer_id`/`caller_principal_id`;
-local callers can still list local jobs and may apply explicit filters.
-Scheduler jobs carry namespace, owner, target selector, delegated permissions,
-policy decision ID, and correlation ID through creation, listing, job-fired
-events, completion events, and audit records.
+cancel/pause/resume jobs owned by their injected `caller_peer_id`/
+`caller_principal_id`; local callers can still list local jobs and may apply
+explicit filters. Scheduler jobs carry namespace, owner, target selector,
+delegated permissions, policy decision ID, correlation ID, timezone, source,
+failure count, and privacy class where available through creation, listing,
+job-fired events, completion events, and audit records.
+
+`Scheduler.Schedule`, `Scheduler.Cancel`, `Scheduler.Pause`, and
+`Scheduler.Resume` are `method_type="manage"` contracts with specific
+permissions matching their method IDs. Generated Gateway routes require the
+AdminAction draft/confirm/audit envelope before forwarding these mutations.
+The Scheduler service also writes scheduler-specific Auth audit events for
+allowed, denied, blocked, unsupported, and failed management decisions.
+
+Pause/resume are intentionally exposed as degraded capability states until the
+CronService can guarantee safe pause and resume semantics without losing
+scheduler context. `Scheduler.ListJobs` returns `action_support` entries that
+mark `pause` and `resume` as `supported=False`, `status="unsupported"`, and
+`reason="scheduler_pause_resume_unsupported"`. Direct calls to
+`Scheduler.Pause` or `Scheduler.Resume` return `SchedulerActionResponse` with
+`ok=False` and audit `scheduler.pause.unsupported` or
+`scheduler.resume.unsupported` rather than silently mutating or recreating jobs.
 
 ---
 
@@ -710,6 +730,8 @@ These methods are exposed via HTTP POST at `/api/{service}/{method}`:
 | Orchestrator | ExternalUserInput | `POST /api/orchestrator/externaluserinput` |
 | Scheduler | Schedule | `POST /api/scheduler/schedule` |
 | Scheduler | Cancel | `POST /api/scheduler/cancel` |
+| Scheduler | Pause | `POST /api/scheduler/pause` |
+| Scheduler | Resume | `POST /api/scheduler/resume` |
 | Scheduler | ListJobs | `POST /api/scheduler/listjobs` |
 | DB | GetMessages | `POST /api/db/getmessages` |
 | DB | GetMessagesForDate | `POST /api/db/getmessagesfordate` |
