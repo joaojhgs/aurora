@@ -448,8 +448,7 @@ async def test_pairing_approve_deny_and_exchange_publish_lifecycle_events(auth_s
     assert denied_entry["denied_reason"] == "not recognized"
 
     audit_events = [
-        call.args[1].event
-        for call in _bus_calls(auth_service.bus, AuthMethods.STORE_AUDIT_EVENT)
+        call.args[1].event for call in _bus_calls(auth_service.bus, AuthMethods.STORE_AUDIT_EVENT)
     ]
     assert "auth.pairing.approved" in audit_events
     assert "auth.pairing.denied" in audit_events

@@ -51,10 +51,7 @@ def redacted_copy(value: Any) -> Any:
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
-        return {
-            str(key): _redact_value(str(key), nested)
-            for key, nested in value.items()
-        }
+        return {str(key): _redact_value(str(key), nested) for key, nested in value.items()}
     if isinstance(value, list | tuple):
         return [redacted_copy(item) for item in value]
     return value

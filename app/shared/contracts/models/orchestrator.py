@@ -20,6 +20,7 @@ class OrchestratorMethods:
 
     USER_INPUT = f"{OrchestratorModule.NAME}.UserInput"
     EXTERNAL_USER_INPUT = f"{OrchestratorModule.NAME}.ExternalUserInput"
+    INGEST_CONTEXT = f"{OrchestratorModule.NAME}.IngestContext"
     TOOL_RESULT = f"{OrchestratorModule.NAME}.ToolResult"
     INTERRUPT = f"{OrchestratorModule.NAME}.Interrupt"
     RESPONSE = f"{OrchestratorModule.NAME}.Response"
@@ -61,6 +62,118 @@ class OrchestratorResponse(IOModel):
     text: str
     session_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+AttachmentContextKind = Literal["text", "url", "file", "image"]
+AttachmentContextPrivacyClass = Literal[
+    "public",
+    "personal",
+    "sensitive",
+    "secret",
+    "credential",
+    "raw-audio",
+]
+AttachmentContextSourceChannel = Literal[
+    "chat",
+    "api",
+    "desktop",
+    "mobile_share_sheet",
+    "deep_link",
+    "browser_extension",
+]
+AttachmentContextStoragePolicy = Literal["ephemeral", "rag", "reject"]
+AttachmentContextStatus = Literal[
+    "accepted",
+    "stored",
+    "rejected",
+    "redacted",
+    "unsupported",
+]
+
+
+class AttachmentContextLimits(IOModel):
+    """Client-visible limits for assistant attachment/context ingestion."""
+
+    max_items: int = 8
+    max_item_bytes: int = 262_144
+    max_total_bytes: int = 1_048_576
+    max_text_chars: int = 120_000
+
+
+class AttachmentContextSource(IOModel):
+    """Redacted provenance for context shared into an assistant session."""
+
+    channel: AttachmentContextSourceChannel = "api"
+    display_name: str | None = None
+    uri: str | None = None
+    mime_type: str | None = None
+    platform: str | None = None
+    originating_app: str | None = None
+    shared_at: str | None = None
+    principal_id: str | None = None
+    device_id: str | None = None
+    peer_id: str | None = None
+
+
+class AttachmentContextItem(IOModel):
+    """One text-like attachment or shared context item for assistant ingestion."""
+
+    kind: AttachmentContextKind
+    content_text: str | None = None
+    url: str | None = None
+    title: str | None = None
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    source: AttachmentContextSource = Field(default_factory=AttachmentContextSource)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AttachmentContextIngestRequest(IOModel):
+    """Request to ingest redacted attachment/context metadata for assistant use."""
+
+    items: list[AttachmentContextItem] = Field(default_factory=list)
+    session_id: str | None = None
+    namespace: str = "assistant.attachments"
+    storage_policy: AttachmentContextStoragePolicy = "ephemeral"
+    privacy_class: AttachmentContextPrivacyClass = "personal"
+    caller_principal_id: str | None = None
+    correlation_id: str | None = None
+    policy_decision_id: str | None = None
+    limits: AttachmentContextLimits = Field(default_factory=AttachmentContextLimits)
+
+
+class AttachmentContextItemResult(IOModel):
+    """Per-item ingestion outcome without echoing raw attachment content."""
+
+    item_id: str
+    kind: AttachmentContextKind
+    status: AttachmentContextStatus
+    storage_policy: AttachmentContextStoragePolicy
+    privacy_class: AttachmentContextPrivacyClass
+    accepted_bytes: int = 0
+    stored_namespace: str | None = None
+    stored_key: str | None = None
+    redacted: bool = False
+    redaction_reasons: list[str] = Field(default_factory=list)
+    reason_code: str | None = None
+    message: str = ""
+
+
+class AttachmentContextIngestResponse(IOModel):
+    """Summary returned after context ingestion and audit recording."""
+
+    accepted: bool
+    rejected: bool
+    total_items: int
+    accepted_items: list[AttachmentContextItemResult] = Field(default_factory=list)
+    rejected_items: list[AttachmentContextItemResult] = Field(default_factory=list)
+    total_bytes: int = 0
+    storage_policy: AttachmentContextStoragePolicy
+    privacy_class: AttachmentContextPrivacyClass
+    audit_event: str = "assistant.context.ingested"
+    correlation_id: str | None = None
+    secrets_redacted: bool = True
 
 
 class OrchestratorToolResultRequest(IOModel):

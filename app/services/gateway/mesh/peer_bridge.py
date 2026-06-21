@@ -115,8 +115,7 @@ class PeerBridge:
                 )
 
             log_debug(
-                f"PeerBridge: Sent call {req_id} to {peer_id} topic={topic} "
-                f"correlation_id={req_id}"
+                f"PeerBridge: Sent call {req_id} to {peer_id} topic={topic} correlation_id={req_id}"
             )
 
             # Wait for response with timeout

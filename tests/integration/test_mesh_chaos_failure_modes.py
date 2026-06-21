@@ -147,9 +147,7 @@ class TestMeshChaosFallbacks:
         mesh_config: MeshConfig,
     ) -> None:
         await _register_peer(peer_registry, "orchestrator-peer", ["Orchestrator"])
-        bridge = ScriptedPeerBridge(
-            {"orchestrator-peer": [ConnectionError("data channel closed")]}
-        )
+        bridge = ScriptedPeerBridge({"orchestrator-peer": [ConnectionError("data channel closed")]})
         mesh_bus = MeshBus(inner_bus, routing_table, bridge, mesh_config)
 
         result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())

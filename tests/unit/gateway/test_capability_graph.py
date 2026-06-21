@@ -243,11 +243,7 @@ def test_capability_graph_classifies_audio_boundaries():
         local_peer_id="local-peer",
     )
 
-    methods = {
-        method.bus_topic: method
-        for service in graph.services
-        for method in service.methods
-    }
+    methods = {method.bus_topic: method for service in graph.services for method in service.methods}
 
     synthesize = methods[TTSMethods.SYNTHESIZE]
     assert synthesize.policy.safety_class == "standard"

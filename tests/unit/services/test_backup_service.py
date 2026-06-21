@@ -9,7 +9,6 @@ import pytest
 from app.messaging.bus import QueryResult
 from app.services.backup import BackupService
 from app.services.config.messages import GetConfigQuery
-from app.shared.contracts.registry import list_modules
 from app.shared.contracts.models.backup import (
     BackupCreateRequest,
     BackupListRequest,
@@ -22,6 +21,7 @@ from app.shared.contracts.models.backup import (
 )
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.db import DBMethods, DBRAGListNamespacesResponse
+from app.shared.contracts.registry import list_modules
 from app.shared.messaging.bus_init import set_bus
 
 

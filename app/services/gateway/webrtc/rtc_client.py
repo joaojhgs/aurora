@@ -927,9 +927,7 @@ class RTCClient:
         )
         remote_node_name = msg.get("node_name") or msg.get("mesh_node_name") or ""
         if remote_stable_peer_id == self._local_mesh_peer_id():
-            log_debug(
-                f"RTCClient: Ignoring stale self-presence from signaling peer {remote_peer}"
-            )
+            log_debug(f"RTCClient: Ignoring stale self-presence from signaling peer {remote_peer}")
             return
         if remote_stable_peer_id:
             self._remember_stable_peer_id(remote_peer, remote_stable_peer_id, remote_node_name)
