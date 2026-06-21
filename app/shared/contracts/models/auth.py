@@ -264,7 +264,7 @@ class PairingLifecycleEvent(BaseModel):
     request_id: str
     event_type: str
     status: str
-    code: str = ""
+    code_sha256: str = ""
     remote_peer_id: str = ""
     remote_node_name: str = ""
     device_name: str = ""

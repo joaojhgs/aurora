@@ -370,8 +370,31 @@ async def test_pending_pairing_queue_lists_admin_metadata_and_prunes_expired(aut
     assert entry["remote_node_name"] == "Peer One"
     assert expired_code not in auth_service.pairing_requests
 
+    requested_events = [
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0] == AuthMethods.PAIRING_REQUESTED
+    ]
+    assert requested_events
+    dumped_requested_events = json.dumps(
+        [event.model_dump(mode="json") for event in requested_events],
+        sort_keys=True,
+    )
+    assert pending_code not in dumped_requested_events
+    assert expired_code not in dumped_requested_events
+    assert all(not hasattr(event, "code") for event in requested_events)
+    assert all(event.code_sha256 for event in requested_events)
+
     published_topics = [call.args[0] for call in auth_service.bus.publish.await_args_list]
     assert AuthMethods.PAIRING_EXPIRED in published_topics
+    expired_event = next(
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0] == AuthMethods.PAIRING_EXPIRED
+    )
+    assert expired_event.code_sha256 == hashlib.sha256(expired_code.encode()).hexdigest()
+    assert not hasattr(expired_event, "code")
+    assert expired_code not in expired_event.model_dump_json()
     audit_calls = _bus_calls(auth_service.bus, AuthMethods.STORE_AUDIT_EVENT)
     assert audit_calls
     audit_request = audit_calls[-1].args[1]
@@ -399,6 +422,24 @@ async def test_pairing_approve_deny_and_exchange_publish_lifecycle_events(auth_s
     assert AuthMethods.PAIRING_APPROVED in published_topics
     assert AuthMethods.PAIRING_DENIED in published_topics
     assert AuthMethods.PAIRING_EXCHANGED in published_topics
+    lifecycle_events = [
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0]
+        in {
+            AuthMethods.PAIRING_APPROVED,
+            AuthMethods.PAIRING_DENIED,
+            AuthMethods.PAIRING_EXCHANGED,
+        }
+    ]
+    dumped_lifecycle_events = json.dumps(
+        [event.model_dump(mode="json") for event in lifecycle_events],
+        sort_keys=True,
+    )
+    assert approved_code not in dumped_lifecycle_events
+    assert denied_code not in dumped_lifecycle_events
+    assert all(not hasattr(event, "code") for event in lifecycle_events)
+    assert all(event.code_sha256 for event in lifecycle_events)
 
     entries, _ = await auth_service.list_pending_pairings(include_non_pending=True)
     denied_entry = next(entry for entry in entries if entry["code"] == denied_code)

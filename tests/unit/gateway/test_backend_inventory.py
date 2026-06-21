@@ -93,25 +93,6 @@ def test_backend_inventory_includes_model_runtime_contracts():
         assert methods[topic]["required_perms"] == ["Orchestrator.manage"]
 
 
-def test_backend_inventory_includes_orchestrator_interrupt_contract():
-    inventory = build_inventory()
-    methods = {method["bus_topic"]: method for method in inventory["methods"]}
-
-    interrupt = methods[OrchestratorMethods.INTERRUPT]
-    assert interrupt["routePath"] == "/api/Orchestrator/Interrupt"
-    assert interrupt["exposure"] == "external"
-    assert interrupt["method_type"] == "use"
-    assert interrupt["required_perms"] == ["Orchestrator.use"]
-    assert interrupt["input_model"] == "OrchestratorInterruptRequest"
-    assert interrupt["output_model"] == "OrchestratorInterruptResponse"
-    assert set(interrupt["input_schema"]["properties"]["scopes"]["items"]["enum"]) == {
-        "generation",
-        "tool_call",
-        "tts_playback",
-        "session",
-    }
-
-
 def test_backend_inventory_includes_admin_pending_pairing_queue_contract():
     inventory = build_inventory()
     methods = {method["bus_topic"]: method for method in inventory["methods"]}

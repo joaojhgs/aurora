@@ -560,7 +560,7 @@ class AuthManager:
             await self.bus.publish(
                 AuthMethods.PAIRING_REQUESTED,
                 PairingRequestedEvent(
-                    code=pairing_code,
+                    code_sha256=hashlib.sha256(pairing_code.encode()).hexdigest(),
                     remote_peer_id=remote_peer_id,
                     remote_node_name=remote_node_name,
                     device_name=device_name,
@@ -851,11 +851,12 @@ class AuthManager:
         reason: str = "",
     ) -> None:
         try:
+            digest = hashlib.sha256(pairing_code.encode()).hexdigest()
             event = PairingLifecycleEvent(
                 request_id=request.get("id", ""),
                 event_type=topic.split(".", 1)[1] if "." in topic else topic,
                 status=request.get("status", ""),
-                code=pairing_code,
+                code_sha256=digest,
                 remote_peer_id=request.get("remote_peer_id", ""),
                 remote_node_name=request.get("remote_node_name", ""),
                 device_name=request.get("device_name", ""),
