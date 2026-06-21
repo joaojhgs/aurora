@@ -391,9 +391,7 @@ class TestOrchestratorInterruptHandling:
         assert mock_bus.publish.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_interrupt_tool_call_reports_no_separate_active_work(
-        self, orchestrator_service
-    ):
+    async def test_interrupt_tool_call_reports_no_separate_active_work(self, orchestrator_service):
         from app.shared.contracts.models.orchestrator import OrchestratorInterruptRequest
 
         response = await orchestrator_service.interrupt_assistant(

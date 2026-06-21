@@ -349,7 +349,7 @@ def test_pairing_lifecycle_event_stream_omits_raw_pairing_code():
     assert event.category == "pairing"
     assert "code_sha256" in event.redacted_payload
     assert raw_code not in dumped
-    assert "code\": " not in dumped
+    assert 'code": ' not in dumped
 
 
 @pytest.mark.asyncio
