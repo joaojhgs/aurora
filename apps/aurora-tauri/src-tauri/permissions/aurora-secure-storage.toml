@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-secure-storage"
+description = "Allow secure-storage helper commands to return structured native-permission-missing responses until TAURI-003 enables storage."
+commands.allow = [
+  "aurora_secure_storage_get",
+  "aurora_secure_storage_set",
+  "aurora_secure_storage_delete"
+]

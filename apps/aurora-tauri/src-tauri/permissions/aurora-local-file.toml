@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-local-file"
+description = "Allow local-file helper commands to return structured native-permission-missing responses without granting broad filesystem access."
+commands.allow = [
+  "aurora_local_file_read",
+  "aurora_local_file_write",
+  "aurora_local_file_pick"
+]

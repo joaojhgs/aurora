@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "aurora-native-capability-manifest"
 description = "Allow the frontend SDK adapter to read the Tauri shell capability manifest."
-commands.allow = ["aurora_native_capability_manifest"]
+commands.allow = ["aurora_native_capability_manifest", "native_capabilities"]

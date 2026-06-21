@@ -1598,7 +1598,7 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(calls[0]).toEqual({
-      command: 'aurora_request',
+      command: 'aurora_command',
       args: {
         request: expect.objectContaining({
           method: 'Gateway.GetRegistry',
@@ -1631,6 +1631,8 @@ describe('AuroraClient', () => {
             return { running: true, mode: 'sidecar', pid: 42 }
           case 'aurora_native_capability_manifest':
             return nativeCapabilityManifestFixture
+          case 'aurora_log_tail':
+            return { available: false, source: 'aurora-sidecar', lines: [], truncated: false }
           case 'aurora_secure_storage_get':
             return { key: 'session', value: 'token-ref' }
           case 'aurora_secure_storage_set':
@@ -1642,6 +1644,8 @@ describe('AuroraClient', () => {
             return { path: String(args?.path), ok: true, bytesWritten: 5 }
           case 'aurora_local_file_pick':
             return { paths: ['/tmp/a.txt'], cancelled: false }
+          case 'aurora_secure_file_handle_open':
+            return { paths: ['/tmp/a.txt'], cancelled: false }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -1652,6 +1656,12 @@ describe('AuroraClient', () => {
       expect.objectContaining({ running: true, mode: 'sidecar' })
     )
     await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.getLogTail({ lines: 10 })).resolves.toEqual({
+      available: false,
+      source: 'aurora-sidecar',
+      lines: [],
+      truncated: false
+    })
     await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
     await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
     await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
@@ -1669,19 +1679,27 @@ describe('AuroraClient', () => {
       paths: ['/tmp/a.txt'],
       cancelled: false
     })
+    await expect(transport.openSecureFileHandle({ mode: 'read' })).resolves.toEqual({
+      paths: ['/tmp/a.txt'],
+      cancelled: false
+    })
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
       'aurora_native_capability_manifest',
+      'aurora_log_tail',
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
       'aurora_secure_storage_delete',
       'aurora_local_file_read',
       'aurora_local_file_write',
-      'aurora_local_file_pick'
+      'aurora_local_file_pick',
+      'aurora_secure_file_handle_open'
     ])
-    expect(calls[3]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[6]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[2]?.args).toEqual({ request: { lines: 10 } })
+    expect(calls[4]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[7]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[9]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
@@ -2107,7 +2125,7 @@ describe('AuroraClient', () => {
   it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
     const tauri = new TauriLocalTransport({
       invoke: async (command, args) => {
-        expect(command).toBe('aurora_event_subscribe')
+        expect(command).toBe('aurora_subscribe')
         expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
         return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
       }

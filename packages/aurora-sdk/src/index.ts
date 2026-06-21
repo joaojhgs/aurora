@@ -137,10 +137,13 @@ export type {
   LocalFileReadResult,
   LocalFileWriteOptions,
   LocalFileWriteResult,
+  SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,
   TauriCommandNames,
   TauriInvoke,
+  TauriLogTailRequest,
+  TauriLogTailResult,
   TauriLocalTransportOptions,
   TauriSidecarStatus
 } from './tauri.js'

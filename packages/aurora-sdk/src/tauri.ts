@@ -14,12 +14,14 @@ export interface TauriCommandNames {
   request: string
   sidecarStatus: string
   nativeCapabilityManifest: string
+  logTail: string
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
   localFileRead: string
   localFileWrite: string
   localFilePick: string
+  secureFileHandleOpen: string
   eventSubscribe: string
 }
 
@@ -38,6 +40,19 @@ export interface TauriSidecarStatus {
   version?: string | null
   lastError?: string | null
   details?: JsonObject
+}
+
+export interface TauriLogTailRequest {
+  lines?: number
+}
+
+export interface TauriLogTailResult {
+  available: boolean
+  source: string
+  lines: string[]
+  truncated: boolean
+  reason?: string | null
+  maxLines?: number
 }
 
 export interface SecureStorageGetResult {
@@ -82,17 +97,23 @@ export interface LocalFilePickResult {
   cancelled: boolean
 }
 
+export interface SecureFileHandleOpenOptions extends LocalFilePickOptions {
+  mode?: 'read' | 'write' | 'readwrite'
+}
+
 const DEFAULT_COMMANDS: TauriCommandNames = {
-  request: 'aurora_request',
+  request: 'aurora_command',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
-  eventSubscribe: 'aurora_event_subscribe'
+  secureFileHandleOpen: 'aurora_secure_file_handle_open',
+  eventSubscribe: 'aurora_subscribe'
 }
 
 export class TauriLocalTransport implements AuroraTransport {
@@ -138,6 +159,10 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
   }
 
+  getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {
+    return this.invokeCommand<TauriLogTailResult>(this.commands.logTail, { request })
+  }
+
   secureStorageGet(key: string): Promise<SecureStorageGetResult> {
     return this.invokeCommand<SecureStorageGetResult>(this.commands.secureStorageGet, { key })
   }
@@ -164,6 +189,10 @@ export class TauriLocalTransport implements AuroraTransport {
 
   pickLocalFile(options: LocalFilePickOptions = {}): Promise<LocalFilePickResult> {
     return this.invokeCommand<LocalFilePickResult>(this.commands.localFilePick, { options })
+  }
+
+  openSecureFileHandle(options: SecureFileHandleOpenOptions = {}): Promise<LocalFilePickResult> {
+    return this.invokeCommand<LocalFilePickResult>(this.commands.secureFileHandleOpen, { options })
   }
 
   async subscribe<TEventPayload = unknown, TPayload = unknown>(
