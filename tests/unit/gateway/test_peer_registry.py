@@ -477,8 +477,8 @@ class TestStaleDetection:
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
         state = registry.get_peer("peer-1")
-        # Set last_ping far in the past
-        state.last_ping = time.monotonic() - 200
+        # Set last_ping beyond this registry's stale threshold.
+        state.last_ping = time.monotonic() - registry._config.stale_peer_timeout_s - 1.0
 
         await registry._check_stale_peers()
         assert registry.get_peer("peer-1").status == "stale"
