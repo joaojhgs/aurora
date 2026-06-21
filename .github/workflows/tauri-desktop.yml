@@ -51,6 +51,11 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Tauri workspace dependencies
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
       - name: Build Tauri frontend bundle
         run: pnpm --filter @aurora/tauri-ui build
 
