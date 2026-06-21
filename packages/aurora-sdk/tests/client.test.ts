@@ -426,6 +426,78 @@ describe('AuroraClient', () => {
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
   })
 
+  it('ingests assistant attachment context through the typed SDK namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [
+          {
+            kind: 'text',
+            content_text: 'Screenshot OCR with password=redacted by backend',
+            title: 'Screenshot OCR',
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          },
+          {
+            kind: 'image',
+            filename: 'screen.png',
+            mime_type: 'image/png',
+            size_bytes: 42_000,
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          }
+        ],
+        privacy_class: 'personal',
+        storage_policy: 'ephemeral',
+        limits: { max_item_bytes: 262_144 }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: true,
+          rejected: true,
+          accepted_items: [
+            expect.objectContaining({
+              kind: 'text',
+              status: 'redacted',
+              redacted: true,
+              privacy_class: 'personal'
+            })
+          ],
+          rejected_items: [
+            expect.objectContaining({
+              kind: 'image',
+              status: 'unsupported',
+              reason_code: 'no_text_context'
+            })
+          ],
+          secrets_redacted: true
+        })
+      })
+    )
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [{ kind: 'text', content_text: 'token body' }],
+        privacy_class: 'credential'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: false,
+          rejected: true,
+          rejected_items: [
+            expect.objectContaining({
+              status: 'rejected',
+              reason_code: 'privacy_class_blocked'
+            })
+          ]
+        })
+      })
+    )
+  })
+
   it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
     const evaluation = evaluateRoutePolicy({
       route: routeExplainFixture,

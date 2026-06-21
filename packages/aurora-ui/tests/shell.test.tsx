@@ -23,9 +23,12 @@ import {
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
+  attachmentStatusFromBackend,
+  attachmentToContextItem,
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  isAcceptedContextStatus,
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
@@ -131,12 +134,64 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('personal')
     expect(markup).toContain('Start with a prompt')
     expect(markup).toContain('Ask Aurora...')
+    expect(markup).toContain('Attachments and shared content')
+    expect(markup).toContain('Privacy label')
+    expect(markup).toContain('Share source')
+    expect(markup).toContain('Add URL')
+    expect(markup).toContain('Add files or images')
+    expect(markup).toContain('Native mobile share payloads remain disabled')
+    expect(markup).toContain('0 context ready')
 
     const disabledMarkup = renderToStaticMarkup(
       <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={assistantRoute} />
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('maps assistant attachment drafts to backend context payloads and statuses', () => {
+    const item = attachmentToContextItem({
+      id: 'context-1',
+      kind: 'url',
+      label: 'docs.example',
+      detail: 'https://docs.example/context',
+      contentText: null,
+      url: 'https://docs.example/context',
+      filename: null,
+      mimeType: 'text/uri-list',
+      sizeBytes: 28,
+      sourceChannel: 'mobile_share_sheet',
+      sourceDisplayName: 'mobile share sheet',
+      privacyClass: 'sensitive',
+      status: 'staged',
+      progress: 0,
+      message: 'Staged for backend validation.',
+      reasonCode: null,
+      redacted: false
+    })
+
+    expect(item).toEqual(
+      expect.objectContaining({
+        kind: 'url',
+        url: 'https://docs.example/context',
+        title: 'docs.example',
+        source: expect.objectContaining({
+          channel: 'mobile_share_sheet',
+          display_name: 'mobile share sheet'
+        }),
+        metadata: expect.objectContaining({
+          ui_status: 'staged',
+          route_privacy_class: 'sensitive'
+        })
+      })
+    )
+    expect(attachmentStatusFromBackend('accepted')).toBe('accepted')
+    expect(attachmentStatusFromBackend('stored')).toBe('stored')
+    expect(attachmentStatusFromBackend('redacted')).toBe('redacted')
+    expect(attachmentStatusFromBackend('unsupported')).toBe('unsupported')
+    expect(attachmentStatusFromBackend('rejected')).toBe('rejected')
+    expect(isAcceptedContextStatus('accepted')).toBe(true)
+    expect(isAcceptedContextStatus('unsupported')).toBe(false)
   })
 
 

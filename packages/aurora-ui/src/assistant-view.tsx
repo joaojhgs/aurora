@@ -1,8 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { RotateCcw, SendHorizontal, StopCircle, WifiOff } from 'lucide-react'
+import { Link, Paperclip, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, WifiOff } from 'lucide-react'
 import type {
+  AttachmentContextIngestResponse,
+  AttachmentContextItem,
+  AttachmentContextPrivacyClass,
+  AttachmentContextSourceChannel,
+  AttachmentContextStatus,
   AssistantMessage as SdkAssistantMessage,
   AssistantRoutePolicy,
   AssistantStreamUpdate,
@@ -51,11 +56,52 @@ export interface AssistantControlState {
   cancelReason: string
 }
 
+export type AttachmentTrayStatus =
+  | 'staged'
+  | 'uploading'
+  | 'accepted'
+  | 'redacted'
+  | 'stored'
+  | 'unsupported'
+  | 'rejected'
+  | 'error'
+
+export interface AssistantAttachmentDraft {
+  id: string
+  kind: 'text' | 'url' | 'file' | 'image'
+  label: string
+  detail: string
+  contentText?: string | null
+  url?: string | null
+  filename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  sourceChannel: AttachmentContextSourceChannel
+  sourceDisplayName: string
+  privacyClass: AttachmentContextPrivacyClass
+  status: AttachmentTrayStatus
+  progress: number
+  message: string
+  reasonCode?: string | null
+  redacted: boolean
+}
+
 const defaultStorageKey = 'aurora.assistant.session.v1'
+const defaultContextLimits = {
+  max_items: 8,
+  max_item_bytes: 262_144,
+  max_total_bytes: 1_048_576,
+  max_text_chars: 120_000
+}
 
 export function AssistantView({ client, route, cancellationRoute, storageKey = defaultStorageKey }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())
   const [text, setText] = useState('')
+  const [urlDraft, setUrlDraft] = useState('')
+  const [sharedTextDraft, setSharedTextDraft] = useState('')
+  const [privacyClass, setPrivacyClass] = useState<AttachmentContextPrivacyClass>('personal')
+  const [sourceChannel, setSourceChannel] = useState<AttachmentContextSourceChannel>('chat')
+  const [attachments, setAttachments] = useState<AssistantAttachmentDraft[]>([])
   const [lastResult, setLastResult] = useState<SdkAssistantMessage | null>(null)
   const [modelLabel, setModelLabel] = useState<string | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
@@ -68,8 +114,14 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
   const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
   const isSending = session.messages.some((message) => message.status === 'sending')
   const isStreaming = session.messages.some((message) => message.status === 'streaming')
-  const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming)
+  const hasContextUpload = attachments.some((attachment) => attachment.status === 'uploading')
+  const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming || hasContextUpload)
   const canSend = controls.canSend
+  const canAttach = !route.disabled && !isSending && !isStreaming && !hasContextUpload
+  const attachmentsAwaitingValidation = attachments.filter((attachment) =>
+    attachment.status === 'staged' || attachment.status === 'error'
+  )
+  const contextSummary = summarizeAttachments(attachments)
 
   useEffect(() => {
     setSession(loadAssistantSession(storageKey))
@@ -85,6 +137,8 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     event.preventDefault()
     const prompt = text.trim()
     if (!prompt || !canSend) return
+    const contextResult = await ingestPendingAttachments()
+    if (contextResult === 'blocked') return
     await startAssistantTurn(prompt)
   }
 
@@ -132,6 +186,81 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     }
     if (abortRef.current === abort) abortRef.current = null
     if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
+  }
+
+  async function ingestPendingAttachments(): Promise<'ready' | 'blocked'> {
+    if (attachments.some((attachment) => attachment.status === 'rejected' || attachment.status === 'unsupported')) {
+      setLastError('Remove rejected or unsupported context items before sending.')
+      return 'blocked'
+    }
+    const pending = attachments.filter((attachment) => attachment.status === 'staged' || attachment.status === 'error')
+    if (pending.length === 0) return 'ready'
+
+    setLastError(null)
+    setAttachments((current) =>
+      current.map((attachment) =>
+        pending.some((candidate) => candidate.id === attachment.id)
+          ? { ...attachment, status: 'uploading', progress: 48, message: 'Uploading context metadata through AuroraClient' }
+          : attachment
+      )
+    )
+
+    const result = await client.assistant.ingestContext({
+      items: pending.map(attachmentToContextItem),
+      session_id: session.sessionId,
+      namespace: 'assistant.attachments',
+      storage_policy: 'ephemeral',
+      privacy_class: privacyClass,
+      limits: defaultContextLimits
+    })
+
+    if (!result.ok) {
+      const message = assistantErrorMessage(result.error)
+      setLastError(message)
+      setAttachments((current) =>
+        current.map((attachment) =>
+          pending.some((candidate) => candidate.id === attachment.id)
+            ? { ...attachment, status: 'error', progress: 0, message }
+            : attachment
+        )
+      )
+      return 'blocked'
+    }
+
+    applyContextIngestResult(pending, result.data)
+    return result.data.accepted && !result.data.rejected ? 'ready' : 'blocked'
+  }
+
+  function applyContextIngestResult(
+    pending: AssistantAttachmentDraft[],
+    response: AttachmentContextIngestResponse
+  ) {
+    const outcomes = new Map(
+      [...response.accepted_items, ...response.rejected_items]
+        .map((outcome) => [Number(outcome.item_id.split('-').at(-1)), outcome] as const)
+        .filter(([index]) => Number.isFinite(index))
+    )
+    setAttachments((current) =>
+      current.map((attachment) => {
+        const pendingIndex = pending.findIndex((candidate) => candidate.id === attachment.id)
+        if (pendingIndex === -1) return attachment
+        const outcome = outcomes.get(pendingIndex)
+        if (!outcome) {
+          return { ...attachment, status: 'error', progress: 0, message: 'No backend outcome was returned for this context item.' }
+        }
+        return {
+          ...attachment,
+          status: attachmentStatusFromBackend(outcome.status),
+          progress: isAcceptedContextStatus(outcome.status) ? 100 : 0,
+          message: outcome.message || outcome.reason_code || 'Context ingestion completed.',
+          reasonCode: outcome.reason_code,
+          redacted: outcome.redacted
+        }
+      })
+    )
+    if (response.rejected) {
+      setLastError('Some context items were rejected or unsupported. Remove or revise them before retrying.')
+    }
   }
 
   function applyAssistantResult(result: AuroraResponse<import('@aurora/client').AssistantSendMessageResult>, pendingId: string) {
@@ -284,6 +413,44 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
     await startAssistantTurn(replay ? lastPrompt : lastPrompt, replay ? streamState.lastEventId : null)
   }
 
+  function addUrlAttachment() {
+    const value = urlDraft.trim()
+    if (!value || !canAttach) return
+    setAttachments((current) => [...current, createAttachmentDraft({
+      kind: 'url',
+      label: urlLabel(value),
+      detail: value,
+      url: value,
+      sourceChannel,
+      privacyClass
+    })])
+    setUrlDraft('')
+  }
+
+  function addSharedTextAttachment() {
+    const value = sharedTextDraft.trim()
+    if (!value || !canAttach) return
+    setAttachments((current) => [...current, createAttachmentDraft({
+      kind: 'text',
+      label: 'Shared text',
+      detail: `${value.length} characters`,
+      contentText: value,
+      sourceChannel,
+      privacyClass
+    })])
+    setSharedTextDraft('')
+  }
+
+  async function onFileInput(files: FileList | null) {
+    if (!files || !canAttach) return
+    const next = await Promise.all([...files].map((file) => fileToAttachmentDraft(file, sourceChannel, privacyClass)))
+    setAttachments((current) => [...current, ...next])
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((attachment) => attachment.id !== id))
+  }
+
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
       <header className="aui-assistant-header">
@@ -299,6 +466,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
           <EvidenceBadge label={client.transport.kind} />
           <EvidenceBadge label={streamState.status === 'idle' ? 'stream ready' : `stream ${streamState.status}`} />
           {session.sessionId ? <EvidenceBadge label={`session ${session.sessionId}`} /> : null}
+          <EvidenceBadge label={`${contextSummary.ready} context ready`} />
         </div>
       </header>
 
@@ -336,6 +504,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
             <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
             <div><dt>Last stream event</dt><dd>{streamState.lastEventId ?? 'none'}</dd></div>
             <div><dt>Model</dt><dd>{modelLabel ?? (lastResult ? 'not reported' : 'pending backend response')}</dd></div>
+            <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
           <p>{route.explanation}</p>
           {route.disabled ? <p role="alert">Assistant send is disabled: {route.blockers.join(', ') || 'capability unavailable'}.</p> : null}
@@ -361,6 +530,122 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
         </aside>
       </div>
 
+      <section className="aui-attachment-panel" aria-labelledby="assistant-context-title">
+        <div className="aui-attachment-head">
+          <div>
+            <p className="aui-kicker">Context intake</p>
+            <h2 id="assistant-context-title">Attachments and shared content</h2>
+          </div>
+          <div className="aui-assistant-badges" aria-label="Context route and privacy evidence">
+            <PrivacyBadge privacy={privacyClass} />
+            <EvidenceBadge label={route.providerLabel} />
+            <EvidenceBadge label={sourceLabel(sourceChannel)} />
+          </div>
+        </div>
+
+        <div className="aui-attachment-controls">
+          <label>
+            Privacy label
+            <select
+              value={privacyClass}
+              onChange={(event) => setPrivacyClass(event.currentTarget.value as AttachmentContextPrivacyClass)}
+              disabled={!canAttach}
+            >
+              <option value="public">Public</option>
+              <option value="personal">Personal</option>
+              <option value="sensitive">Sensitive</option>
+              <option value="secret">Secret</option>
+              <option value="credential">Credential</option>
+              <option value="raw-audio">Raw audio</option>
+            </select>
+          </label>
+          <label>
+            Share source
+            <select
+              value={sourceChannel}
+              onChange={(event) => setSourceChannel(event.currentTarget.value as AttachmentContextSourceChannel)}
+              disabled={!canAttach}
+            >
+              <option value="chat">Chat composer</option>
+              <option value="desktop">Desktop drop</option>
+              <option value="mobile_share_sheet">Mobile share sheet</option>
+              <option value="deep_link">Deep link</option>
+              <option value="browser_extension">Browser extension</option>
+            </select>
+          </label>
+          <label>
+            URL
+            <span className="aui-inline-action">
+              <input
+                value={urlDraft}
+                onChange={(event) => setUrlDraft(event.currentTarget.value)}
+                disabled={!canAttach}
+                placeholder="https://example.com/context"
+              />
+              <button type="button" onClick={addUrlAttachment} disabled={!canAttach || !urlDraft.trim()}>
+                <Link size={16} aria-hidden />
+                Add URL
+              </button>
+            </span>
+          </label>
+          <label>
+            Shared text
+            <span className="aui-inline-action">
+              <textarea
+                value={sharedTextDraft}
+                onChange={(event) => setSharedTextDraft(event.currentTarget.value)}
+                disabled={!canAttach}
+                placeholder="Paste shared text or screenshot OCR"
+                rows={2}
+              />
+              <button type="button" onClick={addSharedTextAttachment} disabled={!canAttach || !sharedTextDraft.trim()}>
+                <Share2 size={16} aria-hidden />
+                Add text
+              </button>
+            </span>
+          </label>
+          <label className="aui-file-picker">
+            <Paperclip size={16} aria-hidden />
+            <span>Add files or images</span>
+            <input
+              type="file"
+              multiple
+              disabled={!canAttach}
+              onChange={(event) => {
+                void onFileInput(event.currentTarget.files)
+                event.currentTarget.value = ''
+              }}
+            />
+          </label>
+        </div>
+
+        <p className="aui-attachment-note">
+          Native mobile share payloads remain disabled until the Android and iOS native manifests advertise them; staged items still use the backend ingestion contract through AuroraClient.
+        </p>
+
+        {attachments.length === 0 ? (
+          <div className="aui-attachment-empty">No context attached.</div>
+        ) : (
+          <ul className="aui-attachment-list" aria-label="Attached context items">
+            {attachments.map((attachment) => (
+              <li key={attachment.id} className={`aui-attachment-item aui-attachment-${attachment.status}`}>
+                <div>
+                  <strong>{attachment.label}</strong>
+                  <span>{attachment.detail}</span>
+                  <small>{sourceLabel(attachment.sourceChannel)} / {attachment.privacyClass} / {attachment.message}</small>
+                  {attachment.status === 'uploading' ? <progress value={attachment.progress} max={100}>{attachment.progress}%</progress> : null}
+                </div>
+                <StatusBadge state={attachmentStateBadge(attachment.status)} />
+                <button type="button" onClick={() => removeAttachment(attachment.id)} aria-label={`Remove ${attachment.label}`}>
+                  <Trash2 size={16} aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {attachmentsAwaitingValidation.length > 0 ? <p className="aui-attachment-note">{attachmentsAwaitingValidation.length} item(s) will be validated before the prompt is sent.</p> : null}
+      </section>
+
       <form className="aui-assistant-form" onSubmit={onSubmit}>
         <label htmlFor="assistant-prompt">Prompt</label>
         <textarea
@@ -380,13 +665,47 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
           <RotateCcw size={17} aria-hidden />
           <span>Retry</span>
         </button>
-        <button type="submit" disabled={!canSend || text.trim().length === 0} aria-label="Send assistant prompt">
+        <button type="submit" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
           <SendHorizontal size={17} aria-hidden />
           <span>Send</span>
         </button>
       </form>
     </section>
   )
+}
+
+export function attachmentToContextItem(attachment: AssistantAttachmentDraft): AttachmentContextItem {
+  const source = {
+    channel: attachment.sourceChannel,
+    display_name: attachment.sourceDisplayName,
+    mime_type: attachment.mimeType ?? null,
+    uri: attachment.url ?? null,
+    shared_at: new Date().toISOString()
+  }
+  return {
+    kind: attachment.kind,
+    content_text: attachment.contentText ?? null,
+    url: attachment.url ?? null,
+    title: attachment.label,
+    filename: attachment.filename ?? null,
+    mime_type: attachment.mimeType ?? null,
+    size_bytes: attachment.sizeBytes ?? null,
+    source,
+    metadata: {
+      ui_status: attachment.status,
+      route_privacy_class: attachment.privacyClass
+    }
+  }
+}
+
+export function attachmentStatusFromBackend(status: AttachmentContextStatus): AttachmentTrayStatus {
+  if (status === 'accepted' || status === 'redacted' || status === 'stored') return status
+  if (status === 'unsupported') return 'unsupported'
+  return 'rejected'
+}
+
+export function isAcceptedContextStatus(status: AttachmentContextStatus): boolean {
+  return status === 'accepted' || status === 'redacted' || status === 'stored'
 }
 
 export function emptyAssistantSession(): AssistantSessionSnapshot {
@@ -495,6 +814,106 @@ export function applyAssistantTerminalUpdate(message: AssistantUiMessage, update
     createdAt: message.createdAt,
     status: 'sent'
   }
+}
+
+function createAttachmentDraft(input: {
+  kind: AssistantAttachmentDraft['kind']
+  label: string
+  detail: string
+  contentText?: string | null
+  url?: string | null
+  filename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  sourceChannel: AttachmentContextSourceChannel
+  privacyClass: AttachmentContextPrivacyClass
+}): AssistantAttachmentDraft {
+  return {
+    id: `context-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    kind: input.kind,
+    label: input.label,
+    detail: input.detail,
+    contentText: input.contentText ?? null,
+    url: input.url ?? null,
+    filename: input.filename ?? null,
+    mimeType: input.mimeType ?? null,
+    sizeBytes: input.sizeBytes ?? null,
+    sourceChannel: input.sourceChannel,
+    sourceDisplayName: sourceLabel(input.sourceChannel),
+    privacyClass: input.privacyClass,
+    status: input.kind === 'image' && !input.contentText ? 'unsupported' : 'staged',
+    progress: 0,
+    message: input.kind === 'image' && !input.contentText
+      ? 'Image binaries require OCR or native payload support before ingestion.'
+      : 'Staged for backend validation.',
+    reasonCode: null,
+    redacted: false
+  }
+}
+
+async function fileToAttachmentDraft(
+  file: File,
+  sourceChannel: AttachmentContextSourceChannel,
+  privacyClass: AttachmentContextPrivacyClass
+): Promise<AssistantAttachmentDraft> {
+  const isTextLike = file.type.startsWith('text/') || ['application/json', 'application/xml'].includes(file.type)
+  const isImage = file.type.startsWith('image/')
+  let contentText: string | null = null
+  if (isTextLike) {
+    contentText = await file.text()
+  }
+  return createAttachmentDraft({
+    kind: isImage ? 'image' : 'file',
+    label: file.name,
+    detail: `${file.type || 'unknown type'} / ${formatBytes(file.size)}`,
+    contentText,
+    filename: file.name,
+    mimeType: file.type || null,
+    sizeBytes: file.size,
+    sourceChannel,
+    privacyClass
+  })
+}
+
+function summarizeAttachments(attachments: AssistantAttachmentDraft[]): { ready: number; blocked: number } {
+  return attachments.reduce(
+    (summary, attachment) => {
+      if (['accepted', 'redacted', 'stored'].includes(attachment.status)) summary.ready += 1
+      if (['unsupported', 'rejected', 'error'].includes(attachment.status)) summary.blocked += 1
+      return summary
+    },
+    { ready: 0, blocked: 0 }
+  )
+}
+
+function attachmentStateBadge(status: AttachmentTrayStatus) {
+  if (status === 'accepted' || status === 'stored' || status === 'redacted') return 'available-local' as const
+  if (status === 'uploading' || status === 'staged') return 'pending' as const
+  if (status === 'unsupported') return 'unsupported' as const
+  return 'denied' as const
+}
+
+function sourceLabel(source: AttachmentContextSourceChannel): string {
+  if (source === 'mobile_share_sheet') return 'mobile share sheet'
+  if (source === 'deep_link') return 'deep link'
+  if (source === 'browser_extension') return 'browser extension'
+  if (source === 'desktop') return 'desktop'
+  if (source === 'api') return 'API'
+  return 'chat composer'
+}
+
+function urlLabel(value: string): string {
+  try {
+    return new URL(value).hostname
+  } catch {
+    return 'URL context'
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 function ChatBubble({ message }: { message: AssistantUiMessage }) {

@@ -41,6 +41,8 @@ import type {
   AuthValidateTokenRequest,
   AuthValidateTokenResponse,
   AuthWhoAmIResponse,
+  AttachmentContextIngestRequest,
+  AttachmentContextIngestResponse,
   AssistantSendMessageRequest,
   AssistantSendMessageResult,
   AssistantCancelRequest,
@@ -385,6 +387,16 @@ export class RouteClient {
 
 export class AssistantClient {
   constructor(private readonly client: AuroraClient) {}
+
+  ingestContext(
+    input: AttachmentContextIngestRequest
+  ): Promise<AuroraResponse<AttachmentContextIngestResponse>> {
+    return this.client.requestResult<AttachmentContextIngestResponse, AttachmentContextIngestRequest>(
+      ORCHESTRATOR_METHODS.ingestContext,
+      input,
+      { path: routePath('Orchestrator', 'IngestContext') }
+    )
+  }
 
   async sendMessage(input: AssistantSendMessageRequest): Promise<AuroraResponse<AssistantSendMessageResult>> {
     const text = input.text.trim()
