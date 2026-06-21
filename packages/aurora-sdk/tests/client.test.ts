@@ -71,6 +71,30 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('classifies pending pairing queue as an admin backend descriptor', () => {
+    const descriptors = describeBackendInventory(backendInventoryFixture)
+
+    expect(descriptors.methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          busTopic: 'Auth.ListPendingPairings',
+          routePath: '/api/Auth/ListPendingPairings',
+          exposure: 'both',
+          methodType: 'manage',
+          requiredPermissions: ['Auth.manage'],
+          availableOverHttp: true,
+          routeKind: 'dynamic'
+        })
+      ])
+    )
+    expect(descriptors.methodTypes['Auth.ListPendingPairings']).toEqual(
+      expect.objectContaining({
+        requestModel: 'ListPendingPairingsRequest',
+        responseModel: 'ListPendingPairingsResponse'
+      })
+    )
+  })
+
   it('summarizes capability catalog responses without inventing state', async () => {
     const catalog = {
       ...capabilityCatalogFixture,
@@ -2181,14 +2205,18 @@ describe('permissions', () => {
         id: 'Auth.manage',
         label: 'Manage Auth',
         kind: 'method_type',
-        availableOverHttp: true,
-        requiredBy: [
+        requiredBy: expect.arrayContaining([
+          expect.objectContaining({
+            method: 'ListPendingPairings',
+            routePath: '/api/Auth/ListPendingPairings',
+            source: 'backend_inventory'
+          }),
           expect.objectContaining({
             method: 'list_peers',
             routePath: '/api/admin/peers',
             source: 'gateway_builtin'
           })
-        ]
+        ])
       })
     )
     expect(catalog.map((entry) => entry.id)).toEqual(expect.arrayContaining(['Gateway.GetRegistry', 'Gateway.*']))

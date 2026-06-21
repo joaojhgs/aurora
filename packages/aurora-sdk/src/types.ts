@@ -106,6 +106,34 @@ export interface GetRegistryResponse {
   method_count: number
 }
 
+export interface PendingPairingEntry {
+  request_id: string
+  code: string
+  device_name: string
+  client_ip: string
+  status: string
+  expires_at: string
+  created_at: string
+  remote_peer_id: string
+  remote_node_name: string
+  approved_by: string | null
+  denied_by: string | null
+  denied_reason: string
+  granted_permissions: string[]
+  granted_is_admin: boolean
+}
+
+export interface ListPendingPairingsRequest {
+  include_non_pending?: boolean
+}
+
+export interface ListPendingPairingsResponse {
+  pairings: PendingPairingEntry[]
+  total: number
+  expired_count: number
+  secrets_redacted: boolean
+}
+
 export interface ServiceInfo {
   module: string
   version: string

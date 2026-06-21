@@ -93,6 +93,47 @@ def test_backend_inventory_includes_model_runtime_contracts():
         assert methods[topic]["required_perms"] == ["Orchestrator.manage"]
 
 
+def test_backend_inventory_includes_orchestrator_interrupt_contract():
+    inventory = build_inventory()
+    methods = {method["bus_topic"]: method for method in inventory["methods"]}
+
+    interrupt = methods[OrchestratorMethods.INTERRUPT]
+    assert interrupt["routePath"] == "/api/Orchestrator/Interrupt"
+    assert interrupt["exposure"] == "external"
+    assert interrupt["method_type"] == "use"
+    assert interrupt["required_perms"] == ["Orchestrator.use"]
+    assert interrupt["input_model"] == "OrchestratorInterruptRequest"
+    assert interrupt["output_model"] == "OrchestratorInterruptResponse"
+    assert set(interrupt["input_schema"]["properties"]["scopes"]["items"]["enum"]) == {
+        "generation",
+        "tool_call",
+        "tts_playback",
+        "session",
+    }
+
+
+def test_backend_inventory_includes_admin_pending_pairing_queue_contract():
+    inventory = build_inventory()
+    methods = {method["bus_topic"]: method for method in inventory["methods"]}
+
+    pending = methods[AuthMethods.LIST_PENDING_PAIRINGS]
+    assert pending["routePath"] == "/api/Auth/ListPendingPairings"
+    assert pending["exposure"] == "both"
+    assert pending["method_type"] == "manage"
+    assert pending["required_perms"] == ["Auth.manage"]
+    assert pending["input_model"] == "ListPendingPairingsRequest"
+    assert pending["output_model"] == "ListPendingPairingsResponse"
+
+    approve = methods[AuthMethods.PAIRING_APPROVE]
+    assert approve["method_type"] == "manage"
+    assert approve["required_perms"] == ["Auth.manage"]
+
+    deny = methods[AuthMethods.PAIRING_DENY]
+    assert deny["routePath"] == "/api/Auth/PairingDeny"
+    assert deny["method_type"] == "manage"
+    assert deny["required_perms"] == ["Auth.manage"]
+
+
 def test_ui_fixture_validation_fails_for_unmarked_missing_public_reference(tmp_path: Path):
     fixture = tmp_path / "data.ts"
     fixture.write_text(
@@ -142,6 +183,8 @@ def test_gateway_auth_bypasses_pascalcase_generated_auth_routes_and_lowercase_al
     assert auth.should_bypass("/api/Auth/PairingStart")
     assert auth.should_bypass("/api/Auth/PairingConnect")
     assert auth.should_bypass("/api/Auth/PairingExchange")
+    assert not auth.should_bypass("/api/Auth/ListPendingPairings")
+    assert not auth.should_bypass("/api/Auth/PairingDeny")
     assert auth.should_bypass("/api/auth/login")
     assert auth.should_bypass("/api/auth/pairing/start")
     assert not auth.should_bypass("/api/Auth/LoginDebug")

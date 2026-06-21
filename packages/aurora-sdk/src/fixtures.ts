@@ -682,9 +682,32 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 4,
+  method_count: 5,
   gateway_builtin_count: 2,
   methods: [
+    {
+      module: 'Auth',
+      name: 'ListPendingPairings',
+      summary: 'List pending device and mesh pairing requests for authorized admins',
+      bus_topic: 'Auth.ListPendingPairings',
+      routePath: '/api/Auth/ListPendingPairings',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'ListPendingPairingsRequest',
+      output_model: 'ListPendingPairingsResponse',
+      input_schema: {
+        title: 'ListPendingPairingsRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ListPendingPairingsResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:100'
+    },
     {
       module: 'Gateway',
       name: 'GetRegistry',
