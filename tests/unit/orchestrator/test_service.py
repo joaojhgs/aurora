@@ -1,5 +1,6 @@
 """Unit tests for orchestrator service."""
 
+import asyncio
 import sys
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -286,6 +287,122 @@ class TestOrchestratorServiceToolHandling:
         with pytest.raises(ValidationError):
             request = OrchestratorToolResultRequest()  # Missing required fields
             await orchestrator_service.process_tool_result(request)
+
+
+class TestOrchestratorInterruptHandling:
+    """Test assistant interrupt/cancellation contract behavior."""
+
+    @pytest.mark.asyncio
+    async def test_interrupt_tts_playback_publishes_stop_and_event(
+        self, orchestrator_service, mock_bus
+    ):
+        from app.shared.contracts.models.common import EmptyInput
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorEvents,
+            OrchestratorInterruptedEvent,
+            OrchestratorInterruptRequest,
+            OrchestratorMethods,
+        )
+        from app.shared.contracts.models.tts import TTSMethods
+
+        envelope = Envelope(
+            type=OrchestratorMethods.INTERRUPT,
+            payload={},
+            correlation_id="corr-123",
+            principal_id="principal-123",
+        )
+
+        response = await orchestrator_service.interrupt_assistant(
+            OrchestratorInterruptRequest(scopes=["tts_playback"], session_id="session-1"),
+            envelope=envelope,
+        )
+
+        assert response.status == "interrupted"
+        assert response.idempotent is True
+        assert response.secrets_redacted is True
+        assert response.results[0].scope == "tts_playback"
+        assert response.results[0].status == "cancelled"
+
+        stop_call, event_call = mock_bus.publish.call_args_list
+        assert stop_call.args[0] == TTSMethods.STOP
+        assert isinstance(stop_call.args[1], EmptyInput)
+        assert stop_call.kwargs["event"] is False
+        assert stop_call.kwargs["correlation_id"] == "corr-123"
+        assert stop_call.kwargs["principal_id"] == "principal-123"
+
+        assert event_call.args[0] == OrchestratorEvents.INTERRUPTED
+        event = event_call.args[1]
+        assert isinstance(event, OrchestratorInterruptedEvent)
+        assert event.audit_event == "orchestrator.interrupt.requested"
+        assert event.secrets_redacted is True
+        assert event.principal_id == "principal-123"
+        assert event_call.kwargs["event"] is True
+        assert event_call.kwargs["mesh"] is True
+
+    @pytest.mark.asyncio
+    async def test_interrupt_generation_is_idempotent_when_no_task_matches(
+        self, orchestrator_service, mock_bus
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorInterruptRequest
+
+        response = await orchestrator_service.interrupt_assistant(
+            OrchestratorInterruptRequest(scopes=["generation"], session_id="missing-session")
+        )
+
+        assert response.status == "no_active_work"
+        assert response.results[0].scope == "generation"
+        assert response.results[0].status == "no_active_work"
+        assert response.results[0].cancelled_count == 0
+        assert mock_bus.publish.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_interrupt_generation_cancels_matching_active_task(
+        self, orchestrator_service, mock_bus
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorInterruptRequest
+
+        started = asyncio.Event()
+
+        async def slow_generation(text, tts_result=False):
+            started.set()
+            await asyncio.sleep(30)
+            return "should not publish"
+
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(
+            side_effect=slow_generation
+        )
+
+        task = asyncio.create_task(
+            orchestrator_service._process_input(
+                "stop this", source="external", session_id="session-123", return_response=True
+            )
+        )
+        await started.wait()
+
+        response = await orchestrator_service.interrupt_assistant(
+            OrchestratorInterruptRequest(scopes=["generation"], session_id="session-123")
+        )
+
+        assert response.status == "interrupted"
+        assert response.results[0].status == "cancelled"
+        assert response.results[0].cancelled_count == 1
+        assert await task == "Interrupted"
+        assert mock_bus.publish.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_interrupt_tool_call_reports_no_separate_active_work(
+        self, orchestrator_service
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorInterruptRequest
+
+        response = await orchestrator_service.interrupt_assistant(
+            OrchestratorInterruptRequest(scopes=["tool_call"])
+        )
+
+        assert response.status == "no_active_work"
+        assert response.results[0].scope == "tool_call"
+        assert response.results[0].status == "no_active_work"
 
 
 class TestOrchestratorServiceInputProcessing:

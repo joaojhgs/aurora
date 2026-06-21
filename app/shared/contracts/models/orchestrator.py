@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -21,6 +21,7 @@ class OrchestratorMethods:
     USER_INPUT = f"{OrchestratorModule.NAME}.UserInput"
     EXTERNAL_USER_INPUT = f"{OrchestratorModule.NAME}.ExternalUserInput"
     TOOL_RESULT = f"{OrchestratorModule.NAME}.ToolResult"
+    INTERRUPT = f"{OrchestratorModule.NAME}.Interrupt"
     RESPONSE = f"{OrchestratorModule.NAME}.Response"
     GET_MODEL_RUNTIME = f"{OrchestratorModule.NAME}.GetModelRuntime"
     GET_MODEL_CATALOG = f"{OrchestratorModule.NAME}.GetModelCatalog"
@@ -29,6 +30,21 @@ class OrchestratorMethods:
     DOWNLOAD_MODEL = f"{OrchestratorModule.NAME}.DownloadModel"
     BENCHMARK_MODEL = f"{OrchestratorModule.NAME}.BenchmarkModel"
     HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
+
+
+class OrchestratorEvents:
+    """Broadcast event identifiers for Orchestrator service."""
+
+    INTERRUPTED = f"{OrchestratorModule.NAME}.Interrupted"
+
+
+OrchestratorInterruptScope = Literal["generation", "tool_call", "tts_playback", "session"]
+OrchestratorInterruptStatus = Literal[
+    "cancelled",
+    "no_active_work",
+    "not_supported",
+    "failed",
+]
 
 
 class OrchestratorProcessRequest(IOModel):
@@ -53,6 +69,63 @@ class OrchestratorToolResultRequest(IOModel):
     request_id: str
     result: Any
     error: str | None = None
+
+
+class OrchestratorInterruptRequest(IOModel):
+    """Request to interrupt active assistant work.
+
+    Scopes:
+    - ``generation``: cancel in-flight LLM/graph work tracked by Orchestrator.
+    - ``tool_call``: cancel active tool execution when a cancellable tool handle exists.
+    - ``tts_playback``: stop server-side TTS playback through the TTS service contract.
+    - ``session``: cancel all tracked work for a session and stop playback.
+    """
+
+    scopes: list[OrchestratorInterruptScope] = Field(
+        default_factory=lambda: ["generation", "tool_call", "tts_playback", "session"]
+    )
+    session_id: str | None = None
+    request_id: str | None = None
+    reason: str = "user_interrupt"
+
+
+class OrchestratorInterruptScopeResult(IOModel):
+    """Cancellation result for one requested scope."""
+
+    scope: OrchestratorInterruptScope
+    status: OrchestratorInterruptStatus
+    message: str = ""
+    cancelled_count: int = 0
+
+
+class OrchestratorInterruptResponse(IOModel):
+    """Idempotent response returned by Orchestrator.Interrupt."""
+
+    interrupt_id: str
+    status: str
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
+    session_id: str | None = None
+    request_id: str | None = None
+    event_topic: str = OrchestratorEvents.INTERRUPTED
+    audit_event: str = "orchestrator.interrupt.requested"
+    idempotent: bool = True
+    secrets_redacted: bool = True
+
+
+class OrchestratorInterruptedEvent(IOModel):
+    """Event emitted after an interrupt request is handled."""
+
+    interrupt_id: str
+    status: str
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
+    session_id: str | None = None
+    request_id: str | None = None
+    reason: str = "user_interrupt"
+    principal_id: str | None = None
+    audit_event: str = "orchestrator.interrupt.requested"
+    secrets_redacted: bool = True
 
 
 class ModelRuntimeFileInfo(IOModel):

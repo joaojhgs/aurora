@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sys
-from types import ModuleType
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,14 +14,14 @@ graph_module.GraphOrchestrator = MagicMock()
 graph_module.set_orchestrator = MagicMock()
 sys.modules["app.services.orchestrator.graph"] = graph_module
 
-from app.services.orchestrator.service import OrchestratorService
-from app.shared.contracts.models.orchestrator import (
+from app.services.orchestrator.service import OrchestratorService  # noqa: E402
+from app.shared.contracts.models.orchestrator import (  # noqa: E402
     ModelRuntimeCatalogRequest,
     ModelRuntimeOperationRequest,
     ModelRuntimeOperationStatusRequest,
     OrchestratorMethods,
 )
-from app.shared.contracts.registry import all_contracts, clear_registry
+from app.shared.contracts.registry import all_contracts, clear_registry  # noqa: E402
 
 
 def _services_config(model_path: Path) -> dict:
@@ -75,6 +75,10 @@ def test_model_runtime_contracts_register_with_permissions():
     OrchestratorService()
 
     contracts = all_contracts()
+    assert contracts[OrchestratorMethods.INTERRUPT].exposure == "external"
+    assert contracts[OrchestratorMethods.INTERRUPT].method_type == "use"
+    assert contracts[OrchestratorMethods.INTERRUPT].required_perms == ["Orchestrator.use"]
+
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].exposure == "external"
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].method_type == "use"
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].required_perms == [

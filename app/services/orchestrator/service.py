@@ -10,6 +10,7 @@ This service:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,8 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
-from app.shared.contracts.models.common import EmptyOutput
+from app.shared.config.interface import ConfigAPI
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.orchestrator import (
     ModelRuntimeBenchmarkInfo,
     ModelRuntimeCatalogRequest,
@@ -35,6 +37,12 @@ from app.shared.contracts.models.orchestrator import (
     ModelRuntimeProviderInfo,
     ModelRuntimeRequest,
     ModelRuntimeResponse,
+    OrchestratorEvents,
+    OrchestratorInterruptedEvent,
+    OrchestratorInterruptRequest,
+    OrchestratorInterruptResponse,
+    OrchestratorInterruptScope,
+    OrchestratorInterruptScopeResult,
     OrchestratorMethods,
     OrchestratorModule,
     OrchestratorProcessRequest,
@@ -42,8 +50,8 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorToolResultRequest,
 )
 from app.shared.contracts.models.stt import STTMethods
+from app.shared.contracts.models.tts import TTSMethods, TTSRequest
 from app.shared.contracts.registry import method_contract
-from app.shared.config.interface import ConfigAPI
 from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 from app.shared.services.base_service import BaseService
 
@@ -68,6 +76,8 @@ class OrchestratorService(BaseService):
         )
         self.orchestrator: GraphOrchestrator | None = None
         self._model_runtime_operations: dict[str, ModelRuntimeOperationResponse] = {}
+        self._generation_tasks: dict[asyncio.Task, str | None] = {}
+        self._generation_lock = asyncio.Lock()
 
     async def on_start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
@@ -89,6 +99,7 @@ class OrchestratorService(BaseService):
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
         self.bus.unsubscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
+        await self._cancel_generation_tasks(session_id=None)
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -231,6 +242,128 @@ class OrchestratorService(BaseService):
         except Exception as e:
             log_error(f"Error processing tool result: {e}", exc_info=True)
             return EmptyOutput()
+
+    @method_contract(
+        method_id=OrchestratorMethods.INTERRUPT,
+        summary="Interrupt active assistant generation, tool work, TTS playback, or a session",
+        input_model=OrchestratorInterruptRequest,
+        output_model=OrchestratorInterruptResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def interrupt_assistant(
+        self,
+        data: OrchestratorInterruptRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorInterruptResponse:
+        """Handle an idempotent assistant interrupt request."""
+        interrupt_id = f"interrupt-{uuid4().hex[:12]}"
+        scopes = _dedupe_scopes(data.scopes)
+        results: list[OrchestratorInterruptScopeResult] = []
+
+        generation_cancelled_by_session = False
+        for scope in scopes:
+            if scope == "generation":
+                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled" if cancelled else "no_active_work",
+                        cancelled_count=cancelled,
+                        message=(
+                            f"Cancelled {cancelled} active generation task(s)"
+                            if cancelled
+                            else "No active generation task matched the interrupt request"
+                        ),
+                    )
+                )
+            elif scope == "tool_call":
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="no_active_work",
+                        message=(
+                            "No separately cancellable tool call is active; graph-level "
+                            "generation cancellation covers current tool-bound runs"
+                        ),
+                    )
+                )
+            elif scope == "tts_playback":
+                await self.bus.publish(
+                    TTSMethods.STOP,
+                    EmptyInput(),
+                    event=False,
+                    priority=get_interactive_priority(),
+                    origin="internal",
+                    correlation_id=getattr(envelope, "correlation_id", None),
+                    principal_id=getattr(envelope, "principal_id", None),
+                )
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled",
+                        cancelled_count=1,
+                        message="TTS stop command sent",
+                    )
+                )
+            elif scope == "session":
+                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
+                results.append(
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="cancelled" if cancelled else "no_active_work",
+                        cancelled_count=cancelled,
+                        message=(
+                            f"Cancelled {cancelled} active session task(s)"
+                            if cancelled
+                            else "No active session task matched the interrupt request"
+                        ),
+                    )
+                )
+
+        if generation_cancelled_by_session:
+            log_info(
+                f"Orchestrator interrupt {interrupt_id} cancelled generation "
+                f"for session={data.session_id or '*'}"
+            )
+
+        status = _interrupt_status(results)
+        response = OrchestratorInterruptResponse(
+            interrupt_id=interrupt_id,
+            status=status,
+            requested_scopes=scopes,
+            results=results,
+            session_id=data.session_id,
+            request_id=data.request_id,
+            audit_event="orchestrator.interrupt.requested",
+            idempotent=True,
+            secrets_redacted=True,
+        )
+        await self.bus.publish(
+            OrchestratorEvents.INTERRUPTED,
+            OrchestratorInterruptedEvent(
+                interrupt_id=response.interrupt_id,
+                status=response.status,
+                requested_scopes=response.requested_scopes,
+                results=response.results,
+                session_id=response.session_id,
+                request_id=response.request_id,
+                reason=data.reason,
+                principal_id=getattr(envelope, "principal_id", None),
+                audit_event=response.audit_event,
+                secrets_redacted=True,
+            ),
+            event=True,
+            mesh=True,
+            priority=get_interactive_priority(),
+            origin="internal",
+            correlation_id=getattr(envelope, "correlation_id", None),
+            principal_id=getattr(envelope, "principal_id", None),
+        )
+        return response
 
     @method_contract(
         method_id=OrchestratorMethods.GET_MODEL_RUNTIME,
@@ -378,6 +511,9 @@ class OrchestratorService(BaseService):
         Returns:
             Response text if return_response is True, else None
         """
+        current_task = asyncio.current_task()
+        if current_task is not None:
+            await self._track_generation_task(current_task, session_id)
         try:
             log_debug(f"Processing input from {source}: {text}")
 
@@ -412,9 +548,6 @@ class OrchestratorService(BaseService):
                 )
 
                 # Send TTS request to speak the response
-                from app.shared.contracts.models.tts import TTSMethods
-                from app.shared.messaging.models.tts_models import TTSRequest
-
                 await self.bus.publish(
                     TTSMethods.REQUEST,
                     TTSRequest(text=response_text, interrupt=True),
@@ -427,12 +560,49 @@ class OrchestratorService(BaseService):
             if return_response:
                 return response_text
 
+        except asyncio.CancelledError:
+            log_info(f"Orchestrator input processing interrupted for session={session_id}")
+            if return_response:
+                return "Interrupted"
         except Exception as e:
             log_error(f"Error processing input: {e}", exc_info=True)
             if return_response:
                 return f"Error: {e!s}"
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
 
         return None
+
+    async def _track_generation_task(
+        self,
+        task: asyncio.Task,
+        session_id: str | None,
+    ) -> None:
+        async with self._generation_lock:
+            self._generation_tasks[task] = session_id
+
+    async def _untrack_generation_task(self, task: asyncio.Task) -> None:
+        async with self._generation_lock:
+            self._generation_tasks.pop(task, None)
+
+    async def _cancel_generation_tasks(self, session_id: str | None) -> int:
+        current_task = asyncio.current_task()
+        async with self._generation_lock:
+            candidates = [
+                task
+                for task, task_session_id in self._generation_tasks.items()
+                if task is not current_task
+                and not task.done()
+                and (session_id is None or task_session_id == session_id)
+            ]
+
+        for task in candidates:
+            task.cancel()
+
+        if candidates:
+            await asyncio.gather(*candidates, return_exceptions=True)
+        return len(candidates)
 
     async def _build_model_runtime_catalog(
         self,
@@ -500,6 +670,31 @@ class OrchestratorService(BaseService):
 
 def _utc_now() -> str:
     return datetime.utcnow().isoformat()
+
+
+def _dedupe_scopes(
+    scopes: list[OrchestratorInterruptScope],
+) -> list[OrchestratorInterruptScope]:
+    seen: set[str] = set()
+    deduped: list[OrchestratorInterruptScope] = []
+    for scope in scopes:
+        if scope in seen:
+            continue
+        seen.add(scope)
+        deduped.append(scope)
+    return deduped
+
+
+def _interrupt_status(results: list[OrchestratorInterruptScopeResult]) -> str:
+    if not results:
+        return "no_op"
+    if any(result.status == "failed" for result in results):
+        return "partial" if any(result.status == "cancelled" for result in results) else "failed"
+    if any(result.status == "cancelled" for result in results):
+        return "interrupted"
+    if all(result.status == "no_active_work" for result in results):
+        return "no_active_work"
+    return "not_supported"
 
 
 def _configured_model_providers(
