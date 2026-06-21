@@ -484,7 +484,7 @@ class BackupService(BaseService):
         return value
 
     def _audit_receipt(self, operation: str, target_id: str) -> str:
-        digest = hashlib.sha256(f"{operation}:{target_id}:{uuid4()}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(f"{operation}:{target_id}:{uuid4()}".encode()).hexdigest()
         return f"bar_{digest[:24]}"
 
     def _result_data(self, result: Any) -> Any:

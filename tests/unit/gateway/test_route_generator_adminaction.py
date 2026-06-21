@@ -27,7 +27,11 @@ from app.shared.contracts.models.auth import (
     PasswordChangeRequest,
     PasswordChangeResponse,
 )
-from app.shared.contracts.models.backup import BackupCreateRequest, BackupCreateResponse, BackupMethods
+from app.shared.contracts.models.backup import (
+    BackupCreateRequest,
+    BackupCreateResponse,
+    BackupMethods,
+)
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import (
     ConfigMethods,
