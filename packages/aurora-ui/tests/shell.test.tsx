@@ -17,6 +17,7 @@ import {
 import {
   AppShell,
   AssistantView,
+  MemoryView,
   OnboardingView,
   RouteSheet,
   buildOnboardingViewModel,
@@ -35,6 +36,7 @@ import {
   ToolApprovalPanel,
   assistantErrorMessage,
   buildAssistantVoiceModel,
+  buildMemoryViewModel,
   buildShellSnapshot,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
@@ -810,6 +812,92 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Assistant route preview')
     expect(markup).toContain('The SDK evaluates where this prompt can run before dispatch.')
     expect(markup).toContain('Loading route policy from AuroraClient')
+  })
+
+  it('renders memory namespaces, conversation history, provenance, and AdminAction-gated controls', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const model = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-studio-gpu.memories',
+      query: 'mesh pairing'
+    })
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
+
+    expect(model.selectedNamespace?.kind).toBe('remote-peer')
+    expect(model.searchDecision).toBe('allowed')
+    expect(model.searchItems[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
+    expect(markup).toContain('Remote peer: peer-studio-gpu.memories')
+    expect(markup).toContain('Search hit for &quot;mesh pairing&quot;')
+    expect(markup).toContain('redacted')
+    expect(markup).toContain('corr-memory-remote')
+    expect(markup).toContain('Conversation history')
+    expect(markup).toContain('Summarize recent mesh pairing failures')
+    expect(markup).toContain('Export snapshot unsupported')
+    expect(markup).toContain('Delete record unsupported')
+  })
+
+  it('keeps local export/import/delete controls disabled behind AdminAction policy', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const memoryModel = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'main.memories',
+      query: 'recent'
+    })
+    const ragModel = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'main.rag',
+      query: 'context'
+    })
+
+    expect(memoryModel.actions.export.supported).toBe(true)
+    expect(memoryModel.actions.export.disabled).toBe(true)
+    expect(memoryModel.actions.export.reason).toContain('AdminAction')
+    expect(memoryModel.actions.delete.supported).toBe(true)
+    expect(memoryModel.actions.delete.disabled).toBe(true)
+    expect(memoryModel.actions.delete.reason).toContain('AdminAction')
+    expect(ragModel.actions.importPreview.supported).toBe(true)
+    expect(ragModel.actions.importPreview.disabled).toBe(true)
+    expect(ragModel.actions.importPreview.reason).toContain('AdminAction')
+  })
+
+  it('shows denied and stale memory namespace states without labeling them local', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const denied = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-denied.secret',
+      query: 'secrets'
+    })
+    const stale = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-cabin-node.archive',
+      query: 'archive'
+    })
+
+    expect(denied.selectedNamespace?.kind).toBe('denied')
+    expect(denied.searchDecision).toBe('denied')
+    expect(denied.denialReason).toContain('denied')
+    expect(stale.selectedNamespace?.kind).toBe('stale')
+    expect(stale.searchDecision).toBe('unavailable')
+
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={denied} />)
+    expect(markup).toContain('denied: peer-denied.secret')
+    expect(markup).not.toContain('Local memory: peer-denied.secret')
+    expect(markup).toContain('remote namespace denied by policy')
+  })
+
+  it('keeps memory SDK errors visible as route-scoped disabled state', async () => {
+    const transport = new MockAuroraTransport().fail('DB.RAGListNamespaces', 'permission', 'DB permission denied')
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const model = await buildMemoryViewModel(client, memoryRoute, { query: 'anything' })
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
+
+    expect(model.loadState).toBe('error')
+    expect(model.error).toContain('denied')
+    expect(markup).toContain('Memory request denied by authentication or permissions')
+    expect(markup).toContain('No namespace reported')
   })
 })
 
