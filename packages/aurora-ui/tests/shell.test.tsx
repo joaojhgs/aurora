@@ -6,7 +6,9 @@ import {
   MockAuroraTransport,
   capabilityCatalogFixture,
   cloneFixture,
+  evaluateRoutePolicy,
   normalizeToolCatalog,
+  routeExplainFixture,
   toolCatalogFixture,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
@@ -16,7 +18,9 @@ import {
   AppShell,
   AssistantView,
   OnboardingView,
+  RouteSheet,
   buildOnboardingViewModel,
+  buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
   applyAssistantStreamDelta,
@@ -27,6 +31,7 @@ import {
   assistantErrorMessage,
   buildShellSnapshot,
   errorShellSnapshot,
+  routeSheetErrorMessage,
   routePolicyFromRoute
 } from '../src/index'
 
@@ -388,6 +393,108 @@ describe('Aurora production shell', () => {
       correlationId: 'corr-denied-error'
     })
   })
+
+  it('renders RouteSheet route/privacy preview, scope choices, candidates, and audit target from SDK policy output', () => {
+    const evaluation = allowedRouteEvaluation()
+    const markup = renderToStaticMarkup(
+      <RouteSheet
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        initialEvaluation={evaluation}
+        payload={{ message: 'summarize deployment', token: 'secret-token' }}
+      />
+    )
+
+    expect(markup).toContain('Route and privacy')
+    expect(markup).toContain('available-local')
+    expect(markup).toContain('personal')
+    expect(markup).toContain('local:orchestrator')
+    expect(markup).toContain('&quot;token&quot;:&quot;[redacted]&quot;')
+    expect(markup).toContain('<dt>Audit</dt><dd>local:orchestrator</dd>')
+    expect(markup).toContain('Apply preference to')
+    expect(markup).toContain('Request')
+    expect(markup).toContain('Session')
+    expect(markup).toContain('Feature')
+    expect(markup).toContain('Global')
+    expect(markup).toContain('Use selected route')
+  })
+
+  it('blocks RouteSheet confirmation for privacy denied, unavailable, SDK error, and unconfirmed AdminAction states', () => {
+    const denied = blockedRouteEvaluation('privacy-blocked')
+    const unavailable = blockedRouteEvaluation('unsupported')
+    const deniedModel = buildRouteSheetViewModel({
+      loadState: 'ready',
+      evaluation: denied,
+      error: null,
+      selectedScope: 'request',
+      adminActionState: 'not-required'
+    })
+    const adminModel = buildRouteSheetViewModel({
+      loadState: 'ready',
+      evaluation: allowedRouteEvaluation(),
+      error: null,
+      selectedScope: 'global',
+      adminActionState: 'required'
+    })
+    const errorModel = buildRouteSheetViewModel({
+      loadState: 'error',
+      evaluation: null,
+      error: routeSheetErrorMessage(new AuroraError({ code: 'timeout', message: 'slow route' })),
+      selectedScope: 'request',
+      adminActionState: 'not-required'
+    })
+
+    expect(deniedModel.canConfirm).toBe(false)
+    expect(deniedModel.primaryReason).toContain('explicit peer')
+    expect(adminModel.canConfirm).toBe(false)
+    expect(adminModel.primaryReason).toContain('AdminAction')
+    expect(errorModel.primaryReason).toContain('timed out')
+
+    const markup = renderToStaticMarkup(
+      <>
+        <RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} initialEvaluation={denied} />
+        <RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} initialEvaluation={unavailable} />
+        <RouteSheet
+          client={new AuroraClient({ transport: new MockAuroraTransport() })}
+          initialEvaluation={allowedRouteEvaluation()}
+          requiresAdminAction
+        />
+      </>
+    )
+
+    expect(markup).toContain('privacy-blocked')
+    expect(markup).toContain('No route candidates were returned')
+    expect(markup).toContain('AdminAction confirmation is required')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('surfaces RouteSheet loading and SDK error states without fixture route candidates', () => {
+    const loadingMarkup = renderToStaticMarkup(<RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} />)
+    const errorMessage = routeSheetErrorMessage(new AuroraError({ code: 'privacy_blocked', message: 'blocked' }))
+
+    expect(loadingMarkup).toContain('Loading route policy from AuroraClient')
+    expect(errorMessage).toContain('privacy policy')
+  })
+
+  it('includes the shared RouteSheet guard in assistant route details', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const assistantRoute = route(snapshot, 'assistant')
+    const enabledRoute = {
+      ...assistantRoute,
+      state: 'available-local' as const,
+      disabled: false,
+      providerLabel: 'local / Orchestrator.ExternalUserInput',
+      blockers: [],
+      routeable: true
+    }
+
+    const markup = renderToStaticMarkup(
+      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={enabledRoute} />
+    )
+
+    expect(markup).toContain('Assistant route preview')
+    expect(markup).toContain('The SDK evaluates where this prompt can run before dispatch.')
+    expect(markup).toContain('Loading route policy from AuroraClient')
+  })
 })
 
 function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: string) {
@@ -561,4 +668,98 @@ function action(
     freshness: { ...providerInfo.freshness },
     ...overrides
   }
+}
+
+function allowedRouteEvaluation() {
+  const route = cloneFixture(routeExplainFixture)
+  route.selected_target = 'local'
+  route.selected_provider_id = 'local:orchestrator'
+  route.selected_peer_id = null
+  route.selected_service_instance_id = 'orchestrator-local'
+  route.selector_valid = true
+  route.fallback_behavior = 'none'
+  route.blockers = []
+  route.security_privacy_blockers = []
+  route.candidates = [
+    {
+      provider_id: 'local:orchestrator',
+      peer_id: '',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      module: 'Orchestrator',
+      version: '1',
+      included: true,
+      selected: true,
+      reason_code: 'selected',
+      reason: 'Local Orchestrator route is eligible.',
+      latency_ms: 8,
+      active_calls: 0,
+      max_concurrent: 4,
+      available_capacity: 4,
+      blockers: []
+    }
+  ]
+  return evaluateRoutePolicy({
+    route,
+    catalog: null,
+    topic: 'Orchestrator.ExternalUserInput',
+    method: 'ExternalUserInput',
+    payload: { message: 'summarize deployment', token: 'secret-token' },
+    privacyClass: 'personal',
+    transportKind: 'mock'
+  })
+}
+
+function blockedRouteEvaluation(availability: 'privacy-blocked' | 'unsupported') {
+  const route = cloneFixture(routeExplainFixture)
+  route.selected_target = availability === 'privacy-blocked' ? 'remote' : 'none'
+  route.selected_provider_id = availability === 'privacy-blocked' ? 'mesh:orchestrator' : null
+  route.selected_peer_id = availability === 'privacy-blocked' ? 'peer-remote' : null
+  route.selector_valid = availability !== 'privacy-blocked'
+  route.selector_validation_code = availability === 'privacy-blocked' ? 'explicit_selector_required' : ''
+  route.selector_validation_message = availability === 'privacy-blocked' ? 'Remote peer selector is required.' : ''
+  route.fallback_behavior = 'none'
+  route.candidates = availability === 'privacy-blocked'
+    ? [
+        {
+          provider_id: 'mesh:orchestrator',
+          peer_id: 'peer-remote',
+          provider_kind: 'remote',
+          service_instance_id: 'orchestrator-remote',
+          module: 'Orchestrator',
+          version: '1',
+          included: false,
+          selected: true,
+          reason_code: 'explicit_selector_required',
+          reason: 'Remote route requires explicit selector and trust scope.',
+          latency_ms: 45,
+          active_calls: 0,
+          max_concurrent: 2,
+          available_capacity: 1,
+          blockers: []
+        }
+      ]
+    : []
+  route.blockers = [
+    {
+      code: availability === 'privacy-blocked' ? 'explicit_selector_required' : 'no_route',
+      message: availability === 'privacy-blocked'
+        ? 'Select the target peer/resource before execution.'
+        : 'No route candidate is available for this request.',
+      severity: 'error',
+      provider_id: availability === 'privacy-blocked' ? 'mesh:orchestrator' : null,
+      peer_id: availability === 'privacy-blocked' ? 'peer-remote' : null,
+      security_privacy: availability === 'privacy-blocked'
+    }
+  ]
+  route.security_privacy_blockers = [...route.blockers]
+  return evaluateRoutePolicy({
+    route,
+    catalog: null,
+    topic: 'Orchestrator.ExternalUserInput',
+    method: 'ExternalUserInput',
+    payload: { message: 'remote sensitive prompt' },
+    privacyClass: availability === 'privacy-blocked' ? 'sensitive' : 'personal',
+    transportKind: 'mock'
+  })
 }
