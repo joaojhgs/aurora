@@ -6,6 +6,11 @@ export {
   normalizeSchedulerActionSupport,
   normalizeSchedulerJob
 } from './scheduler.js'
+export {
+  loadToolApprovalCards,
+  normalizeToolCatalog,
+  submitToolApprovalDecision
+} from './tools.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
@@ -84,6 +89,7 @@ export {
 export type * from './types.js'
 export type * from './admin.js'
 export type * from './scheduler.js'
+export type * from './tools.js'
 export type * from './transport.js'
 export type {
   AuroraEventStreamKind,

@@ -6,6 +6,8 @@ import {
   MockAuroraTransport,
   capabilityCatalogFixture,
   cloneFixture,
+  normalizeToolCatalog,
+  toolCatalogFixture,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo
@@ -20,6 +22,7 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  ToolApprovalPanel,
   assistantErrorMessage,
   buildShellSnapshot,
   errorShellSnapshot,
@@ -262,6 +265,69 @@ describe('Aurora production shell', () => {
     expect(applyAssistantStreamDelta(cancelled, streamUpdate('late delta'))).toEqual(cancelled)
     expect(applyAssistantTerminalUpdate(cancelled, completed)).toEqual(cancelled)
   })
+
+  it('renders tool approval cards and result evidence from the SDK tool catalog', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const toolsRoute = enabledRoute(route(snapshot, 'tools'))
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
+    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+
+    expect(markup).toContain('Approval cards')
+    expect(markup).toContain('Write local config file')
+    expect(markup).toContain('Open garage door')
+    expect(markup).toContain('Search notes')
+    expect(markup).toContain('Send email draft')
+    expect(markup).toContain('Delete calendar event')
+    expect(markup).toContain('Apply lights scene')
+    expect(markup).toContain('Unlock front door')
+    expect(markup).toContain('Camera snapshot')
+    expect(markup).toContain('Collect diagnostics bundle')
+    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('Data egress')
+    expect(markup).toContain('audit.mesh.hardware')
+    expect(markup).toContain('audit-receipt-tool-result')
+    expect(markup).toContain('corr-tool-result')
+    expect(markup).toContain('local-peer -&gt; tooling-local')
+  })
+
+  it('covers provider selector, scoped approvals, dry-run-only, denied, expired, replay, and unavailable states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const toolsRoute = enabledRoute(route(snapshot, 'tools'))
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
+    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+
+    expect(markup).toContain('Provider selector required before approval.')
+    expect(markup).toContain('Backend requires an explicit provider selector before approval.')
+    expect(markup).toContain('Approve session')
+    expect(markup).toContain('Approve peer')
+    expect(markup).toContain('Approve local safe')
+    expect(markup).toContain('Dry-run only until backend policy permits execution.')
+    expect(markup).toContain('Denied: peer policy denies destructive calendar changes.')
+    expect(markup).toContain('Approval expired; request a fresh backend approval.')
+    expect(markup).toContain('Replay rejected: approval_request_replayed.')
+    expect(markup).toContain('Unavailable: service_unavailable.')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('keeps tool approval unavailable when the route is capability-blocked', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const toolsRoute = {
+      ...route(snapshot, 'tools'),
+      disabled: true,
+      blockers: ['capability_not_advertised'],
+      state: 'unsupported' as const
+    }
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
+    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+
+    expect(markup).toContain('Tooling is capability-gated')
+    expect(markup).toContain('capability_not_advertised')
+    expect(markup).toContain('Route state')
+    expect(markup).toContain('unsupported')
+  })
 })
 
 function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: string) {
@@ -299,6 +365,17 @@ function streamUpdate(textDelta: string) {
       }
     },
     metadata: {}
+  }
+}
+
+function enabledRoute(match: ReturnType<typeof route>) {
+  return {
+    ...match,
+    state: 'available-local' as const,
+    disabled: false,
+    providerLabel: 'local / Tooling.GetToolCatalog',
+    blockers: [],
+    routeable: true
   }
 }
 

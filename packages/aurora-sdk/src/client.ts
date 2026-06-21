@@ -16,6 +16,15 @@ import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { SchedulerClient } from './scheduler.js'
+import {
+  loadToolApprovalCards,
+  normalizeToolCatalog,
+  submitToolApprovalDecision,
+  type ToolApprovalCardModel,
+  type ToolApprovalDecisionInput,
+  type ToolApprovalDecisionResult,
+  type ToolCatalogResponse
+} from './tools.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -657,10 +666,23 @@ export class AdminOverviewClient {
 export class ToolClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog<TResponse = unknown>(request: Record<string, unknown> = {}): Promise<TResponse> {
+  listCatalog<TResponse = ToolCatalogResponse>(request: Record<string, unknown> = {}): Promise<TResponse> {
     return this.client.request<TResponse>(TOOLING_METHODS.listCatalog, request, {
       path: routePath('Tooling', 'GetToolCatalog')
     })
+  }
+
+  async listApprovalCards(request: Record<string, unknown> = {}): Promise<ToolApprovalCardModel[]> {
+    const catalog = await this.listCatalog<ToolCatalogResponse>(request)
+    return normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind })
+  }
+
+  loadApprovalCards(): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
+    return loadToolApprovalCards(this.client)
+  }
+
+  submitApprovalDecision(input: ToolApprovalDecisionInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolApprovalDecision(this.client, input)
   }
 
   prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
