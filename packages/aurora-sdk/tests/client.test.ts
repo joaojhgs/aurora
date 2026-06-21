@@ -2170,6 +2170,36 @@ describe('AuroraClient assistant namespace', () => {
     )
   })
 
+  it('closes assistant stream on external abort without falling back to sendMessage', async () => {
+    let sendCalls = 0
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
+      await new Promise(() => undefined)
+    })
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
+      sendCalls += 1
+      return {
+        text: 'fallback should not run',
+        session_id: 'session-fallback',
+        metadata: { model: 'fallback-model' }
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const iterator = client.assistant.streamMessage({ text: 'hello', signal: controller.signal })[Symbol.asyncIterator]()
+
+    await expect(iterator.next()).resolves.toEqual(
+      expect.objectContaining({
+        done: false,
+        value: expect.objectContaining({ kind: 'delta', text: 'partial' })
+      })
+    )
+    controller.abort()
+
+    await expect(raceWithTimeout(iterator.next(), 100)).resolves.toEqual({ done: true, value: undefined })
+    expect(sendCalls).toBe(0)
+  })
+
   it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {
     let capturedPayload: unknown
     const transport = new MockAuroraTransport()

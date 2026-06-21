@@ -468,6 +468,7 @@ export class AssistantClient {
     } catch (error) {
       const normalized = normalizeError(error)
       this.client.auth.applyError(normalized)
+      if (input.signal?.aborted) return
       if (sawEvent) {
         yield streamFailure(normalized, this.client.transport.kind, 'transport_lost')
         return

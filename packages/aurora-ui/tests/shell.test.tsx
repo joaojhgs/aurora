@@ -18,6 +18,7 @@ import {
   RouteMatrix,
   StateSurface,
   applyAssistantStreamDelta,
+  applyAssistantTerminalUpdate,
   assistantControlsForRoute,
   assistantErrorMessage,
   buildShellSnapshot,
@@ -241,6 +242,25 @@ describe('Aurora production shell', () => {
     expect(first.text).toBe('Hel')
     expect(second.text).toBe('Hello')
     expect(second.status).toBe('streaming')
+  })
+
+  it('keeps a cancelled assistant message from being overwritten by later stream events', () => {
+    const cancelled = {
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Stopped by user.',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'cancelled' as const
+    }
+    const completed = {
+      ...streamUpdate('Final response'),
+      kind: 'completed' as const,
+      text: 'Final response',
+      textDelta: 'Final response'
+    }
+
+    expect(applyAssistantStreamDelta(cancelled, streamUpdate('late delta'))).toEqual(cancelled)
+    expect(applyAssistantTerminalUpdate(cancelled, completed)).toEqual(cancelled)
   })
 })
 

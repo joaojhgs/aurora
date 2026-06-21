@@ -62,6 +62,8 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const activePendingIdRef = useRef<string | null>(null)
+  const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
   const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
   const isSending = session.messages.some((message) => message.status === 'sending')
   const isStreaming = session.messages.some((message) => message.status === 'streaming')
@@ -113,6 +115,8 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
 
     const abort = new AbortController()
     abortRef.current = abort
+    activePendingIdRef.current = pendingMessage.id
+    cancelledPendingIdsRef.current.delete(pendingMessage.id)
     for await (const update of client.assistant.streamMessage({
       text: prompt,
       sessionId: session.sessionId,
@@ -126,6 +130,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
       }
     }
     if (abortRef.current === abort) abortRef.current = null
+    if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
   }
 
   function applyAssistantResult(result: AuroraResponse<import('@aurora/client').AssistantSendMessageResult>, pendingId: string) {
@@ -167,6 +172,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
   }
 
   function applyAssistantStreamUpdate(update: AssistantStreamUpdate, pendingId: string) {
+    if (cancelledPendingIdsRef.current.has(pendingId)) return
     if (update.eventId) {
       setStreamState((current) => ({ ...current, lastEventId: update.eventId }))
     }
@@ -230,15 +236,7 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
       setSession((current) => ({
         sessionId: update.sessionId ?? current.sessionId ?? session.sessionId,
         messages: current.messages.map((message) =>
-          message.id === pendingId
-            ? {
-                id: update.eventId ?? message.id,
-                role: 'assistant',
-                text: update.text,
-                createdAt: message.createdAt,
-                status: 'sent'
-              }
-            : message
+          message.id === pendingId ? applyAssistantTerminalUpdate(message, update) : message
         )
       }))
       if (update.kind === 'completed') {
@@ -258,6 +256,8 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
 
   async function onCancel() {
     if (!controls.canCancel) return
+    const pendingId = activePendingIdRef.current
+    if (pendingId) cancelledPendingIdsRef.current.add(pendingId)
     abortRef.current?.abort()
     const result = await client.assistant.cancel({
       sessionId: session.sessionId,
@@ -456,6 +456,7 @@ export function assistantControlsForRoute(
 }
 
 export function applyAssistantStreamDelta(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
+  if (message.status === 'cancelled') return message
   const currentText = message.text === 'Waiting for Aurora stream...' || message.text === 'Replaying stream from last backend event...'
     ? ''
     : message.text
@@ -463,6 +464,17 @@ export function applyAssistantStreamDelta(message: AssistantUiMessage, update: A
     ...message,
     text: `${currentText}${update.textDelta}`,
     status: 'streaming'
+  }
+}
+
+export function applyAssistantTerminalUpdate(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
+  if (message.status === 'cancelled') return message
+  return {
+    id: update.eventId ?? message.id,
+    role: 'assistant',
+    text: update.text,
+    createdAt: message.createdAt,
+    status: 'sent'
   }
 }
 
