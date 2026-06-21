@@ -23,6 +23,7 @@ export {
 } from './events.js'
 export {
   GATEWAY_METHODS,
+  ORCHESTRATOR_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,

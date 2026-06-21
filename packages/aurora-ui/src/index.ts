@@ -1,4 +1,5 @@
 export * from './nav'
+export * from './assistant-view'
 export * from './shell-data'
 export * from './shell'
 export * from './state-surface'

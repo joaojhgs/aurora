@@ -6,6 +6,7 @@ import {
   HttpGatewayTransport,
   MeshP2PTransport,
   MockAuroraTransport,
+  ORCHESTRATOR_METHODS,
   TauriLocalTransport,
   backendInventoryFixture,
   buildPermissionCatalog,
@@ -2103,6 +2104,88 @@ describe('AuroraClient', () => {
         })
       })
     )
+  })
+})
+
+describe('AuroraClient assistant namespace', () => {
+  it('sends text prompts through Orchestrator.ExternalUserInput and normalizes final responses', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: {
+          text: 'Final assistant response',
+          session_id: 'session-123',
+          metadata: {
+            model: 'llama-local',
+            provider: 'local-orchestrator'
+          }
+        },
+        status: 200,
+        audit: {
+          correlationId: 'corr-assistant-123'
+        }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    const result = await client.assistant.sendMessage({
+      text: '  hello Aurora  ',
+      sessionId: 'session-123',
+      routePolicy: {
+        providerId: 'local:orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-local'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'hello Aurora',
+      source: 'external',
+      session_id: 'session-123'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected assistant send success')
+    expect(result.data.sessionId).toBe('session-123')
+    expect(result.data.response.text).toBe('Final assistant response')
+    expect(result.data.modelLabel).toBe('llama-local')
+    expect(result.data.routePolicy?.providerId).toBe('local:orchestrator')
+    expect(result.audit.correlationId).toBe('corr-assistant-123')
+  })
+
+  it('maps assistant timeout, auth denied, and unavailable responses into SDK result failures', async () => {
+    const timeoutClient = new AuroraClient({
+      transport: MockAuroraTransport.empty().timeout(ORCHESTRATOR_METHODS.externalUserInput)
+    })
+    const authClient = new AuroraClient({
+      transport: MockAuroraTransport.empty().fail(ORCHESTRATOR_METHODS.externalUserInput, 'auth', 'token expired')
+    })
+    const unavailableClient = new AuroraClient({
+      transport: MockAuroraTransport.empty().fail(ORCHESTRATOR_METHODS.externalUserInput, 'unavailable_service', 'orchestrator unavailable')
+    })
+
+    const timeout = await timeoutClient.assistant.sendMessage({ text: 'hello' })
+    const auth = await authClient.assistant.sendMessage({ text: 'hello' })
+    const unavailable = await unavailableClient.assistant.sendMessage({ text: 'hello' })
+
+    expect(timeout.ok).toBe(false)
+    expect(auth.ok).toBe(false)
+    expect(unavailable.ok).toBe(false)
+    if (timeout.ok || auth.ok || unavailable.ok) throw new Error('expected assistant send failures')
+    expect(timeout.error.code).toBe('timeout')
+    expect(auth.error.code).toBe('auth')
+    expect(unavailable.error.code).toBe('unavailable_service')
+  })
+
+  it('rejects empty assistant prompts before transport execution', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const result = await client.assistant.sendMessage({ text: '   ' })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected empty prompt failure')
+    expect(result.error).toBeInstanceOf(AuroraError)
+    expect(result.error.code).toBe('validation')
   })
 })
 

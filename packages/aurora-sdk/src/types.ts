@@ -75,6 +75,52 @@ export interface AuroraEvent<TPayload = unknown> {
   receivedAt: string
 }
 
+export interface OrchestratorProcessRequest {
+  text: string
+  source?: string
+  session_id?: string | null
+}
+
+export interface OrchestratorResponse {
+  text: string
+  session_id?: string | null
+  metadata?: JsonObject
+}
+
+export interface AssistantRoutePolicy {
+  providerId?: string | null
+  peerId?: string | null
+  serviceInstanceId?: string | null
+  routeState?: AvailabilityState | null
+  fallbackBehavior?: string | null
+  privacyClass?: PrivacyClass | null
+  selectorRequired?: boolean
+  approvalRequired?: boolean
+}
+
+export interface AssistantSendMessageRequest {
+  text: string
+  sessionId?: string | null
+  routePolicy?: AssistantRoutePolicy | null
+  timeoutMs?: number
+}
+
+export interface AssistantMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  createdAt: string
+}
+
+export interface AssistantSendMessageResult {
+  sessionId: string
+  response: AssistantMessage
+  routePolicy: AssistantRoutePolicy | null
+  modelLabel: string | null
+  privacyClass: PrivacyClass
+  metadata: JsonObject
+}
+
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string
 export type ContractMethodType = 'use' | 'manage' | 'event' | 'gateway' | string
 
