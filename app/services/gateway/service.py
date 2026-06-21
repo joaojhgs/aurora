@@ -283,7 +283,13 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
         return "route"
     if topic == OrchestratorMethods.RESPONSE:
         return "assistant"
-    if topic == AuthMethods.PAIRING_REQUESTED:
+    if topic in {
+        AuthMethods.PAIRING_REQUESTED,
+        AuthMethods.PAIRING_APPROVED,
+        AuthMethods.PAIRING_DENIED,
+        AuthMethods.PAIRING_EXPIRED,
+        AuthMethods.PAIRING_EXCHANGED,
+    }:
         return "pairing"
     if topic.startswith("Mesh."):
         return "peer"

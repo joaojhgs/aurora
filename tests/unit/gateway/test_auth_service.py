@@ -1,4 +1,5 @@
 import hashlib
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.auth.auth_manager import AuthManager as AuthService
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import DBMethods
 from app.shared.models.db import Device, Token, User
 
@@ -340,6 +342,118 @@ async def test_pairing_expiration(auth_service):
         seconds=1
     )
     assert await auth_service.exchange_pairing(pairing_code) is None
+
+
+@pytest.mark.asyncio
+async def test_pending_pairing_queue_lists_admin_metadata_and_prunes_expired(auth_service):
+    pending_code = await auth_service.start_pairing(
+        "PendingDevice",
+        "127.0.0.1",
+        remote_peer_id="peer-1",
+        remote_node_name="Peer One",
+    )
+    expired_code = await auth_service.start_pairing("ExpiredDevice", "127.0.0.2")
+    assert pending_code is not None
+    assert expired_code is not None
+    auth_service.pairing_requests[expired_code]["expires_at"] = datetime.now() - timedelta(
+        seconds=1
+    )
+
+    entries, expired_count = await auth_service.list_pending_pairings()
+
+    assert expired_count == 1
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["code"] == pending_code
+    assert entry["request_id"] == auth_service.pairing_requests[pending_code]["id"]
+    assert entry["remote_peer_id"] == "peer-1"
+    assert entry["remote_node_name"] == "Peer One"
+    assert expired_code not in auth_service.pairing_requests
+
+    requested_events = [
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0] == AuthMethods.PAIRING_REQUESTED
+    ]
+    assert requested_events
+    dumped_requested_events = json.dumps(
+        [event.model_dump(mode="json") for event in requested_events],
+        sort_keys=True,
+    )
+    assert pending_code not in dumped_requested_events
+    assert expired_code not in dumped_requested_events
+    assert all(not hasattr(event, "code") for event in requested_events)
+    assert all(event.code_sha256 for event in requested_events)
+
+    published_topics = [call.args[0] for call in auth_service.bus.publish.await_args_list]
+    assert AuthMethods.PAIRING_EXPIRED in published_topics
+    expired_event = next(
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0] == AuthMethods.PAIRING_EXPIRED
+    )
+    assert expired_event.code_sha256 == hashlib.sha256(expired_code.encode()).hexdigest()
+    assert not hasattr(expired_event, "code")
+    assert expired_code not in expired_event.model_dump_json()
+    audit_calls = _bus_calls(auth_service.bus, AuthMethods.STORE_AUDIT_EVENT)
+    assert audit_calls
+    audit_request = audit_calls[-1].args[1]
+    assert audit_request.event == "auth.pairing.expired"
+    details = json.loads(audit_request.details)
+    assert details["code_sha256"]
+    assert pending_code not in audit_request.details
+    assert expired_code not in audit_request.details
+
+
+@pytest.mark.asyncio
+async def test_pairing_approve_deny_and_exchange_publish_lifecycle_events(auth_service):
+    approved_code = await auth_service.start_pairing("ApproveDevice", "127.0.0.1")
+    denied_code = await auth_service.start_pairing("DenyDevice", "127.0.0.2")
+    assert approved_code is not None
+    assert denied_code is not None
+
+    assert await auth_service.approve_pairing(
+        approved_code, "admin-id", permissions=["TTS.Synthesize"]
+    )
+    assert await auth_service.deny_pairing(denied_code, "admin-id", reason="not recognized")
+    assert await auth_service.exchange_pairing(approved_code)
+
+    published_topics = [call.args[0] for call in auth_service.bus.publish.await_args_list]
+    assert AuthMethods.PAIRING_APPROVED in published_topics
+    assert AuthMethods.PAIRING_DENIED in published_topics
+    assert AuthMethods.PAIRING_EXCHANGED in published_topics
+    lifecycle_events = [
+        call.args[1]
+        for call in auth_service.bus.publish.await_args_list
+        if call.args[0]
+        in {
+            AuthMethods.PAIRING_APPROVED,
+            AuthMethods.PAIRING_DENIED,
+            AuthMethods.PAIRING_EXCHANGED,
+        }
+    ]
+    dumped_lifecycle_events = json.dumps(
+        [event.model_dump(mode="json") for event in lifecycle_events],
+        sort_keys=True,
+    )
+    assert approved_code not in dumped_lifecycle_events
+    assert denied_code not in dumped_lifecycle_events
+    assert all(not hasattr(event, "code") for event in lifecycle_events)
+    assert all(event.code_sha256 for event in lifecycle_events)
+
+    entries, _ = await auth_service.list_pending_pairings(include_non_pending=True)
+    denied_entry = next(entry for entry in entries if entry["code"] == denied_code)
+    assert denied_entry["status"] == "denied"
+    assert denied_entry["denied_by"] == "admin-id"
+    assert denied_entry["denied_reason"] == "not recognized"
+
+    audit_events = [
+        call.args[1].event
+        for call in _bus_calls(auth_service.bus, AuthMethods.STORE_AUDIT_EVENT)
+    ]
+    assert "auth.pairing.approved" in audit_events
+    assert "auth.pairing.denied" in audit_events
+    assert "auth.pairing.exchanged" in audit_events
 
 
 # ── Token Scope Validation ───────────────────────────────────────────────

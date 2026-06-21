@@ -266,7 +266,7 @@ class MeshPeerPermissionsUpdatedEvent(BaseModel):
 class PairingRequestedEvent(BaseModel):
     """Published when a remote peer initiates pairing on our auth service."""
 
-    code: str
+    code_sha256: str
     remote_peer_id: str = ""
     remote_node_name: str = ""
     device_name: str = ""
