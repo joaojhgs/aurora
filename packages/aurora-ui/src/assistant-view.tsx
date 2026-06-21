@@ -11,6 +11,7 @@ import type {
   AuroraResponse
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
+import { RouteSheet } from './route-sheet'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
 export interface AssistantViewProps {
@@ -339,6 +340,24 @@ export function AssistantView({ client, route, cancellationRoute, storageKey = d
           <p>{route.explanation}</p>
           {route.disabled ? <p role="alert">Assistant send is disabled: {route.blockers.join(', ') || 'capability unavailable'}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
+          <RouteSheet
+            client={client}
+            title="Assistant route preview"
+            description="The SDK evaluates where this prompt can run before dispatch."
+            payload={{
+              message: text.trim() || '<pending prompt>',
+              session_id: session.sessionId,
+              route_surface: route.item.id
+            }}
+            routeRequest={{
+              topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
+              method: route.item.capabilityMethod ?? null,
+              include_candidates: true
+            }}
+            privacyClass={route.item.privacyClass}
+            auditReceiptTarget={route.providerLabel}
+            requiresAdminAction={route.requiresAdminAction}
+          />
         </aside>
       </div>
 
