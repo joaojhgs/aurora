@@ -35,9 +35,11 @@ import {
   ToolApprovalPanel,
   assistantErrorMessage,
   buildShellSnapshot,
+  buildSettingsPermissionsModel,
   errorShellSnapshot,
+  routePolicyFromRoute,
   routeSheetErrorMessage,
-  routePolicyFromRoute
+  SettingsPermissionsView
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -113,6 +115,86 @@ describe('Aurora production shell', () => {
     )
     expect(markup).toContain('Gateway unavailable')
     expect(markup).toContain('AuroraClient error')
+  })
+
+  it('renders settings, privacy defaults, native permissions, and AdminAction state from SDK evidence', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.loadState).toBe('ready')
+    expect(model.privacyControls.map((control) => control.id)).toEqual([
+      'prefer-local',
+      'explicit-selector',
+      'block-explicit-fallback'
+    ])
+    expect(model.privacyControls.some((control) => control.requiresAdminAction)).toBe(true)
+    expect(model.nativePermissions.length).toBeGreaterThan(0)
+    expect(model.nativePermissions.some((permission) => permission.state === 'privacy-blocked')).toBe(true)
+    expect(model.routeDefaults.map((item) => item.id)).toContain('denied-routes')
+
+    expect(markup).toContain('Settings and permissions')
+    expect(markup).toContain('Privacy defaults')
+    expect(markup).toContain('Native permissions')
+    expect(markup).toContain('Route and fallback policy')
+    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('Request unavailable')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('maps settings state matrix for denied, degraded, native-unavailable, optimistic and rollback/error states', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => stateMatrixCatalog())
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'android',
+      permissions: {
+        'aurora.microphone': false,
+        'aurora.notifications': true
+      },
+      capabilities: {
+        'aurora.microphone': false,
+        'aurora.notifications': true
+      }
+    }))
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    Object.assign(route(snapshot, 'settings'), {
+      state: 'available-local',
+      disabled: false,
+      requiresAdminAction: false,
+      blockers: [],
+      providerLabel: 'local / Config.Get'
+    })
+    Object.assign(route(snapshot, 'assistant'), {
+      state: 'available-remote',
+      disabled: false,
+      providerLabel: 'remote:studio / Orchestrator.ExternalUserInput'
+    })
+    const model = buildSettingsPermissionsModel(snapshot)
+
+    expect(model.routeDefaults.find((item) => item.id === 'degraded-fallback')?.state).toBe('degraded')
+    expect(model.routeDefaults.find((item) => item.id === 'denied-routes')?.state).toBe('denied')
+    expect(model.privacyControls.map((control) => control.mutationState)).toContain('optimistic')
+    expect(model.privacyControls.map((control) => control.mutationState)).toContain('rollback-error')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.microphone')?.state).toBe('privacy-blocked')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.notifications')?.state).toBe('available-local')
+
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    expect(markup).toContain('Request unavailable')
+    expect(markup).toContain('Granted')
+    expect(markup).toContain('Fallback is visible as degraded capability evidence.')
+  })
+
+  it('keeps settings screen honest for SDK errors and empty native manifests', () => {
+    const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.error).toBe('Gateway unavailable')
+    expect(model.nativePermissions).toEqual([])
+    expect(model.privacyControls.every((control) => control.disabled)).toBe(true)
+    expect(markup).toContain('Gateway unavailable')
+    expect(markup).toContain('No native permission manifest is available')
+    expect(markup).toContain('AdminAction required')
   })
 
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {

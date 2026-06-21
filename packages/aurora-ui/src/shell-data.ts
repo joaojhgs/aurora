@@ -63,6 +63,8 @@ export interface AuroraShellSnapshot {
   blockedCount: number
   nativePlatform: string
   nativeAvailable: boolean
+  nativePermissions: Array<{ name: string; granted: boolean }>
+  nativeCapabilities: Array<{ name: string; enabled: boolean }>
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   error: string | null
@@ -81,6 +83,8 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   blockedCount: 0,
   nativePlatform: 'unknown',
   nativeAvailable: false,
+  nativePermissions: [],
+  nativeCapabilities: [],
   routes: [],
   assistantCancellationRoute: null,
   error: null
@@ -124,6 +128,8 @@ export function snapshotFromGraph(
     blockedCount: routes.filter((route) => route.disabled).length,
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
+    nativePermissions: nativePermissionEntries(native?.permissions),
+    nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
     routes,
     assistantCancellationRoute,
     error: null
@@ -370,6 +376,18 @@ function repairAction(
 
 function sortedUnique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].sort()
+}
+
+function nativePermissionEntries(values: Record<string, boolean> | undefined): Array<{ name: string; granted: boolean }> {
+  return Object.entries(values ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, granted]) => ({ name, granted }))
+}
+
+function nativeCapabilityEntries(values: Record<string, boolean> | undefined): Array<{ name: string; enabled: boolean }> {
+  return Object.entries(values ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, enabled]) => ({ name, enabled }))
 }
 
 function nullToPending(value: string | null): string {
