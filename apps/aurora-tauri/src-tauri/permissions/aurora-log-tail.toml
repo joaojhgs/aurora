@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-log-tail"
+description = "Allow the frontend SDK adapter to query non-secret sidecar log-tail availability without reading arbitrary files."
+commands.allow = ["aurora_log_tail"]

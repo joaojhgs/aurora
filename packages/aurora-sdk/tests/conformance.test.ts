@@ -64,7 +64,7 @@ const conformanceCases: ConformanceCase[] = [
       new AuroraClient({
         transport: new TauriLocalTransport({
           invoke: async (command, args) => {
-            if (command !== 'aurora_request') {
+            if (command !== 'aurora_command') {
               throw new Error(`Unexpected Tauri command ${command}`)
             }
             const request = readTauriRequest(args)
@@ -197,7 +197,7 @@ describe('SDK transport conformance', () => {
       new AuroraClient({
         transport: new TauriLocalTransport({
           invoke: async (command, args) => {
-            if (command !== 'aurora_request') throw new Error(`Unexpected Tauri command ${command}`)
+            if (command !== 'aurora_command') throw new Error(`Unexpected Tauri command ${command}`)
             return { data: conformanceResponse(readTauriRequest(args).method), status: 200 }
           }
         })

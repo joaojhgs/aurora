@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-subscribe"
+description = "Allow the frontend SDK adapter to request the Aurora event subscription bridge; currently returns an explicit unsupported-feature response until the backend event stream contract lands."
+commands.allow = ["aurora_subscribe"]

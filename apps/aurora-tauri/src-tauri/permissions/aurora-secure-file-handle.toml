@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-secure-file-handle"
+description = "Allow secure file-handle helper commands to return structured native-permission-missing responses until a scoped handle design is implemented."
+commands.allow = ["aurora_secure_file_handle_open"]

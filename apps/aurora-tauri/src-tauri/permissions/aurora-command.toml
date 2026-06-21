@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-command"
+description = "Allow the frontend SDK adapter to proxy typed AuroraClient command requests to the configured Aurora Gateway origin."
+commands.allow = ["aurora_command"]
