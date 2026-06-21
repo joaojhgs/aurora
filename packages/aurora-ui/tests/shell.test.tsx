@@ -34,6 +34,7 @@ import {
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
+  buildAssistantVoiceModel,
   buildShellSnapshot,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
@@ -209,10 +210,23 @@ describe('Aurora production shell', () => {
       routeable: true
     }
     const markup = renderToStaticMarkup(
-      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={enabledRoute} />
+      <AssistantView
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        route={enabledRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        nativeAvailable={snapshot.nativeAvailable}
+        nativePlatform={snapshot.nativePlatform}
+        nativePermissions={snapshot.nativePermissions}
+        nativeCapabilities={snapshot.nativeCapabilities}
+      />
     )
 
     expect(markup).toContain('Text chat')
+    expect(markup).toContain('Voice modes')
+    expect(markup).toContain('Browser capture')
+    expect(markup).toContain('Native capture')
+    expect(markup).toContain('Audio route and consent')
+    expect(markup).toContain('Voice event stream')
     expect(markup).toContain('local / Orchestrator.ExternalUserInput')
     expect(markup).toContain('model pending')
     expect(markup).toContain('personal')
@@ -227,10 +241,130 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('0 context ready')
 
     const disabledMarkup = renderToStaticMarkup(
-      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={assistantRoute} />
+      <AssistantView
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        route={assistantRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+      />
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('builds assistant voice routes from capability graph and native manifest evidence', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'tauri-desktop',
+      permissions: { microphone: true },
+      capabilities: { voiceCapture: true }
+    }))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+
+    expect(snapshot.assistantVoiceRoutes.transcription.state).toBe('available-local')
+    expect(snapshot.assistantVoiceRoutes.ttsSynthesize.state).toBe('available-remote')
+    expect(snapshot.assistantVoiceRoutes.wakeControl.state).toBe('available-local')
+
+    const model = buildAssistantVoiceModel({
+      client,
+      route: enabledRoute(route(snapshot, 'assistant')),
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      nativeAvailable: snapshot.nativeAvailable,
+      nativePlatform: snapshot.nativePlatform,
+      nativePermissions: snapshot.nativePermissions,
+      nativeCapabilities: snapshot.nativeCapabilities,
+      captureStatus: 'listening',
+      consentGranted: true
+    })
+
+    expect(model.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('available-local')
+    expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
+    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('typed audio session')
+    expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
+  })
+
+  it('keeps remote STT consent-gated, denial visible, and revoked consent blocking dispatch', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-stt'))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const assistantRoute = enabledRoute(route(snapshot, 'assistant'))
+
+    const noConsent = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: false
+    })
+    expect(noConsent.controls.find((control) => control.id === 'remote-transcription')?.state).toBe('privacy-blocked')
+    expect(noConsent.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Grant session consent')
+
+    const granted = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: true
+    })
+    expect(granted.sessionTtl).toBe('current UI session')
+
+    const revoked = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: false
+    })
+    expect(revoked.sessionTtl).toBe('consent not granted')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-denied'))
+    const deniedSnapshot = await buildShellSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.assistantVoiceRoutes.transcription.state).toBe('denied')
+  })
+
+  it('covers peer disconnect, local permission loss, and mobile foreground-only voice limits', async () => {
+    const staleTransport = new MockAuroraTransport()
+    staleTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('stale-remote'))
+    const staleClient = new AuroraClient({ transport: staleTransport })
+    const staleSnapshot = await buildShellSnapshot(staleClient)
+    const staleModel = buildAssistantVoiceModel({
+      client: staleClient,
+      route: enabledRoute(route(staleSnapshot, 'assistant')),
+      voiceRoutes: staleSnapshot.assistantVoiceRoutes,
+      captureStatus: 'permission-denied',
+      consentGranted: true
+    })
+
+    expect(staleSnapshot.assistantVoiceRoutes.transcription.state).toBe('stale')
+    expect(staleModel.events.find((event) => event.id === 'peer-disconnect')?.state).toBe('stale')
+    expect(staleModel.events.find((event) => event.id === 'permission-loss')?.state).toBe('denied')
+
+    const mobileTransport = new MockAuroraTransport()
+    mobileTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
+    mobileTransport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: { microphone: false },
+      capabilities: { voiceCapture: false }
+    }))
+    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const mobileSnapshot = await buildShellSnapshot(mobileClient)
+    const mobileModel = buildAssistantVoiceModel({
+      client: mobileClient,
+      route: enabledRoute(route(mobileSnapshot, 'assistant')),
+      voiceRoutes: mobileSnapshot.assistantVoiceRoutes,
+      nativeAvailable: mobileSnapshot.nativeAvailable,
+      nativePlatform: mobileSnapshot.nativePlatform,
+      nativePermissions: mobileSnapshot.nativePermissions,
+      nativeCapabilities: mobileSnapshot.nativeCapabilities,
+      captureStatus: 'idle',
+      consentGranted: false
+    })
+
+    expect(mobileModel.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('privacy-blocked')
+    expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
   })
 
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
@@ -726,6 +860,139 @@ function enabledRoute(match: ReturnType<typeof route>) {
     blockers: [],
     routeable: true
   }
+}
+
+function voiceModeCatalog(variant: 'local' | 'remote-stt' | 'remote-denied' | 'stale-remote' = 'local'): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const localTranscription = provider(baseProvider, {
+    provider_id: 'local:Transcription',
+    module: 'Transcription',
+    service_instance_id: 'transcription-local',
+    reason: 'Local transcription provider is available.'
+  })
+  const remoteTranscription = provider(baseProvider, {
+    provider_id: 'mesh:studio:Transcription',
+    peer_id: 'studio-peer',
+    provider_kind: 'remote',
+    node_name: 'Studio node',
+    module: 'Transcription',
+    service_instance_id: 'transcription-studio',
+    reason: 'Remote transcription provider is eligible.'
+  })
+  const deniedTranscription = provider(remoteTranscription, {
+    eligible: false,
+    reason_code: 'policy_denied',
+    reason: 'Remote transcription denied by peer policy.',
+    policy: {
+      ...remoteTranscription.policy,
+      denial_reasons: ['policy_denied'],
+      mesh_visible: true,
+      trust_tier: 'paired'
+    }
+  })
+  const staleTranscription = provider(remoteTranscription, {
+    eligible: false,
+    status: 'stale',
+    reason_code: 'peer_disconnect',
+    reason: 'Remote transcription peer disconnected.',
+    freshness: {
+      ...remoteTranscription.freshness,
+      stale: true,
+      last_probe_age_s: 900
+    }
+  })
+  const wake = provider(baseProvider, {
+    provider_id: 'local:WakeWord',
+    module: 'WakeWord',
+    service_instance_id: 'wake-local',
+    reason: 'Foreground wake control is available locally.'
+  })
+  const ttsRemote = provider(baseProvider, {
+    provider_id: 'mesh:kitchen:TTS',
+    peer_id: 'kitchen-peer',
+    provider_kind: 'remote',
+    node_name: 'Kitchen node',
+    module: 'TTS',
+    service_instance_id: 'tts-kitchen',
+    reason: 'Remote TTS synthesis provider is eligible.'
+  })
+  const transcriptionProvider = variant === 'remote-stt'
+    ? remoteTranscription
+    : variant === 'remote-denied'
+      ? deniedTranscription
+      : variant === 'stale-remote'
+        ? staleTranscription
+        : localTranscription
+
+  catalog.providers = [transcriptionProvider, wake, ttsRemote]
+  catalog.actions = [
+    action(baseAction, transcriptionProvider, {
+      action_id: `${transcriptionProvider.provider_id}:Transcribe`,
+      method: 'Transcribe',
+      bindability: variant === 'remote-denied' ? 'denied' : variant === 'stale-remote' ? 'unavailable' : 'available',
+      policy: {
+        ...transcriptionProvider.policy,
+        required_permissions: ['Transcription.use'],
+        resource_scope: 'raw-audio',
+        mesh_visible: transcriptionProvider.provider_kind !== 'local',
+        trust_tier: transcriptionProvider.provider_kind === 'local' ? 'local' : 'paired'
+      },
+      freshness: transcriptionProvider.freshness
+    }),
+    action(baseAction, wake, {
+      action_id: 'local:WakeWord:ProcessAudio',
+      method: 'ProcessAudio',
+      policy: {
+        ...wake.policy,
+        required_permissions: ['WakeWord.use'],
+        resource_scope: 'raw-audio'
+      }
+    }),
+    action(baseAction, wake, {
+      action_id: 'local:WakeWord:Control',
+      method: 'Control',
+      policy: {
+        ...wake.policy,
+        required_permissions: ['WakeWord.use'],
+        resource_scope: 'raw-audio'
+      }
+    }),
+    action(baseAction, ttsRemote, {
+      action_id: 'mesh:kitchen:TTS:Synthesize',
+      method: 'Synthesize',
+      policy: {
+        ...ttsRemote.policy,
+        required_permissions: ['TTS.use'],
+        mesh_visible: true,
+        trust_tier: 'paired'
+      }
+    }),
+    action(baseAction, ttsRemote, {
+      action_id: 'mesh:kitchen:TTS:Stop',
+      method: 'Stop',
+      policy: {
+        ...ttsRemote.policy,
+        required_permissions: ['TTS.use'],
+        mesh_visible: true,
+        trust_tier: 'paired'
+      }
+    })
+  ]
+  catalog.provider_index = {
+    Transcription: [transcriptionProvider.provider_id],
+    WakeWord: [wake.provider_id],
+    TTS: [ttsRemote.provider_id]
+  }
+  catalog.action_index = {
+    'Transcription.Transcribe': [`${transcriptionProvider.provider_id}:Transcribe`],
+    'WakeWord.ProcessAudio': ['local:WakeWord:ProcessAudio'],
+    'WakeWord.Control': ['local:WakeWord:Control'],
+    'TTS.Synthesize': ['mesh:kitchen:TTS:Synthesize'],
+    'TTS.Stop': ['mesh:kitchen:TTS:Stop']
+  }
+  return catalog
 }
 
 function stateMatrixCatalog(): CapabilityCatalogResponse {
