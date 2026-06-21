@@ -682,7 +682,7 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 5,
+  method_count: 6,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -784,6 +784,29 @@ export const backendInventoryFixture: BackendInventory = {
       output_schema: null,
       source: 'static_contract',
       source_file: 'tests/fixtures/gateway.py:1'
+    },
+    {
+      module: 'Orchestrator',
+      name: 'IngestContext',
+      summary: 'Ingest assistant attachment and shared context metadata',
+      bus_topic: 'Orchestrator.IngestContext',
+      routePath: '/api/Orchestrator/IngestContext',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Orchestrator.use'],
+      input_model: 'AttachmentContextIngestRequest',
+      output_model: 'AttachmentContextIngestResponse',
+      input_schema: {
+        title: 'AttachmentContextIngestRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'AttachmentContextIngestResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
     }
   ],
   gateway_builtins: [

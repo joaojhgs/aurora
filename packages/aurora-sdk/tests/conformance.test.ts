@@ -252,7 +252,8 @@ describe('SDK transport conformance', () => {
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',
-      'Gateway.InternalOnly'
+      'Gateway.InternalOnly',
+      'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
     expect(comparison).toEqual({ ok: true, checked: 4, issues: [] })

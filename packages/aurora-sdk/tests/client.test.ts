@@ -98,6 +98,32 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('advertises assistant context ingestion from backend inventory descriptors', () => {
+    const descriptors = describeBackendInventory(backendInventoryFixture)
+
+    expect(descriptors.methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          busTopic: ORCHESTRATOR_METHODS.ingestContext,
+          routePath: '/api/Orchestrator/IngestContext',
+          exposure: 'external',
+          methodType: 'use',
+          requiredPermissions: ['Orchestrator.use'],
+          inputModel: 'AttachmentContextIngestRequest',
+          outputModel: 'AttachmentContextIngestResponse',
+          availableOverHttp: true,
+          routeKind: 'dynamic'
+        })
+      ])
+    )
+    expect(descriptors.methodTypes[ORCHESTRATOR_METHODS.ingestContext]).toEqual(
+      expect.objectContaining({
+        requestModel: 'AttachmentContextIngestRequest',
+        responseModel: 'AttachmentContextIngestResponse'
+      })
+    )
+  })
+
   it('summarizes capability catalog responses without inventing state', async () => {
     const catalog = {
       ...capabilityCatalogFixture,
