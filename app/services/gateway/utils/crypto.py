@@ -122,7 +122,7 @@ def verify_token(secret: str, token: str) -> dict[str, Any]:
         msg = f"{h}.{p}".encode()
         expected_sig = hmac.new(secret.encode(), msg=msg, digestmod=hashlib.sha256).digest()
 
-        if not hmac.compare_digest(expected_sig, b64d(s)):
+        if not hmac.compare_digest(b64(expected_sig), s):
             raise TokenError("bad signature")
 
         payload = json.loads(b64d(p))

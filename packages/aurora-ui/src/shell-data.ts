@@ -9,6 +9,7 @@ import type {
 } from '@aurora/client'
 import {
   auroraAssistantCancellationItem,
+  auroraAssistantVoiceItems,
   auroraNavSections,
   navItemSnapshot,
   type AuroraNavItem,
@@ -67,7 +68,16 @@ export interface AuroraShellSnapshot {
   nativeCapabilities: Array<{ name: string; enabled: boolean }>
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
+  assistantVoiceRoutes: AssistantVoiceRoutes
   error: string | null
+}
+
+export interface AssistantVoiceRoutes {
+  transcription: RouteAvailability
+  wakeProcess: RouteAvailability
+  wakeControl: RouteAvailability
+  ttsSynthesize: RouteAvailability
+  ttsStop: RouteAvailability
 }
 
 export const loadingShellSnapshot: AuroraShellSnapshot = {
@@ -87,6 +97,7 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeCapabilities: [],
   routes: [],
   assistantCancellationRoute: null,
+  assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
   error: null
 }
 
@@ -115,6 +126,7 @@ export function snapshotFromGraph(
     graph.explain(featureIdForNavItem(auroraAssistantCancellationItem)),
     native
   )
+  const assistantVoiceRoutes = assistantVoiceRoutesFromGraph(graph, native)
   return {
     loadState: 'ready',
     nodeName: graph.localNodeName || 'Aurora node',
@@ -132,6 +144,7 @@ export function snapshotFromGraph(
     nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
     routes,
     assistantCancellationRoute,
+    assistantVoiceRoutes,
     error: null
   }
 }
@@ -169,6 +182,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     disabled: true,
     requiresAdminAction: false
   }
+  const assistantVoiceRoutes = errorAssistantVoiceRoutes()
   return {
     ...loadingShellSnapshot,
     loadState: 'error',
@@ -179,7 +193,77 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     blockedCount: routes.length,
     error: errorMessage(error),
     routes,
-    assistantCancellationRoute
+    assistantCancellationRoute,
+    assistantVoiceRoutes
+  }
+}
+
+function assistantVoiceRoutesFromGraph(
+  graph: CapabilityGraph,
+  native: NativeCapabilityManifest | null
+): AssistantVoiceRoutes {
+  return {
+    transcription: routeAvailability(
+      auroraAssistantVoiceItems.transcription,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.transcription)),
+      native
+    ),
+    wakeProcess: routeAvailability(
+      auroraAssistantVoiceItems.wakeProcess,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.wakeProcess)),
+      native
+    ),
+    wakeControl: routeAvailability(
+      auroraAssistantVoiceItems.wakeControl,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.wakeControl)),
+      native
+    ),
+    ttsSynthesize: routeAvailability(
+      auroraAssistantVoiceItems.ttsSynthesize,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsSynthesize)),
+      native
+    ),
+    ttsStop: routeAvailability(
+      auroraAssistantVoiceItems.ttsStop,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsStop)),
+      native
+    )
+  }
+}
+
+function emptyAssistantVoiceRoutes(): AssistantVoiceRoutes {
+  return unsupportedAssistantVoiceRoutes('pending SDK request')
+}
+
+function errorAssistantVoiceRoutes(): AssistantVoiceRoutes {
+  return unsupportedAssistantVoiceRoutes('AuroraClient error')
+}
+
+function unsupportedAssistantVoiceRoutes(evidence: string): AssistantVoiceRoutes {
+  return {
+    transcription: unsupportedVoiceRoute(auroraAssistantVoiceItems.transcription, evidence),
+    wakeProcess: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeProcess, evidence),
+    wakeControl: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeControl, evidence),
+    ttsSynthesize: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsSynthesize, evidence),
+    ttsStop: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsStop, evidence)
+  }
+}
+
+function unsupportedVoiceRoute(item: AuroraNavItem, evidence: string): RouteAvailability {
+  return {
+    item: navItemSnapshot(item),
+    state: item.fallbackState,
+    explanation: 'Voice capability state could not be loaded from AuroraClient.',
+    providerLabel: `${item.expectedTask} pending`,
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    candidateProviders: [],
+    evidenceSources: [evidence],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: item.methodType === 'manage'
   }
 }
 

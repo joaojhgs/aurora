@@ -1,6 +1,12 @@
 export { AuroraClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export {
+  DB_METHODS,
+  MemoryClient,
+  normalizeConversationMessage,
+  normalizeRagPrivacyClass
+} from './memory.js'
+export {
   SCHEDULER_METHODS,
   SchedulerClient,
   normalizeSchedulerActionSupport,
@@ -89,6 +95,7 @@ export {
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './admin.js'
+export type * from './memory.js'
 export type * from './scheduler.js'
 export type * from './tools.js'
 export type * from './transport.js'

@@ -11,6 +11,7 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
+import { MemoryClient } from './memory.js'
 import { AUTH_METHODS, describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
@@ -93,6 +94,7 @@ export class AuroraClient {
   readonly permissions: PermissionClient
   readonly routes: RouteClient
   readonly assistant: AssistantClient
+  readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
   readonly admin: AdminActionClient
@@ -112,6 +114,7 @@ export class AuroraClient {
     this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
     this.assistant = new AssistantClient(this)
+    this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
     this.admin = new AdminActionClient(this)
