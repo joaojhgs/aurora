@@ -4,6 +4,7 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  buildAdminOverviewManifest,
   buildCapabilityGraph,
   capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
@@ -14,11 +15,15 @@ import {
   normalizeToolCatalog,
   routeExplainFixture,
   toolCatalogFixture,
+  type AdminOverviewManifest,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
-  type CapabilityProviderInfo
+  type CapabilityProviderInfo,
+  type GetServicesResponse
 } from '@aurora/client'
 import {
+  AdminOverviewContent,
+  AdminOverviewView,
   AppShell,
   AssistantView,
   ModelsView,
@@ -612,6 +617,51 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'slow' }))).toContain('timed out')
     expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
+  })
+
+  it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
+    const markup = renderToStaticMarkup(
+      await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
+    )
+
+    expect(markup).toContain('Admin overview')
+    expect(markup).toContain('Deployment')
+    expect(markup).toContain('Service mode')
+    expect(markup).toContain('Health')
+    expect(markup).toContain('Gateway')
+    expect(markup).toContain('Capabilities')
+    expect(markup).toContain('Activity')
+    expect(markup).toContain('AdminAction controller')
+    expect(markup).toContain('Manage/admin-critical operations')
+    expect(markup).toContain('privacy-blocked')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('keeps denied, stale, empty, and internal-only admin states visible with repair links', () => {
+    const manifest = adminOverviewStateMatrixManifest()
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="mock" />)
+
+    expect(markup).toContain('denied')
+    expect(markup).toContain('stale')
+    expect(markup).toContain('Capabilities')
+    expect(markup).toContain('Internal-only methods')
+    expect(markup).toContain('Gateway.InternalOnly')
+    expect(markup).toContain('Config.Get')
+    expect(markup).toContain('DB.RAGSearch')
+    expect(markup).toContain('AdminAction draft/confirm/audit is required')
+  })
+
+  it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
+    const markup = renderToStaticMarkup(
+      await AdminOverviewView({
+        client: new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
+      })
+    )
+
+    expect(markup).toContain('Service overview unavailable')
+    expect(markup).toContain('registry offline')
+    expect(markup).toContain('Open diagnostics')
+    expect(markup).toContain('AuroraClient could not load')
   })
 
   it('keeps assistant stop capability disabled until Orchestrator.Interrupt evidence exists', async () => {
@@ -1290,6 +1340,51 @@ function action(
     freshness: { ...providerInfo.freshness },
     ...overrides
   }
+}
+
+function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
+  const catalog = stateMatrixCatalog()
+  const services: GetServicesResponse = {
+    mode: 'processes',
+    services: [
+      {
+        module: 'Gateway',
+        version: '0.1.0',
+        summary: 'Gateway service',
+        capabilities: ['registry'],
+        status: 'healthy',
+        method_count: 4,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'gateway-1'
+      },
+      {
+        module: 'Config',
+        version: '0.1.0',
+        summary: 'Config service',
+        capabilities: ['config'],
+        status: 'denied',
+        method_count: 1,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'config-1'
+      },
+      {
+        module: 'DB',
+        version: '0.1.0',
+        summary: 'DB service',
+        capabilities: ['rag'],
+        status: 'stale',
+        method_count: 1,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'db-1'
+      }
+    ]
+  }
+  return buildAdminOverviewManifest({
+    registry: gatewayRegistryFixture,
+    services,
+    capabilityCatalog: catalog,
+    generatedAt: '2026-06-19T00:00:00Z'
+  })
 }
 
 function allowedRouteEvaluation() {
