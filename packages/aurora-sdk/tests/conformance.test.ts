@@ -248,6 +248,11 @@ describe('SDK transport conformance', () => {
 
     expect(backendInventoryFixture.generated_by).toBe('scripts/generate_backend_inventory.py')
     expect(generated.methods.map((method) => method.busTopic)).toEqual([
+      'Orchestrator.GetModelCatalog',
+      'Orchestrator.GetModelRuntime',
+      'Orchestrator.ImportModel',
+      'Orchestrator.DownloadModel',
+      'Orchestrator.BenchmarkModel',
       'Auth.ListPendingPairings',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
@@ -256,7 +261,7 @@ describe('SDK transport conformance', () => {
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 4, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 9, issues: [] })
   })
 })
 

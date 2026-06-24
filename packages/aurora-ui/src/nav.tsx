@@ -63,7 +63,7 @@ export const auroraNavSections: AuroraNavSection[] = [
       item('config', 'Config', '/admin/config', Settings, 'Config', 'Get', 'manage', 'secret', 'unsupported', 'ADM-006', true),
       item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'ADM-002', true),
       item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'manage', 'admin-critical', 'unsupported', 'ADM-007', true),
-      item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'MeshListPeers', 'manage', 'credential', 'unsupported', 'ADM-011', true),
+      item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'manage', 'credential', 'unsupported', 'ADM-011', true),
       item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'DB', 'Backup', 'manage', 'admin-critical', 'unsupported', 'ADM-010', true),
       item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'ADM-008', true)
     ]
@@ -71,7 +71,7 @@ export const auroraNavSections: AuroraNavSection[] = [
   {
     label: 'Runtime',
     items: [
-      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'ListModels', 'use', 'personal', 'unsupported', 'UIA-007'),
+      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'UIA-007'),
       item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetCapabilityCatalog', 'use', 'sensitive', 'available-local', 'ADM-009'),
       item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'UI-003'),
       item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'manage', 'secret', 'unsupported', 'UI-004'),

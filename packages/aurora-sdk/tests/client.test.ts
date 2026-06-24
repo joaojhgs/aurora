@@ -28,7 +28,9 @@ import {
   gatewayServicesFixture,
   gatewayRegistryFixture,
   hasPermission,
+  modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
+  ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
   normalizeToolCatalog,
   routeExplainFixture,
@@ -99,6 +101,58 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('routes Auth pairing queue reads and review methods through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListPendingPairings', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          pairings: [pendingPairingFixture()],
+          total: 1,
+          expired_count: 0,
+          secrets_redacted: true
+        }
+      })
+      .register('Auth.PairingApprove', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.PairingDeny', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const queue = await client.authApi.listPendingPairings({ include_non_pending: true })
+    const approved = await client.authApi.pairingApprove({
+      code: '123456',
+      permissions: ['Gateway.use'],
+      is_admin: false
+    })
+    const denied = await client.authApi.pairingDeny({ code: '654321', reason: 'Wrong device' })
+
+    expect(queue.ok).toBe(true)
+    expect(approved.ok).toBe(true)
+    expect(denied.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListPendingPairings',
+        path: '/api/Auth/ListPendingPairings',
+        payload: { include_non_pending: true }
+      },
+      {
+        method: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        payload: { code: '123456', permissions: ['Gateway.use'], is_admin: false }
+      },
+      {
+        method: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: { code: '654321', reason: 'Wrong device' }
+      }
+    ])
+  })
+
   it('advertises assistant context ingestion from backend inventory descriptors', () => {
     const descriptors = describeBackendInventory(backendInventoryFixture)
 
@@ -123,6 +177,32 @@ describe('AuroraClient', () => {
         responseModel: 'AttachmentContextIngestResponse'
       })
     )
+  })
+
+  it('loads model runtime catalog and normalizes unsupported operations through AuroraClient', async () => {
+    const transport = new MockAuroraTransport()
+      .fail(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, 'unsupported_feature', 'benchmark backend is not enabled')
+    const client = new AuroraClient({ transport })
+
+    const catalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
+    const runtime = await client.models.getRuntime()
+    const benchmark = await client.models.benchmarkModel({ provider_id: 'native:mobile-local-light', dry_run: true })
+
+    expect(catalog).toEqual(modelRuntimeCatalogFixture)
+    expect(catalog.providers.map((provider) => provider.provider_id)).toEqual(
+      expect.arrayContaining([
+        'local:Orchestrator:llama-cpp',
+        'mesh:studio-gpu:Orchestrator',
+        'cloud:openai:Orchestrator',
+        'native:mobile-local-light'
+      ])
+    )
+    expect(runtime.provider?.provider_id).toBe(catalog.selected_provider_id)
+    expect(benchmark.ok).toBe(false)
+    if (!benchmark.ok) {
+      expect(benchmark.error.code).toBe('unsupported_feature')
+      expect(benchmark.audit.busTopic).toBe(ORCHESTRATOR_MODEL_METHODS.benchmarkModel)
+    }
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -374,9 +454,9 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 1,
-        methods: 4,
-        externalMethods: 3,
+        services: 2,
+        methods: 9,
+        externalMethods: 8,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -391,7 +471,13 @@ describe('AuroraClient', () => {
     )
     expect(manifest.internalOnly).toHaveLength(1)
     expect(manifest.internalOnly[0]?.busTopic).toBe('Gateway.InternalOnly')
-    expect(manifest.permissionCatalog).toEqual(['Auth.manage', 'Gateway.manage', 'Gateway.use'])
+    expect(manifest.permissionCatalog).toEqual([
+      'Auth.manage',
+      'Gateway.manage',
+      'Gateway.use',
+      'Orchestrator.manage',
+      'Orchestrator.use'
+    ])
     expect(manifest.native).toEqual(
       expect.objectContaining({
         availability: 'unsupported',
@@ -925,7 +1011,7 @@ describe('AuroraClient', () => {
 
     await expect(client.registry.getRegistry()).resolves.toEqual(
       expect.objectContaining({
-        modules: [
+        modules: expect.arrayContaining([
           expect.objectContaining({
             methods: expect.arrayContaining([
               expect.objectContaining({
@@ -934,7 +1020,7 @@ describe('AuroraClient', () => {
               })
             ])
           })
-        ]
+        ])
       })
     )
   })
@@ -2686,9 +2772,28 @@ describe('permissions', () => {
   })
 })
 
+function pendingPairingFixture() {
+  return {
+    request_id: 'pair-1',
+    code: '123456',
+    device_name: 'Kitchen tablet',
+    client_ip: '192.0.2.10',
+    status: 'pending',
+    expires_at: '2099-01-01T00:00:00Z',
+    created_at: '2026-06-24T12:00:00Z',
+    remote_peer_id: 'peer-kitchen',
+    remote_node_name: 'Kitchen node',
+    approved_by: null,
+    denied_by: null,
+    denied_reason: '',
+    granted_permissions: [],
+    granted_is_admin: false
+  }
+}
+
 describe('descriptors', () => {
   it('uses bus topic plus method name as identity source', () => {
-    expect(describeRegistry(gatewayRegistryFixture)[0]).toEqual(
+    expect(describeRegistry(gatewayRegistryFixture).find((method) => method.busTopic === 'Gateway.GetRegistry')).toEqual(
       expect.objectContaining({
         name: 'GetRegistry',
         busTopic: 'Gateway.GetRegistry'
@@ -2741,19 +2846,21 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 4,
+      checked: 9,
       issues: []
     })
+
+    const gatewayModule = gatewayRegistryFixture.modules.find((moduleInfo) => moduleInfo.module === 'Gateway')!
 
     const mismatched = compareRegistryFixtureToBackendInventory(
       {
         ...gatewayRegistryFixture,
         modules: [
           {
-            ...gatewayRegistryFixture.modules[0]!,
+            ...gatewayModule,
             methods: [
               {
-                ...gatewayRegistryFixture.modules[0]!.methods[0]!,
+                ...gatewayModule.methods[0]!,
                 required_perms: ['gateway.use']
               }
             ]

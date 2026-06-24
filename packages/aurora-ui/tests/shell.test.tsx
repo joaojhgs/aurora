@@ -4,23 +4,38 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  buildAdminOverviewManifest,
+  buildCapabilityGraph,
   capabilityCatalogFixture,
+  capabilityGraphCatalogFixture,
   cloneFixture,
   evaluateRoutePolicy,
+  gatewayRegistryFixture,
+  modelRuntimeCatalogFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   toolCatalogFixture,
+  type AdminOverviewManifest,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
-  type CapabilityProviderInfo
+  type CapabilityProviderInfo,
+  type GetServicesResponse,
+  type PendingPairingEntry
 } from '@aurora/client'
 import {
+  AdminOverviewContent,
+  AdminOverviewView,
   AppShell,
   AssistantView,
+  ModelsView,
   MemoryView,
   OnboardingView,
+  PairingQueueSurface,
+  PairingQueueView,
   RouteSheet,
   buildOnboardingViewModel,
+  buildPairingAdminActionRequest,
+  buildPairingQueueModel,
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
@@ -38,8 +53,11 @@ import {
   buildAssistantVoiceModel,
   buildMemoryViewModel,
   buildShellSnapshot,
+  buildModelsViewModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  parsePermissionList,
+  pairingErrorMessage,
   routePolicyFromRoute,
   routeSheetErrorMessage,
   SettingsPermissionsView
@@ -118,6 +136,85 @@ describe('Aurora production shell', () => {
     )
     expect(markup).toContain('Gateway unavailable')
     expect(markup).toContain('AuroraClient error')
+  })
+
+  it('builds model runtime provider state from SDK catalog, capability graph, and native evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      transportKind: 'mock'
+    })
+    const model = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph,
+      nativeManifest: null,
+      loadState: 'ready'
+    })
+
+    expect(model.providerCount).toBe(4)
+    expect(model.selectedProviderId).toBe('local:Orchestrator:llama-cpp')
+    expect(model.providers.find((provider) => provider.id === 'local:Orchestrator:llama-cpp')).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        canSelect: false,
+        privacyClass: 'public'
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
+      expect.objectContaining({
+        availability: 'available-remote',
+        canSelect: false,
+        selectReason: expect.stringContaining('Backend model selection contract is not active'),
+        providerType: 'mesh',
+        routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog')
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'cloud:openai:Orchestrator')).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        privacyClass: 'sensitive',
+        canBenchmark: false
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        canSelect: false,
+        blockers: expect.arrayContaining(['native_provider_missing'])
+      })
+    )
+    expect(model.mobileLocalLightState).toBe('unsupported')
+  })
+
+  it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      transportKind: 'mock'
+    })
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const markup = renderToStaticMarkup(
+      <ModelsView client={client} initialCatalog={modelRuntimeCatalogFixture} initialGraph={graph} />
+    )
+
+    expect(markup).toContain('Models and runtime')
+    expect(markup).toContain('llama.cpp desktop')
+    expect(markup).toContain('studio-gpu peer')
+    expect(markup).toContain('OpenAI-compatible gateway')
+    expect(markup).toContain('Mobile local-light runtime')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('AdminAction model import contract is not active')
+    expect(markup).toContain('Benchmark action stays disabled')
+    expect(markup).toContain('Select: Backend model selection contract is not active')
+    expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
+    expect(markup).toContain('native_provider_missing')
+    expect(markup).toContain('Mobile local-light')
+
+    const errorMarkup = renderToStaticMarkup(
+      <ModelsView client={client} initialCatalog={null} initialError="model catalog unavailable" />
+    )
+    expect(errorMarkup).toContain('role="alert"')
+    expect(errorMarkup).toContain('model catalog unavailable')
   })
 
   it('renders settings, privacy defaults, native permissions, and AdminAction state from SDK evidence', async () => {
@@ -529,6 +626,152 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 
+  it('renders pairing queue states without exposing pairing codes', () => {
+    const route = pairingRoute()
+    const model = buildPairingQueueModel({
+      route,
+      response: {
+        pairings: [
+          pairingEntry({ request_id: 'pending-1', code: 'secret-pending-code', status: 'pending' }),
+          pairingEntry({ request_id: 'approved-1', status: 'approved', approved_by: 'admin-1', granted_permissions: ['Gateway.use'] }),
+          pairingEntry({ request_id: 'denied-1', status: 'denied', denied_by: 'admin-2', denied_reason: 'Wrong device' })
+        ],
+        total: 3,
+        expired_count: 0,
+        secrets_redacted: true
+      }
+    })
+    const markup = renderToStaticMarkup(
+      <PairingQueueSurface
+        model={model}
+        route={route}
+        adminReason="Approve expected kitchen tablet"
+        permissions="Gateway.use"
+      />
+    )
+
+    expect(model.state).toBe('pending')
+    expect(markup).toContain('Pairing queue')
+    expect(markup).toContain('Kitchen tablet')
+    expect(markup).toContain('Kitchen node / peer-kitchen')
+    expect(markup).toContain('AdminAction approve')
+    expect(markup).toContain('AdminAction deny')
+    expect(markup).toContain('redacted by UI')
+    expect(markup).not.toContain('secret-pending-code')
+  })
+
+  it('maps pairing queue loading, empty, denied, degraded, and disabled states', () => {
+    const route = pairingRoute()
+    const disabled = pairingRoute({ disabled: true, state: 'unsupported', explanation: 'No executable Auth.ListPendingPairings entry.' })
+
+    expect(buildPairingQueueModel({ route, loadState: 'loading' }).state).toBe('loading')
+    expect(buildPairingQueueModel({ route, response: emptyPairingQueue() }).description).toContain('no pending')
+    expect(buildPairingQueueModel({
+      route,
+      loadState: 'error',
+      error: new AuroraError({ code: 'permission', message: 'Forbidden' })
+    }).state).toBe('denied')
+    expect(buildPairingQueueModel({
+      route,
+      loadState: 'error',
+      error: new AuroraError({ code: 'unavailable_service', message: 'Auth down' })
+    }).state).toBe('degraded')
+    expect(buildPairingQueueModel({ route: disabled }).disabledReason).toContain('Capability unavailable')
+    expect(pairingErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+    expect(parsePermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
+  })
+
+  it('builds pairing approve and deny mutations as AdminAction requests', () => {
+    const entry = pairingEntry()
+    const approve = buildPairingAdminActionRequest(entry, 'approve', {
+      reason: 'Approve kitchen tablet',
+      permissions: 'Gateway.use Auth.use',
+      grantAdmin: false
+    })
+    const deny = buildPairingAdminActionRequest(entry, 'deny', {
+      reason: 'Wrong peer'
+    })
+
+    expect(approve).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        reauthConfirmed: true,
+        reason: 'Approve kitchen tablet',
+        affectedResources: ['pairing:pair-1', 'peer:peer-kitchen', 'device:Kitchen tablet'],
+        payload: {
+          code: '123456',
+          permissions: ['Gateway.use', 'Auth.use'],
+          is_admin: false
+        }
+      })
+    )
+    expect(deny).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: {
+          code: '123456',
+          reason: 'Wrong peer'
+        }
+      })
+    )
+  })
+
+  it('renders pairing view initial loading state from an enabled SDK route', () => {
+    const markup = renderToStaticMarkup(
+      <PairingQueueView client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={pairingRoute()} />
+    )
+
+    expect(markup).toContain('Loading pairing queue')
+    expect(markup).toContain('AdminAction required for approve/deny')
+  })
+
+  it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
+    const markup = renderToStaticMarkup(
+      await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
+    )
+
+    expect(markup).toContain('Admin overview')
+    expect(markup).toContain('Deployment')
+    expect(markup).toContain('Service mode')
+    expect(markup).toContain('Health')
+    expect(markup).toContain('Gateway')
+    expect(markup).toContain('Capabilities')
+    expect(markup).toContain('Activity')
+    expect(markup).toContain('AdminAction controller')
+    expect(markup).toContain('Manage/admin-critical operations')
+    expect(markup).toContain('privacy-blocked')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('keeps denied, stale, empty, and internal-only admin states visible with repair links', () => {
+    const manifest = adminOverviewStateMatrixManifest()
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="mock" />)
+
+    expect(markup).toContain('denied')
+    expect(markup).toContain('stale')
+    expect(markup).toContain('Capabilities')
+    expect(markup).toContain('Internal-only methods')
+    expect(markup).toContain('Gateway.InternalOnly')
+    expect(markup).toContain('Config.Get')
+    expect(markup).toContain('DB.RAGSearch')
+    expect(markup).toContain('AdminAction draft/confirm/audit is required')
+  })
+
+  it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
+    const markup = renderToStaticMarkup(
+      await AdminOverviewView({
+        client: new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
+      })
+    )
+
+    expect(markup).toContain('Service overview unavailable')
+    expect(markup).toContain('registry offline')
+    expect(markup).toContain('Open diagnostics')
+    expect(markup).toContain('AuroraClient could not load')
+  })
+
   it('keeps assistant stop capability disabled until Orchestrator.Interrupt evidence exists', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
@@ -907,6 +1150,65 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
   return match
 }
 
+function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
+  return {
+    item: {
+      id: 'pairing',
+      label: 'Pairing',
+      href: '/admin/pairing',
+      capabilityModule: 'Auth',
+      capabilityMethod: 'ListPendingPairings',
+      methodType: 'manage',
+      privacyClass: 'credential',
+      fallbackState: 'unsupported',
+      adminGated: true,
+      expectedTask: 'ADM-011'
+    },
+    state: 'available-local',
+    explanation: 'Backend catalog reports Auth.ListPendingPairings as routeable.',
+    providerLabel: 'local / Auth.ListPendingPairings',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['capability-catalog'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: true,
+    ...overrides
+  } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
+}
+
+function emptyPairingQueue() {
+  return {
+    pairings: [],
+    total: 0,
+    expired_count: 0,
+    secrets_redacted: true
+  }
+}
+
+function pairingEntry(overrides: Partial<PendingPairingEntry> = {}): PendingPairingEntry {
+  return {
+    request_id: 'pair-1',
+    code: '123456',
+    device_name: 'Kitchen tablet',
+    client_ip: '192.0.2.10',
+    status: 'pending',
+    expires_at: '2099-01-01T00:00:00Z',
+    created_at: '2026-06-24T12:00:00Z',
+    remote_peer_id: 'peer-kitchen',
+    remote_node_name: 'Kitchen node',
+    approved_by: null,
+    denied_by: null,
+    denied_reason: '',
+    granted_permissions: [],
+    granted_is_admin: false,
+    ...overrides
+  }
+}
+
 function streamUpdate(textDelta: string) {
   return {
     kind: 'delta' as const,
@@ -1205,6 +1507,51 @@ function action(
     freshness: { ...providerInfo.freshness },
     ...overrides
   }
+}
+
+function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
+  const catalog = stateMatrixCatalog()
+  const services: GetServicesResponse = {
+    mode: 'processes',
+    services: [
+      {
+        module: 'Gateway',
+        version: '0.1.0',
+        summary: 'Gateway service',
+        capabilities: ['registry'],
+        status: 'healthy',
+        method_count: 4,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'gateway-1'
+      },
+      {
+        module: 'Config',
+        version: '0.1.0',
+        summary: 'Config service',
+        capabilities: ['config'],
+        status: 'denied',
+        method_count: 1,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'config-1'
+      },
+      {
+        module: 'DB',
+        version: '0.1.0',
+        summary: 'DB service',
+        capabilities: ['rag'],
+        status: 'stale',
+        method_count: 1,
+        last_seen: '2026-06-19T00:00:00Z',
+        instance_id: 'db-1'
+      }
+    ]
+  }
+  return buildAdminOverviewManifest({
+    registry: gatewayRegistryFixture,
+    services,
+    capabilityCatalog: catalog,
+    generatedAt: '2026-06-19T00:00:00Z'
+  })
 }
 
 function allowedRouteEvaluation() {
