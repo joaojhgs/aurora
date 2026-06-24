@@ -12,7 +12,15 @@ import {
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
 import { MemoryClient } from './memory.js'
-import { AUTH_METHODS, describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
+import {
+  AUTH_METHODS,
+  describeRegistry,
+  GATEWAY_METHODS,
+  ORCHESTRATOR_METHODS,
+  ORCHESTRATOR_MODEL_METHODS,
+  TOOLING_METHODS,
+  routePath
+} from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
@@ -59,6 +67,13 @@ import type {
   GetServicesResponse,
   GatewayBuiltinRouteDescriptor,
   MethodDescriptor,
+  ModelRuntimeCatalogRequest,
+  ModelRuntimeCatalogResponse,
+  ModelRuntimeOperationRequest,
+  ModelRuntimeOperationResponse,
+  ModelRuntimeOperationStatusRequest,
+  ModelRuntimeRequest,
+  ModelRuntimeResponse,
   NativeCapabilityManifest,
   OrchestratorProcessRequest,
   OrchestratorResponse,
@@ -94,6 +109,7 @@ export class AuroraClient {
   readonly permissions: PermissionClient
   readonly routes: RouteClient
   readonly assistant: AssistantClient
+  readonly models: ModelRuntimeClient
   readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
@@ -114,6 +130,7 @@ export class AuroraClient {
     this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
     this.assistant = new AssistantClient(this)
+    this.models = new ModelRuntimeClient(this)
     this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
@@ -728,6 +745,60 @@ export class ToolClient {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.executeTool, payload, {
       path: routePath('Tooling', 'ExecuteTool')
     })
+  }
+}
+
+export class ModelRuntimeClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  listCatalog(request: ModelRuntimeCatalogRequest = {}): Promise<ModelRuntimeCatalogResponse> {
+    return this.client.request<ModelRuntimeCatalogResponse, ModelRuntimeCatalogRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getCatalog,
+      request,
+      { path: routePath('Orchestrator', 'GetModelCatalog') }
+    )
+  }
+
+  getRuntime(request: ModelRuntimeRequest = {}): Promise<ModelRuntimeResponse> {
+    return this.client.request<ModelRuntimeResponse, ModelRuntimeRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getRuntime,
+      request,
+      { path: routePath('Orchestrator', 'GetModelRuntime') }
+    )
+  }
+
+  importModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.importModel,
+      request,
+      { path: routePath('Orchestrator', 'ImportModel') }
+    )
+  }
+
+  downloadModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.downloadModel,
+      request,
+      { path: routePath('Orchestrator', 'DownloadModel') }
+    )
+  }
+
+  benchmarkModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.benchmarkModel,
+      request,
+      { path: routePath('Orchestrator', 'BenchmarkModel') }
+    )
+  }
+
+  getOperation(
+    request: ModelRuntimeOperationStatusRequest
+  ): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationStatusRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getOperation,
+      request,
+      { path: routePath('Orchestrator', 'GetModelOperation') }
+    )
   }
 }
 
