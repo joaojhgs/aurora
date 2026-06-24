@@ -11,6 +11,7 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
+import { MemoryClient } from './memory.js'
 import {
   AUTH_METHODS,
   describeRegistry,
@@ -109,6 +110,7 @@ export class AuroraClient {
   readonly routes: RouteClient
   readonly assistant: AssistantClient
   readonly models: ModelRuntimeClient
+  readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
   readonly admin: AdminActionClient
@@ -129,6 +131,7 @@ export class AuroraClient {
     this.routes = new RouteClient(this)
     this.assistant = new AssistantClient(this)
     this.models = new ModelRuntimeClient(this)
+    this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
     this.admin = new AdminActionClient(this)

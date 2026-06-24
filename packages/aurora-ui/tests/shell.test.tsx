@@ -22,6 +22,7 @@ import {
   AppShell,
   AssistantView,
   ModelsView,
+  MemoryView,
   OnboardingView,
   RouteSheet,
   buildOnboardingViewModel,
@@ -33,15 +34,21 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  contextIngestOutcomeIndex,
   isAcceptedContextStatus,
+  mapContextIngestOutcomesByPendingIndex,
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
+  buildAssistantVoiceModel,
+  buildMemoryViewModel,
   buildShellSnapshot,
   buildModelsViewModel,
+  buildSettingsPermissionsModel,
   errorShellSnapshot,
+  routePolicyFromRoute,
   routeSheetErrorMessage,
-  routePolicyFromRoute
+  SettingsPermissionsView
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -194,6 +201,86 @@ describe('Aurora production shell', () => {
     expect(errorMarkup).toContain('model catalog unavailable')
   })
 
+  it('renders settings, privacy defaults, native permissions, and AdminAction state from SDK evidence', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.loadState).toBe('ready')
+    expect(model.privacyControls.map((control) => control.id)).toEqual([
+      'prefer-local',
+      'explicit-selector',
+      'block-explicit-fallback'
+    ])
+    expect(model.privacyControls.some((control) => control.requiresAdminAction)).toBe(true)
+    expect(model.nativePermissions.length).toBeGreaterThan(0)
+    expect(model.nativePermissions.some((permission) => permission.state === 'privacy-blocked')).toBe(true)
+    expect(model.routeDefaults.map((item) => item.id)).toContain('denied-routes')
+
+    expect(markup).toContain('Settings and permissions')
+    expect(markup).toContain('Privacy defaults')
+    expect(markup).toContain('Native permissions')
+    expect(markup).toContain('Route and fallback policy')
+    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('Request unavailable')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('maps settings state matrix for denied, degraded, native-unavailable, optimistic and rollback/error states', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => stateMatrixCatalog())
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'android',
+      permissions: {
+        'aurora.microphone': false,
+        'aurora.notifications': true
+      },
+      capabilities: {
+        'aurora.microphone': false,
+        'aurora.notifications': true
+      }
+    }))
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    Object.assign(route(snapshot, 'settings'), {
+      state: 'available-local',
+      disabled: false,
+      requiresAdminAction: false,
+      blockers: [],
+      providerLabel: 'local / Config.Get'
+    })
+    Object.assign(route(snapshot, 'assistant'), {
+      state: 'available-remote',
+      disabled: false,
+      providerLabel: 'remote:studio / Orchestrator.ExternalUserInput'
+    })
+    const model = buildSettingsPermissionsModel(snapshot)
+
+    expect(model.routeDefaults.find((item) => item.id === 'degraded-fallback')?.state).toBe('degraded')
+    expect(model.routeDefaults.find((item) => item.id === 'denied-routes')?.state).toBe('denied')
+    expect(model.privacyControls.map((control) => control.mutationState)).toContain('optimistic')
+    expect(model.privacyControls.map((control) => control.mutationState)).toContain('rollback-error')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.microphone')?.state).toBe('privacy-blocked')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.notifications')?.state).toBe('available-local')
+
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    expect(markup).toContain('Request unavailable')
+    expect(markup).toContain('Granted')
+    expect(markup).toContain('Fallback is visible as degraded capability evidence.')
+  })
+
+  it('keeps settings screen honest for SDK errors and empty native manifests', () => {
+    const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.error).toBe('Gateway unavailable')
+    expect(model.nativePermissions).toEqual([])
+    expect(model.privacyControls.every((control) => control.disabled)).toBe(true)
+    expect(markup).toContain('Gateway unavailable')
+    expect(markup).toContain('No native permission manifest is available')
+    expect(markup).toContain('AdminAction required')
+  })
+
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
@@ -206,10 +293,23 @@ describe('Aurora production shell', () => {
       routeable: true
     }
     const markup = renderToStaticMarkup(
-      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={enabledRoute} />
+      <AssistantView
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        route={enabledRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        nativeAvailable={snapshot.nativeAvailable}
+        nativePlatform={snapshot.nativePlatform}
+        nativePermissions={snapshot.nativePermissions}
+        nativeCapabilities={snapshot.nativeCapabilities}
+      />
     )
 
     expect(markup).toContain('Text chat')
+    expect(markup).toContain('Voice modes')
+    expect(markup).toContain('Browser capture')
+    expect(markup).toContain('Native capture')
+    expect(markup).toContain('Audio route and consent')
+    expect(markup).toContain('Voice event stream')
     expect(markup).toContain('local / Orchestrator.ExternalUserInput')
     expect(markup).toContain('model pending')
     expect(markup).toContain('personal')
@@ -224,10 +324,130 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('0 context ready')
 
     const disabledMarkup = renderToStaticMarkup(
-      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={assistantRoute} />
+      <AssistantView
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        route={assistantRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+      />
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('builds assistant voice routes from capability graph and native manifest evidence', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'tauri-desktop',
+      permissions: { microphone: true },
+      capabilities: { voiceCapture: true }
+    }))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+
+    expect(snapshot.assistantVoiceRoutes.transcription.state).toBe('available-local')
+    expect(snapshot.assistantVoiceRoutes.ttsSynthesize.state).toBe('available-remote')
+    expect(snapshot.assistantVoiceRoutes.wakeControl.state).toBe('available-local')
+
+    const model = buildAssistantVoiceModel({
+      client,
+      route: enabledRoute(route(snapshot, 'assistant')),
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      nativeAvailable: snapshot.nativeAvailable,
+      nativePlatform: snapshot.nativePlatform,
+      nativePermissions: snapshot.nativePermissions,
+      nativeCapabilities: snapshot.nativeCapabilities,
+      captureStatus: 'listening',
+      consentGranted: true
+    })
+
+    expect(model.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('available-local')
+    expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
+    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('typed audio session')
+    expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
+  })
+
+  it('keeps remote STT consent-gated, denial visible, and revoked consent blocking dispatch', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-stt'))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const assistantRoute = enabledRoute(route(snapshot, 'assistant'))
+
+    const noConsent = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: false
+    })
+    expect(noConsent.controls.find((control) => control.id === 'remote-transcription')?.state).toBe('privacy-blocked')
+    expect(noConsent.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Grant session consent')
+
+    const granted = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: true
+    })
+    expect(granted.sessionTtl).toBe('current UI session')
+
+    const revoked = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      captureStatus: 'listening',
+      consentGranted: false
+    })
+    expect(revoked.sessionTtl).toBe('consent not granted')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-denied'))
+    const deniedSnapshot = await buildShellSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.assistantVoiceRoutes.transcription.state).toBe('denied')
+  })
+
+  it('covers peer disconnect, local permission loss, and mobile foreground-only voice limits', async () => {
+    const staleTransport = new MockAuroraTransport()
+    staleTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('stale-remote'))
+    const staleClient = new AuroraClient({ transport: staleTransport })
+    const staleSnapshot = await buildShellSnapshot(staleClient)
+    const staleModel = buildAssistantVoiceModel({
+      client: staleClient,
+      route: enabledRoute(route(staleSnapshot, 'assistant')),
+      voiceRoutes: staleSnapshot.assistantVoiceRoutes,
+      captureStatus: 'permission-denied',
+      consentGranted: true
+    })
+
+    expect(staleSnapshot.assistantVoiceRoutes.transcription.state).toBe('stale')
+    expect(staleModel.events.find((event) => event.id === 'peer-disconnect')?.state).toBe('stale')
+    expect(staleModel.events.find((event) => event.id === 'permission-loss')?.state).toBe('denied')
+
+    const mobileTransport = new MockAuroraTransport()
+    mobileTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
+    mobileTransport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: { microphone: false },
+      capabilities: { voiceCapture: false }
+    }))
+    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const mobileSnapshot = await buildShellSnapshot(mobileClient)
+    const mobileModel = buildAssistantVoiceModel({
+      client: mobileClient,
+      route: enabledRoute(route(mobileSnapshot, 'assistant')),
+      voiceRoutes: mobileSnapshot.assistantVoiceRoutes,
+      nativeAvailable: mobileSnapshot.nativeAvailable,
+      nativePlatform: mobileSnapshot.nativePlatform,
+      nativePermissions: mobileSnapshot.nativePermissions,
+      nativeCapabilities: mobileSnapshot.nativeCapabilities,
+      captureStatus: 'idle',
+      consentGranted: false
+    })
+
+    expect(mobileModel.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('privacy-blocked')
+    expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
   })
 
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
@@ -275,7 +495,50 @@ describe('Aurora production shell', () => {
     expect(isAcceptedContextStatus('unsupported')).toBe(false)
   })
 
+  it('maps production context ingest item ids back to pending attachments', () => {
+    const outcomes = mapContextIngestOutcomesByPendingIndex({
+      accepted_items: [
+        {
+          item_id: 'context-0-abc123def456',
+          kind: 'url',
+          status: 'accepted',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 64,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: null,
+          message: 'URL accepted'
+        }
+      ],
+      rejected_items: [
+        {
+          item_id: 'context-1-fedcba654321',
+          kind: 'image',
+          status: 'unsupported',
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          accepted_bytes: 0,
+          stored_namespace: null,
+          stored_key: null,
+          redacted: false,
+          redaction_reasons: [],
+          reason_code: 'unsupported_type',
+          message: 'Images are not supported by this route.'
+        }
+      ]
+    })
 
+    expect(contextIngestOutcomeIndex('context-0-abc123def456')).toBe(0)
+    expect(contextIngestOutcomeIndex('context-1-fedcba654321')).toBe(1)
+    expect(contextIngestOutcomeIndex('mock-context-2')).toBe(2)
+    expect(contextIngestOutcomeIndex('context-abc123def456')).toBeNull()
+    expect(outcomes.get(0)?.status).toBe('accepted')
+    expect(outcomes.get(1)?.status).toBe('unsupported')
+    expect(outcomes.get(1)?.reason_code).toBe('unsupported_type')
+  })
 
   it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
@@ -631,6 +894,92 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('The SDK evaluates where this prompt can run before dispatch.')
     expect(markup).toContain('Loading route policy from AuroraClient')
   })
+
+  it('renders memory namespaces, conversation history, provenance, and AdminAction-gated controls', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const model = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-studio-gpu.memories',
+      query: 'mesh pairing'
+    })
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
+
+    expect(model.selectedNamespace?.kind).toBe('remote-peer')
+    expect(model.searchDecision).toBe('allowed')
+    expect(model.searchItems[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
+    expect(markup).toContain('Remote peer: peer-studio-gpu.memories')
+    expect(markup).toContain('Search hit for &quot;mesh pairing&quot;')
+    expect(markup).toContain('redacted')
+    expect(markup).toContain('corr-memory-remote')
+    expect(markup).toContain('Conversation history')
+    expect(markup).toContain('Summarize recent mesh pairing failures')
+    expect(markup).toContain('Export snapshot unsupported')
+    expect(markup).toContain('Delete record unsupported')
+  })
+
+  it('keeps local export/import/delete controls disabled behind AdminAction policy', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const memoryModel = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'main.memories',
+      query: 'recent'
+    })
+    const ragModel = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'main.rag',
+      query: 'context'
+    })
+
+    expect(memoryModel.actions.export.supported).toBe(true)
+    expect(memoryModel.actions.export.disabled).toBe(true)
+    expect(memoryModel.actions.export.reason).toContain('AdminAction')
+    expect(memoryModel.actions.delete.supported).toBe(true)
+    expect(memoryModel.actions.delete.disabled).toBe(true)
+    expect(memoryModel.actions.delete.reason).toContain('AdminAction')
+    expect(ragModel.actions.importPreview.supported).toBe(true)
+    expect(ragModel.actions.importPreview.disabled).toBe(true)
+    expect(ragModel.actions.importPreview.reason).toContain('AdminAction')
+  })
+
+  it('shows denied and stale memory namespace states without labeling them local', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const denied = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-denied.secret',
+      query: 'secrets'
+    })
+    const stale = await buildMemoryViewModel(client, memoryRoute, {
+      namespace: 'peer-cabin-node.archive',
+      query: 'archive'
+    })
+
+    expect(denied.selectedNamespace?.kind).toBe('denied')
+    expect(denied.searchDecision).toBe('denied')
+    expect(denied.denialReason).toContain('denied')
+    expect(stale.selectedNamespace?.kind).toBe('stale')
+    expect(stale.searchDecision).toBe('unavailable')
+
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={denied} />)
+    expect(markup).toContain('denied: peer-denied.secret')
+    expect(markup).not.toContain('Local memory: peer-denied.secret')
+    expect(markup).toContain('remote namespace denied by policy')
+  })
+
+  it('keeps memory SDK errors visible as route-scoped disabled state', async () => {
+    const transport = new MockAuroraTransport().fail('DB.RAGListNamespaces', 'permission', 'DB permission denied')
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const model = await buildMemoryViewModel(client, memoryRoute, { query: 'anything' })
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
+
+    expect(model.loadState).toBe('error')
+    expect(model.error).toContain('denied')
+    expect(markup).toContain('Memory request denied by authentication or permissions')
+    expect(markup).toContain('No namespace reported')
+  })
 })
 
 function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: string) {
@@ -680,6 +1029,139 @@ function enabledRoute(match: ReturnType<typeof route>) {
     blockers: [],
     routeable: true
   }
+}
+
+function voiceModeCatalog(variant: 'local' | 'remote-stt' | 'remote-denied' | 'stale-remote' = 'local'): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const localTranscription = provider(baseProvider, {
+    provider_id: 'local:Transcription',
+    module: 'Transcription',
+    service_instance_id: 'transcription-local',
+    reason: 'Local transcription provider is available.'
+  })
+  const remoteTranscription = provider(baseProvider, {
+    provider_id: 'mesh:studio:Transcription',
+    peer_id: 'studio-peer',
+    provider_kind: 'remote',
+    node_name: 'Studio node',
+    module: 'Transcription',
+    service_instance_id: 'transcription-studio',
+    reason: 'Remote transcription provider is eligible.'
+  })
+  const deniedTranscription = provider(remoteTranscription, {
+    eligible: false,
+    reason_code: 'policy_denied',
+    reason: 'Remote transcription denied by peer policy.',
+    policy: {
+      ...remoteTranscription.policy,
+      denial_reasons: ['policy_denied'],
+      mesh_visible: true,
+      trust_tier: 'paired'
+    }
+  })
+  const staleTranscription = provider(remoteTranscription, {
+    eligible: false,
+    status: 'stale',
+    reason_code: 'peer_disconnect',
+    reason: 'Remote transcription peer disconnected.',
+    freshness: {
+      ...remoteTranscription.freshness,
+      stale: true,
+      last_probe_age_s: 900
+    }
+  })
+  const wake = provider(baseProvider, {
+    provider_id: 'local:WakeWord',
+    module: 'WakeWord',
+    service_instance_id: 'wake-local',
+    reason: 'Foreground wake control is available locally.'
+  })
+  const ttsRemote = provider(baseProvider, {
+    provider_id: 'mesh:kitchen:TTS',
+    peer_id: 'kitchen-peer',
+    provider_kind: 'remote',
+    node_name: 'Kitchen node',
+    module: 'TTS',
+    service_instance_id: 'tts-kitchen',
+    reason: 'Remote TTS synthesis provider is eligible.'
+  })
+  const transcriptionProvider = variant === 'remote-stt'
+    ? remoteTranscription
+    : variant === 'remote-denied'
+      ? deniedTranscription
+      : variant === 'stale-remote'
+        ? staleTranscription
+        : localTranscription
+
+  catalog.providers = [transcriptionProvider, wake, ttsRemote]
+  catalog.actions = [
+    action(baseAction, transcriptionProvider, {
+      action_id: `${transcriptionProvider.provider_id}:Transcribe`,
+      method: 'Transcribe',
+      bindability: variant === 'remote-denied' ? 'denied' : variant === 'stale-remote' ? 'unavailable' : 'available',
+      policy: {
+        ...transcriptionProvider.policy,
+        required_permissions: ['Transcription.use'],
+        resource_scope: 'raw-audio',
+        mesh_visible: transcriptionProvider.provider_kind !== 'local',
+        trust_tier: transcriptionProvider.provider_kind === 'local' ? 'local' : 'paired'
+      },
+      freshness: transcriptionProvider.freshness
+    }),
+    action(baseAction, wake, {
+      action_id: 'local:WakeWord:ProcessAudio',
+      method: 'ProcessAudio',
+      policy: {
+        ...wake.policy,
+        required_permissions: ['WakeWord.use'],
+        resource_scope: 'raw-audio'
+      }
+    }),
+    action(baseAction, wake, {
+      action_id: 'local:WakeWord:Control',
+      method: 'Control',
+      policy: {
+        ...wake.policy,
+        required_permissions: ['WakeWord.use'],
+        resource_scope: 'raw-audio'
+      }
+    }),
+    action(baseAction, ttsRemote, {
+      action_id: 'mesh:kitchen:TTS:Synthesize',
+      method: 'Synthesize',
+      policy: {
+        ...ttsRemote.policy,
+        required_permissions: ['TTS.use'],
+        mesh_visible: true,
+        trust_tier: 'paired'
+      }
+    }),
+    action(baseAction, ttsRemote, {
+      action_id: 'mesh:kitchen:TTS:Stop',
+      method: 'Stop',
+      policy: {
+        ...ttsRemote.policy,
+        required_permissions: ['TTS.use'],
+        mesh_visible: true,
+        trust_tier: 'paired'
+      }
+    })
+  ]
+  catalog.provider_index = {
+    Transcription: [transcriptionProvider.provider_id],
+    WakeWord: [wake.provider_id],
+    TTS: [ttsRemote.provider_id]
+  }
+  catalog.action_index = {
+    'Transcription.Transcribe': [`${transcriptionProvider.provider_id}:Transcribe`],
+    'WakeWord.ProcessAudio': ['local:WakeWord:ProcessAudio'],
+    'WakeWord.Control': ['local:WakeWord:Control'],
+    'TTS.Synthesize': ['mesh:kitchen:TTS:Synthesize'],
+    'TTS.Stop': ['mesh:kitchen:TTS:Stop']
+  }
+  return catalog
 }
 
 function stateMatrixCatalog(): CapabilityCatalogResponse {

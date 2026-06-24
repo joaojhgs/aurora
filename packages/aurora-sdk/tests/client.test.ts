@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   AuroraError,
+  DB_METHODS,
   HttpGatewayTransport,
   MeshP2PTransport,
   MockAuroraTransport,
@@ -2509,6 +2510,31 @@ describe('AuroraClient assistant namespace', () => {
     if (result.ok) throw new Error('expected empty prompt failure')
     expect(result.error).toBeInstanceOf(AuroraError)
     expect(result.error.code).toBe('validation')
+  })
+})
+
+describe('AuroraClient memory namespace', () => {
+  it('uses typed DB/RAG methods with provenance and policy responses', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const namespaces = await client.memory.listNamespaces({ include_remote: true, include_unavailable: true })
+    const messages = await client.memory.listMessages({ limit: 2 })
+    const search = await client.memory.search({
+      namespace: 'peer-studio-gpu.memories',
+      query: 'mesh pairing'
+    })
+    const denied = await client.memory.search({
+      namespace: 'peer-denied.secret',
+      query: 'secret'
+    })
+
+    expect(namespaces.ok).toBe(true)
+    expect(namespaces.ok && namespaces.data.namespaces.some((namespace) => namespace.namespace === 'peer-studio-gpu.memories')).toBe(true)
+    expect(messages.ok && messages.data.messages[0]?.content).toContain('mesh pairing')
+    expect(search.ok && search.audit.method).toBe(DB_METHODS.ragSearchRemote)
+    expect(search.ok && search.data.items[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
+    expect(search.ok && search.data.items[0]?.redacted).toBe(true)
+    expect(denied.ok && denied.data.decision).toBe('denied')
+    expect(denied.ok && denied.data.denial_reason).toContain('denied')
   })
 })
 

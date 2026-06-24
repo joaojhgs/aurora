@@ -5,7 +5,8 @@ import {
   type AuroraEventSubscription,
   type AuroraStreamRequest
 } from './events.js'
-import { cloneFixture, defaultMockAuroraFixtures, type MockAuroraFixtureSet } from './fixtures.js'
+import { cloneFixture, defaultMockAuroraFixtures, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
+import type { DBRAGSearchRemoteRequest } from './memory.js'
 import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
 import type {
   AttachmentContextIngestRequest,
@@ -68,6 +69,12 @@ export class MockAuroraTransport implements AuroraTransport {
         secrets_redacted: fixtures.modelRuntimeCatalog.secrets_redacted
       }))
       .register('Orchestrator.IngestContext', (request) => mockIngestContext(request.payload))
+      .register('DB.GetMessages', () => cloneFixture(fixtures.memoryMessages))
+      .register('DB.RAGListNamespaces', () => cloneFixture(fixtures.memoryNamespaces))
+      .register('DB.RAGSearchRemote', (request) => memorySearchFixture(request.payload as DBRAGSearchRemoteRequest))
+      .register('DB.RAGExportNamespace', () => cloneFixture(fixtures.memoryExport))
+      .register('DB.RAGImportNamespace', () => cloneFixture(fixtures.memoryImport))
+      .register('DB.RAGDelete', () => ({ success: true }))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
         session_id: mockSessionId(request.payload),

@@ -14,6 +14,16 @@ import type {
   RouteExplainResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
+import type {
+  DBGetMessagesResponse,
+  DBRAGExportNamespaceResponse,
+  DBRAGExportRecord,
+  DBRAGImportNamespaceResponse,
+  DBRAGListNamespacesResponse,
+  DBRAGProvenance,
+  DBRAGSearchRemoteResponse,
+  DBRAGSearchRemoteRequest
+} from './memory.js'
 import { describeBackendInventory, describeRegistry } from './descriptors.js'
 
 export const emptyRegistryFixture: GetRegistryResponse = {
@@ -1722,6 +1732,251 @@ export const toolCatalogFixture = {
   secrets_redacted: true
 } as const
 
+const memoryProvenanceFixture: DBRAGProvenance = {
+  source_peer_id: 'local-peer',
+  owner_peer_id: 'local-peer',
+  namespace: 'main.memories',
+  record_id: 'memory-001',
+  origin_principal_id: 'user-local',
+  created_at: '2026-06-19T00:00:00Z',
+  updated_at: '2026-06-19T00:05:00Z',
+  schema_version: 'rag-provenance.v1',
+  policy_decision_id: 'policy-local-memory',
+  correlation_id: 'corr-memory-local',
+  imported_at: null,
+  import_operation_id: null,
+  tombstone: false,
+  deleted_at: null,
+  deleted_by: null,
+  delete_reason: null
+}
+
+const remoteMemoryProvenanceFixture: DBRAGProvenance = {
+  ...memoryProvenanceFixture,
+  source_peer_id: 'peer-studio-gpu',
+  owner_peer_id: 'peer-studio-gpu',
+  namespace: 'peer-studio-gpu.memories',
+  record_id: 'remote-memory-002',
+  origin_principal_id: 'remote-user',
+  policy_decision_id: 'policy-remote-memory',
+  correlation_id: 'corr-memory-remote'
+}
+
+export const memoryMessagesFixture: DBGetMessagesResponse = {
+  total: 2,
+  has_more: false,
+  messages: [
+    {
+      id: 'conversation-001',
+      role: 'user',
+      content: 'Summarize recent mesh pairing failures.',
+      message_type: 'TEXT',
+      created_at: '2026-06-19T00:00:00Z',
+      privacy_class: 'personal',
+      source: 'DB.GetMessages'
+    },
+    {
+      id: 'conversation-002',
+      role: 'assistant',
+      content: 'Mesh pairing failures were denied by explicit selector policy.',
+      message_type: 'TEXT',
+      created_at: '2026-06-19T00:01:00Z',
+      privacy_class: 'personal',
+      source: 'DB.GetMessages'
+    }
+  ]
+}
+
+export const memoryNamespacesFixture: DBRAGListNamespacesResponse = {
+  namespaces: [
+    {
+      namespace: 'main.memories',
+      source_peer_id: 'local-peer',
+      owner_peer_id: 'local-peer',
+      provider_peer_id: 'local-peer',
+      availability: 'available',
+      record_count: 42,
+      embedding_model: 'mock-local-embeddings',
+      schema_version: 'rag-provenance.v1',
+      freshness: 'fresh',
+      policy: {
+        sharing_mode: 'remote_query',
+        privacy_class: 'personal',
+        allowed_operations: ['search', 'export', 'delete'],
+        explicit_selector_required: false,
+        export_supported: true,
+        import_supported: false,
+        delete_supported: true,
+        requires_admin_approval: true,
+        denial_reason: null
+      }
+    },
+    {
+      namespace: 'main.rag',
+      source_peer_id: 'local-peer',
+      owner_peer_id: 'local-peer',
+      provider_peer_id: 'local-peer',
+      availability: 'available',
+      record_count: 12,
+      embedding_model: 'mock-local-embeddings',
+      schema_version: 'rag-provenance.v1',
+      freshness: 'fresh',
+      policy: {
+        sharing_mode: 'export_import',
+        privacy_class: 'sensitive',
+        allowed_operations: ['search', 'export', 'import'],
+        explicit_selector_required: false,
+        export_supported: true,
+        import_supported: true,
+        delete_supported: false,
+        requires_admin_approval: true,
+        denial_reason: null
+      }
+    },
+    {
+      namespace: 'peer-studio-gpu.memories',
+      source_peer_id: 'peer-studio-gpu',
+      owner_peer_id: 'peer-studio-gpu',
+      provider_peer_id: 'peer-studio-gpu',
+      availability: 'available',
+      record_count: 7,
+      embedding_model: 'mock-remote-embeddings',
+      schema_version: 'rag-provenance.v1',
+      freshness: 'last probe 4s ago',
+      policy: {
+        sharing_mode: 'remote_query',
+        privacy_class: 'personal',
+        allowed_operations: ['search'],
+        explicit_selector_required: true,
+        export_supported: false,
+        import_supported: false,
+        delete_supported: false,
+        requires_admin_approval: false,
+        denial_reason: null
+      }
+    },
+    {
+      namespace: 'peer-cabin-node.archive',
+      source_peer_id: 'peer-cabin-node',
+      owner_peer_id: 'peer-cabin-node',
+      provider_peer_id: 'peer-cabin-node',
+      availability: 'stale',
+      record_count: null,
+      embedding_model: 'legacy-embedding-v0',
+      schema_version: 'rag-provenance.v1',
+      freshness: 'last probe 900s ago',
+      policy: {
+        sharing_mode: 'remote_query',
+        privacy_class: 'sensitive',
+        allowed_operations: [],
+        explicit_selector_required: true,
+        export_supported: false,
+        import_supported: false,
+        delete_supported: false,
+        requires_admin_approval: false,
+        denial_reason: 'stale peer'
+      }
+    },
+    {
+      namespace: 'peer-denied.secret',
+      source_peer_id: 'peer-denied',
+      owner_peer_id: 'peer-denied',
+      provider_peer_id: 'peer-denied',
+      availability: 'denied',
+      record_count: null,
+      embedding_model: null,
+      schema_version: 'rag-provenance.v1',
+      freshness: null,
+      policy: {
+        sharing_mode: 'never',
+        privacy_class: 'secret',
+        allowed_operations: [],
+        explicit_selector_required: true,
+        export_supported: false,
+        import_supported: false,
+        delete_supported: false,
+        requires_admin_approval: false,
+        denial_reason: 'remote namespace denied by policy'
+      }
+    }
+  ]
+}
+
+export function memorySearchFixture(request: DBRAGSearchRemoteRequest): DBRAGSearchRemoteResponse {
+  if (request.namespace.includes('denied')) {
+    return {
+      decision: 'denied',
+      items: [],
+      denial_reason: 'remote namespace denied by policy',
+      policy_decision_id: 'policy-denied-memory',
+      correlation_id: request.correlation_id ?? 'corr-memory-denied'
+    }
+  }
+  if (request.namespace.includes('cabin')) {
+    return {
+      decision: 'unavailable',
+      items: [],
+      denial_reason: 'stale peer',
+      policy_decision_id: 'policy-stale-memory',
+      correlation_id: request.correlation_id ?? 'corr-memory-stale'
+    }
+  }
+  const provenance = request.namespace.includes('peer-studio')
+    ? remoteMemoryProvenanceFixture
+    : memoryProvenanceFixture
+  return {
+    decision: 'allowed',
+    denial_reason: null,
+    policy_decision_id: provenance.policy_decision_id,
+    correlation_id: request.correlation_id ?? provenance.correlation_id,
+    items: [
+      {
+        key: provenance.record_id,
+        namespace: request.namespace,
+        value: request.query
+          ? `Search hit for "${request.query}" from ${request.namespace}`
+          : `Recent memory from ${request.namespace}`,
+        search_score: 0.92,
+        provenance: { ...provenance, namespace: request.namespace },
+        redacted: request.namespace.includes('peer-studio'),
+        redaction_reasons: request.namespace.includes('peer-studio') ? ['remote snippet redacted'] : []
+      }
+    ]
+  }
+}
+
+const memoryExportRecordFixture: DBRAGExportRecord = {
+  key: 'memory-001',
+  value: 'Redacted export preview',
+  provenance: memoryProvenanceFixture,
+  redacted: true,
+  redaction_reasons: ['mock fixture redacts export payloads']
+}
+
+export const memoryExportFixture: DBRAGExportNamespaceResponse = {
+  decision: 'allowed',
+  namespace: 'main.memories',
+  source_peer_id: 'local-peer',
+  owner_peer_id: 'local-peer',
+  schema_version: 'rag-export.v1',
+  records: [memoryExportRecordFixture],
+  tombstone_count: 1,
+  denial_reason: null,
+  policy_decision_id: 'policy-local-memory',
+  correlation_id: 'corr-memory-export'
+}
+
+export const memoryImportFixture: DBRAGImportNamespaceResponse = {
+  decision: 'allowed',
+  imported_count: 1,
+  skipped_count: 0,
+  target_namespace: 'imports.preview',
+  import_operation_id: 'import-preview-001',
+  denial_reason: null,
+  policy_decision_id: 'policy-import-memory',
+  correlation_id: 'corr-memory-import'
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -1751,6 +2006,10 @@ export interface MockAuroraFixtureSet {
   nativeManifest: NativeCapabilityManifest
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
+  memoryMessages: DBGetMessagesResponse
+  memoryNamespaces: DBRAGListNamespacesResponse
+  memoryExport: DBRAGExportNamespaceResponse
+  memoryImport: DBRAGImportNamespaceResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -1765,6 +2024,10 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   nativeManifest: nativeCapabilityManifestFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
+  memoryMessages: memoryMessagesFixture,
+  memoryNamespaces: memoryNamespacesFixture,
+  memoryExport: memoryExportFixture,
+  memoryImport: memoryImportFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }

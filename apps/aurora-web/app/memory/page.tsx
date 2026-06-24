@@ -1,11 +1,19 @@
-import { AuroraRoutePage } from '../page-content'
+import { StateSurface, type RouteAvailability } from '@aurora/ui'
+import { getShellSnapshot } from '../shell-state'
+import { MemoryClientPage } from './memory-client'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="memory"
-      title="Memory"
-      description="Memory and RAG views stay capability-gated until provenance, namespace, export, import, and tombstone contracts are wired."
-    />
-  )
+export default async function Page() {
+  const snapshot = await getShellSnapshot()
+  const route = snapshot.routes.find((candidate) => candidate.item.id === 'memory')
+  if (!route) {
+    return (
+      <StateSurface
+        title="Memory"
+        state="unsupported"
+        description="Memory route availability could not be resolved from the AuroraClient capability graph."
+        evidence={snapshot.evidenceSource}
+      />
+    )
+  }
+  return <MemoryClientPage route={route as RouteAvailability} />
 }
