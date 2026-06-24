@@ -349,6 +349,25 @@ export interface AuthPairingExchangeResponse extends PairingExchangeLikeResponse
   token_id?: string
 }
 
+export interface AuthPairingApproveRequest {
+  code: string
+  permissions?: string[] | null
+  is_admin?: boolean
+}
+
+export interface AuthPairingApproveResponse {
+  success: boolean
+}
+
+export interface AuthPairingDenyRequest {
+  code: string
+  reason?: string
+}
+
+export interface AuthPairingDenyResponse {
+  success: boolean
+}
+
 export interface PendingPairingEntry {
   request_id: string
   code: string

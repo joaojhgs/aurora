@@ -43,6 +43,10 @@ import type {
   AuthLoginResponse,
   AuthPairingConnectRequest,
   AuthPairingConnectResponse,
+  AuthPairingApproveRequest,
+  AuthPairingApproveResponse,
+  AuthPairingDenyRequest,
+  AuthPairingDenyResponse,
   AuthPairingExchangeRequest,
   AuthPairingExchangeResponse,
   AuthPairingStartRequest,
@@ -66,6 +70,8 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   GatewayBuiltinRouteDescriptor,
+  ListPendingPairingsRequest,
+  ListPendingPairingsResponse,
   MethodDescriptor,
   ModelRuntimeCatalogRequest,
   ModelRuntimeCatalogResponse,
@@ -274,6 +280,32 @@ export class AuthApiClient {
     )
     if (result.ok) this.client.auth.updateFromPairingExchange(result.data)
     return result
+  }
+
+  listPendingPairings(
+    payload: ListPendingPairingsRequest = {}
+  ): Promise<AuroraResponse<ListPendingPairingsResponse>> {
+    return this.client.requestResult<ListPendingPairingsResponse, ListPendingPairingsRequest>(
+      AUTH_METHODS.listPendingPairings,
+      payload,
+      { path: routePath('Auth', 'ListPendingPairings') }
+    )
+  }
+
+  pairingApprove(payload: AuthPairingApproveRequest): Promise<AuroraResponse<AuthPairingApproveResponse>> {
+    return this.client.requestResult<AuthPairingApproveResponse, AuthPairingApproveRequest>(
+      AUTH_METHODS.pairingApprove,
+      payload,
+      { path: routePath('Auth', 'PairingApprove') }
+    )
+  }
+
+  pairingDeny(payload: AuthPairingDenyRequest): Promise<AuroraResponse<AuthPairingDenyResponse>> {
+    return this.client.requestResult<AuthPairingDenyResponse, AuthPairingDenyRequest>(
+      AUTH_METHODS.pairingDeny,
+      payload,
+      { path: routePath('Auth', 'PairingDeny') }
+    )
   }
 }
 

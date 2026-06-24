@@ -19,7 +19,8 @@ import {
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo,
-  type GetServicesResponse
+  type GetServicesResponse,
+  type PendingPairingEntry
 } from '@aurora/client'
 import {
   AdminOverviewContent,
@@ -29,8 +30,12 @@ import {
   ModelsView,
   MemoryView,
   OnboardingView,
+  PairingQueueSurface,
+  PairingQueueView,
   RouteSheet,
   buildOnboardingViewModel,
+  buildPairingAdminActionRequest,
+  buildPairingQueueModel,
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
@@ -51,6 +56,8 @@ import {
   buildModelsViewModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  parsePermissionList,
+  pairingErrorMessage,
   routePolicyFromRoute,
   routeSheetErrorMessage,
   SettingsPermissionsView
@@ -619,6 +626,107 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 
+  it('renders pairing queue states without exposing pairing codes', () => {
+    const route = pairingRoute()
+    const model = buildPairingQueueModel({
+      route,
+      response: {
+        pairings: [
+          pairingEntry({ request_id: 'pending-1', code: 'secret-pending-code', status: 'pending' }),
+          pairingEntry({ request_id: 'approved-1', status: 'approved', approved_by: 'admin-1', granted_permissions: ['Gateway.use'] }),
+          pairingEntry({ request_id: 'denied-1', status: 'denied', denied_by: 'admin-2', denied_reason: 'Wrong device' })
+        ],
+        total: 3,
+        expired_count: 0,
+        secrets_redacted: true
+      }
+    })
+    const markup = renderToStaticMarkup(
+      <PairingQueueSurface
+        model={model}
+        route={route}
+        adminReason="Approve expected kitchen tablet"
+        permissions="Gateway.use"
+      />
+    )
+
+    expect(model.state).toBe('pending')
+    expect(markup).toContain('Pairing queue')
+    expect(markup).toContain('Kitchen tablet')
+    expect(markup).toContain('Kitchen node / peer-kitchen')
+    expect(markup).toContain('AdminAction approve')
+    expect(markup).toContain('AdminAction deny')
+    expect(markup).toContain('redacted by UI')
+    expect(markup).not.toContain('secret-pending-code')
+  })
+
+  it('maps pairing queue loading, empty, denied, degraded, and disabled states', () => {
+    const route = pairingRoute()
+    const disabled = pairingRoute({ disabled: true, state: 'unsupported', explanation: 'No executable Auth.ListPendingPairings entry.' })
+
+    expect(buildPairingQueueModel({ route, loadState: 'loading' }).state).toBe('loading')
+    expect(buildPairingQueueModel({ route, response: emptyPairingQueue() }).description).toContain('no pending')
+    expect(buildPairingQueueModel({
+      route,
+      loadState: 'error',
+      error: new AuroraError({ code: 'permission', message: 'Forbidden' })
+    }).state).toBe('denied')
+    expect(buildPairingQueueModel({
+      route,
+      loadState: 'error',
+      error: new AuroraError({ code: 'unavailable_service', message: 'Auth down' })
+    }).state).toBe('degraded')
+    expect(buildPairingQueueModel({ route: disabled }).disabledReason).toContain('Capability unavailable')
+    expect(pairingErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+    expect(parsePermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
+  })
+
+  it('builds pairing approve and deny mutations as AdminAction requests', () => {
+    const entry = pairingEntry()
+    const approve = buildPairingAdminActionRequest(entry, 'approve', {
+      reason: 'Approve kitchen tablet',
+      permissions: 'Gateway.use Auth.use',
+      grantAdmin: false
+    })
+    const deny = buildPairingAdminActionRequest(entry, 'deny', {
+      reason: 'Wrong peer'
+    })
+
+    expect(approve).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        reauthConfirmed: true,
+        reason: 'Approve kitchen tablet',
+        affectedResources: ['pairing:pair-1', 'peer:peer-kitchen', 'device:Kitchen tablet'],
+        payload: {
+          code: '123456',
+          permissions: ['Gateway.use', 'Auth.use'],
+          is_admin: false
+        }
+      })
+    )
+    expect(deny).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: {
+          code: '123456',
+          reason: 'Wrong peer'
+        }
+      })
+    )
+  })
+
+  it('renders pairing view initial loading state from an enabled SDK route', () => {
+    const markup = renderToStaticMarkup(
+      <PairingQueueView client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={pairingRoute()} />
+    )
+
+    expect(markup).toContain('Loading pairing queue')
+    expect(markup).toContain('AdminAction required for approve/deny')
+  })
+
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
     const markup = renderToStaticMarkup(
       await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
@@ -1040,6 +1148,65 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
   const match = snapshot.routes.find((candidate) => candidate.item.id === id)
   if (!match) throw new Error(`missing route ${id}`)
   return match
+}
+
+function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
+  return {
+    item: {
+      id: 'pairing',
+      label: 'Pairing',
+      href: '/admin/pairing',
+      capabilityModule: 'Auth',
+      capabilityMethod: 'ListPendingPairings',
+      methodType: 'manage',
+      privacyClass: 'credential',
+      fallbackState: 'unsupported',
+      adminGated: true,
+      expectedTask: 'ADM-011'
+    },
+    state: 'available-local',
+    explanation: 'Backend catalog reports Auth.ListPendingPairings as routeable.',
+    providerLabel: 'local / Auth.ListPendingPairings',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['capability-catalog'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: true,
+    ...overrides
+  } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
+}
+
+function emptyPairingQueue() {
+  return {
+    pairings: [],
+    total: 0,
+    expired_count: 0,
+    secrets_redacted: true
+  }
+}
+
+function pairingEntry(overrides: Partial<PendingPairingEntry> = {}): PendingPairingEntry {
+  return {
+    request_id: 'pair-1',
+    code: '123456',
+    device_name: 'Kitchen tablet',
+    client_ip: '192.0.2.10',
+    status: 'pending',
+    expires_at: '2099-01-01T00:00:00Z',
+    created_at: '2026-06-24T12:00:00Z',
+    remote_peer_id: 'peer-kitchen',
+    remote_node_name: 'Kitchen node',
+    approved_by: null,
+    denied_by: null,
+    denied_reason: '',
+    granted_permissions: [],
+    granted_is_admin: false,
+    ...overrides
+  }
 }
 
 function streamUpdate(textDelta: string) {

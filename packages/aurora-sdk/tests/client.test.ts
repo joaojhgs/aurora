@@ -101,6 +101,58 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('routes Auth pairing queue reads and review methods through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListPendingPairings', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          pairings: [pendingPairingFixture()],
+          total: 1,
+          expired_count: 0,
+          secrets_redacted: true
+        }
+      })
+      .register('Auth.PairingApprove', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.PairingDeny', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const queue = await client.authApi.listPendingPairings({ include_non_pending: true })
+    const approved = await client.authApi.pairingApprove({
+      code: '123456',
+      permissions: ['Gateway.use'],
+      is_admin: false
+    })
+    const denied = await client.authApi.pairingDeny({ code: '654321', reason: 'Wrong device' })
+
+    expect(queue.ok).toBe(true)
+    expect(approved.ok).toBe(true)
+    expect(denied.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListPendingPairings',
+        path: '/api/Auth/ListPendingPairings',
+        payload: { include_non_pending: true }
+      },
+      {
+        method: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        payload: { code: '123456', permissions: ['Gateway.use'], is_admin: false }
+      },
+      {
+        method: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: { code: '654321', reason: 'Wrong device' }
+      }
+    ])
+  })
+
   it('advertises assistant context ingestion from backend inventory descriptors', () => {
     const descriptors = describeBackendInventory(backendInventoryFixture)
 
@@ -2719,6 +2771,25 @@ describe('permissions', () => {
     )
   })
 })
+
+function pendingPairingFixture() {
+  return {
+    request_id: 'pair-1',
+    code: '123456',
+    device_name: 'Kitchen tablet',
+    client_ip: '192.0.2.10',
+    status: 'pending',
+    expires_at: '2099-01-01T00:00:00Z',
+    created_at: '2026-06-24T12:00:00Z',
+    remote_peer_id: 'peer-kitchen',
+    remote_node_name: 'Kitchen node',
+    approved_by: null,
+    denied_by: null,
+    denied_reason: '',
+    granted_permissions: [],
+    granted_is_admin: false
+  }
+}
 
 describe('descriptors', () => {
   it('uses bus topic plus method name as identity source', () => {

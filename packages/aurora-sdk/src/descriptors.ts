@@ -33,7 +33,10 @@ export const AUTH_METHODS = {
   whoAmI: 'Auth.WhoAmI',
   pairingStart: 'Auth.PairingStart',
   pairingConnect: 'Auth.PairingConnect',
-  pairingExchange: 'Auth.PairingExchange'
+  pairingExchange: 'Auth.PairingExchange',
+  listPendingPairings: 'Auth.ListPendingPairings',
+  pairingApprove: 'Auth.PairingApprove',
+  pairingDeny: 'Auth.PairingDeny'
 } as const
 
 export const TOOLING_METHODS = {
