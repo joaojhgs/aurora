@@ -144,13 +144,15 @@ describe('Aurora production shell', () => {
     expect(model.providers.find((provider) => provider.id === 'local:Orchestrator:llama-cpp')).toEqual(
       expect.objectContaining({
         availability: 'available-local',
-        canSelect: true,
+        canSelect: false,
         privacyClass: 'public'
       })
     )
     expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
       expect.objectContaining({
         availability: 'available-remote',
+        canSelect: false,
+        selectReason: expect.stringContaining('Backend model selection contract is not active'),
         providerType: 'mesh',
         routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog')
       })
@@ -191,6 +193,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('secrets redacted')
     expect(markup).toContain('AdminAction model import contract is not active')
     expect(markup).toContain('Benchmark action stays disabled')
+    expect(markup).toContain('Select: Backend model selection contract is not active')
+    expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
     expect(markup).toContain('native_provider_missing')
     expect(markup).toContain('Mobile local-light')
 

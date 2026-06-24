@@ -347,8 +347,8 @@ function providerModel(
       .filter((progress) => progress.status !== 'idle')
       .map((progress) => `${progress.operation_type}:${progress.status} ${progress.progress_percent}%`)
       .join(', ') || 'no operation active',
-    canSelect: ['available-local', 'available-remote', 'degraded'].includes(availability),
-    selectReason: selectReason(availability, candidate),
+    canSelect: false,
+    selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected),
     canImport: importActive,
     importReason: importActive ? provider.import_progress.message : 'AdminAction model import contract is not active.',
     canDownload: downloadActive,
@@ -408,11 +408,9 @@ function filesLabel(provider: ModelRuntimeProviderInfo): string {
     .join(', ')
 }
 
-function selectReason(availability: AvailabilityState, candidate: CapabilityProviderCandidate | undefined): string {
-  if (availability === 'available-local') return 'Local provider is selectable from backend catalog evidence.'
-  if (availability === 'available-remote') return 'Remote provider needs visible route/privacy context before selection.'
-  if (availability === 'degraded') return 'Provider is partially usable with backend-reported limitations.'
-  return candidate?.requiredAction ?? 'Provider is not selectable in the current backend state.'
+function selectReason(selected: boolean): string {
+  if (selected) return 'Selected provider is reported by backend catalog evidence.'
+  return 'Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.'
 }
 
 function mobileLocalLight(
