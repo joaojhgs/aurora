@@ -4,9 +4,13 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  buildCapabilityGraph,
   capabilityCatalogFixture,
+  capabilityGraphCatalogFixture,
   cloneFixture,
   evaluateRoutePolicy,
+  gatewayRegistryFixture,
+  modelRuntimeCatalogFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   toolCatalogFixture,
@@ -17,6 +21,7 @@ import {
 import {
   AppShell,
   AssistantView,
+  ModelsView,
   OnboardingView,
   RouteSheet,
   buildOnboardingViewModel,
@@ -33,6 +38,7 @@ import {
   ToolApprovalPanel,
   assistantErrorMessage,
   buildShellSnapshot,
+  buildModelsViewModel,
   errorShellSnapshot,
   routeSheetErrorMessage,
   routePolicyFromRoute
@@ -111,6 +117,81 @@ describe('Aurora production shell', () => {
     )
     expect(markup).toContain('Gateway unavailable')
     expect(markup).toContain('AuroraClient error')
+  })
+
+  it('builds model runtime provider state from SDK catalog, capability graph, and native evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      transportKind: 'mock'
+    })
+    const model = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph,
+      nativeManifest: null,
+      loadState: 'ready'
+    })
+
+    expect(model.providerCount).toBe(4)
+    expect(model.selectedProviderId).toBe('local:Orchestrator:llama-cpp')
+    expect(model.providers.find((provider) => provider.id === 'local:Orchestrator:llama-cpp')).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        canSelect: true,
+        privacyClass: 'public'
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
+      expect.objectContaining({
+        availability: 'available-remote',
+        providerType: 'mesh',
+        routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog')
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'cloud:openai:Orchestrator')).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        privacyClass: 'sensitive',
+        canBenchmark: false
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        canSelect: false,
+        blockers: expect.arrayContaining(['native_provider_missing'])
+      })
+    )
+    expect(model.mobileLocalLightState).toBe('unsupported')
+  })
+
+  it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      transportKind: 'mock'
+    })
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const markup = renderToStaticMarkup(
+      <ModelsView client={client} initialCatalog={modelRuntimeCatalogFixture} initialGraph={graph} />
+    )
+
+    expect(markup).toContain('Models and runtime')
+    expect(markup).toContain('llama.cpp desktop')
+    expect(markup).toContain('studio-gpu peer')
+    expect(markup).toContain('OpenAI-compatible gateway')
+    expect(markup).toContain('Mobile local-light runtime')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('AdminAction model import contract is not active')
+    expect(markup).toContain('Benchmark action stays disabled')
+    expect(markup).toContain('native_provider_missing')
+    expect(markup).toContain('Mobile local-light')
+
+    const errorMarkup = renderToStaticMarkup(
+      <ModelsView client={client} initialCatalog={null} initialError="model catalog unavailable" />
+    )
+    expect(errorMarkup).toContain('role="alert"')
+    expect(errorMarkup).toContain('model catalog unavailable')
   })
 
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {

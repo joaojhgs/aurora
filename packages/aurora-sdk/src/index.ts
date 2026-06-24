@@ -1,4 +1,4 @@
-export { AuroraClient } from './client.js'
+export { AuroraClient, ModelRuntimeClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export {
   SCHEDULER_METHODS,
@@ -31,6 +31,7 @@ export {
   AUTH_METHODS,
   GATEWAY_METHODS,
   ORCHESTRATOR_METHODS,
+  ORCHESTRATOR_MODEL_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,
@@ -80,6 +81,7 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,

@@ -56,6 +56,17 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
+      .register('Orchestrator.GetModelRuntime', () => ({
+        generated_at: fixtures.modelRuntimeCatalog.generated_at,
+        selected_provider_id: fixtures.modelRuntimeCatalog.selected_provider_id,
+        provider:
+          fixtures.modelRuntimeCatalog.providers.find(
+            (provider) => provider.provider_id === fixtures.modelRuntimeCatalog.selected_provider_id
+          ) ?? null,
+        providers: cloneFixture(fixtures.modelRuntimeCatalog.providers),
+        secrets_redacted: fixtures.modelRuntimeCatalog.secrets_redacted
+      }))
       .register('Orchestrator.IngestContext', (request) => mockIngestContext(request.payload))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,

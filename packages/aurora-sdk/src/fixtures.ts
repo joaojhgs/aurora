@@ -9,6 +9,7 @@ import type {
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
+  ModelRuntimeCatalogResponse,
   NativeCapabilityManifest,
   RouteExplainResponse,
   WebRTCDiagnosticsResponse
@@ -24,6 +25,74 @@ export const emptyRegistryFixture: GetRegistryResponse = {
 
 export const gatewayRegistryFixture: GetRegistryResponse = {
   modules: [
+    {
+      module: 'Orchestrator',
+      version: '0.1.0',
+      summary: 'Assistant orchestration and model runtime',
+      capabilities: ['assistant', 'models'],
+      methods: [
+        {
+          name: 'GetModelCatalog',
+          summary: 'Return UI-safe model runtime provider catalog',
+          bus_topic: 'Orchestrator.GetModelCatalog',
+          exposure: 'external',
+          input_model: 'ModelRuntimeCatalogRequest',
+          output_model: 'ModelRuntimeCatalogResponse',
+          required_perms: ['Orchestrator.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'GetModelRuntime',
+          summary: 'Return selected model runtime provider detail',
+          bus_topic: 'Orchestrator.GetModelRuntime',
+          exposure: 'external',
+          input_model: 'ModelRuntimeRequest',
+          output_model: 'ModelRuntimeResponse',
+          required_perms: ['Orchestrator.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'ImportModel',
+          summary: 'Import a model through AdminAction-gated backend workflow',
+          bus_topic: 'Orchestrator.ImportModel',
+          exposure: 'external',
+          input_model: 'ModelRuntimeOperationRequest',
+          output_model: 'ModelRuntimeOperationResponse',
+          required_perms: ['Orchestrator.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'DownloadModel',
+          summary: 'Download a model through AdminAction-gated backend workflow',
+          bus_topic: 'Orchestrator.DownloadModel',
+          exposure: 'external',
+          input_model: 'ModelRuntimeOperationRequest',
+          output_model: 'ModelRuntimeOperationResponse',
+          required_perms: ['Orchestrator.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'BenchmarkModel',
+          summary: 'Benchmark a model runtime provider',
+          bus_topic: 'Orchestrator.BenchmarkModel',
+          exposure: 'external',
+          input_model: 'ModelRuntimeOperationRequest',
+          output_model: 'ModelRuntimeOperationResponse',
+          required_perms: ['Orchestrator.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        }
+      ]
+    },
     {
       module: 'Gateway',
       version: '0.1.0',
@@ -82,8 +151,8 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
     }
   ],
   digest: 'fixture',
-  service_count: 1,
-  method_count: 4
+  service_count: 2,
+  method_count: 9
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -297,6 +366,20 @@ const baseFreshness: CapabilityFreshnessInfo = {
   registry_digest: 'fixture'
 }
 
+const modelRuntimePolicy: CapabilityPolicyDecisionInfo = {
+  ...basePolicy,
+  required_permissions: ['Orchestrator.use'],
+  resource_scope: 'personal'
+}
+
+const modelManagePolicy: CapabilityPolicyDecisionInfo = {
+  ...basePolicy,
+  required_permissions: ['Orchestrator.manage'],
+  operation_class: 'admin',
+  safety_class: 'admin',
+  approval_required: true
+}
+
 function provider(overrides: Partial<CapabilityProviderInfo>): CapabilityProviderInfo {
   return {
     provider_id: 'local:Gateway',
@@ -398,6 +481,49 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       reason: 'Manifest is stale',
       policy: { ...basePolicy, trust_tier: 'paired', mesh_visible: true },
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
+    }),
+    provider({
+      provider_id: 'local:Orchestrator:llama-cpp',
+      module: 'Orchestrator',
+      service_instance_id: 'orchestrator-local',
+      reason: 'Local desktop llama.cpp runtime is available.'
+    }),
+    provider({
+      provider_id: 'mesh:studio-gpu:Orchestrator',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      node_name: 'studio-gpu',
+      module: 'Orchestrator',
+      service_instance_id: 'orchestrator-studio-gpu',
+      latency_ms: 34,
+      policy: { ...modelRuntimePolicy, trust_tier: 'paired', mesh_visible: true },
+      reason: 'Remote GPU model runtime is eligible through mesh route evidence.'
+    }),
+    provider({
+      provider_id: 'cloud:openai:Orchestrator',
+      peer_id: 'cloud-openai',
+      provider_kind: 'cloud',
+      node_name: 'OpenAI-compatible gateway',
+      module: 'Orchestrator',
+      service_instance_id: 'orchestrator-cloud',
+      latency_ms: 620,
+      available_capacity: 2,
+      reason_code: 'fallback_only',
+      reason: 'Cloud model provider is fallback-only for sensitive prompts.',
+      policy: { ...modelRuntimePolicy, trust_tier: 'external', safety_class: 'sensitive' }
+    }),
+    provider({
+      provider_id: 'native:mobile-local-light',
+      peer_id: 'native-mobile',
+      provider_kind: 'native-mobile',
+      node_name: 'Mobile local-light runtime',
+      module: 'Orchestrator',
+      service_instance_id: 'orchestrator-mobile-local-light',
+      eligible: false,
+      reason_code: 'native_provider_missing',
+      reason: 'Android/iOS local-light runtime needs native provider proof.',
+      policy: { ...modelRuntimePolicy, trust_tier: 'device', local_only: true },
+      freshness: { ...baseFreshness, source: 'native-manifest', stale: false }
     })
   ],
   actions: [
@@ -514,12 +640,86 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
         mesh_visible: true
       },
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
+    }),
+    action({
+      action_id: 'model-runtime-local-catalog',
+      module: 'Orchestrator',
+      method: 'GetModelCatalog',
+      topic: 'Orchestrator.GetModelCatalog',
+      provider_id: 'local:Orchestrator:llama-cpp',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: 'local:Orchestrator:llama-cpp' },
+      policy: modelRuntimePolicy,
+      summary: 'Local model runtime catalog provider.'
+    }),
+    action({
+      action_id: 'model-runtime-mesh-catalog',
+      module: 'Orchestrator',
+      method: 'GetModelCatalog',
+      topic: 'Orchestrator.GetModelCatalog',
+      provider_id: 'mesh:studio-gpu:Orchestrator',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      service_instance_id: 'orchestrator-studio-gpu',
+      selector: { peer_id: 'peer-studio-gpu', module: 'Orchestrator', provider_id: 'mesh:studio-gpu:Orchestrator' },
+      policy: { ...modelRuntimePolicy, trust_tier: 'paired', mesh_visible: true },
+      summary: 'Mesh GPU model runtime catalog provider.'
+    }),
+    action({
+      action_id: 'model-runtime-cloud-catalog',
+      module: 'Orchestrator',
+      method: 'GetModelCatalog',
+      topic: 'Orchestrator.GetModelCatalog',
+      provider_id: 'cloud:openai:Orchestrator',
+      peer_id: 'cloud-openai',
+      provider_kind: 'cloud',
+      service_instance_id: 'orchestrator-cloud',
+      bindability: 'degraded',
+      selector: { module: 'Orchestrator', provider_id: 'cloud:openai:Orchestrator' },
+      policy: { ...modelRuntimePolicy, trust_tier: 'external', safety_class: 'sensitive' },
+      route_hints: ['fallback-only'],
+      route_blockers: ['cloud_fallback_requires_policy'],
+      summary: 'Cloud model runtime is fallback-only when privacy policy allows it.'
+    }),
+    action({
+      action_id: 'model-runtime-mobile-local-light',
+      module: 'Orchestrator',
+      method: 'GetModelCatalog',
+      topic: 'Orchestrator.GetModelCatalog',
+      provider_id: 'native:mobile-local-light',
+      peer_id: 'native-mobile',
+      provider_kind: 'native-mobile',
+      service_instance_id: 'orchestrator-mobile-local-light',
+      bindability: 'unavailable',
+      selector: { module: 'Orchestrator', provider_id: 'native:mobile-local-light' },
+      policy: { ...modelRuntimePolicy, trust_tier: 'device', local_only: true },
+      route_blockers: ['native_provider_missing'],
+      summary: 'Mobile local-light model runtime is gated by native provider proof.'
+    }),
+    action({
+      action_id: 'model-runtime-import-admin',
+      module: 'Orchestrator',
+      method: 'ImportModel',
+      topic: 'Orchestrator.ImportModel',
+      provider_id: 'local:Orchestrator:llama-cpp',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: 'local:Orchestrator:llama-cpp' },
+      policy: modelManagePolicy,
+      summary: 'Import model requires AdminAction confirmation.'
     })
   ],
   resources: [],
   provider_index: {
     TTS: ['local:TTS', 'remote:kitchen:TTS'],
-    Tooling: ['local:TTS', 'remote:kitchen:TTS']
+    Tooling: ['local:TTS', 'remote:kitchen:TTS'],
+    Orchestrator: [
+      'local:Orchestrator:llama-cpp',
+      'mesh:studio-gpu:Orchestrator',
+      'cloud:openai:Orchestrator',
+      'native:mobile-local-light'
+    ]
   },
   action_index: {
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
@@ -529,7 +729,14 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'tool-remote-notes',
       'tool-remote-door',
       'tool-stale-camera'
-    ]
+    ],
+    'Orchestrator.GetModelCatalog': [
+      'model-runtime-local-catalog',
+      'model-runtime-mesh-catalog',
+      'model-runtime-cloud-catalog',
+      'model-runtime-mobile-local-light'
+    ],
+    'Orchestrator.ImportModel': ['model-runtime-import-admin']
   },
   secrets_redacted: true
 }
@@ -682,9 +889,124 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 6,
+  method_count: 11,
   gateway_builtin_count: 2,
   methods: [
+    {
+      module: 'Orchestrator',
+      name: 'GetModelCatalog',
+      summary: 'Return UI-safe model runtime provider catalog',
+      bus_topic: 'Orchestrator.GetModelCatalog',
+      routePath: '/api/Orchestrator/GetModelCatalog',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Orchestrator.use'],
+      input_model: 'ModelRuntimeCatalogRequest',
+      output_model: 'ModelRuntimeCatalogResponse',
+      input_schema: {
+        title: 'ModelRuntimeCatalogRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ModelRuntimeCatalogResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
+    },
+    {
+      module: 'Orchestrator',
+      name: 'GetModelRuntime',
+      summary: 'Return selected model runtime provider detail',
+      bus_topic: 'Orchestrator.GetModelRuntime',
+      routePath: '/api/Orchestrator/GetModelRuntime',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Orchestrator.use'],
+      input_model: 'ModelRuntimeRequest',
+      output_model: 'ModelRuntimeResponse',
+      input_schema: {
+        title: 'ModelRuntimeRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ModelRuntimeResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
+    },
+    {
+      module: 'Orchestrator',
+      name: 'ImportModel',
+      summary: 'Import a model through AdminAction-gated backend workflow',
+      bus_topic: 'Orchestrator.ImportModel',
+      routePath: '/api/Orchestrator/ImportModel',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Orchestrator.manage'],
+      input_model: 'ModelRuntimeOperationRequest',
+      output_model: 'ModelRuntimeOperationResponse',
+      input_schema: {
+        title: 'ModelRuntimeOperationRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ModelRuntimeOperationResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
+    },
+    {
+      module: 'Orchestrator',
+      name: 'DownloadModel',
+      summary: 'Download a model through AdminAction-gated backend workflow',
+      bus_topic: 'Orchestrator.DownloadModel',
+      routePath: '/api/Orchestrator/DownloadModel',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Orchestrator.manage'],
+      input_model: 'ModelRuntimeOperationRequest',
+      output_model: 'ModelRuntimeOperationResponse',
+      input_schema: {
+        title: 'ModelRuntimeOperationRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ModelRuntimeOperationResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
+    },
+    {
+      module: 'Orchestrator',
+      name: 'BenchmarkModel',
+      summary: 'Benchmark a model runtime provider',
+      bus_topic: 'Orchestrator.BenchmarkModel',
+      routePath: '/api/Orchestrator/BenchmarkModel',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'manage',
+      required_perms: ['Orchestrator.manage'],
+      input_model: 'ModelRuntimeOperationRequest',
+      output_model: 'ModelRuntimeOperationResponse',
+      input_schema: {
+        title: 'ModelRuntimeOperationRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'ModelRuntimeOperationResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/orchestrator/service.py:245'
+    },
     {
       module: 'Auth',
       name: 'ListPendingPairings',
@@ -906,13 +1228,181 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
   permissions: {
     microphone: false,
     notifications: true,
-    secureStorage: true
+    secureStorage: true,
+    mobileLocalLightRuntime: false
   },
   capabilities: {
     localGateway: true,
     sidecarSupervisor: false,
-    voiceCapture: false
+    voiceCapture: false,
+    mobileLocalLightRuntime: false
   }
+}
+
+const idleModelProgress = (operationType: string) => ({
+  operation_id: null,
+  operation_type: operationType,
+  status: 'idle',
+  progress_percent: 0,
+  message: 'No backend operation is active.',
+  updated_at: null
+})
+
+export const modelRuntimeCatalogFixture: ModelRuntimeCatalogResponse = {
+  generated_at: '2026-06-19T00:00:00Z',
+  selected_provider_id: 'local:Orchestrator:llama-cpp',
+  providers: [
+    {
+      provider_id: 'local:Orchestrator:llama-cpp',
+      display_name: 'llama.cpp desktop',
+      backend_kind: 'desktop-local',
+      provider_type: 'local',
+      enabled: true,
+      selected: true,
+      health: 'healthy',
+      health_reason: 'Local runtime loaded from backend catalog.',
+      model_id: 'llama-3-8b-instruct',
+      source: 'local-filesystem',
+      license: 'user-provided',
+      context_window: 8192,
+      generation_limit: 2048,
+      hardware: {
+        accelerator: 'cpu',
+        memory_gb: 16,
+        quantization: 'Q4_K_M'
+      },
+      model_files: [
+        {
+          kind: 'weights',
+          display_name: 'llama-3-8b-instruct.Q4_K_M.gguf',
+          exists: true,
+          size_bytes: 4_920_000_000,
+          path_redacted: true
+        }
+      ],
+      capabilities: ['chat', 'tools-context', 'local-only'],
+      benchmark: {
+        status: 'complete',
+        tokens_per_second: 31.4,
+        latency_ms: 1200,
+        measured_at: '2026-06-19T00:00:00Z',
+        reason: null
+      },
+      import_progress: idleModelProgress('import'),
+      download_progress: idleModelProgress('download'),
+      secrets_redacted: true
+    },
+    {
+      provider_id: 'mesh:studio-gpu:Orchestrator',
+      display_name: 'studio-gpu peer',
+      backend_kind: 'mesh-remote',
+      provider_type: 'mesh',
+      enabled: true,
+      selected: false,
+      health: 'degraded',
+      health_reason: 'Eligible remote provider; policy requires route/privacy review before sensitive prompts.',
+      model_id: 'qwen-32b',
+      source: 'mesh-peer',
+      license: 'peer-managed',
+      context_window: 32768,
+      generation_limit: 4096,
+      hardware: {
+        accelerator: 'cuda',
+        gpu: 'RTX 4090',
+        vram_gb: 24
+      },
+      model_files: [
+        {
+          kind: 'weights',
+          display_name: 'peer-managed weights',
+          exists: true,
+          size_bytes: null,
+          path_redacted: true
+        }
+      ],
+      capabilities: ['chat', 'large-context', 'mesh-route'],
+      benchmark: {
+        status: 'complete',
+        tokens_per_second: 78.2,
+        latency_ms: 34,
+        measured_at: '2026-06-19T00:00:00Z',
+        reason: 'mesh route latency only; prompt privacy still policy-gated'
+      },
+      import_progress: idleModelProgress('import'),
+      download_progress: idleModelProgress('download'),
+      secrets_redacted: true
+    },
+    {
+      provider_id: 'cloud:openai:Orchestrator',
+      display_name: 'OpenAI-compatible gateway',
+      backend_kind: 'server-cloud',
+      provider_type: 'cloud',
+      enabled: false,
+      selected: false,
+      health: 'privacy-blocked',
+      health_reason: 'Cloud fallback is disabled until policy allows egress for the selected privacy class.',
+      model_id: 'gpt-class-large',
+      source: 'external-api',
+      license: 'provider-managed',
+      context_window: 128000,
+      generation_limit: 4096,
+      hardware: {
+        accelerator: 'provider-managed'
+      },
+      model_files: [],
+      capabilities: ['chat', 'fallback'],
+      benchmark: {
+        status: 'unavailable',
+        tokens_per_second: null,
+        latency_ms: 620,
+        measured_at: null,
+        reason: 'privacy policy blocks cloud fallback'
+      },
+      import_progress: idleModelProgress('import'),
+      download_progress: idleModelProgress('download'),
+      secrets_redacted: true
+    },
+    {
+      provider_id: 'native:mobile-local-light',
+      display_name: 'Mobile local-light runtime',
+      backend_kind: 'mobile-local-light',
+      provider_type: 'native-mobile',
+      enabled: false,
+      selected: false,
+      health: 'unsupported',
+      health_reason: 'Native Android/iOS provider proof is not available in this manifest.',
+      model_id: 'phi-mini',
+      source: 'native-manifest',
+      license: 'planned',
+      context_window: 4096,
+      generation_limit: 1024,
+      hardware: {
+        accelerator: 'mobile-npu',
+        proof: 'missing'
+      },
+      model_files: [],
+      capabilities: ['planned-mobile-local-light'],
+      benchmark: {
+        status: 'unsupported',
+        tokens_per_second: null,
+        latency_ms: null,
+        measured_at: null,
+        reason: 'requires native provider benchmark/device proof'
+      },
+      import_progress: idleModelProgress('import'),
+      download_progress: idleModelProgress('download'),
+      secrets_redacted: true
+    }
+  ],
+  provider_index: {
+    local: ['local:Orchestrator:llama-cpp'],
+    mesh: ['mesh:studio-gpu:Orchestrator'],
+    cloud: ['cloud:openai:Orchestrator'],
+    'native-mobile': ['native:mobile-local-light']
+  },
+  unavailable: ['native:mobile-local-light'],
+  internal_only: [],
+  secrets_redacted: true
 }
 
 export const toolCatalogFixture = {
@@ -1259,6 +1749,7 @@ export interface MockAuroraFixtureSet {
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
+  modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
@@ -1272,6 +1763,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
+  modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
