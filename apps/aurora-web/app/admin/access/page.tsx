@@ -1,11 +1,5 @@
-import { AuroraRoutePage } from '../../page-content'
+import { AdminAccessClientPage } from './access-client'
 
 export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="access"
-      title="Access & RBAC"
-      description="Principal and permission mutations stay unavailable until RBAC SDK helpers and AdminAction enforcement are wired."
-    />
-  )
+  return <AdminAccessClientPage />
 }

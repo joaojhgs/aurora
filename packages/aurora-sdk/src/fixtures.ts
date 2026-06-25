@@ -9,8 +9,11 @@ import type {
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
+  AuditLogResponse,
   ModelRuntimeCatalogResponse,
   NativeCapabilityManifest,
+  PrincipalListResponse,
+  PrincipalResponse,
   RouteExplainResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
@@ -158,11 +161,103 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         }
       ]
+    },
+    {
+      module: 'Auth',
+      version: '0.1.0',
+      summary: 'Authentication, authorization, pairing, and principal management',
+      capabilities: ['login', 'pairing', 'principals', 'permissions', 'tokens', 'devices', 'audit', 'mesh'],
+      methods: [
+        {
+          name: 'ListPrincipals',
+          summary: 'List all principals',
+          bus_topic: 'Auth.ListPrincipals',
+          exposure: 'both',
+          input_model: 'PrincipalListRequest',
+          output_model: 'PrincipalListResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'CreatePrincipal',
+          summary: 'Create a new principal',
+          bus_topic: 'Auth.CreatePrincipal',
+          exposure: 'both',
+          input_model: 'PrincipalCreateRequest',
+          output_model: 'PrincipalResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'UpdatePrincipal',
+          summary: 'Update a principal',
+          bus_topic: 'Auth.UpdatePrincipal',
+          exposure: 'both',
+          input_model: 'PrincipalUpdateRequest',
+          output_model: 'PrincipalResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'DeletePrincipal',
+          summary: 'Delete a principal',
+          bus_topic: 'Auth.DeletePrincipal',
+          exposure: 'both',
+          input_model: 'PrincipalDeleteRequest',
+          output_model: 'PrincipalDeleteResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'SetPermissions',
+          summary: 'Set permissions for a principal',
+          bus_topic: 'Auth.SetPermissions',
+          exposure: 'both',
+          input_model: 'PermissionSetRequest',
+          output_model: 'PermissionSetResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'PatchPermissions',
+          summary: 'Add/remove specific permissions for a principal',
+          bus_topic: 'Auth.PatchPermissions',
+          exposure: 'both',
+          input_model: 'PermissionPatchRequest',
+          output_model: 'PermissionPatchResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'AuditLog',
+          summary: 'Get audit log entries',
+          bus_topic: 'Auth.AuditLog',
+          exposure: 'both',
+          input_model: 'AuditLogRequest',
+          output_model: 'AuditLogResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        }
+      ]
     }
   ],
   digest: 'fixture',
-  service_count: 2,
-  method_count: 9
+  service_count: 3,
+  method_count: 16
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -534,6 +629,13 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       reason: 'Android/iOS local-light runtime needs native provider proof.',
       policy: { ...modelRuntimePolicy, trust_tier: 'device', local_only: true },
       freshness: { ...baseFreshness, source: 'native-manifest', stale: false }
+    }),
+    provider({
+      provider_id: 'local:Auth',
+      module: 'Auth',
+      service_instance_id: 'auth-local',
+      reason: 'Local Auth service exposes RBAC management contracts.',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' }
     })
   ],
   actions: [
@@ -718,6 +820,83 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: 'local:Orchestrator:llama-cpp' },
       policy: modelManagePolicy,
       summary: 'Import model requires AdminAction confirmation.'
+    }),
+    action({
+      action_id: 'auth-list-principals',
+      module: 'Auth',
+      method: 'ListPrincipals',
+      topic: 'Auth.ListPrincipals',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' },
+      summary: 'List RBAC principals through Auth.'
+    }),
+    action({
+      action_id: 'auth-create-principal',
+      module: 'Auth',
+      method: 'CreatePrincipal',
+      topic: 'Auth.CreatePrincipal',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Create principal through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-update-principal',
+      module: 'Auth',
+      method: 'UpdatePrincipal',
+      topic: 'Auth.UpdatePrincipal',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Update principal through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-delete-principal',
+      module: 'Auth',
+      method: 'DeletePrincipal',
+      topic: 'Auth.DeletePrincipal',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Delete principal through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-set-permissions',
+      module: 'Auth',
+      method: 'SetPermissions',
+      topic: 'Auth.SetPermissions',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Replace principal permissions through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-patch-permissions',
+      module: 'Auth',
+      method: 'PatchPermissions',
+      topic: 'Auth.PatchPermissions',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Patch principal permissions through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-audit-log',
+      module: 'Auth',
+      method: 'AuditLog',
+      topic: 'Auth.AuditLog',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'read-only' },
+      summary: 'Read RBAC audit events from Auth.'
     })
   ],
   resources: [],
@@ -729,7 +908,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'mesh:studio-gpu:Orchestrator',
       'cloud:openai:Orchestrator',
       'native:mobile-local-light'
-    ]
+    ],
+    Auth: ['local:Auth']
   },
   action_index: {
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
@@ -746,7 +926,14 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'model-runtime-cloud-catalog',
       'model-runtime-mobile-local-light'
     ],
-    'Orchestrator.ImportModel': ['model-runtime-import-admin']
+    'Orchestrator.ImportModel': ['model-runtime-import-admin'],
+    'Auth.ListPrincipals': ['auth-list-principals'],
+    'Auth.CreatePrincipal': ['auth-create-principal'],
+    'Auth.UpdatePrincipal': ['auth-update-principal'],
+    'Auth.DeletePrincipal': ['auth-delete-principal'],
+    'Auth.SetPermissions': ['auth-set-permissions'],
+    'Auth.PatchPermissions': ['auth-patch-permissions'],
+    'Auth.AuditLog': ['auth-audit-log']
   },
   secrets_redacted: true
 }
@@ -763,6 +950,16 @@ export const gatewayServicesFixture: GetServicesResponse = {
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: null
+    },
+    {
+      module: 'Auth',
+      version: '0.1.0',
+      summary: 'Authentication, authorization, pairing, and principal management',
+      capabilities: ['login', 'pairing', 'principals', 'permissions', 'tokens', 'devices', 'audit', 'mesh'],
+      method_count: 7,
+      last_seen: '2026-06-19T00:00:00Z',
+      status: 'healthy',
+      instance_id: 'auth-local'
     }
   ]
 }
@@ -897,9 +1094,79 @@ export const gatewayBuiltinRoutesFixture: GatewayBuiltinRouteDescriptor[] = [
   }
 ]
 
+export const principalListFixture: PrincipalListResponse = {
+  principals: [
+    {
+      id: 'principal-owner',
+      username: 'owner',
+      permissions: ['*'],
+      is_admin: true,
+      created_at: '2026-06-19T00:00:00Z'
+    },
+    {
+      id: 'principal-ops',
+      username: 'ops.admin',
+      permissions: ['Auth.manage', 'Gateway.manage', 'Supervisor.manage'],
+      is_admin: true,
+      created_at: '2026-06-19T00:10:00Z'
+    },
+    {
+      id: 'principal-assistant',
+      username: 'assistant.user',
+      permissions: ['Orchestrator.use', 'Tooling.use', 'DB.use'],
+      is_admin: false,
+      created_at: '2026-06-19T00:20:00Z'
+    },
+    {
+      id: 'principal-device',
+      username: 'studio-mac',
+      permissions: ['Gateway.use', 'TTS.use'],
+      is_admin: false,
+      created_at: '2026-06-19T00:30:00Z'
+    }
+  ]
+}
+
+export const auditLogFixture: AuditLogResponse = {
+  total: 3,
+  events: [
+    {
+      id: 'audit-rbac-1',
+      event: 'admin_action.confirmed',
+      principal_id: 'principal-owner',
+      action: 'Auth.PatchPermissions',
+      correlation_id: 'corr-rbac-001',
+      details: '{"target":"principal-assistant","grant":["Tooling.use"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:00:00Z'
+    },
+    {
+      id: 'audit-rbac-2',
+      event: 'auth.permissions.updated',
+      principal_id: 'principal-ops',
+      action: 'Auth.SetPermissions',
+      correlation_id: 'corr-rbac-002',
+      details: '{"target":"principal-device","revoke":["DB.use"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:05:00Z'
+    },
+    {
+      id: 'audit-rbac-3',
+      event: 'admin_action.denied',
+      principal_id: 'principal-assistant',
+      action: 'Auth.DeletePrincipal',
+      correlation_id: 'corr-rbac-003',
+      details: '{"reason":"permission_denied","secrets_redacted":true}',
+      created_at: '2026-06-19T01:10:00Z'
+    }
+  ]
+}
+
+export function principalFixture(id: string): PrincipalResponse | null {
+  return principalListFixture.principals.find((principal) => principal.id === id) ?? null
+}
+
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 11,
+  method_count: 18,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -1039,6 +1306,167 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:100'
+    },
+    {
+      module: 'Auth',
+      name: 'ListPrincipals',
+      summary: 'List RBAC principals with roles, permissions, and effective access',
+      bus_topic: 'Auth.ListPrincipals',
+      routePath: '/api/Auth/ListPrincipals',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PrincipalListRequest',
+      output_model: 'PrincipalListResponse',
+      input_schema: {
+        title: 'PrincipalListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PrincipalListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:472'
+    },
+    {
+      module: 'Auth',
+      name: 'CreatePrincipal',
+      summary: 'Create an RBAC principal through the AdminAction approval workflow',
+      bus_topic: 'Auth.CreatePrincipal',
+      routePath: '/api/Auth/CreatePrincipal',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PrincipalCreateRequest',
+      output_model: 'PrincipalResponse',
+      input_schema: {
+        title: 'PrincipalCreateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PrincipalResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:496'
+    },
+    {
+      module: 'Auth',
+      name: 'UpdatePrincipal',
+      summary: 'Update an RBAC principal through the AdminAction approval workflow',
+      bus_topic: 'Auth.UpdatePrincipal',
+      routePath: '/api/Auth/UpdatePrincipal',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PrincipalUpdateRequest',
+      output_model: 'PrincipalResponse',
+      input_schema: {
+        title: 'PrincipalUpdateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PrincipalResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:545'
+    },
+    {
+      module: 'Auth',
+      name: 'DeletePrincipal',
+      summary: 'Delete an RBAC principal through the AdminAction approval workflow',
+      bus_topic: 'Auth.DeletePrincipal',
+      routePath: '/api/Auth/DeletePrincipal',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PrincipalDeleteRequest',
+      output_model: 'PrincipalDeleteResponse',
+      input_schema: {
+        title: 'PrincipalDeleteRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PrincipalDeleteResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:575'
+    },
+    {
+      module: 'Auth',
+      name: 'SetPermissions',
+      summary: 'Replace RBAC permissions through the AdminAction approval workflow',
+      bus_topic: 'Auth.SetPermissions',
+      routePath: '/api/Auth/SetPermissions',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PermissionSetRequest',
+      output_model: 'PermissionSetResponse',
+      input_schema: {
+        title: 'PermissionSetRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PermissionSetResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:590'
+    },
+    {
+      module: 'Auth',
+      name: 'PatchPermissions',
+      summary: 'Patch RBAC permissions through the AdminAction approval workflow',
+      bus_topic: 'Auth.PatchPermissions',
+      routePath: '/api/Auth/PatchPermissions',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'PermissionPatchRequest',
+      output_model: 'PermissionPatchResponse',
+      input_schema: {
+        title: 'PermissionPatchRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'PermissionPatchResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:603'
+    },
+    {
+      module: 'Auth',
+      name: 'AuditLog',
+      summary: 'List RBAC audit events for principals and permission changes',
+      bus_topic: 'Auth.AuditLog',
+      routePath: '/api/Auth/AuditLog',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'AuditLogRequest',
+      output_model: 'AuditLogResponse',
+      input_schema: {
+        title: 'AuditLogRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'AuditLogResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:800'
     },
     {
       module: 'Gateway',
@@ -2010,6 +2438,8 @@ export interface MockAuroraFixtureSet {
   memoryNamespaces: DBRAGListNamespacesResponse
   memoryExport: DBRAGExportNamespaceResponse
   memoryImport: DBRAGImportNamespaceResponse
+  principals: PrincipalListResponse
+  auditLog: AuditLogResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -2028,6 +2458,8 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   memoryNamespaces: memoryNamespacesFixture,
   memoryExport: memoryExportFixture,
   memoryImport: memoryImportFixture,
+  principals: principalListFixture,
+  auditLog: auditLogFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }

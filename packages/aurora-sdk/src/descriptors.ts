@@ -36,7 +36,15 @@ export const AUTH_METHODS = {
   pairingExchange: 'Auth.PairingExchange',
   listPendingPairings: 'Auth.ListPendingPairings',
   pairingApprove: 'Auth.PairingApprove',
-  pairingDeny: 'Auth.PairingDeny'
+  pairingDeny: 'Auth.PairingDeny',
+  listPrincipals: 'Auth.ListPrincipals',
+  createPrincipal: 'Auth.CreatePrincipal',
+  getPrincipal: 'Auth.GetPrincipal',
+  updatePrincipal: 'Auth.UpdatePrincipal',
+  deletePrincipal: 'Auth.DeletePrincipal',
+  setPermissions: 'Auth.SetPermissions',
+  patchPermissions: 'Auth.PatchPermissions',
+  auditLog: 'Auth.AuditLog'
 } as const
 
 export const TOOLING_METHODS = {

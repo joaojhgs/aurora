@@ -396,6 +396,101 @@ export interface ListPendingPairingsResponse {
   secrets_redacted: boolean
 }
 
+export interface PrincipalCreateRequest {
+  username: string
+  password?: string | null
+  permissions?: string[] | null
+  is_admin?: boolean
+}
+
+export interface PrincipalResponse {
+  id: string
+  username: string
+  permissions: string[]
+  is_admin: boolean
+  created_at?: string | null
+}
+
+export interface PrincipalListRequest {}
+
+export interface PrincipalListResponse {
+  principals: PrincipalResponse[]
+}
+
+export interface PrincipalGetRequest {
+  user_id: string
+}
+
+export interface PrincipalUpdateRequest {
+  user_id: string
+  username?: string | null
+  password?: string | null
+  is_admin?: boolean | null
+}
+
+export interface PrincipalDeleteRequest {
+  user_id: string
+}
+
+export interface PrincipalDeleteResponse {
+  success: boolean
+}
+
+export interface PermissionSetRequest {
+  user_id: string
+  permissions: string[]
+}
+
+export interface PermissionSetResponse {
+  success: boolean
+}
+
+export interface PermissionPatchRequest {
+  user_id: string
+  grant?: string[] | null
+  revoke?: string[] | null
+}
+
+export interface PermissionPatchResponse {
+  success: boolean
+}
+
+export interface AuditLogRequest {
+  limit?: number
+  offset?: number
+  principal_id?: string | null
+  event?: string | null
+  correlation_id?: string | null
+  peer_id?: string | null
+  provider_id?: string | null
+  tool_id?: string | null
+  action?: string | null
+  policy_decision_id?: string | null
+  route?: string | null
+}
+
+export interface AuditLogEntry {
+  id?: string | null
+  event?: string | null
+  principal_id?: string | null
+  details?: string | null
+  ip_address?: string | null
+  created_at?: string | null
+  correlation_id?: string | null
+  peer_id?: string | null
+  provider_id?: string | null
+  tool_id?: string | null
+  action?: string | null
+  policy_decision_id?: string | null
+  route?: string | null
+  [key: string]: JsonValue | undefined
+}
+
+export interface AuditLogResponse {
+  events: AuditLogEntry[]
+  total: number
+}
+
 export interface ServiceInfo {
   module: string
   version: string
