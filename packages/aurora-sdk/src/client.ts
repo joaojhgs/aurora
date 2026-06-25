@@ -83,6 +83,16 @@ import type {
   GatewayBuiltinRouteDescriptor,
   ListPendingPairingsRequest,
   ListPendingPairingsResponse,
+  MeshBoolResponse,
+  MeshPeerApproveRequest,
+  MeshPeerDenyRequest,
+  MeshPeerGetRequest,
+  MeshPeerGetResponse,
+  MeshPeerListRequest,
+  MeshPeerListResponse,
+  MeshPeerRemoveRequest,
+  MeshPeerUpdatePermissionsRequest,
+  MeshStatusResponse,
   MethodDescriptor,
   ModelRuntimeCatalogRequest,
   ModelRuntimeCatalogResponse,
@@ -137,6 +147,7 @@ export class AuroraClient {
   readonly auth: AuthSession
   readonly registry: RegistryClient
   readonly authApi: AuthApiClient
+  readonly mesh: MeshClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
@@ -161,6 +172,7 @@ export class AuroraClient {
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
     this.authApi = new AuthApiClient(this)
+    this.mesh = new MeshClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
@@ -434,6 +446,68 @@ export class AuthApiClient {
       AUTH_METHODS.auditLog,
       payload,
       { path: routePath('Auth', 'AuditLog') }
+    )
+  }
+}
+
+export class MeshClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  getStatus(): Promise<AuroraResponse<MeshStatusResponse>> {
+    return this.client.requestResult<MeshStatusResponse>(
+      GATEWAY_METHODS.getMeshStatus,
+      undefined,
+      { path: routePath('Gateway', 'GetMeshStatus') }
+    )
+  }
+
+  listPeers(payload: MeshPeerListRequest = {}): Promise<AuroraResponse<MeshPeerListResponse>> {
+    return this.client.requestResult<MeshPeerListResponse, MeshPeerListRequest>(
+      AUTH_METHODS.meshListPeers,
+      payload,
+      { path: routePath('Auth', 'MeshListPeers') }
+    )
+  }
+
+  getPeer(payload: MeshPeerGetRequest): Promise<AuroraResponse<MeshPeerGetResponse>> {
+    return this.client.requestResult<MeshPeerGetResponse, MeshPeerGetRequest>(
+      AUTH_METHODS.meshGetPeer,
+      payload,
+      { path: routePath('Auth', 'MeshGetPeer') }
+    )
+  }
+
+  approvePeer(payload: MeshPeerApproveRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerApproveRequest>(
+      AUTH_METHODS.meshApprovePeer,
+      payload,
+      { path: routePath('Auth', 'MeshApprovePeer') }
+    )
+  }
+
+  denyPeer(payload: MeshPeerDenyRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerDenyRequest>(
+      AUTH_METHODS.meshDenyPeer,
+      payload,
+      { path: routePath('Auth', 'MeshDenyPeer') }
+    )
+  }
+
+  updatePeerPermissions(
+    payload: MeshPeerUpdatePermissionsRequest
+  ): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerUpdatePermissionsRequest>(
+      AUTH_METHODS.meshUpdatePeerPermissions,
+      payload,
+      { path: routePath('Auth', 'MeshUpdatePeerPermissions') }
+    )
+  }
+
+  removePeer(payload: MeshPeerRemoveRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerRemoveRequest>(
+      AUTH_METHODS.meshRemovePeer,
+      payload,
+      { path: routePath('Auth', 'MeshRemovePeer') }
     )
   }
 }

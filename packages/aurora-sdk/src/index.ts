@@ -113,6 +113,8 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  meshPeerListFixture,
+  meshStatusFixture,
   modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,

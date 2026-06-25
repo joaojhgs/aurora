@@ -669,6 +669,159 @@ export interface WebRTCDiagnosticsResponse {
   secrets_redacted: boolean
 }
 
+export interface MeshLocalStatus {
+  mesh_enabled: boolean
+  mesh_started: boolean
+  webrtc_started: boolean
+  peer_id: string | null
+  node_name: string
+  peer_selection: string
+  version_policy: string
+  shared_modules: string[]
+  routed_modules: string[]
+}
+
+export interface MeshPeerServiceDiagnostic {
+  module: string
+  version: string
+  capabilities: string[]
+  method_names: string[]
+  max_concurrent: number
+  active_calls: number
+  available_capacity: number | null
+  digest: string
+}
+
+export interface MeshPeerCompatibilityDiagnostic {
+  local_compatible: string[]
+  local_incompatible: string[]
+  local_unused: string[]
+  remote_compatible: string[]
+  remote_incompatible: string[]
+  remote_unused: string[]
+}
+
+export interface MeshPeerDiagnostic {
+  peer_id: string
+  node_name: string
+  status: string
+  latency_ms: number | null
+  last_ping_age_s: number | null
+  last_manifest_age_s: number | null
+  active_calls: number
+  services: MeshPeerServiceDiagnostic[]
+  compatibility: MeshPeerCompatibilityDiagnostic
+}
+
+export interface MeshRouteProviderDiagnostic {
+  peer_id: string
+  node_name: string
+  status: string
+  version: string
+  latency_ms: number | null
+  active_calls: number
+  max_concurrent: number
+  eligible: boolean
+  reason_code: string
+  reason: string
+}
+
+export interface MeshRouteDiagnostic {
+  module: string
+  configured: boolean
+  share: boolean
+  prefer: string
+  fallback: string
+  min_version: string | null
+  required_capabilities: string[]
+  decision_target: string
+  decision_peer_id: string | null
+  decision_version: string
+  decision_latency_ms: number | null
+  reason: string
+  providers: MeshRouteProviderDiagnostic[]
+}
+
+export interface MeshCompatibilityFailure {
+  peer_id: string
+  module: string
+  direction: string
+  reason: string
+}
+
+export interface MeshStatusResponse {
+  local: MeshLocalStatus
+  peers: MeshPeerDiagnostic[]
+  routes: MeshRouteDiagnostic[]
+  compatibility_failures: MeshCompatibilityFailure[]
+  secrets_redacted: boolean
+}
+
+export interface MeshPeerInfo {
+  id: string
+  peer_id: string
+  node_name: string
+  room_name: string
+  ip: string | null
+  port: number | null
+  outbound_status: string
+  outbound_permissions: string[]
+  outbound_approved_at: string | null
+  outbound_approved_by: string | null
+  inbound_status: string
+  inbound_permissions: string[]
+  inbound_approved_at: string | null
+  connection_status: string
+  first_seen_at: string
+  last_seen_at: string | null
+  last_status_change_at: string
+}
+
+export interface MeshPeerListRequest {
+  room_name?: string | null
+  outbound_status?: string | null
+  include_disconnected?: boolean
+}
+
+export interface MeshPeerListResponse {
+  peers: MeshPeerInfo[]
+  total: number
+}
+
+export interface MeshPeerGetRequest {
+  peer_id: string
+  room_name?: string | null
+}
+
+export interface MeshPeerGetResponse {
+  peer: MeshPeerInfo | null
+}
+
+export interface MeshPeerApproveRequest {
+  peer_id: string
+  permissions: string[]
+  approved_by?: string | null
+}
+
+export interface MeshPeerDenyRequest {
+  peer_id: string
+}
+
+export interface MeshPeerUpdatePermissionsRequest {
+  peer_id: string
+  permissions: string[]
+}
+
+export interface MeshPeerRemoveRequest {
+  peer_id: string
+  revoke_token?: boolean
+}
+
+export interface MeshBoolResponse {
+  success: boolean
+  message: string
+}
+
 export interface GatewayEventStreamEvent {
   id: string
   kind: string

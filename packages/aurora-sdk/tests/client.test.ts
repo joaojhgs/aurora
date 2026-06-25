@@ -157,6 +157,74 @@ describe('AuroraClient', () => {
     ])
   })
 
+  it('routes mesh peer lifecycle reads and mutations through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Gateway.GetMeshStatus', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return defaultMockAuroraFixtures.meshStatus
+      })
+      .register('Auth.MeshListPeers', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return defaultMockAuroraFixtures.meshPeers
+      })
+      .register('Auth.MeshGetPeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { peer: defaultMockAuroraFixtures.meshPeers.peers[0] }
+      })
+      .register('Auth.MeshApprovePeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshDenyPeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshUpdatePeerPermissions', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshRemovePeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.mesh.getStatus()
+    await client.mesh.listPeers({ include_disconnected: true })
+    await client.mesh.getPeer({ peer_id: 'peer-kitchen' })
+    await client.mesh.approvePeer({ peer_id: 'peer-kitchen', permissions: ['Gateway.use'] })
+    await client.mesh.denyPeer({ peer_id: 'peer-den' })
+    await client.mesh.updatePeerPermissions({ peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] })
+    await client.mesh.removePeer({ peer_id: 'peer-den', revoke_token: true })
+
+    expect(calls).toEqual([
+      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: undefined },
+      { method: 'Auth.MeshListPeers', path: '/api/Auth/MeshListPeers', payload: { include_disconnected: true } },
+      { method: 'Auth.MeshGetPeer', path: '/api/Auth/MeshGetPeer', payload: { peer_id: 'peer-kitchen' } },
+      {
+        method: 'Auth.MeshApprovePeer',
+        path: '/api/Auth/MeshApprovePeer',
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use'] }
+      },
+      {
+        method: 'Auth.MeshDenyPeer',
+        path: '/api/Auth/MeshDenyPeer',
+        payload: { peer_id: 'peer-den' }
+      },
+      {
+        method: 'Auth.MeshUpdatePeerPermissions',
+        path: '/api/Auth/MeshUpdatePeerPermissions',
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] }
+      },
+      {
+        method: 'Auth.MeshRemovePeer',
+        path: '/api/Auth/MeshRemovePeer',
+        payload: { peer_id: 'peer-den', revoke_token: true }
+      }
+    ])
+  })
+
   it('routes Auth device and token management through typed SDK descriptors', async () => {
     const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
     const transport = MockAuroraTransport.empty()
@@ -525,8 +593,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 4,
-        methods: 25,
-        externalMethods: 24,
+        methods: 33,
+        externalMethods: 32,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -3248,7 +3316,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 25,
+      checked: 33,
       issues: []
     })
 
