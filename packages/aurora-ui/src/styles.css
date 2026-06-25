@@ -474,7 +474,7 @@ button, input, select, textarea { font: inherit; }
 .aui-mesh-header h1 { margin: .15rem 0 0; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.08; }
 .aui-mesh-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
 .aui-mesh-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 34rem; }
-.aui-mesh-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-mesh-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; margin: 0; }
 .aui-mesh-summary div, .aui-mesh-meta div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem; background: color-mix(in srgb, var(--aui-surface-2) 42%, white); }
 .aui-mesh-summary dt, .aui-mesh-meta dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
 .aui-mesh-summary dd, .aui-mesh-meta dd { margin: .2rem 0 0; overflow-wrap: anywhere; line-height: 1.4; }
@@ -507,6 +507,11 @@ button, input, select, textarea { font: inherit; }
 .aui-mesh-scopes span { color: var(--aui-muted); overflow-wrap: anywhere; line-height: 1.4; }
 .aui-mesh-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .45rem; padding: .5rem .7rem; background: var(--aui-surface); color: var(--aui-primary); font-weight: 750; }
 .aui-mesh-actions button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-mesh-row-list { display: grid; gap: .75rem; }
+.aui-mesh-row { display: grid; gap: .65rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: color-mix(in srgb, var(--aui-surface-2) 34%, white); }
+.aui-mesh-row > header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.aui-mesh-row h3 { margin: .12rem 0 0; font-size: .96rem; overflow-wrap: anywhere; }
+.aui-mesh-row code { display: block; max-width: 100%; margin-top: .25rem; color: var(--aui-muted); font-size: .76rem; overflow-wrap: anywhere; white-space: normal; }
 
 @media (max-width: 1100px) {
   .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
@@ -523,7 +528,7 @@ button, input, select, textarea { font: inherit; }
   .aui-mode-card em { grid-column: 1 / -1; }
   .aui-pairing-controls, .aui-pairing-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-pairing-card-header { display: grid; }
-  .aui-mesh-header, .aui-mesh-card > header { display: grid; }
+  .aui-mesh-header, .aui-mesh-card > header, .aui-mesh-row > header { display: grid; }
   .aui-mesh-badges { justify-content: flex-start; }
   .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: minmax(0, 1fr); }
 }

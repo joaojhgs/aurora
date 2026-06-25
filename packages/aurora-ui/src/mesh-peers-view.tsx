@@ -11,6 +11,7 @@ import {
   type AuroraClient,
   type AvailabilityState,
   type CapabilitySummary,
+  type DeviceResponse,
   type JsonObject,
   type MeshPeerDiagnostic,
   type MeshPeerInfo,
@@ -70,6 +71,35 @@ export interface MeshPeerRow {
   removeAction: MeshPeerAdminAction | null
 }
 
+export interface MeshLiveSessionRow {
+  sessionId: string
+  stablePeerId: string
+  nodeName: string
+  state: AvailabilityState
+  connectionState: string
+  iceState: string
+  dataChannelState: string
+  authState: string
+  latencyMs: number | null
+  identitySource: string
+  permissions: string
+  pairingState: string
+  linkedPeerState: string
+  evidenceSource: string
+}
+
+export interface MeshDeviceRow {
+  deviceId: string
+  name: string
+  principalId: string | null
+  state: AvailabilityState
+  trustLabel: string
+  linkedPeerId: string | null
+  linkedPeerLabel: string
+  lastSeen: string | null
+  evidenceSource: string
+}
+
 export interface MeshPeersSnapshot {
   loadState: MeshPeersLoadState
   generatedAt: string | null
@@ -80,11 +110,15 @@ export interface MeshPeersSnapshot {
   webrtcStarted: boolean
   secretsRedacted: boolean
   peers: MeshPeerRow[]
+  liveSessions: MeshLiveSessionRow[]
+  devices: MeshDeviceRow[]
   pendingCount: number
   approvedCount: number
   deniedCount: number
   removedCount: number
   runtimePeerCount: number
+  liveSessionCount: number
+  deviceCount: number
   routeCount: number
   compatibilityFailures: string[]
   listState: AvailabilityState
@@ -131,11 +165,15 @@ const loadingSnapshot: MeshPeersSnapshot = {
   webrtcStarted: false,
   secretsRedacted: true,
   peers: [],
+  liveSessions: [],
+  devices: [],
   pendingCount: 0,
   approvedCount: 0,
   deniedCount: 0,
   removedCount: 0,
   runtimePeerCount: 0,
+  liveSessionCount: 0,
+  deviceCount: 0,
   routeCount: 0,
   compatibilityFailures: [],
   listState: 'pending',
@@ -223,11 +261,12 @@ export async function buildMeshPeersSnapshot(
   client: AuroraClient,
   route: RouteAvailability
 ): Promise<MeshPeersSnapshot> {
-  const [statusResult, peersResult, pairingsResult, diagnosticsResult, catalogResult] = await Promise.allSettled([
+  const [statusResult, peersResult, pairingsResult, diagnosticsResult, devicesResult, catalogResult] = await Promise.allSettled([
     client.mesh.getStatus(),
     client.mesh.listPeers({ include_disconnected: true }),
     client.authApi.listPendingPairings({ include_non_pending: true }),
     client.registry.getWebRTCDiagnostics(),
+    client.authApi.listDevices(),
     client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })
   ])
 
@@ -235,6 +274,7 @@ export async function buildMeshPeersSnapshot(
   const peersResponse = responseDataOrNull(peersResult)
   const pairingsResponse = responseDataOrNull(pairingsResult)
   const diagnostics = valueOrNull(diagnosticsResult)
+  const devicesResponse = responseDataOrNull(devicesResult)
   const catalog = valueOrNull(catalogResult)
   const summaries = catalog ? summarizeCapabilities(catalog) : []
   const listCapability = capabilityFor(AUTH_METHODS.meshListPeers, summaries)
@@ -249,6 +289,7 @@ export async function buildMeshPeersSnapshot(
     failureMessage('mesh peers', peersResult),
     failureMessage('pairing queue', pairingsResult, true),
     failureMessage('WebRTC diagnostics', diagnosticsResult, true),
+    failureMessage('Auth devices', devicesResult, true),
     failureMessage('capability catalog', catalogResult)
   ].filter((message): message is string => Boolean(message))
   const denied = [statusResult, peersResult, catalogResult].some(isDeniedFailure)
@@ -281,9 +322,11 @@ export async function buildMeshPeersSnapshot(
     diagnostics,
     mutationCapability
   })
+  const liveSessions = buildMeshLiveSessionRows(diagnostics, statusResponse, peersResponse?.peers ?? [])
+  const devices = buildMeshDeviceRows(devicesResponse?.devices ?? [], rows, liveSessions)
   const loadState: MeshPeersLoadState = denied
     ? 'denied'
-    : rows.length === 0
+    : rows.length === 0 && liveSessions.length === 0 && devices.length === 0
       ? 'empty'
       : failures.length > 0
         ? 'degraded'
@@ -299,11 +342,15 @@ export async function buildMeshPeersSnapshot(
     webrtcStarted: statusResponse?.local.webrtc_started ?? diagnostics?.started ?? false,
     secretsRedacted: statusResponse?.secrets_redacted ?? catalog?.secrets_redacted ?? true,
     peers: rows,
+    liveSessions,
+    devices,
     pendingCount: rows.filter((peer) => peer.trustState === 'pending').length,
     approvedCount: rows.filter((peer) => peer.trustState === 'available-local' || peer.trustState === 'available-remote').length,
     deniedCount: rows.filter((peer) => peer.trustState === 'denied').length,
     removedCount: rows.filter((peer) => peer.outboundStatus === 'removed').length,
     runtimePeerCount: statusResponse?.peers.length ?? 0,
+    liveSessionCount: liveSessions.length,
+    deviceCount: devices.length,
     routeCount: statusResponse?.routes.length ?? 0,
     compatibilityFailures: statusResponse?.compatibility_failures.map((item) =>
       `${item.peer_id} ${item.module} ${item.direction}: ${item.reason}`
@@ -316,7 +363,7 @@ export async function buildMeshPeersSnapshot(
     mutationReason: capabilityReason(mutationCapability, 'Auth mesh peer mutations require AdminAction draft, confirm, and audit.'),
     warnings: failures,
     error: denied ? 'Mesh peer lifecycle access was denied by Auth or Gateway.' : null,
-    evidenceSource: 'AuroraClient mesh/auth/gateway/capability responses'
+    evidenceSource: 'AuroraClient mesh/auth/gateway/device/capability responses'
   }
 }
 
@@ -345,7 +392,7 @@ export function MeshPeersView({
         <div>
           <p className="aui-kicker">Mesh trust</p>
           <h1 id="mesh-peers-title">Mesh peers</h1>
-          <p>Peer lifecycle, persisted trust, route quality, and AdminAction controls are rendered from AuroraClient evidence.</p>
+          <p>Active WebRTC sessions, persisted Auth peer records, and device records are rendered as separate backend-proven surfaces.</p>
         </div>
         <div className="aui-mesh-badges" aria-label="Mesh evidence">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.listState} />
@@ -358,7 +405,8 @@ export function MeshPeersView({
         <MeshFact label="Local node" value={`${snapshot.localNodeName} / ${snapshot.localPeerId ?? 'not reported'}`} />
         <MeshFact label="Runtime" value={`mesh=${snapshot.meshEnabled ? 'enabled' : 'disabled'} started=${snapshot.meshStarted ? 'yes' : 'no'} webrtc=${snapshot.webrtcStarted ? 'yes' : 'no'}`} />
         <MeshFact label="Trust states" value={`${snapshot.pendingCount} pending / ${snapshot.approvedCount} approved / ${snapshot.deniedCount} denied / ${snapshot.removedCount} removed`} />
-        <MeshFact label="Diagnostics" value={`${snapshot.runtimePeerCount} runtime peers / ${snapshot.routeCount} routes`} />
+        <MeshFact label="Diagnostics" value={`${snapshot.liveSessionCount} live sessions / ${snapshot.runtimePeerCount} runtime peers / ${snapshot.routeCount} routes`} />
+        <MeshFact label="Devices" value={`${snapshot.deviceCount} Auth device records`} />
       </dl>
 
       <section className="aui-mesh-controls" aria-label="Mesh peer controls">
@@ -399,7 +447,10 @@ export function MeshPeersView({
       {mutationError ? <p className="aui-message aui-message-danger" role="alert">{mutationError}</p> : null}
       {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
       {snapshot.loadState === 'loading' ? <p className="aui-message" aria-live="polite">Loading mesh peers from AuroraClient.</p> : null}
-      {snapshot.loadState === 'empty' ? <p className="aui-message">No persisted mesh peers or pending peer pairings were reported by Auth.</p> : null}
+      {snapshot.loadState === 'empty' ? <p className="aui-message">No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.</p> : null}
+
+      <MeshLiveSessionsPanel sessions={snapshot.liveSessions} />
+      <MeshDevicesPanel devices={snapshot.devices} />
 
       <section className="aui-mesh-list" aria-label="Persisted mesh peer lifecycle">
         {snapshot.peers.map((peer) => {
@@ -476,6 +527,83 @@ export function MeshPeersView({
   )
 }
 
+function MeshLiveSessionsPanel({ sessions }: { sessions: MeshLiveSessionRow[] }) {
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-live-sessions-title">
+      <div className="aui-mesh-panel-title">
+        <span><ShieldCheck size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-live-sessions-title">Active WebRTC sessions</h2>
+          <p>Transport session IDs stay separate from stable Auth mesh peer identity.</p>
+        </div>
+      </div>
+      {sessions.length === 0 ? <p className="aui-message">No active WebRTC session evidence was reported.</p> : (
+        <div className="aui-mesh-row-list">
+          {sessions.map((session) => (
+            <article className="aui-mesh-row" key={session.sessionId}>
+              <header>
+                <div>
+                  <p className="aui-kicker">{session.sessionId}</p>
+                  <h3>{session.nodeName}</h3>
+                  <code>{session.stablePeerId}</code>
+                </div>
+                <StatusBadge state={session.state} />
+              </header>
+              <dl className="aui-mesh-meta">
+                <MeshFact label="Connection" value={`${session.connectionState}; ICE ${session.iceState}; channel ${session.dataChannelState}`} />
+                <MeshFact label="Auth" value={session.authState} />
+                <MeshFact label="Latency" value={session.latencyMs === null ? 'not reported' : `${session.latencyMs} ms`} />
+                <MeshFact label="Pairing" value={session.pairingState} />
+                <MeshFact label="Linked peer" value={session.linkedPeerState} />
+                <MeshFact label="Permissions" value={session.permissions} />
+                <MeshFact label="Identity source" value={session.identitySource} />
+                <MeshFact label="Evidence" value={session.evidenceSource} />
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MeshDevicesPanel({ devices }: { devices: MeshDeviceRow[] }) {
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-devices-title">
+      <div className="aui-mesh-panel-title">
+        <span><ShieldCheck size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-devices-title">Auth device records</h2>
+          <p>Device trust is shown separately from mesh peer trust and live WebRTC transport state.</p>
+        </div>
+      </div>
+      {devices.length === 0 ? <p className="aui-message">No Auth device records were reported for this mesh view.</p> : (
+        <div className="aui-mesh-row-list">
+          {devices.map((device) => (
+            <article className="aui-mesh-row" key={device.deviceId}>
+              <header>
+                <div>
+                  <p className="aui-kicker">{device.principalId ?? 'principal not reported'}</p>
+                  <h3>{device.name}</h3>
+                  <code>{device.deviceId}</code>
+                </div>
+                <StatusBadge state={device.state} />
+              </header>
+              <dl className="aui-mesh-meta">
+                <MeshFact label="Device trust" value={device.trustLabel} />
+                <MeshFact label="Linked peer" value={device.linkedPeerLabel} />
+                <MeshFact label="Stable peer ID" value={device.linkedPeerId ?? 'not linked by backend evidence'} />
+                <MeshFact label="Last seen" value={formatDate(device.lastSeen)} />
+                <MeshFact label="Evidence" value={device.evidenceSource} />
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function MeshStatusPanel({ snapshot, route }: { snapshot: MeshPeersSnapshot; route: RouteAvailability }) {
   return (
     <section className="aui-mesh-panel" aria-labelledby="mesh-state-title">
@@ -503,6 +631,83 @@ function MeshStatusPanel({ snapshot, route }: { snapshot: MeshPeersSnapshot; rou
   )
 }
 
+function buildMeshLiveSessionRows(
+  diagnostics: WebRTCDiagnosticsResponse | null,
+  status: MeshStatusResponse | null,
+  persistedPeers: MeshPeerInfo[]
+): MeshLiveSessionRow[] {
+  return (diagnostics?.peers ?? []).map((session) => {
+    const runtime = status?.peers.find((peer) => peer.peer_id === session.stable_peer_id) ?? null
+    const persisted = persistedPeers.find((peer) => peer.peer_id === session.stable_peer_id) ?? null
+    return {
+      sessionId: session.signaling_peer_id,
+      stablePeerId: session.stable_peer_id,
+      nodeName: session.node_name || runtime?.node_name || persisted?.node_name || 'Unnamed WebRTC session',
+      state: liveSessionState(session, runtime, persisted),
+      connectionState: session.connection_state,
+      iceState: session.ice_connection_state,
+      dataChannelState: session.data_channel_state,
+      authState: session.auth_state,
+      latencyMs: session.rtt_ms ?? runtime?.latency_ms ?? null,
+      identitySource: session.identity_source,
+      permissions: `${session.effective_permission_count} effective permissions${session.is_admin ? '; admin principal' : ''}`,
+      pairingState: [
+        session.pairing_active ? 'pairing active' : null,
+        session.auth_timeout_pending ? 'auth timeout pending' : null,
+        session.pending_pairing_task ? 'pending pairing task' : null
+      ].filter(Boolean).join('; ') || 'no pairing task reported',
+      linkedPeerState: persisted
+        ? `Auth peer ${persisted.outbound_status}/${persisted.inbound_status}`
+        : runtime
+          ? `runtime peer ${runtime.status}`
+          : 'no persisted peer record',
+      evidenceSource: 'Gateway.GetWebRTCDiagnostics'
+    }
+  })
+}
+
+function buildMeshDeviceRows(
+  devices: DeviceResponse[],
+  peers: MeshPeerRow[],
+  sessions: MeshLiveSessionRow[]
+): MeshDeviceRow[] {
+  return devices.map((device) => {
+    const linkedPeer = matchDevicePeer(device, peers, sessions)
+    return {
+      deviceId: device.id,
+      name: device.name,
+      principalId: device.user_id ?? null,
+      state: device.is_trusted ? 'available-local' : 'denied',
+      trustLabel: device.is_trusted ? 'trusted Auth device' : 'untrusted Auth device',
+      linkedPeerId: linkedPeer?.peerId ?? null,
+      linkedPeerLabel: linkedPeer ? `${linkedPeer.nodeName} (${linkedPeer.source})` : 'not linked to a mesh peer by backend evidence',
+      lastSeen: device.last_seen ?? null,
+      evidenceSource: 'Auth.ListDevices'
+    }
+  })
+}
+
+function matchDevicePeer(
+  device: DeviceResponse,
+  peers: MeshPeerRow[],
+  sessions: MeshLiveSessionRow[]
+): { peerId: string; nodeName: string; source: string } | null {
+  const fields = [device.id, device.name, device.user_id ?? ''].map(normalizedMatchText).filter(Boolean)
+  for (const session of sessions) {
+    const sessionTokens = [session.stablePeerId, session.nodeName, session.sessionId].map(normalizedMatchText)
+    if (sessionTokens.some((token) => token && fields.some((field) => field.includes(token) || token.includes(field)))) {
+      return { peerId: session.stablePeerId, nodeName: session.nodeName, source: 'live WebRTC session' }
+    }
+  }
+  for (const peer of peers) {
+    const peerTokens = [peer.peerId, peer.nodeName].map(normalizedMatchText)
+    if (peerTokens.some((token) => token && fields.some((field) => field.includes(token) || token.includes(field)))) {
+      return { peerId: peer.peerId, nodeName: peer.nodeName, source: 'persisted peer record' }
+    }
+  }
+  return null
+}
+
 function buildMeshPeerRows(input: {
   persistedPeers: MeshPeerInfo[]
   pendingPairings: PendingPairingEntry[]
@@ -523,6 +728,25 @@ function buildMeshPeerRows(input: {
     const pairing = pairingByPeer.get(peerId) ?? null
     return buildMeshPeerRow(peerId, persisted, runtime, pairing, input.status?.routes ?? [], input.diagnostics, input.mutationCapability)
   })
+}
+
+function liveSessionState(
+  session: WebRTCDiagnosticsResponse['peers'][number],
+  runtime: MeshPeerDiagnostic | null,
+  persisted: MeshPeerInfo | null
+): AvailabilityState {
+  if (session.auth_state === 'denied' || session.auth_state === 'failed') return 'denied'
+  if (runtime?.status === 'stale') return 'stale'
+  if (session.connection_state === 'connected' && session.data_channel_state === 'open' && session.auth_state === 'authenticated') {
+    return persisted?.outbound_status === 'approved' || runtime?.status === 'authenticated' ? 'available-remote' : 'pending'
+  }
+  if (session.pairing_active || session.pending_pairing_task || session.auth_timeout_pending) return 'pending'
+  if (session.connection_state === 'disconnected' || session.ice_connection_state === 'failed') return 'stale'
+  return 'degraded'
+}
+
+function normalizedMatchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
 function buildMeshPeerRow(
