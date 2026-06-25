@@ -17,8 +17,13 @@
     "aurora-sidecar-stop",
     "aurora-log-tail",
     "aurora-secure-storage",
+    "aurora-native-permissions",
+    "aurora-tray",
+    "aurora-notifications",
+    "aurora-dialogs",
     "aurora-local-file",
     "aurora-secure-file-handle",
+    "aurora-audio-bridge",
     "aurora-shutdown"
   ]
 }

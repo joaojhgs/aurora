@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-audio-bridge"
+description = "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control."
+commands.allow = ["aurora_audio_bridge_status"]

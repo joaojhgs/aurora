@@ -16,8 +16,13 @@ TAURI-002 and TAURI-004 expose only the minimum command and capability surface n
 | `aurora_sidecar_status` | Reports local sidecar process and Gateway health. | `aurora-sidecar-status` | Includes pid/running/mode/loopback/health evidence and redacted token-storage facts; does not include the token value. |
 | `aurora_log_tail` | Reports whether a local sidecar log tail is available. | `aurora-log-tail` | Does not read arbitrary files; returns unavailable until a supervised log source is exposed. |
 | `aurora_secure_storage_get`, `aurora_secure_storage_set`, `aurora_secure_storage_delete` | SDK secure-storage helper surface. | `aurora-secure-storage` | Persists only validated Aurora credential keys in the platform keychain. Does not grant filesystem, shell, process, or web-storage access. |
+| `aurora_native_permission_status` | Reports the shell native permission/capability matrix, denied defaults, and privacy classes. | `aurora-native-permissions` | Evidence only; grants no OS permission by itself. |
+| `aurora_tray_status` | Reports system tray availability. | `aurora-tray` | Tray is created in Rust with Show Aurora and Quit actions; no shell/process access is exposed to the webview. |
+| `aurora_notification_status`, `aurora_notification_send` | Reports notification availability and returns structured denied responses for sends. | `aurora-notifications` | Notification delivery is denied by default until a permission-request UX exists. |
+| `aurora_dialog_status` | Reports dialog availability. | `aurora-dialogs` | Native open/save dialogs are denied by default until scoped picker UX exists. |
 | `aurora_local_file_read`, `aurora_local_file_write`, `aurora_local_file_pick` | SDK local-file helper surface. | `aurora-local-file` | Returns `native_permission_missing`; no filesystem plugin or file scope is granted. |
 | `aurora_secure_file_handle_open` | Future secure file-handle surface. | `aurora-secure-file-handle` | Returns `native_permission_missing`; scoped handle design is deferred. |
+| `aurora_audio_bridge_status` | Reports raw-audio bridge readiness and required consent/backend evidence. | `aurora-audio-bridge` | Microphone capture, live audio streaming, and playback control are denied by default. |
 | `aurora_shutdown` | Stops managed sidecar if present, then exits the shell cleanly. | `aurora-shutdown` | Does not terminate non-managed external Aurora processes. |
 
 ## Capability File
@@ -27,6 +32,7 @@ TAURI-002 and TAURI-004 expose only the minimum command and capability surface n
 - `core:app:default`
 - `core:event:default`
 - `core:window:default`
+- Aurora native permission, tray, notification, dialog, and audio status commands
 - the Aurora app-command permissions listed above
 
 ## Denied By Default
@@ -44,6 +50,8 @@ The shell does not grant broad Tauri or plugin permissions for:
 - WebRTC/native networking outside the SDK/Gateway bridge
 
 Secure credential storage is enabled only through the narrow Aurora keychain command surface. The native manifest reports broad filesystem, secure file handles, shell/process spawning, audio, clipboard, notifications, dialogs, and updater surfaces as unavailable where they are part of planned future Aurora surfaces. Follow-up tasks must add explicit permissions, UX, and tests before enabling them.
+
+TAURI-005 adds the core Tauri tray feature and an Aurora-owned native status bridge. It intentionally does not grant notification delivery, native dialogs, arbitrary file reads/writes, microphone capture, live audio streaming, or playback control. Those surfaces report denied defaults through `Native.GetCapabilityManifest`, `aurora_native_permission_status`, and the per-feature status commands until downstream UI/backend tasks provide scoped consent, target selection, retention/audit language, and tests.
 
 ## Token And Origin Handling
 
