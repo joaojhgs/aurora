@@ -10,6 +10,7 @@ import {
   capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
   cloneFixture,
+  deploymentTopologyFixture,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
   modelRuntimeCatalogFixture,
@@ -21,6 +22,7 @@ import {
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo,
+  type DeploymentTopologyResponse,
   type GetRegistryResponse,
   type GetServicesResponse,
   type PendingPairingEntry
@@ -1380,6 +1382,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Manage/admin-critical operations')
     expect(markup).toContain('privacy-blocked')
     expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('Deployment topology')
+    expect(markup).toContain('local thread-mode app')
+    expect(markup).toContain('thread_mode_no_process_controls')
+    expect(markup).toContain('Process controls unsupported')
   })
 
   it('keeps denied, stale, empty, and internal-only admin states visible with repair links', () => {
@@ -1394,6 +1400,71 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Config.Get')
     expect(markup).toContain('DB.RAGSearch')
     expect(markup).toContain('AdminAction draft/confirm/audit is required')
+  })
+
+  it('renders process-mode deployment topology with Redis and BullMQ evidence', () => {
+    const manifest = adminOverviewStateMatrixManifest(processTopologyFixture())
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('server process-mode deployment')
+    expect(markup).toContain('BullMQBus')
+    expect(markup).toContain('redis://[redacted]@redis:6379/0 reachable')
+    expect(markup).toContain('docker-compose.process.yml')
+    expect(markup).toContain('Diagnostics export')
+    expect(markup).toContain('Services and contracts')
+    expect(markup).not.toContain('redis://:password')
+  })
+
+  it('renders Redis-down process topology as degraded with actionable repair copy', () => {
+    const topology = processTopologyFixture({
+      redis_reachable: false,
+      bullmq_queue_health: {
+        ...processTopologyFixture().bullmq_queue_health,
+        redis_reachable: false,
+        status: 'degraded',
+        degraded_reasons: ['redis_unreachable', 'bullmq_queue_lag_unknown'],
+        error: 'Redis connection failed'
+      },
+      mode_capability_degradations: ['redis_unreachable', 'bullmq_queue_lag_unknown']
+    })
+    const manifest = adminOverviewStateMatrixManifest(topology)
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('degraded')
+    expect(markup).toContain('redis_unreachable')
+    expect(markup).toContain('verify Redis is running')
+    expect(markup).toContain('bullmq_queue_lag_unknown')
+  })
+
+  it('renders mesh peer-only topology as privacy-blocked until peer topology is trusted', () => {
+    const topology = topologyFixture({
+      architecture_mode: 'mesh',
+      runtime_mode: 'mesh-peer-only',
+      bus_backend: 'MeshBus',
+      mesh_peer_topology_trusted: false,
+      mode_capability_degradations: ['mesh_peer_topology_untrusted'],
+      service_process_topology: []
+    })
+    const manifest = adminOverviewStateMatrixManifest(topology)
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="mesh" />)
+
+    expect(markup).toContain('mesh peer-only shell')
+    expect(markup).toContain('privacy-blocked')
+    expect(markup).toContain('mesh_peer_topology_untrusted')
+    expect(markup).toContain('require authenticated peer evidence')
+  })
+
+  it('renders missing deployment topology without inventing process health', () => {
+    const manifest = {
+      ...adminOverviewStateMatrixManifest(null),
+      deploymentTopologyError: 'deployment topology unavailable'
+    }
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('Deployment topology unavailable')
+    expect(markup).toContain('deployment topology unavailable')
+    expect(markup).toContain('BE-016 topology unavailable')
+    expect(markup).toContain('Open diagnostics')
   })
 
   it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
@@ -2389,7 +2460,9 @@ function action(
   }
 }
 
-function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
+function adminOverviewStateMatrixManifest(
+  deploymentTopology: DeploymentTopologyResponse | null = deploymentTopologyFixture
+): AdminOverviewManifest {
   const catalog = stateMatrixCatalog()
   const services: GetServicesResponse = {
     mode: 'processes',
@@ -2430,8 +2503,81 @@ function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
     registry: gatewayRegistryFixture,
     services,
     capabilityCatalog: catalog,
+    deploymentTopology,
     generatedAt: '2026-06-19T00:00:00Z'
   })
+}
+
+function topologyFixture(
+  overrides: Partial<DeploymentTopologyResponse> = {}
+): DeploymentTopologyResponse {
+  return {
+    ...cloneFixture(deploymentTopologyFixture),
+    ...overrides
+  }
+}
+
+function processTopologyFixture(
+  overrides: Partial<DeploymentTopologyResponse> = {}
+): DeploymentTopologyResponse {
+  const topology = topologyFixture({
+    architecture_mode: 'processes',
+    runtime_mode: 'server-process',
+    bus_backend: 'BullMQBus',
+    redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+    redis_reachable: true,
+    bullmq_queue_health: {
+      backend: 'BullMQBus',
+      redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+      redis_reachable: true,
+      bullmq_available: true,
+      queue_lag_known: true,
+      queue_depth: 0,
+      published: 42,
+      delivered: 42,
+      retries: 0,
+      dead_letters: 0,
+      status: 'healthy',
+      degraded_reasons: [],
+      error: null
+    },
+    service_process_topology: [
+      {
+        module: 'Gateway',
+        status: 'healthy',
+        topology: 'container',
+        instance_id: 'gateway-1',
+        container_hint: 'gateway-service',
+        process_hint: null,
+        last_seen: '2026-06-19T00:00:00Z',
+        stale: false
+      },
+      {
+        module: 'Config',
+        status: 'healthy',
+        topology: 'container',
+        instance_id: 'config-1',
+        container_hint: 'config-service',
+        process_hint: null,
+        last_seen: '2026-06-19T00:00:00Z',
+        stale: false
+      }
+    ],
+    container_topology_hints: {
+      orchestrator: 'docker-compose',
+      compose_file: 'docker-compose.process.yml',
+      redis_service: 'redis',
+      gateway_service: 'gateway-service',
+      config_service: 'config-service',
+      notes: ['process mode runs one container per Aurora service']
+    },
+    mode_capability_degradations: [],
+    mesh_peer_topology_trusted: null
+  })
+  return {
+    ...topology,
+    ...overrides
+  }
 }
 
 function allowedRouteEvaluation() {

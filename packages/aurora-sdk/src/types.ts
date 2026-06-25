@@ -1218,6 +1218,8 @@ export interface AdminOverviewServiceSummary {
 export interface AdminOverviewManifestInput {
   registry: GetRegistryResponse
   services?: GetServicesResponse | ServiceInfo[]
+  deploymentTopology?: DeploymentTopologyResponse | null
+  deploymentTopologyError?: string | null
   capabilityCatalog?: CapabilityCatalogResponse | null
   gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
   nativeManifest?: NativeCapabilityManifest | null
@@ -1229,6 +1231,8 @@ export interface AdminOverviewManifest {
   generatedAt: string
   registryDigest: string
   serviceMode: string
+  deploymentTopology: DeploymentTopologyResponse | null
+  deploymentTopologyError: string | null
   services: AdminOverviewServiceSummary[]
   methods: MethodDescriptor[]
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]

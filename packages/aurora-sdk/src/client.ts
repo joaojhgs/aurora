@@ -714,6 +714,7 @@ export class AssistantClient {
 
 export interface AdminOverviewManifestOptions {
   gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  deploymentTopology?: DeploymentTopologyResponse | null
   nativeManifest?: NativeCapabilityManifest | null
   peers?: PeerSummary[]
   generatedAt?: string
@@ -840,15 +841,52 @@ export class AdminOverviewClient {
   constructor(private readonly client: AuroraClient) {}
 
   async getManifest(options: AdminOverviewManifestOptions = {}): Promise<AdminOverviewManifest> {
-    const [registry, services, capabilityCatalog] = await Promise.all([
+    const [registry, services, capabilityCatalog, topologyResult] = await Promise.all([
       this.client.registry.getRegistry(),
       this.client.registry.listServices(),
-      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true }),
+      options.deploymentTopology !== undefined
+        ? Promise.resolve<AuroraResponse<DeploymentTopologyResponse>>(
+            options.deploymentTopology
+              ? {
+                  ok: true,
+                  data: options.deploymentTopology,
+                  audit: createAuditReceipt(options.deploymentTopology, {
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology,
+                    transport: this.client.transport.kind
+                  })
+                }
+              : {
+                  ok: false,
+                  error: new AuroraError({
+                    code: 'unsupported_feature',
+                    message: 'Deployment topology evidence was not provided',
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology
+                  }),
+                  audit: createAuditReceipt(null, {
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology,
+                    transport: this.client.transport.kind,
+                    status: 'unsupported_feature'
+                  })
+                }
+          )
+        : this.client.requestResult<DeploymentTopologyResponse>(
+            GATEWAY_METHODS.getDeploymentTopology,
+            undefined,
+            {
+              path: routePath('Gateway', 'GetDeploymentTopology')
+            }
+          )
     ])
     const input: AdminOverviewManifestInput = {
       registry,
       services,
-      capabilityCatalog
+      capabilityCatalog,
+      deploymentTopology: topologyResult.ok ? topologyResult.data : null,
+      deploymentTopologyError: topologyResult.ok ? null : topologyResult.error.message
     }
     if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
     if (options.nativeManifest !== undefined) input.nativeManifest = options.nativeManifest

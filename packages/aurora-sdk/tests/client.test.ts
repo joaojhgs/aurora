@@ -18,10 +18,12 @@ import {
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  cloneFixture,
   compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
   createAuroraEvent,
   defaultMockAuroraFixtures,
+  deploymentTopologyFixture,
   describeBackendInventory,
   describeRegistry,
   evaluateRoutePolicy,
@@ -554,6 +556,8 @@ describe('AuroraClient', () => {
         evidenceSource: 'not-provided'
       })
     )
+    expect(manifest.deploymentTopology).toBeNull()
+    expect(manifest.deploymentTopologyError).toBeNull()
     expect(manifest.privacy).toEqual({
       secretsRedacted: true,
       nativeStateInvented: false,
@@ -566,6 +570,7 @@ describe('AuroraClient', () => {
       .register('Gateway.GetRegistry', gatewayRegistryFixture)
       .register('Gateway.GetServices', gatewayServicesFixture)
       .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+      .register('Gateway.GetDeploymentTopology', deploymentTopologyFixture)
     const client = new AuroraClient({ transport })
 
     const manifest = await client.adminOverview.getManifest({
@@ -578,7 +583,64 @@ describe('AuroraClient', () => {
       '/api/admin/peers',
       '/api/health'
     ])
+    expect(manifest.deploymentTopology?.bus_backend).toBe('LocalBus')
+    expect(manifest.deploymentTopology?.mode_capability_degradations).toContain('thread_mode_no_process_controls')
     expect(manifest.native.availability).toBe('unsupported')
+  })
+
+  it('keeps admin overview usable when deployment topology is unavailable', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetServices', gatewayServicesFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+      .lose('Gateway.GetDeploymentTopology', 'deployment topology unavailable')
+    const client = new AuroraClient({ transport })
+
+    const manifest = await client.adminOverview.getManifest()
+
+    expect(manifest.services.length).toBeGreaterThan(0)
+    expect(manifest.deploymentTopology).toBeNull()
+    expect(manifest.deploymentTopologyError).toBe('deployment topology unavailable')
+  })
+
+  it('accepts process-mode deployment topology evidence in admin overview fixtures', () => {
+    const topology = cloneFixture(deploymentTopologyFixture)
+    topology.architecture_mode = 'processes'
+    topology.runtime_mode = 'server-process'
+    topology.bus_backend = 'BullMQBus'
+    topology.redis_url_redacted = 'redis://[redacted]@redis:6379/0'
+    topology.redis_reachable = true
+    topology.bullmq_queue_health = {
+      ...topology.bullmq_queue_health,
+      backend: 'BullMQBus',
+      redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+      redis_reachable: true,
+      bullmq_available: true,
+      queue_depth: 0,
+      status: 'healthy',
+      degraded_reasons: []
+    }
+    topology.mode_capability_degradations = []
+    topology.container_topology_hints = {
+      orchestrator: 'docker-compose',
+      compose_file: 'docker-compose.process.yml',
+      redis_service: 'redis',
+      gateway_service: 'gateway-service',
+      config_service: 'config-service',
+      notes: ['process mode runs one container per Aurora service']
+    }
+
+    const manifest = buildAdminOverviewManifest({
+      registry: gatewayRegistryFixture,
+      services: { ...gatewayServicesFixture, mode: 'processes' },
+      capabilityCatalog: capabilityCatalogFixture,
+      deploymentTopology: topology
+    })
+
+    expect(manifest.serviceMode).toBe('processes')
+    expect(manifest.deploymentTopology?.bus_backend).toBe('BullMQBus')
+    expect(manifest.deploymentTopology?.redis_url_redacted).toContain('[redacted]')
+    expect(manifest.deploymentTopology?.mode_capability_degradations).toEqual([])
   })
 
   it('preloads deterministic mock fixtures for offline SDK development', async () => {
