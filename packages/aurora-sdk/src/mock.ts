@@ -55,6 +55,7 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
+      .register('Backup.List', () => cloneFixture(fixtures.backups))
       .register('Gateway.GetSupportBundle', () => cloneFixture(fixtures.supportBundle))
       .register('Gateway.AdminActionDraft', (request) => {
         const payload = request.payload as { method_id?: string; affected_resources?: string[] } | undefined

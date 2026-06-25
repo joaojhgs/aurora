@@ -20,6 +20,7 @@ import type {
   TokenListResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
+import type { BackupListResponse } from './backup.js'
 import type {
   DBGetMessagesResponse,
   DBRAGExportNamespaceResponse,
@@ -409,6 +410,31 @@ const remoteTtsProvider: CapabilityProviderInfo = {
   freshness: localFreshness
 }
 
+const localBackupProvider: CapabilityProviderInfo = {
+  provider_id: 'local:Backup',
+  peer_id: 'local-peer',
+  provider_kind: 'local',
+  node_name: 'aurora-prod-01',
+  status: 'healthy',
+  service_instance_id: 'backup-local-01',
+  module: 'Backup',
+  version: '0.1.0',
+  latency_ms: 2,
+  max_concurrent: 2,
+  active_calls: 0,
+  available_capacity: 2,
+  eligible: true,
+  reason_code: 'eligible',
+  reason: 'Local Backup service fixture is available.',
+  policy: {
+    ...standardPolicy,
+    required_permissions: ['Backup.manage'],
+    safety_class: 'admin',
+    operation_class: 'admin'
+  },
+  freshness: localFreshness
+}
+
 const staleDbProvider: CapabilityProviderInfo = {
   provider_id: 'mesh:cabin-node:DB',
   peer_id: 'peer-cabin-node',
@@ -467,7 +493,7 @@ export const capabilityCatalogFixture: CapabilityCatalogResponse = {
   generated_at: '2026-06-19T00:00:00Z',
   local_peer_id: 'local-peer',
   local_node_name: 'aurora-prod-01',
-  providers: [localGatewayProvider, remoteTtsProvider, staleDbProvider],
+  providers: [localGatewayProvider, remoteTtsProvider, staleDbProvider, localBackupProvider],
   actions: [
     actionFixture(localGatewayProvider, {
       action_id: 'gateway-registry-local',
@@ -489,18 +515,27 @@ export const capabilityCatalogFixture: CapabilityCatalogResponse = {
       topic: 'DB.RAGSearch',
       summary: 'Stale remote DB/RAG provider fixture.',
       bindability: 'unavailable'
+    }),
+    actionFixture(localBackupProvider, {
+      action_id: 'backup-list-local',
+      method: 'List',
+      topic: 'Backup.List',
+      summary: 'List UI-safe backup manifests through the Backup service.',
+      bindability: 'available'
     })
   ],
   resources: [],
   provider_index: {
     Gateway: ['local:Gateway'],
     TTS: ['mesh:studio-gpu:TTS'],
-    DB: ['mesh:cabin-node:DB']
+    DB: ['mesh:cabin-node:DB'],
+    Backup: ['local:Backup']
   },
   action_index: {
     Gateway: ['gateway-registry-local'],
     TTS: ['tts-remote-privacy-blocked'],
-    DB: ['db-stale-rag-search']
+    DB: ['db-stale-rag-search'],
+    Backup: ['backup-list-local']
   },
   secrets_redacted: true
 }
@@ -647,6 +682,17 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       reason: 'Manifest is stale',
       policy: { ...basePolicy, trust_tier: 'paired', mesh_visible: true },
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
+    }),
+    provider({
+      provider_id: 'local:Backup',
+      module: 'Backup',
+      service_instance_id: 'backup-local',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Backup.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
     }),
     provider({
       provider_id: 'local:Orchestrator:llama-cpp',
@@ -813,6 +859,21 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
         mesh_visible: true
       },
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
+    }),
+    action({
+      action_id: 'backup-list-local',
+      module: 'Backup',
+      method: 'List',
+      topic: 'Backup.List',
+      provider_id: 'local:Backup',
+      service_instance_id: 'backup-local',
+      summary: 'List UI-safe backup manifests through the Backup service.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Backup.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
     }),
     action({
       action_id: 'model-runtime-local-catalog',
@@ -1014,7 +1075,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'cloud:openai:Orchestrator',
       'native:mobile-local-light'
     ],
-    Auth: ['local:Auth']
+    Auth: ['local:Auth'],
+    Backup: ['local:Backup']
   },
   action_index: {
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
@@ -1042,7 +1104,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.RevokeToken': ['auth-revoke-token'],
     'Auth.ListDevices': ['auth-list-devices'],
     'Auth.DeleteDevice': ['auth-delete-device'],
-    'Auth.AuditLog': ['auth-audit-log']
+    'Auth.AuditLog': ['auth-audit-log'],
+    'Backup.List': ['backup-list-local']
   },
   secrets_redacted: true
 }
@@ -2983,6 +3046,89 @@ export const supportBundleFixture: GatewaySupportBundleResponse = {
   secrets_redacted: true
 }
 
+export const backupListFixture: BackupListResponse = {
+  total: 2,
+  secrets_redacted: true,
+  backups: [
+    {
+      backup_id: 'backup-20260625T120000Z-config-rag',
+      created_at: '2026-06-25T12:00:00Z',
+      status: 'ok',
+      storage: {
+        kind: 'local',
+        uri: '.aurora/backups',
+        encryption: 'none',
+        key_ref: null,
+        credential_ref: null,
+        metadata: {}
+      },
+      components: [
+        {
+          component: 'config',
+          status: 'included',
+          item_count: 1,
+          bytes: 4096,
+          fingerprint: 'sha256:config-fixture',
+          redacted: true,
+          message: 'Config snapshot metadata captured with secret values redacted.'
+        },
+        {
+          component: 'rag',
+          status: 'included',
+          item_count: 3,
+          bytes: null,
+          fingerprint: 'sha256:rag-fixture',
+          redacted: true,
+          message: 'RAG namespace metadata captured; record payloads remain redacted.'
+        },
+        {
+          component: 'models',
+          status: 'unsupported',
+          item_count: null,
+          bytes: null,
+          fingerprint: null,
+          redacted: true,
+          message: 'Model binary backup awaits model runtime contracts.'
+        }
+      ],
+      manifest_digest: 'sha256:backup-fixture-a',
+      schema_version: 'aurora.backup.v1',
+      encrypted: false,
+      secrets_redacted: true,
+      audit_receipt: 'audit-backup-create-fixture'
+    },
+    {
+      backup_id: 'backup-20260624T090000Z-config-only',
+      created_at: '2026-06-24T09:00:00Z',
+      status: 'ok',
+      storage: {
+        kind: 'local',
+        uri: '.aurora/backups',
+        encryption: 'none',
+        key_ref: null,
+        credential_ref: null,
+        metadata: {}
+      },
+      components: [
+        {
+          component: 'config',
+          status: 'included',
+          item_count: 1,
+          bytes: 2048,
+          fingerprint: 'sha256:config-only-fixture',
+          redacted: true,
+          message: 'Config snapshot metadata captured.'
+        }
+      ],
+      manifest_digest: 'sha256:backup-fixture-b',
+      schema_version: 'aurora.backup.v1',
+      encrypted: false,
+      secrets_redacted: true,
+      audit_receipt: 'audit-backup-create-fixture-b'
+    }
+  ]
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -3010,6 +3156,7 @@ export interface MockAuroraFixtureSet {
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
+  backups: BackupListResponse
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
   configGet: ConfigGetResponse
@@ -3041,6 +3188,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
+  backups: backupListFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
   configGet: configGetFixture,

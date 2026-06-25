@@ -359,6 +359,7 @@ button, input, select, textarea { font: inherit; }
   .aui-activity { display: none; }
   .aui-assistant-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-route-panel { order: -1; }
+  .aui-backup-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-voice-body { grid-template-columns: minmax(0, 1fr); }
   .aui-tool-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-tool-summary { position: static; order: -1; }
@@ -390,6 +391,8 @@ button, input, select, textarea { font: inherit; }
   .aui-assistant-form { grid-template-columns: minmax(0, 1fr); }
   .aui-assistant-form button { width: 100%; }
   .aui-chat-bubble { max-width: 100%; }
+  .aui-backup-facts div { grid-template-columns: minmax(0, 1fr); }
+  .aui-backup-panel button, .aui-backup-form button { width: 100%; }
   .aui-tool-header { display: grid; }
   .aui-tool-card-header { display: grid; }
   .aui-risk-pill { width: fit-content; }

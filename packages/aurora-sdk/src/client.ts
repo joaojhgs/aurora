@@ -25,6 +25,7 @@ import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities
 import { ConfigClient } from './config.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
+import { BackupClient } from './backup.js'
 import { SchedulerClient } from './scheduler.js'
 import {
   loadToolApprovalCards,
@@ -144,6 +145,7 @@ export class AuroraClient {
   readonly models: ModelRuntimeClient
   readonly memory: MemoryClient
   readonly tools: ToolClient
+  readonly backups: BackupClient
   readonly scheduler: SchedulerClient
   readonly config: ConfigClient
   readonly diagnostics: DiagnosticsClient
@@ -167,6 +169,7 @@ export class AuroraClient {
     this.models = new ModelRuntimeClient(this)
     this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
+    this.backups = new BackupClient(this)
     this.scheduler = new SchedulerClient(this)
     this.config = new ConfigClient(this)
     this.diagnostics = new DiagnosticsClient(this)

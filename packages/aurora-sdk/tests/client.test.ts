@@ -7,6 +7,7 @@ import {
   HttpGatewayTransport,
   MeshP2PTransport,
   MockAuroraTransport,
+  backupListFixture,
   ORCHESTRATOR_METHODS,
   TauriLocalTransport,
   backendInventoryFixture,
@@ -1399,6 +1400,94 @@ describe('AuroraClient', () => {
       })
     )
   })
+
+  it('lists backups through the Backup SDK namespace and wraps backup mutations in AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordBackupCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport()
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        const methodId = (request.payload as { method_id: string }).method_id
+        return adminDraftFixture(methodId)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register('Backup.Create', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup: null,
+          audit_receipt: 'audit-create',
+          message: 'created'
+        }
+      })
+      .register('Backup.Verify', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup_id: 'backup-20260625T120000Z-config-rag',
+          verified: true,
+          manifest_digest: 'sha256:backup-fixture-a',
+          components: [],
+          message: null
+        }
+      })
+      .register('Backup.Restore', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup_id: 'backup-20260625T120000Z-config-rag',
+          restored: false,
+          rollback_backup_id: null,
+          impact_plan: backupImpactPlanFixture(),
+          audit_receipt: 'audit-restore',
+          message: 'Restore dry-run only; no state was changed.'
+        }
+      })
+      .register('Backup.Rollback', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          rollback_backup_id: 'rollback-1',
+          rolled_back: false,
+          impact_plan: backupImpactPlanFixture(),
+          audit_receipt: 'audit-rollback',
+          message: 'Rollback dry-run only; no state was changed.'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const listed = await client.backups.list()
+    expect(listed.ok).toBe(true)
+    if (listed.ok) {
+      expect(listed.data.backups[0]?.backup_id).toContain('backup-20260625')
+      expect(listed.data.secrets_redacted).toBe(true)
+    }
+
+    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore')).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' })).resolves.toMatchObject({ ok: true })
+
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(4)
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionConfirm')).toHaveLength(4)
+    for (const method of ['Backup.Create', 'Backup.Verify', 'Backup.Restore', 'Backup.Rollback']) {
+      expect(calls.find((call) => call.method === method)?.headers).toEqual(
+        expect.objectContaining({
+          'X-Aurora-AdminAction-Id': expect.stringContaining('aa-Backup'),
+          'X-Aurora-AdminAction-Token': expect.stringContaining('token-'),
+          'X-Aurora-AdminAction-Digest': expect.stringContaining('digest-')
+        })
+      )
+    }
+  })
+
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
@@ -3160,3 +3249,64 @@ describe('descriptors', () => {
     expect(error.correlationId).toBe('corr-1')
   })
 })
+
+function adminDraftFixture(methodId: string) {
+  const suffix = methodId.replace('.', '-')
+  return {
+    action_id: `aa-${suffix}`,
+    nonce: `nonce-${suffix}`,
+    digest: `digest-${suffix}`,
+    method_id: methodId,
+    affected_resources: ['admin.backups'],
+    required_phrase: 'CONFIRM',
+    required_reason: true,
+    required_reauth: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function adminConfirmFixture(actionId: string) {
+  const suffix = actionId.replace('aa-', '')
+  return {
+    action_id: actionId,
+    confirmation_token: `token-${suffix}`,
+    digest: `digest-${suffix}`,
+    confirmed: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    audit_receipt: `audit-${suffix}`,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function backupImpactPlanFixture() {
+  return {
+    admin_critical: true,
+    requires_quiesce: true,
+    requires_restart: true,
+    affected_services: [
+      {
+        service: 'Config',
+        action: 'reload',
+        required: true,
+        reason: 'Config state changes require reload review.'
+      },
+      {
+        service: 'DB',
+        action: 'quiesce',
+        required: true,
+        reason: 'DB/RAG restore needs write quiesce.'
+      }
+    ],
+    warnings: ['Destructive restore remains disabled by backend policy.']
+  }
+}
