@@ -53,6 +53,7 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
       .register('Gateway.GetDeploymentTopology', () => cloneFixture(fixtures.deploymentTopology))
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
+      .register('Gateway.GetMeshStatus', () => cloneFixture(fixtures.meshStatus))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Backup.List', () => cloneFixture(fixtures.backups))
@@ -135,6 +136,13 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.ListDevices', (request) => mockListDevices(fixtures.devices, request.payload))
       .register('Auth.DeleteDevice', () => ({ success: true }))
       .register('Auth.AuditLog', () => cloneFixture(fixtures.auditLog))
+      .register('Auth.ListPendingPairings', () => cloneFixture(fixtures.pendingPairings))
+      .register('Auth.MeshListPeers', () => cloneFixture(fixtures.meshPeers))
+      .register('Auth.MeshGetPeer', (request) => mockMeshPeer(fixtures.meshPeers, request.payload))
+      .register('Auth.MeshApprovePeer', () => ({ success: true, message: 'peer approved' }))
+      .register('Auth.MeshDenyPeer', () => ({ success: true, message: 'peer denied' }))
+      .register('Auth.MeshUpdatePeerPermissions', () => ({ success: true, message: 'permissions updated' }))
+      .register('Auth.MeshRemovePeer', () => ({ success: true, message: 'peer removed' }))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
         session_id: mockSessionId(request.payload),
@@ -299,6 +307,15 @@ function mockUpdatePrincipal(
     username: typeof request.username === 'string' ? request.username : principal.username,
     is_admin: typeof request.is_admin === 'boolean' ? request.is_admin : principal.is_admin
   }
+}
+
+function mockMeshPeer(
+  peers: { peers: Array<{ peer_id: string }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { peer_id?: unknown } : {}
+  const peer = peers.peers.find((candidate) => candidate.peer_id === request.peer_id)
+  return { peer: peer ? cloneFixture(peer) : null }
 }
 
 function mockListTokens(

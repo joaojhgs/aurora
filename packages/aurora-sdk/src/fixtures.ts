@@ -10,6 +10,9 @@ import type {
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
+  ListPendingPairingsResponse,
+  MeshPeerListResponse,
+  MeshStatusResponse,
   AuditLogResponse,
   DeviceListResponse,
   ModelRuntimeCatalogResponse,
@@ -140,6 +143,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'GetMeshStatus',
+          summary: 'Return read-only mesh peer and route diagnostics',
+          bus_topic: 'Gateway.GetMeshStatus',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'GetMeshStatusResponse',
+          required_perms: ['Gateway.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'GetDeploymentTopology',
           summary: 'Get sanitized deployment topology and message bus health',
           bus_topic: 'Gateway.GetDeploymentTopology',
@@ -183,6 +198,90 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
       summary: 'Authentication, authorization, pairing, and principal management',
       capabilities: ['login', 'pairing', 'principals', 'permissions', 'tokens', 'devices', 'audit', 'mesh'],
       methods: [
+        {
+          name: 'ListPendingPairings',
+          summary: 'List pending device and mesh pairing requests for authorized admins',
+          bus_topic: 'Auth.ListPendingPairings',
+          exposure: 'both',
+          input_model: 'ListPendingPairingsRequest',
+          output_model: 'ListPendingPairingsResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshListPeers',
+          summary: 'List persisted mesh peers and trust state',
+          bus_topic: 'Auth.MeshListPeers',
+          exposure: 'both',
+          input_model: 'MeshPeerListRequest',
+          output_model: 'MeshPeerListResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshGetPeer',
+          summary: 'Get one persisted mesh peer trust record',
+          bus_topic: 'Auth.MeshGetPeer',
+          exposure: 'both',
+          input_model: 'MeshPeerGetRequest',
+          output_model: 'MeshPeerGetResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshApprovePeer',
+          summary: 'Approve a mesh peer and granted outbound permissions',
+          bus_topic: 'Auth.MeshApprovePeer',
+          exposure: 'both',
+          input_model: 'MeshPeerApproveRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshDenyPeer',
+          summary: 'Deny a persisted mesh peer',
+          bus_topic: 'Auth.MeshDenyPeer',
+          exposure: 'both',
+          input_model: 'MeshPeerDenyRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshUpdatePeerPermissions',
+          summary: 'Replace outbound mesh peer permissions',
+          bus_topic: 'Auth.MeshUpdatePeerPermissions',
+          exposure: 'both',
+          input_model: 'MeshPeerUpdatePermissionsRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshRemovePeer',
+          summary: 'Remove a mesh peer record and optionally revoke its token',
+          bus_topic: 'Auth.MeshRemovePeer',
+          exposure: 'both',
+          input_model: 'MeshPeerRemoveRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
         {
           name: 'ListPrincipals',
           summary: 'List all principals',
@@ -846,6 +945,66 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
   ],
   actions: [
     action({
+      action_id: 'gateway-mesh-status-local',
+      module: 'Gateway',
+      method: 'GetMeshStatus',
+      topic: 'Gateway.GetMeshStatus',
+      provider_id: 'local:Gateway',
+      service_instance_id: 'gateway-local',
+      policy: { ...basePolicy, required_permissions: ['Gateway.use'] },
+      summary: 'Return read-only mesh peer lifecycle and route diagnostics.'
+    }),
+    action({
+      action_id: 'auth-mesh-list-peers-local',
+      module: 'Auth',
+      method: 'MeshListPeers',
+      topic: 'Auth.MeshListPeers',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' },
+      summary: 'List persisted mesh peer trust state.'
+    }),
+    action({
+      action_id: 'auth-mesh-approve-peer-local',
+      module: 'Auth',
+      method: 'MeshApprovePeer',
+      topic: 'Auth.MeshApprovePeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Approve a persisted mesh peer through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-deny-peer-local',
+      module: 'Auth',
+      method: 'MeshDenyPeer',
+      topic: 'Auth.MeshDenyPeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Deny a persisted mesh peer through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-update-peer-permissions-local',
+      module: 'Auth',
+      method: 'MeshUpdatePeerPermissions',
+      topic: 'Auth.MeshUpdatePeerPermissions',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Update persisted mesh peer permissions through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-remove-peer-local',
+      module: 'Auth',
+      method: 'MeshRemovePeer',
+      topic: 'Auth.MeshRemovePeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Remove a persisted mesh peer through AdminAction.'
+    }),
+    action({
       action_id: 'tts-local-synthesize',
       module: 'TTS',
       method: 'Synthesize',
@@ -1223,6 +1382,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
   ],
   resources: [],
   provider_index: {
+    Gateway: ['local:Gateway'],
     TTS: ['local:TTS', 'remote:kitchen:TTS'],
     Tooling: ['local:TTS', 'remote:kitchen:TTS'],
     Orchestrator: [
@@ -1236,6 +1396,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler']
   },
   action_index: {
+    'Gateway.GetMeshStatus': ['gateway-mesh-status-local'],
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
     'Tooling.ExecuteTool': [
       'tool-remote-file-search',
@@ -1262,6 +1423,11 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.ListDevices': ['auth-list-devices'],
     'Auth.DeleteDevice': ['auth-delete-device'],
     'Auth.AuditLog': ['auth-audit-log'],
+    'Auth.MeshListPeers': ['auth-mesh-list-peers-local'],
+    'Auth.MeshApprovePeer': ['auth-mesh-approve-peer-local'],
+    'Auth.MeshDenyPeer': ['auth-mesh-deny-peer-local'],
+    'Auth.MeshUpdatePeerPermissions': ['auth-mesh-update-peer-permissions-local'],
+    'Auth.MeshRemovePeer': ['auth-mesh-remove-peer-local'],
     'Backup.List': ['backup-list-local'],
     'Scheduler.ListJobs': ['scheduler-list-local'],
     'Scheduler.Schedule': ['scheduler-schedule-local'],
@@ -1412,6 +1578,293 @@ export const webrtcDiagnosticsFixture: WebRTCDiagnosticsResponse = {
       peer_id: 'stable-peer'
     }
   ],
+  secrets_redacted: true
+}
+
+export const meshStatusFixture: MeshStatusResponse = {
+  local: {
+    mesh_enabled: true,
+    mesh_started: true,
+    webrtc_started: true,
+    peer_id: 'local-peer',
+    node_name: 'aurora-prod-01',
+    peer_selection: 'latency',
+    version_policy: 'compatible',
+    shared_modules: ['Gateway', 'Auth', 'TTS'],
+    routed_modules: ['TTS', 'Tooling', 'Scheduler']
+  },
+  peers: [
+    {
+      peer_id: 'peer-kitchen',
+      node_name: 'Kitchen node',
+      status: 'authenticated',
+      latency_ms: 28,
+      last_ping_age_s: 4,
+      last_manifest_age_s: 18,
+      active_calls: 0,
+      services: [
+        {
+          module: 'TTS',
+          version: '0.1.0',
+          capabilities: ['synthesize'],
+          method_names: ['Synthesize'],
+          max_concurrent: 2,
+          active_calls: 0,
+          available_capacity: 2,
+          digest: 'tts-kitchen-digest'
+        }
+      ],
+      compatibility: {
+        local_compatible: ['TTS'],
+        local_incompatible: [],
+        local_unused: ['DB'],
+        remote_compatible: ['Gateway'],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    },
+    {
+      peer_id: 'peer-studio-gpu',
+      node_name: 'Studio GPU',
+      status: 'negotiated',
+      latency_ms: 34,
+      last_ping_age_s: 2,
+      last_manifest_age_s: 8,
+      active_calls: 1,
+      services: [
+        {
+          module: 'Orchestrator',
+          version: '0.1.0',
+          capabilities: ['models'],
+          method_names: ['GetModelCatalog'],
+          max_concurrent: 2,
+          active_calls: 1,
+          available_capacity: 1,
+          digest: 'orchestrator-studio-digest'
+        },
+        {
+          module: 'Scheduler',
+          version: '0.1.0',
+          capabilities: ['delegation'],
+          method_names: ['ListJobs', 'Schedule'],
+          max_concurrent: 2,
+          active_calls: 0,
+          available_capacity: 2,
+          digest: 'scheduler-studio-digest'
+        }
+      ],
+      compatibility: {
+        local_compatible: ['Orchestrator', 'Scheduler'],
+        local_incompatible: [],
+        local_unused: [],
+        remote_compatible: ['Gateway', 'Auth'],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    },
+    {
+      peer_id: 'peer-den',
+      node_name: 'Den node',
+      status: 'stale',
+      latency_ms: null,
+      last_ping_age_s: 900,
+      last_manifest_age_s: 900,
+      active_calls: 0,
+      services: [],
+      compatibility: {
+        local_compatible: [],
+        local_incompatible: ['Tooling'],
+        local_unused: [],
+        remote_compatible: [],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    }
+  ],
+  routes: [
+    {
+      module: 'TTS',
+      configured: true,
+      share: true,
+      prefer: 'remote',
+      fallback: 'local',
+      min_version: '0.1.0',
+      required_capabilities: ['synthesize'],
+      decision_target: 'remote',
+      decision_peer_id: 'peer-kitchen',
+      decision_version: '0.1.0',
+      decision_latency_ms: 28,
+      reason: 'remote provider eligible',
+      providers: [
+        {
+          peer_id: 'peer-kitchen',
+          node_name: 'Kitchen node',
+          status: 'authenticated',
+          version: '0.1.0',
+          latency_ms: 28,
+          active_calls: 0,
+          max_concurrent: 2,
+          eligible: true,
+          reason_code: 'eligible',
+          reason: 'compatible TTS provider'
+        },
+        {
+          peer_id: 'peer-den',
+          node_name: 'Den node',
+          status: 'stale',
+          version: '',
+          latency_ms: null,
+          active_calls: 0,
+          max_concurrent: 0,
+          eligible: false,
+          reason_code: 'stale_provider',
+          reason: 'manifest is stale'
+        }
+      ]
+    },
+    {
+      module: 'Scheduler',
+      configured: true,
+      share: false,
+      prefer: 'local',
+      fallback: 'none',
+      min_version: null,
+      required_capabilities: ['delegation'],
+      decision_target: 'local',
+      decision_peer_id: null,
+      decision_version: '',
+      decision_latency_ms: null,
+      reason: 'local provider selected by policy',
+      providers: [
+        {
+          peer_id: 'peer-studio-gpu',
+          node_name: 'Studio GPU',
+          status: 'negotiated',
+          version: '0.1.0',
+          latency_ms: 34,
+          active_calls: 0,
+          max_concurrent: 2,
+          eligible: true,
+          reason_code: 'eligible',
+          reason: 'remote scheduler candidate available'
+        }
+      ]
+    }
+  ],
+  compatibility_failures: [
+    {
+      peer_id: 'peer-den',
+      module: 'Tooling',
+      direction: 'local',
+      reason: 'remote manifest stale'
+    }
+  ],
+  secrets_redacted: true
+}
+
+export const meshPeerListFixture: MeshPeerListResponse = {
+  peers: [
+    {
+      id: 'mesh-peer-kitchen',
+      peer_id: 'peer-kitchen',
+      node_name: 'Kitchen node',
+      room_name: 'home',
+      ip: '192.0.2.10',
+      port: null,
+      outbound_status: 'pending',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'pending',
+      inbound_permissions: ['Gateway.use'],
+      inbound_approved_at: null,
+      connection_status: 'connected',
+      first_seen_at: '2026-06-24T12:00:00Z',
+      last_seen_at: '2026-06-25T15:00:00Z',
+      last_status_change_at: '2026-06-25T15:00:00Z'
+    },
+    {
+      id: 'mesh-peer-studio-gpu',
+      peer_id: 'peer-studio-gpu',
+      node_name: 'Studio GPU',
+      room_name: 'home',
+      ip: '192.0.2.20',
+      port: null,
+      outbound_status: 'approved',
+      outbound_permissions: ['TTS.use', 'Orchestrator.use'],
+      outbound_approved_at: '2026-06-20T14:00:00Z',
+      outbound_approved_by: 'admin',
+      inbound_status: 'approved',
+      inbound_permissions: ['Gateway.use'],
+      inbound_approved_at: '2026-06-20T14:05:00Z',
+      connection_status: 'connected',
+      first_seen_at: '2026-06-20T13:50:00Z',
+      last_seen_at: '2026-06-25T15:01:00Z',
+      last_status_change_at: '2026-06-20T14:05:00Z'
+    },
+    {
+      id: 'mesh-peer-den',
+      peer_id: 'peer-den',
+      node_name: 'Den node',
+      room_name: 'home',
+      ip: null,
+      port: null,
+      outbound_status: 'denied',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'denied',
+      inbound_permissions: [],
+      inbound_approved_at: null,
+      connection_status: 'disconnected',
+      first_seen_at: '2026-06-18T10:00:00Z',
+      last_seen_at: '2026-06-18T10:10:00Z',
+      last_status_change_at: '2026-06-18T10:15:00Z'
+    },
+    {
+      id: 'mesh-peer-removed',
+      peer_id: 'peer-removed',
+      node_name: 'Removed lab node',
+      room_name: 'lab',
+      ip: null,
+      port: null,
+      outbound_status: 'removed',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'unknown',
+      inbound_permissions: [],
+      inbound_approved_at: null,
+      connection_status: 'disconnected',
+      first_seen_at: '2026-06-10T09:00:00Z',
+      last_seen_at: '2026-06-10T09:30:00Z',
+      last_status_change_at: '2026-06-10T09:30:00Z'
+    }
+  ],
+  total: 4
+}
+
+export const pendingPairingsFixture: ListPendingPairingsResponse = {
+  pairings: [
+    {
+      request_id: 'mesh-pairing-peer-kitchen',
+      code: 'mesh-pairing-secret',
+      device_name: 'Kitchen tablet',
+      client_ip: '192.168.10.42',
+      status: 'pending',
+      expires_at: '2026-06-25T16:30:00Z',
+      created_at: '2026-06-25T16:00:00Z',
+      remote_peer_id: 'peer-kitchen',
+      remote_node_name: 'Kitchen node',
+      approved_by: null,
+      denied_by: null,
+      denied_reason: '',
+      granted_permissions: ['Gateway.use'],
+      granted_is_admin: false
+    }
+  ],
+  total: 1,
+  expired_count: 0,
   secrets_redacted: true
 }
 
@@ -1622,7 +2075,7 @@ export function principalFixture(id: string): PrincipalResponse | null {
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 23,
+  method_count: 31,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -1762,6 +2215,144 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:100'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshListPeers',
+      summary: 'List persisted mesh peer trust state',
+      bus_topic: 'Auth.MeshListPeers',
+      routePath: '/api/Auth/MeshListPeers',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerListRequest',
+      output_model: 'MeshPeerListResponse',
+      input_schema: {
+        title: 'MeshPeerListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshPeerListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:969'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshGetPeer',
+      summary: 'Get a single persisted mesh peer trust record',
+      bus_topic: 'Auth.MeshGetPeer',
+      routePath: '/api/Auth/MeshGetPeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerGetRequest',
+      output_model: 'MeshPeerGetResponse',
+      input_schema: {
+        title: 'MeshPeerGetRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshPeerGetResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:983'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshApprovePeer',
+      summary: 'Approve a mesh peer',
+      bus_topic: 'Auth.MeshApprovePeer',
+      routePath: '/api/Auth/MeshApprovePeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerApproveRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerApproveRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:988'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshDenyPeer',
+      summary: 'Deny/block a mesh peer',
+      bus_topic: 'Auth.MeshDenyPeer',
+      routePath: '/api/Auth/MeshDenyPeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerDenyRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerDenyRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:998'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshUpdatePeerPermissions',
+      summary: 'Update outbound permissions granted to a mesh peer',
+      bus_topic: 'Auth.MeshUpdatePeerPermissions',
+      routePath: '/api/Auth/MeshUpdatePeerPermissions',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerUpdatePermissionsRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerUpdatePermissionsRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:1008'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshRemovePeer',
+      summary: 'Remove a persisted mesh peer',
+      bus_topic: 'Auth.MeshRemovePeer',
+      routePath: '/api/Auth/MeshRemovePeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerRemoveRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerRemoveRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:1018'
     },
     {
       module: 'Auth',
@@ -2186,6 +2777,26 @@ export const backendInventoryFixture: BackendInventory = {
       input_schema: null,
       output_schema: {
         title: 'WebRTCDiagnosticsResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetMeshStatus',
+      summary: 'Get read-only mesh peer, service, route, and compatibility diagnostics',
+      bus_topic: 'Gateway.GetMeshStatus',
+      routePath: '/api/Gateway/GetMeshStatus',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Gateway.use'],
+      input_model: 'EmptyInput',
+      output_model: 'MeshStatusResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'MeshStatusResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -3566,6 +4177,9 @@ export interface MockAuroraFixtureSet {
   services: GetServicesResponse
   deploymentTopology: DeploymentTopologyResponse
   webrtcDiagnostics: WebRTCDiagnosticsResponse
+  meshStatus: MeshStatusResponse
+  meshPeers: MeshPeerListResponse
+  pendingPairings: ListPendingPairingsResponse
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
@@ -3599,6 +4213,9 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   services: gatewayServicesFixture,
   deploymentTopology: deploymentTopologyFixture,
   webrtcDiagnostics: webrtcDiagnosticsFixture,
+  meshStatus: meshStatusFixture,
+  meshPeers: meshPeerListFixture,
+  pendingPairings: pendingPairingsFixture,
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,

@@ -14,6 +14,8 @@ import {
   evaluateRoutePolicy,
   gatewayRegistryFixture,
   modelRuntimeCatalogFixture,
+  meshPeerListFixture,
+  meshStatusFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -45,6 +47,8 @@ import {
   OnboardingView,
   PairingQueueSurface,
   PairingQueueView,
+  MeshPeersResource,
+  MeshPeersView,
   RouteSheet,
   buildAdminServicesSnapshot,
   buildAdminPluginsSnapshot,
@@ -58,6 +62,8 @@ import {
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
+  buildMeshPeerAdminAction,
+  buildMeshPeersSnapshot,
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
@@ -82,6 +88,8 @@ import {
   errorShellSnapshot,
   parsePermissionList,
   pairingErrorMessage,
+  meshPeerErrorMessage,
+  parseMeshPermissionList,
   routePolicyFromRoute,
   routeSheetErrorMessage,
   SettingsPermissionsView
@@ -1366,6 +1374,119 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required for approve/deny')
   })
 
+  it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability evidence', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.localPeerId).toBe(meshStatusFixture.local.peer_id)
+    expect(snapshot.secretsRedacted).toBe(true)
+    expect(snapshot.pendingCount).toBe(1)
+    expect(snapshot.approvedCount).toBe(1)
+    expect(snapshot.deniedCount).toBe(1)
+    expect(snapshot.removedCount).toBe(1)
+    expect(snapshot.runtimePeerCount).toBe(meshStatusFixture.peers.length)
+    expect(snapshot.routeCount).toBe(meshStatusFixture.routes.length)
+    expect(snapshot.peers.map((peer) => peer.peerId)).toEqual(
+      expect.arrayContaining(meshPeerListFixture.peers.map((peer) => peer.peer_id))
+    )
+    expect(snapshot.peers.find((peer) => peer.peerId === 'peer-kitchen')).toEqual(
+      expect.objectContaining({
+        trustState: 'pending',
+        connectionStatus: 'connected',
+        lastEvidenceSource: expect.stringContaining('Auth.MeshListPeers')
+      })
+    )
+    expect(snapshot.peers.find((peer) => peer.peerId === 'peer-den')?.compatibility).toContain('incompatible')
+  })
+
+  it('renders mesh peer lifecycle UI without local-only trust or secret leakage', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const markup = renderToStaticMarkup(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={route}
+        adminReason="Approve kitchen peer"
+        permissions="Gateway.use TTS.use"
+      />
+    )
+
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Kitchen node')
+    expect(markup).toContain('Studio GPU')
+    expect(markup).toContain('AdminAction approve')
+    expect(markup).toContain('AdminAction deny')
+    expect(markup).toContain('AdminAction remove')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('Gateway.GetMeshStatus')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('maps mesh disabled, denied, degraded, and loading states without faking backend truth', async () => {
+    const disabledSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport() }),
+      meshRoute({ disabled: true, state: 'unsupported', explanation: 'Gateway.GetMeshStatus is not routeable.' })
+    )
+    expect(disabledSnapshot.loadState).toBe('service-unavailable')
+    expect(disabledSnapshot.error).toContain('Capability unavailable')
+
+    const deniedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.MeshListPeers', 'permission', 'Auth denied') }),
+      meshRoute()
+    )
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(deniedSnapshot.error).toContain('denied')
+
+    const degradedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().lose('Gateway.GetWebRTCDiagnostics', 'diagnostics down') }),
+      meshRoute()
+    )
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(degradedSnapshot.warnings.join(' ')).toContain('diagnostics down')
+
+    const loadingMarkup = renderToStaticMarkup(
+      <MeshPeersResource client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
+    )
+    expect(loadingMarkup).toContain('Loading mesh peers')
+  })
+
+  it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {
+    const peer = { peerId: 'peer-kitchen', nodeName: 'Kitchen node' }
+    const approve = buildMeshPeerAdminAction(peer, 'approve', {
+      reason: 'Approve expected kitchen peer',
+      permissions: 'Gateway.use, TTS.use\nTooling.use'
+    })
+    const deny = buildMeshPeerAdminAction(peer, 'deny', { reason: 'Wrong peer' })
+    const remove = buildMeshPeerAdminAction(peer, 'remove', { reason: 'Retire peer', revokeToken: false })
+
+    expect(parseMeshPermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
+    expect(approve).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshApprovePeer',
+        path: '/api/Auth/MeshApprovePeer',
+        reauthConfirmed: true,
+        reason: 'Approve expected kitchen peer',
+        affectedResources: ['mesh-peer:peer-kitchen', 'peer:Kitchen node'],
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use', 'Tooling.use'] }
+      })
+    )
+    expect(deny).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshDenyPeer',
+        path: '/api/Auth/MeshDenyPeer',
+        payload: { peer_id: 'peer-kitchen' }
+      })
+    )
+    expect(remove).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshRemovePeer',
+        path: '/api/Auth/MeshRemovePeer',
+        payload: { peer_id: 'peer-kitchen', revoke_token: false }
+      })
+    )
+    expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+  })
+
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
     const markup = renderToStaticMarkup(
       await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
@@ -2126,6 +2247,36 @@ function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSna
     routeable: true,
     disabled: false,
     requiresAdminAction: true,
+    ...overrides
+  } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
+}
+
+function meshRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
+  return {
+    item: {
+      id: 'mesh',
+      label: 'Mesh',
+      href: '/mesh',
+      capabilityModule: 'Gateway',
+      capabilityMethod: 'GetMeshStatus',
+      methodType: 'use',
+      privacyClass: 'credential',
+      fallbackState: 'unsupported',
+      adminGated: false,
+      expectedTask: 'MESH-001'
+    },
+    state: 'available-local',
+    explanation: 'Backend catalog reports Gateway.GetMeshStatus and Auth.MeshListPeers as routeable.',
+    providerLabel: 'local / Gateway.GetMeshStatus',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['capability-catalog'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false,
     ...overrides
   } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
 }

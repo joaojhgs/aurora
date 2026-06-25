@@ -469,10 +469,50 @@ button, input, select, textarea { font: inherit; }
 .aui-pairing-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .aui-pairing-actions button:disabled, .aui-pairing-controls button:disabled, .aui-pairing-controls input:disabled, .aui-pairing-controls textarea:disabled { cursor: not-allowed; opacity: .58; }
 
+.aui-mesh { display: grid; gap: 1rem; }
+.aui-mesh-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-mesh-header h1 { margin: .15rem 0 0; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.08; }
+.aui-mesh-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-mesh-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 34rem; }
+.aui-mesh-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-mesh-summary div, .aui-mesh-meta div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem; background: color-mix(in srgb, var(--aui-surface-2) 42%, white); }
+.aui-mesh-summary dt, .aui-mesh-meta dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-summary dd, .aui-mesh-meta dd { margin: .2rem 0 0; overflow-wrap: anywhere; line-height: 1.4; }
+.aui-mesh-controls { display: grid; grid-template-columns: minmax(16rem, 1.35fr) minmax(14rem, 1fr) minmax(12rem, auto) auto; gap: .75rem; align-items: end; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-mesh-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-controls input:not([type="checkbox"]), .aui-mesh-controls textarea { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); }
+.aui-mesh-controls textarea { resize: vertical; }
+.aui-mesh-controls button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .85rem; background: var(--aui-surface-2); color: var(--aui-ink); font-weight: 750; }
+.aui-mesh-controls button:disabled, .aui-mesh-controls input:disabled, .aui-mesh-controls textarea:disabled { cursor: not-allowed; opacity: .58; }
+.aui-mesh-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-mesh-panel-title { display: flex; align-items: flex-start; gap: .6rem; }
+.aui-mesh-panel-title > span { display: grid; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
+.aui-mesh-panel-title h2 { margin: 0; font-size: 1rem; }
+.aui-mesh-panel-title p { margin: .28rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; margin: 0; }
+.aui-mesh-warnings { display: grid; gap: .4rem; margin: 0; padding-left: 1.1rem; color: var(--aui-muted); line-height: 1.4; }
+.aui-mesh-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); gap: .85rem; }
+.aui-mesh-card { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-mesh-card[data-state="optimistic"] { border-color: color-mix(in srgb, var(--aui-info) 32%, var(--aui-border)); background: color-mix(in srgb, var(--aui-info) 6%, white); }
+.aui-mesh-card-available-local, .aui-mesh-card-available-remote { border-color: color-mix(in srgb, var(--aui-success) 24%, var(--aui-border)); }
+.aui-mesh-card-denied { border-color: color-mix(in srgb, var(--aui-danger) 28%, var(--aui-border)); }
+.aui-mesh-card-stale, .aui-mesh-card-unsupported { border-color: color-mix(in srgb, var(--aui-warning) 32%, var(--aui-border)); }
+.aui-mesh-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.aui-mesh-card h2 { margin: .15rem 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.aui-mesh-card code { display: block; margin-top: .3rem; color: var(--aui-muted); font-size: .78rem; overflow-wrap: anywhere; white-space: normal; }
+.aui-mesh-card-badges, .aui-mesh-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.aui-mesh-scopes { display: grid; gap: .55rem; }
+.aui-mesh-scopes div { display: grid; gap: .18rem; min-width: 0; }
+.aui-mesh-scopes strong { color: var(--aui-ink); font-size: .78rem; }
+.aui-mesh-scopes span { color: var(--aui-muted); overflow-wrap: anywhere; line-height: 1.4; }
+.aui-mesh-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .45rem; padding: .5rem .7rem; background: var(--aui-surface); color: var(--aui-primary); font-weight: 750; }
+.aui-mesh-actions button:disabled { cursor: not-allowed; opacity: .58; }
+
 @media (max-width: 1100px) {
   .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-mode-panel { grid-row: auto; }
   .aui-pairing-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -483,6 +523,9 @@ button, input, select, textarea { font: inherit; }
   .aui-mode-card em { grid-column: 1 / -1; }
   .aui-pairing-controls, .aui-pairing-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-pairing-card-header { display: grid; }
+  .aui-mesh-header, .aui-mesh-card > header { display: grid; }
+  .aui-mesh-badges { justify-content: flex-start; }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: minmax(0, 1fr); }
 }
 
 .aui-admin-overview { display: grid; gap: 1rem; }
