@@ -55,6 +55,40 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
+      .register('Gateway.GetSupportBundle', () => cloneFixture(fixtures.supportBundle))
+      .register('Gateway.AdminActionDraft', (request) => {
+        const payload = request.payload as { method_id?: string; affected_resources?: string[] } | undefined
+        return {
+          action_id: 'mock-admin-action',
+          nonce: 'mock-nonce',
+          digest: 'mock-digest',
+          method_id: payload?.method_id ?? 'Gateway.GetSupportBundle',
+          affected_resources: payload?.affected_resources ?? ['diagnostics.support_bundle'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-19T00:10:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', () => ({
+        action_id: 'mock-admin-action',
+        confirmation_token: 'mock-confirmation-token',
+        digest: 'mock-digest',
+        confirmed: true,
+        expires_at: '2026-06-19T00:10:00Z',
+        audit_receipt: 'aar-mock-admin-action',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      }))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
       .register('Config.Get', () => cloneFixture(fixtures.configGet))

@@ -669,6 +669,76 @@ export interface WebRTCDiagnosticsResponse {
   secrets_redacted: boolean
 }
 
+export interface GatewayEventStreamEvent {
+  id: string
+  kind: string
+  topic: string | null
+  bus_topic: string | null
+  correlation_id: string | null
+  peer_id: string | null
+  target_peer_id: string | null
+  status: string | null
+  timestamp: string
+  payload_summary: JsonObject
+  secrets_redacted: boolean
+}
+
+export interface SupportBundleRedactionInfo {
+  secrets_redacted: boolean
+  redacted_fields: string[]
+  omitted_payloads: string[]
+}
+
+export interface SupportBundleDiagnosticItem {
+  name: string
+  status: string
+  source: string
+  details: JsonObject
+  redacted: boolean
+}
+
+export interface GatewaySupportBundleRequest {
+  correlation_id?: string | null
+  event_limit?: number
+  audit_limit?: number
+  include_capability_catalog?: boolean
+}
+
+export interface CapabilityCatalogSummary {
+  providers: number
+  actions: number
+  resources: number
+  modules: string[]
+  blocked_actions: number
+}
+
+export interface GatewaySupportBundleResponse {
+  generated_at: string
+  correlation_id: string | null
+  registry: GetRegistryResponse
+  services: ServiceInfo[]
+  service_health: Array<{
+    module: string
+    status: string
+    checks: Record<string, JsonValue>
+    timestamp: string
+  }>
+  mesh_status: JsonObject
+  webrtc_diagnostics: WebRTCDiagnosticsResponse
+  route_diagnostics: JsonObject[]
+  capability_catalog_summary: CapabilityCatalogSummary
+  recent_events: GatewayEventStreamEvent[]
+  recent_audit_events: JsonObject[]
+  native_capabilities: SupportBundleDiagnosticItem[]
+  sidecar_logs: SupportBundleDiagnosticItem[]
+  config_shape: JsonObject
+  correlation_ids: string[]
+  audit_receipt: string | null
+  audit_error: string | null
+  redaction: SupportBundleRedactionInfo
+  secrets_redacted: boolean
+}
+
 export interface ServiceAnnouncement {
   module: string
   version: string

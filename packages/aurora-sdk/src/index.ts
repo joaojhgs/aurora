@@ -116,6 +116,7 @@ export {
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
+  supportBundleFixture,
   toolCatalogFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'

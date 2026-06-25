@@ -35,6 +35,7 @@ import {
   normalizeToolCatalog,
   routeExplainFixture,
   resolveEffectivePermissions,
+  supportBundleFixture,
   toolCatalogFixture,
   uiMockReferenceFixtureSummary,
   wildcardIntersection
@@ -1310,6 +1311,93 @@ describe('AuroraClient', () => {
     expect(configSet?.headers).toMatchObject({ 'X-Aurora-AdminAction-Token': 'token-config' })
     expect(rollback?.headers).toMatchObject({ 'X-Aurora-AdminAction-Id': 'aa-config' })
     expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(2)
+  })
+
+  it('loads diagnostics bundles and exports them through AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.GetSupportBundle', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return supportBundleFixture
+      })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(
+          expect.objectContaining({
+            method_id: 'Gateway.GetSupportBundle',
+            payload: expect.objectContaining({ correlation_id: 'corr-diagnostics-fixture' }),
+            affected_resources: expect.arrayContaining(['diagnostics.support_bundle'])
+          })
+        )
+        return {
+          action_id: 'aa-support-bundle',
+          nonce: 'nonce-support-bundle',
+          digest: 'digest-support-bundle',
+          method_id: 'Gateway.GetSupportBundle',
+          affected_resources: ['diagnostics.support_bundle'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', {
+        action_id: 'aa-support-bundle',
+        confirmation_token: 'token-support-bundle',
+        digest: 'digest-support-bundle',
+        confirmed: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        audit_receipt: 'aar-support-bundle',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const preview = await client.diagnostics.getSupportBundle({
+      correlation_id: 'corr-diagnostics-fixture',
+      event_limit: 5,
+      audit_limit: 5
+    })
+    const exported = await client.diagnostics.exportSupportBundle({
+      request: { correlation_id: 'corr-diagnostics-fixture', event_limit: 5, audit_limit: 5 },
+      reason: 'Share redacted diagnostics with support',
+      reauthConfirmed: true
+    })
+
+    expect(preview.ok).toBe(true)
+    if (preview.ok) {
+      expect(preview.data.redaction).toEqual(
+        expect.objectContaining({
+          secrets_redacted: true,
+          omitted_payloads: expect.arrayContaining(['raw audio', 'tokens and credentials'])
+        })
+      )
+    }
+    expect(exported.data.audit_receipt).toBe('support_bundle:fixture')
+    expect(calls.at(-1)).toEqual(
+      expect.objectContaining({
+        method: 'Gateway.GetSupportBundle',
+        headers: expect.objectContaining({
+          'X-Aurora-AdminAction-Id': 'aa-support-bundle',
+          'X-Aurora-AdminAction-Token': 'token-support-bundle',
+          'X-Aurora-AdminAction-Digest': 'digest-support-bundle'
+        })
+      })
+    )
   })
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {

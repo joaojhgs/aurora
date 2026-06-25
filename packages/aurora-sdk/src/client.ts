@@ -74,8 +74,11 @@ import type {
   CapabilityGraph,
   CapabilitySummary,
   DeploymentTopologyResponse,
+  GatewaySupportBundleRequest,
+  GatewaySupportBundleResponse,
   GetRegistryResponse,
   GetServicesResponse,
+  JsonObject,
   GatewayBuiltinRouteDescriptor,
   ListPendingPairingsRequest,
   ListPendingPairingsResponse,
@@ -143,6 +146,7 @@ export class AuroraClient {
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
   readonly config: ConfigClient
+  readonly diagnostics: DiagnosticsClient
   readonly admin: AdminActionClient
   readonly approvals: ApprovalClient
   readonly native: NativeClient
@@ -165,6 +169,7 @@ export class AuroraClient {
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
     this.config = new ConfigClient(this)
+    this.diagnostics = new DiagnosticsClient(this)
     this.admin = new AdminActionClient(this)
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
@@ -953,6 +958,61 @@ export class ModelRuntimeClient {
       { path: routePath('Orchestrator', 'GetModelOperation') }
     )
   }
+}
+
+export class DiagnosticsClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  getSupportBundle(
+    request: GatewaySupportBundleRequest = {}
+  ): Promise<AuroraResponse<GatewaySupportBundleResponse>> {
+    return this.client.requestResult<GatewaySupportBundleResponse, GatewaySupportBundleRequest>(
+      GATEWAY_METHODS.getSupportBundle,
+      request,
+      { path: routePath('Gateway', 'GetSupportBundle') }
+    )
+  }
+
+  exportSupportBundle(input: {
+    request?: GatewaySupportBundleRequest
+    reason: string
+    reauthConfirmed: boolean
+    phrase?: string
+    affectedResources?: string[]
+    timeoutMs?: number
+  }): Promise<{
+    draft: import('./admin.js').AdminActionDraftResponse
+    confirmation: import('./admin.js').AdminActionConfirmResponse
+    data: GatewaySupportBundleResponse
+  }> {
+    const executeInput: Parameters<AdminActionClient['execute']>[0] = {
+      methodId: GATEWAY_METHODS.getSupportBundle,
+      payload: supportBundlePayload(input.request),
+      reason: input.reason,
+      reauthConfirmed: input.reauthConfirmed,
+      affectedResources: input.affectedResources ?? [
+        'diagnostics.support_bundle',
+        'diagnostics.redaction_preview',
+        'diagnostics.audit_receipt'
+      ],
+      path: routePath('Gateway', 'GetSupportBundle')
+    }
+    if (input.phrase !== undefined) executeInput.phrase = input.phrase
+    if (input.timeoutMs !== undefined) executeInput.timeoutMs = input.timeoutMs
+    return this.client.admin.execute<GatewaySupportBundleResponse>(executeInput)
+  }
+}
+
+function supportBundlePayload(request: GatewaySupportBundleRequest | undefined): JsonObject {
+  const payload: JsonObject = {}
+  if (!request) return payload
+  if (request.correlation_id !== undefined) payload.correlation_id = request.correlation_id
+  if (request.event_limit !== undefined) payload.event_limit = request.event_limit
+  if (request.audit_limit !== undefined) payload.audit_limit = request.audit_limit
+  if (request.include_capability_catalog !== undefined) {
+    payload.include_capability_catalog = request.include_capability_catalog
+  }
+  return payload
 }
 
 export class NativeClient {

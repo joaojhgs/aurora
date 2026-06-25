@@ -6,6 +6,7 @@ import type {
   CapabilityPolicyDecisionInfo,
   CapabilityProviderInfo,
   DeploymentTopologyResponse,
+  GatewaySupportBundleResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
@@ -2856,6 +2857,132 @@ export const configRollbackFixture: ConfigRollbackResponse = {
   secrets_redacted: true
 }
 
+export const supportBundleFixture: GatewaySupportBundleResponse = {
+  generated_at: '2026-06-19T00:05:00Z',
+  correlation_id: 'corr-diagnostics-fixture',
+  registry: gatewayRegistryFixture,
+  services: gatewayServicesFixture.services,
+  service_health: [
+    {
+      module: 'Gateway',
+      status: 'healthy',
+      checks: {
+        registry: 'present',
+        heartbeat: 'healthy',
+        contracts: 'present'
+      },
+      timestamp: '2026-06-19T00:05:00Z'
+    }
+  ],
+  mesh_status: {
+    enabled: true,
+    local_peer_id: 'local-peer',
+    local_node_name: 'aurora-prod-01',
+    routes: [
+      {
+        module: 'Tooling',
+        selected_target: 'remote',
+        selected_peer_id: 'stable-peer',
+        selected_provider_id: 'mesh:studio-gpu:Tooling',
+        fallback_behavior: 'blocked',
+        secrets_redacted: true
+      }
+    ],
+    secrets_redacted: true
+  },
+  webrtc_diagnostics: webrtcDiagnosticsFixture,
+  route_diagnostics: [
+    {
+      module: 'Tooling',
+      selected_target: 'remote',
+      selected_peer_id: 'stable-peer',
+      selected_provider_id: 'mesh:studio-gpu:Tooling',
+      fallback_behavior: 'blocked',
+      secrets_redacted: true
+    }
+  ],
+  capability_catalog_summary: {
+    providers: capabilityGraphCatalogFixture.providers.length,
+    actions: capabilityGraphCatalogFixture.actions.length,
+    resources: capabilityGraphCatalogFixture.resources.length,
+    modules: ['Gateway', 'Tooling', 'TTS'],
+    blocked_actions: capabilityGraphCatalogFixture.actions.filter((action) => action.bindability !== 'available').length
+  },
+  recent_events: [
+    {
+      id: 'evt-diagnostics-1',
+      kind: 'Tooling.ExecuteTool',
+      topic: 'Tooling.ExecuteTool',
+      bus_topic: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-diagnostics-fixture',
+      peer_id: 'local-peer',
+      target_peer_id: 'stable-peer',
+      status: 'denied',
+      timestamp: '2026-06-19T00:04:50Z',
+      payload_summary: {
+        tool_id: 'tool:local:diagnostics.serviceHealth',
+        args_redacted: true
+      },
+      secrets_redacted: true
+    }
+  ],
+  recent_audit_events: [
+    {
+      event: 'diagnostics.support_bundle.exported',
+      correlation_id: 'corr-diagnostics-fixture',
+      audit_receipt: 'support_bundle:fixture',
+      secrets_redacted: true
+    }
+  ],
+  native_capabilities: [
+    {
+      name: 'native_capability_manifest',
+      status: 'unavailable',
+      source: 'tauri/native manifest',
+      details: {
+        reason: 'no native manifest is registered in this backend runtime',
+        backend_coverage: 'deferred'
+      },
+      redacted: true
+    }
+  ],
+  sidecar_logs: [
+    {
+      name: 'gateway_sidecar_logs',
+      status: 'metadata_only',
+      source: 'gateway runtime',
+      details: {
+        reason: 'raw logs are omitted; metadata only',
+        omitted_payloads: ['host paths', 'tokens', 'raw audio', 'personal content']
+      },
+      redacted: true
+    }
+  ],
+  config_shape: {
+    api: {
+      token_secret: '[REDACTED]',
+      redis_url: '[REDACTED_URL]'
+    },
+    mesh: {
+      node_name: 'aurora-prod-01'
+    }
+  },
+  correlation_ids: ['corr-diagnostics-fixture'],
+  audit_receipt: 'support_bundle:fixture',
+  audit_error: null,
+  redaction: {
+    secrets_redacted: true,
+    redacted_fields: ['token', 'secret', 'password', 'redis_url', 'path', 'args', 'audio', 'rag'],
+    omitted_payloads: [
+      'raw audio',
+      'unredacted tool arguments',
+      'RAG contents',
+      'tokens and credentials'
+    ]
+  },
+  secrets_redacted: true
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -2901,6 +3028,7 @@ export interface MockAuroraFixtureSet {
   tokens: TokenListResponse
   devices: DeviceListResponse
   auditLog: AuditLogResponse
+  supportBundle: GatewaySupportBundleResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -2931,6 +3059,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   tokens: tokenListFixture,
   devices: deviceListFixture,
   auditLog: auditLogFixture,
+  supportBundle: supportBundleFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }
