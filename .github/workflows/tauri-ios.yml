@@ -1,0 +1,66 @@
+name: Tauri iOS Baseline
+
+on:
+  pull_request:
+    paths:
+      - "apps/aurora-tauri/**"
+      - "packages/aurora-sdk/**"
+      - "packages/aurora-ui/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/tauri-ios.yml"
+  workflow_dispatch:
+
+jobs:
+  macos-tauri-ios:
+    name: macOS Xcode Tauri iOS init and build
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Set up Rust with iOS targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install CocoaPods
+        run: |
+          if ! command -v pod >/dev/null 2>&1; then
+            brew install cocoapods
+          fi
+          pod --version
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri workspace dependencies
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Build Tauri frontend bundle
+        run: pnpm --filter @aurora/tauri-ui build
+
+      - name: Initialize Tauri iOS project
+        run: pnpm --filter @aurora/tauri-ui tauri ios init
+
+      - name: Build Tauri iOS app
+        run: pnpm --filter @aurora/tauri-ui tauri ios build
