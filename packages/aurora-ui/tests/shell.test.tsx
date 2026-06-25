@@ -19,12 +19,14 @@ import {
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo,
+  type GetRegistryResponse,
   type GetServicesResponse,
   type PendingPairingEntry
 } from '@aurora/client'
 import {
   AdminOverviewContent,
   AdminOverviewView,
+  AdminServicesView,
   AppShell,
   AssistantView,
   ModelsView,
@@ -33,6 +35,7 @@ import {
   PairingQueueSurface,
   PairingQueueView,
   RouteSheet,
+  buildAdminServicesSnapshot,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
@@ -626,6 +629,88 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 
+  it('wires admin services and contract explorer from AuroraClient SDK resources', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.services.map((service) => service.module)).toContain('Gateway')
+    expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Gateway.GetServices')
+    expect(markup).toContain('Services and contracts')
+    expect(markup).toContain('SDK mock transport fixture')
+    expect(markup).toContain('Gateway.GetServices')
+    expect(markup).toContain('Supervisor.RestartService')
+    expect(markup).toContain('AdminAction')
+    expect(markup).not.toContain('visual mock')
+  })
+
+  it('keeps service control actions capability-driven and AdminAction-gated', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+    const supervisor = snapshot.services.find((service) => service.module === 'Supervisor')
+    const gateway = snapshot.services.find((service) => service.module === 'Gateway')
+
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.available).toBe(true)
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.requiresAdminAction).toBe(true)
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.action?.methodId).toBe('Supervisor.RestartService')
+    expect(gateway?.controls.every((control) => !control.available)).toBe(true)
+
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+    expect(markup).toContain('Preview requires AdminAction draft/confirm/audit')
+    expect(markup).toContain('Supervisor control contract is not present in the service registry')
+  })
+
+  it('renders admin service loading, empty, denied, degraded, and unavailable states', async () => {
+    const loadingMarkup = renderToStaticMarkup(
+      <AdminServicesView snapshot={{
+        loadState: 'loading',
+        servicesMode: 'pending',
+        generatedAt: null,
+        secretsRedacted: true,
+        services: [],
+        contracts: [],
+        warnings: [],
+        error: null,
+        evidenceSource: 'pending AuroraClient SDK calls'
+      }} />
+    )
+    expect(loadingMarkup).toContain('Loading services')
+
+    const emptySnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: emptyAdminTransport() }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={emptySnapshot} />)).toContain('No service registry')
+
+    const deniedTransport = adminServicesTransport()
+    deniedTransport.fail('Gateway.GetCapabilityCatalog', 'permission', 'Capability catalog denied')
+    const deniedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={deniedSnapshot} />)).toContain('Capability catalog denied')
+
+    const degradedTransport = adminServicesTransport()
+    degradedTransport.lose('Gateway.GetServices', 'Gateway service list unavailable')
+    const degradedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={degradedSnapshot} />)).toContain('Gateway service list unavailable')
+
+    const unavailableSnapshot = await buildAdminServicesSnapshot(
+      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetServices').lose('Gateway.GetRegistry').lose('Gateway.GetCapabilityCatalog') })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+  })
+
+  it('preserves denied, degraded, stale, privacy-blocked, and unsupported contract evidence', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminStateMatrixTransport() }))
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+
+    expect(snapshot.services.map((service) => service.routeState)).toEqual(
+      expect.arrayContaining(['degraded', 'denied', 'stale', 'privacy-blocked', 'unsupported'])
+    )
+    expect(markup).toContain('policy_denied')
+    expect(markup).toContain('stale_provider')
+    expect(markup).toContain('explicit_selector_required')
+    expect(markup).toContain('internal-only')
+  })
+
   it('renders pairing queue states without exposing pairing codes', () => {
     const route = pairingRoute()
     const model = buildPairingQueueModel({
@@ -1148,6 +1233,248 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
   const match = snapshot.routes.find((candidate) => candidate.item.id === id)
   if (!match) throw new Error(`missing route ${id}`)
   return match
+}
+
+function adminServicesTransport(): MockAuroraTransport {
+  const transport = new MockAuroraTransport()
+  transport.register('Gateway.GetServices', () => adminServicesFixture())
+  transport.register('Gateway.GetRegistry', () => adminRegistryFixture())
+  transport.register('Gateway.GetCapabilityCatalog', () => adminCapabilityCatalog())
+  return transport
+}
+
+function emptyAdminTransport(): MockAuroraTransport {
+  return MockAuroraTransport.empty()
+    .register('Gateway.GetServices', () => ({ mode: 'threads', services: [] }))
+    .register('Gateway.GetRegistry', () => ({ modules: [], digest: 'empty', service_count: 0, method_count: 0 }))
+    .register('Gateway.GetCapabilityCatalog', () => ({
+      generated_at: '2026-06-25T00:00:00Z',
+      local_peer_id: 'local-peer',
+      local_node_name: 'local',
+      providers: [],
+      actions: [],
+      resources: [],
+      provider_index: {},
+      action_index: {},
+      secrets_redacted: true
+    }))
+}
+
+function adminStateMatrixTransport(): MockAuroraTransport {
+  const transport = adminServicesTransport()
+  const catalog = adminCapabilityCatalog()
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const modules = ['Denied', 'Stale', 'Audio', 'InternalOnly']
+  catalog.providers = [
+    provider(baseProvider, {
+      provider_id: 'local:Gateway-degraded',
+      module: 'Gateway',
+      service_instance_id: 'gateway-degraded',
+      reason_code: 'fallback_used',
+      reason: 'Reduced Gateway service diagnostics.'
+    }),
+    provider(baseProvider, {
+      provider_id: 'local:Denied',
+      module: 'Denied',
+      service_instance_id: 'denied-local',
+      eligible: false,
+      reason_code: 'policy_denied',
+      reason: 'Current principal is denied.',
+      policy: { ...baseProvider.policy, denial_reasons: ['policy_denied'] }
+    }),
+    provider(baseProvider, {
+      provider_id: 'remote:Stale',
+      module: 'Stale',
+      service_instance_id: 'stale-remote',
+      eligible: false,
+      reason_code: 'stale_provider',
+      reason: 'Provider heartbeat is stale.',
+      freshness: { ...baseProvider.freshness, stale: true, last_probe_age_s: 900 }
+    }),
+    provider(baseProvider, {
+      provider_id: 'remote:Audio',
+      module: 'Audio',
+      service_instance_id: 'audio-remote',
+      eligible: false,
+      reason_code: 'explicit_selector_required',
+      reason: 'Audio action requires explicit selector.',
+      policy: { ...baseProvider.policy, explicit_selector_required: true, selector_required: true, consent_required: true }
+    })
+  ]
+  catalog.actions = [
+    action(baseAction, catalog.providers[0]!, {
+      action_id: 'gateway-degraded-services',
+      method: 'GetServices',
+      topic: 'Gateway.GetServices',
+      bindability: 'degraded'
+    }),
+    action(baseAction, catalog.providers[1]!, {
+      action_id: 'denied-use',
+      method: 'Use',
+      topic: 'Denied.Use',
+      bindability: 'denied'
+    }),
+    action(baseAction, catalog.providers[2]!, {
+      action_id: 'stale-use',
+      method: 'Use',
+      topic: 'Stale.Use',
+      bindability: 'unavailable'
+    }),
+    action(baseAction, catalog.providers[3]!, {
+      action_id: 'audio-use',
+      method: 'Use',
+      topic: 'Audio.Use',
+      bindability: 'unavailable'
+    })
+  ]
+  transport.register('Gateway.GetCapabilityCatalog', () => catalog)
+  transport.register('Gateway.GetServices', () => ({
+    mode: 'threads',
+    services: modules.map((module) => service(module)).concat(service('Gateway'))
+  }))
+  transport.register('Gateway.GetRegistry', () => ({
+    modules: modules.map((module) => registryModule(module, module === 'InternalOnly' ? 'internal' : 'external')).concat(registryModule('Gateway')),
+    digest: 'matrix',
+    service_count: modules.length + 1,
+    method_count: modules.length + 1
+  }))
+  return transport
+}
+
+function adminServicesFixture(): GetServicesResponse {
+  return {
+    mode: 'threads',
+    services: [
+      service('Gateway', { capabilities: ['registry', 'services'], method_count: 2, instance_id: 'gateway-local' }),
+      service('Supervisor', { capabilities: ['lifecycle'], method_count: 2, instance_id: 'supervisor-local' })
+    ]
+  }
+}
+
+function adminRegistryFixture(): GetRegistryResponse {
+  return {
+    modules: [
+      {
+        ...registryModule('Gateway'),
+        methods: [
+          method('Gateway', 'GetServices', 'use', 'external', ['Gateway.use']),
+          method('Gateway', 'GetRegistry', 'use', 'external', ['Gateway.use'])
+        ]
+      },
+      {
+        ...registryModule('Supervisor'),
+        methods: [
+          method('Supervisor', 'RestartService', 'manage', 'external', ['Supervisor.manage']),
+          method('Supervisor', 'StopService', 'manage', 'internal', ['Supervisor.manage'])
+        ]
+      }
+    ],
+    digest: 'admin',
+    service_count: 2,
+    method_count: 4
+  }
+}
+
+function adminCapabilityCatalog(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const gateway = provider(baseProvider, {
+    provider_id: 'local:Gateway',
+    module: 'Gateway',
+    service_instance_id: 'gateway-local',
+    reason: 'Gateway admin services are available.'
+  })
+  const supervisor = provider(baseProvider, {
+    provider_id: 'local:Supervisor',
+    module: 'Supervisor',
+    service_instance_id: 'supervisor-local',
+    reason: 'Supervisor restart is available through AdminAction.'
+  })
+  catalog.providers = [gateway, supervisor]
+  catalog.actions = [
+    action(baseAction, gateway, {
+      action_id: 'gateway-get-services',
+      method: 'GetServices',
+      topic: 'Gateway.GetServices'
+    }),
+    action(baseAction, gateway, {
+      action_id: 'gateway-get-registry',
+      method: 'GetRegistry',
+      topic: 'Gateway.GetRegistry'
+    }),
+    action(baseAction, supervisor, {
+      action_id: 'supervisor-restart',
+      method: 'RestartService',
+      topic: 'Supervisor.RestartService',
+      policy: {
+        ...supervisor.policy,
+        required_permissions: ['Supervisor.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin',
+        approval_required: true
+      }
+    })
+  ]
+  catalog.provider_index = { Gateway: ['local:Gateway'], Supervisor: ['local:Supervisor'] }
+  catalog.action_index = {
+    'Gateway.GetServices': ['gateway-get-services'],
+    'Gateway.GetRegistry': ['gateway-get-registry'],
+    'Supervisor.RestartService': ['supervisor-restart']
+  }
+  return catalog
+}
+
+function service(
+  module: string,
+  overrides: Partial<GetServicesResponse['services'][number]> = {}
+): GetServicesResponse['services'][number] {
+  return {
+    module,
+    version: '0.1.0',
+    summary: `${module} service`,
+    capabilities: [module.toLowerCase()],
+    method_count: 1,
+    last_seen: '2026-06-25T00:00:00Z',
+    status: 'healthy',
+    instance_id: `${module.toLowerCase()}-local`,
+    ...overrides
+  }
+}
+
+function registryModule(
+  module: string,
+  exposure: 'external' | 'internal' = 'external'
+): GetRegistryResponse['modules'][number] {
+  return {
+    module,
+    version: '0.1.0',
+    summary: `${module} service`,
+    capabilities: [module.toLowerCase()],
+    methods: [method(module, 'Use', 'use', exposure, [`${module}.use`])]
+  }
+}
+
+function method(
+  module: string,
+  name: string,
+  methodType: 'use' | 'manage',
+  exposure: 'external' | 'internal',
+  permissions: string[]
+): GetRegistryResponse['modules'][number]['methods'][number] {
+  return {
+    name,
+    summary: `${module} ${name}`,
+    bus_topic: `${module}.${name}`,
+    exposure,
+    input_model: null,
+    output_model: null,
+    required_perms: permissions,
+    method_type: methodType,
+    input_schema: null,
+    output_schema: null
+  }
 }
 
 function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
