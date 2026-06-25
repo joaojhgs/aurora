@@ -36,7 +36,19 @@ export const AUTH_METHODS = {
   pairingExchange: 'Auth.PairingExchange',
   listPendingPairings: 'Auth.ListPendingPairings',
   pairingApprove: 'Auth.PairingApprove',
-  pairingDeny: 'Auth.PairingDeny'
+  pairingDeny: 'Auth.PairingDeny',
+  listPrincipals: 'Auth.ListPrincipals',
+  createPrincipal: 'Auth.CreatePrincipal',
+  getPrincipal: 'Auth.GetPrincipal',
+  updatePrincipal: 'Auth.UpdatePrincipal',
+  deletePrincipal: 'Auth.DeletePrincipal',
+  setPermissions: 'Auth.SetPermissions',
+  patchPermissions: 'Auth.PatchPermissions',
+  listTokens: 'Auth.ListTokens',
+  revokeToken: 'Auth.RevokeToken',
+  listDevices: 'Auth.ListDevices',
+  deleteDevice: 'Auth.DeleteDevice',
+  auditLog: 'Auth.AuditLog'
 } as const
 
 export const TOOLING_METHODS = {
@@ -54,6 +66,17 @@ export const ORCHESTRATOR_METHODS = {
   interrupt: 'Orchestrator.Interrupt',
   toolResult: 'Orchestrator.ToolResult',
   response: 'Orchestrator.Response'
+} as const
+
+export const CONFIG_METHODS = {
+  get: 'Config.Get',
+  set: 'Config.Set',
+  validate: 'Config.Validate',
+  getSchemaMetadata: 'Config.GetSchemaMetadata',
+  previewDiff: 'Config.PreviewDiff',
+  getVersionHistory: 'Config.GetVersionHistory',
+  rollback: 'Config.Rollback',
+  previewReloadImpact: 'Config.PreviewReloadImpact'
 } as const
 
 export const ORCHESTRATOR_MODEL_METHODS = {

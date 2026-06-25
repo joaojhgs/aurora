@@ -22,6 +22,7 @@ import {
   routePath
 } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
+import { ConfigClient } from './config.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { SchedulerClient } from './scheduler.js'
@@ -51,9 +52,15 @@ import type {
   AuthPairingExchangeResponse,
   AuthPairingStartRequest,
   AuthPairingStartResponse,
+  AuditLogRequest,
+  AuditLogResponse,
   AuthValidateTokenRequest,
   AuthValidateTokenResponse,
   AuthWhoAmIResponse,
+  DeviceDeleteRequest,
+  DeviceDeleteResponse,
+  DeviceListRequest,
+  DeviceListResponse,
   AttachmentContextIngestRequest,
   AttachmentContextIngestResponse,
   AssistantSendMessageRequest,
@@ -86,11 +93,27 @@ import type {
   OrchestratorInterruptRequest,
   OrchestratorInterruptResponse,
   PeerSummary,
+  PermissionPatchRequest,
+  PermissionPatchResponse,
+  PermissionSetRequest,
+  PermissionSetResponse,
+  PrincipalCreateRequest,
+  PrincipalDeleteRequest,
+  PrincipalDeleteResponse,
+  PrincipalGetRequest,
+  PrincipalListRequest,
+  PrincipalListResponse,
+  PrincipalResponse,
+  PrincipalUpdateRequest,
   ContractMethodType,
   RouteExplainRequest,
   RouteExplainResponse,
   RoutePolicyEvaluation,
   RoutePolicyInput,
+  TokenListRequest,
+  TokenListResponse,
+  TokenRevokeRequest,
+  TokenRevokeResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type {
@@ -119,6 +142,7 @@ export class AuroraClient {
   readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
+  readonly config: ConfigClient
   readonly admin: AdminActionClient
   readonly approvals: ApprovalClient
   readonly native: NativeClient
@@ -140,6 +164,7 @@ export class AuroraClient {
     this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
+    this.config = new ConfigClient(this)
     this.admin = new AdminActionClient(this)
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
@@ -305,6 +330,102 @@ export class AuthApiClient {
       AUTH_METHODS.pairingDeny,
       payload,
       { path: routePath('Auth', 'PairingDeny') }
+    )
+  }
+
+  listPrincipals(payload: PrincipalListRequest = {}): Promise<AuroraResponse<PrincipalListResponse>> {
+    return this.client.requestResult<PrincipalListResponse, PrincipalListRequest>(
+      AUTH_METHODS.listPrincipals,
+      payload,
+      { path: routePath('Auth', 'ListPrincipals') }
+    )
+  }
+
+  createPrincipal(payload: PrincipalCreateRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalCreateRequest>(
+      AUTH_METHODS.createPrincipal,
+      payload,
+      { path: routePath('Auth', 'CreatePrincipal') }
+    )
+  }
+
+  getPrincipal(payload: PrincipalGetRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalGetRequest>(
+      AUTH_METHODS.getPrincipal,
+      payload,
+      { path: routePath('Auth', 'GetPrincipal') }
+    )
+  }
+
+  updatePrincipal(payload: PrincipalUpdateRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalUpdateRequest>(
+      AUTH_METHODS.updatePrincipal,
+      payload,
+      { path: routePath('Auth', 'UpdatePrincipal') }
+    )
+  }
+
+  deletePrincipal(payload: PrincipalDeleteRequest): Promise<AuroraResponse<PrincipalDeleteResponse>> {
+    return this.client.requestResult<PrincipalDeleteResponse, PrincipalDeleteRequest>(
+      AUTH_METHODS.deletePrincipal,
+      payload,
+      { path: routePath('Auth', 'DeletePrincipal') }
+    )
+  }
+
+  setPermissions(payload: PermissionSetRequest): Promise<AuroraResponse<PermissionSetResponse>> {
+    return this.client.requestResult<PermissionSetResponse, PermissionSetRequest>(
+      AUTH_METHODS.setPermissions,
+      payload,
+      { path: routePath('Auth', 'SetPermissions') }
+    )
+  }
+
+  patchPermissions(payload: PermissionPatchRequest): Promise<AuroraResponse<PermissionPatchResponse>> {
+    return this.client.requestResult<PermissionPatchResponse, PermissionPatchRequest>(
+      AUTH_METHODS.patchPermissions,
+      payload,
+      { path: routePath('Auth', 'PatchPermissions') }
+    )
+  }
+
+  listTokens(payload: TokenListRequest = {}): Promise<AuroraResponse<TokenListResponse>> {
+    return this.client.requestResult<TokenListResponse, TokenListRequest>(
+      AUTH_METHODS.listTokens,
+      payload,
+      { path: routePath('Auth', 'ListTokens') }
+    )
+  }
+
+  revokeToken(payload: TokenRevokeRequest): Promise<AuroraResponse<TokenRevokeResponse>> {
+    return this.client.requestResult<TokenRevokeResponse, TokenRevokeRequest>(
+      AUTH_METHODS.revokeToken,
+      payload,
+      { path: routePath('Auth', 'RevokeToken') }
+    )
+  }
+
+  listDevices(payload: DeviceListRequest = {}): Promise<AuroraResponse<DeviceListResponse>> {
+    return this.client.requestResult<DeviceListResponse, DeviceListRequest>(
+      AUTH_METHODS.listDevices,
+      payload,
+      { path: routePath('Auth', 'ListDevices') }
+    )
+  }
+
+  deleteDevice(payload: DeviceDeleteRequest): Promise<AuroraResponse<DeviceDeleteResponse>> {
+    return this.client.requestResult<DeviceDeleteResponse, DeviceDeleteRequest>(
+      AUTH_METHODS.deleteDevice,
+      payload,
+      { path: routePath('Auth', 'DeleteDevice') }
+    )
+  }
+
+  auditLog(payload: AuditLogRequest = {}): Promise<AuroraResponse<AuditLogResponse>> {
+    return this.client.requestResult<AuditLogResponse, AuditLogRequest>(
+      AUTH_METHODS.auditLog,
+      payload,
+      { path: routePath('Auth', 'AuditLog') }
     )
   }
 }

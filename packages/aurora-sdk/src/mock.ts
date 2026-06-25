@@ -57,6 +57,14 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Config.Get', () => cloneFixture(fixtures.configGet))
+      .register('Config.Validate', () => cloneFixture(fixtures.configValidate))
+      .register('Config.GetSchemaMetadata', () => cloneFixture(fixtures.configSchemaMetadata))
+      .register('Config.PreviewDiff', () => cloneFixture(fixtures.configDiffPreview))
+      .register('Config.GetVersionHistory', () => cloneFixture(fixtures.configVersionHistory))
+      .register('Config.PreviewReloadImpact', () => cloneFixture(fixtures.configReloadImpact))
+      .register('Config.Set', () => cloneFixture(fixtures.configSet))
+      .register('Config.Rollback', () => cloneFixture(fixtures.configRollback))
       .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
       .register('Orchestrator.GetModelRuntime', () => ({
         generated_at: fixtures.modelRuntimeCatalog.generated_at,
@@ -75,6 +83,18 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('DB.RAGExportNamespace', () => cloneFixture(fixtures.memoryExport))
       .register('DB.RAGImportNamespace', () => cloneFixture(fixtures.memoryImport))
       .register('DB.RAGDelete', () => ({ success: true }))
+      .register('Auth.ListPrincipals', () => cloneFixture(fixtures.principals))
+      .register('Auth.GetPrincipal', (request) => mockPrincipal(fixtures.principals, request.payload))
+      .register('Auth.CreatePrincipal', (request) => mockCreatePrincipal(request.payload))
+      .register('Auth.UpdatePrincipal', (request) => mockUpdatePrincipal(fixtures.principals, request.payload))
+      .register('Auth.DeletePrincipal', () => ({ success: true }))
+      .register('Auth.SetPermissions', () => ({ success: true }))
+      .register('Auth.PatchPermissions', () => ({ success: true }))
+      .register('Auth.ListTokens', (request) => mockListTokens(fixtures.tokens, request.payload))
+      .register('Auth.RevokeToken', () => ({ success: true }))
+      .register('Auth.ListDevices', (request) => mockListDevices(fixtures.devices, request.payload))
+      .register('Auth.DeleteDevice', () => ({ success: true }))
+      .register('Auth.AuditLog', () => cloneFixture(fixtures.auditLog))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
         session_id: mockSessionId(request.payload),
@@ -181,6 +201,74 @@ function mockSessionId(payload: unknown): string {
     if (typeof sessionId === 'string' && sessionId.trim()) return sessionId
   }
   return 'mock-assistant-session'
+}
+
+function mockPrincipal(
+  principals: { principals: Array<{ id: string; username: string; permissions: string[]; is_admin: boolean; created_at?: string | null }> },
+  payload: unknown
+) {
+  const userId = typeof payload === 'object' && payload !== null ? (payload as { user_id?: unknown }).user_id : null
+  const principal = principals.principals.find((candidate) => candidate.id === userId)
+  if (!principal) {
+    throw new AuroraError({ code: 'unknown', status: 404, message: 'Principal not found', method: 'Auth.GetPrincipal' })
+  }
+  return cloneFixture(principal)
+}
+
+function mockCreatePrincipal(payload: unknown) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { username?: unknown; permissions?: unknown; is_admin?: unknown } : {}
+  return {
+    id: `principal-${String(request.username ?? 'new').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
+    username: typeof request.username === 'string' ? request.username : 'new-principal',
+    permissions: Array.isArray(request.permissions) ? request.permissions.filter((item): item is string => typeof item === 'string') : [],
+    is_admin: Boolean(request.is_admin),
+    created_at: new Date(0).toISOString()
+  }
+}
+
+function mockUpdatePrincipal(
+  principals: { principals: Array<{ id: string; username: string; permissions: string[]; is_admin: boolean; created_at?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { user_id?: unknown; username?: unknown; is_admin?: unknown } : {}
+  const principal = principals.principals.find((candidate) => candidate.id === request.user_id)
+  if (!principal) {
+    throw new AuroraError({ code: 'unknown', status: 404, message: 'Principal not found', method: 'Auth.UpdatePrincipal' })
+  }
+  return {
+    ...cloneFixture(principal),
+    username: typeof request.username === 'string' ? request.username : principal.username,
+    is_admin: typeof request.is_admin === 'boolean' ? request.is_admin : principal.is_admin
+  }
+}
+
+function mockListTokens(
+  tokens: { tokens: Array<{ device_id?: string | null; user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null
+    ? payload as { device_id?: unknown; principal_id?: unknown }
+    : {}
+  const deviceId = typeof request.device_id === 'string' ? request.device_id : null
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    tokens: cloneFixture(tokens.tokens).filter((token) => {
+      if (deviceId && token.device_id !== deviceId) return false
+      if (principalId && token.user_id !== principalId) return false
+      return true
+    })
+  }
+}
+
+function mockListDevices(
+  devices: { devices: Array<{ user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { principal_id?: unknown } : {}
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    devices: cloneFixture(devices.devices).filter((device) => !principalId || device.user_id === principalId)
+  }
 }
 
 function mockIngestContext(payload: unknown): AttachmentContextIngestResponse {

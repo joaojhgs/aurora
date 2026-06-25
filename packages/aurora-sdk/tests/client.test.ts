@@ -153,6 +153,72 @@ describe('AuroraClient', () => {
     ])
   })
 
+  it('routes Auth device and token management through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListDevices', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          devices: [
+            {
+              id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              name: 'Studio Mac',
+              is_trusted: true,
+              created_at: '2026-06-19T00:30:00Z',
+              last_seen: '2026-06-25T02:30:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.ListTokens', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          tokens: [
+            {
+              id: 'token-studio',
+              prefix: 'aur_stu',
+              device_id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              scopes: ['Auth.manage'],
+              created_at: '2026-06-19T00:35:00Z',
+              expires_at: '2026-07-19T00:35:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.DeleteDevice', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const devices = await client.authApi.listDevices({ principal_id: 'principal-owner' })
+    const tokens = await client.authApi.listTokens({ device_id: 'device-studio-mac' })
+    const deleted = await client.authApi.deleteDevice({ device_id: 'device-studio-mac' })
+
+    expect(devices.ok).toBe(true)
+    expect(tokens.ok).toBe(true)
+    expect(deleted.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListDevices',
+        path: '/api/Auth/ListDevices',
+        payload: { principal_id: 'principal-owner' }
+      },
+      {
+        method: 'Auth.ListTokens',
+        path: '/api/Auth/ListTokens',
+        payload: { device_id: 'device-studio-mac' }
+      },
+      {
+        method: 'Auth.DeleteDevice',
+        path: '/api/Auth/DeleteDevice',
+        payload: { device_id: 'device-studio-mac' }
+      }
+    ])
+  })
+
   it('advertises assistant context ingestion from backend inventory descriptors', () => {
     const descriptors = describeBackendInventory(backendInventoryFixture)
 
@@ -454,15 +520,15 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 2,
-        methods: 9,
-        externalMethods: 8,
+        services: 3,
+        methods: 20,
+        externalMethods: 19,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
       })
     )
-    expect(manifest.services[0]).toEqual(
+    expect(manifest.services.find((service) => service.module === 'Gateway')).toEqual(
       expect.objectContaining({
         module: 'Gateway',
         status: 'healthy',
@@ -1149,6 +1215,101 @@ describe('AuroraClient', () => {
         }
       })
     )
+  })
+
+  it('loads config metadata, diff, reload impact, and history through the config namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const schema = await client.config.getSchemaMetadata({ include_values: true })
+    const diff = await client.config.previewDiff({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const impact = await client.config.previewReloadImpact({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const history = await client.config.getVersionHistory({ limit: 2 })
+
+    expect(schema.ok).toBe(true)
+    expect(schema.ok && schema.data.fields.some((field) => field.key_path === 'services.gateway.api.token_secret' && field.secret)).toBe(true)
+    expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
+    expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
+    expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+  })
+
+  it('applies config changes and rollback through AdminAction headers', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          nonce: 'nonce-config',
+          digest: 'digest-config',
+          method_id: (request.payload as { method_id: string }).method_id,
+          affected_resources: ['services.gateway.api.port'],
+          required_phrase: 'APPLY',
+          required_reason: true,
+          required_reauth: false,
+          expires_at: '2026-06-19T00:10:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          confirmation_token: 'token-config',
+          digest: 'digest-config',
+          confirmed: true,
+          expires_at: '2026-06-19T00:10:00Z',
+          audit_receipt: 'aar-config',
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Config.Set', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, previous_value: 8000 }
+      })
+      .register('Config.Rollback', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          success: true,
+          version_id: 'cfgv-gateway-port-001',
+          key_path: 'services.gateway.api.port',
+          rolled_back_to: 7000,
+          affected_sections: ['services.gateway.api'],
+          error: null,
+          secrets_redacted: true
+        }
+      })
+
+    const client = new AuroraClient({ transport })
+    await client.config.applyChange({
+      change: { key_path: 'services.gateway.api.port', value: 8080 },
+      reason: 'test change',
+      reauthConfirmed: true
+    })
+    await client.config.rollback({
+      versionId: 'cfgv-gateway-port-001',
+      reason: 'test rollback',
+      reauthConfirmed: true
+    })
+
+    const configSet = calls.find((call) => call.method === 'Config.Set')
+    const rollback = calls.find((call) => call.method === 'Config.Rollback')
+    expect(configSet?.headers).toMatchObject({ 'X-Aurora-AdminAction-Token': 'token-config' })
+    expect(rollback?.headers).toMatchObject({ 'X-Aurora-AdminAction-Id': 'aa-config' })
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(2)
   })
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
@@ -2846,7 +3007,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 9,
+      checked: 20,
       issues: []
     })
 

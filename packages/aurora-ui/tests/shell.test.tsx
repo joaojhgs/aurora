@@ -19,20 +19,32 @@ import {
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo,
+  type GetRegistryResponse,
   type GetServicesResponse,
   type PendingPairingEntry
 } from '@aurora/client'
 import {
   AdminOverviewContent,
   AdminOverviewView,
+  AdminPluginsView,
+  AdminServicesView,
+  AdminRbacView,
+  AdminDevicesView,
   AppShell,
   AssistantView,
+  ConfigEditorView,
   ModelsView,
   MemoryView,
   OnboardingView,
   PairingQueueSurface,
   PairingQueueView,
   RouteSheet,
+  buildAdminServicesSnapshot,
+  buildAdminPluginsSnapshot,
+  buildAdminRbacSnapshot,
+  buildAdminDevicesSnapshot,
+  buildDeviceDeleteAdminAction,
+  buildRbacPermissionPatchAction,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
@@ -54,6 +66,7 @@ import {
   buildMemoryViewModel,
   buildShellSnapshot,
   buildModelsViewModel,
+  buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
   parsePermissionList,
@@ -626,6 +639,390 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 
+  it('wires admin services and contract explorer from AuroraClient SDK resources', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.services.map((service) => service.module)).toContain('Gateway')
+    expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Gateway.GetServices')
+    expect(markup).toContain('Services and contracts')
+    expect(markup).toContain('SDK mock transport fixture')
+    expect(markup).toContain('Gateway.GetServices')
+    expect(markup).toContain('Supervisor.RestartService')
+    expect(markup).toContain('AdminAction')
+    expect(markup).not.toContain('visual mock')
+  })
+
+  it('keeps service control actions capability-driven and AdminAction-gated', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+    const supervisor = snapshot.services.find((service) => service.module === 'Supervisor')
+    const gateway = snapshot.services.find((service) => service.module === 'Gateway')
+
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.available).toBe(true)
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.requiresAdminAction).toBe(true)
+    expect(supervisor?.controls.find((control) => control.verb === 'restart')?.action?.methodId).toBe('Supervisor.RestartService')
+    expect(gateway?.controls.every((control) => !control.available)).toBe(true)
+
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+    expect(markup).toContain('Preview requires AdminAction draft/confirm/audit')
+    expect(markup).toContain('Supervisor control contract is not present in the service registry')
+  })
+
+  it('renders admin service loading, empty, denied, degraded, and unavailable states', async () => {
+    const loadingMarkup = renderToStaticMarkup(
+      <AdminServicesView snapshot={{
+        loadState: 'loading',
+        servicesMode: 'pending',
+        generatedAt: null,
+        secretsRedacted: true,
+        services: [],
+        contracts: [],
+        warnings: [],
+        error: null,
+        evidenceSource: 'pending AuroraClient SDK calls'
+      }} />
+    )
+    expect(loadingMarkup).toContain('Loading services')
+
+    const emptySnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: emptyAdminTransport() }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={emptySnapshot} />)).toContain('No service registry')
+
+    const deniedTransport = adminServicesTransport()
+    deniedTransport.fail('Gateway.GetCapabilityCatalog', 'permission', 'Capability catalog denied')
+    const deniedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={deniedSnapshot} />)).toContain('Capability catalog denied')
+
+    const degradedTransport = adminServicesTransport()
+    degradedTransport.lose('Gateway.GetServices', 'Gateway service list unavailable')
+    const degradedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={degradedSnapshot} />)).toContain('Gateway service list unavailable')
+
+    const unavailableSnapshot = await buildAdminServicesSnapshot(
+      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetServices').lose('Gateway.GetRegistry').lose('Gateway.GetCapabilityCatalog') })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+  })
+
+  it('preserves denied, degraded, stale, privacy-blocked, and unsupported contract evidence', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminStateMatrixTransport() }))
+    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+
+    expect(snapshot.services.map((service) => service.routeState)).toEqual(
+      expect.arrayContaining(['degraded', 'denied', 'stale', 'privacy-blocked', 'unsupported'])
+    )
+    expect(markup).toContain('policy_denied')
+    expect(markup).toContain('stale_provider')
+    expect(markup).toContain('explicit_selector_required')
+    expect(markup).toContain('internal-only')
+  })
+
+  it('wires plugins, MCP, provider grouping, risk metadata, and policy controls from AuroraClient', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
+    const markup = renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.tools.map((tool) => tool.providerGroup)).toEqual(expect.arrayContaining([
+      'local-built-in',
+      'local-mcp',
+      'remote-peer-built-in',
+      'unavailable-stale'
+    ]))
+    expect(snapshot.tools.some((tool) => tool.admin && tool.mutating && tool.riskClass === 'admin-critical')).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.dataClasses.includes('external-egress'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'require-confirmation'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'dry-run-only'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'allowed-peers'))).toBe(true)
+    expect(markup).toContain('Plugins, MCP, and tools')
+    expect(markup).toContain('Local built-in')
+    expect(markup).toContain('Local MCP')
+    expect(markup).toContain('Remote peer built-in')
+    expect(markup).toContain('Unavailable or stale provider')
+    expect(markup).toContain('Write local config file')
+    expect(markup).toContain('Open garage door')
+    expect(markup).toContain('Send email draft')
+    expect(markup).toContain('admin-critical')
+    expect(markup).toContain('external-egress')
+    expect(markup).toContain('Share selected')
+    expect(markup).toContain('Require confirmation')
+    expect(markup).toContain('Dry-run only')
+    expect(markup).toContain('Allowed peers/providers')
+    expect(markup).toContain('audit.local.tooling')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps plugin reload, install, and sharing mutations AdminAction-gated by advertised registry methods', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
+    const markup = renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.actions.map((action) => action.methodId)).toEqual([
+      'Tooling.ReloadPlugins',
+      'Tooling.InstallPlugin',
+      'Tooling.UpdateToolSharingPolicy'
+    ])
+    expect(snapshot.actions.every((action) => action.requiresAdminAction || action.state === 'unsupported')).toBe(true)
+    expect(snapshot.actions.every((action) => !action.available)).toBe(true)
+    expect(markup).toContain('Tooling.ReloadPlugins is not advertised')
+    expect(markup).toContain('Tooling.InstallPlugin is not advertised')
+    expect(markup).toContain('Tooling.UpdateToolSharingPolicy is not advertised')
+    expect(markup).toContain('disabled=""')
+    expect(markup).toContain('Remote peer tool policy is read-only')
+  })
+
+  it('renders plugin admin loading, empty, denied, degraded, unavailable, and error states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={{
+      loadState: 'loading',
+      generatedAt: null,
+      secretsRedacted: true,
+      tools: [],
+      providerGroups: [],
+      actions: [],
+      warnings: [],
+      error: null,
+      evidenceSource: 'pending AuroraClient SDK calls'
+    }} />)).toContain('Loading Tooling catalog')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Tooling.GetToolCatalog', () => ({ tools: [], secrets_redacted: true }))
+    const emptySnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: emptyTransport }), pluginsRoute)
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={emptySnapshot} />)).toContain('No Tooling catalog entries')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
+    const deniedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: deniedTransport }), pluginsRoute)
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={deniedSnapshot} />)).toContain('tool catalog denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Gateway.GetRegistry', 'registry unavailable')
+    const degradedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: degradedTransport }), pluginsRoute)
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={degradedSnapshot} />)).toContain('registry unavailable')
+
+    const unavailableSnapshot = await buildAdminPluginsSnapshot(
+      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Tooling.GetToolCatalog').lose('Gateway.GetRegistry') }),
+      pluginsRoute
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+
+    const disabledRoute = { ...pluginsRoute, disabled: true, state: 'denied' as const, blockers: ['missing:Tooling.manage'] }
+    const disabledSnapshot = await buildAdminPluginsSnapshot(client, disabledRoute)
+    expect(disabledSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Tooling.manage')
+  })
+
+  it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.principals.map((principal) => principal.id)).toContain('principal-owner')
+    expect(snapshot.roles.map((role) => role.label)).toEqual(expect.arrayContaining(['Owner', 'Admin', 'Automation', 'Member']))
+    expect(snapshot.permissions.map((permission) => permission.id)).toContain('Auth.manage')
+    expect(snapshot.audit.map((entry) => entry.correlationId)).toContain('corr-rbac-001')
+    expect(snapshot.principals.some((principal) => principal.patchPreview.requiresAdminAction)).toBe(true)
+    expect(markup).toContain('Access and RBAC')
+    expect(markup).toContain('Auth.PatchPermissions')
+    expect(markup).toContain('AdminAction approval')
+    expect(markup).toContain('Recent access changes')
+    expect(markup).not.toContain('secret-pending-code')
+  })
+
+  it('builds RBAC permission patch AdminAction payloads with effective diffs and cascade notes', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const principal = snapshot.principals.find((row) => row.id === 'principal-assistant')
+    expect(principal).toBeTruthy()
+    expect(principal?.patchPreview.cascade.join(' ')).toContain('effective-permission')
+
+    const action = buildRbacPermissionPatchAction(principal!, {
+      grant: ['Auth.manage'],
+      revoke: ['DB.use'],
+      reason: 'promote assistant operator'
+    })
+
+    expect(action.methodId).toBe('Auth.PatchPermissions')
+    expect(action.requiresAdminAction).toBe(true)
+    expect(action.payload).toEqual({ user_id: 'principal-assistant', grant: ['Auth.manage'], revoke: ['DB.use'] })
+    expect(action.affectedResources).toEqual(expect.arrayContaining(['principal:principal-assistant', 'grant:Auth.manage', 'revoke:DB.use']))
+    expect(action.diff.find((row) => row.key === 'principal.permissions')?.after).toContain('Auth.manage')
+    expect(action.auditReason).toBe('promote assistant operator')
+  })
+
+  it('renders RBAC loading, empty, denied, degraded, unavailable, and rollback-error states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminRbacView snapshot={rbacLoadingSnapshot()} />)
+    expect(loadingMarkup).toContain('Loading RBAC principals')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.ListPrincipals', () => ({ principals: [] }))
+    emptyTransport.register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+    const emptySnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={emptySnapshot} />)).toContain('No principals')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.ListPrincipals', 'permission', 'Auth RBAC denied')
+    const deniedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={deniedSnapshot} />)).toContain('Auth RBAC denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Auth.AuditLog', 'audit backend unavailable')
+    const degradedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={degradedSnapshot} />)).toContain('audit backend unavailable')
+
+    const unavailableSnapshot = await buildAdminRbacSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .lose('Auth.ListPrincipals')
+          .lose('Auth.AuditLog')
+          .lose('Gateway.GetRegistry')
+          .lose('Gateway.GetCapabilityCatalog')
+      })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={unavailableSnapshot} />)).toContain('Auth RBAC SDK resources are unavailable')
+
+    const rollbackMarkup = renderToStaticMarkup(
+      <AdminRbacView
+        snapshot={{
+          ...rbacLoadingSnapshot(),
+          loadState: 'error',
+          mutationState: 'denied',
+          error: 'Rollback required after AdminAction submit failed',
+          mutationReason: 'Backend rejected the AdminAction confirmation token.'
+        }}
+      />
+    )
+    expect(rollbackMarkup).toContain('Rollback required after AdminAction submit failed')
+  })
+
+  it('wires device/session management from AuroraClient Auth resources', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminDevicesView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.devices.map((device) => device.id)).toContain('device-studio-mac')
+    expect(snapshot.devices.some((device) => device.activeSessionCount > 0)).toBe(true)
+    expect(snapshot.devices.some((device) => device.deleteAction?.methodId === 'Auth.DeleteDevice')).toBe(true)
+    expect(markup).toContain('Devices and sessions')
+    expect(markup).toContain('token-backed active sessions')
+    expect(markup).toContain('AdminAction boundary')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('builds device delete mutations as AdminAction requests', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
+    expect(device).toBeTruthy()
+
+    const action = buildDeviceDeleteAdminAction(device!, 'retire lost laptop')
+    expect(action.methodId).toBe('Auth.DeleteDevice')
+    expect(action.payload).toEqual({ device_id: 'device-studio-mac' })
+    expect(action.reason).toBe('retire lost laptop')
+    expect(action.reauthConfirmed).toBe(true)
+    expect(action.affectedResources).toEqual(expect.arrayContaining(['device:device-studio-mac', 'device_tokens', 'active_sessions']))
+  })
+
+  it('renders device loading, empty, denied, degraded, unavailable, optimistic, rollback, and capability-gated states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminDevicesView snapshot={devicesLoadingSnapshot()} />)
+    expect(loadingMarkup).toContain('Loading devices')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.ListDevices', () => ({ devices: [] }))
+    emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
+    const emptySnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={emptySnapshot} />)).toContain('No registered devices')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.ListDevices', 'permission', 'device access denied')
+    const deniedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={deniedSnapshot} />)).toContain('device access denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Auth.ListTokens', 'token service unavailable')
+    const degradedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={degradedSnapshot} />)).toContain('token service unavailable')
+
+    const unavailableSnapshot = await buildAdminDevicesSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .lose('Auth.ListDevices')
+          .lose('Auth.ListTokens')
+          .lose('Gateway.GetCapabilityCatalog')
+      })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={unavailableSnapshot} />)).toContain('Auth device/session SDK resources are unavailable')
+
+    const optimisticMarkup = renderToStaticMarkup(
+      <AdminDevicesView snapshot={await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))} optimisticDeviceId="device-studio-mac" />
+    )
+    expect(optimisticMarkup).toContain('AdminAction submitted for device-studio-mac')
+
+    const rollbackMarkup = renderToStaticMarkup(
+      <AdminDevicesView snapshot={devicesLoadingSnapshot()} mutationError="Backend rejected the AdminAction confirmation token." />
+    )
+    expect(rollbackMarkup).toContain('Rollback required after AdminAction device deletion failed')
+
+    const gatedTransport = new MockAuroraTransport()
+    gatedTransport.register('Gateway.GetCapabilityCatalog', () => deviceCatalogWithoutDelete())
+    const gatedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: gatedTransport }))
+    expect(gatedSnapshot.deleteState).toBe('unsupported')
+    expect(gatedSnapshot.devices.every((device) => device.deleteAction === null)).toBe(true)
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={gatedSnapshot} />)).toContain('Auth.DeleteDevice is not advertised')
+  })
+
+  it('renders config editor schema, rollback, and AdminAction controls from SDK evidence', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = enabledRoute(route(snapshot, 'config'))
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('ready')
+    expect(model.fields.map((field) => field.key_path)).toContain('services.gateway.api.port')
+    expect(model.versions.map((version) => version.version_id)).toContain('cfgv-gateway-port-001')
+    expect(markup).toContain('Configuration')
+    expect(markup).toContain('Gateway port')
+    expect(markup).toContain('Apply through AdminAction')
+    expect(markup).toContain('Rollback')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps config editor denied states disabled without local-only fallback', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = { ...route(snapshot, 'config'), disabled: true, state: 'denied' as const, blockers: ['missing:Config.manage'] }
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('denied')
+    expect(model.fields).toEqual([])
+    expect(markup).toContain('Config editor unavailable')
+    expect(markup).toContain('missing:Config.manage')
+    expect(markup).toContain('disabled=""')
+  })
+
   it('renders pairing queue states without exposing pairing codes', () => {
     const route = pairingRoute()
     const model = buildPairingQueueModel({
@@ -1150,6 +1547,248 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
   return match
 }
 
+function adminServicesTransport(): MockAuroraTransport {
+  const transport = new MockAuroraTransport()
+  transport.register('Gateway.GetServices', () => adminServicesFixture())
+  transport.register('Gateway.GetRegistry', () => adminRegistryFixture())
+  transport.register('Gateway.GetCapabilityCatalog', () => adminCapabilityCatalog())
+  return transport
+}
+
+function emptyAdminTransport(): MockAuroraTransport {
+  return MockAuroraTransport.empty()
+    .register('Gateway.GetServices', () => ({ mode: 'threads', services: [] }))
+    .register('Gateway.GetRegistry', () => ({ modules: [], digest: 'empty', service_count: 0, method_count: 0 }))
+    .register('Gateway.GetCapabilityCatalog', () => ({
+      generated_at: '2026-06-25T00:00:00Z',
+      local_peer_id: 'local-peer',
+      local_node_name: 'local',
+      providers: [],
+      actions: [],
+      resources: [],
+      provider_index: {},
+      action_index: {},
+      secrets_redacted: true
+    }))
+}
+
+function adminStateMatrixTransport(): MockAuroraTransport {
+  const transport = adminServicesTransport()
+  const catalog = adminCapabilityCatalog()
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const modules = ['Denied', 'Stale', 'Audio', 'InternalOnly']
+  catalog.providers = [
+    provider(baseProvider, {
+      provider_id: 'local:Gateway-degraded',
+      module: 'Gateway',
+      service_instance_id: 'gateway-degraded',
+      reason_code: 'fallback_used',
+      reason: 'Reduced Gateway service diagnostics.'
+    }),
+    provider(baseProvider, {
+      provider_id: 'local:Denied',
+      module: 'Denied',
+      service_instance_id: 'denied-local',
+      eligible: false,
+      reason_code: 'policy_denied',
+      reason: 'Current principal is denied.',
+      policy: { ...baseProvider.policy, denial_reasons: ['policy_denied'] }
+    }),
+    provider(baseProvider, {
+      provider_id: 'remote:Stale',
+      module: 'Stale',
+      service_instance_id: 'stale-remote',
+      eligible: false,
+      reason_code: 'stale_provider',
+      reason: 'Provider heartbeat is stale.',
+      freshness: { ...baseProvider.freshness, stale: true, last_probe_age_s: 900 }
+    }),
+    provider(baseProvider, {
+      provider_id: 'remote:Audio',
+      module: 'Audio',
+      service_instance_id: 'audio-remote',
+      eligible: false,
+      reason_code: 'explicit_selector_required',
+      reason: 'Audio action requires explicit selector.',
+      policy: { ...baseProvider.policy, explicit_selector_required: true, selector_required: true, consent_required: true }
+    })
+  ]
+  catalog.actions = [
+    action(baseAction, catalog.providers[0]!, {
+      action_id: 'gateway-degraded-services',
+      method: 'GetServices',
+      topic: 'Gateway.GetServices',
+      bindability: 'degraded'
+    }),
+    action(baseAction, catalog.providers[1]!, {
+      action_id: 'denied-use',
+      method: 'Use',
+      topic: 'Denied.Use',
+      bindability: 'denied'
+    }),
+    action(baseAction, catalog.providers[2]!, {
+      action_id: 'stale-use',
+      method: 'Use',
+      topic: 'Stale.Use',
+      bindability: 'unavailable'
+    }),
+    action(baseAction, catalog.providers[3]!, {
+      action_id: 'audio-use',
+      method: 'Use',
+      topic: 'Audio.Use',
+      bindability: 'unavailable'
+    })
+  ]
+  transport.register('Gateway.GetCapabilityCatalog', () => catalog)
+  transport.register('Gateway.GetServices', () => ({
+    mode: 'threads',
+    services: modules.map((module) => service(module)).concat(service('Gateway'))
+  }))
+  transport.register('Gateway.GetRegistry', () => ({
+    modules: modules.map((module) => registryModule(module, module === 'InternalOnly' ? 'internal' : 'external')).concat(registryModule('Gateway')),
+    digest: 'matrix',
+    service_count: modules.length + 1,
+    method_count: modules.length + 1
+  }))
+  return transport
+}
+
+function adminServicesFixture(): GetServicesResponse {
+  return {
+    mode: 'threads',
+    services: [
+      service('Gateway', { capabilities: ['registry', 'services'], method_count: 2, instance_id: 'gateway-local' }),
+      service('Supervisor', { capabilities: ['lifecycle'], method_count: 2, instance_id: 'supervisor-local' })
+    ]
+  }
+}
+
+function adminRegistryFixture(): GetRegistryResponse {
+  return {
+    modules: [
+      {
+        ...registryModule('Gateway'),
+        methods: [
+          method('Gateway', 'GetServices', 'use', 'external', ['Gateway.use']),
+          method('Gateway', 'GetRegistry', 'use', 'external', ['Gateway.use'])
+        ]
+      },
+      {
+        ...registryModule('Supervisor'),
+        methods: [
+          method('Supervisor', 'RestartService', 'manage', 'external', ['Supervisor.manage']),
+          method('Supervisor', 'StopService', 'manage', 'internal', ['Supervisor.manage'])
+        ]
+      }
+    ],
+    digest: 'admin',
+    service_count: 2,
+    method_count: 4
+  }
+}
+
+function adminCapabilityCatalog(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const gateway = provider(baseProvider, {
+    provider_id: 'local:Gateway',
+    module: 'Gateway',
+    service_instance_id: 'gateway-local',
+    reason: 'Gateway admin services are available.'
+  })
+  const supervisor = provider(baseProvider, {
+    provider_id: 'local:Supervisor',
+    module: 'Supervisor',
+    service_instance_id: 'supervisor-local',
+    reason: 'Supervisor restart is available through AdminAction.'
+  })
+  catalog.providers = [gateway, supervisor]
+  catalog.actions = [
+    action(baseAction, gateway, {
+      action_id: 'gateway-get-services',
+      method: 'GetServices',
+      topic: 'Gateway.GetServices'
+    }),
+    action(baseAction, gateway, {
+      action_id: 'gateway-get-registry',
+      method: 'GetRegistry',
+      topic: 'Gateway.GetRegistry'
+    }),
+    action(baseAction, supervisor, {
+      action_id: 'supervisor-restart',
+      method: 'RestartService',
+      topic: 'Supervisor.RestartService',
+      policy: {
+        ...supervisor.policy,
+        required_permissions: ['Supervisor.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin',
+        approval_required: true
+      }
+    })
+  ]
+  catalog.provider_index = { Gateway: ['local:Gateway'], Supervisor: ['local:Supervisor'] }
+  catalog.action_index = {
+    'Gateway.GetServices': ['gateway-get-services'],
+    'Gateway.GetRegistry': ['gateway-get-registry'],
+    'Supervisor.RestartService': ['supervisor-restart']
+  }
+  return catalog
+}
+
+function service(
+  module: string,
+  overrides: Partial<GetServicesResponse['services'][number]> = {}
+): GetServicesResponse['services'][number] {
+  return {
+    module,
+    version: '0.1.0',
+    summary: `${module} service`,
+    capabilities: [module.toLowerCase()],
+    method_count: 1,
+    last_seen: '2026-06-25T00:00:00Z',
+    status: 'healthy',
+    instance_id: `${module.toLowerCase()}-local`,
+    ...overrides
+  }
+}
+
+function registryModule(
+  module: string,
+  exposure: 'external' | 'internal' = 'external'
+): GetRegistryResponse['modules'][number] {
+  return {
+    module,
+    version: '0.1.0',
+    summary: `${module} service`,
+    capabilities: [module.toLowerCase()],
+    methods: [method(module, 'Use', 'use', exposure, [`${module}.use`])]
+  }
+}
+
+function method(
+  module: string,
+  name: string,
+  methodType: 'use' | 'manage',
+  exposure: 'external' | 'internal',
+  permissions: string[]
+): GetRegistryResponse['modules'][number]['methods'][number] {
+  return {
+    name,
+    summary: `${module} ${name}`,
+    bus_topic: `${module}.${name}`,
+    exposure,
+    input_model: null,
+    output_model: null,
+    required_perms: permissions,
+    method_type: methodType,
+    input_schema: null,
+    output_schema: null
+  }
+}
+
 function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
   return {
     item: {
@@ -1646,4 +2285,48 @@ function blockedRouteEvaluation(availability: 'privacy-blocked' | 'unsupported')
     privacyClass: availability === 'privacy-blocked' ? 'sensitive' : 'personal',
     transportKind: 'mock'
   })
+}
+
+function rbacLoadingSnapshot() {
+  return {
+    loadState: 'loading' as const,
+    generatedAt: null,
+    secretsRedacted: true,
+    principals: [],
+    roles: [],
+    permissions: [],
+    audit: [],
+    mutationState: 'pending' as const,
+    mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through AuroraClient.',
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending AuroraClient SDK calls'
+  }
+}
+
+function devicesLoadingSnapshot() {
+  return {
+    loadState: 'loading' as const,
+    generatedAt: null,
+    secretsRedacted: true,
+    devices: [],
+    listState: 'pending' as const,
+    listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
+    tokenState: 'pending' as const,
+    tokenReason: 'Loading token/session evidence through AuroraClient.',
+    deleteState: 'pending' as const,
+    deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
+    nativePlatform: null,
+    nativeCapabilities: [],
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending AuroraClient SDK calls'
+  }
+}
+
+function deviceCatalogWithoutDelete(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityGraphCatalogFixture)
+  catalog.actions = catalog.actions.filter((action) => action.topic !== 'Auth.DeleteDevice')
+  delete catalog.action_index['Auth.DeleteDevice']
+  return catalog
 }

@@ -1,11 +1,9 @@
-import { AuroraRoutePage } from '../../page-content'
+import { getShellSnapshot } from '../../shell-state'
+import { ConfigClientPage } from './config-client'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="config"
-      title="Configuration"
-      description="Config mutation, diff, rollback, and reload impact previews must go through SDK and AdminAction once the backend contract exists."
-    />
-  )
+export default async function Page() {
+  const snapshot = await getShellSnapshot()
+  const route = snapshot.routes.find((candidate) => candidate.item.id === 'config')
+  if (!route) throw new Error('Config route is not registered in the Aurora shell')
+  return <ConfigClientPage route={route} />
 }
