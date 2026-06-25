@@ -29,6 +29,16 @@ import type {
   DBRAGSearchRemoteResponse,
   DBRAGSearchRemoteRequest
 } from './memory.js'
+import type {
+  ConfigDiffPreviewResponse,
+  ConfigGetResponse,
+  ConfigReloadImpactResponse,
+  ConfigRollbackResponse,
+  ConfigSchemaMetadataResponse,
+  ConfigSetResponse,
+  ConfigValidateResponse,
+  ConfigVersionHistoryResponse
+} from './config.js'
 import { describeBackendInventory, describeRegistry } from './descriptors.js'
 
 export const emptyRegistryFixture: GetRegistryResponse = {
@@ -2656,6 +2666,145 @@ export const memoryImportFixture: DBRAGImportNamespaceResponse = {
   correlation_id: 'corr-memory-import'
 }
 
+export const configGetFixture: ConfigGetResponse = {
+  config: {
+    services: {
+      gateway: {
+        api: {
+          host: '127.0.0.1',
+          port: 8000,
+          token_secret: '[REDACTED]'
+        }
+      }
+    }
+  }
+}
+
+export const configValidateFixture: ConfigValidateResponse = {
+  errors: []
+}
+
+export const configSchemaMetadataFixture: ConfigSchemaMetadataResponse = {
+  fields: [
+    {
+      key_path: 'services.gateway.api.host',
+      title: 'Gateway host',
+      description: 'Host interface used by the Gateway API.',
+      type: 'string',
+      default: '127.0.0.1',
+      current_value: '127.0.0.1',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.api.port',
+      title: 'Gateway port',
+      description: 'HTTP port exposed by the Gateway API.',
+      type: 'integer',
+      default: 8000,
+      current_value: 8000,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1, maximum: 65535 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.api.token_secret',
+      title: 'Token secret',
+      description: 'Secret used for Gateway token signing.',
+      type: 'string',
+      default: null,
+      current_value: '[REDACTED]',
+      source_layer: 'env',
+      secret: true,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway', 'auth'],
+      constraints: {},
+      choices: null
+    }
+  ],
+  secrets_redacted: true
+}
+
+export const configDiffPreviewFixture: ConfigDiffPreviewResponse = {
+  valid: true,
+  diffs: [
+    {
+      key_path: 'services.gateway.api.port',
+      old_value: 8000,
+      new_value: 8080,
+      changed: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway']
+    }
+  ],
+  errors: [],
+  secrets_redacted: true
+}
+
+export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
+  versions: [
+    {
+      version_id: 'cfgv-gateway-port-001',
+      timestamp: '2026-06-20T00:00:00Z',
+      key_path: 'services.gateway.api.port',
+      old_value: 7000,
+      new_value: 8000,
+      affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+      secret: false
+    },
+    {
+      version_id: 'cfgv-token-secret-001',
+      timestamp: '2026-06-19T00:00:00Z',
+      key_path: 'services.gateway.api.token_secret',
+      old_value: null,
+      new_value: '[REDACTED]',
+      affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+      secret: true
+    }
+  ],
+  secrets_redacted: true
+}
+
+export const configReloadImpactFixture: ConfigReloadImpactResponse = {
+  impacts: [
+    {
+      key_path: 'services.gateway.api.port',
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway'],
+      reason: 'Gateway bind address changes require a process restart.'
+    }
+  ]
+}
+
+export const configSetFixture: ConfigSetResponse = {
+  success: true,
+  previous_value: 8000
+}
+
+export const configRollbackFixture: ConfigRollbackResponse = {
+  success: true,
+  version_id: 'cfgv-gateway-port-001',
+  key_path: 'services.gateway.api.port',
+  rolled_back_to: 7000,
+  affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+  error: null,
+  secrets_redacted: true
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -2685,6 +2834,14 @@ export interface MockAuroraFixtureSet {
   nativeManifest: NativeCapabilityManifest
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
+  configGet: ConfigGetResponse
+  configValidate: ConfigValidateResponse
+  configSchemaMetadata: ConfigSchemaMetadataResponse
+  configDiffPreview: ConfigDiffPreviewResponse
+  configVersionHistory: ConfigVersionHistoryResponse
+  configReloadImpact: ConfigReloadImpactResponse
+  configSet: ConfigSetResponse
+  configRollback: ConfigRollbackResponse
   memoryMessages: DBGetMessagesResponse
   memoryNamespaces: DBRAGListNamespacesResponse
   memoryExport: DBRAGExportNamespaceResponse
@@ -2707,6 +2864,14 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   nativeManifest: nativeCapabilityManifestFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
+  configGet: configGetFixture,
+  configValidate: configValidateFixture,
+  configSchemaMetadata: configSchemaMetadataFixture,
+  configDiffPreview: configDiffPreviewFixture,
+  configVersionHistory: configVersionHistoryFixture,
+  configReloadImpact: configReloadImpactFixture,
+  configSet: configSetFixture,
+  configRollback: configRollbackFixture,
   memoryMessages: memoryMessagesFixture,
   memoryNamespaces: memoryNamespacesFixture,
   memoryExport: memoryExportFixture,

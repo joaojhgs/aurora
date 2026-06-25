@@ -31,6 +31,7 @@ import {
   AdminDevicesView,
   AppShell,
   AssistantView,
+  ConfigEditorView,
   ModelsView,
   MemoryView,
   OnboardingView,
@@ -63,6 +64,7 @@ import {
   buildMemoryViewModel,
   buildShellSnapshot,
   buildModelsViewModel,
+  buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
   parsePermissionList,
@@ -880,6 +882,38 @@ describe('Aurora production shell', () => {
     expect(gatedSnapshot.deleteState).toBe('unsupported')
     expect(gatedSnapshot.devices.every((device) => device.deleteAction === null)).toBe(true)
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={gatedSnapshot} />)).toContain('Auth.DeleteDevice is not advertised')
+  })
+
+  it('renders config editor schema, rollback, and AdminAction controls from SDK evidence', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = enabledRoute(route(snapshot, 'config'))
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('ready')
+    expect(model.fields.map((field) => field.key_path)).toContain('services.gateway.api.port')
+    expect(model.versions.map((version) => version.version_id)).toContain('cfgv-gateway-port-001')
+    expect(markup).toContain('Configuration')
+    expect(markup).toContain('Gateway port')
+    expect(markup).toContain('Apply through AdminAction')
+    expect(markup).toContain('Rollback')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps config editor denied states disabled without local-only fallback', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = { ...route(snapshot, 'config'), disabled: true, state: 'denied' as const, blockers: ['missing:Config.manage'] }
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('denied')
+    expect(model.fields).toEqual([])
+    expect(markup).toContain('Config editor unavailable')
+    expect(markup).toContain('missing:Config.manage')
+    expect(markup).toContain('disabled=""')
   })
 
   it('renders pairing queue states without exposing pairing codes', () => {

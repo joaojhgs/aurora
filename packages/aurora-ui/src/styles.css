@@ -614,6 +614,45 @@ button, input, select, textarea { font: inherit; }
 .aui-device-facts dd { margin: 0; overflow-wrap: anywhere; }
 .aui-danger-button { display: inline-flex; align-items: center; gap: .38rem; color: var(--aui-danger); }
 
+.aui-config { display: grid; gap: 1rem; }
+.aui-config-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-config-header h1 { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
+.aui-config-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-config-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); gap: .85rem; align-items: start; }
+.aui-config-panel { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-config-panel-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .85rem; }
+.aui-config-panel-header h2, .aui-config-review-block h3 { margin: 0; font-size: 1rem; }
+.aui-config-fields { display: grid; gap: .65rem; }
+.aui-config-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 22rem); gap: .55rem .85rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
+.aui-config-field strong, .aui-config-field code, .aui-config-field small, .aui-config-field em { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-config-field code { width: fit-content; max-width: 100%; margin-top: .2rem; border: 1px solid var(--aui-border); border-radius: .35rem; padding: .15rem .35rem; color: var(--aui-muted); background: var(--aui-surface); font-size: .75rem; }
+.aui-config-field small, .aui-config-field em { color: var(--aui-muted); line-height: 1.4; }
+.aui-config-field small { margin-top: .35rem; }
+.aui-config-field em { grid-column: 1 / -1; font-size: .75rem; font-style: normal; }
+.aui-config-field input, .aui-config-reason textarea { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .65rem; background: var(--aui-surface); color: var(--aui-ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.aui-config-field input[data-changed="true"] { border-color: color-mix(in srgb, var(--aui-warning) 45%, var(--aui-border)); background: color-mix(in srgb, var(--aui-warning) 8%, white); }
+.aui-config-field input:disabled, .aui-config-reason textarea:disabled { cursor: not-allowed; opacity: .62; }
+.aui-config-review-block { display: grid; gap: .5rem; border-top: 1px solid var(--aui-border); padding-top: .75rem; }
+.aui-config-review-block:first-of-type { border-top: 0; padding-top: 0; }
+.aui-config-review-block p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-config-diff-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 55%, white); }
+.aui-config-diff-row code, .aui-config-diff-row span { min-width: 0; overflow-wrap: anywhere; }
+.aui-config-diff-row span:nth-child(2) { color: var(--aui-danger); text-decoration: line-through; }
+.aui-config-diff-row span:nth-child(3) { color: var(--aui-success); }
+.aui-config-reason { display: grid; gap: .35rem; margin: .85rem 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-config-reason textarea { min-height: 5rem; resize: vertical; text-transform: none; font-weight: 500; }
+.aui-config-alert { display: grid; gap: .35rem; border: 1px solid color-mix(in srgb, var(--aui-info) 25%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-info) 8%, white); color: var(--aui-info); padding: .8rem; }
+.aui-config-alert ul { margin: .25rem 0 0; padding-left: 1.1rem; color: var(--aui-danger); }
+.aui-config-history { display: grid; gap: .55rem; }
+.aui-config-history article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .65rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .7rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
+.aui-config-history strong, .aui-config-history span, .aui-config-history code { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-config-history code { width: fit-content; max-width: 100%; margin: .18rem 0; border: 1px solid var(--aui-border); border-radius: .35rem; padding: .12rem .35rem; color: var(--aui-muted); background: var(--aui-surface); font-size: .74rem; }
+.aui-config-history span { color: var(--aui-muted); font-size: .8rem; }
+
+@media (max-width: 1100px) {
+  .aui-config-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 900px) {
   .aui-admin-header { display: grid; }
   .aui-admin-badges { justify-content: flex-start; }
@@ -624,6 +663,9 @@ button, input, select, textarea { font: inherit; }
 }
 
 @media (max-width: 620px) {
+  .aui-config-header { display: grid; }
+  .aui-config-field { grid-template-columns: minmax(0, 1fr); }
+  .aui-config-history article { grid-template-columns: minmax(0, 1fr); }
   .aui-admin-metrics { grid-template-columns: minmax(0, 1fr); }
   .aui-service-drawer dl { grid-template-columns: minmax(0, 1fr); }
   .aui-device-facts div, .aui-device-token-list li { grid-template-columns: minmax(0, 1fr); }

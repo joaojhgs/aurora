@@ -68,6 +68,17 @@ export const ORCHESTRATOR_METHODS = {
   response: 'Orchestrator.Response'
 } as const
 
+export const CONFIG_METHODS = {
+  get: 'Config.Get',
+  set: 'Config.Set',
+  validate: 'Config.Validate',
+  getSchemaMetadata: 'Config.GetSchemaMetadata',
+  previewDiff: 'Config.PreviewDiff',
+  getVersionHistory: 'Config.GetVersionHistory',
+  rollback: 'Config.Rollback',
+  previewReloadImpact: 'Config.PreviewReloadImpact'
+} as const
+
 export const ORCHESTRATOR_MODEL_METHODS = {
   getRuntime: 'Orchestrator.GetModelRuntime',
   getCatalog: 'Orchestrator.GetModelCatalog',

@@ -22,6 +22,7 @@ import {
   routePath
 } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
+import { ConfigClient } from './config.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { SchedulerClient } from './scheduler.js'
@@ -141,6 +142,7 @@ export class AuroraClient {
   readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
+  readonly config: ConfigClient
   readonly admin: AdminActionClient
   readonly approvals: ApprovalClient
   readonly native: NativeClient
@@ -162,6 +164,7 @@ export class AuroraClient {
     this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
+    this.config = new ConfigClient(this)
     this.admin = new AdminActionClient(this)
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
