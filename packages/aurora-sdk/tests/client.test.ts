@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   AuroraError,
+  AUTH_METHODS,
   DB_METHODS,
   HttpGatewayTransport,
   MeshP2PTransport,
@@ -1149,6 +1150,91 @@ describe('AuroraClient', () => {
         }
       })
     )
+  })
+
+  it('manages Auth tokens through AuroraClient and AdminAction headers', async () => {
+    const createCalls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const transport = new MockAuroraTransport()
+      .register('Auth.CreateToken', (request) => {
+        const call: { method: string; payload: unknown; headers?: Record<string, string> } = {
+          method: request.method,
+          payload: request.payload
+        }
+        if (request.headers !== undefined) call.headers = request.headers
+        createCalls.push(call)
+        return {
+          token: 'secret-created-token-value',
+          id: 'token-created',
+          prefix: 'secret_c',
+          scopes: ['Gateway.use'],
+          expires_at: '2030-01-01T00:00:00Z'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const listed = await client.tokens.list()
+    expect(listed.ok).toBe(true)
+    if (listed.ok) {
+      expect(listed.data.tokens[0]).toEqual(
+        expect.objectContaining({
+          id: 'token-ops-bot',
+          prefix: 'aura_ops',
+          scopes: expect.arrayContaining(['Gateway.use'])
+        })
+      )
+      expect(JSON.stringify(listed.data.tokens)).not.toContain('secret-created-token-value')
+    }
+
+    const created = await client.tokens.create(
+      {
+        principal_id: 'ops-bot',
+        scopes: ['Gateway.use'],
+        expires_in_days: 30
+      },
+      {
+        reason: 'Create scoped test token',
+        reauthConfirmed: false
+      }
+    )
+
+    expect(created.data.token).toBe('secret-created-token-value')
+    expect(created.auditReceipt).toContain('audit-aa-auth-createtoken')
+    expect(createCalls[0]).toEqual(
+      expect.objectContaining({
+        method: AUTH_METHODS.createToken,
+        payload: expect.objectContaining({
+          principal_id: 'ops-bot',
+          scopes: ['Gateway.use']
+        }),
+        headers: expect.objectContaining({
+          'X-Aurora-AdminAction-Id': 'aa-auth-createtoken',
+          'X-Aurora-AdminAction-Token': 'confirm-aa-auth-createtoken',
+          'X-Aurora-AdminAction-Digest': 'digest-aa-auth-createtoken'
+        })
+      })
+    )
+
+    const scoped = await client.tokens.updateScopes(
+      { token_id: 'token-ops-bot', scopes: ['Gateway.use'] },
+      { reason: 'Narrow token scopes', reauthConfirmed: false }
+    )
+    expect(scoped.data.success).toBe(true)
+    const afterScopes = await client.tokens.list()
+    expect(afterScopes.ok).toBe(true)
+    if (afterScopes.ok) {
+      expect(afterScopes.data.tokens.find((token) => token.id === 'token-ops-bot')?.scopes).toEqual(['Gateway.use'])
+    }
+
+    const revoked = await client.tokens.revoke(
+      { token_id: 'token-ops-bot' },
+      { reason: 'Revoke old token', reauthConfirmed: false, phrase: 'aura_ops' }
+    )
+    expect(revoked.data.success).toBe(true)
+    const afterRevoke = await client.tokens.list()
+    expect(afterRevoke.ok).toBe(true)
+    if (afterRevoke.ok) {
+      expect(afterRevoke.data.tokens.some((token) => token.id === 'token-ops-bot')).toBe(false)
+    }
   })
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {

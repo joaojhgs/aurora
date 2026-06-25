@@ -5,6 +5,7 @@ import type {
   CapabilityFreshnessInfo,
   CapabilityPolicyDecisionInfo,
   CapabilityProviderInfo,
+  AuthTokenListResponse,
   DeploymentTopologyResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
@@ -293,6 +294,14 @@ const standardPolicy: CapabilityPolicyDecisionInfo = {
   denial_reasons: []
 }
 
+const adminManagePolicy: CapabilityPolicyDecisionInfo = {
+  ...standardPolicy,
+  required_permissions: ['Auth.manage'],
+  safety_class: 'admin-critical',
+  approval_required: true,
+  operation_class: 'manage'
+}
+
 const privacyBlockedPolicy: CapabilityPolicyDecisionInfo = {
   ...standardPolicy,
   required_permissions: ['TTS.use'],
@@ -547,6 +556,12 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       service_instance_id: 'tts-local'
     }),
     provider({
+      provider_id: 'local:Auth',
+      module: 'Auth',
+      service_instance_id: 'auth-local',
+      policy: adminManagePolicy
+    }),
+    provider({
       provider_id: 'remote:kitchen:TTS',
       peer_id: 'kitchen-peer',
       provider_kind: 'remote',
@@ -639,6 +654,42 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     })
   ],
   actions: [
+    action({
+      action_id: 'auth-local-list-tokens',
+      module: 'Auth',
+      method: 'ListTokens',
+      topic: 'Auth.ListTokens',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: adminManagePolicy
+    }),
+    action({
+      action_id: 'auth-local-create-token',
+      module: 'Auth',
+      method: 'CreateToken',
+      topic: 'Auth.CreateToken',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: adminManagePolicy
+    }),
+    action({
+      action_id: 'auth-local-update-token-scopes',
+      module: 'Auth',
+      method: 'UpdateTokenScopes',
+      topic: 'Auth.UpdateTokenScopes',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: adminManagePolicy
+    }),
+    action({
+      action_id: 'auth-local-revoke-token',
+      module: 'Auth',
+      method: 'RevokeToken',
+      topic: 'Auth.RevokeToken',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: adminManagePolicy
+    }),
     action({
       action_id: 'tts-local-synthesize',
       module: 'TTS',
@@ -901,6 +952,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
   ],
   resources: [],
   provider_index: {
+    Auth: ['local:Auth'],
     TTS: ['local:TTS', 'remote:kitchen:TTS'],
     Tooling: ['local:TTS', 'remote:kitchen:TTS'],
     Orchestrator: [
@@ -908,10 +960,13 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'mesh:studio-gpu:Orchestrator',
       'cloud:openai:Orchestrator',
       'native:mobile-local-light'
-    ],
-    Auth: ['local:Auth']
+    ]
   },
   action_index: {
+    'Auth.ListTokens': ['auth-local-list-tokens'],
+    'Auth.CreateToken': ['auth-local-create-token'],
+    'Auth.UpdateTokenScopes': ['auth-local-update-token-scopes'],
+    'Auth.RevokeToken': ['auth-local-revoke-token'],
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
     'Tooling.ExecuteTool': [
       'tool-remote-file-search',
@@ -1283,6 +1338,98 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/orchestrator/service.py:245'
+    },
+    {
+      module: 'Auth',
+      name: 'ListTokens',
+      summary: 'List tokens, optionally filtered by principal or device',
+      bus_topic: 'Auth.ListTokens',
+      routePath: '/api/Auth/ListTokens',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenListRequest',
+      output_model: 'TokenListResponse',
+      input_schema: {
+        title: 'TokenListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:636'
+    },
+    {
+      module: 'Auth',
+      name: 'CreateToken',
+      summary: 'Create a token for a principal',
+      bus_topic: 'Auth.CreateToken',
+      routePath: '/api/Auth/CreateToken',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenCreateRequest',
+      output_model: 'TokenCreateResponse',
+      input_schema: {
+        title: 'TokenCreateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenCreateResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:663'
+    },
+    {
+      module: 'Auth',
+      name: 'UpdateTokenScopes',
+      summary: 'Update token scopes',
+      bus_topic: 'Auth.UpdateTokenScopes',
+      routePath: '/api/Auth/UpdateTokenScopes',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenScopeUpdateRequest',
+      output_model: 'TokenScopeUpdateResponse',
+      input_schema: {
+        title: 'TokenScopeUpdateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenScopeUpdateResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:696'
+    },
+    {
+      module: 'Auth',
+      name: 'RevokeToken',
+      summary: 'Revoke a token',
+      bus_topic: 'Auth.RevokeToken',
+      routePath: '/api/Auth/RevokeToken',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenRevokeRequest',
+      output_model: 'TokenRevokeResponse',
+      input_schema: {
+        title: 'TokenRevokeRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenRevokeResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:713'
     },
     {
       module: 'Auth',
@@ -2424,6 +2571,29 @@ export const uiMockReferenceFixtureSummary = {
   backendTruthRule: 'Fixture labels are deterministic UI/mock references; execution truth stays with Gateway registry, capability catalog, route explain, and native manifest responses.'
 } as const
 
+export const tokenListFixture: AuthTokenListResponse = {
+  tokens: [
+    {
+      id: 'token-ops-bot',
+      prefix: 'aura_ops',
+      device_id: null,
+      user_id: 'ops-bot',
+      scopes: ['Gateway.use', 'Scheduler.manage', 'Tooling.use'],
+      created_at: '2026-06-20T12:00:00Z',
+      expires_at: '2026-09-18T12:00:00Z'
+    },
+    {
+      id: 'token-mesh-tablet',
+      prefix: 'mesh_tab',
+      device_id: 'tablet-01',
+      user_id: 'mesh-operator',
+      scopes: ['Gateway.use', 'Auth.manage'],
+      created_at: '2026-05-01T10:30:00Z',
+      expires_at: '2026-06-30T10:30:00Z'
+    }
+  ]
+}
+
 export interface MockAuroraFixtureSet {
   registry: GetRegistryResponse
   services: GetServicesResponse
@@ -2440,6 +2610,7 @@ export interface MockAuroraFixtureSet {
   memoryImport: DBRAGImportNamespaceResponse
   principals: PrincipalListResponse
   auditLog: AuditLogResponse
+  tokens: AuthTokenListResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -2460,6 +2631,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   memoryImport: memoryImportFixture,
   principals: principalListFixture,
   auditLog: auditLogFixture,
+  tokens: tokenListFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }

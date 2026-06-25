@@ -1,11 +1,19 @@
-import { AuroraRoutePage } from '../../page-content'
+import { StateSurface, type RouteAvailability } from '@aurora/ui'
+import { getShellSnapshot } from '../../shell-state'
+import { TokensClientPage } from './tokens-client'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="tokens"
-      title="Tokens"
-      description="Credential views never render token values and remain disabled until token lifecycle contracts are available through the SDK."
-    />
-  )
+export default async function Page() {
+  const snapshot = await getShellSnapshot()
+  const route = snapshot.routes.find((candidate) => candidate.item.id === 'tokens')
+  if (!route) {
+    return (
+      <StateSurface
+        title="Tokens"
+        state="unsupported"
+        description="Token route availability could not be resolved from the AuroraClient capability graph."
+        evidence={snapshot.evidenceSource}
+      />
+    )
+  }
+  return <TokensClientPage route={route as RouteAvailability} />
 }

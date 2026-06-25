@@ -67,6 +67,9 @@ import {
   routePolicyFromRoute,
   routeSheetErrorMessage,
   SettingsPermissionsView
+  , TokensView
+  , buildTokenViewModel
+  , emptyTokenViewModel
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -1252,6 +1255,79 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Summarize recent mesh pairing failures')
     expect(markup).toContain('Export snapshot unsupported')
     expect(markup).toContain('Delete record unsupported')
+  })
+
+  it('renders token lifecycle state from AuroraClient without table-secret leakage', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const route = snapshot.routes.find((candidate) => candidate.item.id === 'tokens')
+    expect(route).toBeDefined()
+    const model = await buildTokenViewModel(client, route!)
+    const markup = renderToStaticMarkup(<TokensView client={client} route={route!} initialModel={model} />)
+
+    expect(model.loadState).toBe('ready')
+    expect(model.tokens.length).toBeGreaterThan(0)
+    expect(markup).toContain('Token lifecycle')
+    expect(markup).toContain('aura_ops')
+    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('Create token')
+    expect(markup).toContain('Revoke')
+    expect(markup).not.toContain('mock-created-token-value')
+  })
+
+  it('shows one-time reveal only for create responses and supports empty/loading/error state copy', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const route = snapshot.routes.find((candidate) => candidate.item.id === 'tokens')!
+    const emptyModel = { ...emptyTokenViewModel(route), loadState: 'ready' as const, tokens: [] }
+    const revealModel = {
+      ...emptyModel,
+      oneTimeReveal: {
+        token: 'secret-one-time-token',
+        id: 'token-new',
+        prefix: 'new_tok',
+        scopes: ['Gateway.use'],
+        expires_at: '2030-01-01T00:00:00Z'
+      }
+    }
+    const revealMarkup = renderToStaticMarkup(<TokensView client={client} route={route} initialModel={revealModel} />)
+    const emptyMarkup = renderToStaticMarkup(<TokensView client={client} route={route} initialModel={emptyModel} />)
+    const loadingMarkup = renderToStaticMarkup(<TokensView client={client} route={route} />)
+
+    expect(revealMarkup).toContain('One-time token reveal')
+    expect(revealMarkup).toContain('secret-one-time-token')
+    expect(emptyMarkup).toContain('No tokens reported by Auth.ListTokens')
+    expect(emptyMarkup).not.toContain('secret-one-time-token')
+    expect(loadingMarkup).toContain('Loading token evidence from AuroraClient')
+  })
+
+  it('covers denied, degraded, unavailable, SDK error, optimistic, and rollback token states', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const baseRoute = snapshot.routes.find((candidate) => candidate.item.id === 'tokens')!
+    const deniedRoute = {
+      ...baseRoute,
+      state: 'denied' as const,
+      disabled: true,
+      blockers: ['permission_denied'],
+      explanation: 'Backend policy denied token access.'
+    }
+    const degradedRoute = { ...baseRoute, state: 'degraded' as const, disabled: false, blockers: ['fallback_used'] }
+    const unavailableRoute = { ...baseRoute, state: 'unsupported' as const, disabled: true, blockers: ['capability_not_advertised'] }
+    const deniedMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={deniedRoute} initialModel={{ ...emptyTokenViewModel(deniedRoute), loadState: 'ready', deniedReason: 'Current principal lacks Auth.manage permission for token lifecycle management.' }} />)
+    const degradedMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={degradedRoute} initialModel={{ ...emptyTokenViewModel(degradedRoute), loadState: 'ready', tokens: [] }} />)
+    const unavailableMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={unavailableRoute} initialModel={{ ...emptyTokenViewModel(unavailableRoute), loadState: 'ready', deniedReason: 'Token management is disabled by capability evidence: capability_not_advertised.' }} />)
+    const errorModel = await buildTokenViewModel(new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.ListTokens', 'permission', 'Forbidden') }), baseRoute)
+    const errorMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={baseRoute} initialModel={errorModel} />)
+    const optimisticMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={baseRoute} initialModel={{ ...emptyTokenViewModel(baseRoute), loadState: 'ready', mutationState: 'optimistic' }} />)
+    const rollbackMarkup = renderToStaticMarkup(<TokensView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={baseRoute} initialModel={{ ...emptyTokenViewModel(baseRoute), loadState: 'ready', mutationState: 'rollback-error', error: 'Backend rejected token revocation' }} />)
+
+    expect(deniedMarkup).toContain('Auth.manage')
+    expect(degradedMarkup).toContain('backend-reported degradation')
+    expect(unavailableMarkup).toContain('capability_not_advertised')
+    expect(errorMarkup).toContain('permission: Forbidden')
+    expect(optimisticMarkup).toContain('pending AdminAction confirmation')
+    expect(rollbackMarkup).toContain('rolled back')
+    expect(rollbackMarkup).toContain('Backend rejected token revocation')
   })
 
   it('keeps local export/import/delete controls disabled behind AdminAction policy', async () => {

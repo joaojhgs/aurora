@@ -11,6 +11,7 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
+import type { AdminActionClient as AdminActionClientType } from './admin.js'
 import { MemoryClient } from './memory.js'
 import {
   AUTH_METHODS,
@@ -53,6 +54,14 @@ import type {
   AuthPairingStartResponse,
   AuditLogRequest,
   AuditLogResponse,
+  AuthTokenCreateRequest,
+  AuthTokenCreateResponse,
+  AuthTokenListRequest,
+  AuthTokenListResponse,
+  AuthTokenRevokeRequest,
+  AuthTokenRevokeResponse,
+  AuthTokenScopeUpdateRequest,
+  AuthTokenScopeUpdateResponse,
   AuthValidateTokenRequest,
   AuthValidateTokenResponse,
   AuthWhoAmIResponse,
@@ -100,6 +109,7 @@ import type {
   PrincipalListResponse,
   PrincipalResponse,
   PrincipalUpdateRequest,
+  JsonObject,
   ContractMethodType,
   RouteExplainRequest,
   RouteExplainResponse,
@@ -124,6 +134,7 @@ export class AuroraClient {
   readonly auth: AuthSession
   readonly registry: RegistryClient
   readonly authApi: AuthApiClient
+  readonly tokens: AuthTokenClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
@@ -145,6 +156,7 @@ export class AuroraClient {
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
     this.authApi = new AuthApiClient(this)
+    this.tokens = new AuthTokenClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
@@ -385,6 +397,98 @@ export class AuthApiClient {
       { path: routePath('Auth', 'AuditLog') }
     )
   }
+}
+
+export class AuthTokenClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  list(payload: AuthTokenListRequest = {}): Promise<AuroraResponse<AuthTokenListResponse>> {
+    return this.client.requestResult<AuthTokenListResponse, AuthTokenListRequest>(
+      AUTH_METHODS.listTokens,
+      payload,
+      { path: routePath('Auth', 'ListTokens') }
+    )
+  }
+
+  async create(
+    payload: AuthTokenCreateRequest,
+    input: { reason: string; reauthConfirmed: boolean; phrase?: string; affectedResources?: string[] }
+  ): Promise<{ data: AuthTokenCreateResponse; auditReceipt: string; actionId: string }> {
+    const options = tokenAdminActionOptions(AUTH_METHODS.createToken, jsonPayload(payload), input, tokenAffectedResources(payload.principal_id, payload.device_id))
+    const result = await this.client.admin.execute<AuthTokenCreateResponse>({
+      ...options,
+      methodId: AUTH_METHODS.createToken,
+      payload: jsonPayload(payload)
+    })
+    return {
+      data: result.data,
+      auditReceipt: result.confirmation.audit_receipt,
+      actionId: result.confirmation.action_id
+    }
+  }
+
+  async updateScopes(
+    payload: AuthTokenScopeUpdateRequest,
+    input: { reason: string; reauthConfirmed: boolean; phrase?: string; affectedResources?: string[] }
+  ): Promise<{ data: AuthTokenScopeUpdateResponse; auditReceipt: string; actionId: string }> {
+    const options = tokenAdminActionOptions(AUTH_METHODS.updateTokenScopes, jsonPayload(payload), input, [`token:${payload.token_id}`, 'audit:Auth.AuditEvent'])
+    const result = await this.client.admin.execute<AuthTokenScopeUpdateResponse>({
+      ...options,
+      methodId: AUTH_METHODS.updateTokenScopes,
+      payload: jsonPayload(payload)
+    })
+    return {
+      data: result.data,
+      auditReceipt: result.confirmation.audit_receipt,
+      actionId: result.confirmation.action_id
+    }
+  }
+
+  async revoke(
+    payload: AuthTokenRevokeRequest,
+    input: { reason: string; reauthConfirmed: boolean; phrase?: string; affectedResources?: string[] }
+  ): Promise<{ data: AuthTokenRevokeResponse; auditReceipt: string; actionId: string }> {
+    const options = tokenAdminActionOptions(AUTH_METHODS.revokeToken, jsonPayload(payload), input, [`token:${payload.token_id}`, 'audit:Auth.AuditEvent'])
+    const result = await this.client.admin.execute<AuthTokenRevokeResponse>({
+      ...options,
+      methodId: AUTH_METHODS.revokeToken,
+      payload: jsonPayload(payload)
+    })
+    return {
+      data: result.data,
+      auditReceipt: result.confirmation.audit_receipt,
+      actionId: result.confirmation.action_id
+    }
+  }
+}
+
+function tokenAffectedResources(principalId: string, deviceId?: string | null): string[] {
+  const resources = [`principal:${principalId}`, 'credential:token', 'audit:Auth.AuditEvent']
+  if (deviceId) resources.push(`device:${deviceId}`)
+  return resources
+}
+
+type AdminExecuteInput = Parameters<AdminActionClientType['execute']>[0]
+
+function tokenAdminActionOptions(
+  methodId: string,
+  payload: JsonObject,
+  input: { reason: string; reauthConfirmed: boolean; phrase?: string; affectedResources?: string[] },
+  affectedResources: string[]
+): AdminExecuteInput {
+  const options: AdminExecuteInput = {
+    methodId,
+    payload,
+    reason: input.reason,
+    reauthConfirmed: input.reauthConfirmed,
+    affectedResources: input.affectedResources ?? affectedResources
+  }
+  if (input.phrase !== undefined) options.phrase = input.phrase
+  return options
+}
+
+function jsonPayload<T extends object>(payload: T): JsonObject {
+  return { ...(payload as Record<string, unknown>) } as JsonObject
 }
 
 export class RegistryClient {

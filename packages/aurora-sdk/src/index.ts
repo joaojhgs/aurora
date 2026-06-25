@@ -1,4 +1,4 @@
-export { AuroraClient, ModelRuntimeClient } from './client.js'
+export { AuroraClient, AuthTokenClient, ModelRuntimeClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export {
   DB_METHODS,

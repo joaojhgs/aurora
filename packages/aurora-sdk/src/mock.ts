@@ -7,7 +7,7 @@ import {
 } from './events.js'
 import { cloneFixture, defaultMockAuroraFixtures, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
 import type { DBRAGSearchRemoteRequest } from './memory.js'
-import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
+import type { AuthTokenCreateRequest, AuthTokenListResponse, AuthTokenRevokeRequest, AuthTokenScopeUpdateRequest, AuroraEvent, AuroraTransportEnvelope } from './types.js'
 import type {
   AttachmentContextIngestRequest,
   AttachmentContextIngestResponse,
@@ -37,6 +37,7 @@ export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
   private readonly handlers = new Map<string, MockHandler>()
   private readonly eventHandlers = new Map<string, MockEventRegistration>()
+  private tokens: AuthTokenListResponse['tokens'] = []
 
   constructor(options: MockAuroraTransportOptions = {}) {
     const fixtures = options.fixtures === false ? null : options.fixtures ?? defaultMockAuroraFixtures
@@ -48,6 +49,7 @@ export class MockAuroraTransport implements AuroraTransport {
   }
 
   registerFixtures(fixtures: MockAuroraFixtureSet): this {
+    this.tokens = cloneFixture(fixtures.tokens).tokens
     return this
       .register('Gateway.GetRegistry', () => cloneFixture(fixtures.registry))
       .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
@@ -55,7 +57,13 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
+      .register('Gateway.AdminActionDraft', (request) => mockAdminActionDraft(request.payload))
+      .register('Gateway.AdminActionConfirm', (request) => mockAdminActionConfirm(request.payload))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
+      .register('Auth.ListTokens', (request) => mockListTokens(this.tokens, request.payload))
+      .register('Auth.CreateToken', (request) => mockCreateToken(this.tokens, request.payload))
+      .register('Auth.UpdateTokenScopes', (request) => mockUpdateTokenScopes(this.tokens, request.payload))
+      .register('Auth.RevokeToken', (request) => mockRevokeToken(this.tokens, request.payload))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
       .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
       .register('Orchestrator.GetModelRuntime', () => ({
@@ -175,6 +183,117 @@ export class MockAuroraTransport implements AuroraTransport {
       | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
     return createEventSubscription(normalizeMockEvents<TEventPayload>(source, request))
   }
+}
+
+function mockAdminActionDraft(payload: unknown) {
+  const methodId = methodIdFromPayload(payload)
+  const actionId = `aa-${methodId.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  return {
+    action_id: actionId,
+    nonce: `nonce-${actionId}`,
+    digest: `digest-${actionId}`,
+    method_id: methodId,
+    affected_resources: Array.isArray((payload as { affected_resources?: unknown })?.affected_resources)
+      ? (payload as { affected_resources: string[] }).affected_resources
+      : [],
+    required_phrase: methodId.split('.').pop() ?? methodId,
+    required_reason: true,
+    required_reauth: false,
+    expires_at: '2030-01-01T00:00:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: adminActionHeaders()
+  }
+}
+
+function mockAdminActionConfirm(payload: unknown) {
+  const actionId = typeof (payload as { action_id?: unknown })?.action_id === 'string'
+    ? (payload as { action_id: string }).action_id
+    : 'aa-mock'
+  return {
+    action_id: actionId,
+    confirmation_token: `confirm-${actionId}`,
+    digest: typeof (payload as { digest?: unknown })?.digest === 'string'
+      ? (payload as { digest: string }).digest
+      : `digest-${actionId}`,
+    confirmed: true,
+    expires_at: '2030-01-01T00:00:00Z',
+    audit_receipt: `audit-${actionId}`,
+    confirmation_headers: adminActionHeaders()
+  }
+}
+
+function adminActionHeaders() {
+  return {
+    action_id: 'X-Aurora-AdminAction-Id',
+    confirmation_token: 'X-Aurora-AdminAction-Token',
+    digest: 'X-Aurora-AdminAction-Digest'
+  }
+}
+
+function methodIdFromPayload(payload: unknown): string {
+  if (typeof payload === 'object' && payload !== null) {
+    const methodId = (payload as { method_id?: unknown }).method_id
+    if (typeof methodId === 'string' && methodId.trim()) return methodId
+  }
+  return 'Gateway.AdminAction'
+}
+
+function mockListTokens(tokens: AuthTokenListResponse['tokens'], payload: unknown): AuthTokenListResponse {
+  const principalId = typeof (payload as { principal_id?: unknown })?.principal_id === 'string'
+    ? (payload as { principal_id: string }).principal_id
+    : null
+  const deviceId = typeof (payload as { device_id?: unknown })?.device_id === 'string'
+    ? (payload as { device_id: string }).device_id
+    : null
+  return {
+    tokens: tokens
+      .filter((token) => !principalId || token.user_id === principalId)
+      .filter((token) => !deviceId || token.device_id === deviceId)
+      .map((token) => ({ ...token, scopes: [...token.scopes] }))
+  }
+}
+
+function mockCreateToken(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenCreateRequest>
+  const principalId = typeof request.principal_id === 'string' && request.principal_id.trim()
+    ? request.principal_id.trim()
+    : 'mock-principal'
+  const id = `token-created-${tokens.length + 1}`
+  const prefix = `mk_${String(tokens.length + 1).padStart(4, '0')}`
+  const expiresAt = '2030-01-01T00:00:00Z'
+  const scopes = Array.isArray(request.scopes) && request.scopes.length > 0 ? [...request.scopes] : ['Gateway.use']
+  tokens.unshift({
+    id,
+    prefix,
+    device_id: request.device_id ?? null,
+    user_id: principalId,
+    scopes,
+    created_at: '2026-06-25T00:00:00Z',
+    expires_at: expiresAt
+  })
+  return {
+    token: `mock-created-token-value-${prefix}`,
+    id,
+    prefix,
+    scopes,
+    expires_at: expiresAt
+  }
+}
+
+function mockUpdateTokenScopes(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenScopeUpdateRequest>
+  const token = tokens.find((candidate) => candidate.id === request.token_id)
+  if (!token || !Array.isArray(request.scopes)) return { success: false }
+  token.scopes = [...request.scopes]
+  return { success: true }
+}
+
+function mockRevokeToken(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenRevokeRequest>
+  const index = tokens.findIndex((candidate) => candidate.id === request.token_id)
+  if (index < 0) return { success: false }
+  tokens.splice(index, 1)
+  return { success: true }
 }
 
 function mockPromptText(payload: unknown): string {

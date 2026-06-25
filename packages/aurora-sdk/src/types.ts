@@ -31,6 +31,8 @@ export interface AuditReceipt {
   redaction: RedactionMetadata
 }
 
+export type PermissionId = string
+
 export interface AuroraRequest<TPayload = unknown> {
   method: string
   busTopic?: string | undefined
@@ -315,6 +317,57 @@ export interface AuthValidateTokenRequest {
 }
 
 export type AuthValidateTokenResponse = ValidateTokenLikeResponse
+
+export interface AuthTokenListRequest {
+  principal_id?: string | null
+  device_id?: string | null
+}
+
+export interface AuthTokenRecord {
+  id: string
+  prefix: string
+  device_id: string | null
+  user_id: string | null
+  scopes: PermissionId[]
+  created_at: string | null
+  expires_at: string | null
+}
+
+export interface AuthTokenListResponse {
+  tokens: AuthTokenRecord[]
+}
+
+export interface AuthTokenCreateRequest {
+  principal_id: string
+  device_id?: string | null
+  scopes?: PermissionId[] | null
+  expires_in_days?: number
+}
+
+export interface AuthTokenCreateResponse {
+  token: string
+  id: string
+  prefix: string
+  scopes: PermissionId[]
+  expires_at: string | null
+}
+
+export interface AuthTokenScopeUpdateRequest {
+  token_id: string
+  scopes: PermissionId[]
+}
+
+export interface AuthTokenScopeUpdateResponse {
+  success: boolean
+}
+
+export interface AuthTokenRevokeRequest {
+  token_id: string
+}
+
+export interface AuthTokenRevokeResponse {
+  success: boolean
+}
 
 export type AuthWhoAmIResponse = WhoAmILikeResponse
 
