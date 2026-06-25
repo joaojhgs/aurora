@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AppShell, RouteMatrix, StateSurface, buildShellSnapshot, loadingShellSnapshot } from '@aurora/ui'
 import type { AuroraShellSnapshot } from '@aurora/ui'
-import type { TauriNativeFeatureStatus, TauriNativePermissionStatus, TauriSidecarStatus } from '@aurora/client'
+import type {
+  TauriAndroidBaselineStatus,
+  TauriNativeFeatureStatus,
+  TauriNativePermissionStatus,
+  TauriSidecarStatus
+} from '@aurora/client'
 import { createAuroraTauriRuntime } from './aurora-client'
 
 export function AuroraTauriApp() {
@@ -10,6 +15,7 @@ export function AuroraTauriApp() {
   const [sidecar, setSidecar] = useState<TauriSidecarStatus | null>(null)
   const [nativePermissions, setNativePermissions] = useState<TauriNativePermissionStatus | null>(null)
   const [nativeFeatures, setNativeFeatures] = useState<Record<string, TauriNativeFeatureStatus | null>>({})
+  const [androidBaseline, setAndroidBaseline] = useState<TauriAndroidBaselineStatus | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -23,20 +29,22 @@ export function AuroraTauriApp() {
               details: {}
             }))
           : null
-      const [nextSnapshot, nextSidecar, nextNativePermissions, tray, notifications, dialogs, audio] = await Promise.all([
+      const [nextSnapshot, nextSidecar, nextNativePermissions, tray, notifications, dialogs, audio, android] = await Promise.all([
         buildShellSnapshot(runtime.client),
         localSidecar ? Promise.resolve(localSidecar) : runtime.sidecarStatus().catch(() => null),
         runtime.nativePermissionStatus().catch(() => null),
         runtime.trayStatus().catch(() => null),
         runtime.notificationStatus().catch(() => null),
         runtime.dialogStatus().catch(() => null),
-        runtime.audioBridgeStatus().catch(() => null)
+        runtime.audioBridgeStatus().catch(() => null),
+        runtime.androidBaselineStatus().catch(() => null)
       ])
       if (!cancelled) {
         setSnapshot(nextSnapshot)
         setSidecar(nextSidecar)
         setNativePermissions(nextNativePermissions)
         setNativeFeatures({ tray, notifications, dialogs, audio })
+        setAndroidBaseline(android)
       }
     }
     void load()
@@ -72,6 +80,8 @@ export function AuroraTauriApp() {
             <div><dt>Dialogs</dt><dd>{nativeFeatureLabel(nativeFeatures.dialogs)}</dd></div>
             <div><dt>Audio bridge</dt><dd>{nativeFeatureLabel(nativeFeatures.audio)}</dd></div>
             <div><dt>iOS invocation</dt><dd>Siri/Shortcuts/App Intents integration; no Siri replacement claim.</dd></div>
+            <div><dt>Android baseline</dt><dd>{androidBaselineLabel(androidBaseline)}</dd></div>
+            <div><dt>Assistant role probe</dt><dd>{assistantRoleProbeLabel(androidBaseline)}</dd></div>
             <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
           </dl>
           <button className="ata-secondary" type="button" onClick={() => void runtime.shutdown()}>
@@ -88,4 +98,16 @@ function nativeFeatureLabel(feature: TauriNativeFeatureStatus | null | undefined
   if (!feature) return 'not available'
   if (feature.available) return `${feature.capability} available`
   return `${feature.capability} denied by default`
+}
+
+function androidBaselineLabel(status: TauriAndroidBaselineStatus | null): string {
+  if (!status) return 'not available'
+  return `${status.feature} ${status.state}; platform=${status.platform}`
+}
+
+function assistantRoleProbeLabel(status: TauriAndroidBaselineStatus | null): string {
+  if (!status) return 'not available'
+  return status.assistantRole.probeImplemented
+    ? 'native probe implemented'
+    : `probe deferred; role availability unknown; ${status.assistantRole.reason}`
 }

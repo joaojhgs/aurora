@@ -23,6 +23,7 @@ export interface TauriCommandNames {
   notificationSend: string
   dialogStatus: string
   audioBridgeStatus: string
+  androidBaselineStatus: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
@@ -85,6 +86,28 @@ export interface TauriNativeFeatureStatus {
   source: string
   reason?: string | null
   details?: JsonObject
+}
+
+export interface TauriAndroidAssistantRoleStatus {
+  roleAvailable?: boolean | null
+  packageQualified?: boolean | null
+  roleHeld?: boolean | null
+  requestable?: boolean | null
+  denied?: boolean | null
+  oemUnavailable?: boolean | null
+  probeImplemented: boolean
+  reason: string
+}
+
+export interface TauriAndroidBaselineStatus {
+  platform: string
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  feature: string
+  available: boolean
+  assistantRole: TauriAndroidAssistantRoleStatus
+  fallbackEntrypoints: Record<string, boolean>
+  evidenceSource: string
+  secretsRedacted: boolean
 }
 
 export interface TauriNotificationRequest {
@@ -151,6 +174,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   notificationSend: 'aurora_notification_send',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
+  androidBaselineStatus: 'aurora_android_baseline_status',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
@@ -239,6 +263,10 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAudioBridgeStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.audioBridgeStatus)
+  }
+
+  getAndroidBaselineStatus(): Promise<TauriAndroidBaselineStatus> {
+    return this.invokeCommand<TauriAndroidBaselineStatus>(this.commands.androidBaselineStatus)
   }
 
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {

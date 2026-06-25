@@ -77,6 +77,20 @@ The iOS baseline uses `src-tauri/tauri.ios.conf.json` and the `aurora-ios-baseli
 
 After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
 
+## Android Baseline
+
+AND-001 keeps Android support at the official Tauri mobile build baseline. It does not implement the Aurora Android Kotlin feature plugin, assistant-role qualification, foreground audio service, share/deep-link intake, or secure mobile storage. The shell exposes `aurora_android_baseline_status` so emulator smoke tests can capture a redacted native payload. That payload keeps assistant-role fields unknown until a later RoleManager/VoiceInteractionService probe provides backend/native evidence.
+
+```bash
+pnpm --filter @aurora/tauri-ui android:init
+pnpm --filter @aurora/tauri-ui android:build:apk:x86_64
+pnpm --filter @aurora/tauri-ui android:build:apk:x86_64:debug
+pnpm --filter @aurora/tauri-ui android:build:aab
+pnpm --filter @aurora/tauri-ui android:smoke
+```
+
+The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a webview permission. Local Android builds require Java plus Android SDK/NDK/emulator components. The GitHub `Tauri Android Verification` workflow installs those prerequisites, initializes the generated `src-tauri/gen/android` project, builds an installable debug APK for emulator smoke, uploads the APK artifact, installs it on an emulator, launches Aurora, and records the `aurora_android_baseline_status` payload from logcat when available.
+
 ## Scope Boundary
 
 The frontend must use `AuroraClient`; screens must not call Tauri `invoke` except through the SDK transport adapter or this package's runtime bootstrap. Secure credential storage is enabled through the narrow Aurora keychain command surface only. File access, native audio, event subscription streaming, and broad shell/fs permissions remain disabled or explicitly unsupported until their dedicated follow-up tasks.

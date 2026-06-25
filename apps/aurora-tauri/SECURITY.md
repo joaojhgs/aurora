@@ -25,7 +25,7 @@ TAURI-002, TAURI-004, and TAURI-006 expose only the minimum command and capabili
 | `aurora_audio_bridge_status` | Reports raw-audio bridge readiness and required consent/backend evidence. | `aurora-audio-bridge` | Microphone capture, live audio streaming, and playback control are denied by default. |
 | `aurora_shutdown` | Stops managed sidecar if present, then exits the shell cleanly. | `aurora-shutdown` | Does not terminate non-managed external Aurora processes. |
 
-The Tauri updater plugin is also granted on desktop through the separate `aurora-desktop-updater` capability with `updater:default`. It validates signed updater artifacts against the configured public key and does not expose filesystem, shell, process-spawn, or arbitrary network powers to Aurora screens. The IOS-001 baseline uses `aurora-ios-baseline` and does not grant updater permissions because the updater plugin is only installed at runtime on desktop in this shell.
+The Tauri updater plugin is granted only on desktop through the separate `aurora-desktop-updater` capability with `updater:default`. It validates signed updater artifacts against the configured public key and does not expose filesystem, shell, process-spawn, or arbitrary network powers to Aurora screens. Android and iOS baseline builds do not grant updater permissions because the updater plugin is installed only for desktop targets in this shell.
 
 ## Capability File
 

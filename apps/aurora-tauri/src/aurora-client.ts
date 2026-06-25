@@ -3,6 +3,7 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type TauriAndroidBaselineStatus,
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
   type TauriSidecarStatus
@@ -20,6 +21,7 @@ export interface AuroraTauriRuntime {
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
   dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
   audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
+  androidBaselineStatus: () => Promise<TauriAndroidBaselineStatus | null>
   shutdown: () => Promise<void>
 }
 
@@ -37,6 +39,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: () => transport.getNotificationStatus(),
       dialogStatus: () => transport.getDialogStatus(),
       audioBridgeStatus: () => transport.getAudioBridgeStatus(),
+      androidBaselineStatus: () => transport.getAndroidBaselineStatus(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
@@ -59,6 +62,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
+      androidBaselineStatus: async () => null,
       shutdown: async () => undefined
     }
   }
@@ -74,6 +78,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     notificationStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,
+    androidBaselineStatus: async () => null,
     shutdown: async () => undefined
   }
 }
