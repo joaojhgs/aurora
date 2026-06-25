@@ -1297,7 +1297,7 @@ export const deviceListFixture: DeviceListResponse = {
 }
 
 export const auditLogFixture: AuditLogResponse = {
-  total: 3,
+  total: 7,
   events: [
     {
       id: 'audit-rbac-1',
@@ -1305,7 +1305,7 @@ export const auditLogFixture: AuditLogResponse = {
       principal_id: 'principal-owner',
       action: 'Auth.PatchPermissions',
       correlation_id: 'corr-rbac-001',
-      details: '{"target":"principal-assistant","grant":["Tooling.use"],"secrets_redacted":true}',
+      details: '{"target":"principal-assistant","grant":["Tooling.use"],"approval_mode":"admin_action","audit_receipt":"receipt-rbac-001","payload_hash":"sha256:rbac001","support_bundle_correlation_ids":["corr-rbac-001"],"secrets_redacted":true}',
       created_at: '2026-06-19T01:00:00Z'
     },
     {
@@ -1325,6 +1325,57 @@ export const auditLogFixture: AuditLogResponse = {
       correlation_id: 'corr-rbac-003',
       details: '{"reason":"permission_denied","secrets_redacted":true}',
       created_at: '2026-06-19T01:10:00Z'
+    },
+    {
+      id: 'audit-tool-approval-1',
+      event: 'tooling.approval.requested',
+      principal_id: 'principal-owner',
+      action: 'Tooling.RequestApproval',
+      correlation_id: 'corr-tool-approval-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:files.write',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","global_tool_id":"tool:studio:files.write","provider_peer_id":"peer-studio","route_path":"mesh://peer-studio/Tooling.ExecuteTool","args_hash":"sha256:toolargs001","token":"redacted-by-backend","support_bundle_correlation_ids":["corr-tool-approval-001"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:15:00Z'
+    },
+    {
+      id: 'audit-tool-denied-1',
+      event: 'tooling.approval.denied',
+      principal_id: 'principal-ops',
+      action: 'Tooling.ConfirmExecution',
+      correlation_id: 'corr-tool-denied-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:shell.exec',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","denial_reason":"policy_denied","global_tool_id":"tool:studio:shell.exec","provider_peer_id":"peer-studio","route_path":"mesh://peer-studio/Tooling.ExecuteTool","payload_hash":"sha256:denied001","secrets_redacted":true}',
+      created_at: '2026-06-19T01:20:00Z'
+    },
+    {
+      id: 'audit-data-audio-scheduler-1',
+      event: 'mesh.audit.executed',
+      principal_id: 'principal-owner',
+      action: 'Scheduler.DelegatedRun',
+      correlation_id: 'corr-scheduler-001',
+      peer_id: 'peer-kitchen',
+      provider_id: 'provider-scheduler-kitchen',
+      route: 'mesh://peer-kitchen/Scheduler.RunJob',
+      details: '{"approval_mode":"approve_all","data_namespace":"recipes","audio_session_id":"audio-session-77","scheduler_job_id":"job-nightly-sync","route_path":"mesh://peer-kitchen/Scheduler.RunJob","audit_receipt":"receipt-scheduler-001","payload_hash":"sha256:scheduler001","support_bundle_correlation_ids":["corr-scheduler-001","bundle-corr-001"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:25:00Z'
+    },
+    {
+      id: 'audit-replay-1',
+      event: 'tooling.approval_replay_rejected',
+      principal_id: 'principal-owner',
+      action: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-replay-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:files.write',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","denial_reason":"replay_rejected","payload_hash":"sha256:replay001","secrets_redacted":true}',
+      created_at: '2026-06-19T01:30:00Z'
     }
   ]
 }

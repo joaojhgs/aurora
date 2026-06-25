@@ -30,6 +30,7 @@ import {
   AdminServicesView,
   AdminRbacView,
   AdminDevicesView,
+  AdminAuditView,
   AppShell,
   AssistantView,
   ConfigEditorView,
@@ -43,6 +44,8 @@ import {
   buildAdminPluginsSnapshot,
   buildAdminRbacSnapshot,
   buildAdminDevicesSnapshot,
+  buildAdminAuditSnapshot,
+  buildAuditExport,
   buildDeviceDeleteAdminAction,
   buildRbacPermissionPatchAction,
   buildOnboardingViewModel,
@@ -910,6 +913,92 @@ describe('Aurora production shell', () => {
       />
     )
     expect(rollbackMarkup).toContain('Rollback required after AdminAction submit failed')
+  })
+
+  it('wires audit log details, mesh filters, redaction, and export from AuroraClient', async () => {
+    const snapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminAuditView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.rows.map((row) => row.correlationId)).toEqual(expect.arrayContaining(['corr-tool-approval-001', 'corr-scheduler-001']))
+    expect(snapshot.rows.map((row) => row.lifecycleLabel)).toEqual(expect.arrayContaining(['requested', 'approve-all scope created', 'replay rejected']))
+    expect(snapshot.rows.some((row) => row.dataNamespace === 'recipes')).toBe(true)
+    expect(snapshot.rows.some((row) => row.audioSessionId === 'audio-session-77')).toBe(true)
+    expect(snapshot.rows.some((row) => row.schedulerJobId === 'job-nightly-sync')).toBe(true)
+    expect(markup).toContain('Audit log')
+    expect(markup).toContain('Redacted payload preview')
+    expect(markup).toContain('mesh://peer-studio/Tooling.ExecuteTool')
+    expect(markup).toContain('receipt-scheduler-001')
+    expect(markup).toContain('payload_hash')
+    expect(markup).not.toContain('secret-token')
+    expect(markup).not.toContain('Bearer ')
+
+    const exportPayload = buildAuditExport(snapshot.rows)
+    expect(exportPayload.redaction.raw_payloads_included).toBe(false)
+    expect(exportPayload.support_bundle_correlation_ids).toContain('bundle-corr-001')
+    expect(JSON.stringify(exportPayload)).not.toContain('redacted-by-backend')
+    expect(JSON.stringify(exportPayload)).toContain('sha256:scheduler001')
+  })
+
+  it('filters audit events by peer/provider, route, approval mode, namespace, audio, scheduler, correlation, and denial reason', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const schedulerSnapshot = await buildAdminAuditSnapshot(client, {
+      peerOrProvider: 'peer-kitchen',
+      routePath: 'Scheduler.RunJob',
+      approvalMode: 'approve_all',
+      dataNamespace: 'recipes',
+      audioSessionId: 'audio-session-77',
+      schedulerJobId: 'job-nightly-sync',
+      correlationId: 'corr-scheduler-001'
+    })
+    expect(schedulerSnapshot.rows).toHaveLength(1)
+    expect(schedulerSnapshot.rows[0]?.event).toBe('mesh.audit.executed')
+    expect(schedulerSnapshot.warnings.join(' ')).toContain('Data namespace is filtered')
+
+    const deniedSnapshot = await buildAdminAuditSnapshot(client, {
+      toolId: 'tool:studio:shell.exec',
+      denialReason: 'policy_denied'
+    })
+    expect(deniedSnapshot.rows).toHaveLength(1)
+    expect(deniedSnapshot.rows[0]?.status).toBe('denied')
+    expect(renderToStaticMarkup(<AdminAuditView snapshot={deniedSnapshot} />)).toContain('policy_denied')
+  })
+
+  it('renders audit loading, empty, denied, degraded, and unavailable states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminAuditView snapshot={auditLoadingSnapshot()} />)
+    expect(loadingMarkup).toContain('Loading audit events')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+    const emptySnapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminAuditView snapshot={emptySnapshot} />)).toContain('No audit rows match')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.AuditLog', 'permission', 'audit access denied')
+    const deniedSnapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminAuditView snapshot={deniedSnapshot} />)).toContain('audit access denied')
+
+    const unavailableSnapshot = await buildAdminAuditSnapshot(
+      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Auth.AuditLog', 'audit service unavailable') })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminAuditView snapshot={unavailableSnapshot} />)).toContain('audit service unavailable')
+
+    const degradedMarkup = renderToStaticMarkup(
+      <AdminAuditView
+        snapshot={{
+          ...auditLoadingSnapshot(),
+          loadState: 'degraded',
+          error: 'Audit backend returned partial redacted detail fields.',
+          exportState: 'unsupported',
+          exportReason: 'Export disabled until redacted details are complete.'
+        }}
+      />
+    )
+    expect(degradedMarkup).toContain('partial redacted detail fields')
   })
 
   it('wires device/session management from AuroraClient Auth resources', async () => {
@@ -2301,6 +2390,36 @@ function rbacLoadingSnapshot() {
     warnings: [],
     error: null,
     evidenceSource: 'pending AuroraClient SDK calls'
+  }
+}
+
+function auditLoadingSnapshot() {
+  return {
+    loadState: 'loading' as const,
+    generatedAt: null,
+    secretsRedacted: true,
+    backendFilter: { limit: 100, offset: 0 },
+    filters: {
+      query: '',
+      event: 'all',
+      principalId: '',
+      peerOrProvider: '',
+      routePath: '',
+      approvalMode: 'all',
+      toolId: '',
+      dataNamespace: '',
+      audioSessionId: '',
+      schedulerJobId: '',
+      correlationId: '',
+      denialReason: ''
+    },
+    rows: [],
+    total: 0,
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending AuroraClient SDK calls',
+    exportState: 'pending' as const,
+    exportReason: 'Audit export waits for redacted Auth.AuditLog evidence.'
   }
 }
 
