@@ -15,6 +15,7 @@ use url::Url;
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
+const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -171,6 +172,10 @@ enum AuroraCommandError {
     SidecarProcess(String),
     #[error("Sidecar state lock failed")]
     SidecarState,
+    #[error("Secure storage key is invalid or outside the Aurora credential namespace: {0}")]
+    SecureStorageKeyInvalid(String),
+    #[error("Secure storage operation failed: {0}")]
+    SecureStorage(String),
 }
 
 impl Serialize for AuroraCommandError {
@@ -355,6 +360,10 @@ async fn aurora_sidecar_status(
     );
     details.insert("commandTokenIssued".to_string(), json!(token_issued));
     details.insert("tokenStoredInWebStorage".to_string(), json!(false));
+    details.insert(
+        "secureStorageBackend".to_string(),
+        json!("platform-keychain"),
+    );
     details.insert("healthPath".to_string(), json!(SIDECAR_HEALTH_PATH));
     if let Some(ms) = started_at_ms {
         details.insert("uptimeMs".to_string(), json!(ms));
@@ -423,8 +432,19 @@ async fn aurora_log_tail(
 
 #[tauri::command]
 async fn aurora_secure_storage_get(key: String) -> Result<Value, AuroraCommandError> {
-    let _ = key;
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    let value = match entry.get_password() {
+        Ok(value) => Some(value),
+        Err(keyring::Error::NoEntry) => None,
+        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+    };
+    Ok(json!({
+        "key": key,
+        "value": value,
+        "backend": "platform-keychain",
+        "persisted": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[tauri::command]
@@ -432,14 +452,32 @@ async fn aurora_secure_storage_set(
     key: String,
     value: String,
 ) -> Result<Value, AuroraCommandError> {
-    let _ = (key, value);
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    entry
+        .set_password(&value)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+    Ok(json!({
+        "key": key,
+        "ok": true,
+        "backend": "platform-keychain",
+        "persisted": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[tauri::command]
 async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraCommandError> {
-    let _ = key;
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
+            "key": key,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "secretsRedacted": true
+        })),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
 }
 
 #[tauri::command]
@@ -501,6 +539,8 @@ impl AuroraCommandError {
             Self::SidecarTokenInvalid => "permission",
             Self::SidecarProcess(_) => "unavailable_service",
             Self::SidecarState => "transport_loss",
+            Self::SecureStorageKeyInvalid(_) => "validation_error",
+            Self::SecureStorage(_) => "secure_storage_error",
         }
     }
 }
@@ -543,7 +583,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.sidecarStop".to_string(), true);
     permissions.insert("aurora.shutdown".to_string(), true);
     permissions.insert("aurora.logTail".to_string(), true);
-    permissions.insert("aurora.secureStorage".to_string(), false);
+    permissions.insert("aurora.secureStorage".to_string(), true);
     permissions.insert("aurora.localFileRead".to_string(), false);
     permissions.insert("aurora.localFileWrite".to_string(), false);
     permissions.insert("aurora.secureFileHandle".to_string(), false);
@@ -555,7 +595,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("desktop.localSidecarHealth".to_string(), true);
     capabilities.insert("desktop.logTail".to_string(), false);
     capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
-    capabilities.insert("native.secureCredentialStorage".to_string(), false);
+    capabilities.insert("native.secureCredentialStorage".to_string(), true);
     capabilities.insert("native.secureFileHandles".to_string(), false);
     capabilities.insert("native.filesystem".to_string(), false);
     capabilities.insert("native.audio".to_string(), false);
@@ -564,6 +604,43 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         platform: "tauri-desktop".to_string(),
         permissions,
         capabilities,
+    }
+}
+
+fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
+    validate_secure_storage_key(key)?;
+    keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
+    if key.is_empty() || key.len() > 128 {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "key length must be 1..128 bytes".to_string(),
+        ));
+    }
+    if !key
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "key may only contain ASCII letters, digits, dot, underscore, or hyphen".to_string(),
+        ));
+    }
+    let allowed = [
+        "aurora.session",
+        "aurora.auth",
+        "aurora.gateway",
+        "aurora.mesh",
+        "aurora.admin",
+    ];
+    if allowed
+        .iter()
+        .any(|prefix| key == *prefix || key.starts_with(&format!("{prefix}.")))
+    {
+        Ok(())
+    } else {
+        Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()))
     }
 }
 
@@ -909,6 +986,41 @@ mod tests {
             manifest.permissions.get("aurora.localFileWrite"),
             Some(&false)
         );
+        assert_eq!(
+            manifest.permissions.get("aurora.secureStorage"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.secureCredentialStorage"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.secureFileHandles"),
+            Some(&false)
+        );
+    }
+
+    #[test]
+    fn secure_storage_keys_are_limited_to_credential_namespaces() {
+        for key in [
+            "aurora.session",
+            "aurora.session.gateway",
+            "aurora.auth.refresh-token",
+            "aurora.mesh.peer_01",
+            "aurora.admin.unlock",
+        ] {
+            assert!(validate_secure_storage_key(key).is_ok(), "{key}");
+        }
+
+        for key in [
+            "",
+            "session",
+            "aurora.config.secret",
+            "aurora.session/../../token",
+            "aurora.session.token value",
+        ] {
+            assert!(validate_secure_storage_key(key).is_err(), "{key}");
+        }
     }
 
     #[test]

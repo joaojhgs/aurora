@@ -2948,7 +2948,7 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.sidecarStop': true,
     'aurora.shutdown': true,
     'aurora.logTail': true,
-    'aurora.secureStorage': false,
+    'aurora.secureStorage': true,
     'aurora.localFileRead': false,
     'aurora.localFileWrite': false,
     'aurora.secureFileHandle': false,
@@ -2960,7 +2960,7 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'desktop.localSidecarHealth': true,
     'desktop.logTail': false,
     'desktop.localSidecarSupervision': true,
-    'native.secureCredentialStorage': false,
+    'native.secureCredentialStorage': true,
     'native.secureFileHandles': false,
     'native.filesystem': false,
     'native.audio': false
