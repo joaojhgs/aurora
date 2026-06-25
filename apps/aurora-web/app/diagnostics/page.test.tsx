@@ -8,7 +8,8 @@ describe('Diagnostics page', () => {
 
     expect(markup).toContain('Diagnostics Probes')
     expect(markup).toContain('Capability catalog snapshot')
-    expect(markup).toContain('Mesh And Route Snapshot')
+    expect(markup).toContain('WebRTC and ICE diagnostics')
+    expect(markup).toContain('Peer transport matrix')
     expect(markup).toContain('Redaction Preview')
     expect(markup).toContain('Tokens and credentials')
     expect(markup).toContain('Support Bundle Export')
