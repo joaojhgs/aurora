@@ -1,6 +1,7 @@
 import {
   Activity,
   Boxes,
+  CalendarClock,
   Compass,
   Cpu,
   Database,
@@ -65,6 +66,7 @@ export const auroraNavSections: AuroraNavSection[] = [
       item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'manage', 'admin-critical', 'unsupported', 'ADM-007', true),
       item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'manage', 'credential', 'unsupported', 'ADM-011', true),
       item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'manage', 'admin-critical', 'unsupported', 'ADM-010', true),
+      item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'manage', 'admin-critical', 'unsupported', 'ADM-012', true),
       item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'ADM-008', true)
     ]
   },

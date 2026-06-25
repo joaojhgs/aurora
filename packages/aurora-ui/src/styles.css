@@ -532,7 +532,7 @@ button, input, select, textarea { font: inherit; }
   .aui-admin-gap-list .aui-badge { width: fit-content; }
 }
 
-.aui-admin-services { display: grid; gap: 1rem; }
+.aui-admin-services, .aui-admin-scheduler { display: grid; gap: 1rem; }
 .aui-admin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-admin-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.55rem); line-height: 1.08; }
 .aui-admin-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
@@ -550,6 +550,16 @@ button, input, select, textarea { font: inherit; }
 .aui-admin-panel { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
 .aui-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem; border-bottom: 1px solid var(--aui-border); }
 .aui-panel-heading h2 { margin: .15rem 0 0; font-size: 1.05rem; }
+.aui-scheduler-form { display: grid; gap: .6rem; padding: .9rem; }
+.aui-scheduler-form label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-scheduler-form input, .aui-scheduler-form select, .aui-scheduler-form textarea { min-width: 0; width: 100%; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .58rem .65rem; text-transform: none; }
+.aui-scheduler-form textarea { resize: vertical; }
+.aui-scheduler-form button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; width: fit-content; min-height: 2.55rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); border-radius: .45rem; background: var(--aui-primary); color: white; padding: .55rem .85rem; font-weight: 750; }
+.aui-scheduler-form input:disabled, .aui-scheduler-form select:disabled, .aui-scheduler-form textarea:disabled, .aui-scheduler-form button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-scheduler-facts { display: grid; gap: .55rem; margin: 0; padding: .9rem; }
+.aui-scheduler-facts div { display: grid; grid-template-columns: minmax(7rem, .35fr) minmax(0, 1fr); gap: .5rem; min-width: 0; }
+.aui-scheduler-facts dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-scheduler-facts dd { margin: 0; overflow-wrap: anywhere; }
 .aui-table-scroll { overflow-x: auto; }
 .aui-table { width: 100%; min-width: 58rem; border-collapse: collapse; }
 .aui-table th, .aui-table td { border-bottom: 1px solid var(--aui-border); padding: .72rem .85rem; text-align: left; vertical-align: top; }
@@ -681,4 +691,6 @@ button, input, select, textarea { font: inherit; }
   .aui-admin-metrics { grid-template-columns: minmax(0, 1fr); }
   .aui-service-drawer dl { grid-template-columns: minmax(0, 1fr); }
   .aui-device-facts div, .aui-device-token-list li { grid-template-columns: minmax(0, 1fr); }
+  .aui-scheduler-facts div { grid-template-columns: minmax(0, 1fr); }
+  .aui-scheduler-form button { width: 100%; }
 }

@@ -21,6 +21,7 @@ import type {
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type { BackupListResponse } from './backup.js'
+import type { SchedulerListJobsResponse } from './scheduler.js'
 import type {
   DBGetMessagesResponse,
   DBRAGExportNamespaceResponse,
@@ -315,11 +316,79 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         }
       ]
+    },
+    {
+      module: 'Scheduler',
+      version: '0.1.0',
+      summary: 'Scheduler jobs and delegated automation management',
+      capabilities: ['jobs', 'delegation', 'automation'],
+      methods: [
+        {
+          name: 'ListJobs',
+          summary: 'List scheduler jobs visible to the caller namespace',
+          bus_topic: 'Scheduler.ListJobs',
+          exposure: 'both',
+          input_model: 'SchedulerListJobsRequest',
+          output_model: 'SchedulerListJobsResponse',
+          required_perms: ['Scheduler.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Schedule',
+          summary: 'Schedule a local or delegated automation job',
+          bus_topic: 'Scheduler.Schedule',
+          exposure: 'both',
+          input_model: 'SchedulerScheduleJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Cancel',
+          summary: 'Cancel a scheduler job in an authorized owner namespace',
+          bus_topic: 'Scheduler.Cancel',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Pause',
+          summary: 'Pause a scheduler job when backend management support is enabled',
+          bus_topic: 'Scheduler.Pause',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Resume',
+          summary: 'Resume a scheduler job when backend management support is enabled',
+          bus_topic: 'Scheduler.Resume',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        }
+      ]
     }
   ],
   digest: 'fixture',
-  service_count: 3,
-  method_count: 20
+  service_count: 4,
+  method_count: 25
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -695,6 +764,36 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       }
     }),
     provider({
+      provider_id: 'local:Scheduler',
+      module: 'Scheduler',
+      service_instance_id: 'scheduler-local',
+      reason: 'Local Scheduler service exposes namespace-scoped job management.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Scheduler.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    provider({
+      provider_id: 'mesh:studio-gpu:Scheduler',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      node_name: 'studio-gpu',
+      module: 'Scheduler',
+      service_instance_id: 'scheduler-studio-gpu',
+      latency_ms: 42,
+      reason: 'Remote scheduler delegation provider is eligible when selector and policy are present.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Scheduler.manage'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    provider({
       provider_id: 'local:Orchestrator:llama-cpp',
       module: 'Orchestrator',
       service_instance_id: 'orchestrator-local',
@@ -874,6 +973,63 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
         operation_class: 'admin',
         safety_class: 'admin'
       }
+    }),
+    action({
+      action_id: 'scheduler-list-local',
+      module: 'Scheduler',
+      method: 'ListJobs',
+      topic: 'Scheduler.ListJobs',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.use'], operation_class: 'admin', safety_class: 'admin' },
+      summary: 'List namespace-scoped scheduler jobs through Scheduler.'
+    }),
+    action({
+      action_id: 'scheduler-schedule-local',
+      module: 'Scheduler',
+      method: 'Schedule',
+      topic: 'Scheduler.Schedule',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Create scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-cancel-local',
+      module: 'Scheduler',
+      method: 'Cancel',
+      topic: 'Scheduler.Cancel',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Cancel scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-pause-local',
+      module: 'Scheduler',
+      method: 'Pause',
+      topic: 'Scheduler.Pause',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Pause scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-resume-remote',
+      module: 'Scheduler',
+      method: 'Resume',
+      topic: 'Scheduler.Resume',
+      provider_id: 'mesh:studio-gpu:Scheduler',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      service_instance_id: 'scheduler-studio-gpu',
+      selector: { peer_id: 'peer-studio-gpu', module: 'Scheduler', provider_id: 'mesh:studio-gpu:Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], trust_tier: 'paired', mesh_visible: true, operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Resume delegated remote scheduler jobs with visible peer/provider context.'
     }),
     action({
       action_id: 'model-runtime-local-catalog',
@@ -1076,7 +1232,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'native:mobile-local-light'
     ],
     Auth: ['local:Auth'],
-    Backup: ['local:Backup']
+    Backup: ['local:Backup'],
+    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler']
   },
   action_index: {
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
@@ -1105,7 +1262,12 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.ListDevices': ['auth-list-devices'],
     'Auth.DeleteDevice': ['auth-delete-device'],
     'Auth.AuditLog': ['auth-audit-log'],
-    'Backup.List': ['backup-list-local']
+    'Backup.List': ['backup-list-local'],
+    'Scheduler.ListJobs': ['scheduler-list-local'],
+    'Scheduler.Schedule': ['scheduler-schedule-local'],
+    'Scheduler.Cancel': ['scheduler-cancel-local'],
+    'Scheduler.Pause': ['scheduler-pause-local'],
+    'Scheduler.Resume': ['scheduler-resume-remote']
   },
   secrets_redacted: true
 }
@@ -1132,6 +1294,16 @@ export const gatewayServicesFixture: GetServicesResponse = {
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: 'auth-local'
+    },
+    {
+      module: 'Scheduler',
+      version: '0.1.0',
+      summary: 'Scheduler jobs and delegated automation management',
+      capabilities: ['jobs', 'delegation', 'automation'],
+      method_count: 5,
+      last_seen: '2026-06-19T00:00:00Z',
+      status: 'healthy',
+      instance_id: 'scheduler-local'
     }
   ]
 }
@@ -1450,7 +1622,7 @@ export function principalFixture(id: string): PrincipalResponse | null {
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 18,
+  method_count: 23,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -1843,6 +2015,121 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:800'
+    },
+    {
+      module: 'Scheduler',
+      name: 'ListJobs',
+      summary: 'List namespace-scoped scheduler jobs with ownership and delegation policy evidence',
+      bus_topic: 'Scheduler.ListJobs',
+      routePath: '/api/Scheduler/ListJobs',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'use',
+      required_perms: ['Scheduler.use'],
+      input_model: 'SchedulerListJobsRequest',
+      output_model: 'SchedulerListJobsResponse',
+      input_schema: {
+        title: 'SchedulerListJobsRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerListJobsResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Schedule',
+      summary: 'Schedule an automation job through AdminAction with explicit target and policy provenance',
+      bus_topic: 'Scheduler.Schedule',
+      routePath: '/api/Scheduler/Schedule',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScheduleJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScheduleJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Cancel',
+      summary: 'Cancel a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Cancel',
+      routePath: '/api/Scheduler/Cancel',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Pause',
+      summary: 'Pause a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Pause',
+      routePath: '/api/Scheduler/Pause',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Resume',
+      summary: 'Resume a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Resume',
+      routePath: '/api/Scheduler/Resume',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
     },
     {
       module: 'Gateway',
@@ -3129,6 +3416,132 @@ export const backupListFixture: BackupListResponse = {
   ]
 }
 
+export const schedulerJobsFixture: SchedulerListJobsResponse = {
+  total: 4,
+  jobs: [
+    {
+      job_id: 'job-local-daily-digest',
+      name: 'daily-digest',
+      schedule: '0 8 * * *',
+      action: 'Orchestrator.ExternalUserInput',
+      enabled: true,
+      next_run: '2026-06-26T08:00:00Z',
+      last_run: '2026-06-25T08:00:00Z',
+      status: 'active',
+      namespace: 'local:automation',
+      owner_peer_id: 'local-peer',
+      owner_principal_id: 'principal-admin',
+      target_peer_id: null,
+      target_resource_namespace: null,
+      delegated_permissions: ['Orchestrator.use'],
+      policy_decision_id: 'policy-local-digest',
+      delegated_approval_token_present: false,
+      correlation_id: 'corr-scheduler-local-digest',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'admin',
+      failure_count: 0,
+      privacy_class: 'personal',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: true, status: 'supported', reason: null },
+        { action: 'pause', supported: true, status: 'supported', reason: null },
+        { action: 'resume', supported: false, status: 'not_applicable', reason: 'Job is already active.' }
+      ]
+    },
+    {
+      job_id: 'job-delegated-index',
+      name: 'remote-knowledge-index',
+      schedule: '*/30 * * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: true,
+      next_run: '2026-06-25T16:30:00Z',
+      last_run: '2026-06-25T16:00:00Z',
+      status: 'delegated',
+      namespace: 'local:delegated',
+      owner_peer_id: 'local-peer',
+      owner_principal_id: 'principal-admin',
+      target_peer_id: 'peer-studio-gpu',
+      target_resource_namespace: 'rag:studio',
+      delegated_permissions: ['Tooling.use', 'DB.use'],
+      policy_decision_id: 'policy-remote-index',
+      delegated_approval_token_present: true,
+      correlation_id: 'corr-scheduler-remote-index',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'mesh-delegation',
+      failure_count: 0,
+      privacy_class: 'sensitive',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: true, status: 'supported', reason: null },
+        { action: 'pause', supported: true, status: 'supported', reason: null },
+        { action: 'resume', supported: false, status: 'not_applicable', reason: 'Job is already active.' }
+      ]
+    },
+    {
+      job_id: 'job-remote-running',
+      name: 'studio-render-cleanup',
+      schedule: '15 * * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: true,
+      next_run: '2026-06-25T17:15:00Z',
+      last_run: '2026-06-25T16:15:00Z',
+      status: 'remote-running',
+      namespace: 'peer-studio-gpu:automation',
+      owner_peer_id: 'peer-studio-gpu',
+      owner_principal_id: 'remote-operator',
+      target_peer_id: 'peer-studio-gpu',
+      target_resource_namespace: 'tool:render-cleanup',
+      delegated_permissions: ['Tooling.use'],
+      policy_decision_id: 'policy-remote-owner',
+      delegated_approval_token_present: true,
+      correlation_id: 'corr-scheduler-remote-owner',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'remote-peer',
+      failure_count: 1,
+      privacy_class: 'sensitive',
+      last_error: 'Previous run used fallback capacity.',
+      action_support: [
+        { action: 'cancel', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' },
+        { action: 'pause', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' },
+        { action: 'resume', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' }
+      ]
+    },
+    {
+      job_id: 'job-denied-foreign',
+      name: 'cabin-lights',
+      schedule: '0 22 * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: false,
+      next_run: null,
+      last_run: null,
+      status: 'denied',
+      namespace: 'peer-cabin-node:automation',
+      owner_peer_id: 'peer-cabin-node',
+      owner_principal_id: 'remote-cabin-admin',
+      target_peer_id: 'peer-cabin-node',
+      target_resource_namespace: 'hardware:lights',
+      delegated_permissions: [],
+      policy_decision_id: 'policy-denied-foreign',
+      delegated_approval_token_present: false,
+      correlation_id: 'corr-scheduler-denied-foreign',
+      blocked_reason: 'Caller is outside the owner namespace.',
+      timezone: 'UTC',
+      source: 'remote-peer',
+      failure_count: 0,
+      privacy_class: 'admin-critical',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: false, status: 'denied', reason: 'Owner namespace denies cancellation.' },
+        { action: 'pause', supported: false, status: 'denied', reason: 'Owner namespace denies pause.' },
+        { action: 'resume', supported: false, status: 'denied', reason: 'Owner namespace denies resume.' }
+      ]
+    }
+  ]
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -3157,6 +3570,7 @@ export interface MockAuroraFixtureSet {
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
   backups: BackupListResponse
+  schedulerJobs: SchedulerListJobsResponse
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
   configGet: ConfigGetResponse
@@ -3189,6 +3603,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
   backups: backupListFixture,
+  schedulerJobs: schedulerJobsFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
   configGet: configGetFixture,

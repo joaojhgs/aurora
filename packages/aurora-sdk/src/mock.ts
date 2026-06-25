@@ -56,6 +56,11 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Backup.List', () => cloneFixture(fixtures.backups))
+      .register('Scheduler.ListJobs', () => cloneFixture(fixtures.schedulerJobs))
+      .register('Scheduler.Schedule', () => mockSchedulerAction('schedule', 'job-mock-created'))
+      .register('Scheduler.Cancel', (request) => mockSchedulerAction('cancel', schedulerJobId(request.payload)))
+      .register('Scheduler.Pause', (request) => mockSchedulerAction('pause', schedulerJobId(request.payload)))
+      .register('Scheduler.Resume', (request) => mockSchedulerAction('resume', schedulerJobId(request.payload)))
       .register('Gateway.GetSupportBundle', () => cloneFixture(fixtures.supportBundle))
       .register('Gateway.AdminActionDraft', (request) => {
         const payload = request.payload as { method_id?: string; affected_resources?: string[] } | undefined
@@ -236,6 +241,25 @@ function mockSessionId(payload: unknown): string {
     if (typeof sessionId === 'string' && sessionId.trim()) return sessionId
   }
   return 'mock-assistant-session'
+}
+
+function schedulerJobId(payload: unknown): string {
+  if (typeof payload === 'object' && payload !== null) {
+    const jobId = (payload as { job_id?: unknown }).job_id
+    if (typeof jobId === 'string' || typeof jobId === 'number') return String(jobId)
+  }
+  return 'job-mock'
+}
+
+function mockSchedulerAction(action: string, jobId: string) {
+  return {
+    ok: true,
+    status: 'ok',
+    job_id: jobId,
+    action,
+    reason: null,
+    audit_event: `audit:scheduler:${action}:${jobId}`
+  }
 }
 
 function mockPrincipal(

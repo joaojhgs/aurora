@@ -522,9 +522,9 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 3,
-        methods: 20,
-        externalMethods: 19,
+        services: 4,
+        methods: 25,
+        externalMethods: 24,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -544,7 +544,9 @@ describe('AuroraClient', () => {
       'Gateway.manage',
       'Gateway.use',
       'Orchestrator.manage',
-      'Orchestrator.use'
+      'Orchestrator.use',
+      'Scheduler.manage',
+      'Scheduler.use'
     ])
     expect(manifest.native).toEqual(
       expect.objectContaining({
@@ -3184,7 +3186,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 20,
+      checked: 25,
       issues: []
     })
 
