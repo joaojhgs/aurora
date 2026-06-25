@@ -24,6 +24,27 @@ Override with `AURORA_TAURI_SIDECAR_PROGRAM`, `AURORA_TAURI_SIDECAR_ARGS`, `AURO
 
 The Tauri shell and SDK transport do not use `localStorage`, `sessionStorage`, or plaintext files for these values. The secure-storage commands return redacted metadata (`backend=platform-keychain`, `persisted=true`, `secretsRedacted=true`) and only return a secret value to the explicit `secureStorageGet` caller.
 
+## Packaging And Updates
+
+Tauri bundling is enabled for Linux AppImage/deb/rpm, macOS dmg, and Windows MSI/NSIS targets. Release builds create updater artifacts and signatures through Tauri's updater configuration.
+
+Release inputs:
+
+- `AURORA_TAURI_SIDECAR_SOURCE`: required path to a prebuilt Aurora sidecar executable before `tauri build`.
+- `AURORA_TAURI_TARGET_TRIPLE`: optional override for cross-build sidecar naming; defaults to the host Rust target triple.
+- `TAURI_SIGNING_PRIVATE_KEY`: required by Tauri when producing signed updater artifacts. Use a secure CI secret or a local secret path/content.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: optional signing key password.
+
+The updater public key and endpoint in `src-tauri/tauri.conf.json` are release placeholders. A production release must replace `AURORA_RELEASE_PUBLIC_KEY_REPLACE_BEFORE_RELEASE` with the generated public key content and point the HTTPS endpoint at the signed release metadata service before publishing.
+
+```bash
+pnpm --filter @aurora/tauri-ui prepare:sidecar
+pnpm --filter @aurora/tauri-ui build
+pnpm --filter @aurora/tauri-ui build:bundle
+```
+
+`prepare:sidecar` copies the explicit sidecar artifact into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. The generated binaries are ignored by git.
+
 ## Commands
 
 ```bash

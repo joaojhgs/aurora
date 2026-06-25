@@ -20,6 +20,9 @@ const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
+const UPDATER_ENDPOINT: &str =
+    "https://releases.aurora.local/latest/{{target}}/{{arch}}/{{current_version}}.json";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -399,6 +402,15 @@ async fn aurora_sidecar_status(
         json!("platform-keychain"),
     );
     details.insert("healthPath".to_string(), json!(SIDECAR_HEALTH_PATH));
+    details.insert(
+        "bundledSidecarName".to_string(),
+        json!(BUNDLED_SIDECAR_NAME),
+    );
+    details.insert(
+        "bundledSidecarPolicy".to_string(),
+        json!("explicit-prebuilt-artifact"),
+    );
+    details.insert("updaterArtifactsEnabled".to_string(), json!(true));
     if let Some(ms) = started_at_ms {
         details.insert("uptimeMs".to_string(), json!(ms));
     }
@@ -707,6 +719,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.sidecarStop".to_string(), true);
     permissions.insert("aurora.shutdown".to_string(), true);
     permissions.insert("aurora.logTail".to_string(), true);
+    permissions.insert("aurora.updater".to_string(), true);
     permissions.insert("aurora.secureStorage".to_string(), true);
     permissions.insert("aurora.nativePermissionStatus".to_string(), true);
     permissions.insert("aurora.trayStatus".to_string(), true);
@@ -726,6 +739,8 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     let mut capabilities = BTreeMap::new();
     capabilities.insert("desktop.thinGateway".to_string(), true);
     capabilities.insert("desktop.localSidecarHealth".to_string(), true);
+    capabilities.insert("desktop.signedUpdater".to_string(), true);
+    capabilities.insert("desktop.bundledSidecarPolicy".to_string(), true);
     capabilities.insert("desktop.logTail".to_string(), false);
     capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
     capabilities.insert("desktop.tray".to_string(), true);
@@ -1096,6 +1111,9 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .setup(|app| {
             install_tray(app.handle())?;
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1173,6 +1191,15 @@ mod tests {
         );
         assert_eq!(manifest.permissions.get("aurora.sidecarStart"), Some(&true));
         assert_eq!(manifest.permissions.get("aurora.sidecarStop"), Some(&true));
+        assert_eq!(manifest.permissions.get("aurora.updater"), Some(&true));
+        assert_eq!(
+            manifest.capabilities.get("desktop.signedUpdater"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("desktop.bundledSidecarPolicy"),
+            Some(&true)
+        );
         assert_eq!(manifest.permissions.get("aurora.shell"), Some(&false));
         assert_eq!(
             manifest.permissions.get("aurora.localFileWrite"),
@@ -1290,5 +1317,14 @@ mod tests {
         assert!(!is_loopback_http_origin(
             &Url::parse("https://aurora.example.test").unwrap()
         ));
+    }
+
+    #[test]
+    fn release_constants_do_not_embed_secret_signing_material() {
+        assert_eq!(BUNDLED_SIDECAR_NAME, "aurora-sidecar");
+        assert!(UPDATER_ENDPOINT.starts_with("https://"));
+        assert!(UPDATER_ENDPOINT.contains("{{target}}"));
+        assert!(UPDATER_ENDPOINT.contains("{{arch}}"));
+        assert!(UPDATER_ENDPOINT.contains("{{current_version}}"));
     }
 }

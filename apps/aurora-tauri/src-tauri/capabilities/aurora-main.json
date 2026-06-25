@@ -7,6 +7,7 @@
     "core:app:default",
     "core:event:default",
     "core:window:default",
+    "updater:default",
     "aurora-command",
     "aurora-request",
     "aurora-subscribe",
