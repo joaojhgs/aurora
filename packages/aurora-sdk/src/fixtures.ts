@@ -6,6 +6,7 @@ import type {
   CapabilityPolicyDecisionInfo,
   CapabilityProviderInfo,
   DeploymentTopologyResponse,
+  GatewaySupportBundleResponse,
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
@@ -1297,7 +1298,7 @@ export const deviceListFixture: DeviceListResponse = {
 }
 
 export const auditLogFixture: AuditLogResponse = {
-  total: 3,
+  total: 7,
   events: [
     {
       id: 'audit-rbac-1',
@@ -1305,7 +1306,7 @@ export const auditLogFixture: AuditLogResponse = {
       principal_id: 'principal-owner',
       action: 'Auth.PatchPermissions',
       correlation_id: 'corr-rbac-001',
-      details: '{"target":"principal-assistant","grant":["Tooling.use"],"secrets_redacted":true}',
+      details: '{"target":"principal-assistant","grant":["Tooling.use"],"approval_mode":"admin_action","audit_receipt":"receipt-rbac-001","payload_hash":"sha256:rbac001","support_bundle_correlation_ids":["corr-rbac-001"],"secrets_redacted":true}',
       created_at: '2026-06-19T01:00:00Z'
     },
     {
@@ -1325,6 +1326,57 @@ export const auditLogFixture: AuditLogResponse = {
       correlation_id: 'corr-rbac-003',
       details: '{"reason":"permission_denied","secrets_redacted":true}',
       created_at: '2026-06-19T01:10:00Z'
+    },
+    {
+      id: 'audit-tool-approval-1',
+      event: 'tooling.approval.requested',
+      principal_id: 'principal-owner',
+      action: 'Tooling.RequestApproval',
+      correlation_id: 'corr-tool-approval-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:files.write',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","global_tool_id":"tool:studio:files.write","provider_peer_id":"peer-studio","route_path":"mesh://peer-studio/Tooling.ExecuteTool","args_hash":"sha256:toolargs001","token":"redacted-by-backend","support_bundle_correlation_ids":["corr-tool-approval-001"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:15:00Z'
+    },
+    {
+      id: 'audit-tool-denied-1',
+      event: 'tooling.approval.denied',
+      principal_id: 'principal-ops',
+      action: 'Tooling.ConfirmExecution',
+      correlation_id: 'corr-tool-denied-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:shell.exec',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","denial_reason":"policy_denied","global_tool_id":"tool:studio:shell.exec","provider_peer_id":"peer-studio","route_path":"mesh://peer-studio/Tooling.ExecuteTool","payload_hash":"sha256:denied001","secrets_redacted":true}',
+      created_at: '2026-06-19T01:20:00Z'
+    },
+    {
+      id: 'audit-data-audio-scheduler-1',
+      event: 'mesh.audit.executed',
+      principal_id: 'principal-owner',
+      action: 'Scheduler.DelegatedRun',
+      correlation_id: 'corr-scheduler-001',
+      peer_id: 'peer-kitchen',
+      provider_id: 'provider-scheduler-kitchen',
+      route: 'mesh://peer-kitchen/Scheduler.RunJob',
+      details: '{"approval_mode":"approve_all","data_namespace":"recipes","audio_session_id":"audio-session-77","scheduler_job_id":"job-nightly-sync","route_path":"mesh://peer-kitchen/Scheduler.RunJob","audit_receipt":"receipt-scheduler-001","payload_hash":"sha256:scheduler001","support_bundle_correlation_ids":["corr-scheduler-001","bundle-corr-001"],"secrets_redacted":true}',
+      created_at: '2026-06-19T01:25:00Z'
+    },
+    {
+      id: 'audit-replay-1',
+      event: 'tooling.approval_replay_rejected',
+      principal_id: 'principal-owner',
+      action: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-replay-001',
+      peer_id: 'peer-studio',
+      provider_id: 'provider-tooling-studio',
+      tool_id: 'tool:studio:files.write',
+      route: 'mesh://peer-studio/Tooling.ExecuteTool',
+      details: '{"approval_mode":"single","denial_reason":"replay_rejected","payload_hash":"sha256:replay001","secrets_redacted":true}',
+      created_at: '2026-06-19T01:30:00Z'
     }
   ]
 }
@@ -2805,6 +2857,132 @@ export const configRollbackFixture: ConfigRollbackResponse = {
   secrets_redacted: true
 }
 
+export const supportBundleFixture: GatewaySupportBundleResponse = {
+  generated_at: '2026-06-19T00:05:00Z',
+  correlation_id: 'corr-diagnostics-fixture',
+  registry: gatewayRegistryFixture,
+  services: gatewayServicesFixture.services,
+  service_health: [
+    {
+      module: 'Gateway',
+      status: 'healthy',
+      checks: {
+        registry: 'present',
+        heartbeat: 'healthy',
+        contracts: 'present'
+      },
+      timestamp: '2026-06-19T00:05:00Z'
+    }
+  ],
+  mesh_status: {
+    enabled: true,
+    local_peer_id: 'local-peer',
+    local_node_name: 'aurora-prod-01',
+    routes: [
+      {
+        module: 'Tooling',
+        selected_target: 'remote',
+        selected_peer_id: 'stable-peer',
+        selected_provider_id: 'mesh:studio-gpu:Tooling',
+        fallback_behavior: 'blocked',
+        secrets_redacted: true
+      }
+    ],
+    secrets_redacted: true
+  },
+  webrtc_diagnostics: webrtcDiagnosticsFixture,
+  route_diagnostics: [
+    {
+      module: 'Tooling',
+      selected_target: 'remote',
+      selected_peer_id: 'stable-peer',
+      selected_provider_id: 'mesh:studio-gpu:Tooling',
+      fallback_behavior: 'blocked',
+      secrets_redacted: true
+    }
+  ],
+  capability_catalog_summary: {
+    providers: capabilityGraphCatalogFixture.providers.length,
+    actions: capabilityGraphCatalogFixture.actions.length,
+    resources: capabilityGraphCatalogFixture.resources.length,
+    modules: ['Gateway', 'Tooling', 'TTS'],
+    blocked_actions: capabilityGraphCatalogFixture.actions.filter((action) => action.bindability !== 'available').length
+  },
+  recent_events: [
+    {
+      id: 'evt-diagnostics-1',
+      kind: 'Tooling.ExecuteTool',
+      topic: 'Tooling.ExecuteTool',
+      bus_topic: 'Tooling.ExecuteTool',
+      correlation_id: 'corr-diagnostics-fixture',
+      peer_id: 'local-peer',
+      target_peer_id: 'stable-peer',
+      status: 'denied',
+      timestamp: '2026-06-19T00:04:50Z',
+      payload_summary: {
+        tool_id: 'tool:local:diagnostics.serviceHealth',
+        args_redacted: true
+      },
+      secrets_redacted: true
+    }
+  ],
+  recent_audit_events: [
+    {
+      event: 'diagnostics.support_bundle.exported',
+      correlation_id: 'corr-diagnostics-fixture',
+      audit_receipt: 'support_bundle:fixture',
+      secrets_redacted: true
+    }
+  ],
+  native_capabilities: [
+    {
+      name: 'native_capability_manifest',
+      status: 'unavailable',
+      source: 'tauri/native manifest',
+      details: {
+        reason: 'no native manifest is registered in this backend runtime',
+        backend_coverage: 'deferred'
+      },
+      redacted: true
+    }
+  ],
+  sidecar_logs: [
+    {
+      name: 'gateway_sidecar_logs',
+      status: 'metadata_only',
+      source: 'gateway runtime',
+      details: {
+        reason: 'raw logs are omitted; metadata only',
+        omitted_payloads: ['host paths', 'tokens', 'raw audio', 'personal content']
+      },
+      redacted: true
+    }
+  ],
+  config_shape: {
+    api: {
+      token_secret: '[REDACTED]',
+      redis_url: '[REDACTED_URL]'
+    },
+    mesh: {
+      node_name: 'aurora-prod-01'
+    }
+  },
+  correlation_ids: ['corr-diagnostics-fixture'],
+  audit_receipt: 'support_bundle:fixture',
+  audit_error: null,
+  redaction: {
+    secrets_redacted: true,
+    redacted_fields: ['token', 'secret', 'password', 'redis_url', 'path', 'args', 'audio', 'rag'],
+    omitted_payloads: [
+      'raw audio',
+      'unredacted tool arguments',
+      'RAG contents',
+      'tokens and credentials'
+    ]
+  },
+  secrets_redacted: true
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -2850,6 +3028,7 @@ export interface MockAuroraFixtureSet {
   tokens: TokenListResponse
   devices: DeviceListResponse
   auditLog: AuditLogResponse
+  supportBundle: GatewaySupportBundleResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -2880,6 +3059,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   tokens: tokenListFixture,
   devices: deviceListFixture,
   auditLog: auditLogFixture,
+  supportBundle: supportBundleFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }

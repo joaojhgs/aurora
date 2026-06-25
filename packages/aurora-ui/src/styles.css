@@ -572,7 +572,7 @@ button, input, select, textarea { font: inherit; }
 .aui-method-manage, .aui-privacy-admin-critical, .aui-backend-internal-only, .aui-backend-missing-capability { color: var(--aui-danger); }
 .aui-exposure-internal { color: var(--aui-warning); }
 .aui-backend-http, .aui-backend-gateway-builtin { color: var(--aui-success); }
-.aui-admin-rbac { display: grid; gap: 1rem; }
+.aui-admin-rbac, .aui-admin-audit { display: grid; gap: 1rem; }
 .aui-rbac-layout { display: grid; gap: 1rem; }
 .aui-rbac-principals { grid-column: 1 / -1; }
 .aui-rbac-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; padding: .9rem; }
@@ -591,6 +591,15 @@ button, input, select, textarea { font: inherit; }
 .aui-rbac-audit span, .aui-rbac-audit strong, .aui-rbac-audit code, .aui-rbac-audit small { min-width: 0; overflow-wrap: anywhere; }
 .aui-rbac-audit span, .aui-rbac-audit small { color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
 .aui-rbac-audit small { grid-column: 1 / -1; }
+.aui-audit-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .7rem; padding: .9rem; }
+.aui-audit-filters label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-audit-filters input, .aui-audit-filters select { min-width: 0; width: 100%; min-height: 2.35rem; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .5rem .6rem; text-transform: none; }
+.aui-input-icon { position: relative; min-width: 0; }
+.aui-input-icon svg { position: absolute; left: .55rem; top: 50%; transform: translateY(-50%); color: var(--aui-muted); }
+.aui-input-icon input { padding-left: 2rem; }
+.aui-audit-filter-note { display: flex; align-items: flex-start; gap: .5rem; margin: 0 .9rem .9rem; border: 1px solid color-mix(in srgb, var(--aui-info) 22%, var(--aui-border)); border-radius: .45rem; padding: .6rem; background: color-mix(in srgb, var(--aui-info) 7%, white); color: var(--aui-info); font-size: .84rem; line-height: 1.4; }
+.aui-audit-filter-note span { min-width: 0; overflow-wrap: anywhere; }
+.aui-audit-table { min-width: 72rem; }
 .aui-admin-devices { display: grid; gap: 1rem; }
 .aui-device-controls { display: grid; gap: .85rem; padding: .9rem; }
 .aui-device-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
