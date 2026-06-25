@@ -64,7 +64,7 @@ export const auroraNavSections: AuroraNavSection[] = [
       item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'ADM-002', true),
       item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'manage', 'admin-critical', 'unsupported', 'ADM-007', true),
       item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'MeshListPeers', 'manage', 'credential', 'unsupported', 'ADM-011', true),
-      item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'DB', 'Backup', 'manage', 'admin-critical', 'unsupported', 'ADM-010', true),
+      item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'manage', 'admin-critical', 'unsupported', 'ADM-010', true),
       item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'ADM-008', true)
     ]
   },

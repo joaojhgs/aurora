@@ -15,6 +15,7 @@ import { AUTH_METHODS, describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, 
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
+import { BackupClient } from './backup.js'
 import { SchedulerClient } from './scheduler.js'
 import type {
   AdminOverviewManifest,
@@ -76,6 +77,7 @@ export class AuroraClient {
   readonly routes: RouteClient
   readonly assistant: AssistantClient
   readonly tools: ToolClient
+  readonly backups: BackupClient
   readonly scheduler: SchedulerClient
   readonly admin: AdminActionClient
   readonly approvals: ApprovalClient
@@ -95,6 +97,7 @@ export class AuroraClient {
     this.routes = new RouteClient(this)
     this.assistant = new AssistantClient(this)
     this.tools = new ToolClient(this)
+    this.backups = new BackupClient(this)
     this.scheduler = new SchedulerClient(this)
     this.admin = new AdminActionClient(this)
     this.approvals = new ApprovalClient(this)

@@ -4,6 +4,7 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  backupListFixture,
   capabilityCatalogFixture,
   cloneFixture,
   type CapabilityActionInfo,
@@ -13,11 +14,13 @@ import {
 import {
   AppShell,
   AssistantView,
+  BackupRestoreView,
   OnboardingView,
   buildOnboardingViewModel,
   RouteMatrix,
   StateSurface,
   assistantErrorMessage,
+  backupErrorMessage,
   buildShellSnapshot,
   errorShellSnapshot,
   routePolicyFromRoute
@@ -125,6 +128,61 @@ describe('Aurora production shell', () => {
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const backups = route(snapshot, 'backups')
+    const markup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={backups} initialList={backupListFixture} />
+    )
+
+    expect(backups.disabled).toBe(false)
+    expect(markup).toContain('Backups &amp; Restore')
+    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('Verify via AdminAction')
+    expect(markup).toContain('Preview restore impact')
+    expect(markup).toContain('Full restore disabled')
+    expect(markup).toContain('Preview rollback')
+    expect(markup).toContain('Download manifest')
+    expect(markup).toContain('backup-20260625T120000Z-config-rag')
+    expect(markup).toContain('config:included')
+    expect(markup).toContain('models:unsupported')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('renders backup empty, denied, degraded, unavailable, and SDK error states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const backups = route(snapshot, 'backups')
+
+    const emptyMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={backups} initialList={{ backups: [], total: 0, secrets_redacted: true }} />
+    )
+    expect(emptyMarkup).toContain('No manifests available')
+    expect(emptyMarkup).toContain('No backup manifests were returned')
+
+    const deniedMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'denied', disabled: true, blockers: ['permission_denied'] }} />
+    )
+    expect(deniedMarkup).toContain('Backup operations are disabled')
+    expect(deniedMarkup).toContain('permission_denied')
+
+    const degradedMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'degraded', disabled: false }} initialList={backupListFixture} />
+    )
+    expect(degradedMarkup).toContain('<dd>degraded</dd>')
+
+    const unavailableMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'unsupported', disabled: true, blockers: ['capability_not_advertised'] }} />
+    )
+    expect(unavailableMarkup).toContain('<dd>unavailable</dd>')
+    expect(unavailableMarkup).toContain('capability_not_advertised')
+
+    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
+    expect(backupErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'missing' }))).toContain('unavailable')
+    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('retry')
   })
 
 

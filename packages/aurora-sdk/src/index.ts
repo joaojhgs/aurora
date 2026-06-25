@@ -1,5 +1,6 @@
 export { AuroraClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
+export { BACKUP_METHODS, BackupClient } from './backup.js'
 export {
   SCHEDULER_METHODS,
   SchedulerClient,
@@ -65,6 +66,7 @@ export {
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
   backendInventoryFixture,
+  backupListFixture,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
   cloneFixture,
@@ -83,6 +85,7 @@ export {
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './admin.js'
+export type * from './backup.js'
 export type * from './scheduler.js'
 export type * from './transport.js'
 export type {
