@@ -26,6 +26,7 @@ import {
 import {
   AdminOverviewContent,
   AdminOverviewView,
+  AdminPluginsView,
   AdminServicesView,
   AdminRbacView,
   AdminDevicesView,
@@ -39,6 +40,7 @@ import {
   PairingQueueView,
   RouteSheet,
   buildAdminServicesSnapshot,
+  buildAdminPluginsSnapshot,
   buildAdminRbacSnapshot,
   buildAdminDevicesSnapshot,
   buildDeviceDeleteAdminAction,
@@ -717,6 +719,111 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('stale_provider')
     expect(markup).toContain('explicit_selector_required')
     expect(markup).toContain('internal-only')
+  })
+
+  it('wires plugins, MCP, provider grouping, risk metadata, and policy controls from AuroraClient', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
+    const markup = renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.tools.map((tool) => tool.providerGroup)).toEqual(expect.arrayContaining([
+      'local-built-in',
+      'local-mcp',
+      'remote-peer-built-in',
+      'unavailable-stale'
+    ]))
+    expect(snapshot.tools.some((tool) => tool.admin && tool.mutating && tool.riskClass === 'admin-critical')).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.dataClasses.includes('external-egress'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'require-confirmation'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'dry-run-only'))).toBe(true)
+    expect(snapshot.tools.some((tool) => tool.policyControls.some((control) => control.mode === 'allowed-peers'))).toBe(true)
+    expect(markup).toContain('Plugins, MCP, and tools')
+    expect(markup).toContain('Local built-in')
+    expect(markup).toContain('Local MCP')
+    expect(markup).toContain('Remote peer built-in')
+    expect(markup).toContain('Unavailable or stale provider')
+    expect(markup).toContain('Write local config file')
+    expect(markup).toContain('Open garage door')
+    expect(markup).toContain('Send email draft')
+    expect(markup).toContain('admin-critical')
+    expect(markup).toContain('external-egress')
+    expect(markup).toContain('Share selected')
+    expect(markup).toContain('Require confirmation')
+    expect(markup).toContain('Dry-run only')
+    expect(markup).toContain('Allowed peers/providers')
+    expect(markup).toContain('audit.local.tooling')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps plugin reload, install, and sharing mutations AdminAction-gated by advertised registry methods', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
+    const markup = renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.actions.map((action) => action.methodId)).toEqual([
+      'Tooling.ReloadPlugins',
+      'Tooling.InstallPlugin',
+      'Tooling.UpdateToolSharingPolicy'
+    ])
+    expect(snapshot.actions.every((action) => action.requiresAdminAction || action.state === 'unsupported')).toBe(true)
+    expect(snapshot.actions.every((action) => !action.available)).toBe(true)
+    expect(markup).toContain('Tooling.ReloadPlugins is not advertised')
+    expect(markup).toContain('Tooling.InstallPlugin is not advertised')
+    expect(markup).toContain('Tooling.UpdateToolSharingPolicy is not advertised')
+    expect(markup).toContain('disabled=""')
+    expect(markup).toContain('Remote peer tool policy is read-only')
+  })
+
+  it('renders plugin admin loading, empty, denied, degraded, unavailable, and error states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const pluginsRoute = enabledRoute(route(shell, 'plugins'))
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={{
+      loadState: 'loading',
+      generatedAt: null,
+      secretsRedacted: true,
+      tools: [],
+      providerGroups: [],
+      actions: [],
+      warnings: [],
+      error: null,
+      evidenceSource: 'pending AuroraClient SDK calls'
+    }} />)).toContain('Loading Tooling catalog')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Tooling.GetToolCatalog', () => ({ tools: [], secrets_redacted: true }))
+    const emptySnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: emptyTransport }), pluginsRoute)
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={emptySnapshot} />)).toContain('No Tooling catalog entries')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
+    const deniedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: deniedTransport }), pluginsRoute)
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={deniedSnapshot} />)).toContain('tool catalog denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Gateway.GetRegistry', 'registry unavailable')
+    const degradedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: degradedTransport }), pluginsRoute)
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={degradedSnapshot} />)).toContain('registry unavailable')
+
+    const unavailableSnapshot = await buildAdminPluginsSnapshot(
+      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Tooling.GetToolCatalog').lose('Gateway.GetRegistry') }),
+      pluginsRoute
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+
+    const disabledRoute = { ...pluginsRoute, disabled: true, state: 'denied' as const, blockers: ['missing:Tooling.manage'] }
+    const disabledSnapshot = await buildAdminPluginsSnapshot(client, disabledRoute)
+    expect(disabledSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Tooling.manage')
   })
 
   it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
