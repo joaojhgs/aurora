@@ -8,7 +8,11 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, State,
+};
 use thiserror::Error;
 use url::Url;
 
@@ -106,6 +110,36 @@ struct NativeCapabilityManifest {
     platform: String,
     permissions: BTreeMap<String, bool>,
     capabilities: BTreeMap<String, bool>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativePermissionStatus {
+    platform: String,
+    permissions: BTreeMap<String, bool>,
+    capabilities: BTreeMap<String, bool>,
+    denied_by_default: Vec<String>,
+    privacy_classes: Vec<String>,
+    evidence_source: String,
+    secrets_redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeFeatureStatus {
+    available: bool,
+    permission: String,
+    capability: String,
+    source: String,
+    reason: Option<String>,
+    details: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeNotificationRequest {
+    title: String,
+    body: String,
 }
 
 struct SidecarState {
@@ -410,6 +444,96 @@ async fn native_capabilities() -> Result<NativeCapabilityManifest, AuroraCommand
 }
 
 #[tauri::command]
+async fn aurora_native_permission_status() -> Result<NativePermissionStatus, AuroraCommandError> {
+    let manifest = native_capability_manifest();
+    Ok(NativePermissionStatus {
+        platform: manifest.platform,
+        permissions: manifest.permissions,
+        capabilities: manifest.capabilities,
+        denied_by_default: vec![
+            "aurora.shell".to_string(),
+            "aurora.processSpawn".to_string(),
+            "aurora.localFileRead".to_string(),
+            "aurora.localFileWrite".to_string(),
+            "aurora.notificationsSend".to_string(),
+            "aurora.dialogOpen".to_string(),
+            "aurora.audioCapture".to_string(),
+            "aurora.audioPlayback".to_string(),
+        ],
+        privacy_classes: vec![
+            "personal".to_string(),
+            "credential".to_string(),
+            "raw-audio".to_string(),
+        ],
+        evidence_source: "tauri-capability-manifest".to_string(),
+        secrets_redacted: true,
+    })
+}
+
+#[tauri::command]
+async fn aurora_tray_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = BTreeMap::new();
+    details.insert("menuItems".to_string(), json!(["show", "quit"]));
+    details.insert("backendTruthRequired".to_string(), json!(false));
+    Ok(NativeFeatureStatus {
+        available: true,
+        permission: "aurora.trayStatus".to_string(),
+        capability: "desktop.tray".to_string(),
+        source: "tauri-core-tray-icon".to_string(),
+        reason: None,
+        details,
+    })
+}
+
+#[tauri::command]
+async fn aurora_notification_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    denied_native_feature_status(
+        "aurora.notificationsSend",
+        "native.notifications",
+        "notification delivery is disabled until UI-004 defines the OS permission request and consent UX",
+    )
+}
+
+#[tauri::command]
+async fn aurora_notification_send(
+    request: NativeNotificationRequest,
+) -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let _ = (request.title, request.body);
+    Err(native_permission_missing("aurora.notificationsSend"))
+}
+
+#[tauri::command]
+async fn aurora_dialog_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    denied_native_feature_status(
+        "aurora.dialogOpen",
+        "native.dialogs",
+        "dialog plugin access is disabled until file/attachment UX defines scoped picker behavior",
+    )
+}
+
+#[tauri::command]
+async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut status = denied_native_feature_status(
+        "aurora.audioCapture",
+        "native.audio",
+        "raw-audio capture/playback requires backend audio events, explicit target, visible privacy state, and consent",
+    )?;
+    status
+        .details
+        .insert("privacyClass".to_string(), json!("raw-audio"));
+    status
+        .details
+        .insert("backendEvidenceRequired".to_string(), json!(true));
+    status
+        .details
+        .insert("captureEnabled".to_string(), json!(false));
+    status
+        .details
+        .insert("playbackControlEnabled".to_string(), json!(false));
+    Ok(status)
+}
+
+#[tauri::command]
 async fn aurora_log_tail(
     request: Option<LogTailRequest>,
 ) -> Result<LogTailResult, AuroraCommandError> {
@@ -584,9 +708,18 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.shutdown".to_string(), true);
     permissions.insert("aurora.logTail".to_string(), true);
     permissions.insert("aurora.secureStorage".to_string(), true);
+    permissions.insert("aurora.nativePermissionStatus".to_string(), true);
+    permissions.insert("aurora.trayStatus".to_string(), true);
+    permissions.insert("aurora.notificationsStatus".to_string(), true);
+    permissions.insert("aurora.notificationsSend".to_string(), false);
+    permissions.insert("aurora.dialogStatus".to_string(), true);
+    permissions.insert("aurora.dialogOpen".to_string(), false);
     permissions.insert("aurora.localFileRead".to_string(), false);
     permissions.insert("aurora.localFileWrite".to_string(), false);
     permissions.insert("aurora.secureFileHandle".to_string(), false);
+    permissions.insert("aurora.audioBridgeStatus".to_string(), true);
+    permissions.insert("aurora.audioCapture".to_string(), false);
+    permissions.insert("aurora.audioPlayback".to_string(), false);
     permissions.insert("aurora.shell".to_string(), false);
     permissions.insert("aurora.processSpawn".to_string(), false);
 
@@ -595,16 +728,40 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("desktop.localSidecarHealth".to_string(), true);
     capabilities.insert("desktop.logTail".to_string(), false);
     capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
+    capabilities.insert("desktop.tray".to_string(), true);
     capabilities.insert("native.secureCredentialStorage".to_string(), true);
+    capabilities.insert("native.permissionsManifest".to_string(), true);
+    capabilities.insert("native.notifications".to_string(), false);
+    capabilities.insert("native.dialogs".to_string(), false);
     capabilities.insert("native.secureFileHandles".to_string(), false);
     capabilities.insert("native.filesystem".to_string(), false);
     capabilities.insert("native.audio".to_string(), false);
+    capabilities.insert("native.audioCapture".to_string(), false);
+    capabilities.insert("native.audioPlayback".to_string(), false);
 
     NativeCapabilityManifest {
         platform: "tauri-desktop".to_string(),
         permissions,
         capabilities,
     }
+}
+
+fn denied_native_feature_status(
+    permission: &str,
+    capability: &str,
+    reason: &str,
+) -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = BTreeMap::new();
+    details.insert("enabledByDefault".to_string(), json!(false));
+    details.insert("secretsRedacted".to_string(), json!(true));
+    Ok(NativeFeatureStatus {
+        available: false,
+        permission: permission.to_string(),
+        capability: capability.to_string(),
+        source: "tauri-capability-manifest".to_string(),
+        reason: Some(reason.to_string()),
+        details,
+    })
 }
 
 fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
@@ -937,6 +1094,10 @@ pub fn run() {
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     tauri::Builder::default()
         .manage(sidecar_state.clone())
+        .setup(|app| {
+            install_tray(app.handle())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             aurora_request,
             aurora_command,
@@ -947,6 +1108,12 @@ pub fn run() {
             aurora_sidecar_status,
             aurora_native_capability_manifest,
             native_capabilities,
+            aurora_native_permission_status,
+            aurora_tray_status,
+            aurora_notification_status,
+            aurora_notification_send,
+            aurora_dialog_status,
+            aurora_audio_bridge_status,
             aurora_log_tail,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
@@ -966,6 +1133,31 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Aurora Tauri shell");
+}
+
+fn install_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let mut builder = TrayIconBuilder::with_id("aurora-main")
+        .tooltip("Aurora")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -998,6 +1190,36 @@ mod tests {
             manifest.capabilities.get("native.secureFileHandles"),
             Some(&false)
         );
+        assert_eq!(manifest.capabilities.get("desktop.tray"), Some(&true));
+        assert_eq!(
+            manifest.permissions.get("aurora.notificationsSend"),
+            Some(&false)
+        );
+        assert_eq!(manifest.permissions.get("aurora.dialogOpen"), Some(&false));
+        assert_eq!(
+            manifest.permissions.get("aurora.audioCapture"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.notifications"),
+            Some(&false)
+        );
+        assert_eq!(manifest.capabilities.get("native.dialogs"), Some(&false));
+        assert_eq!(manifest.capabilities.get("native.audio"), Some(&false));
+    }
+
+    #[test]
+    fn native_permission_status_lists_denied_sensitive_surfaces() {
+        let manifest = native_capability_manifest();
+        let denied: Vec<String> = manifest
+            .permissions
+            .iter()
+            .filter_map(|(key, allowed)| if *allowed { None } else { Some(key.clone()) })
+            .collect();
+        assert!(denied.contains(&"aurora.notificationsSend".to_string()));
+        assert!(denied.contains(&"aurora.dialogOpen".to_string()));
+        assert!(denied.contains(&"aurora.audioCapture".to_string()));
+        assert!(denied.contains(&"aurora.localFileRead".to_string()));
     }
 
     #[test]

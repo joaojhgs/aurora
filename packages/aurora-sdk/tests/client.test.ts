@@ -2304,6 +2304,33 @@ describe('AuroraClient', () => {
             return { running: true, mode: 'sidecar', pid: 42 }
           case 'aurora_native_capability_manifest':
             return nativeCapabilityManifestFixture
+          case 'aurora_native_permission_status':
+            return {
+              platform: 'tauri-desktop',
+              permissions: nativeCapabilityManifestFixture.permissions,
+              capabilities: nativeCapabilityManifestFixture.capabilities,
+              deniedByDefault: ['aurora.notificationsSend', 'aurora.audioCapture'],
+              privacyClasses: ['personal', 'credential', 'raw-audio'],
+              evidenceSource: 'tauri-capability-manifest',
+              secretsRedacted: true
+            }
+          case 'aurora_tray_status':
+            return { available: true, permission: 'aurora.trayStatus', capability: 'desktop.tray', source: 'tauri-core-tray-icon' }
+          case 'aurora_notification_status':
+            return { available: false, permission: 'aurora.notificationsSend', capability: 'native.notifications', source: 'tauri-capability-manifest', reason: 'disabled' }
+          case 'aurora_notification_send':
+            throw { detail: { code: 'native_permission_missing', message: 'native permission missing' } }
+          case 'aurora_dialog_status':
+            return { available: false, permission: 'aurora.dialogOpen', capability: 'native.dialogs', source: 'tauri-capability-manifest', reason: 'disabled' }
+          case 'aurora_audio_bridge_status':
+            return {
+              available: false,
+              permission: 'aurora.audioCapture',
+              capability: 'native.audio',
+              source: 'tauri-capability-manifest',
+              reason: 'raw-audio requires consent',
+              details: { privacyClass: 'raw-audio', backendEvidenceRequired: true }
+            }
           case 'aurora_log_tail':
             return { available: false, source: 'aurora-sidecar', lines: [], truncated: false }
           case 'aurora_secure_storage_get':
@@ -2331,6 +2358,31 @@ describe('AuroraClient', () => {
     await expect(transport.startSidecar()).resolves.toEqual(expect.objectContaining({ running: true }))
     await expect(transport.stopSidecar()).resolves.toEqual(expect.objectContaining({ running: false }))
     await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.getNativePermissionStatus()).resolves.toEqual(
+      expect.objectContaining({
+        deniedByDefault: expect.arrayContaining(['aurora.notificationsSend', 'aurora.audioCapture']),
+        privacyClasses: expect.arrayContaining(['raw-audio']),
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.getTrayStatus()).resolves.toEqual(
+      expect.objectContaining({ available: true, capability: 'desktop.tray' })
+    )
+    await expect(transport.getNotificationStatus()).resolves.toEqual(
+      expect.objectContaining({ available: false, permission: 'aurora.notificationsSend' })
+    )
+    await expect(transport.sendNotification({ title: 'Aurora', body: 'Ready' })).rejects.toMatchObject({
+      code: 'native_permission_missing'
+    })
+    await expect(transport.getDialogStatus()).resolves.toEqual(
+      expect.objectContaining({ available: false, capability: 'native.dialogs' })
+    )
+    await expect(transport.getAudioBridgeStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        details: expect.objectContaining({ privacyClass: 'raw-audio', backendEvidenceRequired: true })
+      })
+    )
     await expect(transport.getLogTail({ lines: 10 })).resolves.toEqual({
       available: false,
       source: 'aurora-sidecar',
@@ -2365,6 +2417,12 @@ describe('AuroraClient', () => {
       'aurora_sidecar_start',
       'aurora_sidecar_stop',
       'aurora_native_capability_manifest',
+      'aurora_native_permission_status',
+      'aurora_tray_status',
+      'aurora_notification_status',
+      'aurora_notification_send',
+      'aurora_dialog_status',
+      'aurora_audio_bridge_status',
       'aurora_log_tail',
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
@@ -2376,12 +2434,13 @@ describe('AuroraClient', () => {
     ])
     expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
     expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })
-    expect(calls[5]?.args).toEqual({ request: { lines: 10 } })
-    expect(calls[6]?.args).toEqual({ key: 'session' })
-    expect(calls[7]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[9]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[10]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[12]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[8]?.args).toEqual({ request: { title: 'Aurora', body: 'Ready' } })
+    expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
+    expect(calls[12]?.args).toEqual({ key: 'session' })
+    expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[15]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[16]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[18]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

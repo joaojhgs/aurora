@@ -2949,9 +2949,18 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.shutdown': true,
     'aurora.logTail': true,
     'aurora.secureStorage': true,
+    'aurora.nativePermissionStatus': true,
+    'aurora.trayStatus': true,
+    'aurora.notificationsStatus': true,
+    'aurora.notificationsSend': false,
+    'aurora.dialogStatus': true,
+    'aurora.dialogOpen': false,
     'aurora.localFileRead': false,
     'aurora.localFileWrite': false,
     'aurora.secureFileHandle': false,
+    'aurora.audioBridgeStatus': true,
+    'aurora.audioCapture': false,
+    'aurora.audioPlayback': false,
     'aurora.shell': false,
     'aurora.processSpawn': false
   },
@@ -2960,10 +2969,16 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'desktop.localSidecarHealth': true,
     'desktop.logTail': false,
     'desktop.localSidecarSupervision': true,
+    'desktop.tray': true,
     'native.secureCredentialStorage': true,
+    'native.permissionsManifest': true,
+    'native.notifications': false,
+    'native.dialogs': false,
     'native.secureFileHandles': false,
     'native.filesystem': false,
-    'native.audio': false
+    'native.audio': false,
+    'native.audioCapture': false,
+    'native.audioPlayback': false
   }
 }
 

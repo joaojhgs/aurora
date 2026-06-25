@@ -185,6 +185,9 @@ export type {
   TauriLogTailRequest,
   TauriLogTailResult,
   TauriLocalTransportOptions,
+  TauriNativeFeatureStatus,
+  TauriNativePermissionStatus,
+  TauriNotificationRequest,
   TauriSidecarStatus
 } from './tauri.js'
 export type {
