@@ -20,6 +20,7 @@ import {
   routeExplainFixture,
   schedulerJobsFixture,
   toolCatalogFixture,
+  webrtcDiagnosticsFixture,
   type AdminOverviewManifest,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
@@ -47,6 +48,7 @@ import {
   OnboardingView,
   PairingQueueSurface,
   PairingQueueView,
+  MeshDiagnosticsView,
   MeshPeersResource,
   MeshPeersView,
   RoutePolicyView,
@@ -63,6 +65,7 @@ import {
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
+  buildMeshDiagnosticsSnapshot,
   buildMeshPeerAdminAction,
   buildMeshPeersSnapshot,
   buildRoutePolicySnapshot,
@@ -91,6 +94,7 @@ import {
   parsePermissionList,
   pairingErrorMessage,
   meshPeerErrorMessage,
+  meshDiagnosticsSnapshotFromResults,
   parseMeshPermissionList,
   routePolicyDraftChange,
   routePolicyFromRoute,
@@ -1476,6 +1480,86 @@ describe('Aurora production shell', () => {
       <MeshPeersResource client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
     )
     expect(loadingMarkup).toContain('Loading mesh peers')
+  })
+
+  it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability evidence', async () => {
+    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.localMeshPeerId).toBe('local-peer')
+    expect(snapshot.secretsRedacted).toBe(true)
+    expect(snapshot.signalingState).toBe('available-remote')
+    expect(snapshot.connectedPeerCount).toBe(1)
+    expect(snapshot.transportRows[0]).toEqual(
+      expect.objectContaining({
+        peerId: 'stable-peer',
+        signalingPeerId: 'session-peer',
+        state: 'available-remote',
+        authState: 'authenticated',
+        dataChannelState: 'open',
+        routeQuality: 'healthy'
+      })
+    )
+    expect(snapshot.routeRows.map((row) => row.module)).toEqual(expect.arrayContaining(['TTS', 'Scheduler']))
+    expect(snapshot.routeRows.find((row) => row.module === 'TTS')?.blockers.join(' ')).toContain('stale_provider')
+    expect(snapshot.recentErrors[0]?.code).toBe('rpc_timeout')
+  })
+
+  it('renders WebRTC ICE diagnostics without leaking secret transport state', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={snapshot} route={route} />)
+
+    expect(markup).toContain('WebRTC and ICE diagnostics')
+    expect(markup).toContain('Peer transport matrix')
+    expect(markup).toContain('session-peer')
+    expect(markup).toContain('stable-peer')
+    expect(markup).toContain('ICE completed')
+    expect(markup).toContain('DataChannel')
+    expect(markup).toContain('Route quality')
+    expect(markup).toContain('rpc_timeout')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('maps WebRTC diagnostics empty, denied, and SDK error states with repair evidence', async () => {
+    const noPeers = cloneFixture(webrtcDiagnosticsFixture)
+    noPeers.peers = []
+    noPeers.connected_peer_count = 0
+    noPeers.authenticated_peer_count = 0
+    noPeers.started = false
+    const emptySnapshot = meshDiagnosticsSnapshotFromResults({
+      route: meshRoute(),
+      webrtc: { data: noPeers, error: null },
+      mesh: { data: { ...cloneFixture(meshStatusFixture), peers: [], routes: [], compatibility_failures: [] }, error: null },
+      catalog: { data: capabilityCatalogFixture, error: null }
+    })
+    expect(emptySnapshot.loadState).toBe('degraded')
+    expect(emptySnapshot.transportRows).toHaveLength(0)
+    expect(emptySnapshot.warnings.join(' ')).toContain('WebRTC runtime is not started')
+
+    const deniedSnapshot = await buildMeshDiagnosticsSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Gateway.GetWebRTCDiagnostics', 'permission', 'Gateway denied') }),
+      meshRoute()
+    )
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(deniedSnapshot.errors.join(' ')).toContain('Gateway denied')
+
+    const unavailableSnapshot = await buildMeshDiagnosticsSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .fail('Gateway.GetWebRTCDiagnostics', 'unavailable_service', 'diagnostics down')
+          .fail('Gateway.GetMeshStatus', 'unavailable_service', 'mesh down')
+          .fail('Gateway.GetCapabilityCatalog', 'unavailable_service', 'catalog down')
+      }),
+      meshRoute()
+    )
+    expect(unavailableSnapshot.loadState).toBe('unavailable')
+    expect(unavailableSnapshot.signalingRepair).toContain('Repair Gateway.GetWebRTCDiagnostics')
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={unavailableSnapshot} route={meshRoute()} />)
+    expect(markup).toContain('Degraded diagnostics inputs')
+    expect(markup).toContain('diagnostics down')
+    expect(markup).toContain('No live WebRTC peer sessions')
   })
 
   it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {

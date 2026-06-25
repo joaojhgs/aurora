@@ -548,11 +548,35 @@ button, input, select, textarea { font: inherit; }
 .aui-route-policy-actions button { width: fit-content; }
 .aui-route-policy-actions p { margin: 0; color: var(--aui-muted); line-height: 1.4; }
 
+.aui-mesh-diagnostics { display: grid; gap: 1rem; margin-top: 1rem; }
+.aui-mesh-diagnostics-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-mesh-diagnostics-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.08; }
+.aui-mesh-diagnostics-header p { max-width: 58rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-mesh-diagnostics-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-mesh-diagnostics-summary div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .65rem; }
+.aui-mesh-diagnostics-summary dt, .aui-mesh-diagnostics-table dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-diagnostics-summary dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; align-items: start; }
+.aui-mesh-diagnostics-note, .aui-mesh-diagnostics-empty { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-diagnostics-alert { display: flex; gap: .65rem; align-items: flex-start; border: 1px solid color-mix(in srgb, var(--aui-danger) 28%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-danger) 7%, white); color: var(--aui-danger); padding: .8rem; }
+.aui-mesh-diagnostics-alert ul { margin: .35rem 0 0; padding-left: 1.1rem; }
+.aui-mesh-diagnostics-table { display: grid; gap: .45rem; min-width: 0; overflow-x: auto; }
+.aui-mesh-diagnostics-table-head, .aui-mesh-diagnostics-table-row { display: grid; grid-template-columns: minmax(12rem, 1.1fr) minmax(13rem, 1fr) minmax(13rem, 1fr) minmax(13rem, 1fr); gap: .55rem; min-width: 48rem; align-items: start; }
+.aui-mesh-diagnostics-table-head { color: var(--aui-muted); font-size: .74rem; font-weight: 800; text-transform: uppercase; }
+.aui-mesh-diagnostics-table-row { border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 34%, white); padding: .65rem; }
+.aui-mesh-diagnostics-table-row span { min-width: 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-table-row strong, .aui-mesh-diagnostics-table-row code, .aui-mesh-diagnostics-table-row small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-table-row code, .aui-mesh-diagnostics-table-row small { margin-top: .25rem; color: var(--aui-muted); font-size: .77rem; line-height: 1.4; }
+.aui-mesh-error-list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.aui-mesh-error-list li { display: grid; gap: .2rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: color-mix(in srgb, var(--aui-surface-2) 42%, white); padding: .6rem; }
+.aui-mesh-error-list span, .aui-mesh-error-list small { min-width: 0; overflow-wrap: anywhere; color: var(--aui-muted); }
+
 @media (max-width: 1100px) {
   .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-mode-panel { grid-row: auto; }
   .aui-pairing-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .aui-route-policy-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-route-policy-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -566,8 +590,10 @@ button, input, select, textarea { font: inherit; }
   .aui-pairing-controls, .aui-pairing-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-pairing-card-header { display: grid; }
   .aui-mesh-header, .aui-mesh-card > header, .aui-mesh-row > header { display: grid; }
+  .aui-mesh-diagnostics-header { display: grid; }
   .aui-mesh-badges { justify-content: flex-start; }
   .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: minmax(0, 1fr); }
+  .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-route-policy-header, .aui-route-explain-card > header { display: grid; }
   .aui-route-policy-summary, .aui-route-scenarios { grid-template-columns: minmax(0, 1fr); }
   .aui-route-explain-badges { justify-content: flex-start; }

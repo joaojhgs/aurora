@@ -6,7 +6,9 @@ import type {
   RouteExplainResponse,
   WebRTCDiagnosticsResponse
 } from '@aurora/client'
+import { MeshDiagnosticsView, meshDiagnosticsSnapshotFromResults } from '@aurora/ui'
 import { createAuroraWebClient } from '../aurora-client'
+import { getShellSnapshot } from '../shell-state'
 import { DiagnosticsExportControl } from './diagnostics-export-control'
 
 interface DiagnosticResult<T> {
@@ -31,10 +33,12 @@ const redactionPreview = [
 
 export default async function Page() {
   const client = createAuroraWebClient()
-  const [services, topology, webrtc, catalog, route] = await Promise.all([
+  const [shell, services, topology, webrtc, mesh, catalog, route] = await Promise.all([
+    getShellSnapshot(),
     capture(() => client.registry.listServices()),
     capture(() => client.registry.getDeploymentTopology()),
     capture(() => client.registry.getWebRTCDiagnostics()),
+    captureResult(() => client.mesh.getStatus()),
     capture(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })),
     capture(() => client.routes.explain({
       topic: 'Tooling.ExecuteTool',
@@ -46,6 +50,8 @@ export default async function Page() {
   const correlationId = route.data?.blockers.find((blocker) => blocker.security_privacy)?.code ?? null
   const unavailable = probes.filter((probe) => probe.state !== 'available-local' && probe.state !== 'available-remote')
   const exportDisabled = services.error !== null || topology.error !== null || catalog.error !== null
+  const diagnosticsRoute = shell.routes.find((candidate) => candidate.item.id === 'diagnostics') ?? shell.routes[0]!
+  const meshDiagnostics = meshDiagnosticsSnapshotFromResults({ route: diagnosticsRoute, webrtc, mesh, catalog })
 
   return (
     <div className="aw-page-stack adx-page">
@@ -128,37 +134,6 @@ export default async function Page() {
       </div>
 
       <div className="aw-page-grid">
-        <section className="aw-panel" aria-labelledby="diagnostics-mesh-title">
-          <div className="adx-section-heading">
-            <div>
-              <h2 id="diagnostics-mesh-title">Mesh And Route Snapshot</h2>
-              <p>Route explain and WebRTC state stay visible with provider identity and blockers.</p>
-            </div>
-          </div>
-          <dl className="aw-facts">
-            <div>
-              <dt>Route target</dt>
-              <dd>{route.data ? `${route.data.selected_target} for ${route.data.topic}` : unavailableText(route.error)}</dd>
-            </div>
-            <div>
-              <dt>Selected provider</dt>
-              <dd>{route.data?.selected_provider_id ?? route.data?.selected_peer_id ?? 'none'}</dd>
-            </div>
-            <div>
-              <dt>Fallback</dt>
-              <dd>{route.data?.fallback_behavior ?? 'unknown'}</dd>
-            </div>
-            <div>
-              <dt>WebRTC/DataChannel</dt>
-              <dd>{webrtc.data ? `${webrtc.data.connected_peer_count} connected, ${webrtc.data.pending_rpc_count} pending RPC` : unavailableText(webrtc.error)}</dd>
-            </div>
-            <div>
-              <dt>Recent ICE/DataChannel errors</dt>
-              <dd>{webrtc.data?.recent_errors.length ? webrtc.data.recent_errors.map((error) => error.code).join(', ') : 'none reported'}</dd>
-            </div>
-          </dl>
-        </section>
-
         <section className="aw-panel" aria-labelledby="diagnostics-availability-title">
           <div className="adx-section-heading">
             <div>
@@ -187,6 +162,8 @@ export default async function Page() {
         </section>
       </div>
 
+      <MeshDiagnosticsView snapshot={meshDiagnostics} route={diagnosticsRoute} />
+
       <DiagnosticsExportControl
         correlationId={correlationId}
         disabled={exportDisabled}
@@ -199,6 +176,16 @@ export default async function Page() {
 async function capture<T>(operation: () => Promise<T>): Promise<DiagnosticResult<T>> {
   try {
     return { data: await operation(), error: null }
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : 'SDK request failed' }
+  }
+}
+
+async function captureResult<T>(operation: () => Promise<{ ok: true; data: T } | { ok: false; error: Error }>): Promise<DiagnosticResult<T>> {
+  try {
+    const result = await operation()
+    if (result.ok) return { data: result.data, error: null }
+    return { data: null, error: result.error.message }
   } catch (error) {
     return { data: null, error: error instanceof Error ? error.message : 'SDK request failed' }
   }
