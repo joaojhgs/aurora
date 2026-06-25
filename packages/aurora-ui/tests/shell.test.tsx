@@ -49,6 +49,7 @@ import {
   PairingQueueView,
   MeshPeersResource,
   MeshPeersView,
+  RoutePolicyView,
   RouteSheet,
   buildAdminServicesSnapshot,
   buildAdminPluginsSnapshot,
@@ -64,6 +65,7 @@ import {
   buildPairingQueueModel,
   buildMeshPeerAdminAction,
   buildMeshPeersSnapshot,
+  buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
@@ -90,7 +92,9 @@ import {
   pairingErrorMessage,
   meshPeerErrorMessage,
   parseMeshPermissionList,
+  routePolicyDraftChange,
   routePolicyFromRoute,
+  routePolicyScenarios,
   routeSheetErrorMessage,
   SettingsPermissionsView
 } from '../src/index'
@@ -1511,6 +1515,80 @@ describe('Aurora production shell', () => {
     expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
   })
 
+  it('builds route policy explain state matrix through AuroraClient route APIs', async () => {
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.scenarios.map((scenario) => scenario.scenario.id)).toEqual([
+      'assistant_prompt',
+      'tool_call',
+      'rag_query',
+      'audio_session',
+      'model_runtime',
+      'scheduler_job',
+      'admin_action'
+    ])
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'tool_call')?.evaluation?.privacyClass).toBe('admin-critical')
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_id: 'rag:home-lab' })
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'audio_session')?.evaluation?.privacyClass).toBe('raw-audio')
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'scheduler_job')?.evaluation?.repairPath).toContain('selector')
+    expect(snapshot.policyCapabilityReason).toContain('Gateway.ExplainRoute')
+    expect(snapshot.configCapabilityReason).toContain('Config.Set')
+  })
+
+  it('renders route policy editor and exact explain blockers without local-only success claims', async () => {
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+
+    expect(markup).toContain('Route policy and explain')
+    expect(markup).toContain('Backend decision matrix')
+    expect(markup).toContain('Remote RAG namespace')
+    expect(markup).toContain('Remote STT session')
+    expect(markup).toContain('Scheduler delegation')
+    expect(markup).toContain('explicit_selector_required')
+    expect(markup).toContain('Select the target peer before remote raw-audio capable synthesis.')
+    expect(markup).toContain('Config.Set')
+    expect(markup).toContain('AdminAction')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('keeps route policy SDK failures visible and disabled', async () => {
+    const transport = new MockAuroraTransport()
+      .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
+      .fail('Gateway.GetCapabilityCatalog', 'permission', 'catalog denied')
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport }), meshRoute())
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+
+    expect(snapshot.loadState).toBe('denied')
+    expect(snapshot.error).toContain('Route explain')
+    expect(snapshot.canEditPolicy).toBe(false)
+    expect(markup).toContain('route explain down')
+    expect(markup).toContain('catalog denied')
+    expect(markup).toContain('Save policy')
+    expect(markup).toContain('disabled')
+  })
+
+  it('serializes route policy draft to schema-backed mesh sharing config', () => {
+    const change = routePolicyDraftChange({
+      ...routePolicyDraft(),
+      module: 'TTS',
+      allowedPeers: 'peer-a, peer-b',
+      deniedPeers: 'peer-c',
+      requiredCapabilities: 'synthesize, low-latency',
+      minimumVersion: '0.3.0'
+    })
+
+    expect(change.key_path).toBe('services.tts.mesh_sharing')
+    expect(change.value).toEqual({
+      require_explicit_selector: true,
+      allowed_peers: ['peer-a', 'peer-b'],
+      required_capabilities: ['synthesize', 'low-latency'],
+      min_version: '0.3.0',
+      fallback: 'local'
+    })
+    expect(routePolicyScenarios().map((scenario) => scenario.id)).toContain('admin_action')
+  })
+
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
     const markup = renderToStaticMarkup(
       await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
@@ -2303,6 +2381,22 @@ function meshRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapsh
     requiresAdminAction: false,
     ...overrides
   } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
+}
+
+function routePolicyDraft() {
+  return {
+    module: 'TTS',
+    requireExplicitSelector: true,
+    allowedPeers: '',
+    deniedPeers: '',
+    requiredCapabilities: 'synthesize',
+    minimumVersion: '',
+    trustTier: 'paired',
+    fallbackPolicy: 'local' as const,
+    safetySensitiveClasses: 'admin-critical, raw-audio, credential',
+    reason: 'Update mesh route policy',
+    reauthConfirmed: true
+  }
 }
 
 function emptyPairingQueue() {

@@ -1,8 +1,14 @@
 'use client'
 
-import { MeshPeersResource, type RouteAvailability } from '@aurora/ui'
+import { MeshPeersResource, RoutePolicyResource, type RouteAvailability } from '@aurora/ui'
 import { createAuroraBrowserClient } from '../aurora-client'
 
 export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
-  return <MeshPeersResource client={createAuroraBrowserClient()} route={route} />
+  const client = createAuroraBrowserClient()
+  return (
+    <>
+      <MeshPeersResource client={client} route={route} />
+      <RoutePolicyResource client={client} route={route} />
+    </>
+  )
 }
