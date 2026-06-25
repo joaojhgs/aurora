@@ -732,7 +732,14 @@ describe('AuroraClient', () => {
     expect(nativeManifest).toEqual(
       expect.objectContaining({
         platform: 'tauri-desktop',
-        permissions: expect.objectContaining({ microphone: false })
+        permissions: expect.objectContaining({
+          'aurora.sidecarStart': true,
+          'aurora.shell': false
+        }),
+        capabilities: expect.objectContaining({
+          'desktop.localSidecarSupervision': true,
+          'native.audio': false
+        })
       })
     )
     expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
@@ -2239,6 +2246,9 @@ describe('AuroraClient', () => {
     const transport = new TauriLocalTransport({
       invoke: async (command, args) => {
         calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') {
+          return { token: 'session-token' }
+        }
         return {
           data: gatewayRegistryFixture,
           status: 200,
@@ -2252,14 +2262,16 @@ describe('AuroraClient', () => {
     const result = await client.requestResult('Gateway.GetRegistry')
 
     expect(registry.digest).toBe('fixture')
-    expect(calls[0]).toEqual({
+    expect(calls[0]).toEqual({ command: 'aurora_sidecar_session', args: undefined })
+    expect(calls[1]).toEqual({
       command: 'aurora_command',
       args: {
         request: expect.objectContaining({
           method: 'Gateway.GetRegistry',
           busTopic: 'Gateway.GetRegistry',
           path: '/api/registry',
-          httpMethod: 'GET'
+          httpMethod: 'GET',
+          headers: { 'x-aurora-sidecar-token': 'session-token' }
         })
       }
     })
@@ -2282,6 +2294,12 @@ describe('AuroraClient', () => {
       invoke: async (command, args) => {
         calls.push({ command, args })
         switch (command) {
+          case 'aurora_sidecar_session':
+            return { token: 'session-token' }
+          case 'aurora_sidecar_start':
+            return { running: true, mode: 'sidecar', pid: 42 }
+          case 'aurora_sidecar_stop':
+            return { running: false, mode: 'desktop-local-stopped', pid: null }
           case 'aurora_sidecar_status':
             return { running: true, mode: 'sidecar', pid: 42 }
           case 'aurora_native_capability_manifest':
@@ -2310,6 +2328,8 @@ describe('AuroraClient', () => {
     await expect(transport.getSidecarStatus()).resolves.toEqual(
       expect.objectContaining({ running: true, mode: 'sidecar' })
     )
+    await expect(transport.startSidecar()).resolves.toEqual(expect.objectContaining({ running: true }))
+    await expect(transport.stopSidecar()).resolves.toEqual(expect.objectContaining({ running: false }))
     await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
     await expect(transport.getLogTail({ lines: 10 })).resolves.toEqual({
       available: false,
@@ -2341,6 +2361,9 @@ describe('AuroraClient', () => {
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
+      'aurora_sidecar_session',
+      'aurora_sidecar_start',
+      'aurora_sidecar_stop',
       'aurora_native_capability_manifest',
       'aurora_log_tail',
       'aurora_secure_storage_get',
@@ -2351,10 +2374,14 @@ describe('AuroraClient', () => {
       'aurora_local_file_pick',
       'aurora_secure_file_handle_open'
     ])
-    expect(calls[2]?.args).toEqual({ request: { lines: 10 } })
-    expect(calls[4]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[7]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[9]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
+    expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })
+    expect(calls[5]?.args).toEqual({ request: { lines: 10 } })
+    expect(calls[6]?.args).toEqual({ key: 'session' })
+    expect(calls[7]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[9]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[10]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[12]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

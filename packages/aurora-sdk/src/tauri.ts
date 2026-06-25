@@ -12,6 +12,9 @@ export type TauriInvoke = (command: string, args?: Record<string, unknown>) => P
 
 export interface TauriCommandNames {
   request: string
+  sidecarSession: string
+  sidecarStart: string
+  sidecarStop: string
   sidecarStatus: string
   nativeCapabilityManifest: string
   logTail: string
@@ -53,6 +56,10 @@ export interface TauriLogTailResult {
   truncated: boolean
   reason?: string | null
   maxLines?: number
+}
+
+export interface TauriSidecarSession {
+  token: string
 }
 
 export interface SecureStorageGetResult {
@@ -103,6 +110,9 @@ export interface SecureFileHandleOpenOptions extends LocalFilePickOptions {
 
 const DEFAULT_COMMANDS: TauriCommandNames = {
   request: 'aurora_command',
+  sidecarSession: 'aurora_sidecar_session',
+  sidecarStart: 'aurora_sidecar_start',
+  sidecarStop: 'aurora_sidecar_stop',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
   logTail: 'aurora_log_tail',
@@ -122,6 +132,7 @@ export class TauriLocalTransport implements AuroraTransport {
   private readonly invokeImpl: TauriInvoke
   private readonly requestArgName: string
   private readonly defaultTimeoutMs: number
+  private sidecarSession: Promise<TauriSidecarSession | null> | null = null
 
   constructor(options: TauriLocalTransportOptions = {}) {
     this.invokeImpl = options.invoke ?? resolveTauriInvoke()
@@ -134,7 +145,8 @@ export class TauriLocalTransport implements AuroraTransport {
     request: AuroraTransportRequest<TPayload>
   ): Promise<AuroraTransportResponse<TData>> {
     const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs
-    const args = { [this.requestArgName]: request }
+    const sidecarSession = await this.getSidecarSession()
+    const args = { [this.requestArgName]: withSidecarSessionHeader(request, sidecarSession) }
     const context: TauriInvokeContext = { timeoutMs, method: request.method }
     if (request.signal !== undefined) context.signal = request.signal
     if (request.busTopic !== undefined) context.busTopic = request.busTopic
@@ -153,6 +165,16 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getSidecarStatus(): Promise<TauriSidecarStatus> {
     return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStatus)
+  }
+
+  async startSidecar(): Promise<TauriSidecarStatus> {
+    const commandToken = await this.requireSidecarSession()
+    return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStart, { commandToken })
+  }
+
+  async stopSidecar(): Promise<TauriSidecarStatus> {
+    const commandToken = await this.requireSidecarSession()
+    return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStop, { commandToken })
   }
 
   getNativeCapabilityManifest(): Promise<NativeCapabilityManifest> {
@@ -230,6 +252,39 @@ export class TauriLocalTransport implements AuroraTransport {
         method: context.method ?? command,
         busTopic: context.busTopic
       })
+    }
+  }
+
+  private async requireSidecarSession(): Promise<TauriSidecarSession> {
+    const session = await this.getSidecarSession()
+    if (!session) {
+      throw new AuroraError({
+        code: 'native_permission_missing',
+        message: 'Tauri sidecar session command is unavailable.'
+      })
+    }
+    return session
+  }
+
+  private async getSidecarSession(): Promise<TauriSidecarSession | null> {
+    this.sidecarSession ??= withTimeout(
+      this.invokeImpl(this.commands.sidecarSession).then((value) => value as TauriSidecarSession),
+      { command: this.commands.sidecarSession, timeoutMs: 250 }
+    ).catch(() => null)
+    return this.sidecarSession
+  }
+}
+
+function withSidecarSessionHeader<TPayload>(
+  request: AuroraTransportRequest<TPayload>,
+  session: TauriSidecarSession | null
+): AuroraTransportRequest<TPayload> {
+  if (!session?.token) return request
+  return {
+    ...request,
+    headers: {
+      ...request.headers,
+      'x-aurora-sidecar-token': session.token
     }
   }
 }

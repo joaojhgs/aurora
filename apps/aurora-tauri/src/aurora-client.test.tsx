@@ -39,6 +39,6 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Native boundary')
     expect(markup).toContain('Runtime mode')
     expect(markup).toContain('mock')
-    expect(markup).toContain('not started by TAURI-001')
+    expect(markup).toContain('not used in thin mode')
   })
 })

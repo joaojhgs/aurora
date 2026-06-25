@@ -2938,16 +2938,32 @@ export const routeExplainFixture: RouteExplainResponse = {
 export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
   platform: 'tauri-desktop',
   permissions: {
-    microphone: false,
-    notifications: true,
-    secureStorage: true,
-    mobileLocalLightRuntime: false
+    'aurora.command': true,
+    'aurora.request': true,
+    'aurora.subscribe': true,
+    'aurora.nativeCapabilityManifest': true,
+    'aurora.sidecarStatus': true,
+    'aurora.sidecarSession': true,
+    'aurora.sidecarStart': true,
+    'aurora.sidecarStop': true,
+    'aurora.shutdown': true,
+    'aurora.logTail': true,
+    'aurora.secureStorage': false,
+    'aurora.localFileRead': false,
+    'aurora.localFileWrite': false,
+    'aurora.secureFileHandle': false,
+    'aurora.shell': false,
+    'aurora.processSpawn': false
   },
   capabilities: {
-    localGateway: true,
-    sidecarSupervisor: false,
-    voiceCapture: false,
-    mobileLocalLightRuntime: false
+    'desktop.thinGateway': true,
+    'desktop.localSidecarHealth': true,
+    'desktop.logTail': false,
+    'desktop.localSidecarSupervision': true,
+    'native.secureCredentialStorage': false,
+    'native.secureFileHandles': false,
+    'native.filesystem': false,
+    'native.audio': false
   }
 }
 
