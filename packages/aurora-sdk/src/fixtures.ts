@@ -910,6 +910,145 @@ export const toolCatalogFixture = {
   secrets_redacted: true
 } as const
 
+export const configSchemaMetadataFixture = {
+  fields: [
+    {
+      key_path: 'services.gateway.api.host',
+      title: 'Gateway host',
+      description: 'Host interface used by the Gateway API.',
+      type: 'string',
+      default: '127.0.0.1',
+      current_value: '127.0.0.1',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.api.port',
+      title: 'Gateway port',
+      description: 'HTTP port exposed by the Gateway API.',
+      type: 'integer',
+      default: 8000,
+      current_value: 8000,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1, maximum: 65535 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.api.token_secret',
+      title: 'Token secret',
+      description: 'Secret used for Gateway token signing.',
+      type: 'string',
+      default: null,
+      current_value: '[REDACTED]',
+      source_layer: 'env',
+      secret: true,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway', 'auth'],
+      constraints: {},
+      choices: null
+    }
+  ],
+  secrets_redacted: true
+} as const
+
+export const configDiffPreviewFixture = {
+  valid: true,
+  diffs: [
+    {
+      key_path: 'services.gateway.api.port',
+      old_value: 8000,
+      new_value: 8080,
+      changed: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway']
+    }
+  ],
+  errors: [],
+  secrets_redacted: true
+} as const
+
+export const configVersionHistoryFixture = {
+  versions: [
+    {
+      version_id: 'cfgv-gateway-port-001',
+      timestamp: '2026-06-19T00:05:00Z',
+      key_path: 'services.gateway.api.port',
+      old_value: 7000,
+      new_value: 8000,
+      affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+      secret: false
+    },
+    {
+      version_id: 'cfgv-token-secret-001',
+      timestamp: '2026-06-19T00:04:00Z',
+      key_path: 'services.gateway.api.token_secret',
+      old_value: null,
+      new_value: '[REDACTED]',
+      affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+      secret: true
+    }
+  ],
+  secrets_redacted: true
+} as const
+
+export const configReloadImpactFixture = {
+  impacts: [
+    {
+      key_path: 'services.gateway.api.port',
+      reload_required: true,
+      restart_required: true,
+      affected_services: ['gateway'],
+      reason: 'Gateway bind address changes require a process restart.'
+    }
+  ]
+} as const
+
+export const configGetFixture = {
+  config: {
+    services: {
+      gateway: {
+        api: {
+          host: '127.0.0.1',
+          port: 8000,
+          token_secret: '[REDACTED]'
+        }
+      }
+    }
+  }
+} as const
+
+export const configValidateFixture = {
+  errors: []
+} as const
+
+export const configSetFixture = {
+  success: true,
+  previous_value: 8000
+} as const
+
+export const configRollbackFixture = {
+  success: true,
+  version_id: 'cfgv-gateway-port-001',
+  key_path: 'services.gateway.api.port',
+  rolled_back_to: 7000,
+  affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
+  error: null,
+  secrets_redacted: true
+} as const
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -938,6 +1077,14 @@ export interface MockAuroraFixtureSet {
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
   toolCatalog: typeof toolCatalogFixture
+  configGet: typeof configGetFixture
+  configValidate: typeof configValidateFixture
+  configSchemaMetadata: typeof configSchemaMetadataFixture
+  configDiffPreview: typeof configDiffPreviewFixture
+  configVersionHistory: typeof configVersionHistoryFixture
+  configReloadImpact: typeof configReloadImpactFixture
+  configSet: typeof configSetFixture
+  configRollback: typeof configRollbackFixture
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
 }
@@ -951,6 +1098,14 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
   toolCatalog: toolCatalogFixture,
+  configGet: configGetFixture,
+  configValidate: configValidateFixture,
+  configSchemaMetadata: configSchemaMetadataFixture,
+  configDiffPreview: configDiffPreviewFixture,
+  configVersionHistory: configVersionHistoryFixture,
+  configReloadImpact: configReloadImpactFixture,
+  configSet: configSetFixture,
+  configRollback: configRollbackFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture
 }

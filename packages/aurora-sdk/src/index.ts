@@ -1,5 +1,29 @@
 export { AuroraClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
+export { ConfigClient } from './config.js'
+export type {
+  ConfigChange,
+  ConfigDiffEntry,
+  ConfigDiffPreviewRequest,
+  ConfigDiffPreviewResponse,
+  ConfigFieldMetadata,
+  ConfigGetRequest,
+  ConfigGetResponse,
+  ConfigReloadImpactEntry,
+  ConfigReloadImpactRequest,
+  ConfigReloadImpactResponse,
+  ConfigRollbackRequest,
+  ConfigRollbackResponse,
+  ConfigSchemaMetadataRequest,
+  ConfigSchemaMetadataResponse,
+  ConfigSetRequest,
+  ConfigSetResponse,
+  ConfigValidateRequest,
+  ConfigValidateResponse,
+  ConfigVersionEntry,
+  ConfigVersionHistoryRequest,
+  ConfigVersionHistoryResponse
+} from './config.js'
 export {
   SCHEDULER_METHODS,
   SchedulerClient,

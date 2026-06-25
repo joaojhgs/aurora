@@ -13,8 +13,10 @@ import {
 import {
   AppShell,
   AssistantView,
+  ConfigEditorView,
   OnboardingView,
   buildOnboardingViewModel,
+  buildConfigEditorModel,
   RouteMatrix,
   StateSurface,
   assistantErrorMessage,
@@ -197,6 +199,48 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'slow' }))).toContain('timed out')
     expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
+  })
+
+  it('renders config editor schema, rollback, and AdminAction controls from SDK evidence', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = {
+      ...route(snapshot, 'config'),
+      state: 'available-local' as const,
+      disabled: false,
+      routeable: true,
+      providerLabel: 'local / Config.GetSchemaMetadata',
+      blockers: []
+    }
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('ready')
+    expect(markup).toContain('Schema-backed values')
+    expect(markup).toContain('services.gateway.api.port')
+    expect(markup).toContain('[REDACTED]')
+    expect(markup).toContain('Apply through AdminAction')
+    expect(markup).toContain('Rollback history')
+    expect(markup).toContain('cfgv-gateway-port-001')
+  })
+
+  it('keeps config editor denied states disabled without local-only fallback', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const deniedRoute = {
+      ...route(snapshot, 'config'),
+      state: 'denied' as const,
+      disabled: true,
+      providerLabel: 'local / Config denied',
+      blockers: ['permission_denied']
+    }
+    const model = await buildConfigEditorModel(client, deniedRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={deniedRoute} initialModel={model} />)
+
+    expect(model.state).toBe('denied')
+    expect(markup).toContain('Config editor unavailable')
+    expect(markup).toContain('permission_denied')
+    expect(markup).toContain('disabled=""')
   })
 })
 

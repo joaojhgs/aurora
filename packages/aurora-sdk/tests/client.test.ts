@@ -964,6 +964,101 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('loads config metadata, diff, reload impact, and history through the config namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const schema = await client.config.getSchemaMetadata({ include_values: true })
+    const diff = await client.config.previewDiff({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const impact = await client.config.previewReloadImpact({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const history = await client.config.getVersionHistory({ limit: 2 })
+
+    expect(schema.ok).toBe(true)
+    expect(schema.ok && schema.data.fields.some((field) => field.key_path === 'services.gateway.api.token_secret' && field.secret)).toBe(true)
+    expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
+    expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
+    expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+  })
+
+  it('applies config changes and rollback through AdminAction headers', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          nonce: 'nonce-config',
+          digest: 'digest-config',
+          method_id: (request.payload as { method_id: string }).method_id,
+          affected_resources: ['services.gateway.api.port'],
+          required_phrase: 'APPLY',
+          required_reason: true,
+          required_reauth: false,
+          expires_at: '2026-06-19T00:10:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          confirmation_token: 'token-config',
+          digest: 'digest-config',
+          confirmed: true,
+          expires_at: '2026-06-19T00:10:00Z',
+          audit_receipt: 'aar-config',
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Config.Set', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, previous_value: 8000 }
+      })
+      .register('Config.Rollback', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          success: true,
+          version_id: 'cfgv-gateway-port-001',
+          key_path: 'services.gateway.api.port',
+          rolled_back_to: 7000,
+          affected_sections: ['services.gateway.api'],
+          error: null,
+          secrets_redacted: true
+        }
+      })
+
+    const client = new AuroraClient({ transport })
+    await client.config.applyChange({
+      change: { key_path: 'services.gateway.api.port', value: 8080 },
+      reason: 'test change',
+      reauthConfirmed: true
+    })
+    await client.config.rollback({
+      versionId: 'cfgv-gateway-port-001',
+      reason: 'test rollback',
+      reauthConfirmed: true
+    })
+
+    const configSet = calls.find((call) => call.method === 'Config.Set')
+    const rollback = calls.find((call) => call.method === 'Config.Rollback')
+    expect(configSet?.headers).toMatchObject({ 'X-Aurora-AdminAction-Token': 'token-config' })
+    expect(rollback?.headers).toMatchObject({ 'X-Aurora-AdminAction-Id': 'aa-config' })
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(2)
+  })
+
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
       .register('Tooling.RequestApproval', {

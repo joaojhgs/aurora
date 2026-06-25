@@ -48,6 +48,14 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Config.Get', () => cloneFixture(fixtures.configGet))
+      .register('Config.Validate', () => cloneFixture(fixtures.configValidate))
+      .register('Config.GetSchemaMetadata', () => cloneFixture(fixtures.configSchemaMetadata))
+      .register('Config.PreviewDiff', () => cloneFixture(fixtures.configDiffPreview))
+      .register('Config.GetVersionHistory', () => cloneFixture(fixtures.configVersionHistory))
+      .register('Config.PreviewReloadImpact', () => cloneFixture(fixtures.configReloadImpact))
+      .register('Config.Set', () => cloneFixture(fixtures.configSet))
+      .register('Config.Rollback', () => cloneFixture(fixtures.configRollback))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
         session_id: mockSessionId(request.payload),
