@@ -10,11 +10,13 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   AuditLogResponse,
+  DeviceListResponse,
   ModelRuntimeCatalogResponse,
   NativeCapabilityManifest,
   PrincipalListResponse,
   PrincipalResponse,
   RouteExplainResponse,
+  TokenListResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type {
@@ -241,6 +243,54 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'ListTokens',
+          summary: 'List tokens, optionally filtered by principal or device',
+          bus_topic: 'Auth.ListTokens',
+          exposure: 'both',
+          input_model: 'TokenListRequest',
+          output_model: 'TokenListResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'RevokeToken',
+          summary: 'Revoke a token',
+          bus_topic: 'Auth.RevokeToken',
+          exposure: 'both',
+          input_model: 'TokenRevokeRequest',
+          output_model: 'TokenRevokeResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'ListDevices',
+          summary: 'List devices, optionally filtered by principal',
+          bus_topic: 'Auth.ListDevices',
+          exposure: 'both',
+          input_model: 'DeviceListRequest',
+          output_model: 'DeviceListResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'DeleteDevice',
+          summary: 'Delete a device',
+          bus_topic: 'Auth.DeleteDevice',
+          exposure: 'both',
+          input_model: 'DeviceDeleteRequest',
+          output_model: 'DeviceDeleteResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'AuditLog',
           summary: 'Get audit log entries',
           bus_topic: 'Auth.AuditLog',
@@ -257,7 +307,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
   ],
   digest: 'fixture',
   service_count: 3,
-  method_count: 16
+  method_count: 20
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -888,6 +938,50 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       summary: 'Patch principal permissions through AdminAction.'
     }),
     action({
+      action_id: 'auth-list-tokens',
+      module: 'Auth',
+      method: 'ListTokens',
+      topic: 'Auth.ListTokens',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'credential' },
+      summary: 'List token/session evidence through Auth.'
+    }),
+    action({
+      action_id: 'auth-revoke-token',
+      module: 'Auth',
+      method: 'RevokeToken',
+      topic: 'Auth.RevokeToken',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'credential', approval_required: true },
+      summary: 'Revoke token through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-list-devices',
+      module: 'Auth',
+      method: 'ListDevices',
+      topic: 'Auth.ListDevices',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'credential' },
+      summary: 'List trusted devices and session evidence through Auth.'
+    }),
+    action({
+      action_id: 'auth-delete-device',
+      module: 'Auth',
+      method: 'DeleteDevice',
+      topic: 'Auth.DeleteDevice',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'credential', approval_required: true },
+      summary: 'Delete device through AdminAction.'
+    }),
+    action({
       action_id: 'auth-audit-log',
       module: 'Auth',
       method: 'AuditLog',
@@ -933,6 +1027,10 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.DeletePrincipal': ['auth-delete-principal'],
     'Auth.SetPermissions': ['auth-set-permissions'],
     'Auth.PatchPermissions': ['auth-patch-permissions'],
+    'Auth.ListTokens': ['auth-list-tokens'],
+    'Auth.RevokeToken': ['auth-revoke-token'],
+    'Auth.ListDevices': ['auth-list-devices'],
+    'Auth.DeleteDevice': ['auth-delete-device'],
     'Auth.AuditLog': ['auth-audit-log']
   },
   secrets_redacted: true
@@ -1123,6 +1221,67 @@ export const principalListFixture: PrincipalListResponse = {
       permissions: ['Gateway.use', 'TTS.use'],
       is_admin: false,
       created_at: '2026-06-19T00:30:00Z'
+    }
+  ]
+}
+
+export const tokenListFixture: TokenListResponse = {
+  tokens: [
+    {
+      id: 'token-studio-mac-active',
+      prefix: 'aur_stu',
+      device_id: 'device-studio-mac',
+      user_id: 'principal-owner',
+      scopes: ['*'],
+      created_at: '2026-06-19T00:35:00Z',
+      expires_at: '2026-07-19T00:35:00Z'
+    },
+    {
+      id: 'token-ops-tablet-active',
+      prefix: 'aur_ops',
+      device_id: 'device-ops-tablet',
+      user_id: 'principal-ops',
+      scopes: ['Auth.manage', 'Gateway.manage'],
+      created_at: '2026-06-19T00:45:00Z',
+      expires_at: '2026-07-19T00:45:00Z'
+    },
+    {
+      id: 'token-assistant-phone-expired',
+      prefix: 'aur_ast',
+      device_id: 'device-assistant-phone',
+      user_id: 'principal-assistant',
+      scopes: ['Orchestrator.use', 'Tooling.use'],
+      created_at: '2026-05-19T00:55:00Z',
+      expires_at: '2026-06-20T00:55:00Z'
+    }
+  ]
+}
+
+export const deviceListFixture: DeviceListResponse = {
+  devices: [
+    {
+      id: 'device-studio-mac',
+      user_id: 'principal-owner',
+      name: 'Studio Mac',
+      is_trusted: true,
+      created_at: '2026-06-19T00:30:00Z',
+      last_seen: '2026-06-25T02:30:00Z'
+    },
+    {
+      id: 'device-ops-tablet',
+      user_id: 'principal-ops',
+      name: 'Ops tablet',
+      is_trusted: true,
+      created_at: '2026-06-19T00:40:00Z',
+      last_seen: '2026-06-24T20:15:00Z'
+    },
+    {
+      id: 'device-assistant-phone',
+      user_id: 'principal-assistant',
+      name: 'Assistant phone',
+      is_trusted: false,
+      created_at: '2026-06-19T00:50:00Z',
+      last_seen: null
     }
   ]
 }
@@ -1444,6 +1603,98 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:603'
+    },
+    {
+      module: 'Auth',
+      name: 'ListTokens',
+      summary: 'List tokens, optionally filtered by principal or device',
+      bus_topic: 'Auth.ListTokens',
+      routePath: '/api/Auth/ListTokens',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenListRequest',
+      output_model: 'TokenListResponse',
+      input_schema: {
+        title: 'TokenListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:636'
+    },
+    {
+      module: 'Auth',
+      name: 'RevokeToken',
+      summary: 'Revoke a token',
+      bus_topic: 'Auth.RevokeToken',
+      routePath: '/api/Auth/RevokeToken',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'TokenRevokeRequest',
+      output_model: 'TokenRevokeResponse',
+      input_schema: {
+        title: 'TokenRevokeRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenRevokeResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:713'
+    },
+    {
+      module: 'Auth',
+      name: 'ListDevices',
+      summary: 'List devices, optionally filtered by principal',
+      bus_topic: 'Auth.ListDevices',
+      routePath: '/api/Auth/ListDevices',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'DeviceListRequest',
+      output_model: 'DeviceListResponse',
+      input_schema: {
+        title: 'DeviceListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'DeviceListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:727'
+    },
+    {
+      module: 'Auth',
+      name: 'DeleteDevice',
+      summary: 'Delete a device',
+      bus_topic: 'Auth.DeleteDevice',
+      routePath: '/api/Auth/DeleteDevice',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'DeviceDeleteRequest',
+      output_model: 'DeviceDeleteResponse',
+      input_schema: {
+        title: 'DeviceDeleteRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'DeviceDeleteResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:751'
     },
     {
       module: 'Auth',
@@ -2439,6 +2690,8 @@ export interface MockAuroraFixtureSet {
   memoryExport: DBRAGExportNamespaceResponse
   memoryImport: DBRAGImportNamespaceResponse
   principals: PrincipalListResponse
+  tokens: TokenListResponse
+  devices: DeviceListResponse
   auditLog: AuditLogResponse
   backendInventory: BackendInventory
   gatewayBuiltins: GatewayBuiltinRouteDescriptor[]
@@ -2459,6 +2712,8 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   memoryExport: memoryExportFixture,
   memoryImport: memoryImportFixture,
   principals: principalListFixture,
+  tokens: tokenListFixture,
+  devices: deviceListFixture,
   auditLog: auditLogFixture,
   backendInventory: backendInventoryFixture,
   gatewayBuiltins: gatewayBuiltinRoutesFixture

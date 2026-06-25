@@ -56,6 +56,10 @@ import type {
   AuthValidateTokenRequest,
   AuthValidateTokenResponse,
   AuthWhoAmIResponse,
+  DeviceDeleteRequest,
+  DeviceDeleteResponse,
+  DeviceListRequest,
+  DeviceListResponse,
   AttachmentContextIngestRequest,
   AttachmentContextIngestResponse,
   AssistantSendMessageRequest,
@@ -105,6 +109,10 @@ import type {
   RouteExplainResponse,
   RoutePolicyEvaluation,
   RoutePolicyInput,
+  TokenListRequest,
+  TokenListResponse,
+  TokenRevokeRequest,
+  TokenRevokeResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type {
@@ -375,6 +383,38 @@ export class AuthApiClient {
       AUTH_METHODS.patchPermissions,
       payload,
       { path: routePath('Auth', 'PatchPermissions') }
+    )
+  }
+
+  listTokens(payload: TokenListRequest = {}): Promise<AuroraResponse<TokenListResponse>> {
+    return this.client.requestResult<TokenListResponse, TokenListRequest>(
+      AUTH_METHODS.listTokens,
+      payload,
+      { path: routePath('Auth', 'ListTokens') }
+    )
+  }
+
+  revokeToken(payload: TokenRevokeRequest): Promise<AuroraResponse<TokenRevokeResponse>> {
+    return this.client.requestResult<TokenRevokeResponse, TokenRevokeRequest>(
+      AUTH_METHODS.revokeToken,
+      payload,
+      { path: routePath('Auth', 'RevokeToken') }
+    )
+  }
+
+  listDevices(payload: DeviceListRequest = {}): Promise<AuroraResponse<DeviceListResponse>> {
+    return this.client.requestResult<DeviceListResponse, DeviceListRequest>(
+      AUTH_METHODS.listDevices,
+      payload,
+      { path: routePath('Auth', 'ListDevices') }
+    )
+  }
+
+  deleteDevice(payload: DeviceDeleteRequest): Promise<AuroraResponse<DeviceDeleteResponse>> {
+    return this.client.requestResult<DeviceDeleteResponse, DeviceDeleteRequest>(
+      AUTH_METHODS.deleteDevice,
+      payload,
+      { path: routePath('Auth', 'DeleteDevice') }
     )
   }
 

@@ -455,6 +455,58 @@ export interface PermissionPatchResponse {
   success: boolean
 }
 
+export interface TokenListRequest {
+  principal_id?: string | null
+  device_id?: string | null
+}
+
+export interface TokenResponse {
+  id: string
+  prefix: string
+  device_id?: string | null
+  user_id?: string | null
+  scopes: string[]
+  created_at?: string | null
+  expires_at?: string | null
+}
+
+export interface TokenListResponse {
+  tokens: TokenResponse[]
+}
+
+export interface TokenRevokeRequest {
+  token_id: string
+}
+
+export interface TokenRevokeResponse {
+  success: boolean
+}
+
+export interface DeviceListRequest {
+  principal_id?: string | null
+}
+
+export interface DeviceResponse {
+  id: string
+  user_id?: string | null
+  name: string
+  is_trusted: boolean
+  created_at?: string | null
+  last_seen?: string | null
+}
+
+export interface DeviceListResponse {
+  devices: DeviceResponse[]
+}
+
+export interface DeviceDeleteRequest {
+  device_id: string
+}
+
+export interface DeviceDeleteResponse {
+  success: boolean
+}
+
 export interface AuditLogRequest {
   limit?: number
   offset?: number

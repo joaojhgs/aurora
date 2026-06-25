@@ -44,6 +44,10 @@ export const AUTH_METHODS = {
   deletePrincipal: 'Auth.DeletePrincipal',
   setPermissions: 'Auth.SetPermissions',
   patchPermissions: 'Auth.PatchPermissions',
+  listTokens: 'Auth.ListTokens',
+  revokeToken: 'Auth.RevokeToken',
+  listDevices: 'Auth.ListDevices',
+  deleteDevice: 'Auth.DeleteDevice',
   auditLog: 'Auth.AuditLog'
 } as const
 

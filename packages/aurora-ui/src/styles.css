@@ -591,11 +591,34 @@ button, input, select, textarea { font: inherit; }
 .aui-rbac-audit span, .aui-rbac-audit strong, .aui-rbac-audit code, .aui-rbac-audit small { min-width: 0; overflow-wrap: anywhere; }
 .aui-rbac-audit span, .aui-rbac-audit small { color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
 .aui-rbac-audit small { grid-column: 1 / -1; }
+.aui-admin-devices { display: grid; gap: 1rem; }
+.aui-device-controls { display: grid; gap: .85rem; padding: .9rem; }
+.aui-device-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-device-controls textarea { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem .7rem; background: var(--aui-surface); color: var(--aui-ink); resize: vertical; text-transform: none; }
+.aui-device-controls textarea:disabled, .aui-admin-devices button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-device-capability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.aui-device-capability { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; align-items: start; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .65rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
+.aui-device-capability strong, .aui-device-capability span { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-device-capability span { margin-top: .15rem; color: var(--aui-muted); font-size: .8rem; line-height: 1.35; }
+.aui-device-identity { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+.aui-device-identity strong, .aui-device-identity span { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-device-identity span { color: var(--aui-muted); font-size: .78rem; }
+.aui-device-icon { display: grid; flex: 0 0 2.2rem; width: 2.2rem; height: 2.2rem; place-items: center; border-radius: .5rem; background: var(--aui-surface-2); color: var(--aui-primary); }
+.aui-device-token-list { display: grid; gap: .4rem; margin: .55rem 0 0; padding: 0; list-style: none; }
+.aui-device-token-list li { display: grid; grid-template-columns: auto minmax(0, .7fr) minmax(0, 1fr); gap: .45rem; align-items: center; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .45rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
+.aui-device-token-list span, .aui-device-token-list small { min-width: 0; overflow-wrap: anywhere; }
+.aui-device-token-list small { color: var(--aui-muted); font-size: .76rem; }
+.aui-device-facts { display: grid; gap: .45rem; margin: 0; }
+.aui-device-facts div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .45rem; }
+.aui-device-facts dt { color: var(--aui-muted); font-size: .74rem; }
+.aui-device-facts dd { margin: 0; overflow-wrap: anywhere; }
+.aui-danger-button { display: inline-flex; align-items: center; gap: .38rem; color: var(--aui-danger); }
 
 @media (max-width: 900px) {
   .aui-admin-header { display: grid; }
   .aui-admin-badges { justify-content: flex-start; }
   .aui-admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-device-capability-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-rbac-audit li { grid-template-columns: minmax(0, 1fr); }
   .aui-rbac-audit small { grid-column: auto; }
 }
@@ -603,4 +626,5 @@ button, input, select, textarea { font: inherit; }
 @media (max-width: 620px) {
   .aui-admin-metrics { grid-template-columns: minmax(0, 1fr); }
   .aui-service-drawer dl { grid-template-columns: minmax(0, 1fr); }
+  .aui-device-facts div, .aui-device-token-list li { grid-template-columns: minmax(0, 1fr); }
 }

@@ -28,6 +28,7 @@ import {
   AdminOverviewView,
   AdminServicesView,
   AdminRbacView,
+  AdminDevicesView,
   AppShell,
   AssistantView,
   ModelsView,
@@ -38,6 +39,8 @@ import {
   RouteSheet,
   buildAdminServicesSnapshot,
   buildAdminRbacSnapshot,
+  buildAdminDevicesSnapshot,
+  buildDeviceDeleteAdminAction,
   buildRbacPermissionPatchAction,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
@@ -798,6 +801,85 @@ describe('Aurora production shell', () => {
       />
     )
     expect(rollbackMarkup).toContain('Rollback required after AdminAction submit failed')
+  })
+
+  it('wires device/session management from AuroraClient Auth resources', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminDevicesView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.devices.map((device) => device.id)).toContain('device-studio-mac')
+    expect(snapshot.devices.some((device) => device.activeSessionCount > 0)).toBe(true)
+    expect(snapshot.devices.some((device) => device.deleteAction?.methodId === 'Auth.DeleteDevice')).toBe(true)
+    expect(markup).toContain('Devices and sessions')
+    expect(markup).toContain('token-backed active sessions')
+    expect(markup).toContain('AdminAction boundary')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('builds device delete mutations as AdminAction requests', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
+    expect(device).toBeTruthy()
+
+    const action = buildDeviceDeleteAdminAction(device!, 'retire lost laptop')
+    expect(action.methodId).toBe('Auth.DeleteDevice')
+    expect(action.payload).toEqual({ device_id: 'device-studio-mac' })
+    expect(action.reason).toBe('retire lost laptop')
+    expect(action.reauthConfirmed).toBe(true)
+    expect(action.affectedResources).toEqual(expect.arrayContaining(['device:device-studio-mac', 'device_tokens', 'active_sessions']))
+  })
+
+  it('renders device loading, empty, denied, degraded, unavailable, optimistic, rollback, and capability-gated states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminDevicesView snapshot={devicesLoadingSnapshot()} />)
+    expect(loadingMarkup).toContain('Loading devices')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.ListDevices', () => ({ devices: [] }))
+    emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
+    const emptySnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={emptySnapshot} />)).toContain('No registered devices')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.ListDevices', 'permission', 'device access denied')
+    const deniedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={deniedSnapshot} />)).toContain('device access denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Auth.ListTokens', 'token service unavailable')
+    const degradedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={degradedSnapshot} />)).toContain('token service unavailable')
+
+    const unavailableSnapshot = await buildAdminDevicesSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .lose('Auth.ListDevices')
+          .lose('Auth.ListTokens')
+          .lose('Gateway.GetCapabilityCatalog')
+      })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={unavailableSnapshot} />)).toContain('Auth device/session SDK resources are unavailable')
+
+    const optimisticMarkup = renderToStaticMarkup(
+      <AdminDevicesView snapshot={await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))} optimisticDeviceId="device-studio-mac" />
+    )
+    expect(optimisticMarkup).toContain('AdminAction submitted for device-studio-mac')
+
+    const rollbackMarkup = renderToStaticMarkup(
+      <AdminDevicesView snapshot={devicesLoadingSnapshot()} mutationError="Backend rejected the AdminAction confirmation token." />
+    )
+    expect(rollbackMarkup).toContain('Rollback required after AdminAction device deletion failed')
+
+    const gatedTransport = new MockAuroraTransport()
+    gatedTransport.register('Gateway.GetCapabilityCatalog', () => deviceCatalogWithoutDelete())
+    const gatedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: gatedTransport }))
+    expect(gatedSnapshot.deleteState).toBe('unsupported')
+    expect(gatedSnapshot.devices.every((device) => device.deleteAction === null)).toBe(true)
+    expect(renderToStaticMarkup(<AdminDevicesView snapshot={gatedSnapshot} />)).toContain('Auth.DeleteDevice is not advertised')
   })
 
   it('renders pairing queue states without exposing pairing codes', () => {
@@ -2079,4 +2161,31 @@ function rbacLoadingSnapshot() {
     error: null,
     evidenceSource: 'pending AuroraClient SDK calls'
   }
+}
+
+function devicesLoadingSnapshot() {
+  return {
+    loadState: 'loading' as const,
+    generatedAt: null,
+    secretsRedacted: true,
+    devices: [],
+    listState: 'pending' as const,
+    listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
+    tokenState: 'pending' as const,
+    tokenReason: 'Loading token/session evidence through AuroraClient.',
+    deleteState: 'pending' as const,
+    deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
+    nativePlatform: null,
+    nativeCapabilities: [],
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending AuroraClient SDK calls'
+  }
+}
+
+function deviceCatalogWithoutDelete(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityGraphCatalogFixture)
+  catalog.actions = catalog.actions.filter((action) => action.topic !== 'Auth.DeleteDevice')
+  delete catalog.action_index['Auth.DeleteDevice']
+  return catalog
 }
