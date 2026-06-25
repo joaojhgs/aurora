@@ -118,6 +118,7 @@ export {
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
+  schedulerJobsFixture,
   supportBundleFixture,
   toolCatalogFixture,
   uiMockReferenceFixtureSummary

@@ -15,6 +15,7 @@ import {
   modelRuntimeCatalogFixture,
   normalizeToolCatalog,
   routeExplainFixture,
+  schedulerJobsFixture,
   toolCatalogFixture,
   type AdminOverviewManifest,
   type CapabilityActionInfo,
@@ -32,6 +33,7 @@ import {
   AdminRbacView,
   AdminDevicesView,
   AdminAuditView,
+  AdminSchedulerView,
   AppShell,
   AssistantView,
   BackupRestoreView,
@@ -47,6 +49,7 @@ import {
   buildAdminRbacSnapshot,
   buildAdminDevicesSnapshot,
   buildAdminAuditSnapshot,
+  buildAdminSchedulerSnapshot,
   buildAuditExport,
   buildDeviceDeleteAdminAction,
   buildRbacPermissionPatchAction,
@@ -885,6 +888,96 @@ describe('Aurora production shell', () => {
     const disabledSnapshot = await buildAdminPluginsSnapshot(client, disabledRoute)
     expect(disabledSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Tooling.manage')
+  })
+
+  it('wires scheduler jobs, ownership states, and delegated target evidence from AuroraClient', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      explanation: 'Backend catalog reports Scheduler.ListJobs as routeable.',
+      requiresAdminAction: true
+    })
+    const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute)
+    const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.totals).toEqual({
+      local: 1,
+      delegatedOwned: 1,
+      remoteRunning: 1,
+      foreignDenied: 1
+    })
+    expect(snapshot.jobs.map((job) => job.ownership)).toEqual(expect.arrayContaining([
+      'local-owned',
+      'delegated-owned',
+      'remote-running',
+      'foreign-denied'
+    ]))
+    expect(snapshot.jobs.flatMap((job) => job.operationControls).every((control) => control.requiresAdminAction)).toBe(true)
+    expect(markup).toContain('Scheduler jobs')
+    expect(markup).toContain('Delegated by this node')
+    expect(markup).toContain('Running on remote peer')
+    expect(markup).toContain('Denied foreign namespace')
+    expect(markup).toContain('AdminAction')
+    expect(markup).toContain('approval token present')
+    expect(markup).toContain('policy-remote-index')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps scheduler create and job mutations AdminAction-gated by advertised registry methods', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      requiresAdminAction: true
+    })
+    const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute)
+    const delegatedJob = snapshot.jobs.find((job) => job.ownership === 'delegated-owned')
+    const deniedJob = snapshot.jobs.find((job) => job.ownership === 'foreign-denied')
+    const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.createControl.available).toBe(true)
+    expect(snapshot.createControl.requiresAdminAction).toBe(true)
+    expect(snapshot.createControl.targetOptions.map((option) => option.id)).toEqual(expect.arrayContaining(['local-peer', 'peer-studio-gpu']))
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'cancel')?.available).toBe(true)
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'pause')?.available).toBe(true)
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'resume')?.available).toBe(false)
+    expect(deniedJob?.operationControls.every((control) => !control.available)).toBe(true)
+    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('target selector')
+    expect(markup).toContain('delegated permissions')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('renders scheduler disabled and SDK error states without fake local state', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      requiresAdminAction: true
+    })
+    const disabledRoute = { ...schedulerRoute, disabled: true, state: 'denied' as const, blockers: ['missing:Scheduler.manage'] }
+    const disabledSnapshot = await buildAdminSchedulerSnapshot(client, disabledRoute)
+    expect(disabledSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Scheduler.manage')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Scheduler.ListJobs', 'permission', 'scheduler list denied')
+    const deniedSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: deniedTransport }), schedulerRoute)
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={deniedSnapshot} />)).toContain('scheduler list denied')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Scheduler.ListJobs', () => ({ jobs: [], total: 0 }))
+    const emptySnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: emptyTransport }), schedulerRoute)
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={emptySnapshot} />)).toContain('No scheduler jobs')
+
+    const customTransport = new MockAuroraTransport()
+    customTransport.register('Scheduler.ListJobs', () => schedulerJobsFixture)
+    const customSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: customTransport }), schedulerRoute)
+    expect(customSnapshot.jobs).toHaveLength(schedulerJobsFixture.jobs.length)
   })
 
   it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
@@ -2027,14 +2120,15 @@ function streamUpdate(textDelta: string) {
   }
 }
 
-function enabledRoute(match: ReturnType<typeof route>) {
+function enabledRoute(match: ReturnType<typeof route>, overrides: Partial<ReturnType<typeof route>> = {}) {
   return {
     ...match,
     state: 'available-local' as const,
     disabled: false,
     providerLabel: 'local / Tooling.GetToolCatalog',
     blockers: [],
-    routeable: true
+    routeable: true,
+    ...overrides
   }
 }
 
