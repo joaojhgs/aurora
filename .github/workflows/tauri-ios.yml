@@ -62,9 +62,9 @@ jobs:
       - name: Initialize Tauri iOS project
         run: pnpm --filter @aurora/tauri-ui tauri ios init
 
-      - name: Build Tauri iOS app
+      - name: Build Tauri iOS simulator app
         env:
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
-        run: pnpm --filter @aurora/tauri-ui tauri ios build
+        run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim

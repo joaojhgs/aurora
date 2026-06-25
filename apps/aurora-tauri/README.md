@@ -71,7 +71,7 @@ pnpm --filter @aurora/tauri-ui tauri ios init
 pnpm --filter @aurora/tauri-ui tauri ios build
 ```
 
-The `Tauri iOS Baseline` GitHub Actions workflow runs this baseline on macOS with Xcode, CocoaPods, and the required Rust iOS targets. Use that workflow's `macOS Xcode Tauri iOS init and build` job as IOS-001 build evidence for pull requests. The CI baseline disables Xcode code signing for the build step; App Store/TestFlight signing remains a separate release dry-run gate once Apple team credentials and native iOS targets are ready.
+The `Tauri iOS Baseline` GitHub Actions workflow runs this baseline on macOS with Xcode, CocoaPods, and the required Rust iOS targets. Use that workflow's `macOS Xcode Tauri iOS init and build` job as IOS-001 build evidence for pull requests. The CI baseline builds the unsigned iOS simulator target with `pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim`; the default device/archive build requires Apple signing credentials and remains a separate App Store/TestFlight release dry-run gate once Apple team credentials and native iOS targets are ready.
 
 After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
 
