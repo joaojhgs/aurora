@@ -33,7 +33,22 @@ export const AUTH_METHODS = {
   whoAmI: 'Auth.WhoAmI',
   pairingStart: 'Auth.PairingStart',
   pairingConnect: 'Auth.PairingConnect',
-  pairingExchange: 'Auth.PairingExchange'
+  pairingExchange: 'Auth.PairingExchange',
+  listPendingPairings: 'Auth.ListPendingPairings',
+  pairingApprove: 'Auth.PairingApprove',
+  pairingDeny: 'Auth.PairingDeny',
+  listPrincipals: 'Auth.ListPrincipals',
+  createPrincipal: 'Auth.CreatePrincipal',
+  getPrincipal: 'Auth.GetPrincipal',
+  updatePrincipal: 'Auth.UpdatePrincipal',
+  deletePrincipal: 'Auth.DeletePrincipal',
+  setPermissions: 'Auth.SetPermissions',
+  patchPermissions: 'Auth.PatchPermissions',
+  listTokens: 'Auth.ListTokens',
+  revokeToken: 'Auth.RevokeToken',
+  listDevices: 'Auth.ListDevices',
+  deleteDevice: 'Auth.DeleteDevice',
+  auditLog: 'Auth.AuditLog'
 } as const
 
 export const TOOLING_METHODS = {
@@ -47,6 +62,8 @@ export const TOOLING_METHODS = {
 export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
   externalUserInput: 'Orchestrator.ExternalUserInput',
+  ingestContext: 'Orchestrator.IngestContext',
+  interrupt: 'Orchestrator.Interrupt',
   toolResult: 'Orchestrator.ToolResult',
   response: 'Orchestrator.Response'
 } as const

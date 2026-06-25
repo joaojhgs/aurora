@@ -7,7 +7,14 @@ import type {
   CapabilityProviderCandidate,
   NativeCapabilityManifest
 } from '@aurora/client'
-import { auroraNavSections, navItemSnapshot, type AuroraNavItem, type AuroraNavItemSnapshot } from './nav'
+import {
+  auroraAssistantCancellationItem,
+  auroraAssistantVoiceItems,
+  auroraNavSections,
+  navItemSnapshot,
+  type AuroraNavItem,
+  type AuroraNavItemSnapshot
+} from './nav'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
 
@@ -57,8 +64,20 @@ export interface AuroraShellSnapshot {
   blockedCount: number
   nativePlatform: string
   nativeAvailable: boolean
+  nativePermissions: Array<{ name: string; granted: boolean }>
+  nativeCapabilities: Array<{ name: string; enabled: boolean }>
   routes: RouteAvailability[]
+  assistantCancellationRoute: RouteAvailability | null
+  assistantVoiceRoutes: AssistantVoiceRoutes
   error: string | null
+}
+
+export interface AssistantVoiceRoutes {
+  transcription: RouteAvailability
+  wakeProcess: RouteAvailability
+  wakeControl: RouteAvailability
+  ttsSynthesize: RouteAvailability
+  ttsStop: RouteAvailability
 }
 
 export const loadingShellSnapshot: AuroraShellSnapshot = {
@@ -74,7 +93,11 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   blockedCount: 0,
   nativePlatform: 'unknown',
   nativeAvailable: false,
+  nativePermissions: [],
+  nativeCapabilities: [],
   routes: [],
+  assistantCancellationRoute: null,
+  assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
   error: null
 }
 
@@ -98,6 +121,12 @@ export function snapshotFromGraph(
   const routes = auroraNavSections.flatMap((section) =>
     section.items.map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
   )
+  const assistantCancellationRoute = routeAvailability(
+    auroraAssistantCancellationItem,
+    graph.explain(featureIdForNavItem(auroraAssistantCancellationItem)),
+    native
+  )
+  const assistantVoiceRoutes = assistantVoiceRoutesFromGraph(graph, native)
   return {
     loadState: 'ready',
     nodeName: graph.localNodeName || 'Aurora node',
@@ -111,7 +140,11 @@ export function snapshotFromGraph(
     blockedCount: routes.filter((route) => route.disabled).length,
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
+    nativePermissions: nativePermissionEntries(native?.permissions),
+    nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
     routes,
+    assistantCancellationRoute,
+    assistantVoiceRoutes,
     error: null
   }
 }
@@ -134,6 +167,22 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
         requiresAdminAction: item.methodType === 'manage'
       }))
   )
+  const assistantCancellationRoute: RouteAvailability = {
+    item: navItemSnapshot(auroraAssistantCancellationItem),
+    state: 'unsupported',
+    explanation: 'Capability state could not be loaded from AuroraClient.',
+    providerLabel: 'No backend evidence',
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    candidateProviders: [],
+    evidenceSources: ['AuroraClient error'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: false
+  }
+  const assistantVoiceRoutes = errorAssistantVoiceRoutes()
   return {
     ...loadingShellSnapshot,
     loadState: 'error',
@@ -143,7 +192,78 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     routeCount: routes.length,
     blockedCount: routes.length,
     error: errorMessage(error),
-    routes
+    routes,
+    assistantCancellationRoute,
+    assistantVoiceRoutes
+  }
+}
+
+function assistantVoiceRoutesFromGraph(
+  graph: CapabilityGraph,
+  native: NativeCapabilityManifest | null
+): AssistantVoiceRoutes {
+  return {
+    transcription: routeAvailability(
+      auroraAssistantVoiceItems.transcription,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.transcription)),
+      native
+    ),
+    wakeProcess: routeAvailability(
+      auroraAssistantVoiceItems.wakeProcess,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.wakeProcess)),
+      native
+    ),
+    wakeControl: routeAvailability(
+      auroraAssistantVoiceItems.wakeControl,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.wakeControl)),
+      native
+    ),
+    ttsSynthesize: routeAvailability(
+      auroraAssistantVoiceItems.ttsSynthesize,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsSynthesize)),
+      native
+    ),
+    ttsStop: routeAvailability(
+      auroraAssistantVoiceItems.ttsStop,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsStop)),
+      native
+    )
+  }
+}
+
+function emptyAssistantVoiceRoutes(): AssistantVoiceRoutes {
+  return unsupportedAssistantVoiceRoutes('pending SDK request')
+}
+
+function errorAssistantVoiceRoutes(): AssistantVoiceRoutes {
+  return unsupportedAssistantVoiceRoutes('AuroraClient error')
+}
+
+function unsupportedAssistantVoiceRoutes(evidence: string): AssistantVoiceRoutes {
+  return {
+    transcription: unsupportedVoiceRoute(auroraAssistantVoiceItems.transcription, evidence),
+    wakeProcess: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeProcess, evidence),
+    wakeControl: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeControl, evidence),
+    ttsSynthesize: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsSynthesize, evidence),
+    ttsStop: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsStop, evidence)
+  }
+}
+
+function unsupportedVoiceRoute(item: AuroraNavItem, evidence: string): RouteAvailability {
+  return {
+    item: navItemSnapshot(item),
+    state: item.fallbackState,
+    explanation: 'Voice capability state could not be loaded from AuroraClient.',
+    providerLabel: `${item.expectedTask} pending`,
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    candidateProviders: [],
+    evidenceSources: [evidence],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: item.methodType === 'manage'
   }
 }
 
@@ -340,6 +460,18 @@ function repairAction(
 
 function sortedUnique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].sort()
+}
+
+function nativePermissionEntries(values: Record<string, boolean> | undefined): Array<{ name: string; granted: boolean }> {
+  return Object.entries(values ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, granted]) => ({ name, granted }))
+}
+
+function nativeCapabilityEntries(values: Record<string, boolean> | undefined): Array<{ name: string; enabled: boolean }> {
+  return Object.entries(values ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, enabled]) => ({ name, enabled }))
 }
 
 function nullToPending(value: string | null): string {

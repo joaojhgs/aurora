@@ -109,7 +109,7 @@ const transport = new TauriLocalTransport({
   // Optional in tests; production Tauri shells can rely on window.__TAURI__.core.invoke.
   invoke: window.__TAURI__.core.invoke,
   commands: {
-    request: 'aurora_request',
+    request: 'aurora_command',
     sidecarStatus: 'aurora_sidecar_status',
     nativeCapabilityManifest: 'aurora_native_capability_manifest'
   }
@@ -148,7 +148,7 @@ const picked = await transport.pickLocalFile({ filters: [{ name: 'Audio', extens
 const file = picked.cancelled ? null : await transport.readLocalFile(picked.paths[0]!, { encoding: 'base64' })
 ```
 
-Internal bus access is explicit to the Tauri command implementation. The SDK preserves `method`, `busTopic`, payload, timeout, audit hints, permission casing, and returned correlation/redaction metadata when it invokes `aurora_request`.
+Internal bus access is explicit to the Tauri command implementation. The SDK preserves `method`, `busTopic`, payload, timeout, audit hints, permission casing, and returned correlation/redaction metadata when it invokes `aurora_command`.
 
 ## Mesh
 
@@ -381,7 +381,7 @@ Tauri local shells expose the same API through an IPC command that returns backe
 ```ts
 const transport = new TauriLocalTransport({
   invoke: window.__TAURI__.core.invoke,
-  commands: { eventSubscribe: 'aurora_event_subscribe' }
+  commands: { eventSubscribe: 'aurora_subscribe' }
 })
 const client = new AuroraClient({ transport })
 

@@ -11,12 +11,32 @@ import {
 } from './transport.js'
 import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
-import { AUTH_METHODS, describeRegistry, GATEWAY_METHODS, ORCHESTRATOR_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
+import { MemoryClient } from './memory.js'
+import {
+  AUTH_METHODS,
+  describeRegistry,
+  GATEWAY_METHODS,
+  ORCHESTRATOR_METHODS,
+  ORCHESTRATOR_MODEL_METHODS,
+  TOOLING_METHODS,
+  routePath
+} from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { ConfigClient } from './config.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { SchedulerClient } from './scheduler.js'
+import {
+  loadToolApprovalCards,
+  normalizeToolCatalog,
+  submitToolDenialDecision,
+  submitToolApprovalDecision,
+  type ToolApprovalCardModel,
+  type ToolApprovalDenialInput,
+  type ToolApprovalDecisionInput,
+  type ToolApprovalDecisionResult,
+  type ToolCatalogResponse
+} from './tools.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -24,15 +44,30 @@ import type {
   AuthLoginResponse,
   AuthPairingConnectRequest,
   AuthPairingConnectResponse,
+  AuthPairingApproveRequest,
+  AuthPairingApproveResponse,
+  AuthPairingDenyRequest,
+  AuthPairingDenyResponse,
   AuthPairingExchangeRequest,
   AuthPairingExchangeResponse,
   AuthPairingStartRequest,
   AuthPairingStartResponse,
+  AuditLogRequest,
+  AuditLogResponse,
   AuthValidateTokenRequest,
   AuthValidateTokenResponse,
   AuthWhoAmIResponse,
+  DeviceDeleteRequest,
+  DeviceDeleteResponse,
+  DeviceListRequest,
+  DeviceListResponse,
+  AttachmentContextIngestRequest,
+  AttachmentContextIngestResponse,
   AssistantSendMessageRequest,
   AssistantSendMessageResult,
+  AssistantCancelRequest,
+  AssistantStreamMessageRequest,
+  AssistantStreamUpdate,
   CapabilityCatalogRequest,
   CapabilityCatalogResponse,
   CapabilityExplanation,
@@ -42,16 +77,43 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   GatewayBuiltinRouteDescriptor,
+  ListPendingPairingsRequest,
+  ListPendingPairingsResponse,
   MethodDescriptor,
+  ModelRuntimeCatalogRequest,
+  ModelRuntimeCatalogResponse,
+  ModelRuntimeOperationRequest,
+  ModelRuntimeOperationResponse,
+  ModelRuntimeOperationStatusRequest,
+  ModelRuntimeRequest,
+  ModelRuntimeResponse,
   NativeCapabilityManifest,
   OrchestratorProcessRequest,
   OrchestratorResponse,
+  OrchestratorInterruptRequest,
+  OrchestratorInterruptResponse,
   PeerSummary,
+  PermissionPatchRequest,
+  PermissionPatchResponse,
+  PermissionSetRequest,
+  PermissionSetResponse,
+  PrincipalCreateRequest,
+  PrincipalDeleteRequest,
+  PrincipalDeleteResponse,
+  PrincipalGetRequest,
+  PrincipalListRequest,
+  PrincipalListResponse,
+  PrincipalResponse,
+  PrincipalUpdateRequest,
   ContractMethodType,
   RouteExplainRequest,
   RouteExplainResponse,
   RoutePolicyEvaluation,
   RoutePolicyInput,
+  TokenListRequest,
+  TokenListResponse,
+  TokenRevokeRequest,
+  TokenRevokeResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type {
@@ -76,6 +138,8 @@ export class AuroraClient {
   readonly permissions: PermissionClient
   readonly routes: RouteClient
   readonly assistant: AssistantClient
+  readonly models: ModelRuntimeClient
+  readonly memory: MemoryClient
   readonly tools: ToolClient
   readonly scheduler: SchedulerClient
   readonly config: ConfigClient
@@ -96,6 +160,8 @@ export class AuroraClient {
     this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
     this.assistant = new AssistantClient(this)
+    this.models = new ModelRuntimeClient(this)
+    this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
     this.scheduler = new SchedulerClient(this)
     this.config = new ConfigClient(this)
@@ -240,6 +306,128 @@ export class AuthApiClient {
     if (result.ok) this.client.auth.updateFromPairingExchange(result.data)
     return result
   }
+
+  listPendingPairings(
+    payload: ListPendingPairingsRequest = {}
+  ): Promise<AuroraResponse<ListPendingPairingsResponse>> {
+    return this.client.requestResult<ListPendingPairingsResponse, ListPendingPairingsRequest>(
+      AUTH_METHODS.listPendingPairings,
+      payload,
+      { path: routePath('Auth', 'ListPendingPairings') }
+    )
+  }
+
+  pairingApprove(payload: AuthPairingApproveRequest): Promise<AuroraResponse<AuthPairingApproveResponse>> {
+    return this.client.requestResult<AuthPairingApproveResponse, AuthPairingApproveRequest>(
+      AUTH_METHODS.pairingApprove,
+      payload,
+      { path: routePath('Auth', 'PairingApprove') }
+    )
+  }
+
+  pairingDeny(payload: AuthPairingDenyRequest): Promise<AuroraResponse<AuthPairingDenyResponse>> {
+    return this.client.requestResult<AuthPairingDenyResponse, AuthPairingDenyRequest>(
+      AUTH_METHODS.pairingDeny,
+      payload,
+      { path: routePath('Auth', 'PairingDeny') }
+    )
+  }
+
+  listPrincipals(payload: PrincipalListRequest = {}): Promise<AuroraResponse<PrincipalListResponse>> {
+    return this.client.requestResult<PrincipalListResponse, PrincipalListRequest>(
+      AUTH_METHODS.listPrincipals,
+      payload,
+      { path: routePath('Auth', 'ListPrincipals') }
+    )
+  }
+
+  createPrincipal(payload: PrincipalCreateRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalCreateRequest>(
+      AUTH_METHODS.createPrincipal,
+      payload,
+      { path: routePath('Auth', 'CreatePrincipal') }
+    )
+  }
+
+  getPrincipal(payload: PrincipalGetRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalGetRequest>(
+      AUTH_METHODS.getPrincipal,
+      payload,
+      { path: routePath('Auth', 'GetPrincipal') }
+    )
+  }
+
+  updatePrincipal(payload: PrincipalUpdateRequest): Promise<AuroraResponse<PrincipalResponse>> {
+    return this.client.requestResult<PrincipalResponse, PrincipalUpdateRequest>(
+      AUTH_METHODS.updatePrincipal,
+      payload,
+      { path: routePath('Auth', 'UpdatePrincipal') }
+    )
+  }
+
+  deletePrincipal(payload: PrincipalDeleteRequest): Promise<AuroraResponse<PrincipalDeleteResponse>> {
+    return this.client.requestResult<PrincipalDeleteResponse, PrincipalDeleteRequest>(
+      AUTH_METHODS.deletePrincipal,
+      payload,
+      { path: routePath('Auth', 'DeletePrincipal') }
+    )
+  }
+
+  setPermissions(payload: PermissionSetRequest): Promise<AuroraResponse<PermissionSetResponse>> {
+    return this.client.requestResult<PermissionSetResponse, PermissionSetRequest>(
+      AUTH_METHODS.setPermissions,
+      payload,
+      { path: routePath('Auth', 'SetPermissions') }
+    )
+  }
+
+  patchPermissions(payload: PermissionPatchRequest): Promise<AuroraResponse<PermissionPatchResponse>> {
+    return this.client.requestResult<PermissionPatchResponse, PermissionPatchRequest>(
+      AUTH_METHODS.patchPermissions,
+      payload,
+      { path: routePath('Auth', 'PatchPermissions') }
+    )
+  }
+
+  listTokens(payload: TokenListRequest = {}): Promise<AuroraResponse<TokenListResponse>> {
+    return this.client.requestResult<TokenListResponse, TokenListRequest>(
+      AUTH_METHODS.listTokens,
+      payload,
+      { path: routePath('Auth', 'ListTokens') }
+    )
+  }
+
+  revokeToken(payload: TokenRevokeRequest): Promise<AuroraResponse<TokenRevokeResponse>> {
+    return this.client.requestResult<TokenRevokeResponse, TokenRevokeRequest>(
+      AUTH_METHODS.revokeToken,
+      payload,
+      { path: routePath('Auth', 'RevokeToken') }
+    )
+  }
+
+  listDevices(payload: DeviceListRequest = {}): Promise<AuroraResponse<DeviceListResponse>> {
+    return this.client.requestResult<DeviceListResponse, DeviceListRequest>(
+      AUTH_METHODS.listDevices,
+      payload,
+      { path: routePath('Auth', 'ListDevices') }
+    )
+  }
+
+  deleteDevice(payload: DeviceDeleteRequest): Promise<AuroraResponse<DeviceDeleteResponse>> {
+    return this.client.requestResult<DeviceDeleteResponse, DeviceDeleteRequest>(
+      AUTH_METHODS.deleteDevice,
+      payload,
+      { path: routePath('Auth', 'DeleteDevice') }
+    )
+  }
+
+  auditLog(payload: AuditLogRequest = {}): Promise<AuroraResponse<AuditLogResponse>> {
+    return this.client.requestResult<AuditLogResponse, AuditLogRequest>(
+      AUTH_METHODS.auditLog,
+      payload,
+      { path: routePath('Auth', 'AuditLog') }
+    )
+  }
 }
 
 export class RegistryClient {
@@ -373,6 +561,16 @@ export class RouteClient {
 export class AssistantClient {
   constructor(private readonly client: AuroraClient) {}
 
+  ingestContext(
+    input: AttachmentContextIngestRequest
+  ): Promise<AuroraResponse<AttachmentContextIngestResponse>> {
+    return this.client.requestResult<AttachmentContextIngestResponse, AttachmentContextIngestRequest>(
+      ORCHESTRATOR_METHODS.ingestContext,
+      input,
+      { path: routePath('Orchestrator', 'IngestContext') }
+    )
+  }
+
   async sendMessage(input: AssistantSendMessageRequest): Promise<AuroraResponse<AssistantSendMessageResult>> {
     const text = input.text.trim()
     if (!text) {
@@ -424,6 +622,86 @@ export class AssistantClient {
       }
     }
   }
+
+  async *streamMessage(input: AssistantStreamMessageRequest): AsyncIterable<AssistantStreamUpdate> {
+    const text = input.text.trim()
+    if (!text) {
+      yield streamFailure(
+        new AuroraError({
+          code: 'validation',
+          message: 'Assistant message text is required.',
+          method: ORCHESTRATOR_METHODS.externalUserInput,
+          busTopic: ORCHESTRATOR_METHODS.externalUserInput
+        }),
+        this.client.transport.kind
+      )
+      return
+    }
+
+    const payload: OrchestratorProcessRequest = {
+      text,
+      source: 'external'
+    }
+    if (input.sessionId !== undefined) payload.session_id = input.sessionId
+
+    let sawEvent = false
+    try {
+      const stream = this.client.events.streamAssistant<Record<string, unknown>, OrchestratorProcessRequest>(payload, {
+        signal: input.signal,
+        lastEventId: input.lastEventId ?? null,
+        replayFrom: input.replayFrom ?? input.lastEventId ?? null,
+        reconnect: { maxAttempts: 1, initialDelayMs: 250, maxDelayMs: 1_000 },
+        audit: {
+          method: ORCHESTRATOR_METHODS.externalUserInput,
+          busTopic: ORCHESTRATOR_METHODS.externalUserInput,
+          transport: this.client.transport.kind
+        }
+      })
+      for await (const event of stream) {
+        sawEvent = true
+        yield assistantStreamUpdateFromEvent(event)
+      }
+    } catch (error) {
+      const normalized = normalizeError(error)
+      this.client.auth.applyError(normalized)
+      if (input.signal?.aborted) return
+      if (sawEvent) {
+        yield streamFailure(normalized, this.client.transport.kind, 'transport_lost')
+        return
+      }
+
+      const fallback = await this.sendMessage(input)
+      if (fallback.ok) {
+        yield {
+          kind: 'fallback',
+          eventId: fallback.data.response.id,
+          sessionId: fallback.data.sessionId,
+          text: fallback.data.response.text,
+          textDelta: fallback.data.response.text,
+          modelLabel: fallback.data.modelLabel,
+          error: null,
+          audit: fallback.audit,
+          metadata: fallback.data.metadata
+        }
+        return
+      }
+      yield streamFailure(fallback.error, this.client.transport.kind, 'fallback')
+    }
+  }
+
+  cancel(input: AssistantCancelRequest = {}): Promise<AuroraResponse<OrchestratorInterruptResponse>> {
+    const payload: OrchestratorInterruptRequest = {
+      scopes: input.scopes ?? ['generation', 'tool_call', 'tts_playback', 'session'],
+      reason: input.reason ?? 'user_interrupt'
+    }
+    if (input.sessionId !== undefined) payload.session_id = input.sessionId
+    if (input.requestId !== undefined) payload.request_id = input.requestId
+    return this.client.requestResult<OrchestratorInterruptResponse, OrchestratorInterruptRequest>(
+      ORCHESTRATOR_METHODS.interrupt,
+      payload,
+      { path: routePath('Orchestrator', 'Interrupt') }
+    )
+  }
 }
 
 export interface AdminOverviewManifestOptions {
@@ -436,6 +714,114 @@ export interface AdminOverviewManifestOptions {
 function metadataString(metadata: OrchestratorResponse['metadata'] | undefined, key: string): string | null {
   const value = metadata?.[key]
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<Record<string, unknown>>): AssistantStreamUpdate {
+  const payload = event.payload ?? {}
+  const text = streamText(payload)
+  const metadata = streamMetadata(payload)
+  const sessionId = streamString(payload, 'session_id', 'sessionId') ?? null
+  const modelLabel = metadataString(metadata, 'model') ?? metadataString(metadata, 'provider')
+  if (event.kind === 'assistant.completed') {
+    return {
+      kind: 'completed',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: text,
+      modelLabel,
+      error: null,
+      audit: event.audit,
+      metadata
+    }
+  }
+  if (event.kind === 'assistant.failed') {
+    return {
+      kind: 'failed',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: '',
+      modelLabel,
+      error: new AuroraError({
+        code: 'unavailable_service',
+        message: text || 'Assistant stream failed.',
+        detail: payload,
+        correlationId: event.audit.correlationId ?? undefined,
+        method: event.method ?? ORCHESTRATOR_METHODS.externalUserInput,
+        busTopic: event.busTopic ?? ORCHESTRATOR_METHODS.externalUserInput
+      }),
+      audit: event.audit,
+      metadata
+    }
+  }
+  if (event.kind.startsWith('tool.')) {
+    return {
+      kind: 'tool',
+      eventId: event.id,
+      sessionId,
+      text,
+      textDelta: '',
+      modelLabel,
+      error: null,
+      audit: event.audit,
+      metadata
+    }
+  }
+  return {
+    kind: 'delta',
+    eventId: event.id,
+    sessionId,
+    text,
+    textDelta: streamString(payload, 'delta', 'text_delta', 'textDelta') ?? text,
+    modelLabel,
+    error: null,
+    audit: event.audit,
+    metadata
+  }
+}
+
+function streamFailure(
+  error: AuroraError,
+  transport: string,
+  kind: 'failed' | 'transport_lost' | 'fallback' = 'failed'
+): AssistantStreamUpdate {
+  return {
+    kind,
+    eventId: null,
+    sessionId: null,
+    text: error.message,
+    textDelta: '',
+    modelLabel: null,
+    error,
+    audit: createAuditReceipt(error.detail, {
+      correlationId: error.correlationId ?? null,
+      method: error.method ?? ORCHESTRATOR_METHODS.externalUserInput,
+      busTopic: error.busTopic ?? ORCHESTRATOR_METHODS.externalUserInput,
+      status: error.code,
+      transport
+    }),
+    metadata: {}
+  }
+}
+
+function streamText(payload: Record<string, unknown>): string {
+  return streamString(payload, 'text', 'content', 'message', 'delta', 'text_delta', 'textDelta') ?? ''
+}
+
+function streamMetadata(payload: Record<string, unknown>): Record<string, import('./types.js').JsonValue | undefined> {
+  const metadata = payload.metadata
+  return typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
+    ? metadata as Record<string, import('./types.js').JsonValue | undefined>
+    : {}
+}
+
+function streamString(payload: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return null
 }
 
 function stableSessionId(): string {
@@ -467,10 +853,27 @@ export class AdminOverviewClient {
 export class ToolClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog<TResponse = unknown>(request: Record<string, unknown> = {}): Promise<TResponse> {
+  listCatalog<TResponse = ToolCatalogResponse>(request: Record<string, unknown> = {}): Promise<TResponse> {
     return this.client.request<TResponse>(TOOLING_METHODS.listCatalog, request, {
       path: routePath('Tooling', 'GetToolCatalog')
     })
+  }
+
+  async listApprovalCards(request: Record<string, unknown> = {}): Promise<ToolApprovalCardModel[]> {
+    const catalog = await this.listCatalog<ToolCatalogResponse>(request)
+    return normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind })
+  }
+
+  loadApprovalCards(): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
+    return loadToolApprovalCards(this.client)
+  }
+
+  submitApprovalDecision(input: ToolApprovalDecisionInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolApprovalDecision(this.client, input)
+  }
+
+  submitDenialDecision(input: ToolApprovalDenialInput): Promise<ToolApprovalDecisionResult> {
+    return submitToolDenialDecision(this.client, input)
   }
 
   prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
@@ -495,6 +898,60 @@ export class ToolClient {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.executeTool, payload, {
       path: routePath('Tooling', 'ExecuteTool')
     })
+  }
+}
+
+export class ModelRuntimeClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  listCatalog(request: ModelRuntimeCatalogRequest = {}): Promise<ModelRuntimeCatalogResponse> {
+    return this.client.request<ModelRuntimeCatalogResponse, ModelRuntimeCatalogRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getCatalog,
+      request,
+      { path: routePath('Orchestrator', 'GetModelCatalog') }
+    )
+  }
+
+  getRuntime(request: ModelRuntimeRequest = {}): Promise<ModelRuntimeResponse> {
+    return this.client.request<ModelRuntimeResponse, ModelRuntimeRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getRuntime,
+      request,
+      { path: routePath('Orchestrator', 'GetModelRuntime') }
+    )
+  }
+
+  importModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.importModel,
+      request,
+      { path: routePath('Orchestrator', 'ImportModel') }
+    )
+  }
+
+  downloadModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.downloadModel,
+      request,
+      { path: routePath('Orchestrator', 'DownloadModel') }
+    )
+  }
+
+  benchmarkModel(request: ModelRuntimeOperationRequest): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationRequest>(
+      ORCHESTRATOR_MODEL_METHODS.benchmarkModel,
+      request,
+      { path: routePath('Orchestrator', 'BenchmarkModel') }
+    )
+  }
+
+  getOperation(
+    request: ModelRuntimeOperationStatusRequest
+  ): Promise<AuroraResponse<ModelRuntimeOperationResponse>> {
+    return this.client.requestResult<ModelRuntimeOperationResponse, ModelRuntimeOperationStatusRequest>(
+      ORCHESTRATOR_MODEL_METHODS.getOperation,
+      request,
+      { path: routePath('Orchestrator', 'GetModelOperation') }
+    )
   }
 }
 
