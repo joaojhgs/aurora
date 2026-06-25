@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   AuroraError,
+  DB_METHODS,
   HttpGatewayTransport,
   MeshP2PTransport,
   MockAuroraTransport,
+  backupListFixture,
   ORCHESTRATOR_METHODS,
   TauriLocalTransport,
   backendInventoryFixture,
@@ -27,10 +29,15 @@ import {
   gatewayServicesFixture,
   gatewayRegistryFixture,
   hasPermission,
+  modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
+  ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
+  normalizeToolCatalog,
   routeExplainFixture,
   resolveEffectivePermissions,
+  supportBundleFixture,
+  toolCatalogFixture,
   uiMockReferenceFixtureSummary,
   wildcardIntersection
 } from '../src/index.js'
@@ -94,6 +101,176 @@ describe('AuroraClient', () => {
         responseModel: 'ListPendingPairingsResponse'
       })
     )
+  })
+
+  it('routes Auth pairing queue reads and review methods through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListPendingPairings', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          pairings: [pendingPairingFixture()],
+          total: 1,
+          expired_count: 0,
+          secrets_redacted: true
+        }
+      })
+      .register('Auth.PairingApprove', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.PairingDeny', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const queue = await client.authApi.listPendingPairings({ include_non_pending: true })
+    const approved = await client.authApi.pairingApprove({
+      code: '123456',
+      permissions: ['Gateway.use'],
+      is_admin: false
+    })
+    const denied = await client.authApi.pairingDeny({ code: '654321', reason: 'Wrong device' })
+
+    expect(queue.ok).toBe(true)
+    expect(approved.ok).toBe(true)
+    expect(denied.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListPendingPairings',
+        path: '/api/Auth/ListPendingPairings',
+        payload: { include_non_pending: true }
+      },
+      {
+        method: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        payload: { code: '123456', permissions: ['Gateway.use'], is_admin: false }
+      },
+      {
+        method: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: { code: '654321', reason: 'Wrong device' }
+      }
+    ])
+  })
+
+  it('routes Auth device and token management through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListDevices', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          devices: [
+            {
+              id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              name: 'Studio Mac',
+              is_trusted: true,
+              created_at: '2026-06-19T00:30:00Z',
+              last_seen: '2026-06-25T02:30:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.ListTokens', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          tokens: [
+            {
+              id: 'token-studio',
+              prefix: 'aur_stu',
+              device_id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              scopes: ['Auth.manage'],
+              created_at: '2026-06-19T00:35:00Z',
+              expires_at: '2026-07-19T00:35:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.DeleteDevice', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const devices = await client.authApi.listDevices({ principal_id: 'principal-owner' })
+    const tokens = await client.authApi.listTokens({ device_id: 'device-studio-mac' })
+    const deleted = await client.authApi.deleteDevice({ device_id: 'device-studio-mac' })
+
+    expect(devices.ok).toBe(true)
+    expect(tokens.ok).toBe(true)
+    expect(deleted.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListDevices',
+        path: '/api/Auth/ListDevices',
+        payload: { principal_id: 'principal-owner' }
+      },
+      {
+        method: 'Auth.ListTokens',
+        path: '/api/Auth/ListTokens',
+        payload: { device_id: 'device-studio-mac' }
+      },
+      {
+        method: 'Auth.DeleteDevice',
+        path: '/api/Auth/DeleteDevice',
+        payload: { device_id: 'device-studio-mac' }
+      }
+    ])
+  })
+
+  it('advertises assistant context ingestion from backend inventory descriptors', () => {
+    const descriptors = describeBackendInventory(backendInventoryFixture)
+
+    expect(descriptors.methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          busTopic: ORCHESTRATOR_METHODS.ingestContext,
+          routePath: '/api/Orchestrator/IngestContext',
+          exposure: 'external',
+          methodType: 'use',
+          requiredPermissions: ['Orchestrator.use'],
+          inputModel: 'AttachmentContextIngestRequest',
+          outputModel: 'AttachmentContextIngestResponse',
+          availableOverHttp: true,
+          routeKind: 'dynamic'
+        })
+      ])
+    )
+    expect(descriptors.methodTypes[ORCHESTRATOR_METHODS.ingestContext]).toEqual(
+      expect.objectContaining({
+        requestModel: 'AttachmentContextIngestRequest',
+        responseModel: 'AttachmentContextIngestResponse'
+      })
+    )
+  })
+
+  it('loads model runtime catalog and normalizes unsupported operations through AuroraClient', async () => {
+    const transport = new MockAuroraTransport()
+      .fail(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, 'unsupported_feature', 'benchmark backend is not enabled')
+    const client = new AuroraClient({ transport })
+
+    const catalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
+    const runtime = await client.models.getRuntime()
+    const benchmark = await client.models.benchmarkModel({ provider_id: 'native:mobile-local-light', dry_run: true })
+
+    expect(catalog).toEqual(modelRuntimeCatalogFixture)
+    expect(catalog.providers.map((provider) => provider.provider_id)).toEqual(
+      expect.arrayContaining([
+        'local:Orchestrator:llama-cpp',
+        'mesh:studio-gpu:Orchestrator',
+        'cloud:openai:Orchestrator',
+        'native:mobile-local-light'
+      ])
+    )
+    expect(runtime.provider?.provider_id).toBe(catalog.selected_provider_id)
+    expect(benchmark.ok).toBe(false)
+    if (!benchmark.ok) {
+      expect(benchmark.error.code).toBe('unsupported_feature')
+      expect(benchmark.audit.busTopic).toBe(ORCHESTRATOR_MODEL_METHODS.benchmarkModel)
+    }
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -345,15 +522,15 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 1,
-        methods: 4,
-        externalMethods: 3,
+        services: 3,
+        methods: 20,
+        externalMethods: 19,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
       })
     )
-    expect(manifest.services[0]).toEqual(
+    expect(manifest.services.find((service) => service.module === 'Gateway')).toEqual(
       expect.objectContaining({
         module: 'Gateway',
         status: 'healthy',
@@ -362,7 +539,13 @@ describe('AuroraClient', () => {
     )
     expect(manifest.internalOnly).toHaveLength(1)
     expect(manifest.internalOnly[0]?.busTopic).toBe('Gateway.InternalOnly')
-    expect(manifest.permissionCatalog).toEqual(['Auth.manage', 'Gateway.manage', 'Gateway.use'])
+    expect(manifest.permissionCatalog).toEqual([
+      'Auth.manage',
+      'Gateway.manage',
+      'Gateway.use',
+      'Orchestrator.manage',
+      'Orchestrator.use'
+    ])
     expect(manifest.native).toEqual(
       expect.objectContaining({
         availability: 'unsupported',
@@ -422,6 +605,78 @@ describe('AuroraClient', () => {
     )
     expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
+  })
+
+  it('ingests assistant attachment context through the typed SDK namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [
+          {
+            kind: 'text',
+            content_text: 'Screenshot OCR with password=redacted by backend',
+            title: 'Screenshot OCR',
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          },
+          {
+            kind: 'image',
+            filename: 'screen.png',
+            mime_type: 'image/png',
+            size_bytes: 42_000,
+            source: { channel: 'mobile_share_sheet', display_name: 'Android share sheet' }
+          }
+        ],
+        privacy_class: 'personal',
+        storage_policy: 'ephemeral',
+        limits: { max_item_bytes: 262_144 }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: true,
+          rejected: true,
+          accepted_items: [
+            expect.objectContaining({
+              kind: 'text',
+              status: 'redacted',
+              redacted: true,
+              privacy_class: 'personal'
+            })
+          ],
+          rejected_items: [
+            expect.objectContaining({
+              kind: 'image',
+              status: 'unsupported',
+              reason_code: 'no_text_context'
+            })
+          ],
+          secrets_redacted: true
+        })
+      })
+    )
+
+    await expect(
+      client.assistant.ingestContext({
+        items: [{ kind: 'text', content_text: 'token body' }],
+        privacy_class: 'credential'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          accepted: false,
+          rejected: true,
+          rejected_items: [
+            expect.objectContaining({
+              status: 'rejected',
+              reason_code: 'privacy_class_blocked'
+            })
+          ]
+        })
+      })
+    )
   })
 
   it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
@@ -824,7 +1079,7 @@ describe('AuroraClient', () => {
 
     await expect(client.registry.getRegistry()).resolves.toEqual(
       expect.objectContaining({
-        modules: [
+        modules: expect.arrayContaining([
           expect.objectContaining({
             methods: expect.arrayContaining([
               expect.objectContaining({
@@ -833,7 +1088,7 @@ describe('AuroraClient', () => {
               })
             ])
           })
-        ]
+        ])
       })
     )
   })
@@ -964,6 +1219,188 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('loads config metadata, diff, reload impact, and history through the config namespace', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const schema = await client.config.getSchemaMetadata({ include_values: true })
+    const diff = await client.config.previewDiff({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const impact = await client.config.previewReloadImpact({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
+    const history = await client.config.getVersionHistory({ limit: 2 })
+
+    expect(schema.ok).toBe(true)
+    expect(schema.ok && schema.data.fields.some((field) => field.key_path === 'services.gateway.api.token_secret' && field.secret)).toBe(true)
+    expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
+    expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
+    expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+  })
+
+  it('applies config changes and rollback through AdminAction headers', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          nonce: 'nonce-config',
+          digest: 'digest-config',
+          method_id: (request.payload as { method_id: string }).method_id,
+          affected_resources: ['services.gateway.api.port'],
+          required_phrase: 'APPLY',
+          required_reason: true,
+          required_reauth: false,
+          expires_at: '2026-06-19T00:10:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          action_id: 'aa-config',
+          confirmation_token: 'token-config',
+          digest: 'digest-config',
+          confirmed: true,
+          expires_at: '2026-06-19T00:10:00Z',
+          audit_receipt: 'aar-config',
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Config.Set', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, previous_value: 8000 }
+      })
+      .register('Config.Rollback', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          success: true,
+          version_id: 'cfgv-gateway-port-001',
+          key_path: 'services.gateway.api.port',
+          rolled_back_to: 7000,
+          affected_sections: ['services.gateway.api'],
+          error: null,
+          secrets_redacted: true
+        }
+      })
+
+    const client = new AuroraClient({ transport })
+    await client.config.applyChange({
+      change: { key_path: 'services.gateway.api.port', value: 8080 },
+      reason: 'test change',
+      reauthConfirmed: true
+    })
+    await client.config.rollback({
+      versionId: 'cfgv-gateway-port-001',
+      reason: 'test rollback',
+      reauthConfirmed: true
+    })
+
+    const configSet = calls.find((call) => call.method === 'Config.Set')
+    const rollback = calls.find((call) => call.method === 'Config.Rollback')
+    expect(configSet?.headers).toMatchObject({ 'X-Aurora-AdminAction-Token': 'token-config' })
+    expect(rollback?.headers).toMatchObject({ 'X-Aurora-AdminAction-Id': 'aa-config' })
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(2)
+  })
+
+  it('loads diagnostics bundles and exports them through AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.GetSupportBundle', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return supportBundleFixture
+      })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(
+          expect.objectContaining({
+            method_id: 'Gateway.GetSupportBundle',
+            payload: expect.objectContaining({ correlation_id: 'corr-diagnostics-fixture' }),
+            affected_resources: expect.arrayContaining(['diagnostics.support_bundle'])
+          })
+        )
+        return {
+          action_id: 'aa-support-bundle',
+          nonce: 'nonce-support-bundle',
+          digest: 'digest-support-bundle',
+          method_id: 'Gateway.GetSupportBundle',
+          affected_resources: ['diagnostics.support_bundle'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-20T10:05:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', {
+        action_id: 'aa-support-bundle',
+        confirmation_token: 'token-support-bundle',
+        digest: 'digest-support-bundle',
+        confirmed: true,
+        expires_at: '2026-06-20T10:05:00Z',
+        audit_receipt: 'aar-support-bundle',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const preview = await client.diagnostics.getSupportBundle({
+      correlation_id: 'corr-diagnostics-fixture',
+      event_limit: 5,
+      audit_limit: 5
+    })
+    const exported = await client.diagnostics.exportSupportBundle({
+      request: { correlation_id: 'corr-diagnostics-fixture', event_limit: 5, audit_limit: 5 },
+      reason: 'Share redacted diagnostics with support',
+      reauthConfirmed: true
+    })
+
+    expect(preview.ok).toBe(true)
+    if (preview.ok) {
+      expect(preview.data.redaction).toEqual(
+        expect.objectContaining({
+          secrets_redacted: true,
+          omitted_payloads: expect.arrayContaining(['raw audio', 'tokens and credentials'])
+        })
+      )
+    }
+    expect(exported.data.audit_receipt).toBe('support_bundle:fixture')
+    expect(calls.at(-1)).toEqual(
+      expect.objectContaining({
+        method: 'Gateway.GetSupportBundle',
+        headers: expect.objectContaining({
+          'X-Aurora-AdminAction-Id': 'aa-support-bundle',
+          'X-Aurora-AdminAction-Token': 'token-support-bundle',
+          'X-Aurora-AdminAction-Digest': 'digest-support-bundle'
+        })
+      })
+    )
+  })
+
   it('lists backups through the Backup SDK namespace and wraps backup mutations in AdminAction', async () => {
     const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
     const recordBackupCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
@@ -1050,6 +1487,7 @@ describe('AuroraClient', () => {
       )
     }
   })
+
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
@@ -1155,6 +1593,48 @@ describe('AuroraClient', () => {
       ok: true,
       used_tool_approval_token: 'tool-token-1',
       admin_header: 'aa-tool'
+    })
+  })
+
+  it('submits tool denial decisions through the backend approval confirmation path', async () => {
+    let confirmationPayload: unknown = null
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.ConfirmExecution', (request) => {
+        confirmationPayload = request.payload
+        return {
+          ok: true,
+          approval_token: null,
+          expires_at: null,
+          policy_decision_id: 'policy-local-danger',
+          correlation_id: 'corr-local-danger-denied',
+          error: null
+        }
+      })
+    const client = new AuroraClient({ transport })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    const result = await client.tools.submitDenialDecision({
+      tool,
+      approverPrincipalId: 'admin-1',
+      reason: 'Operator denied config mutation'
+    })
+
+    expect(confirmationPayload).toEqual({
+      approval_request_id: 'approval-local-danger',
+      approver_principal_id: 'admin-1',
+      approve: false,
+      reason: 'Operator denied config mutation',
+      correlation_id: 'corr-local-danger'
+    })
+    expect(result).toEqual({
+      toolId: 'tool:local:filesystem.writeConfig',
+      approvalRequestId: 'approval-local-danger',
+      approvalToken: null,
+      correlationId: 'corr-local-danger-denied',
+      policyDecisionId: 'policy-local-danger',
+      approved: false,
+      audit: null
     })
   })
 
@@ -1641,7 +2121,7 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(calls[0]).toEqual({
-      command: 'aurora_request',
+      command: 'aurora_command',
       args: {
         request: expect.objectContaining({
           method: 'Gateway.GetRegistry',
@@ -1674,6 +2154,8 @@ describe('AuroraClient', () => {
             return { running: true, mode: 'sidecar', pid: 42 }
           case 'aurora_native_capability_manifest':
             return nativeCapabilityManifestFixture
+          case 'aurora_log_tail':
+            return { available: false, source: 'aurora-sidecar', lines: [], truncated: false }
           case 'aurora_secure_storage_get':
             return { key: 'session', value: 'token-ref' }
           case 'aurora_secure_storage_set':
@@ -1685,6 +2167,8 @@ describe('AuroraClient', () => {
             return { path: String(args?.path), ok: true, bytesWritten: 5 }
           case 'aurora_local_file_pick':
             return { paths: ['/tmp/a.txt'], cancelled: false }
+          case 'aurora_secure_file_handle_open':
+            return { paths: ['/tmp/a.txt'], cancelled: false }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -1695,6 +2179,12 @@ describe('AuroraClient', () => {
       expect.objectContaining({ running: true, mode: 'sidecar' })
     )
     await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.getLogTail({ lines: 10 })).resolves.toEqual({
+      available: false,
+      source: 'aurora-sidecar',
+      lines: [],
+      truncated: false
+    })
     await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
     await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
     await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
@@ -1712,19 +2202,27 @@ describe('AuroraClient', () => {
       paths: ['/tmp/a.txt'],
       cancelled: false
     })
+    await expect(transport.openSecureFileHandle({ mode: 'read' })).resolves.toEqual({
+      paths: ['/tmp/a.txt'],
+      cancelled: false
+    })
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
       'aurora_native_capability_manifest',
+      'aurora_log_tail',
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
       'aurora_secure_storage_delete',
       'aurora_local_file_read',
       'aurora_local_file_write',
-      'aurora_local_file_pick'
+      'aurora_local_file_pick',
+      'aurora_secure_file_handle_open'
     ])
-    expect(calls[3]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[6]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[2]?.args).toEqual({ request: { lines: 10 } })
+    expect(calls[4]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[7]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[9]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
@@ -2150,7 +2648,7 @@ describe('AuroraClient', () => {
   it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
     const tauri = new TauriLocalTransport({
       invoke: async (command, args) => {
-        expect(command).toBe('aurora_event_subscribe')
+        expect(command).toBe('aurora_subscribe')
         expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
         return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
       }
@@ -2194,68 +2692,136 @@ describe('AuroraClient', () => {
   })
 })
 
-function adminDraftFixture(methodId: string) {
-  const suffix = methodId.replace('.', '-')
-  return {
-    action_id: `aa-${suffix}`,
-    nonce: `nonce-${suffix}`,
-    digest: `digest-${suffix}`,
-    method_id: methodId,
-    affected_resources: ['admin.backups'],
-    required_phrase: 'CONFIRM',
-    required_reason: true,
-    required_reauth: true,
-    expires_at: '2026-06-25T12:05:00Z',
-    expires_in_seconds: 300,
-    confirmation_headers: {
-      action_id: 'X-Aurora-AdminAction-Id',
-      confirmation_token: 'X-Aurora-AdminAction-Token',
-      digest: 'X-Aurora-AdminAction-Digest'
-    }
-  }
-}
-
-function adminConfirmFixture(actionId: string) {
-  const suffix = actionId.replace('aa-', '')
-  return {
-    action_id: actionId,
-    confirmation_token: `token-${suffix}`,
-    digest: `digest-${suffix}`,
-    confirmed: true,
-    expires_at: '2026-06-25T12:05:00Z',
-    audit_receipt: `audit-${suffix}`,
-    confirmation_headers: {
-      action_id: 'X-Aurora-AdminAction-Id',
-      confirmation_token: 'X-Aurora-AdminAction-Token',
-      digest: 'X-Aurora-AdminAction-Digest'
-    }
-  }
-}
-
-function backupImpactPlanFixture() {
-  return {
-    admin_critical: true,
-    requires_quiesce: true,
-    requires_restart: true,
-    affected_services: [
-      {
-        service: 'Config',
-        action: 'reload',
-        required: true,
-        reason: 'Config state changes require reload review.'
-      },
-      {
-        service: 'DB',
-        action: 'quiesce',
-        required: true,
-        reason: 'DB/RAG restore needs write quiesce.'
-      }
-    ],
-    warnings: ['Destructive restore remains disabled by backend policy.']
-  }
-}
-
 describe('AuroraClient assistant namespace', () => {
+  it('streams assistant deltas, final event evidence, and model metadata', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      { id: 's1', kind: 'assistant.delta', payload: { textDelta: 'Hel' }, correlation_id: 'corr-stream' },
+      { id: 's2', kind: 'assistant.delta', payload: { delta: 'lo' }, correlation_id: 'corr-stream' },
+      {
+        id: 's3',
+        kind: 'assistant.completed',
+        payload: { text: 'Hello', session_id: 'session-stream', metadata: { model: 'mock-stream' } },
+        correlation_id: 'corr-stream'
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 3)
+
+    expect(events.map((event) => event.kind)).toEqual(['delta', 'delta', 'completed'])
+    expect(events[0]?.textDelta).toBe('Hel')
+    expect(events[1]?.textDelta).toBe('lo')
+    expect(events[2]).toEqual(
+      expect.objectContaining({
+        eventId: 's3',
+        sessionId: 'session-stream',
+        text: 'Hello',
+        modelLabel: 'mock-stream',
+        audit: expect.objectContaining({ correlationId: 'corr-stream' })
+      })
+    )
+  })
+
+  it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'fallback please' }), 1)
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: 'fallback',
+        sessionId: 'mock-assistant-session',
+        text: 'Mock Aurora response to "fallback please"',
+        modelLabel: 'mock-local'
+      })
+    )
+  })
+
+  it('reports transport loss after the last streamed event instead of inventing completion', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
+      throw new TypeError('stream disconnected')
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 2)
+
+    expect(events[0]?.kind).toBe('delta')
+    expect(events[1]).toEqual(
+      expect.objectContaining({
+        kind: 'transport_lost',
+        error: expect.objectContaining({ code: 'transport_loss' })
+      })
+    )
+  })
+
+  it('closes assistant stream on external abort without falling back to sendMessage', async () => {
+    let sendCalls = 0
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
+      await new Promise(() => undefined)
+    })
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
+      sendCalls += 1
+      return {
+        text: 'fallback should not run',
+        session_id: 'session-fallback',
+        metadata: { model: 'fallback-model' }
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const iterator = client.assistant.streamMessage({ text: 'hello', signal: controller.signal })[Symbol.asyncIterator]()
+
+    await expect(iterator.next()).resolves.toEqual(
+      expect.objectContaining({
+        done: false,
+        value: expect.objectContaining({ kind: 'delta', text: 'partial' })
+      })
+    )
+    controller.abort()
+
+    await expect(raceWithTimeout(iterator.next(), 100)).resolves.toEqual({ done: true, value: undefined })
+    expect(sendCalls).toBe(0)
+  })
+
+  it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.interrupt, (request) => {
+      capturedPayload = request.payload
+      return {
+        interrupt_id: 'interrupt-1',
+        status: 'interrupted',
+        requested_scopes: ['generation', 'session'],
+        results: [],
+        session_id: 'session-123',
+        request_id: 'request-123',
+        event_topic: 'Orchestrator.Interrupted',
+        audit_event: 'orchestrator.interrupt.requested',
+        idempotent: true,
+        secrets_redacted: true
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.cancel({
+      sessionId: 'session-123',
+      requestId: 'request-123',
+      scopes: ['generation', 'session']
+    })
+
+    expect(capturedPayload).toEqual({
+      scopes: ['generation', 'session'],
+      reason: 'user_interrupt',
+      session_id: 'session-123',
+      request_id: 'request-123'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected interrupt success')
+    expect(result.data.status).toBe('interrupted')
+  })
+
   it('sends text prompts through Orchestrator.ExternalUserInput and normalizes final responses', async () => {
     let capturedPayload: unknown
     const transport = new MockAuroraTransport()
@@ -2334,6 +2900,31 @@ describe('AuroraClient assistant namespace', () => {
     if (result.ok) throw new Error('expected empty prompt failure')
     expect(result.error).toBeInstanceOf(AuroraError)
     expect(result.error.code).toBe('validation')
+  })
+})
+
+describe('AuroraClient memory namespace', () => {
+  it('uses typed DB/RAG methods with provenance and policy responses', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const namespaces = await client.memory.listNamespaces({ include_remote: true, include_unavailable: true })
+    const messages = await client.memory.listMessages({ limit: 2 })
+    const search = await client.memory.search({
+      namespace: 'peer-studio-gpu.memories',
+      query: 'mesh pairing'
+    })
+    const denied = await client.memory.search({
+      namespace: 'peer-denied.secret',
+      query: 'secret'
+    })
+
+    expect(namespaces.ok).toBe(true)
+    expect(namespaces.ok && namespaces.data.namespaces.some((namespace) => namespace.namespace === 'peer-studio-gpu.memories')).toBe(true)
+    expect(messages.ok && messages.data.messages[0]?.content).toContain('mesh pairing')
+    expect(search.ok && search.audit.method).toBe(DB_METHODS.ragSearchRemote)
+    expect(search.ok && search.data.items[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
+    expect(search.ok && search.data.items[0]?.redacted).toBe(true)
+    expect(denied.ok && denied.data.decision).toBe('denied')
+    expect(denied.ok && denied.data.denial_reason).toContain('denied')
   })
 })
 
@@ -2519,9 +3110,28 @@ describe('permissions', () => {
   })
 })
 
+function pendingPairingFixture() {
+  return {
+    request_id: 'pair-1',
+    code: '123456',
+    device_name: 'Kitchen tablet',
+    client_ip: '192.0.2.10',
+    status: 'pending',
+    expires_at: '2099-01-01T00:00:00Z',
+    created_at: '2026-06-24T12:00:00Z',
+    remote_peer_id: 'peer-kitchen',
+    remote_node_name: 'Kitchen node',
+    approved_by: null,
+    denied_by: null,
+    denied_reason: '',
+    granted_permissions: [],
+    granted_is_admin: false
+  }
+}
+
 describe('descriptors', () => {
   it('uses bus topic plus method name as identity source', () => {
-    expect(describeRegistry(gatewayRegistryFixture)[0]).toEqual(
+    expect(describeRegistry(gatewayRegistryFixture).find((method) => method.busTopic === 'Gateway.GetRegistry')).toEqual(
       expect.objectContaining({
         name: 'GetRegistry',
         busTopic: 'Gateway.GetRegistry'
@@ -2574,19 +3184,21 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 4,
+      checked: 20,
       issues: []
     })
+
+    const gatewayModule = gatewayRegistryFixture.modules.find((moduleInfo) => moduleInfo.module === 'Gateway')!
 
     const mismatched = compareRegistryFixtureToBackendInventory(
       {
         ...gatewayRegistryFixture,
         modules: [
           {
-            ...gatewayRegistryFixture.modules[0]!,
+            ...gatewayModule,
             methods: [
               {
-                ...gatewayRegistryFixture.modules[0]!.methods[0]!,
+                ...gatewayModule.methods[0]!,
                 required_perms: ['gateway.use']
               }
             ]
@@ -2637,3 +3249,64 @@ describe('descriptors', () => {
     expect(error.correlationId).toBe('corr-1')
   })
 })
+
+function adminDraftFixture(methodId: string) {
+  const suffix = methodId.replace('.', '-')
+  return {
+    action_id: `aa-${suffix}`,
+    nonce: `nonce-${suffix}`,
+    digest: `digest-${suffix}`,
+    method_id: methodId,
+    affected_resources: ['admin.backups'],
+    required_phrase: 'CONFIRM',
+    required_reason: true,
+    required_reauth: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function adminConfirmFixture(actionId: string) {
+  const suffix = actionId.replace('aa-', '')
+  return {
+    action_id: actionId,
+    confirmation_token: `token-${suffix}`,
+    digest: `digest-${suffix}`,
+    confirmed: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    audit_receipt: `audit-${suffix}`,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function backupImpactPlanFixture() {
+  return {
+    admin_critical: true,
+    requires_quiesce: true,
+    requires_restart: true,
+    affected_services: [
+      {
+        service: 'Config',
+        action: 'reload',
+        required: true,
+        reason: 'Config state changes require reload review.'
+      },
+      {
+        service: 'DB',
+        action: 'quiesce',
+        required: true,
+        reason: 'DB/RAG restore needs write quiesce.'
+      }
+    ],
+    warnings: ['Destructive restore remains disabled by backend policy.']
+  }
+}

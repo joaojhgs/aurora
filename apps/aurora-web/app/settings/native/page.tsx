@@ -1,11 +1,7 @@
-import { AuroraRoutePage } from '../../page-content'
+import { SettingsPermissionsView } from '@aurora/ui'
+import { getShellSnapshot } from '../../shell-state'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="native"
-      title="Native Capabilities"
-      description="Tauri and mobile native capability claims must come from the SDK native manifest; browser-only state cannot prove native behavior."
-    />
-  )
+export default async function Page() {
+  const snapshot = await getShellSnapshot()
+  return <SettingsPermissionsView snapshot={snapshot} />
 }

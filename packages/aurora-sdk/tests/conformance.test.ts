@@ -64,7 +64,7 @@ const conformanceCases: ConformanceCase[] = [
       new AuroraClient({
         transport: new TauriLocalTransport({
           invoke: async (command, args) => {
-            if (command !== 'aurora_request') {
+            if (command !== 'aurora_command') {
               throw new Error(`Unexpected Tauri command ${command}`)
             }
             const request = readTauriRequest(args)
@@ -197,7 +197,7 @@ describe('SDK transport conformance', () => {
       new AuroraClient({
         transport: new TauriLocalTransport({
           invoke: async (command, args) => {
-            if (command !== 'aurora_request') throw new Error(`Unexpected Tauri command ${command}`)
+            if (command !== 'aurora_command') throw new Error(`Unexpected Tauri command ${command}`)
             return { data: conformanceResponse(readTauriRequest(args).method), status: 200 }
           }
         })
@@ -248,14 +248,31 @@ describe('SDK transport conformance', () => {
 
     expect(backendInventoryFixture.generated_by).toBe('scripts/generate_backend_inventory.py')
     expect(generated.methods.map((method) => method.busTopic)).toEqual([
+      'Orchestrator.GetModelCatalog',
+      'Orchestrator.GetModelRuntime',
+      'Orchestrator.ImportModel',
+      'Orchestrator.DownloadModel',
+      'Orchestrator.BenchmarkModel',
       'Auth.ListPendingPairings',
+      'Auth.ListPrincipals',
+      'Auth.CreatePrincipal',
+      'Auth.UpdatePrincipal',
+      'Auth.DeletePrincipal',
+      'Auth.SetPermissions',
+      'Auth.PatchPermissions',
+      'Auth.ListTokens',
+      'Auth.RevokeToken',
+      'Auth.ListDevices',
+      'Auth.DeleteDevice',
+      'Auth.AuditLog',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',
-      'Gateway.InternalOnly'
+      'Gateway.InternalOnly',
+      'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 4, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 20, issues: [] })
   })
 })
 

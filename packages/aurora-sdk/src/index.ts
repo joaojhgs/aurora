@@ -1,12 +1,48 @@
-export { AuroraClient } from './client.js'
+export { AuroraClient, ModelRuntimeClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export { BACKUP_METHODS, BackupClient } from './backup.js'
+export { ConfigClient } from './config.js'
+export type {
+  ConfigChange,
+  ConfigDiffEntry,
+  ConfigDiffPreviewRequest,
+  ConfigDiffPreviewResponse,
+  ConfigFieldMetadata,
+  ConfigGetRequest,
+  ConfigGetResponse,
+  ConfigReloadImpactEntry,
+  ConfigReloadImpactRequest,
+  ConfigReloadImpactResponse,
+  ConfigRollbackRequest,
+  ConfigRollbackResponse,
+  ConfigSchemaMetadataRequest,
+  ConfigSchemaMetadataResponse,
+  ConfigSetRequest,
+  ConfigSetResponse,
+  ConfigValidateRequest,
+  ConfigValidateResponse,
+  ConfigVersionEntry,
+  ConfigVersionHistoryRequest,
+  ConfigVersionHistoryResponse
+} from './config.js'
+export {
+  DB_METHODS,
+  MemoryClient,
+  normalizeConversationMessage,
+  normalizeRagPrivacyClass
+} from './memory.js'
 export {
   SCHEDULER_METHODS,
   SchedulerClient,
   normalizeSchedulerActionSupport,
   normalizeSchedulerJob
 } from './scheduler.js'
+export {
+  loadToolApprovalCards,
+  normalizeToolCatalog,
+  submitToolDenialDecision,
+  submitToolApprovalDecision
+} from './tools.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
@@ -26,6 +62,7 @@ export {
   AUTH_METHODS,
   GATEWAY_METHODS,
   ORCHESTRATOR_METHODS,
+  ORCHESTRATOR_MODEL_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,
@@ -76,17 +113,21 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
+  supportBundleFixture,
   toolCatalogFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './admin.js'
 export type * from './backup.js'
+export type * from './memory.js'
 export type * from './scheduler.js'
+export type * from './tools.js'
 export type * from './transport.js'
 export type {
   AuroraEventStreamKind,
@@ -133,10 +174,13 @@ export type {
   LocalFileReadResult,
   LocalFileWriteOptions,
   LocalFileWriteResult,
+  SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,
   TauriCommandNames,
   TauriInvoke,
+  TauriLogTailRequest,
+  TauriLogTailResult,
   TauriLocalTransportOptions,
   TauriSidecarStatus
 } from './tauri.js'

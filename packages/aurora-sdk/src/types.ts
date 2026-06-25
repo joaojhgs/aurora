@@ -106,6 +106,12 @@ export interface AssistantSendMessageRequest {
   timeoutMs?: number
 }
 
+export interface AssistantStreamMessageRequest extends AssistantSendMessageRequest {
+  signal?: AbortSignal
+  lastEventId?: string | null
+  replayFrom?: string | null
+}
+
 export interface AssistantMessage {
   id: string
   role: 'user' | 'assistant'
@@ -120,6 +126,147 @@ export interface AssistantSendMessageResult {
   modelLabel: string | null
   privacyClass: PrivacyClass
   metadata: JsonObject
+}
+
+export type AssistantStreamUpdateKind = 'delta' | 'completed' | 'failed' | 'tool' | 'transport_lost' | 'fallback'
+
+export interface AssistantStreamUpdate {
+  kind: AssistantStreamUpdateKind
+  eventId: string | null
+  sessionId: string | null
+  text: string
+  textDelta: string
+  modelLabel: string | null
+  error: AuroraError | null
+  audit: AuditReceipt
+  metadata: JsonObject
+}
+
+export type OrchestratorInterruptScope = 'generation' | 'tool_call' | 'tts_playback' | 'session'
+export type OrchestratorInterruptStatus = 'cancelled' | 'no_active_work' | 'not_supported' | 'failed'
+
+export interface OrchestratorInterruptRequest {
+  scopes?: OrchestratorInterruptScope[]
+  session_id?: string | null
+  request_id?: string | null
+  reason?: string
+}
+
+export interface OrchestratorInterruptScopeResult {
+  scope: OrchestratorInterruptScope
+  status: OrchestratorInterruptStatus
+  message: string
+  cancelled_count: number
+}
+
+export interface OrchestratorInterruptResponse {
+  interrupt_id: string
+  status: string
+  requested_scopes: OrchestratorInterruptScope[]
+  results: OrchestratorInterruptScopeResult[]
+  session_id: string | null
+  request_id: string | null
+  event_topic: string
+  audit_event: string
+  idempotent: boolean
+  secrets_redacted: boolean
+}
+
+export interface AssistantCancelRequest {
+  sessionId?: string | null
+  requestId?: string | null
+  scopes?: OrchestratorInterruptScope[]
+  reason?: string
+}
+
+export type AttachmentContextKind = 'text' | 'url' | 'file' | 'image'
+export type AttachmentContextPrivacyClass = Exclude<PrivacyClass, 'admin-critical'>
+export type AttachmentContextSourceChannel =
+  | 'chat'
+  | 'api'
+  | 'desktop'
+  | 'mobile_share_sheet'
+  | 'deep_link'
+  | 'browser_extension'
+export type AttachmentContextStoragePolicy = 'ephemeral' | 'rag' | 'reject'
+export type AttachmentContextStatus =
+  | 'accepted'
+  | 'stored'
+  | 'rejected'
+  | 'redacted'
+  | 'unsupported'
+
+export interface AttachmentContextLimits {
+  max_items: number
+  max_item_bytes: number
+  max_total_bytes: number
+  max_text_chars: number
+}
+
+export interface AttachmentContextSource {
+  channel: AttachmentContextSourceChannel
+  display_name?: string | null
+  uri?: string | null
+  mime_type?: string | null
+  platform?: string | null
+  originating_app?: string | null
+  shared_at?: string | null
+  principal_id?: string | null
+  device_id?: string | null
+  peer_id?: string | null
+}
+
+export interface AttachmentContextItem {
+  kind: AttachmentContextKind
+  content_text?: string | null
+  url?: string | null
+  title?: string | null
+  filename?: string | null
+  mime_type?: string | null
+  size_bytes?: number | null
+  source?: Partial<AttachmentContextSource> | null
+  metadata?: JsonObject
+}
+
+export interface AttachmentContextIngestRequest {
+  items: AttachmentContextItem[]
+  session_id?: string | null
+  namespace?: string
+  storage_policy?: AttachmentContextStoragePolicy
+  privacy_class?: AttachmentContextPrivacyClass
+  caller_principal_id?: string | null
+  correlation_id?: string | null
+  policy_decision_id?: string | null
+  limits?: Partial<AttachmentContextLimits>
+}
+
+export interface AttachmentContextItemResult {
+  item_id: string
+  kind: AttachmentContextKind
+  status: AttachmentContextStatus
+  storage_policy: AttachmentContextStoragePolicy
+  privacy_class: AttachmentContextPrivacyClass
+  accepted_bytes: number
+  stored_namespace: string | null
+  stored_key: string | null
+  redacted: boolean
+  redaction_reasons: string[]
+  reason_code: string | null
+  message: string
+}
+
+export interface AttachmentContextIngestResponse {
+  accepted: boolean
+  rejected: boolean
+  total_items: number
+  accepted_items: AttachmentContextItemResult[]
+  rejected_items: AttachmentContextItemResult[]
+  total_bytes: number
+  storage_policy: AttachmentContextStoragePolicy
+  privacy_class: AttachmentContextPrivacyClass
+  audit_event: string
+  correlation_id: string | null
+  secrets_redacted: boolean
 }
 
 export type ContractExposure = 'internal' | 'external' | 'both' | 'gateway_builtin' | string
@@ -202,6 +349,25 @@ export interface AuthPairingExchangeResponse extends PairingExchangeLikeResponse
   token_id?: string
 }
 
+export interface AuthPairingApproveRequest {
+  code: string
+  permissions?: string[] | null
+  is_admin?: boolean
+}
+
+export interface AuthPairingApproveResponse {
+  success: boolean
+}
+
+export interface AuthPairingDenyRequest {
+  code: string
+  reason?: string
+}
+
+export interface AuthPairingDenyResponse {
+  success: boolean
+}
+
 export interface PendingPairingEntry {
   request_id: string
   code: string
@@ -228,6 +394,153 @@ export interface ListPendingPairingsResponse {
   total: number
   expired_count: number
   secrets_redacted: boolean
+}
+
+export interface PrincipalCreateRequest {
+  username: string
+  password?: string | null
+  permissions?: string[] | null
+  is_admin?: boolean
+}
+
+export interface PrincipalResponse {
+  id: string
+  username: string
+  permissions: string[]
+  is_admin: boolean
+  created_at?: string | null
+}
+
+export interface PrincipalListRequest {}
+
+export interface PrincipalListResponse {
+  principals: PrincipalResponse[]
+}
+
+export interface PrincipalGetRequest {
+  user_id: string
+}
+
+export interface PrincipalUpdateRequest {
+  user_id: string
+  username?: string | null
+  password?: string | null
+  is_admin?: boolean | null
+}
+
+export interface PrincipalDeleteRequest {
+  user_id: string
+}
+
+export interface PrincipalDeleteResponse {
+  success: boolean
+}
+
+export interface PermissionSetRequest {
+  user_id: string
+  permissions: string[]
+}
+
+export interface PermissionSetResponse {
+  success: boolean
+}
+
+export interface PermissionPatchRequest {
+  user_id: string
+  grant?: string[] | null
+  revoke?: string[] | null
+}
+
+export interface PermissionPatchResponse {
+  success: boolean
+}
+
+export interface TokenListRequest {
+  principal_id?: string | null
+  device_id?: string | null
+}
+
+export interface TokenResponse {
+  id: string
+  prefix: string
+  device_id?: string | null
+  user_id?: string | null
+  scopes: string[]
+  created_at?: string | null
+  expires_at?: string | null
+}
+
+export interface TokenListResponse {
+  tokens: TokenResponse[]
+}
+
+export interface TokenRevokeRequest {
+  token_id: string
+}
+
+export interface TokenRevokeResponse {
+  success: boolean
+}
+
+export interface DeviceListRequest {
+  principal_id?: string | null
+}
+
+export interface DeviceResponse {
+  id: string
+  user_id?: string | null
+  name: string
+  is_trusted: boolean
+  created_at?: string | null
+  last_seen?: string | null
+}
+
+export interface DeviceListResponse {
+  devices: DeviceResponse[]
+}
+
+export interface DeviceDeleteRequest {
+  device_id: string
+}
+
+export interface DeviceDeleteResponse {
+  success: boolean
+}
+
+export interface AuditLogRequest {
+  limit?: number
+  offset?: number
+  principal_id?: string | null
+  event?: string | null
+  correlation_id?: string | null
+  peer_id?: string | null
+  provider_id?: string | null
+  tool_id?: string | null
+  action?: string | null
+  policy_decision_id?: string | null
+  route?: string | null
+}
+
+export interface AuditLogEntry {
+  id?: string | null
+  event?: string | null
+  principal_id?: string | null
+  details?: string | null
+  ip_address?: string | null
+  created_at?: string | null
+  correlation_id?: string | null
+  peer_id?: string | null
+  provider_id?: string | null
+  tool_id?: string | null
+  action?: string | null
+  policy_decision_id?: string | null
+  route?: string | null
+  [key: string]: JsonValue | undefined
+}
+
+export interface AuditLogResponse {
+  events: AuditLogEntry[]
+  total: number
 }
 
 export interface ServiceInfo {
@@ -353,6 +666,76 @@ export interface WebRTCDiagnosticsResponse {
   pairing_peer_count: number
   pending_rpc_count: number
   recent_errors: WebRTCDiagnosticError[]
+  secrets_redacted: boolean
+}
+
+export interface GatewayEventStreamEvent {
+  id: string
+  kind: string
+  topic: string | null
+  bus_topic: string | null
+  correlation_id: string | null
+  peer_id: string | null
+  target_peer_id: string | null
+  status: string | null
+  timestamp: string
+  payload_summary: JsonObject
+  secrets_redacted: boolean
+}
+
+export interface SupportBundleRedactionInfo {
+  secrets_redacted: boolean
+  redacted_fields: string[]
+  omitted_payloads: string[]
+}
+
+export interface SupportBundleDiagnosticItem {
+  name: string
+  status: string
+  source: string
+  details: JsonObject
+  redacted: boolean
+}
+
+export interface GatewaySupportBundleRequest {
+  correlation_id?: string | null
+  event_limit?: number
+  audit_limit?: number
+  include_capability_catalog?: boolean
+}
+
+export interface CapabilityCatalogSummary {
+  providers: number
+  actions: number
+  resources: number
+  modules: string[]
+  blocked_actions: number
+}
+
+export interface GatewaySupportBundleResponse {
+  generated_at: string
+  correlation_id: string | null
+  registry: GetRegistryResponse
+  services: ServiceInfo[]
+  service_health: Array<{
+    module: string
+    status: string
+    checks: Record<string, JsonValue>
+    timestamp: string
+  }>
+  mesh_status: JsonObject
+  webrtc_diagnostics: WebRTCDiagnosticsResponse
+  route_diagnostics: JsonObject[]
+  capability_catalog_summary: CapabilityCatalogSummary
+  recent_events: GatewayEventStreamEvent[]
+  recent_audit_events: JsonObject[]
+  native_capabilities: SupportBundleDiagnosticItem[]
+  sidecar_logs: SupportBundleDiagnosticItem[]
+  config_shape: JsonObject
+  correlation_ids: string[]
+  audit_receipt: string | null
+  audit_error: string | null
+  redaction: SupportBundleRedactionInfo
   secrets_redacted: boolean
 }
 

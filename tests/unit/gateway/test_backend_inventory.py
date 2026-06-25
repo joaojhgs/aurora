@@ -93,6 +93,22 @@ def test_backend_inventory_includes_model_runtime_contracts():
         assert methods[topic]["required_perms"] == ["Orchestrator.manage"]
 
 
+def test_backend_inventory_includes_attachment_context_ingestion_contract():
+    inventory = build_inventory()
+    methods = {method["bus_topic"]: method for method in inventory["methods"]}
+
+    ingest = methods[OrchestratorMethods.INGEST_CONTEXT]
+    assert ingest["routePath"] == "/api/Orchestrator/IngestContext"
+    assert ingest["exposure"] == "external"
+    assert ingest["method_type"] == "use"
+    assert ingest["required_perms"] == ["Orchestrator.use"]
+    assert ingest["input_model"] == "AttachmentContextIngestRequest"
+    assert ingest["output_model"] == "AttachmentContextIngestResponse"
+    assert ingest["input_schema"]["title"] == "AttachmentContextIngestRequest"
+    assert ingest["output_schema"]["title"] == "AttachmentContextIngestResponse"
+    assert ingest["source_file"].startswith("app/services/orchestrator/service.py:")
+
+
 def test_backend_inventory_includes_admin_pending_pairing_queue_contract():
     inventory = build_inventory()
     methods = {method["bus_topic"]: method for method in inventory["methods"]}
