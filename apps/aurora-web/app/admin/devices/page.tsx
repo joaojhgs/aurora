@@ -1,11 +1,5 @@
-import { AuroraRoutePage } from '../../page-content'
+import { AdminDevicesClientPage } from './devices-client'
 
 export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="devices"
-      title="Devices"
-      description="Device and session management requires backend-proven identity state before device trust or revocation controls are enabled."
-    />
-  )
+  return <AdminDevicesClientPage />
 }

@@ -82,6 +82,10 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.DeletePrincipal', () => ({ success: true }))
       .register('Auth.SetPermissions', () => ({ success: true }))
       .register('Auth.PatchPermissions', () => ({ success: true }))
+      .register('Auth.ListTokens', (request) => mockListTokens(fixtures.tokens, request.payload))
+      .register('Auth.RevokeToken', () => ({ success: true }))
+      .register('Auth.ListDevices', (request) => mockListDevices(fixtures.devices, request.payload))
+      .register('Auth.DeleteDevice', () => ({ success: true }))
       .register('Auth.AuditLog', () => cloneFixture(fixtures.auditLog))
       .register('Orchestrator.ExternalUserInput', (request) => ({
         text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
@@ -227,6 +231,35 @@ function mockUpdatePrincipal(
     ...cloneFixture(principal),
     username: typeof request.username === 'string' ? request.username : principal.username,
     is_admin: typeof request.is_admin === 'boolean' ? request.is_admin : principal.is_admin
+  }
+}
+
+function mockListTokens(
+  tokens: { tokens: Array<{ device_id?: string | null; user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null
+    ? payload as { device_id?: unknown; principal_id?: unknown }
+    : {}
+  const deviceId = typeof request.device_id === 'string' ? request.device_id : null
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    tokens: cloneFixture(tokens.tokens).filter((token) => {
+      if (deviceId && token.device_id !== deviceId) return false
+      if (principalId && token.user_id !== principalId) return false
+      return true
+    })
+  }
+}
+
+function mockListDevices(
+  devices: { devices: Array<{ user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { principal_id?: unknown } : {}
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    devices: cloneFixture(devices.devices).filter((device) => !principalId || device.user_id === principalId)
   }
 }
 

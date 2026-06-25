@@ -153,6 +153,72 @@ describe('AuroraClient', () => {
     ])
   })
 
+  it('routes Auth device and token management through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Auth.ListDevices', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          devices: [
+            {
+              id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              name: 'Studio Mac',
+              is_trusted: true,
+              created_at: '2026-06-19T00:30:00Z',
+              last_seen: '2026-06-25T02:30:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.ListTokens', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          tokens: [
+            {
+              id: 'token-studio',
+              prefix: 'aur_stu',
+              device_id: 'device-studio-mac',
+              user_id: 'principal-owner',
+              scopes: ['Auth.manage'],
+              created_at: '2026-06-19T00:35:00Z',
+              expires_at: '2026-07-19T00:35:00Z'
+            }
+          ]
+        }
+      })
+      .register('Auth.DeleteDevice', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    const devices = await client.authApi.listDevices({ principal_id: 'principal-owner' })
+    const tokens = await client.authApi.listTokens({ device_id: 'device-studio-mac' })
+    const deleted = await client.authApi.deleteDevice({ device_id: 'device-studio-mac' })
+
+    expect(devices.ok).toBe(true)
+    expect(tokens.ok).toBe(true)
+    expect(deleted.ok).toBe(true)
+    expect(calls).toEqual([
+      {
+        method: 'Auth.ListDevices',
+        path: '/api/Auth/ListDevices',
+        payload: { principal_id: 'principal-owner' }
+      },
+      {
+        method: 'Auth.ListTokens',
+        path: '/api/Auth/ListTokens',
+        payload: { device_id: 'device-studio-mac' }
+      },
+      {
+        method: 'Auth.DeleteDevice',
+        path: '/api/Auth/DeleteDevice',
+        payload: { device_id: 'device-studio-mac' }
+      }
+    ])
+  })
+
   it('advertises assistant context ingestion from backend inventory descriptors', () => {
     const descriptors = describeBackendInventory(backendInventoryFixture)
 
@@ -455,8 +521,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 3,
-        methods: 16,
-        externalMethods: 15,
+        methods: 20,
+        externalMethods: 19,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -2846,7 +2912,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 16,
+      checked: 20,
       issues: []
     })
 
