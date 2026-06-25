@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-sidecar-stop"
+description = "Allow the frontend SDK adapter to stop the Rust-supervised local Aurora Python sidecar after sidecar-session token proof."
+commands.allow = ["aurora_sidecar_stop"]

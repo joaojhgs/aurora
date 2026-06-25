@@ -1,24 +1,42 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AppShell, RouteMatrix, StateSurface, buildShellSnapshot, loadingShellSnapshot } from '@aurora/ui'
 import type { AuroraShellSnapshot } from '@aurora/ui'
-import type { TauriSidecarStatus } from '@aurora/client'
+import type { TauriNativeFeatureStatus, TauriNativePermissionStatus, TauriSidecarStatus } from '@aurora/client'
 import { createAuroraTauriRuntime } from './aurora-client'
 
 export function AuroraTauriApp() {
   const runtime = useMemo(() => createAuroraTauriRuntime(), [])
   const [snapshot, setSnapshot] = useState<AuroraShellSnapshot>(loadingShellSnapshot)
   const [sidecar, setSidecar] = useState<TauriSidecarStatus | null>(null)
+  const [nativePermissions, setNativePermissions] = useState<TauriNativePermissionStatus | null>(null)
+  const [nativeFeatures, setNativeFeatures] = useState<Record<string, TauriNativeFeatureStatus | null>>({})
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [nextSnapshot, nextSidecar] = await Promise.all([
+      const localSidecar =
+        runtime.mode === 'desktop-local'
+          ? await runtime.startSidecar().catch((error: unknown) => ({
+              running: false,
+              mode: 'desktop-local-start-failed',
+              lastError: error instanceof Error ? error.message : String(error),
+              details: {}
+            }))
+          : null
+      const [nextSnapshot, nextSidecar, nextNativePermissions, tray, notifications, dialogs, audio] = await Promise.all([
         buildShellSnapshot(runtime.client),
-        runtime.sidecarStatus().catch(() => null)
+        localSidecar ? Promise.resolve(localSidecar) : runtime.sidecarStatus().catch(() => null),
+        runtime.nativePermissionStatus().catch(() => null),
+        runtime.trayStatus().catch(() => null),
+        runtime.notificationStatus().catch(() => null),
+        runtime.dialogStatus().catch(() => null),
+        runtime.audioBridgeStatus().catch(() => null)
       ])
       if (!cancelled) {
         setSnapshot(nextSnapshot)
         setSidecar(nextSidecar)
+        setNativePermissions(nextNativePermissions)
+        setNativeFeatures({ tray, notifications, dialogs, audio })
       }
     }
     void load()
@@ -47,8 +65,13 @@ export function AuroraTauriApp() {
           <dl className="ata-facts">
             <div><dt>Runtime mode</dt><dd>{runtime.mode}</dd></div>
             <div><dt>SDK transport</dt><dd>{snapshot.transportKind}</dd></div>
-            <div><dt>Sidecar supervisor</dt><dd>{sidecar?.running ? 'running' : 'not started by TAURI-001'}</dd></div>
+            <div><dt>Sidecar supervisor</dt><dd>{sidecar?.running ? 'running' : localMode ? 'stopped or unavailable' : 'not used in thin mode'}</dd></div>
             <div><dt>Native manifest</dt><dd>{snapshot.nativeAvailable ? snapshot.nativePlatform : 'unavailable'}</dd></div>
+            <div><dt>Tray</dt><dd>{nativeFeatureLabel(nativeFeatures.tray)}</dd></div>
+            <div><dt>Notifications</dt><dd>{nativeFeatureLabel(nativeFeatures.notifications)}</dd></div>
+            <div><dt>Dialogs</dt><dd>{nativeFeatureLabel(nativeFeatures.dialogs)}</dd></div>
+            <div><dt>Audio bridge</dt><dd>{nativeFeatureLabel(nativeFeatures.audio)}</dd></div>
+            <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
           </dl>
           <button className="ata-secondary" type="button" onClick={() => void runtime.shutdown()}>
             Shut down shell
@@ -58,4 +81,10 @@ export function AuroraTauriApp() {
       </div>
     </AppShell>
   )
+}
+
+function nativeFeatureLabel(feature: TauriNativeFeatureStatus | null | undefined): string {
+  if (!feature) return 'not available'
+  if (feature.available) return `${feature.capability} available`
+  return `${feature.capability} denied by default`
 }

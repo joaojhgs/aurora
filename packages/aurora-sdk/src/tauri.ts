@@ -12,8 +12,17 @@ export type TauriInvoke = (command: string, args?: Record<string, unknown>) => P
 
 export interface TauriCommandNames {
   request: string
+  sidecarSession: string
+  sidecarStart: string
+  sidecarStop: string
   sidecarStatus: string
   nativeCapabilityManifest: string
+  nativePermissionStatus: string
+  trayStatus: string
+  notificationStatus: string
+  notificationSend: string
+  dialogStatus: string
+  audioBridgeStatus: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
@@ -53,6 +62,34 @@ export interface TauriLogTailResult {
   truncated: boolean
   reason?: string | null
   maxLines?: number
+}
+
+export interface TauriSidecarSession {
+  token: string
+}
+
+export interface TauriNativePermissionStatus {
+  platform: string
+  permissions: Record<string, boolean>
+  capabilities: Record<string, boolean>
+  deniedByDefault: string[]
+  privacyClasses: string[]
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface TauriNativeFeatureStatus {
+  available: boolean
+  permission: string
+  capability: string
+  source: string
+  reason?: string | null
+  details?: JsonObject
+}
+
+export interface TauriNotificationRequest {
+  title: string
+  body: string
 }
 
 export interface SecureStorageGetResult {
@@ -103,8 +140,17 @@ export interface SecureFileHandleOpenOptions extends LocalFilePickOptions {
 
 const DEFAULT_COMMANDS: TauriCommandNames = {
   request: 'aurora_command',
+  sidecarSession: 'aurora_sidecar_session',
+  sidecarStart: 'aurora_sidecar_start',
+  sidecarStop: 'aurora_sidecar_stop',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  nativePermissionStatus: 'aurora_native_permission_status',
+  trayStatus: 'aurora_tray_status',
+  notificationStatus: 'aurora_notification_status',
+  notificationSend: 'aurora_notification_send',
+  dialogStatus: 'aurora_dialog_status',
+  audioBridgeStatus: 'aurora_audio_bridge_status',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
@@ -122,6 +168,7 @@ export class TauriLocalTransport implements AuroraTransport {
   private readonly invokeImpl: TauriInvoke
   private readonly requestArgName: string
   private readonly defaultTimeoutMs: number
+  private sidecarSession: Promise<TauriSidecarSession | null> | null = null
 
   constructor(options: TauriLocalTransportOptions = {}) {
     this.invokeImpl = options.invoke ?? resolveTauriInvoke()
@@ -134,7 +181,8 @@ export class TauriLocalTransport implements AuroraTransport {
     request: AuroraTransportRequest<TPayload>
   ): Promise<AuroraTransportResponse<TData>> {
     const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs
-    const args = { [this.requestArgName]: request }
+    const sidecarSession = await this.getSidecarSession()
+    const args = { [this.requestArgName]: withSidecarSessionHeader(request, sidecarSession) }
     const context: TauriInvokeContext = { timeoutMs, method: request.method }
     if (request.signal !== undefined) context.signal = request.signal
     if (request.busTopic !== undefined) context.busTopic = request.busTopic
@@ -155,8 +203,42 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStatus)
   }
 
+  async startSidecar(): Promise<TauriSidecarStatus> {
+    const commandToken = await this.requireSidecarSession()
+    return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStart, { commandToken })
+  }
+
+  async stopSidecar(): Promise<TauriSidecarStatus> {
+    const commandToken = await this.requireSidecarSession()
+    return this.invokeCommand<TauriSidecarStatus>(this.commands.sidecarStop, { commandToken })
+  }
+
   getNativeCapabilityManifest(): Promise<NativeCapabilityManifest> {
     return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
+  }
+
+  getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {
+    return this.invokeCommand<TauriNativePermissionStatus>(this.commands.nativePermissionStatus)
+  }
+
+  getTrayStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.trayStatus)
+  }
+
+  getNotificationStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.notificationStatus)
+  }
+
+  sendNotification(request: TauriNotificationRequest): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.notificationSend, { request })
+  }
+
+  getDialogStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.dialogStatus)
+  }
+
+  getAudioBridgeStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.audioBridgeStatus)
   }
 
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {
@@ -230,6 +312,39 @@ export class TauriLocalTransport implements AuroraTransport {
         method: context.method ?? command,
         busTopic: context.busTopic
       })
+    }
+  }
+
+  private async requireSidecarSession(): Promise<TauriSidecarSession> {
+    const session = await this.getSidecarSession()
+    if (!session) {
+      throw new AuroraError({
+        code: 'native_permission_missing',
+        message: 'Tauri sidecar session command is unavailable.'
+      })
+    }
+    return session
+  }
+
+  private async getSidecarSession(): Promise<TauriSidecarSession | null> {
+    this.sidecarSession ??= withTimeout(
+      this.invokeImpl(this.commands.sidecarSession).then((value) => value as TauriSidecarSession),
+      { command: this.commands.sidecarSession, timeoutMs: 250 }
+    ).catch(() => null)
+    return this.sidecarSession
+  }
+}
+
+function withSidecarSessionHeader<TPayload>(
+  request: AuroraTransportRequest<TPayload>,
+  session: TauriSidecarSession | null
+): AuroraTransportRequest<TPayload> {
+  if (!session?.token) return request
+  return {
+    ...request,
+    headers: {
+      ...request.headers,
+      'x-aurora-sidecar-token': session.token
     }
   }
 }

@@ -10,6 +10,9 @@ import type {
   GatewayBuiltinRouteDescriptor,
   GetRegistryResponse,
   GetServicesResponse,
+  ListPendingPairingsResponse,
+  MeshPeerListResponse,
+  MeshStatusResponse,
   AuditLogResponse,
   DeviceListResponse,
   ModelRuntimeCatalogResponse,
@@ -20,6 +23,8 @@ import type {
   TokenListResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
+import type { BackupListResponse } from './backup.js'
+import type { SchedulerListJobsResponse } from './scheduler.js'
 import type {
   DBGetMessagesResponse,
   DBRAGExportNamespaceResponse,
@@ -138,6 +143,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'GetMeshStatus',
+          summary: 'Return read-only mesh peer and route diagnostics',
+          bus_topic: 'Gateway.GetMeshStatus',
+          exposure: 'external',
+          input_model: 'EmptyInput',
+          output_model: 'GetMeshStatusResponse',
+          required_perms: ['Gateway.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'GetDeploymentTopology',
           summary: 'Get sanitized deployment topology and message bus health',
           bus_topic: 'Gateway.GetDeploymentTopology',
@@ -181,6 +198,90 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
       summary: 'Authentication, authorization, pairing, and principal management',
       capabilities: ['login', 'pairing', 'principals', 'permissions', 'tokens', 'devices', 'audit', 'mesh'],
       methods: [
+        {
+          name: 'ListPendingPairings',
+          summary: 'List pending device and mesh pairing requests for authorized admins',
+          bus_topic: 'Auth.ListPendingPairings',
+          exposure: 'both',
+          input_model: 'ListPendingPairingsRequest',
+          output_model: 'ListPendingPairingsResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshListPeers',
+          summary: 'List persisted mesh peers and trust state',
+          bus_topic: 'Auth.MeshListPeers',
+          exposure: 'both',
+          input_model: 'MeshPeerListRequest',
+          output_model: 'MeshPeerListResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshGetPeer',
+          summary: 'Get one persisted mesh peer trust record',
+          bus_topic: 'Auth.MeshGetPeer',
+          exposure: 'both',
+          input_model: 'MeshPeerGetRequest',
+          output_model: 'MeshPeerGetResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshApprovePeer',
+          summary: 'Approve a mesh peer and granted outbound permissions',
+          bus_topic: 'Auth.MeshApprovePeer',
+          exposure: 'both',
+          input_model: 'MeshPeerApproveRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshDenyPeer',
+          summary: 'Deny a persisted mesh peer',
+          bus_topic: 'Auth.MeshDenyPeer',
+          exposure: 'both',
+          input_model: 'MeshPeerDenyRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshUpdatePeerPermissions',
+          summary: 'Replace outbound mesh peer permissions',
+          bus_topic: 'Auth.MeshUpdatePeerPermissions',
+          exposure: 'both',
+          input_model: 'MeshPeerUpdatePermissionsRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'MeshRemovePeer',
+          summary: 'Remove a mesh peer record and optionally revoke its token',
+          bus_topic: 'Auth.MeshRemovePeer',
+          exposure: 'both',
+          input_model: 'MeshPeerRemoveRequest',
+          output_model: 'MeshBoolResponse',
+          required_perms: ['Auth.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
         {
           name: 'ListPrincipals',
           summary: 'List all principals',
@@ -314,11 +415,79 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         }
       ]
+    },
+    {
+      module: 'Scheduler',
+      version: '0.1.0',
+      summary: 'Scheduler jobs and delegated automation management',
+      capabilities: ['jobs', 'delegation', 'automation'],
+      methods: [
+        {
+          name: 'ListJobs',
+          summary: 'List scheduler jobs visible to the caller namespace',
+          bus_topic: 'Scheduler.ListJobs',
+          exposure: 'both',
+          input_model: 'SchedulerListJobsRequest',
+          output_model: 'SchedulerListJobsResponse',
+          required_perms: ['Scheduler.use'],
+          method_type: 'use',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Schedule',
+          summary: 'Schedule a local or delegated automation job',
+          bus_topic: 'Scheduler.Schedule',
+          exposure: 'both',
+          input_model: 'SchedulerScheduleJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Cancel',
+          summary: 'Cancel a scheduler job in an authorized owner namespace',
+          bus_topic: 'Scheduler.Cancel',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Pause',
+          summary: 'Pause a scheduler job when backend management support is enabled',
+          bus_topic: 'Scheduler.Pause',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'Resume',
+          summary: 'Resume a scheduler job when backend management support is enabled',
+          bus_topic: 'Scheduler.Resume',
+          exposure: 'both',
+          input_model: 'SchedulerScopedJobRequest',
+          output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        }
+      ]
     }
   ],
   digest: 'fixture',
-  service_count: 3,
-  method_count: 20
+  service_count: 4,
+  method_count: 25
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -409,6 +578,31 @@ const remoteTtsProvider: CapabilityProviderInfo = {
   freshness: localFreshness
 }
 
+const localBackupProvider: CapabilityProviderInfo = {
+  provider_id: 'local:Backup',
+  peer_id: 'local-peer',
+  provider_kind: 'local',
+  node_name: 'aurora-prod-01',
+  status: 'healthy',
+  service_instance_id: 'backup-local-01',
+  module: 'Backup',
+  version: '0.1.0',
+  latency_ms: 2,
+  max_concurrent: 2,
+  active_calls: 0,
+  available_capacity: 2,
+  eligible: true,
+  reason_code: 'eligible',
+  reason: 'Local Backup service fixture is available.',
+  policy: {
+    ...standardPolicy,
+    required_permissions: ['Backup.manage'],
+    safety_class: 'admin',
+    operation_class: 'admin'
+  },
+  freshness: localFreshness
+}
+
 const staleDbProvider: CapabilityProviderInfo = {
   provider_id: 'mesh:cabin-node:DB',
   peer_id: 'peer-cabin-node',
@@ -467,7 +661,7 @@ export const capabilityCatalogFixture: CapabilityCatalogResponse = {
   generated_at: '2026-06-19T00:00:00Z',
   local_peer_id: 'local-peer',
   local_node_name: 'aurora-prod-01',
-  providers: [localGatewayProvider, remoteTtsProvider, staleDbProvider],
+  providers: [localGatewayProvider, remoteTtsProvider, staleDbProvider, localBackupProvider],
   actions: [
     actionFixture(localGatewayProvider, {
       action_id: 'gateway-registry-local',
@@ -489,18 +683,27 @@ export const capabilityCatalogFixture: CapabilityCatalogResponse = {
       topic: 'DB.RAGSearch',
       summary: 'Stale remote DB/RAG provider fixture.',
       bindability: 'unavailable'
+    }),
+    actionFixture(localBackupProvider, {
+      action_id: 'backup-list-local',
+      method: 'List',
+      topic: 'Backup.List',
+      summary: 'List UI-safe backup manifests through the Backup service.',
+      bindability: 'available'
     })
   ],
   resources: [],
   provider_index: {
     Gateway: ['local:Gateway'],
     TTS: ['mesh:studio-gpu:TTS'],
-    DB: ['mesh:cabin-node:DB']
+    DB: ['mesh:cabin-node:DB'],
+    Backup: ['local:Backup']
   },
   action_index: {
     Gateway: ['gateway-registry-local'],
     TTS: ['tts-remote-privacy-blocked'],
-    DB: ['db-stale-rag-search']
+    DB: ['db-stale-rag-search'],
+    Backup: ['backup-list-local']
   },
   secrets_redacted: true
 }
@@ -649,6 +852,47 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
     }),
     provider({
+      provider_id: 'local:Backup',
+      module: 'Backup',
+      service_instance_id: 'backup-local',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Backup.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    provider({
+      provider_id: 'local:Scheduler',
+      module: 'Scheduler',
+      service_instance_id: 'scheduler-local',
+      reason: 'Local Scheduler service exposes namespace-scoped job management.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Scheduler.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    provider({
+      provider_id: 'mesh:studio-gpu:Scheduler',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      node_name: 'studio-gpu',
+      module: 'Scheduler',
+      service_instance_id: 'scheduler-studio-gpu',
+      latency_ms: 42,
+      reason: 'Remote scheduler delegation provider is eligible when selector and policy are present.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Scheduler.manage'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    provider({
       provider_id: 'local:Orchestrator:llama-cpp',
       module: 'Orchestrator',
       service_instance_id: 'orchestrator-local',
@@ -700,6 +944,66 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     })
   ],
   actions: [
+    action({
+      action_id: 'gateway-mesh-status-local',
+      module: 'Gateway',
+      method: 'GetMeshStatus',
+      topic: 'Gateway.GetMeshStatus',
+      provider_id: 'local:Gateway',
+      service_instance_id: 'gateway-local',
+      policy: { ...basePolicy, required_permissions: ['Gateway.use'] },
+      summary: 'Return read-only mesh peer lifecycle and route diagnostics.'
+    }),
+    action({
+      action_id: 'auth-mesh-list-peers-local',
+      module: 'Auth',
+      method: 'MeshListPeers',
+      topic: 'Auth.MeshListPeers',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' },
+      summary: 'List persisted mesh peer trust state.'
+    }),
+    action({
+      action_id: 'auth-mesh-approve-peer-local',
+      module: 'Auth',
+      method: 'MeshApprovePeer',
+      topic: 'Auth.MeshApprovePeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Approve a persisted mesh peer through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-deny-peer-local',
+      module: 'Auth',
+      method: 'MeshDenyPeer',
+      topic: 'Auth.MeshDenyPeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Deny a persisted mesh peer through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-update-peer-permissions-local',
+      module: 'Auth',
+      method: 'MeshUpdatePeerPermissions',
+      topic: 'Auth.MeshUpdatePeerPermissions',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Update persisted mesh peer permissions through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-mesh-remove-peer-local',
+      module: 'Auth',
+      method: 'MeshRemovePeer',
+      topic: 'Auth.MeshRemovePeer',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Remove a persisted mesh peer through AdminAction.'
+    }),
     action({
       action_id: 'tts-local-synthesize',
       module: 'TTS',
@@ -813,6 +1117,78 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
         mesh_visible: true
       },
       freshness: { ...baseFreshness, last_probe_age_s: 900, stale: true }
+    }),
+    action({
+      action_id: 'backup-list-local',
+      module: 'Backup',
+      method: 'List',
+      topic: 'Backup.List',
+      provider_id: 'local:Backup',
+      service_instance_id: 'backup-local',
+      summary: 'List UI-safe backup manifests through the Backup service.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Backup.manage'],
+        operation_class: 'admin',
+        safety_class: 'admin'
+      }
+    }),
+    action({
+      action_id: 'scheduler-list-local',
+      module: 'Scheduler',
+      method: 'ListJobs',
+      topic: 'Scheduler.ListJobs',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.use'], operation_class: 'admin', safety_class: 'admin' },
+      summary: 'List namespace-scoped scheduler jobs through Scheduler.'
+    }),
+    action({
+      action_id: 'scheduler-schedule-local',
+      module: 'Scheduler',
+      method: 'Schedule',
+      topic: 'Scheduler.Schedule',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Create scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-cancel-local',
+      module: 'Scheduler',
+      method: 'Cancel',
+      topic: 'Scheduler.Cancel',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Cancel scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-pause-local',
+      module: 'Scheduler',
+      method: 'Pause',
+      topic: 'Scheduler.Pause',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Pause scheduler jobs through AdminAction.'
+    }),
+    action({
+      action_id: 'scheduler-resume-remote',
+      module: 'Scheduler',
+      method: 'Resume',
+      topic: 'Scheduler.Resume',
+      provider_id: 'mesh:studio-gpu:Scheduler',
+      peer_id: 'peer-studio-gpu',
+      provider_kind: 'mesh',
+      service_instance_id: 'scheduler-studio-gpu',
+      selector: { peer_id: 'peer-studio-gpu', module: 'Scheduler', provider_id: 'mesh:studio-gpu:Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], trust_tier: 'paired', mesh_visible: true, operation_class: 'admin', safety_class: 'admin', approval_required: true },
+      summary: 'Resume delegated remote scheduler jobs with visible peer/provider context.'
     }),
     action({
       action_id: 'model-runtime-local-catalog',
@@ -1006,6 +1382,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
   ],
   resources: [],
   provider_index: {
+    Gateway: ['local:Gateway'],
     TTS: ['local:TTS', 'remote:kitchen:TTS'],
     Tooling: ['local:TTS', 'remote:kitchen:TTS'],
     Orchestrator: [
@@ -1014,9 +1391,12 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'cloud:openai:Orchestrator',
       'native:mobile-local-light'
     ],
-    Auth: ['local:Auth']
+    Auth: ['local:Auth'],
+    Backup: ['local:Backup'],
+    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler']
   },
   action_index: {
+    'Gateway.GetMeshStatus': ['gateway-mesh-status-local'],
     'TTS.Synthesize': ['tts-local-synthesize', 'tts-remote-synthesize'],
     'Tooling.ExecuteTool': [
       'tool-remote-file-search',
@@ -1042,7 +1422,18 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.RevokeToken': ['auth-revoke-token'],
     'Auth.ListDevices': ['auth-list-devices'],
     'Auth.DeleteDevice': ['auth-delete-device'],
-    'Auth.AuditLog': ['auth-audit-log']
+    'Auth.AuditLog': ['auth-audit-log'],
+    'Auth.MeshListPeers': ['auth-mesh-list-peers-local'],
+    'Auth.MeshApprovePeer': ['auth-mesh-approve-peer-local'],
+    'Auth.MeshDenyPeer': ['auth-mesh-deny-peer-local'],
+    'Auth.MeshUpdatePeerPermissions': ['auth-mesh-update-peer-permissions-local'],
+    'Auth.MeshRemovePeer': ['auth-mesh-remove-peer-local'],
+    'Backup.List': ['backup-list-local'],
+    'Scheduler.ListJobs': ['scheduler-list-local'],
+    'Scheduler.Schedule': ['scheduler-schedule-local'],
+    'Scheduler.Cancel': ['scheduler-cancel-local'],
+    'Scheduler.Pause': ['scheduler-pause-local'],
+    'Scheduler.Resume': ['scheduler-resume-remote']
   },
   secrets_redacted: true
 }
@@ -1069,6 +1460,16 @@ export const gatewayServicesFixture: GetServicesResponse = {
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: 'auth-local'
+    },
+    {
+      module: 'Scheduler',
+      version: '0.1.0',
+      summary: 'Scheduler jobs and delegated automation management',
+      capabilities: ['jobs', 'delegation', 'automation'],
+      method_count: 5,
+      last_seen: '2026-06-19T00:00:00Z',
+      status: 'healthy',
+      instance_id: 'scheduler-local'
     }
   ]
 }
@@ -1177,6 +1578,293 @@ export const webrtcDiagnosticsFixture: WebRTCDiagnosticsResponse = {
       peer_id: 'stable-peer'
     }
   ],
+  secrets_redacted: true
+}
+
+export const meshStatusFixture: MeshStatusResponse = {
+  local: {
+    mesh_enabled: true,
+    mesh_started: true,
+    webrtc_started: true,
+    peer_id: 'local-peer',
+    node_name: 'aurora-prod-01',
+    peer_selection: 'latency',
+    version_policy: 'compatible',
+    shared_modules: ['Gateway', 'Auth', 'TTS'],
+    routed_modules: ['TTS', 'Tooling', 'Scheduler']
+  },
+  peers: [
+    {
+      peer_id: 'peer-kitchen',
+      node_name: 'Kitchen node',
+      status: 'authenticated',
+      latency_ms: 28,
+      last_ping_age_s: 4,
+      last_manifest_age_s: 18,
+      active_calls: 0,
+      services: [
+        {
+          module: 'TTS',
+          version: '0.1.0',
+          capabilities: ['synthesize'],
+          method_names: ['Synthesize'],
+          max_concurrent: 2,
+          active_calls: 0,
+          available_capacity: 2,
+          digest: 'tts-kitchen-digest'
+        }
+      ],
+      compatibility: {
+        local_compatible: ['TTS'],
+        local_incompatible: [],
+        local_unused: ['DB'],
+        remote_compatible: ['Gateway'],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    },
+    {
+      peer_id: 'peer-studio-gpu',
+      node_name: 'Studio GPU',
+      status: 'negotiated',
+      latency_ms: 34,
+      last_ping_age_s: 2,
+      last_manifest_age_s: 8,
+      active_calls: 1,
+      services: [
+        {
+          module: 'Orchestrator',
+          version: '0.1.0',
+          capabilities: ['models'],
+          method_names: ['GetModelCatalog'],
+          max_concurrent: 2,
+          active_calls: 1,
+          available_capacity: 1,
+          digest: 'orchestrator-studio-digest'
+        },
+        {
+          module: 'Scheduler',
+          version: '0.1.0',
+          capabilities: ['delegation'],
+          method_names: ['ListJobs', 'Schedule'],
+          max_concurrent: 2,
+          active_calls: 0,
+          available_capacity: 2,
+          digest: 'scheduler-studio-digest'
+        }
+      ],
+      compatibility: {
+        local_compatible: ['Orchestrator', 'Scheduler'],
+        local_incompatible: [],
+        local_unused: [],
+        remote_compatible: ['Gateway', 'Auth'],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    },
+    {
+      peer_id: 'peer-den',
+      node_name: 'Den node',
+      status: 'stale',
+      latency_ms: null,
+      last_ping_age_s: 900,
+      last_manifest_age_s: 900,
+      active_calls: 0,
+      services: [],
+      compatibility: {
+        local_compatible: [],
+        local_incompatible: ['Tooling'],
+        local_unused: [],
+        remote_compatible: [],
+        remote_incompatible: [],
+        remote_unused: []
+      }
+    }
+  ],
+  routes: [
+    {
+      module: 'TTS',
+      configured: true,
+      share: true,
+      prefer: 'remote',
+      fallback: 'local',
+      min_version: '0.1.0',
+      required_capabilities: ['synthesize'],
+      decision_target: 'remote',
+      decision_peer_id: 'peer-kitchen',
+      decision_version: '0.1.0',
+      decision_latency_ms: 28,
+      reason: 'remote provider eligible',
+      providers: [
+        {
+          peer_id: 'peer-kitchen',
+          node_name: 'Kitchen node',
+          status: 'authenticated',
+          version: '0.1.0',
+          latency_ms: 28,
+          active_calls: 0,
+          max_concurrent: 2,
+          eligible: true,
+          reason_code: 'eligible',
+          reason: 'compatible TTS provider'
+        },
+        {
+          peer_id: 'peer-den',
+          node_name: 'Den node',
+          status: 'stale',
+          version: '',
+          latency_ms: null,
+          active_calls: 0,
+          max_concurrent: 0,
+          eligible: false,
+          reason_code: 'stale_provider',
+          reason: 'manifest is stale'
+        }
+      ]
+    },
+    {
+      module: 'Scheduler',
+      configured: true,
+      share: false,
+      prefer: 'local',
+      fallback: 'none',
+      min_version: null,
+      required_capabilities: ['delegation'],
+      decision_target: 'local',
+      decision_peer_id: null,
+      decision_version: '',
+      decision_latency_ms: null,
+      reason: 'local provider selected by policy',
+      providers: [
+        {
+          peer_id: 'peer-studio-gpu',
+          node_name: 'Studio GPU',
+          status: 'negotiated',
+          version: '0.1.0',
+          latency_ms: 34,
+          active_calls: 0,
+          max_concurrent: 2,
+          eligible: true,
+          reason_code: 'eligible',
+          reason: 'remote scheduler candidate available'
+        }
+      ]
+    }
+  ],
+  compatibility_failures: [
+    {
+      peer_id: 'peer-den',
+      module: 'Tooling',
+      direction: 'local',
+      reason: 'remote manifest stale'
+    }
+  ],
+  secrets_redacted: true
+}
+
+export const meshPeerListFixture: MeshPeerListResponse = {
+  peers: [
+    {
+      id: 'mesh-peer-kitchen',
+      peer_id: 'peer-kitchen',
+      node_name: 'Kitchen node',
+      room_name: 'home',
+      ip: '192.0.2.10',
+      port: null,
+      outbound_status: 'pending',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'pending',
+      inbound_permissions: ['Gateway.use'],
+      inbound_approved_at: null,
+      connection_status: 'connected',
+      first_seen_at: '2026-06-24T12:00:00Z',
+      last_seen_at: '2026-06-25T15:00:00Z',
+      last_status_change_at: '2026-06-25T15:00:00Z'
+    },
+    {
+      id: 'mesh-peer-studio-gpu',
+      peer_id: 'peer-studio-gpu',
+      node_name: 'Studio GPU',
+      room_name: 'home',
+      ip: '192.0.2.20',
+      port: null,
+      outbound_status: 'approved',
+      outbound_permissions: ['TTS.use', 'Orchestrator.use'],
+      outbound_approved_at: '2026-06-20T14:00:00Z',
+      outbound_approved_by: 'admin',
+      inbound_status: 'approved',
+      inbound_permissions: ['Gateway.use'],
+      inbound_approved_at: '2026-06-20T14:05:00Z',
+      connection_status: 'connected',
+      first_seen_at: '2026-06-20T13:50:00Z',
+      last_seen_at: '2026-06-25T15:01:00Z',
+      last_status_change_at: '2026-06-20T14:05:00Z'
+    },
+    {
+      id: 'mesh-peer-den',
+      peer_id: 'peer-den',
+      node_name: 'Den node',
+      room_name: 'home',
+      ip: null,
+      port: null,
+      outbound_status: 'denied',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'denied',
+      inbound_permissions: [],
+      inbound_approved_at: null,
+      connection_status: 'disconnected',
+      first_seen_at: '2026-06-18T10:00:00Z',
+      last_seen_at: '2026-06-18T10:10:00Z',
+      last_status_change_at: '2026-06-18T10:15:00Z'
+    },
+    {
+      id: 'mesh-peer-removed',
+      peer_id: 'peer-removed',
+      node_name: 'Removed lab node',
+      room_name: 'lab',
+      ip: null,
+      port: null,
+      outbound_status: 'removed',
+      outbound_permissions: [],
+      outbound_approved_at: null,
+      outbound_approved_by: null,
+      inbound_status: 'unknown',
+      inbound_permissions: [],
+      inbound_approved_at: null,
+      connection_status: 'disconnected',
+      first_seen_at: '2026-06-10T09:00:00Z',
+      last_seen_at: '2026-06-10T09:30:00Z',
+      last_status_change_at: '2026-06-10T09:30:00Z'
+    }
+  ],
+  total: 4
+}
+
+export const pendingPairingsFixture: ListPendingPairingsResponse = {
+  pairings: [
+    {
+      request_id: 'mesh-pairing-peer-kitchen',
+      code: 'mesh-pairing-secret',
+      device_name: 'Kitchen tablet',
+      client_ip: '192.168.10.42',
+      status: 'pending',
+      expires_at: '2026-06-25T16:30:00Z',
+      created_at: '2026-06-25T16:00:00Z',
+      remote_peer_id: 'peer-kitchen',
+      remote_node_name: 'Kitchen node',
+      approved_by: null,
+      denied_by: null,
+      denied_reason: '',
+      granted_permissions: ['Gateway.use'],
+      granted_is_admin: false
+    }
+  ],
+  total: 1,
+  expired_count: 0,
   secrets_redacted: true
 }
 
@@ -1387,7 +2075,7 @@ export function principalFixture(id: string): PrincipalResponse | null {
 
 export const backendInventoryFixture: BackendInventory = {
   generated_by: 'scripts/generate_backend_inventory.py',
-  method_count: 18,
+  method_count: 31,
   gateway_builtin_count: 2,
   methods: [
     {
@@ -1527,6 +2215,144 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:100'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshListPeers',
+      summary: 'List persisted mesh peer trust state',
+      bus_topic: 'Auth.MeshListPeers',
+      routePath: '/api/Auth/MeshListPeers',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerListRequest',
+      output_model: 'MeshPeerListResponse',
+      input_schema: {
+        title: 'MeshPeerListRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshPeerListResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:969'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshGetPeer',
+      summary: 'Get a single persisted mesh peer trust record',
+      bus_topic: 'Auth.MeshGetPeer',
+      routePath: '/api/Auth/MeshGetPeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerGetRequest',
+      output_model: 'MeshPeerGetResponse',
+      input_schema: {
+        title: 'MeshPeerGetRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshPeerGetResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:983'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshApprovePeer',
+      summary: 'Approve a mesh peer',
+      bus_topic: 'Auth.MeshApprovePeer',
+      routePath: '/api/Auth/MeshApprovePeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerApproveRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerApproveRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:988'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshDenyPeer',
+      summary: 'Deny/block a mesh peer',
+      bus_topic: 'Auth.MeshDenyPeer',
+      routePath: '/api/Auth/MeshDenyPeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerDenyRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerDenyRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:998'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshUpdatePeerPermissions',
+      summary: 'Update outbound permissions granted to a mesh peer',
+      bus_topic: 'Auth.MeshUpdatePeerPermissions',
+      routePath: '/api/Auth/MeshUpdatePeerPermissions',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerUpdatePermissionsRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerUpdatePermissionsRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:1008'
+    },
+    {
+      module: 'Auth',
+      name: 'MeshRemovePeer',
+      summary: 'Remove a persisted mesh peer',
+      bus_topic: 'Auth.MeshRemovePeer',
+      routePath: '/api/Auth/MeshRemovePeer',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Auth.manage'],
+      input_model: 'MeshPeerRemoveRequest',
+      output_model: 'MeshBoolResponse',
+      input_schema: {
+        title: 'MeshPeerRemoveRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'MeshBoolResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:1018'
     },
     {
       module: 'Auth',
@@ -1782,6 +2608,121 @@ export const backendInventoryFixture: BackendInventory = {
       source_file: 'app/services/auth/service.py:800'
     },
     {
+      module: 'Scheduler',
+      name: 'ListJobs',
+      summary: 'List namespace-scoped scheduler jobs with ownership and delegation policy evidence',
+      bus_topic: 'Scheduler.ListJobs',
+      routePath: '/api/Scheduler/ListJobs',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'use',
+      required_perms: ['Scheduler.use'],
+      input_model: 'SchedulerListJobsRequest',
+      output_model: 'SchedulerListJobsResponse',
+      input_schema: {
+        title: 'SchedulerListJobsRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerListJobsResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Schedule',
+      summary: 'Schedule an automation job through AdminAction with explicit target and policy provenance',
+      bus_topic: 'Scheduler.Schedule',
+      routePath: '/api/Scheduler/Schedule',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScheduleJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScheduleJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Cancel',
+      summary: 'Cancel a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Cancel',
+      routePath: '/api/Scheduler/Cancel',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Pause',
+      summary: 'Pause a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Pause',
+      routePath: '/api/Scheduler/Pause',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'Resume',
+      summary: 'Resume a scheduler job through AdminAction with namespace authorization',
+      bus_topic: 'Scheduler.Resume',
+      routePath: '/api/Scheduler/Resume',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScopedJobRequest',
+      output_model: 'SchedulerActionResponse',
+      input_schema: {
+        title: 'SchedulerScopedJobRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
       module: 'Gateway',
       name: 'GetRegistry',
       summary: 'Return the aggregated service registry',
@@ -1836,6 +2777,26 @@ export const backendInventoryFixture: BackendInventory = {
       input_schema: null,
       output_schema: {
         title: 'WebRTCDiagnosticsResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/gateway/service.py:100'
+    },
+    {
+      module: 'Gateway',
+      name: 'GetMeshStatus',
+      summary: 'Get read-only mesh peer, service, route, and compatibility diagnostics',
+      bus_topic: 'Gateway.GetMeshStatus',
+      routePath: '/api/Gateway/GetMeshStatus',
+      route_kind: 'dynamic',
+      exposure: 'external',
+      method_type: 'use',
+      required_perms: ['Gateway.use'],
+      input_model: 'EmptyInput',
+      output_model: 'MeshStatusResponse',
+      input_schema: null,
+      output_schema: {
+        title: 'MeshStatusResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -1977,16 +2938,47 @@ export const routeExplainFixture: RouteExplainResponse = {
 export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
   platform: 'tauri-desktop',
   permissions: {
-    microphone: false,
-    notifications: true,
-    secureStorage: true,
-    mobileLocalLightRuntime: false
+    'aurora.command': true,
+    'aurora.request': true,
+    'aurora.subscribe': true,
+    'aurora.nativeCapabilityManifest': true,
+    'aurora.sidecarStatus': true,
+    'aurora.sidecarSession': true,
+    'aurora.sidecarStart': true,
+    'aurora.sidecarStop': true,
+    'aurora.shutdown': true,
+    'aurora.logTail': true,
+    'aurora.secureStorage': true,
+    'aurora.nativePermissionStatus': true,
+    'aurora.trayStatus': true,
+    'aurora.notificationsStatus': true,
+    'aurora.notificationsSend': false,
+    'aurora.dialogStatus': true,
+    'aurora.dialogOpen': false,
+    'aurora.localFileRead': false,
+    'aurora.localFileWrite': false,
+    'aurora.secureFileHandle': false,
+    'aurora.audioBridgeStatus': true,
+    'aurora.audioCapture': false,
+    'aurora.audioPlayback': false,
+    'aurora.shell': false,
+    'aurora.processSpawn': false
   },
   capabilities: {
-    localGateway: true,
-    sidecarSupervisor: false,
-    voiceCapture: false,
-    mobileLocalLightRuntime: false
+    'desktop.thinGateway': true,
+    'desktop.localSidecarHealth': true,
+    'desktop.logTail': false,
+    'desktop.localSidecarSupervision': true,
+    'desktop.tray': true,
+    'native.secureCredentialStorage': true,
+    'native.permissionsManifest': true,
+    'native.notifications': false,
+    'native.dialogs': false,
+    'native.secureFileHandles': false,
+    'native.filesystem': false,
+    'native.audio': false,
+    'native.audioCapture': false,
+    'native.audioPlayback': false
   }
 }
 
@@ -2983,6 +3975,215 @@ export const supportBundleFixture: GatewaySupportBundleResponse = {
   secrets_redacted: true
 }
 
+export const backupListFixture: BackupListResponse = {
+  total: 2,
+  secrets_redacted: true,
+  backups: [
+    {
+      backup_id: 'backup-20260625T120000Z-config-rag',
+      created_at: '2026-06-25T12:00:00Z',
+      status: 'ok',
+      storage: {
+        kind: 'local',
+        uri: '.aurora/backups',
+        encryption: 'none',
+        key_ref: null,
+        credential_ref: null,
+        metadata: {}
+      },
+      components: [
+        {
+          component: 'config',
+          status: 'included',
+          item_count: 1,
+          bytes: 4096,
+          fingerprint: 'sha256:config-fixture',
+          redacted: true,
+          message: 'Config snapshot metadata captured with secret values redacted.'
+        },
+        {
+          component: 'rag',
+          status: 'included',
+          item_count: 3,
+          bytes: null,
+          fingerprint: 'sha256:rag-fixture',
+          redacted: true,
+          message: 'RAG namespace metadata captured; record payloads remain redacted.'
+        },
+        {
+          component: 'models',
+          status: 'unsupported',
+          item_count: null,
+          bytes: null,
+          fingerprint: null,
+          redacted: true,
+          message: 'Model binary backup awaits model runtime contracts.'
+        }
+      ],
+      manifest_digest: 'sha256:backup-fixture-a',
+      schema_version: 'aurora.backup.v1',
+      encrypted: false,
+      secrets_redacted: true,
+      audit_receipt: 'audit-backup-create-fixture'
+    },
+    {
+      backup_id: 'backup-20260624T090000Z-config-only',
+      created_at: '2026-06-24T09:00:00Z',
+      status: 'ok',
+      storage: {
+        kind: 'local',
+        uri: '.aurora/backups',
+        encryption: 'none',
+        key_ref: null,
+        credential_ref: null,
+        metadata: {}
+      },
+      components: [
+        {
+          component: 'config',
+          status: 'included',
+          item_count: 1,
+          bytes: 2048,
+          fingerprint: 'sha256:config-only-fixture',
+          redacted: true,
+          message: 'Config snapshot metadata captured.'
+        }
+      ],
+      manifest_digest: 'sha256:backup-fixture-b',
+      schema_version: 'aurora.backup.v1',
+      encrypted: false,
+      secrets_redacted: true,
+      audit_receipt: 'audit-backup-create-fixture-b'
+    }
+  ]
+}
+
+export const schedulerJobsFixture: SchedulerListJobsResponse = {
+  total: 4,
+  jobs: [
+    {
+      job_id: 'job-local-daily-digest',
+      name: 'daily-digest',
+      schedule: '0 8 * * *',
+      action: 'Orchestrator.ExternalUserInput',
+      enabled: true,
+      next_run: '2026-06-26T08:00:00Z',
+      last_run: '2026-06-25T08:00:00Z',
+      status: 'active',
+      namespace: 'local:automation',
+      owner_peer_id: 'local-peer',
+      owner_principal_id: 'principal-admin',
+      target_peer_id: null,
+      target_resource_namespace: null,
+      delegated_permissions: ['Orchestrator.use'],
+      policy_decision_id: 'policy-local-digest',
+      delegated_approval_token_present: false,
+      correlation_id: 'corr-scheduler-local-digest',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'admin',
+      failure_count: 0,
+      privacy_class: 'personal',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: true, status: 'supported', reason: null },
+        { action: 'pause', supported: true, status: 'supported', reason: null },
+        { action: 'resume', supported: false, status: 'not_applicable', reason: 'Job is already active.' }
+      ]
+    },
+    {
+      job_id: 'job-delegated-index',
+      name: 'remote-knowledge-index',
+      schedule: '*/30 * * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: true,
+      next_run: '2026-06-25T16:30:00Z',
+      last_run: '2026-06-25T16:00:00Z',
+      status: 'delegated',
+      namespace: 'local:delegated',
+      owner_peer_id: 'local-peer',
+      owner_principal_id: 'principal-admin',
+      target_peer_id: 'peer-studio-gpu',
+      target_resource_namespace: 'rag:studio',
+      delegated_permissions: ['Tooling.use', 'DB.use'],
+      policy_decision_id: 'policy-remote-index',
+      delegated_approval_token_present: true,
+      correlation_id: 'corr-scheduler-remote-index',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'mesh-delegation',
+      failure_count: 0,
+      privacy_class: 'sensitive',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: true, status: 'supported', reason: null },
+        { action: 'pause', supported: true, status: 'supported', reason: null },
+        { action: 'resume', supported: false, status: 'not_applicable', reason: 'Job is already active.' }
+      ]
+    },
+    {
+      job_id: 'job-remote-running',
+      name: 'studio-render-cleanup',
+      schedule: '15 * * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: true,
+      next_run: '2026-06-25T17:15:00Z',
+      last_run: '2026-06-25T16:15:00Z',
+      status: 'remote-running',
+      namespace: 'peer-studio-gpu:automation',
+      owner_peer_id: 'peer-studio-gpu',
+      owner_principal_id: 'remote-operator',
+      target_peer_id: 'peer-studio-gpu',
+      target_resource_namespace: 'tool:render-cleanup',
+      delegated_permissions: ['Tooling.use'],
+      policy_decision_id: 'policy-remote-owner',
+      delegated_approval_token_present: true,
+      correlation_id: 'corr-scheduler-remote-owner',
+      blocked_reason: null,
+      timezone: 'UTC',
+      source: 'remote-peer',
+      failure_count: 1,
+      privacy_class: 'sensitive',
+      last_error: 'Previous run used fallback capacity.',
+      action_support: [
+        { action: 'cancel', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' },
+        { action: 'pause', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' },
+        { action: 'resume', supported: false, status: 'denied', reason: 'Foreign owner namespace; local node may only observe.' }
+      ]
+    },
+    {
+      job_id: 'job-denied-foreign',
+      name: 'cabin-lights',
+      schedule: '0 22 * * *',
+      action: 'Tooling.ExecuteTool',
+      enabled: false,
+      next_run: null,
+      last_run: null,
+      status: 'denied',
+      namespace: 'peer-cabin-node:automation',
+      owner_peer_id: 'peer-cabin-node',
+      owner_principal_id: 'remote-cabin-admin',
+      target_peer_id: 'peer-cabin-node',
+      target_resource_namespace: 'hardware:lights',
+      delegated_permissions: [],
+      policy_decision_id: 'policy-denied-foreign',
+      delegated_approval_token_present: false,
+      correlation_id: 'corr-scheduler-denied-foreign',
+      blocked_reason: 'Caller is outside the owner namespace.',
+      timezone: 'UTC',
+      source: 'remote-peer',
+      failure_count: 0,
+      privacy_class: 'admin-critical',
+      last_error: null,
+      action_support: [
+        { action: 'cancel', supported: false, status: 'denied', reason: 'Owner namespace denies cancellation.' },
+        { action: 'pause', supported: false, status: 'denied', reason: 'Owner namespace denies pause.' },
+        { action: 'resume', supported: false, status: 'denied', reason: 'Owner namespace denies resume.' }
+      ]
+    }
+  ]
+}
+
 export const uiMockReferenceFixtureSummary = {
   source: 'modules/ui-mock-reference/lib/aurora/data.ts',
   deploymentMode: 'Server',
@@ -3007,9 +4208,14 @@ export interface MockAuroraFixtureSet {
   services: GetServicesResponse
   deploymentTopology: DeploymentTopologyResponse
   webrtcDiagnostics: WebRTCDiagnosticsResponse
+  meshStatus: MeshStatusResponse
+  meshPeers: MeshPeerListResponse
+  pendingPairings: ListPendingPairingsResponse
   capabilityCatalog: CapabilityCatalogResponse
   routeExplain: RouteExplainResponse
   nativeManifest: NativeCapabilityManifest
+  backups: BackupListResponse
+  schedulerJobs: SchedulerListJobsResponse
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
   configGet: ConfigGetResponse
@@ -3038,9 +4244,14 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   services: gatewayServicesFixture,
   deploymentTopology: deploymentTopologyFixture,
   webrtcDiagnostics: webrtcDiagnosticsFixture,
+  meshStatus: meshStatusFixture,
+  meshPeers: meshPeerListFixture,
+  pendingPairings: pendingPairingsFixture,
   capabilityCatalog: capabilityGraphCatalogFixture,
   routeExplain: routeExplainFixture,
   nativeManifest: nativeCapabilityManifestFixture,
+  backups: backupListFixture,
+  schedulerJobs: schedulerJobsFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
   configGet: configGetFixture,

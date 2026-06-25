@@ -25,6 +25,7 @@ import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities
 import { ConfigClient } from './config.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
+import { BackupClient } from './backup.js'
 import { SchedulerClient } from './scheduler.js'
 import {
   loadToolApprovalCards,
@@ -82,6 +83,16 @@ import type {
   GatewayBuiltinRouteDescriptor,
   ListPendingPairingsRequest,
   ListPendingPairingsResponse,
+  MeshBoolResponse,
+  MeshPeerApproveRequest,
+  MeshPeerDenyRequest,
+  MeshPeerGetRequest,
+  MeshPeerGetResponse,
+  MeshPeerListRequest,
+  MeshPeerListResponse,
+  MeshPeerRemoveRequest,
+  MeshPeerUpdatePermissionsRequest,
+  MeshStatusResponse,
   MethodDescriptor,
   ModelRuntimeCatalogRequest,
   ModelRuntimeCatalogResponse,
@@ -136,6 +147,7 @@ export class AuroraClient {
   readonly auth: AuthSession
   readonly registry: RegistryClient
   readonly authApi: AuthApiClient
+  readonly mesh: MeshClient
   readonly capabilities: CapabilityClient
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
@@ -144,6 +156,7 @@ export class AuroraClient {
   readonly models: ModelRuntimeClient
   readonly memory: MemoryClient
   readonly tools: ToolClient
+  readonly backups: BackupClient
   readonly scheduler: SchedulerClient
   readonly config: ConfigClient
   readonly diagnostics: DiagnosticsClient
@@ -159,6 +172,7 @@ export class AuroraClient {
     this.auth = new AuthSession()
     this.registry = new RegistryClient(this)
     this.authApi = new AuthApiClient(this)
+    this.mesh = new MeshClient(this)
     this.capabilities = new CapabilityClient(this)
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
@@ -167,6 +181,7 @@ export class AuroraClient {
     this.models = new ModelRuntimeClient(this)
     this.memory = new MemoryClient(this)
     this.tools = new ToolClient(this)
+    this.backups = new BackupClient(this)
     this.scheduler = new SchedulerClient(this)
     this.config = new ConfigClient(this)
     this.diagnostics = new DiagnosticsClient(this)
@@ -431,6 +446,68 @@ export class AuthApiClient {
       AUTH_METHODS.auditLog,
       payload,
       { path: routePath('Auth', 'AuditLog') }
+    )
+  }
+}
+
+export class MeshClient {
+  constructor(private readonly client: AuroraClient) {}
+
+  getStatus(): Promise<AuroraResponse<MeshStatusResponse>> {
+    return this.client.requestResult<MeshStatusResponse>(
+      GATEWAY_METHODS.getMeshStatus,
+      undefined,
+      { path: routePath('Gateway', 'GetMeshStatus') }
+    )
+  }
+
+  listPeers(payload: MeshPeerListRequest = {}): Promise<AuroraResponse<MeshPeerListResponse>> {
+    return this.client.requestResult<MeshPeerListResponse, MeshPeerListRequest>(
+      AUTH_METHODS.meshListPeers,
+      payload,
+      { path: routePath('Auth', 'MeshListPeers') }
+    )
+  }
+
+  getPeer(payload: MeshPeerGetRequest): Promise<AuroraResponse<MeshPeerGetResponse>> {
+    return this.client.requestResult<MeshPeerGetResponse, MeshPeerGetRequest>(
+      AUTH_METHODS.meshGetPeer,
+      payload,
+      { path: routePath('Auth', 'MeshGetPeer') }
+    )
+  }
+
+  approvePeer(payload: MeshPeerApproveRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerApproveRequest>(
+      AUTH_METHODS.meshApprovePeer,
+      payload,
+      { path: routePath('Auth', 'MeshApprovePeer') }
+    )
+  }
+
+  denyPeer(payload: MeshPeerDenyRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerDenyRequest>(
+      AUTH_METHODS.meshDenyPeer,
+      payload,
+      { path: routePath('Auth', 'MeshDenyPeer') }
+    )
+  }
+
+  updatePeerPermissions(
+    payload: MeshPeerUpdatePermissionsRequest
+  ): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerUpdatePermissionsRequest>(
+      AUTH_METHODS.meshUpdatePeerPermissions,
+      payload,
+      { path: routePath('Auth', 'MeshUpdatePeerPermissions') }
+    )
+  }
+
+  removePeer(payload: MeshPeerRemoveRequest): Promise<AuroraResponse<MeshBoolResponse>> {
+    return this.client.requestResult<MeshBoolResponse, MeshPeerRemoveRequest>(
+      AUTH_METHODS.meshRemovePeer,
+      payload,
+      { path: routePath('Auth', 'MeshRemovePeer') }
     )
   }
 }
@@ -711,6 +788,7 @@ export class AssistantClient {
 
 export interface AdminOverviewManifestOptions {
   gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  deploymentTopology?: DeploymentTopologyResponse | null
   nativeManifest?: NativeCapabilityManifest | null
   peers?: PeerSummary[]
   generatedAt?: string
@@ -837,15 +915,52 @@ export class AdminOverviewClient {
   constructor(private readonly client: AuroraClient) {}
 
   async getManifest(options: AdminOverviewManifestOptions = {}): Promise<AdminOverviewManifest> {
-    const [registry, services, capabilityCatalog] = await Promise.all([
+    const [registry, services, capabilityCatalog, topologyResult] = await Promise.all([
       this.client.registry.getRegistry(),
       this.client.registry.listServices(),
-      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+      this.client.capabilities.listCatalog({ include_internal: true, include_unavailable: true }),
+      options.deploymentTopology !== undefined
+        ? Promise.resolve<AuroraResponse<DeploymentTopologyResponse>>(
+            options.deploymentTopology
+              ? {
+                  ok: true,
+                  data: options.deploymentTopology,
+                  audit: createAuditReceipt(options.deploymentTopology, {
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology,
+                    transport: this.client.transport.kind
+                  })
+                }
+              : {
+                  ok: false,
+                  error: new AuroraError({
+                    code: 'unsupported_feature',
+                    message: 'Deployment topology evidence was not provided',
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology
+                  }),
+                  audit: createAuditReceipt(null, {
+                    method: GATEWAY_METHODS.getDeploymentTopology,
+                    busTopic: GATEWAY_METHODS.getDeploymentTopology,
+                    transport: this.client.transport.kind,
+                    status: 'unsupported_feature'
+                  })
+                }
+          )
+        : this.client.requestResult<DeploymentTopologyResponse>(
+            GATEWAY_METHODS.getDeploymentTopology,
+            undefined,
+            {
+              path: routePath('Gateway', 'GetDeploymentTopology')
+            }
+          )
     ])
     const input: AdminOverviewManifestInput = {
       registry,
       services,
-      capabilityCatalog
+      capabilityCatalog,
+      deploymentTopology: topologyResult.ok ? topologyResult.data : null,
+      deploymentTopologyError: topologyResult.ok ? null : topologyResult.error.message
     }
     if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
     if (options.nativeManifest !== undefined) input.nativeManifest = options.nativeManifest

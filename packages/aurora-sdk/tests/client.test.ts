@@ -7,6 +7,7 @@ import {
   HttpGatewayTransport,
   MeshP2PTransport,
   MockAuroraTransport,
+  backupListFixture,
   ORCHESTRATOR_METHODS,
   TauriLocalTransport,
   backendInventoryFixture,
@@ -17,10 +18,12 @@ import {
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  cloneFixture,
   compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
   createAuroraEvent,
   defaultMockAuroraFixtures,
+  deploymentTopologyFixture,
   describeBackendInventory,
   describeRegistry,
   evaluateRoutePolicy,
@@ -150,6 +153,74 @@ describe('AuroraClient', () => {
         method: 'Auth.PairingDeny',
         path: '/api/Auth/PairingDeny',
         payload: { code: '654321', reason: 'Wrong device' }
+      }
+    ])
+  })
+
+  it('routes mesh peer lifecycle reads and mutations through typed SDK descriptors', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Gateway.GetMeshStatus', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return defaultMockAuroraFixtures.meshStatus
+      })
+      .register('Auth.MeshListPeers', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return defaultMockAuroraFixtures.meshPeers
+      })
+      .register('Auth.MeshGetPeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { peer: defaultMockAuroraFixtures.meshPeers.peers[0] }
+      })
+      .register('Auth.MeshApprovePeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshDenyPeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshUpdatePeerPermissions', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+      .register('Auth.MeshRemovePeer', (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return { success: true }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.mesh.getStatus()
+    await client.mesh.listPeers({ include_disconnected: true })
+    await client.mesh.getPeer({ peer_id: 'peer-kitchen' })
+    await client.mesh.approvePeer({ peer_id: 'peer-kitchen', permissions: ['Gateway.use'] })
+    await client.mesh.denyPeer({ peer_id: 'peer-den' })
+    await client.mesh.updatePeerPermissions({ peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] })
+    await client.mesh.removePeer({ peer_id: 'peer-den', revoke_token: true })
+
+    expect(calls).toEqual([
+      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: undefined },
+      { method: 'Auth.MeshListPeers', path: '/api/Auth/MeshListPeers', payload: { include_disconnected: true } },
+      { method: 'Auth.MeshGetPeer', path: '/api/Auth/MeshGetPeer', payload: { peer_id: 'peer-kitchen' } },
+      {
+        method: 'Auth.MeshApprovePeer',
+        path: '/api/Auth/MeshApprovePeer',
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use'] }
+      },
+      {
+        method: 'Auth.MeshDenyPeer',
+        path: '/api/Auth/MeshDenyPeer',
+        payload: { peer_id: 'peer-den' }
+      },
+      {
+        method: 'Auth.MeshUpdatePeerPermissions',
+        path: '/api/Auth/MeshUpdatePeerPermissions',
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] }
+      },
+      {
+        method: 'Auth.MeshRemovePeer',
+        path: '/api/Auth/MeshRemovePeer',
+        payload: { peer_id: 'peer-den', revoke_token: true }
       }
     ])
   })
@@ -521,9 +592,9 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 3,
-        methods: 20,
-        externalMethods: 19,
+        services: 4,
+        methods: 33,
+        externalMethods: 32,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -543,7 +614,9 @@ describe('AuroraClient', () => {
       'Gateway.manage',
       'Gateway.use',
       'Orchestrator.manage',
-      'Orchestrator.use'
+      'Orchestrator.use',
+      'Scheduler.manage',
+      'Scheduler.use'
     ])
     expect(manifest.native).toEqual(
       expect.objectContaining({
@@ -551,6 +624,8 @@ describe('AuroraClient', () => {
         evidenceSource: 'not-provided'
       })
     )
+    expect(manifest.deploymentTopology).toBeNull()
+    expect(manifest.deploymentTopologyError).toBeNull()
     expect(manifest.privacy).toEqual({
       secretsRedacted: true,
       nativeStateInvented: false,
@@ -563,6 +638,7 @@ describe('AuroraClient', () => {
       .register('Gateway.GetRegistry', gatewayRegistryFixture)
       .register('Gateway.GetServices', gatewayServicesFixture)
       .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+      .register('Gateway.GetDeploymentTopology', deploymentTopologyFixture)
     const client = new AuroraClient({ transport })
 
     const manifest = await client.adminOverview.getManifest({
@@ -575,7 +651,64 @@ describe('AuroraClient', () => {
       '/api/admin/peers',
       '/api/health'
     ])
+    expect(manifest.deploymentTopology?.bus_backend).toBe('LocalBus')
+    expect(manifest.deploymentTopology?.mode_capability_degradations).toContain('thread_mode_no_process_controls')
     expect(manifest.native.availability).toBe('unsupported')
+  })
+
+  it('keeps admin overview usable when deployment topology is unavailable', async () => {
+    const transport = new MockAuroraTransport()
+      .register('Gateway.GetRegistry', gatewayRegistryFixture)
+      .register('Gateway.GetServices', gatewayServicesFixture)
+      .register('Gateway.GetCapabilityCatalog', capabilityCatalogFixture)
+      .lose('Gateway.GetDeploymentTopology', 'deployment topology unavailable')
+    const client = new AuroraClient({ transport })
+
+    const manifest = await client.adminOverview.getManifest()
+
+    expect(manifest.services.length).toBeGreaterThan(0)
+    expect(manifest.deploymentTopology).toBeNull()
+    expect(manifest.deploymentTopologyError).toBe('deployment topology unavailable')
+  })
+
+  it('accepts process-mode deployment topology evidence in admin overview fixtures', () => {
+    const topology = cloneFixture(deploymentTopologyFixture)
+    topology.architecture_mode = 'processes'
+    topology.runtime_mode = 'server-process'
+    topology.bus_backend = 'BullMQBus'
+    topology.redis_url_redacted = 'redis://[redacted]@redis:6379/0'
+    topology.redis_reachable = true
+    topology.bullmq_queue_health = {
+      ...topology.bullmq_queue_health,
+      backend: 'BullMQBus',
+      redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+      redis_reachable: true,
+      bullmq_available: true,
+      queue_depth: 0,
+      status: 'healthy',
+      degraded_reasons: []
+    }
+    topology.mode_capability_degradations = []
+    topology.container_topology_hints = {
+      orchestrator: 'docker-compose',
+      compose_file: 'docker-compose.process.yml',
+      redis_service: 'redis',
+      gateway_service: 'gateway-service',
+      config_service: 'config-service',
+      notes: ['process mode runs one container per Aurora service']
+    }
+
+    const manifest = buildAdminOverviewManifest({
+      registry: gatewayRegistryFixture,
+      services: { ...gatewayServicesFixture, mode: 'processes' },
+      capabilityCatalog: capabilityCatalogFixture,
+      deploymentTopology: topology
+    })
+
+    expect(manifest.serviceMode).toBe('processes')
+    expect(manifest.deploymentTopology?.bus_backend).toBe('BullMQBus')
+    expect(manifest.deploymentTopology?.redis_url_redacted).toContain('[redacted]')
+    expect(manifest.deploymentTopology?.mode_capability_degradations).toEqual([])
   })
 
   it('preloads deterministic mock fixtures for offline SDK development', async () => {
@@ -599,7 +732,14 @@ describe('AuroraClient', () => {
     expect(nativeManifest).toEqual(
       expect.objectContaining({
         platform: 'tauri-desktop',
-        permissions: expect.objectContaining({ microphone: false })
+        permissions: expect.objectContaining({
+          'aurora.sidecarStart': true,
+          'aurora.shell': false
+        }),
+        capabilities: expect.objectContaining({
+          'desktop.localSidecarSupervision': true,
+          'native.audio': false
+        })
       })
     )
     expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
@@ -1400,6 +1540,94 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('lists backups through the Backup SDK namespace and wraps backup mutations in AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> }> = []
+    const recordBackupCall = (method: string, payload: unknown, headers?: Record<string, string>) => {
+      const call: { method: string; payload: unknown; headers?: Record<string, string> } = { method, payload }
+      if (headers !== undefined) call.headers = headers
+      calls.push(call)
+    }
+    const transport = new MockAuroraTransport()
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        const methodId = (request.payload as { method_id: string }).method_id
+        return adminDraftFixture(methodId)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register('Backup.Create', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup: null,
+          audit_receipt: 'audit-create',
+          message: 'created'
+        }
+      })
+      .register('Backup.Verify', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup_id: 'backup-20260625T120000Z-config-rag',
+          verified: true,
+          manifest_digest: 'sha256:backup-fixture-a',
+          components: [],
+          message: null
+        }
+      })
+      .register('Backup.Restore', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          backup_id: 'backup-20260625T120000Z-config-rag',
+          restored: false,
+          rollback_backup_id: null,
+          impact_plan: backupImpactPlanFixture(),
+          audit_receipt: 'audit-restore',
+          message: 'Restore dry-run only; no state was changed.'
+        }
+      })
+      .register('Backup.Rollback', (request) => {
+        recordBackupCall(request.method, request.payload, request.headers)
+        return {
+          status: 'ok',
+          rollback_backup_id: 'rollback-1',
+          rolled_back: false,
+          impact_plan: backupImpactPlanFixture(),
+          audit_receipt: 'audit-rollback',
+          message: 'Rollback dry-run only; no state was changed.'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const listed = await client.backups.list()
+    expect(listed.ok).toBe(true)
+    if (listed.ok) {
+      expect(listed.data.backups[0]?.backup_id).toContain('backup-20260625')
+      expect(listed.data.secrets_redacted).toBe(true)
+    }
+
+    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore')).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' })).resolves.toMatchObject({ ok: true })
+
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(4)
+    expect(calls.filter((call) => call.method === 'Gateway.AdminActionConfirm')).toHaveLength(4)
+    for (const method of ['Backup.Create', 'Backup.Verify', 'Backup.Restore', 'Backup.Rollback']) {
+      expect(calls.find((call) => call.method === method)?.headers).toEqual(
+        expect.objectContaining({
+          'X-Aurora-AdminAction-Id': expect.stringContaining('aa-Backup'),
+          'X-Aurora-AdminAction-Token': expect.stringContaining('token-'),
+          'X-Aurora-AdminAction-Digest': expect.stringContaining('digest-')
+        })
+      )
+    }
+  })
+
+
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
       .register('Tooling.RequestApproval', {
@@ -2018,6 +2246,9 @@ describe('AuroraClient', () => {
     const transport = new TauriLocalTransport({
       invoke: async (command, args) => {
         calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') {
+          return { token: 'session-token' }
+        }
         return {
           data: gatewayRegistryFixture,
           status: 200,
@@ -2031,14 +2262,16 @@ describe('AuroraClient', () => {
     const result = await client.requestResult('Gateway.GetRegistry')
 
     expect(registry.digest).toBe('fixture')
-    expect(calls[0]).toEqual({
+    expect(calls[0]).toEqual({ command: 'aurora_sidecar_session', args: undefined })
+    expect(calls[1]).toEqual({
       command: 'aurora_command',
       args: {
         request: expect.objectContaining({
           method: 'Gateway.GetRegistry',
           busTopic: 'Gateway.GetRegistry',
           path: '/api/registry',
-          httpMethod: 'GET'
+          httpMethod: 'GET',
+          headers: { 'x-aurora-sidecar-token': 'session-token' }
         })
       }
     })
@@ -2061,10 +2294,43 @@ describe('AuroraClient', () => {
       invoke: async (command, args) => {
         calls.push({ command, args })
         switch (command) {
+          case 'aurora_sidecar_session':
+            return { token: 'session-token' }
+          case 'aurora_sidecar_start':
+            return { running: true, mode: 'sidecar', pid: 42 }
+          case 'aurora_sidecar_stop':
+            return { running: false, mode: 'desktop-local-stopped', pid: null }
           case 'aurora_sidecar_status':
             return { running: true, mode: 'sidecar', pid: 42 }
           case 'aurora_native_capability_manifest':
             return nativeCapabilityManifestFixture
+          case 'aurora_native_permission_status':
+            return {
+              platform: 'tauri-desktop',
+              permissions: nativeCapabilityManifestFixture.permissions,
+              capabilities: nativeCapabilityManifestFixture.capabilities,
+              deniedByDefault: ['aurora.notificationsSend', 'aurora.audioCapture'],
+              privacyClasses: ['personal', 'credential', 'raw-audio'],
+              evidenceSource: 'tauri-capability-manifest',
+              secretsRedacted: true
+            }
+          case 'aurora_tray_status':
+            return { available: true, permission: 'aurora.trayStatus', capability: 'desktop.tray', source: 'tauri-core-tray-icon' }
+          case 'aurora_notification_status':
+            return { available: false, permission: 'aurora.notificationsSend', capability: 'native.notifications', source: 'tauri-capability-manifest', reason: 'disabled' }
+          case 'aurora_notification_send':
+            throw { detail: { code: 'native_permission_missing', message: 'native permission missing' } }
+          case 'aurora_dialog_status':
+            return { available: false, permission: 'aurora.dialogOpen', capability: 'native.dialogs', source: 'tauri-capability-manifest', reason: 'disabled' }
+          case 'aurora_audio_bridge_status':
+            return {
+              available: false,
+              permission: 'aurora.audioCapture',
+              capability: 'native.audio',
+              source: 'tauri-capability-manifest',
+              reason: 'raw-audio requires consent',
+              details: { privacyClass: 'raw-audio', backendEvidenceRequired: true }
+            }
           case 'aurora_log_tail':
             return { available: false, source: 'aurora-sidecar', lines: [], truncated: false }
           case 'aurora_secure_storage_get':
@@ -2089,7 +2355,34 @@ describe('AuroraClient', () => {
     await expect(transport.getSidecarStatus()).resolves.toEqual(
       expect.objectContaining({ running: true, mode: 'sidecar' })
     )
+    await expect(transport.startSidecar()).resolves.toEqual(expect.objectContaining({ running: true }))
+    await expect(transport.stopSidecar()).resolves.toEqual(expect.objectContaining({ running: false }))
     await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(nativeCapabilityManifestFixture)
+    await expect(transport.getNativePermissionStatus()).resolves.toEqual(
+      expect.objectContaining({
+        deniedByDefault: expect.arrayContaining(['aurora.notificationsSend', 'aurora.audioCapture']),
+        privacyClasses: expect.arrayContaining(['raw-audio']),
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.getTrayStatus()).resolves.toEqual(
+      expect.objectContaining({ available: true, capability: 'desktop.tray' })
+    )
+    await expect(transport.getNotificationStatus()).resolves.toEqual(
+      expect.objectContaining({ available: false, permission: 'aurora.notificationsSend' })
+    )
+    await expect(transport.sendNotification({ title: 'Aurora', body: 'Ready' })).rejects.toMatchObject({
+      code: 'native_permission_missing'
+    })
+    await expect(transport.getDialogStatus()).resolves.toEqual(
+      expect.objectContaining({ available: false, capability: 'native.dialogs' })
+    )
+    await expect(transport.getAudioBridgeStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        details: expect.objectContaining({ privacyClass: 'raw-audio', backendEvidenceRequired: true })
+      })
+    )
     await expect(transport.getLogTail({ lines: 10 })).resolves.toEqual({
       available: false,
       source: 'aurora-sidecar',
@@ -2120,7 +2413,16 @@ describe('AuroraClient', () => {
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
+      'aurora_sidecar_session',
+      'aurora_sidecar_start',
+      'aurora_sidecar_stop',
       'aurora_native_capability_manifest',
+      'aurora_native_permission_status',
+      'aurora_tray_status',
+      'aurora_notification_status',
+      'aurora_notification_send',
+      'aurora_dialog_status',
+      'aurora_audio_bridge_status',
       'aurora_log_tail',
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
@@ -2130,10 +2432,15 @@ describe('AuroraClient', () => {
       'aurora_local_file_pick',
       'aurora_secure_file_handle_open'
     ])
-    expect(calls[2]?.args).toEqual({ request: { lines: 10 } })
-    expect(calls[4]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[7]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[9]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
+    expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })
+    expect(calls[8]?.args).toEqual({ request: { title: 'Aurora', body: 'Ready' } })
+    expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
+    expect(calls[12]?.args).toEqual({ key: 'session' })
+    expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
+    expect(calls[15]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[16]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[18]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
@@ -3095,7 +3402,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 20,
+      checked: 33,
       issues: []
     })
 
@@ -3160,3 +3467,64 @@ describe('descriptors', () => {
     expect(error.correlationId).toBe('corr-1')
   })
 })
+
+function adminDraftFixture(methodId: string) {
+  const suffix = methodId.replace('.', '-')
+  return {
+    action_id: `aa-${suffix}`,
+    nonce: `nonce-${suffix}`,
+    digest: `digest-${suffix}`,
+    method_id: methodId,
+    affected_resources: ['admin.backups'],
+    required_phrase: 'CONFIRM',
+    required_reason: true,
+    required_reauth: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function adminConfirmFixture(actionId: string) {
+  const suffix = actionId.replace('aa-', '')
+  return {
+    action_id: actionId,
+    confirmation_token: `token-${suffix}`,
+    digest: `digest-${suffix}`,
+    confirmed: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    audit_receipt: `audit-${suffix}`,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest'
+    }
+  }
+}
+
+function backupImpactPlanFixture() {
+  return {
+    admin_critical: true,
+    requires_quiesce: true,
+    requires_restart: true,
+    affected_services: [
+      {
+        service: 'Config',
+        action: 'reload',
+        required: true,
+        reason: 'Config state changes require reload review.'
+      },
+      {
+        service: 'DB',
+        action: 'quiesce',
+        required: true,
+        reason: 'DB/RAG restore needs write quiesce.'
+      }
+    ],
+    warnings: ['Destructive restore remains disabled by backend policy.']
+  }
+}

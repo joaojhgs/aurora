@@ -359,6 +359,7 @@ button, input, select, textarea { font: inherit; }
   .aui-activity { display: none; }
   .aui-assistant-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-route-panel { order: -1; }
+  .aui-backup-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-voice-body { grid-template-columns: minmax(0, 1fr); }
   .aui-tool-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-tool-summary { position: static; order: -1; }
@@ -390,6 +391,8 @@ button, input, select, textarea { font: inherit; }
   .aui-assistant-form { grid-template-columns: minmax(0, 1fr); }
   .aui-assistant-form button { width: 100%; }
   .aui-chat-bubble { max-width: 100%; }
+  .aui-backup-facts div { grid-template-columns: minmax(0, 1fr); }
+  .aui-backup-panel button, .aui-backup-form button { width: 100%; }
   .aui-tool-header { display: grid; }
   .aui-tool-card-header { display: grid; }
   .aui-risk-pill { width: fit-content; }
@@ -466,10 +469,116 @@ button, input, select, textarea { font: inherit; }
 .aui-pairing-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .aui-pairing-actions button:disabled, .aui-pairing-controls button:disabled, .aui-pairing-controls input:disabled, .aui-pairing-controls textarea:disabled { cursor: not-allowed; opacity: .58; }
 
+.aui-mesh { display: grid; gap: 1rem; }
+.aui-mesh-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-mesh-header h1 { margin: .15rem 0 0; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.08; }
+.aui-mesh-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-mesh-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 34rem; }
+.aui-mesh-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-mesh-summary div, .aui-mesh-meta div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem; background: color-mix(in srgb, var(--aui-surface-2) 42%, white); }
+.aui-mesh-summary dt, .aui-mesh-meta dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-summary dd, .aui-mesh-meta dd { margin: .2rem 0 0; overflow-wrap: anywhere; line-height: 1.4; }
+.aui-mesh-controls { display: grid; grid-template-columns: minmax(16rem, 1.35fr) minmax(14rem, 1fr) minmax(12rem, auto) auto; gap: .75rem; align-items: end; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-mesh-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-controls input:not([type="checkbox"]), .aui-mesh-controls textarea { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); }
+.aui-mesh-controls textarea { resize: vertical; }
+.aui-mesh-controls button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.55rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .85rem; background: var(--aui-surface-2); color: var(--aui-ink); font-weight: 750; }
+.aui-mesh-controls button:disabled, .aui-mesh-controls input:disabled, .aui-mesh-controls textarea:disabled { cursor: not-allowed; opacity: .58; }
+.aui-mesh-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-mesh-panel-title { display: flex; align-items: flex-start; gap: .6rem; }
+.aui-mesh-panel-title > span { display: grid; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
+.aui-mesh-panel-title h2 { margin: 0; font-size: 1rem; }
+.aui-mesh-panel-title p { margin: .28rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; margin: 0; }
+.aui-mesh-warnings { display: grid; gap: .4rem; margin: 0; padding-left: 1.1rem; color: var(--aui-muted); line-height: 1.4; }
+.aui-mesh-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); gap: .85rem; }
+.aui-mesh-card { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-mesh-card[data-state="optimistic"] { border-color: color-mix(in srgb, var(--aui-info) 32%, var(--aui-border)); background: color-mix(in srgb, var(--aui-info) 6%, white); }
+.aui-mesh-card-available-local, .aui-mesh-card-available-remote { border-color: color-mix(in srgb, var(--aui-success) 24%, var(--aui-border)); }
+.aui-mesh-card-denied { border-color: color-mix(in srgb, var(--aui-danger) 28%, var(--aui-border)); }
+.aui-mesh-card-stale, .aui-mesh-card-unsupported { border-color: color-mix(in srgb, var(--aui-warning) 32%, var(--aui-border)); }
+.aui-mesh-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.aui-mesh-card h2 { margin: .15rem 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.aui-mesh-card code { display: block; margin-top: .3rem; color: var(--aui-muted); font-size: .78rem; overflow-wrap: anywhere; white-space: normal; }
+.aui-mesh-card-badges, .aui-mesh-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.aui-mesh-scopes { display: grid; gap: .55rem; }
+.aui-mesh-scopes div { display: grid; gap: .18rem; min-width: 0; }
+.aui-mesh-scopes strong { color: var(--aui-ink); font-size: .78rem; }
+.aui-mesh-scopes span { color: var(--aui-muted); overflow-wrap: anywhere; line-height: 1.4; }
+.aui-mesh-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .45rem; padding: .5rem .7rem; background: var(--aui-surface); color: var(--aui-primary); font-weight: 750; }
+.aui-mesh-actions button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-mesh-row-list { display: grid; gap: .75rem; }
+.aui-mesh-row { display: grid; gap: .65rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: color-mix(in srgb, var(--aui-surface-2) 34%, white); }
+.aui-mesh-row > header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.aui-mesh-row h3 { margin: .12rem 0 0; font-size: .96rem; overflow-wrap: anywhere; }
+.aui-mesh-row code { display: block; max-width: 100%; margin-top: .25rem; color: var(--aui-muted); font-size: .76rem; overflow-wrap: anywhere; white-space: normal; }
+.aui-route-policy-view { display: grid; gap: 1rem; margin-top: 1.2rem; }
+.aui-route-policy-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-route-policy-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.08; }
+.aui-route-policy-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-route-policy-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-route-policy-summary div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .65rem; }
+.aui-route-policy-summary dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-route-policy-summary dd { margin: .2rem 0 0; color: var(--aui-ink); overflow-wrap: anywhere; line-height: 1.35; }
+.aui-route-policy-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(20rem, .85fr); gap: .85rem; align-items: start; }
+.aui-route-policy-panel { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
+.aui-route-policy-panel .aui-panel-heading { padding: .85rem; }
+.aui-route-scenarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .5rem; padding: .85rem; border-bottom: 1px solid var(--aui-border); }
+.aui-route-scenarios button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .4rem; align-items: center; min-height: 2.6rem; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .45rem .55rem; text-align: left; }
+.aui-route-scenarios button[data-active="true"] { border-color: color-mix(in srgb, var(--aui-primary) 45%, var(--aui-border)); background: color-mix(in srgb, var(--aui-primary) 8%, white); }
+.aui-route-scenarios span { min-width: 0; overflow-wrap: anywhere; font-weight: 750; }
+.aui-route-explain-card { display: grid; gap: .8rem; padding: .85rem; }
+.aui-route-explain-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.aui-route-explain-card h3 { margin: 0; font-size: 1.05rem; }
+.aui-route-explain-card p { margin: .25rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-route-explain-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; }
+.aui-route-candidates { display: grid; gap: .65rem; }
+.aui-route-candidate { display: grid; gap: .55rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .65rem; }
+.aui-route-candidate[data-selected="true"] { border-color: color-mix(in srgb, var(--aui-success) 38%, var(--aui-border)); background: color-mix(in srgb, var(--aui-success) 8%, white); }
+.aui-route-candidate > header { display: flex; align-items: center; justify-content: space-between; gap: .55rem; }
+.aui-route-candidate strong { min-width: 0; overflow-wrap: anywhere; }
+.aui-route-candidate ul { display: grid; gap: .3rem; margin: 0; padding-left: 1rem; color: var(--aui-muted); overflow-wrap: anywhere; }
+.aui-route-policy-form { display: grid; gap: .65rem; padding: .85rem; }
+.aui-route-policy-form label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-route-policy-form input, .aui-route-policy-form select, .aui-route-policy-form textarea { min-width: 0; width: 100%; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .58rem .65rem; text-transform: none; font: inherit; }
+.aui-route-policy-form textarea { resize: vertical; }
+.aui-route-policy-form input:disabled, .aui-route-policy-form select:disabled, .aui-route-policy-form textarea:disabled { cursor: not-allowed; opacity: .58; }
+.aui-route-policy-reason { grid-column: 1 / -1; }
+.aui-route-policy-actions { display: grid; gap: .45rem; padding: .85rem; border-top: 1px solid var(--aui-border); }
+.aui-route-policy-actions button { width: fit-content; }
+.aui-route-policy-actions p { margin: 0; color: var(--aui-muted); line-height: 1.4; }
+
+.aui-mesh-diagnostics { display: grid; gap: 1rem; margin-top: 1rem; }
+.aui-mesh-diagnostics-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-mesh-diagnostics-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.08; }
+.aui-mesh-diagnostics-header p { max-width: 58rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-mesh-diagnostics-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-mesh-diagnostics-summary div { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .65rem; }
+.aui-mesh-diagnostics-summary dt, .aui-mesh-diagnostics-table dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-mesh-diagnostics-summary dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; align-items: start; }
+.aui-mesh-diagnostics-note, .aui-mesh-diagnostics-empty { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-diagnostics-alert { display: flex; gap: .65rem; align-items: flex-start; border: 1px solid color-mix(in srgb, var(--aui-danger) 28%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-danger) 7%, white); color: var(--aui-danger); padding: .8rem; }
+.aui-mesh-diagnostics-alert ul { margin: .35rem 0 0; padding-left: 1.1rem; }
+.aui-mesh-diagnostics-table { display: grid; gap: .45rem; min-width: 0; overflow-x: auto; }
+.aui-mesh-diagnostics-table-head, .aui-mesh-diagnostics-table-row { display: grid; grid-template-columns: minmax(12rem, 1.1fr) minmax(13rem, 1fr) minmax(13rem, 1fr) minmax(13rem, 1fr); gap: .55rem; min-width: 48rem; align-items: start; }
+.aui-mesh-diagnostics-table-head { color: var(--aui-muted); font-size: .74rem; font-weight: 800; text-transform: uppercase; }
+.aui-mesh-diagnostics-table-row { border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 34%, white); padding: .65rem; }
+.aui-mesh-diagnostics-table-row span { min-width: 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-table-row strong, .aui-mesh-diagnostics-table-row code, .aui-mesh-diagnostics-table-row small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-mesh-diagnostics-table-row code, .aui-mesh-diagnostics-table-row small { margin-top: .25rem; color: var(--aui-muted); font-size: .77rem; line-height: 1.4; }
+.aui-mesh-error-list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.aui-mesh-error-list li { display: grid; gap: .2rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: color-mix(in srgb, var(--aui-surface-2) 42%, white); padding: .6rem; }
+.aui-mesh-error-list span, .aui-mesh-error-list small { min-width: 0; overflow-wrap: anywhere; color: var(--aui-muted); }
+
 @media (max-width: 1100px) {
   .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-mode-panel { grid-row: auto; }
   .aui-pairing-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-route-policy-layout { grid-template-columns: minmax(0, 1fr); }
+  .aui-route-policy-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -480,6 +589,15 @@ button, input, select, textarea { font: inherit; }
   .aui-mode-card em { grid-column: 1 / -1; }
   .aui-pairing-controls, .aui-pairing-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-pairing-card-header { display: grid; }
+  .aui-mesh-header, .aui-mesh-card > header, .aui-mesh-row > header { display: grid; }
+  .aui-mesh-diagnostics-header { display: grid; }
+  .aui-mesh-badges { justify-content: flex-start; }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: minmax(0, 1fr); }
+  .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-route-policy-header, .aui-route-explain-card > header { display: grid; }
+  .aui-route-policy-summary, .aui-route-scenarios { grid-template-columns: minmax(0, 1fr); }
+  .aui-route-explain-badges { justify-content: flex-start; }
+  .aui-route-policy-actions button { width: 100%; }
 }
 
 .aui-admin-overview { display: grid; gap: 1rem; }
@@ -529,7 +647,7 @@ button, input, select, textarea { font: inherit; }
   .aui-admin-gap-list .aui-badge { width: fit-content; }
 }
 
-.aui-admin-services { display: grid; gap: 1rem; }
+.aui-admin-services, .aui-admin-scheduler { display: grid; gap: 1rem; }
 .aui-admin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-admin-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.55rem); line-height: 1.08; }
 .aui-admin-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
@@ -547,6 +665,16 @@ button, input, select, textarea { font: inherit; }
 .aui-admin-panel { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
 .aui-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem; border-bottom: 1px solid var(--aui-border); }
 .aui-panel-heading h2 { margin: .15rem 0 0; font-size: 1.05rem; }
+.aui-scheduler-form { display: grid; gap: .6rem; padding: .9rem; }
+.aui-scheduler-form label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-scheduler-form input, .aui-scheduler-form select, .aui-scheduler-form textarea { min-width: 0; width: 100%; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .58rem .65rem; text-transform: none; }
+.aui-scheduler-form textarea { resize: vertical; }
+.aui-scheduler-form button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; width: fit-content; min-height: 2.55rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); border-radius: .45rem; background: var(--aui-primary); color: white; padding: .55rem .85rem; font-weight: 750; }
+.aui-scheduler-form input:disabled, .aui-scheduler-form select:disabled, .aui-scheduler-form textarea:disabled, .aui-scheduler-form button:disabled { cursor: not-allowed; opacity: .58; }
+.aui-scheduler-facts { display: grid; gap: .55rem; margin: 0; padding: .9rem; }
+.aui-scheduler-facts div { display: grid; grid-template-columns: minmax(7rem, .35fr) minmax(0, 1fr); gap: .5rem; min-width: 0; }
+.aui-scheduler-facts dt { color: var(--aui-muted); font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-scheduler-facts dd { margin: 0; overflow-wrap: anywhere; }
 .aui-table-scroll { overflow-x: auto; }
 .aui-table { width: 100%; min-width: 58rem; border-collapse: collapse; }
 .aui-table th, .aui-table td { border-bottom: 1px solid var(--aui-border); padding: .72rem .85rem; text-align: left; vertical-align: top; }
@@ -678,4 +806,6 @@ button, input, select, textarea { font: inherit; }
   .aui-admin-metrics { grid-template-columns: minmax(0, 1fr); }
   .aui-service-drawer dl { grid-template-columns: minmax(0, 1fr); }
   .aui-device-facts div, .aui-device-token-list li { grid-template-columns: minmax(0, 1fr); }
+  .aui-scheduler-facts div { grid-template-columns: minmax(0, 1fr); }
+  .aui-scheduler-form button { width: 100%; }
 }

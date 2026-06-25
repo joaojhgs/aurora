@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-sidecar-session"
+description = "Allow the frontend SDK adapter to fetch an in-memory sidecar command token. The token is not persisted or rendered."
+commands.allow = ["aurora_sidecar_session"]

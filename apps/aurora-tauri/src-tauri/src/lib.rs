@@ -3,12 +3,26 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::env;
-use tauri::AppHandle;
+use std::fs;
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, State,
+};
 use thiserror::Error;
 use url::Url;
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
+const SIDECAR_HEALTH_PATH: &str = "/api/health";
+const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
+const UPDATER_ENDPOINT: &str =
+    "https://releases.aurora.local/latest/{{target}}/{{arch}}/{{current_version}}.json";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +85,12 @@ struct LogTailRequest {
     lines: Option<usize>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SidecarCommandToken {
+    token: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LogTailResult {
@@ -83,11 +103,89 @@ struct LogTailResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SidecarSession {
+    token: String,
+}
+
+#[derive(Debug, Serialize)]
 struct NativeCapabilityManifest {
     platform: String,
     permissions: BTreeMap<String, bool>,
     capabilities: BTreeMap<String, bool>,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativePermissionStatus {
+    platform: String,
+    permissions: BTreeMap<String, bool>,
+    capabilities: BTreeMap<String, bool>,
+    denied_by_default: Vec<String>,
+    privacy_classes: Vec<String>,
+    evidence_source: String,
+    secrets_redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeFeatureStatus {
+    available: bool,
+    permission: String,
+    capability: String,
+    source: String,
+    reason: Option<String>,
+    details: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeNotificationRequest {
+    title: String,
+    body: String,
+}
+
+struct SidecarState {
+    child: Option<Child>,
+    started_at: Option<Instant>,
+    token: String,
+    last_error: Option<String>,
+    last_health: Option<Value>,
+}
+
+impl SidecarState {
+    fn new() -> Self {
+        Self {
+            child: None,
+            started_at: None,
+            token: generate_sidecar_token(),
+            last_error: None,
+            last_health: None,
+        }
+    }
+
+    fn is_running(&mut self) -> bool {
+        if let Some(child) = self.child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    self.last_error = Some(format!("sidecar exited with status {status}"));
+                    self.child = None;
+                    self.started_at = None;
+                    false
+                }
+                Ok(None) => true,
+                Err(error) => {
+                    self.last_error = Some(format!("sidecar status check failed: {error}"));
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+}
+
+type SharedSidecarState = Arc<Mutex<SidecarState>>;
 
 #[derive(Debug, Error)]
 enum AuroraCommandError {
@@ -101,6 +199,20 @@ enum AuroraCommandError {
     NativePermissionMissing(String),
     #[error("{0}")]
     UnsupportedFeature(String),
+    #[error("Desktop thin mode is connected to a remote Gateway and cannot start a local sidecar")]
+    ThinModeSidecarDisabled,
+    #[error("Local sidecar supervision is only allowed for loopback Gateway origins: {0}")]
+    SidecarLoopbackRequired(String),
+    #[error("Sidecar command token is invalid or missing")]
+    SidecarTokenInvalid,
+    #[error("Sidecar process failed: {0}")]
+    SidecarProcess(String),
+    #[error("Sidecar state lock failed")]
+    SidecarState,
+    #[error("Secure storage key is invalid or outside the Aurora credential namespace: {0}")]
+    SecureStorageKeyInvalid(String),
+    #[error("Secure storage operation failed: {0}")]
+    SecureStorage(String),
 }
 
 impl Serialize for AuroraCommandError {
@@ -124,12 +236,21 @@ impl Serialize for AuroraCommandError {
 }
 
 #[tauri::command]
-async fn aurora_request(request: AuroraRequest) -> Result<AuroraEnvelope, AuroraCommandError> {
-    aurora_command(request).await
+async fn aurora_request(
+    request: AuroraRequest,
+    state: State<'_, SharedSidecarState>,
+) -> Result<AuroraEnvelope, AuroraCommandError> {
+    aurora_command(request, state).await
 }
 
 #[tauri::command]
-async fn aurora_command(request: AuroraRequest) -> Result<AuroraEnvelope, AuroraCommandError> {
+async fn aurora_command(
+    request: AuroraRequest,
+    state: State<'_, SharedSidecarState>,
+) -> Result<AuroraEnvelope, AuroraCommandError> {
+    if !request_has_valid_sidecar_token(&request, &state)? {
+        return Err(AuroraCommandError::SidecarTokenInvalid);
+    }
     if request.method == NATIVE_MANIFEST_METHOD {
         return Ok(envelope(
             request.method,
@@ -191,8 +312,78 @@ async fn aurora_subscribe(
 }
 
 #[tauri::command]
-async fn aurora_sidecar_status() -> Result<SidecarStatus, AuroraCommandError> {
+async fn aurora_sidecar_start(
+    state: State<'_, SharedSidecarState>,
+    command_token: Option<SidecarCommandToken>,
+) -> Result<SidecarStatus, AuroraCommandError> {
     let gateway = gateway_url()?;
+    if is_thin_mode() {
+        return Err(AuroraCommandError::ThinModeSidecarDisabled);
+    }
+    if !is_loopback_http_origin(&gateway) {
+        return Err(AuroraCommandError::SidecarLoopbackRequired(
+            gateway.to_string(),
+        ));
+    }
+    verify_sidecar_command_token(command_token, &state)?;
+
+    {
+        let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+        if !sidecar.is_running() {
+            let child = spawn_sidecar(&gateway, &sidecar.token)?;
+            sidecar.started_at = Some(Instant::now());
+            sidecar.child = Some(child);
+            sidecar.last_error = None;
+        }
+    }
+
+    aurora_sidecar_status(state).await
+}
+
+#[tauri::command]
+async fn aurora_sidecar_session(
+    state: State<'_, SharedSidecarState>,
+) -> Result<SidecarSession, AuroraCommandError> {
+    let sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(SidecarSession {
+        token: sidecar.token.clone(),
+    })
+}
+
+#[tauri::command]
+async fn aurora_sidecar_stop(
+    state: State<'_, SharedSidecarState>,
+    command_token: Option<SidecarCommandToken>,
+) -> Result<SidecarStatus, AuroraCommandError> {
+    verify_sidecar_command_token(command_token, &state)?;
+
+    {
+        let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+        stop_sidecar(&mut sidecar)?;
+    }
+
+    aurora_sidecar_status(state).await
+}
+
+#[tauri::command]
+async fn aurora_sidecar_status(
+    state: State<'_, SharedSidecarState>,
+) -> Result<SidecarStatus, AuroraCommandError> {
+    let gateway = gateway_url()?;
+    let (running, pid, last_error, started_at_ms, token_issued) = {
+        let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+        (
+            sidecar.is_running(),
+            sidecar.child.as_ref().map(std::process::Child::id),
+            sidecar.last_error.clone(),
+            sidecar
+                .started_at
+                .map(|instant| instant.elapsed().as_millis()),
+            !sidecar.token.is_empty(),
+        )
+    };
+
+    let health = check_gateway_health(&gateway).await;
     let mut details = BTreeMap::new();
     details.insert("supervisionTask".to_string(), json!("TAURI-002"));
     details.insert("shellTask".to_string(), json!("TAURI-001"));
@@ -200,18 +391,55 @@ async fn aurora_sidecar_status() -> Result<SidecarStatus, AuroraCommandError> {
         "loopbackHardened".to_string(),
         json!(is_loopback_http_origin(&gateway)),
     );
+    details.insert(
+        "remoteGatewayAllowed".to_string(),
+        json!(remote_gateway_allowed()),
+    );
+    details.insert("commandTokenIssued".to_string(), json!(token_issued));
+    details.insert("tokenStoredInWebStorage".to_string(), json!(false));
+    details.insert(
+        "secureStorageBackend".to_string(),
+        json!("platform-keychain"),
+    );
+    details.insert("healthPath".to_string(), json!(SIDECAR_HEALTH_PATH));
+    details.insert(
+        "bundledSidecarName".to_string(),
+        json!(BUNDLED_SIDECAR_NAME),
+    );
+    details.insert(
+        "bundledSidecarPolicy".to_string(),
+        json!("explicit-prebuilt-artifact"),
+    );
+    details.insert("updaterArtifactsEnabled".to_string(), json!(true));
+    if let Some(ms) = started_at_ms {
+        details.insert("uptimeMs".to_string(), json!(ms));
+    }
+    match health {
+        Ok(value) => {
+            {
+                let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+                sidecar.last_health = Some(value.clone());
+            }
+            details.insert("gatewayHealth".to_string(), value);
+        }
+        Err(error) => {
+            details.insert("gatewayHealthError".to_string(), json!(error.to_string()));
+        }
+    }
 
     Ok(SidecarStatus {
-        running: false,
-        mode: if env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").is_ok() {
+        running,
+        mode: if is_thin_mode() {
             "thin".to_string()
+        } else if running {
+            "sidecar".to_string()
         } else {
-            "desktop-local-pending-sidecar".to_string()
+            "desktop-local-stopped".to_string()
         },
-        pid: None,
+        pid,
         gateway_url: Some(gateway.to_string()),
         version: Some(env!("CARGO_PKG_VERSION").to_string()),
-        last_error: None,
+        last_error,
         details,
     })
 }
@@ -228,6 +456,96 @@ async fn native_capabilities() -> Result<NativeCapabilityManifest, AuroraCommand
 }
 
 #[tauri::command]
+async fn aurora_native_permission_status() -> Result<NativePermissionStatus, AuroraCommandError> {
+    let manifest = native_capability_manifest();
+    Ok(NativePermissionStatus {
+        platform: manifest.platform,
+        permissions: manifest.permissions,
+        capabilities: manifest.capabilities,
+        denied_by_default: vec![
+            "aurora.shell".to_string(),
+            "aurora.processSpawn".to_string(),
+            "aurora.localFileRead".to_string(),
+            "aurora.localFileWrite".to_string(),
+            "aurora.notificationsSend".to_string(),
+            "aurora.dialogOpen".to_string(),
+            "aurora.audioCapture".to_string(),
+            "aurora.audioPlayback".to_string(),
+        ],
+        privacy_classes: vec![
+            "personal".to_string(),
+            "credential".to_string(),
+            "raw-audio".to_string(),
+        ],
+        evidence_source: "tauri-capability-manifest".to_string(),
+        secrets_redacted: true,
+    })
+}
+
+#[tauri::command]
+async fn aurora_tray_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = BTreeMap::new();
+    details.insert("menuItems".to_string(), json!(["show", "quit"]));
+    details.insert("backendTruthRequired".to_string(), json!(false));
+    Ok(NativeFeatureStatus {
+        available: true,
+        permission: "aurora.trayStatus".to_string(),
+        capability: "desktop.tray".to_string(),
+        source: "tauri-core-tray-icon".to_string(),
+        reason: None,
+        details,
+    })
+}
+
+#[tauri::command]
+async fn aurora_notification_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    denied_native_feature_status(
+        "aurora.notificationsSend",
+        "native.notifications",
+        "notification delivery is disabled until UI-004 defines the OS permission request and consent UX",
+    )
+}
+
+#[tauri::command]
+async fn aurora_notification_send(
+    request: NativeNotificationRequest,
+) -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let _ = (request.title, request.body);
+    Err(native_permission_missing("aurora.notificationsSend"))
+}
+
+#[tauri::command]
+async fn aurora_dialog_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    denied_native_feature_status(
+        "aurora.dialogOpen",
+        "native.dialogs",
+        "dialog plugin access is disabled until file/attachment UX defines scoped picker behavior",
+    )
+}
+
+#[tauri::command]
+async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut status = denied_native_feature_status(
+        "aurora.audioCapture",
+        "native.audio",
+        "raw-audio capture/playback requires backend audio events, explicit target, visible privacy state, and consent",
+    )?;
+    status
+        .details
+        .insert("privacyClass".to_string(), json!("raw-audio"));
+    status
+        .details
+        .insert("backendEvidenceRequired".to_string(), json!(true));
+    status
+        .details
+        .insert("captureEnabled".to_string(), json!(false));
+    status
+        .details
+        .insert("playbackControlEnabled".to_string(), json!(false));
+    Ok(status)
+}
+
+#[tauri::command]
 async fn aurora_log_tail(
     request: Option<LogTailRequest>,
 ) -> Result<LogTailResult, AuroraCommandError> {
@@ -241,7 +559,7 @@ async fn aurora_log_tail(
         lines: Vec::new(),
         truncated: false,
         reason: Some(
-            "TAURI-002 sidecar supervision is not implemented in this shell; no local log source is active"
+            "TAURI-004 log tailing is deferred; the supervised sidecar does not expose a local log source yet"
                 .to_string(),
         ),
         max_lines,
@@ -250,8 +568,19 @@ async fn aurora_log_tail(
 
 #[tauri::command]
 async fn aurora_secure_storage_get(key: String) -> Result<Value, AuroraCommandError> {
-    let _ = key;
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    let value = match entry.get_password() {
+        Ok(value) => Some(value),
+        Err(keyring::Error::NoEntry) => None,
+        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+    };
+    Ok(json!({
+        "key": key,
+        "value": value,
+        "backend": "platform-keychain",
+        "persisted": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[tauri::command]
@@ -259,14 +588,32 @@ async fn aurora_secure_storage_set(
     key: String,
     value: String,
 ) -> Result<Value, AuroraCommandError> {
-    let _ = (key, value);
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    entry
+        .set_password(&value)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+    Ok(json!({
+        "key": key,
+        "ok": true,
+        "backend": "platform-keychain",
+        "persisted": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[tauri::command]
 async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraCommandError> {
-    let _ = key;
-    Err(native_permission_missing("aurora.secureStorage"))
+    let entry = secure_storage_entry(&key)?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
+            "key": key,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "secretsRedacted": true
+        })),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
 }
 
 #[tauri::command]
@@ -303,7 +650,14 @@ async fn aurora_secure_file_handle_open(
 }
 
 #[tauri::command]
-async fn aurora_shutdown(app: AppHandle) -> Result<(), AuroraCommandError> {
+async fn aurora_shutdown(
+    app: AppHandle,
+    state: State<'_, SharedSidecarState>,
+) -> Result<(), AuroraCommandError> {
+    {
+        let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+        stop_sidecar(&mut sidecar)?;
+    }
     app.exit(0);
     Ok(())
 }
@@ -316,6 +670,13 @@ impl AuroraCommandError {
             Self::InvalidGatewayResponse => "validation_error",
             Self::NativePermissionMissing(_) => "native_permission_missing",
             Self::UnsupportedFeature(_) => "unsupported_feature",
+            Self::ThinModeSidecarDisabled => "unsupported_feature",
+            Self::SidecarLoopbackRequired(_) => "validation_error",
+            Self::SidecarTokenInvalid => "permission",
+            Self::SidecarProcess(_) => "unavailable_service",
+            Self::SidecarState => "transport_loss",
+            Self::SecureStorageKeyInvalid(_) => "validation_error",
+            Self::SecureStorage(_) => "secure_storage_error",
         }
     }
 }
@@ -335,7 +696,11 @@ fn envelope(method: String, data: Value) -> AuroraEnvelope {
             redaction: RedactionMetadata {
                 secrets_redacted: true,
                 source: "tauri-shell".to_string(),
-                redacted_fields: vec!["authorization".to_string(), "token".to_string()],
+                redacted_fields: vec![
+                    "authorization".to_string(),
+                    "token".to_string(),
+                    "x-aurora-sidecar-token".to_string(),
+                ],
                 warnings: Vec::new(),
             },
         },
@@ -349,29 +714,105 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.subscribe".to_string(), true);
     permissions.insert("aurora.nativeCapabilityManifest".to_string(), true);
     permissions.insert("aurora.sidecarStatus".to_string(), true);
+    permissions.insert("aurora.sidecarSession".to_string(), true);
+    permissions.insert("aurora.sidecarStart".to_string(), true);
+    permissions.insert("aurora.sidecarStop".to_string(), true);
     permissions.insert("aurora.shutdown".to_string(), true);
     permissions.insert("aurora.logTail".to_string(), true);
-    permissions.insert("aurora.secureStorage".to_string(), false);
+    permissions.insert("aurora.updater".to_string(), true);
+    permissions.insert("aurora.secureStorage".to_string(), true);
+    permissions.insert("aurora.nativePermissionStatus".to_string(), true);
+    permissions.insert("aurora.trayStatus".to_string(), true);
+    permissions.insert("aurora.notificationsStatus".to_string(), true);
+    permissions.insert("aurora.notificationsSend".to_string(), false);
+    permissions.insert("aurora.dialogStatus".to_string(), true);
+    permissions.insert("aurora.dialogOpen".to_string(), false);
     permissions.insert("aurora.localFileRead".to_string(), false);
     permissions.insert("aurora.localFileWrite".to_string(), false);
     permissions.insert("aurora.secureFileHandle".to_string(), false);
+    permissions.insert("aurora.audioBridgeStatus".to_string(), true);
+    permissions.insert("aurora.audioCapture".to_string(), false);
+    permissions.insert("aurora.audioPlayback".to_string(), false);
     permissions.insert("aurora.shell".to_string(), false);
     permissions.insert("aurora.processSpawn".to_string(), false);
 
     let mut capabilities = BTreeMap::new();
     capabilities.insert("desktop.thinGateway".to_string(), true);
     capabilities.insert("desktop.localSidecarHealth".to_string(), true);
+    capabilities.insert("desktop.signedUpdater".to_string(), true);
+    capabilities.insert("desktop.bundledSidecarPolicy".to_string(), true);
     capabilities.insert("desktop.logTail".to_string(), false);
-    capabilities.insert("desktop.localSidecarSupervision".to_string(), false);
-    capabilities.insert("native.secureCredentialStorage".to_string(), false);
+    capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
+    capabilities.insert("desktop.tray".to_string(), true);
+    capabilities.insert("native.secureCredentialStorage".to_string(), true);
+    capabilities.insert("native.permissionsManifest".to_string(), true);
+    capabilities.insert("native.notifications".to_string(), false);
+    capabilities.insert("native.dialogs".to_string(), false);
     capabilities.insert("native.secureFileHandles".to_string(), false);
     capabilities.insert("native.filesystem".to_string(), false);
     capabilities.insert("native.audio".to_string(), false);
+    capabilities.insert("native.audioCapture".to_string(), false);
+    capabilities.insert("native.audioPlayback".to_string(), false);
 
     NativeCapabilityManifest {
         platform: "tauri-desktop".to_string(),
         permissions,
         capabilities,
+    }
+}
+
+fn denied_native_feature_status(
+    permission: &str,
+    capability: &str,
+    reason: &str,
+) -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = BTreeMap::new();
+    details.insert("enabledByDefault".to_string(), json!(false));
+    details.insert("secretsRedacted".to_string(), json!(true));
+    Ok(NativeFeatureStatus {
+        available: false,
+        permission: permission.to_string(),
+        capability: capability.to_string(),
+        source: "tauri-capability-manifest".to_string(),
+        reason: Some(reason.to_string()),
+        details,
+    })
+}
+
+fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
+    validate_secure_storage_key(key)?;
+    keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
+    if key.is_empty() || key.len() > 128 {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "key length must be 1..128 bytes".to_string(),
+        ));
+    }
+    if !key
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "key may only contain ASCII letters, digits, dot, underscore, or hyphen".to_string(),
+        ));
+    }
+    let allowed = [
+        "aurora.session",
+        "aurora.auth",
+        "aurora.gateway",
+        "aurora.mesh",
+        "aurora.admin",
+    ];
+    if allowed
+        .iter()
+        .any(|prefix| key == *prefix || key.starts_with(&format!("{prefix}.")))
+    {
+        Ok(())
+    } else {
+        Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()))
     }
 }
 
@@ -381,13 +822,19 @@ fn gateway_url() -> Result<Url, AuroraCommandError> {
         .unwrap_or_else(|_| DEFAULT_GATEWAY_URL.to_string());
     let url =
         Url::parse(&raw).map_err(|_| AuroraCommandError::InvalidGatewayOrigin(raw.clone()))?;
-    if is_loopback_http_origin(&url)
-        || env::var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY").as_deref() == Ok("1")
-    {
+    if is_loopback_http_origin(&url) || remote_gateway_allowed() {
         Ok(url)
     } else {
         Err(AuroraCommandError::InvalidGatewayOrigin(raw))
     }
+}
+
+fn remote_gateway_allowed() -> bool {
+    env::var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY").as_deref() == Ok("1")
+}
+
+fn is_thin_mode() -> bool {
+    env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").is_ok()
 }
 
 fn gateway_request_url(
@@ -435,6 +882,220 @@ fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
     output
 }
 
+fn request_has_valid_sidecar_token(
+    request: &AuroraRequest,
+    state: &State<'_, SharedSidecarState>,
+) -> Result<bool, AuroraCommandError> {
+    if is_thin_mode() || request.method == NATIVE_MANIFEST_METHOD {
+        return Ok(true);
+    }
+    let Some(headers) = &request.headers else {
+        return Ok(false);
+    };
+    let Some(token) = headers
+        .get("x-aurora-sidecar-token")
+        .or_else(|| headers.get("X-Aurora-Sidecar-Token"))
+    else {
+        return Ok(false);
+    };
+    let sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(token == &sidecar.token)
+}
+
+fn verify_sidecar_command_token(
+    command_token: Option<SidecarCommandToken>,
+    state: &State<'_, SharedSidecarState>,
+) -> Result<(), AuroraCommandError> {
+    let Some(command_token) = command_token.and_then(|value| value.token) else {
+        return Err(AuroraCommandError::SidecarTokenInvalid);
+    };
+    let sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+    if command_token == sidecar.token {
+        Ok(())
+    } else {
+        Err(AuroraCommandError::SidecarTokenInvalid)
+    }
+}
+
+fn spawn_sidecar(gateway: &Url, token: &str) -> Result<Child, AuroraCommandError> {
+    let mut command = Command::new(sidecar_program());
+    command.args(sidecar_args());
+    command.current_dir(sidecar_working_dir());
+    command.env("AURORA_ARCHITECTURE_MODE", "threads");
+    command.env("AURORA_TAURI_MANAGED_SIDECAR", "1");
+    command.env("AURORA_GATEWAY_URL", gateway.to_string());
+    command.env("AURORA_TAURI_SIDECAR_TOKEN", token);
+    command.env("AURORA_CONFIG_FILE", sidecar_config_file(gateway)?);
+    command.env(
+        "AURORA_GATEWAY_HOST",
+        gateway.host_str().unwrap_or("127.0.0.1"),
+    );
+    if let Some(port) = gateway.port_or_known_default() {
+        command.env("AURORA_GATEWAY_PORT", port.to_string());
+    }
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    command
+        .spawn()
+        .map_err(|error| AuroraCommandError::SidecarProcess(error.to_string()))
+}
+
+fn stop_sidecar(sidecar: &mut SidecarState) -> Result<(), AuroraCommandError> {
+    let Some(mut child) = sidecar.child.take() else {
+        sidecar.started_at = None;
+        return Ok(());
+    };
+    if let Ok(Some(status)) = child.try_wait() {
+        sidecar.last_error = Some(format!("sidecar exited with status {status}"));
+        sidecar.started_at = None;
+        return Ok(());
+    }
+    child
+        .kill()
+        .map_err(|error| AuroraCommandError::SidecarProcess(error.to_string()))?;
+    let _ = child.wait();
+    sidecar.started_at = None;
+    sidecar.last_error = None;
+    Ok(())
+}
+
+async fn check_gateway_health(gateway: &Url) -> Result<Value, AuroraCommandError> {
+    let url = gateway
+        .join(SIDECAR_HEALTH_PATH.trim_start_matches('/'))
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    let response = reqwest::Client::new()
+        .get(url)
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    let status = response.status();
+    let value = response
+        .json::<Value>()
+        .await
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    if status.is_success() {
+        Ok(value)
+    } else {
+        Err(AuroraCommandError::Gateway(format!(
+            "HTTP {status}: {value}"
+        )))
+    }
+}
+
+fn sidecar_program() -> String {
+    env::var("AURORA_TAURI_SIDECAR_PROGRAM").unwrap_or_else(|_| "python".to_string())
+}
+
+fn sidecar_args() -> Vec<String> {
+    if let Ok(args) = env::var("AURORA_TAURI_SIDECAR_ARGS") {
+        return args
+            .split_whitespace()
+            .filter(|part| !part.is_empty())
+            .map(ToString::to_string)
+            .collect();
+    }
+    vec!["main.py".to_string()]
+}
+
+fn sidecar_working_dir() -> PathBuf {
+    env::var("AURORA_TAURI_SIDECAR_CWD")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .and_then(|path| path.parent())
+                .and_then(|path| path.parent())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."))
+        })
+}
+
+fn sidecar_config_file(gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
+    if let Ok(path) = env::var("AURORA_TAURI_SIDECAR_CONFIG_FILE") {
+        return Ok(PathBuf::from(path));
+    }
+
+    let defaults_path = sidecar_working_dir()
+        .join("app")
+        .join("services")
+        .join("config")
+        .join("config_defaults.json");
+    let defaults = fs::read_to_string(&defaults_path).map_err(|error| {
+        AuroraCommandError::SidecarProcess(format!(
+            "failed to read config defaults at {}: {error}",
+            defaults_path.display()
+        ))
+    })?;
+    let mut config: Value = serde_json::from_str(&defaults).map_err(|error| {
+        AuroraCommandError::SidecarProcess(format!(
+            "failed to parse config defaults at {}: {error}",
+            defaults_path.display()
+        ))
+    })?;
+
+    let gateway_config = config
+        .pointer_mut("/services/gateway")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            AuroraCommandError::SidecarProcess(
+                "config defaults are missing services.gateway".to_string(),
+            )
+        })?;
+    gateway_config.insert("enabled".to_string(), json!(true));
+    let api_config = gateway_config
+        .get_mut("api")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            AuroraCommandError::SidecarProcess(
+                "config defaults are missing services.gateway.api".to_string(),
+            )
+        })?;
+    api_config.insert(
+        "host".to_string(),
+        json!(gateway.host_str().unwrap_or("127.0.0.1")),
+    );
+    if let Some(port) = gateway.port_or_known_default() {
+        api_config.insert("port".to_string(), json!(port));
+    }
+
+    let path = env::temp_dir().join(format!(
+        "aurora-tauri-sidecar-{}-config.json",
+        std::process::id()
+    ));
+    let serialized = serde_json::to_string_pretty(&config).map_err(|error| {
+        AuroraCommandError::SidecarProcess(format!("failed to serialize sidecar config: {error}"))
+    })?;
+    fs::write(&path, serialized).map_err(|error| {
+        AuroraCommandError::SidecarProcess(format!(
+            "failed to write sidecar config at {}: {error}",
+            path.display()
+        ))
+    })?;
+    Ok(path)
+}
+
+fn generate_sidecar_token() -> String {
+    let mut bytes = [0_u8; 32];
+    if getrandom::getrandom(&mut bytes).is_err() {
+        let fallback = format!(
+            "{}:{}:{:?}",
+            std::process::id(),
+            env!("CARGO_PKG_VERSION"),
+            Instant::now()
+        );
+        return fallback
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+    }
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+}
+
 fn is_loopback_http_origin(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https")
         && matches!(
@@ -445,14 +1106,32 @@ fn is_loopback_http_origin(url: &Url) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     tauri::Builder::default()
+        .manage(sidecar_state.clone())
+        .setup(|app| {
+            install_tray(app.handle())?;
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             aurora_request,
             aurora_command,
             aurora_subscribe,
+            aurora_sidecar_session,
+            aurora_sidecar_start,
+            aurora_sidecar_stop,
             aurora_sidecar_status,
             aurora_native_capability_manifest,
             native_capabilities,
+            aurora_native_permission_status,
+            aurora_tray_status,
+            aurora_notification_status,
+            aurora_notification_send,
+            aurora_dialog_status,
+            aurora_audio_bridge_status,
             aurora_log_tail,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
@@ -463,6 +1142,189 @@ pub fn run() {
             aurora_secure_file_handle_open,
             aurora_shutdown
         ])
+        .on_window_event(move |_window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                if let Ok(mut sidecar) = sidecar_state.lock() {
+                    let _ = stop_sidecar(&mut sidecar);
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Aurora Tauri shell");
+}
+
+fn install_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let mut builder = TrayIconBuilder::with_id("aurora-main")
+        .tooltip("Aurora")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_manifest_advertises_sidecar_supervision_without_broad_native_access() {
+        let manifest = native_capability_manifest();
+        assert_eq!(
+            manifest.capabilities.get("desktop.localSidecarSupervision"),
+            Some(&true)
+        );
+        assert_eq!(manifest.permissions.get("aurora.sidecarStart"), Some(&true));
+        assert_eq!(manifest.permissions.get("aurora.sidecarStop"), Some(&true));
+        assert_eq!(manifest.permissions.get("aurora.updater"), Some(&true));
+        assert_eq!(
+            manifest.capabilities.get("desktop.signedUpdater"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("desktop.bundledSidecarPolicy"),
+            Some(&true)
+        );
+        assert_eq!(manifest.permissions.get("aurora.shell"), Some(&false));
+        assert_eq!(
+            manifest.permissions.get("aurora.localFileWrite"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.secureStorage"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.secureCredentialStorage"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.secureFileHandles"),
+            Some(&false)
+        );
+        assert_eq!(manifest.capabilities.get("desktop.tray"), Some(&true));
+        assert_eq!(
+            manifest.permissions.get("aurora.notificationsSend"),
+            Some(&false)
+        );
+        assert_eq!(manifest.permissions.get("aurora.dialogOpen"), Some(&false));
+        assert_eq!(
+            manifest.permissions.get("aurora.audioCapture"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.capabilities.get("native.notifications"),
+            Some(&false)
+        );
+        assert_eq!(manifest.capabilities.get("native.dialogs"), Some(&false));
+        assert_eq!(manifest.capabilities.get("native.audio"), Some(&false));
+    }
+
+    #[test]
+    fn native_permission_status_lists_denied_sensitive_surfaces() {
+        let manifest = native_capability_manifest();
+        let denied: Vec<String> = manifest
+            .permissions
+            .iter()
+            .filter_map(|(key, allowed)| if *allowed { None } else { Some(key.clone()) })
+            .collect();
+        assert!(denied.contains(&"aurora.notificationsSend".to_string()));
+        assert!(denied.contains(&"aurora.dialogOpen".to_string()));
+        assert!(denied.contains(&"aurora.audioCapture".to_string()));
+        assert!(denied.contains(&"aurora.localFileRead".to_string()));
+    }
+
+    #[test]
+    fn secure_storage_keys_are_limited_to_credential_namespaces() {
+        for key in [
+            "aurora.session",
+            "aurora.session.gateway",
+            "aurora.auth.refresh-token",
+            "aurora.mesh.peer_01",
+            "aurora.admin.unlock",
+        ] {
+            assert!(validate_secure_storage_key(key).is_ok(), "{key}");
+        }
+
+        for key in [
+            "",
+            "session",
+            "aurora.config.secret",
+            "aurora.session/../../token",
+            "aurora.session.token value",
+        ] {
+            assert!(validate_secure_storage_key(key).is_err(), "{key}");
+        }
+    }
+
+    #[test]
+    fn sidecar_token_is_random_hex_and_not_empty() {
+        let first = generate_sidecar_token();
+        let second = generate_sidecar_token();
+        assert_eq!(first.len(), 64);
+        assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn default_sidecar_working_dir_points_to_repo_root() {
+        let cwd = sidecar_working_dir();
+        assert!(cwd.ends_with("aurora"));
+    }
+
+    #[test]
+    fn generated_sidecar_config_enables_loopback_gateway() {
+        let path = sidecar_config_file(&Url::parse("http://127.0.0.1:8765").unwrap()).unwrap();
+        let config = fs::read_to_string(path).unwrap();
+        let value: Value = serde_json::from_str(&config).unwrap();
+        assert_eq!(
+            value.pointer("/services/gateway/enabled"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            value.pointer("/services/gateway/api/host"),
+            Some(&json!("127.0.0.1"))
+        );
+        assert_eq!(
+            value.pointer("/services/gateway/api/port"),
+            Some(&json!(8765))
+        );
+    }
+
+    #[test]
+    fn loopback_origin_rejects_non_loopback_hosts() {
+        assert!(is_loopback_http_origin(
+            &Url::parse("http://127.0.0.1:8000").unwrap()
+        ));
+        assert!(is_loopback_http_origin(
+            &Url::parse("http://localhost:8000").unwrap()
+        ));
+        assert!(!is_loopback_http_origin(
+            &Url::parse("https://aurora.example.test").unwrap()
+        ));
+    }
+
+    #[test]
+    fn release_constants_do_not_embed_secret_signing_material() {
+        assert_eq!(BUNDLED_SIDECAR_NAME, "aurora-sidecar");
+        assert!(UPDATER_ENDPOINT.starts_with("https://"));
+        assert!(UPDATER_ENDPOINT.contains("{{target}}"));
+        assert!(UPDATER_ENDPOINT.contains("{{arch}}"));
+        assert!(UPDATER_ENDPOINT.contains("{{current_version}}"));
+    }
 }

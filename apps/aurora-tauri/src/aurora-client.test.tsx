@@ -17,6 +17,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(runtime.mode).toBe('mock')
     expect(runtime.client.transport.kind).toBe('mock')
     await expect(runtime.sidecarStatus()).resolves.toBeNull()
+    await expect(runtime.nativePermissionStatus()).resolves.toBeNull()
     await expect(runtime.shutdown()).resolves.toBeUndefined()
   })
 
@@ -38,7 +39,9 @@ describe('Aurora Tauri runtime wrapper', () => {
 
     expect(markup).toContain('Native boundary')
     expect(markup).toContain('Runtime mode')
+    expect(markup).toContain('Audio bridge')
+    expect(markup).toContain('Denied native defaults')
     expect(markup).toContain('mock')
-    expect(markup).toContain('not started by TAURI-001')
+    expect(markup).toContain('not used in thin mode')
   })
 })

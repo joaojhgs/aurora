@@ -165,6 +165,8 @@ export function buildAdminOverviewManifest(input: AdminOverviewManifestInput): A
     generatedAt: input.generatedAt ?? input.capabilityCatalog?.generated_at ?? new Date().toISOString(),
     registryDigest: input.registry.digest,
     serviceMode: servicesInput.mode,
+    deploymentTopology: input.deploymentTopology ?? null,
+    deploymentTopologyError: input.deploymentTopologyError ?? null,
     services: serviceSummaries.sort((a, b) => a.module.localeCompare(b.module)),
     methods,
     gatewayBuiltins: [...(input.gatewayBuiltins ?? [])].sort((a, b) => a.routePath.localeCompare(b.routePath)),

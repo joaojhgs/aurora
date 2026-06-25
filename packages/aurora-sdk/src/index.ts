@@ -1,5 +1,6 @@
 export { AuroraClient, ModelRuntimeClient } from './client.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
+export { BACKUP_METHODS, BackupClient } from './backup.js'
 export { ConfigClient } from './config.js'
 export type {
   ConfigChange,
@@ -102,6 +103,7 @@ export {
 export { auditFromHeaders, captureResult, createAuditReceipt, createAuroraEvent, createRedactionMetadata, normalizeError } from './transport.js'
 export {
   backendInventoryFixture,
+  backupListFixture,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
   cloneFixture,
@@ -111,17 +113,21 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  meshPeerListFixture,
+  meshStatusFixture,
   modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
+  schedulerJobsFixture,
   supportBundleFixture,
   toolCatalogFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
 export type * from './types.js'
 export type * from './admin.js'
+export type * from './backup.js'
 export type * from './memory.js'
 export type * from './scheduler.js'
 export type * from './tools.js'
@@ -179,6 +185,9 @@ export type {
   TauriLogTailRequest,
   TauriLogTailResult,
   TauriLocalTransportOptions,
+  TauriNativeFeatureStatus,
+  TauriNativePermissionStatus,
+  TauriNotificationRequest,
   TauriSidecarStatus
 } from './tauri.js'
 export type {

@@ -3,6 +3,8 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type TauriNativeFeatureStatus,
+  type TauriNativePermissionStatus,
   type TauriSidecarStatus
 } from '@aurora/client'
 import { invoke } from '@tauri-apps/api/core'
@@ -11,6 +13,13 @@ export interface AuroraTauriRuntime {
   client: AuroraClient
   mode: 'desktop-local' | 'desktop-thin' | 'mock'
   sidecarStatus: () => Promise<TauriSidecarStatus | null>
+  startSidecar: () => Promise<TauriSidecarStatus | null>
+  stopSidecar: () => Promise<TauriSidecarStatus | null>
+  nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>
+  trayStatus: () => Promise<TauriNativeFeatureStatus | null>
+  notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
+  dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
+  audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
   shutdown: () => Promise<void>
 }
 
@@ -21,6 +30,13 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       client: new AuroraClient({ transport }),
       mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
       sidecarStatus: () => transport.getSidecarStatus(),
+      startSidecar: () => transport.startSidecar(),
+      stopSidecar: () => transport.stopSidecar(),
+      nativePermissionStatus: () => transport.getNativePermissionStatus(),
+      trayStatus: () => transport.getTrayStatus(),
+      notificationStatus: () => transport.getNotificationStatus(),
+      dialogStatus: () => transport.getDialogStatus(),
+      audioBridgeStatus: () => transport.getAudioBridgeStatus(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
@@ -36,6 +52,13 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       }),
       mode: 'desktop-thin',
       sidecarStatus: async () => null,
+      startSidecar: async () => null,
+      stopSidecar: async () => null,
+      nativePermissionStatus: async () => null,
+      trayStatus: async () => null,
+      notificationStatus: async () => null,
+      dialogStatus: async () => null,
+      audioBridgeStatus: async () => null,
       shutdown: async () => undefined
     }
   }
@@ -44,6 +67,13 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     client: new AuroraClient({ transport: new MockAuroraTransport() }),
     mode: 'mock',
     sidecarStatus: async () => null,
+    startSidecar: async () => null,
+    stopSidecar: async () => null,
+    nativePermissionStatus: async () => null,
+    trayStatus: async () => null,
+    notificationStatus: async () => null,
+    dialogStatus: async () => null,
+    audioBridgeStatus: async () => null,
     shutdown: async () => undefined
   }
 }

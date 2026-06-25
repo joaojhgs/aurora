@@ -254,6 +254,12 @@ describe('SDK transport conformance', () => {
       'Orchestrator.DownloadModel',
       'Orchestrator.BenchmarkModel',
       'Auth.ListPendingPairings',
+      'Auth.MeshListPeers',
+      'Auth.MeshGetPeer',
+      'Auth.MeshApprovePeer',
+      'Auth.MeshDenyPeer',
+      'Auth.MeshUpdatePeerPermissions',
+      'Auth.MeshRemovePeer',
       'Auth.ListPrincipals',
       'Auth.CreatePrincipal',
       'Auth.UpdatePrincipal',
@@ -265,14 +271,20 @@ describe('SDK transport conformance', () => {
       'Auth.ListDevices',
       'Auth.DeleteDevice',
       'Auth.AuditLog',
+      'Scheduler.ListJobs',
+      'Scheduler.Schedule',
+      'Scheduler.Cancel',
+      'Scheduler.Pause',
+      'Scheduler.Resume',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',
+      'Gateway.GetMeshStatus',
       'Gateway.InternalOnly',
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 20, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 33, issues: [] })
   })
 })
 

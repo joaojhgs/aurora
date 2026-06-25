@@ -4,21 +4,28 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  backupListFixture,
   buildAdminOverviewManifest,
   buildCapabilityGraph,
   capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
   cloneFixture,
+  deploymentTopologyFixture,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
   modelRuntimeCatalogFixture,
+  meshPeerListFixture,
+  meshStatusFixture,
   normalizeToolCatalog,
   routeExplainFixture,
+  schedulerJobsFixture,
   toolCatalogFixture,
+  webrtcDiagnosticsFixture,
   type AdminOverviewManifest,
   type CapabilityActionInfo,
   type CapabilityCatalogResponse,
   type CapabilityProviderInfo,
+  type DeploymentTopologyResponse,
   type GetRegistryResponse,
   type GetServicesResponse,
   type PendingPairingEntry
@@ -31,26 +38,37 @@ import {
   AdminRbacView,
   AdminDevicesView,
   AdminAuditView,
+  AdminSchedulerView,
   AppShell,
   AssistantView,
+  BackupRestoreView,
   ConfigEditorView,
   ModelsView,
   MemoryView,
   OnboardingView,
   PairingQueueSurface,
   PairingQueueView,
+  MeshDiagnosticsView,
+  MeshPeersResource,
+  MeshPeersView,
+  RoutePolicyView,
   RouteSheet,
   buildAdminServicesSnapshot,
   buildAdminPluginsSnapshot,
   buildAdminRbacSnapshot,
   buildAdminDevicesSnapshot,
   buildAdminAuditSnapshot,
+  buildAdminSchedulerSnapshot,
   buildAuditExport,
   buildDeviceDeleteAdminAction,
   buildRbacPermissionPatchAction,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
+  buildMeshDiagnosticsSnapshot,
+  buildMeshPeerAdminAction,
+  buildMeshPeersSnapshot,
+  buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
   RouteMatrix,
   StateSurface,
@@ -65,6 +83,7 @@ import {
   submitToolDenialAction,
   ToolApprovalPanel,
   assistantErrorMessage,
+  backupErrorMessage,
   buildAssistantVoiceModel,
   buildMemoryViewModel,
   buildShellSnapshot,
@@ -74,7 +93,12 @@ import {
   errorShellSnapshot,
   parsePermissionList,
   pairingErrorMessage,
+  meshPeerErrorMessage,
+  meshDiagnosticsSnapshotFromResults,
+  parseMeshPermissionList,
+  routePolicyDraftChange,
   routePolicyFromRoute,
+  routePolicyScenarios,
   routeSheetErrorMessage,
   SettingsPermissionsView
 } from '../src/index'
@@ -364,6 +388,61 @@ describe('Aurora production shell', () => {
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+  })
+
+  it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const backups = route(snapshot, 'backups')
+    const markup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={backups} initialList={backupListFixture} />
+    )
+
+    expect(backups.disabled).toBe(false)
+    expect(markup).toContain('Backups &amp; Restore')
+    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('Verify via AdminAction')
+    expect(markup).toContain('Preview restore impact')
+    expect(markup).toContain('Full restore disabled')
+    expect(markup).toContain('Preview rollback')
+    expect(markup).toContain('Download manifest')
+    expect(markup).toContain('backup-20260625T120000Z-config-rag')
+    expect(markup).toContain('config:included')
+    expect(markup).toContain('models:unsupported')
+    expect(markup).toContain('secrets redacted')
+  })
+
+  it('renders backup empty, denied, degraded, unavailable, and SDK error states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const backups = route(snapshot, 'backups')
+
+    const emptyMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={backups} initialList={{ backups: [], total: 0, secrets_redacted: true }} />
+    )
+    expect(emptyMarkup).toContain('No manifests available')
+    expect(emptyMarkup).toContain('No backup manifests were returned')
+
+    const deniedMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'denied', disabled: true, blockers: ['permission_denied'] }} />
+    )
+    expect(deniedMarkup).toContain('Backup operations are disabled')
+    expect(deniedMarkup).toContain('permission_denied')
+
+    const degradedMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'degraded', disabled: false }} initialList={backupListFixture} />
+    )
+    expect(degradedMarkup).toContain('<dd>degraded</dd>')
+
+    const unavailableMarkup = renderToStaticMarkup(
+      <BackupRestoreView client={client} route={{ ...backups, state: 'unsupported', disabled: true, blockers: ['capability_not_advertised'] }} />
+    )
+    expect(unavailableMarkup).toContain('<dd>unavailable</dd>')
+    expect(unavailableMarkup).toContain('capability_not_advertised')
+
+    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
+    expect(backupErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'missing' }))).toContain('unavailable')
+    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('retry')
   })
 
   it('builds assistant voice routes from capability graph and native manifest evidence', async () => {
@@ -829,6 +908,96 @@ describe('Aurora production shell', () => {
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Tooling.manage')
   })
 
+  it('wires scheduler jobs, ownership states, and delegated target evidence from AuroraClient', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      explanation: 'Backend catalog reports Scheduler.ListJobs as routeable.',
+      requiresAdminAction: true
+    })
+    const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute)
+    const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.totals).toEqual({
+      local: 1,
+      delegatedOwned: 1,
+      remoteRunning: 1,
+      foreignDenied: 1
+    })
+    expect(snapshot.jobs.map((job) => job.ownership)).toEqual(expect.arrayContaining([
+      'local-owned',
+      'delegated-owned',
+      'remote-running',
+      'foreign-denied'
+    ]))
+    expect(snapshot.jobs.flatMap((job) => job.operationControls).every((control) => control.requiresAdminAction)).toBe(true)
+    expect(markup).toContain('Scheduler jobs')
+    expect(markup).toContain('Delegated by this node')
+    expect(markup).toContain('Running on remote peer')
+    expect(markup).toContain('Denied foreign namespace')
+    expect(markup).toContain('AdminAction')
+    expect(markup).toContain('approval token present')
+    expect(markup).toContain('policy-remote-index')
+    expect(markup).not.toContain('secret-token')
+  })
+
+  it('keeps scheduler create and job mutations AdminAction-gated by advertised registry methods', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      requiresAdminAction: true
+    })
+    const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute)
+    const delegatedJob = snapshot.jobs.find((job) => job.ownership === 'delegated-owned')
+    const deniedJob = snapshot.jobs.find((job) => job.ownership === 'foreign-denied')
+    const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={snapshot} />)
+
+    expect(snapshot.createControl.available).toBe(true)
+    expect(snapshot.createControl.requiresAdminAction).toBe(true)
+    expect(snapshot.createControl.targetOptions.map((option) => option.id)).toEqual(expect.arrayContaining(['local-peer', 'peer-studio-gpu']))
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'cancel')?.available).toBe(true)
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'pause')?.available).toBe(true)
+    expect(delegatedJob?.operationControls.find((control) => control.action === 'resume')?.available).toBe(false)
+    expect(deniedJob?.operationControls.every((control) => !control.available)).toBe(true)
+    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('target selector')
+    expect(markup).toContain('delegated permissions')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('renders scheduler disabled and SDK error states without fake local state', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const shell = await buildShellSnapshot(client)
+    const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
+      providerLabel: 'local / Scheduler.ListJobs',
+      requiresAdminAction: true
+    })
+    const disabledRoute = { ...schedulerRoute, disabled: true, state: 'denied' as const, blockers: ['missing:Scheduler.manage'] }
+    const disabledSnapshot = await buildAdminSchedulerSnapshot(client, disabledRoute)
+    expect(disabledSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Scheduler.manage')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Scheduler.ListJobs', 'permission', 'scheduler list denied')
+    const deniedSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: deniedTransport }), schedulerRoute)
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={deniedSnapshot} />)).toContain('scheduler list denied')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Scheduler.ListJobs', () => ({ jobs: [], total: 0 }))
+    const emptySnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: emptyTransport }), schedulerRoute)
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={emptySnapshot} />)).toContain('No scheduler jobs')
+
+    const customTransport = new MockAuroraTransport()
+    customTransport.register('Scheduler.ListJobs', () => schedulerJobsFixture)
+    const customSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: customTransport }), schedulerRoute)
+    expect(customSnapshot.jobs).toHaveLength(schedulerJobsFixture.jobs.length)
+  })
+
   it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
     const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
@@ -1213,6 +1382,297 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required for approve/deny')
   })
 
+  it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability evidence', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.localPeerId).toBe(meshStatusFixture.local.peer_id)
+    expect(snapshot.secretsRedacted).toBe(true)
+    expect(snapshot.pendingCount).toBe(1)
+    expect(snapshot.approvedCount).toBe(1)
+    expect(snapshot.deniedCount).toBe(1)
+    expect(snapshot.removedCount).toBe(1)
+    expect(snapshot.runtimePeerCount).toBe(meshStatusFixture.peers.length)
+    expect(snapshot.liveSessionCount).toBe(1)
+    expect(snapshot.deviceCount).toBe(3)
+    expect(snapshot.routeCount).toBe(meshStatusFixture.routes.length)
+    expect(snapshot.peers.map((peer) => peer.peerId)).toEqual(
+      expect.arrayContaining(meshPeerListFixture.peers.map((peer) => peer.peer_id))
+    )
+    expect(snapshot.liveSessions[0]).toEqual(
+      expect.objectContaining({
+        sessionId: 'session-peer',
+        stablePeerId: 'stable-peer',
+        evidenceSource: 'Gateway.GetWebRTCDiagnostics'
+      })
+    )
+    expect(snapshot.devices.map((device) => device.name)).toEqual(
+      expect.arrayContaining(['Studio Mac', 'Ops tablet', 'Assistant phone'])
+    )
+    expect(snapshot.peers.find((peer) => peer.peerId === 'peer-kitchen')).toEqual(
+      expect.objectContaining({
+        trustState: 'pending',
+        connectionStatus: 'connected',
+        lastEvidenceSource: expect.stringContaining('Auth.MeshListPeers')
+      })
+    )
+    expect(snapshot.peers.find((peer) => peer.peerId === 'peer-den')?.compatibility).toContain('incompatible')
+  })
+
+  it('renders mesh peer lifecycle UI without local-only trust or secret leakage', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const markup = renderToStaticMarkup(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={route}
+        adminReason="Approve kitchen peer"
+        permissions="Gateway.use TTS.use"
+      />
+    )
+
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Active WebRTC sessions')
+    expect(markup).toContain('Auth device records')
+    expect(markup).toContain('Kitchen node')
+    expect(markup).toContain('Studio GPU')
+    expect(markup).toContain('session-peer')
+    expect(markup).toContain('Studio Mac')
+    expect(markup).toContain('AdminAction approve')
+    expect(markup).toContain('AdminAction deny')
+    expect(markup).toContain('AdminAction remove')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('Gateway.GetMeshStatus')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('maps mesh disabled, denied, degraded, and loading states without faking backend truth', async () => {
+    const disabledSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport() }),
+      meshRoute({ disabled: true, state: 'unsupported', explanation: 'Gateway.GetMeshStatus is not routeable.' })
+    )
+    expect(disabledSnapshot.loadState).toBe('service-unavailable')
+    expect(disabledSnapshot.error).toContain('Capability unavailable')
+
+    const deniedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.MeshListPeers', 'permission', 'Auth denied') }),
+      meshRoute()
+    )
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(deniedSnapshot.error).toContain('denied')
+
+    const degradedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().lose('Gateway.GetWebRTCDiagnostics', 'diagnostics down') }),
+      meshRoute()
+    )
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(degradedSnapshot.warnings.join(' ')).toContain('diagnostics down')
+
+    const deviceDegradedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.ListDevices', 'unavailable_service', 'devices down') }),
+      meshRoute()
+    )
+    expect(deviceDegradedSnapshot.loadState).toBe('degraded')
+    expect(deviceDegradedSnapshot.warnings.join(' ')).toContain('devices down')
+    expect(deviceDegradedSnapshot.peers.length).toBeGreaterThan(0)
+
+    const loadingMarkup = renderToStaticMarkup(
+      <MeshPeersResource client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
+    )
+    expect(loadingMarkup).toContain('Loading mesh peers')
+  })
+
+  it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability evidence', async () => {
+    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.localMeshPeerId).toBe('local-peer')
+    expect(snapshot.secretsRedacted).toBe(true)
+    expect(snapshot.signalingState).toBe('available-remote')
+    expect(snapshot.connectedPeerCount).toBe(1)
+    expect(snapshot.transportRows[0]).toEqual(
+      expect.objectContaining({
+        peerId: 'stable-peer',
+        signalingPeerId: 'session-peer',
+        state: 'available-remote',
+        authState: 'authenticated',
+        dataChannelState: 'open',
+        routeQuality: 'healthy'
+      })
+    )
+    expect(snapshot.routeRows.map((row) => row.module)).toEqual(expect.arrayContaining(['TTS', 'Scheduler']))
+    expect(snapshot.routeRows.find((row) => row.module === 'TTS')?.blockers.join(' ')).toContain('stale_provider')
+    expect(snapshot.recentErrors[0]?.code).toBe('rpc_timeout')
+  })
+
+  it('renders WebRTC ICE diagnostics without leaking secret transport state', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={snapshot} route={route} />)
+
+    expect(markup).toContain('WebRTC and ICE diagnostics')
+    expect(markup).toContain('Peer transport matrix')
+    expect(markup).toContain('session-peer')
+    expect(markup).toContain('stable-peer')
+    expect(markup).toContain('ICE completed')
+    expect(markup).toContain('DataChannel')
+    expect(markup).toContain('Route quality')
+    expect(markup).toContain('rpc_timeout')
+    expect(markup).toContain('secrets redacted')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('maps WebRTC diagnostics empty, denied, and SDK error states with repair evidence', async () => {
+    const noPeers = cloneFixture(webrtcDiagnosticsFixture)
+    noPeers.peers = []
+    noPeers.connected_peer_count = 0
+    noPeers.authenticated_peer_count = 0
+    noPeers.started = false
+    const emptySnapshot = meshDiagnosticsSnapshotFromResults({
+      route: meshRoute(),
+      webrtc: { data: noPeers, error: null },
+      mesh: { data: { ...cloneFixture(meshStatusFixture), peers: [], routes: [], compatibility_failures: [] }, error: null },
+      catalog: { data: capabilityCatalogFixture, error: null }
+    })
+    expect(emptySnapshot.loadState).toBe('degraded')
+    expect(emptySnapshot.transportRows).toHaveLength(0)
+    expect(emptySnapshot.warnings.join(' ')).toContain('WebRTC runtime is not started')
+
+    const deniedSnapshot = await buildMeshDiagnosticsSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Gateway.GetWebRTCDiagnostics', 'permission', 'Gateway denied') }),
+      meshRoute()
+    )
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(deniedSnapshot.errors.join(' ')).toContain('Gateway denied')
+
+    const unavailableSnapshot = await buildMeshDiagnosticsSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .fail('Gateway.GetWebRTCDiagnostics', 'unavailable_service', 'diagnostics down')
+          .fail('Gateway.GetMeshStatus', 'unavailable_service', 'mesh down')
+          .fail('Gateway.GetCapabilityCatalog', 'unavailable_service', 'catalog down')
+      }),
+      meshRoute()
+    )
+    expect(unavailableSnapshot.loadState).toBe('unavailable')
+    expect(unavailableSnapshot.signalingRepair).toContain('Repair Gateway.GetWebRTCDiagnostics')
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={unavailableSnapshot} route={meshRoute()} />)
+    expect(markup).toContain('Degraded diagnostics inputs')
+    expect(markup).toContain('diagnostics down')
+    expect(markup).toContain('No live WebRTC peer sessions')
+  })
+
+  it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {
+    const peer = { peerId: 'peer-kitchen', nodeName: 'Kitchen node' }
+    const approve = buildMeshPeerAdminAction(peer, 'approve', {
+      reason: 'Approve expected kitchen peer',
+      permissions: 'Gateway.use, TTS.use\nTooling.use'
+    })
+    const deny = buildMeshPeerAdminAction(peer, 'deny', { reason: 'Wrong peer' })
+    const remove = buildMeshPeerAdminAction(peer, 'remove', { reason: 'Retire peer', revokeToken: false })
+
+    expect(parseMeshPermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
+    expect(approve).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshApprovePeer',
+        path: '/api/Auth/MeshApprovePeer',
+        reauthConfirmed: true,
+        reason: 'Approve expected kitchen peer',
+        affectedResources: ['mesh-peer:peer-kitchen', 'peer:Kitchen node'],
+        payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use', 'Tooling.use'] }
+      })
+    )
+    expect(deny).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshDenyPeer',
+        path: '/api/Auth/MeshDenyPeer',
+        payload: { peer_id: 'peer-kitchen' }
+      })
+    )
+    expect(remove).toEqual(
+      expect.objectContaining({
+        methodId: 'Auth.MeshRemovePeer',
+        path: '/api/Auth/MeshRemovePeer',
+        payload: { peer_id: 'peer-kitchen', revoke_token: false }
+      })
+    )
+    expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+  })
+
+  it('builds route policy explain state matrix through AuroraClient route APIs', async () => {
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.scenarios.map((scenario) => scenario.scenario.id)).toEqual([
+      'assistant_prompt',
+      'tool_call',
+      'rag_query',
+      'audio_session',
+      'model_runtime',
+      'scheduler_job',
+      'admin_action'
+    ])
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'tool_call')?.evaluation?.privacyClass).toBe('admin-critical')
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_id: 'rag:home-lab' })
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'audio_session')?.evaluation?.privacyClass).toBe('raw-audio')
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'scheduler_job')?.evaluation?.repairPath).toContain('selector')
+    expect(snapshot.policyCapabilityReason).toContain('Gateway.ExplainRoute')
+    expect(snapshot.configCapabilityReason).toContain('Config.Set')
+  })
+
+  it('renders route policy editor and exact explain blockers without local-only success claims', async () => {
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+
+    expect(markup).toContain('Route policy and explain')
+    expect(markup).toContain('Backend decision matrix')
+    expect(markup).toContain('Remote RAG namespace')
+    expect(markup).toContain('Remote STT session')
+    expect(markup).toContain('Scheduler delegation')
+    expect(markup).toContain('explicit_selector_required')
+    expect(markup).toContain('Select the target peer before remote raw-audio capable synthesis.')
+    expect(markup).toContain('Config.Set')
+    expect(markup).toContain('AdminAction')
+    expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('keeps route policy SDK failures visible and disabled', async () => {
+    const transport = new MockAuroraTransport()
+      .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
+      .fail('Gateway.GetCapabilityCatalog', 'permission', 'catalog denied')
+    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport }), meshRoute())
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+
+    expect(snapshot.loadState).toBe('denied')
+    expect(snapshot.error).toContain('Route explain')
+    expect(snapshot.canEditPolicy).toBe(false)
+    expect(markup).toContain('route explain down')
+    expect(markup).toContain('catalog denied')
+    expect(markup).toContain('Save policy')
+    expect(markup).toContain('disabled')
+  })
+
+  it('serializes route policy draft to schema-backed mesh sharing config', () => {
+    const change = routePolicyDraftChange({
+      ...routePolicyDraft(),
+      module: 'TTS',
+      allowedPeers: 'peer-a, peer-b',
+      deniedPeers: 'peer-c',
+      requiredCapabilities: 'synthesize, low-latency',
+      minimumVersion: '0.3.0'
+    })
+
+    expect(change.key_path).toBe('services.tts.mesh_sharing')
+    expect(change.value).toEqual({
+      require_explicit_selector: true,
+      allowed_peers: ['peer-a', 'peer-b'],
+      required_capabilities: ['synthesize', 'low-latency'],
+      min_version: '0.3.0',
+      fallback: 'local'
+    })
+    expect(routePolicyScenarios().map((scenario) => scenario.id)).toContain('admin_action')
+  })
+
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
     const markup = renderToStaticMarkup(
       await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
@@ -1229,6 +1689,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Manage/admin-critical operations')
     expect(markup).toContain('privacy-blocked')
     expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('Deployment topology')
+    expect(markup).toContain('local thread-mode app')
+    expect(markup).toContain('thread_mode_no_process_controls')
+    expect(markup).toContain('Process controls unsupported')
   })
 
   it('keeps denied, stale, empty, and internal-only admin states visible with repair links', () => {
@@ -1243,6 +1707,71 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Config.Get')
     expect(markup).toContain('DB.RAGSearch')
     expect(markup).toContain('AdminAction draft/confirm/audit is required')
+  })
+
+  it('renders process-mode deployment topology with Redis and BullMQ evidence', () => {
+    const manifest = adminOverviewStateMatrixManifest(processTopologyFixture())
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('server process-mode deployment')
+    expect(markup).toContain('BullMQBus')
+    expect(markup).toContain('redis://[redacted]@redis:6379/0 reachable')
+    expect(markup).toContain('docker-compose.process.yml')
+    expect(markup).toContain('Diagnostics export')
+    expect(markup).toContain('Services and contracts')
+    expect(markup).not.toContain('redis://:password')
+  })
+
+  it('renders Redis-down process topology as degraded with actionable repair copy', () => {
+    const topology = processTopologyFixture({
+      redis_reachable: false,
+      bullmq_queue_health: {
+        ...processTopologyFixture().bullmq_queue_health,
+        redis_reachable: false,
+        status: 'degraded',
+        degraded_reasons: ['redis_unreachable', 'bullmq_queue_lag_unknown'],
+        error: 'Redis connection failed'
+      },
+      mode_capability_degradations: ['redis_unreachable', 'bullmq_queue_lag_unknown']
+    })
+    const manifest = adminOverviewStateMatrixManifest(topology)
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('degraded')
+    expect(markup).toContain('redis_unreachable')
+    expect(markup).toContain('verify Redis is running')
+    expect(markup).toContain('bullmq_queue_lag_unknown')
+  })
+
+  it('renders mesh peer-only topology as privacy-blocked until peer topology is trusted', () => {
+    const topology = topologyFixture({
+      architecture_mode: 'mesh',
+      runtime_mode: 'mesh-peer-only',
+      bus_backend: 'MeshBus',
+      mesh_peer_topology_trusted: false,
+      mode_capability_degradations: ['mesh_peer_topology_untrusted'],
+      service_process_topology: []
+    })
+    const manifest = adminOverviewStateMatrixManifest(topology)
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="mesh" />)
+
+    expect(markup).toContain('mesh peer-only shell')
+    expect(markup).toContain('privacy-blocked')
+    expect(markup).toContain('mesh_peer_topology_untrusted')
+    expect(markup).toContain('require authenticated peer evidence')
+  })
+
+  it('renders missing deployment topology without inventing process health', () => {
+    const manifest = {
+      ...adminOverviewStateMatrixManifest(null),
+      deploymentTopologyError: 'deployment topology unavailable'
+    }
+    const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
+
+    expect(markup).toContain('Deployment topology unavailable')
+    expect(markup).toContain('deployment topology unavailable')
+    expect(markup).toContain('BE-016 topology unavailable')
+    expect(markup).toContain('Open diagnostics')
   })
 
   it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
@@ -1908,6 +2437,52 @@ function pairingRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSna
   } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
 }
 
+function meshRoute(overrides: Partial<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]> = {}) {
+  return {
+    item: {
+      id: 'mesh',
+      label: 'Mesh',
+      href: '/mesh',
+      capabilityModule: 'Gateway',
+      capabilityMethod: 'GetMeshStatus',
+      methodType: 'use',
+      privacyClass: 'credential',
+      fallbackState: 'unsupported',
+      adminGated: false,
+      expectedTask: 'MESH-001'
+    },
+    state: 'available-local',
+    explanation: 'Backend catalog reports Gateway.GetMeshStatus and Auth.MeshListPeers as routeable.',
+    providerLabel: 'local / Gateway.GetMeshStatus',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['capability-catalog'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false,
+    ...overrides
+  } as Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number]
+}
+
+function routePolicyDraft() {
+  return {
+    module: 'TTS',
+    requireExplicitSelector: true,
+    allowedPeers: '',
+    deniedPeers: '',
+    requiredCapabilities: 'synthesize',
+    minimumVersion: '',
+    trustTier: 'paired',
+    fallbackPolicy: 'local' as const,
+    safetySensitiveClasses: 'admin-critical, raw-audio, credential',
+    reason: 'Update mesh route policy',
+    reauthConfirmed: true
+  }
+}
+
 function emptyPairingQueue() {
   return {
     pairings: [],
@@ -1969,14 +2544,15 @@ function streamUpdate(textDelta: string) {
   }
 }
 
-function enabledRoute(match: ReturnType<typeof route>) {
+function enabledRoute(match: ReturnType<typeof route>, overrides: Partial<ReturnType<typeof route>> = {}) {
   return {
     ...match,
     state: 'available-local' as const,
     disabled: false,
     providerLabel: 'local / Tooling.GetToolCatalog',
     blockers: [],
-    routeable: true
+    routeable: true,
+    ...overrides
   }
 }
 
@@ -2237,7 +2813,9 @@ function action(
   }
 }
 
-function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
+function adminOverviewStateMatrixManifest(
+  deploymentTopology: DeploymentTopologyResponse | null = deploymentTopologyFixture
+): AdminOverviewManifest {
   const catalog = stateMatrixCatalog()
   const services: GetServicesResponse = {
     mode: 'processes',
@@ -2278,8 +2856,81 @@ function adminOverviewStateMatrixManifest(): AdminOverviewManifest {
     registry: gatewayRegistryFixture,
     services,
     capabilityCatalog: catalog,
+    deploymentTopology,
     generatedAt: '2026-06-19T00:00:00Z'
   })
+}
+
+function topologyFixture(
+  overrides: Partial<DeploymentTopologyResponse> = {}
+): DeploymentTopologyResponse {
+  return {
+    ...cloneFixture(deploymentTopologyFixture),
+    ...overrides
+  }
+}
+
+function processTopologyFixture(
+  overrides: Partial<DeploymentTopologyResponse> = {}
+): DeploymentTopologyResponse {
+  const topology = topologyFixture({
+    architecture_mode: 'processes',
+    runtime_mode: 'server-process',
+    bus_backend: 'BullMQBus',
+    redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+    redis_reachable: true,
+    bullmq_queue_health: {
+      backend: 'BullMQBus',
+      redis_url_redacted: 'redis://[redacted]@redis:6379/0',
+      redis_reachable: true,
+      bullmq_available: true,
+      queue_lag_known: true,
+      queue_depth: 0,
+      published: 42,
+      delivered: 42,
+      retries: 0,
+      dead_letters: 0,
+      status: 'healthy',
+      degraded_reasons: [],
+      error: null
+    },
+    service_process_topology: [
+      {
+        module: 'Gateway',
+        status: 'healthy',
+        topology: 'container',
+        instance_id: 'gateway-1',
+        container_hint: 'gateway-service',
+        process_hint: null,
+        last_seen: '2026-06-19T00:00:00Z',
+        stale: false
+      },
+      {
+        module: 'Config',
+        status: 'healthy',
+        topology: 'container',
+        instance_id: 'config-1',
+        container_hint: 'config-service',
+        process_hint: null,
+        last_seen: '2026-06-19T00:00:00Z',
+        stale: false
+      }
+    ],
+    container_topology_hints: {
+      orchestrator: 'docker-compose',
+      compose_file: 'docker-compose.process.yml',
+      redis_service: 'redis',
+      gateway_service: 'gateway-service',
+      config_service: 'config-service',
+      notes: ['process mode runs one container per Aurora service']
+    },
+    mode_capability_degradations: [],
+    mesh_peer_topology_trusted: null
+  })
+  return {
+    ...topology,
+    ...overrides
+  }
 }
 
 function allowedRouteEvaluation() {

@@ -26,7 +26,23 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all"
+    "active": true,
+    "targets": ["appimage", "deb", "rpm", "dmg", "msi", "nsis"],
+    "publisher": "Aurora contributors",
+    "category": "Productivity",
+    "shortDescription": "Privacy-first modular voice assistant desktop shell.",
+    "longDescription": "Aurora desktop packages the official Tauri 2 shell with a constrained AuroraClient bridge, signed updater artifacts, and an explicitly prepared local sidecar binary for Desktop Local mode.",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "AURORA_RELEASE_PUBLIC_KEY_REPLACE_BEFORE_RELEASE",
+      "endpoints": [
+        "https://releases.aurora.local/latest/{{target}}/{{arch}}/{{current_version}}.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
