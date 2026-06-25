@@ -354,6 +354,43 @@ button, input, select, textarea { font: inherit; }
 .aui-memory-facts dt { color: var(--aui-muted); font-size: .74rem; }
 .aui-memory-facts dd { margin: 0; overflow-wrap: anywhere; }
 
+.aui-tokens { display: grid; gap: 1rem; }
+.aui-tokens-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-tokens-header h1 { margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
+.aui-tokens-header p { max-width: 52rem; margin: .5rem 0 0; color: var(--aui-muted); line-height: 1.5; }
+.aui-token-alert { margin: 0; border: 1px solid color-mix(in srgb, var(--aui-danger) 35%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-danger) 8%, white); color: var(--aui-danger); padding: .8rem; }
+.aui-token-reveal { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .75rem; border: 1px solid color-mix(in srgb, var(--aui-danger) 30%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-danger) 7%, white); padding: .9rem; }
+.aui-token-reveal h2 { margin: 0; font-size: 1rem; }
+.aui-token-reveal p { margin: .3rem 0 .65rem; color: var(--aui-muted); line-height: 1.45; }
+.aui-token-reveal code { display: block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .6rem; color: var(--aui-ink); }
+.aui-token-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.aui-token-summary article { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .2rem .65rem; align-items: center; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .85rem; }
+.aui-token-summary article[data-state="optimistic"] { border-color: color-mix(in srgb, var(--aui-success) 26%, var(--aui-border)); }
+.aui-token-summary article[data-state="rollback-error"] { border-color: color-mix(in srgb, var(--aui-danger) 30%, var(--aui-border)); }
+.aui-token-summary svg { grid-row: span 2; color: var(--aui-primary); }
+.aui-token-summary strong { font-size: 1.35rem; }
+.aui-token-summary span { color: var(--aui-muted); font-size: .82rem; }
+.aui-token-create { display: grid; grid-template-columns: minmax(10rem, .8fr) minmax(9rem, .7fr) minmax(14rem, 1.2fr) minmax(5rem, .35fr) minmax(14rem, 1.2fr) auto; gap: .6rem; align-items: end; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .85rem; }
+.aui-token-create label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .75rem; font-weight: 750; text-transform: uppercase; }
+.aui-token-create input, .aui-token-table input { width: 100%; min-height: 2.5rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .52rem .62rem; text-transform: none; }
+.aui-token-create button, .aui-token-panel-head button, .aui-token-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .38rem; min-height: 2.5rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 30%, var(--aui-border)); border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); padding: .5rem .75rem; font-weight: 800; white-space: nowrap; }
+.aui-token-create button[type="submit"] { background: var(--aui-primary); color: white; }
+.aui-token-create button:disabled, .aui-token-panel-head button:disabled, .aui-token-actions button:disabled, .aui-token-create input:disabled, .aui-token-table input:disabled { cursor: not-allowed; opacity: .58; }
+.aui-token-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
+.aui-token-panel-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.aui-token-panel-head h2 { margin: 0; font-size: 1rem; }
+.aui-token-empty { display: grid; min-height: 7rem; place-content: center; margin: 0; border: 1px dashed var(--aui-border); border-radius: .5rem; color: var(--aui-muted); text-align: center; }
+.aui-token-table-wrap { max-width: 100%; overflow-x: auto; }
+.aui-token-table { width: 100%; min-width: 48rem; border-collapse: collapse; }
+.aui-token-table th { color: var(--aui-muted); font-size: .74rem; text-align: left; text-transform: uppercase; }
+.aui-token-table th, .aui-token-table td { border-bottom: 1px solid var(--aui-border); padding: .65rem .55rem; vertical-align: top; }
+.aui-token-table tr[data-busy="true"] { background: color-mix(in srgb, var(--aui-warning) 7%, white); }
+.aui-token-table code { display: inline-block; border: 1px solid var(--aui-border); border-radius: .35rem; background: var(--aui-surface-2); padding: .18rem .4rem; }
+.aui-token-table small { display: block; margin-top: .2rem; color: var(--aui-muted); overflow-wrap: anywhere; }
+.aui-token-scopes { display: flex; flex-wrap: wrap; gap: .28rem; }
+.aui-token-scopes span { border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface-2); color: var(--aui-muted); padding: .16rem .45rem; font-size: .74rem; font-weight: 700; }
+.aui-token-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+
 @media (max-width: 1100px) {
   .aui-content-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-activity { display: none; }
@@ -364,7 +401,7 @@ button, input, select, textarea { font: inherit; }
   .aui-tool-summary { position: static; order: -1; }
   .aui-model-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-model-summary { position: static; order: -1; }
-  .aui-settings-grid, .aui-route-defaults, .aui-settings-facts, .aui-memory-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-settings-grid, .aui-route-defaults, .aui-settings-facts, .aui-memory-grid, .aui-token-summary, .aui-token-create { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 860px) {
@@ -403,7 +440,11 @@ button, input, select, textarea { font: inherit; }
   .aui-model-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .aui-model-actions button { width: 100%; }
   .aui-settings-header { display: grid; }
+  .aui-tokens-header { display: grid; }
   .aui-settings-badges { justify-content: flex-start; }
+  .aui-token-reveal { grid-template-columns: minmax(0, 1fr); }
+  .aui-token-create button { width: 100%; }
+  .aui-token-panel-head { display: grid; }
   .aui-settings-control, .aui-native-card { grid-template-columns: minmax(0, 1fr); }
   .aui-settings-control-icon { width: 2rem; height: 2rem; }
   .aui-settings-control button, .aui-native-card button { width: 100%; max-width: none; }
