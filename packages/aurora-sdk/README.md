@@ -110,12 +110,16 @@ const transport = new TauriLocalTransport({
   invoke: window.__TAURI__.core.invoke,
   commands: {
     request: 'aurora_command',
+    sidecarSession: 'aurora_sidecar_session',
+    sidecarStart: 'aurora_sidecar_start',
+    sidecarStop: 'aurora_sidecar_stop',
     sidecarStatus: 'aurora_sidecar_status',
     nativeCapabilityManifest: 'aurora_native_capability_manifest'
   }
 })
 
 const client = new AuroraClient({ transport })
+const started = await transport.startSidecar()
 const sidecar = await transport.getSidecarStatus()
 const manifest = await client.native.getManifest()
 const catalog = await client.capabilities.listCatalog({ include_unavailable: true })

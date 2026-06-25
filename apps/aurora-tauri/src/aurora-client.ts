@@ -11,6 +11,8 @@ export interface AuroraTauriRuntime {
   client: AuroraClient
   mode: 'desktop-local' | 'desktop-thin' | 'mock'
   sidecarStatus: () => Promise<TauriSidecarStatus | null>
+  startSidecar: () => Promise<TauriSidecarStatus | null>
+  stopSidecar: () => Promise<TauriSidecarStatus | null>
   shutdown: () => Promise<void>
 }
 
@@ -21,6 +23,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       client: new AuroraClient({ transport }),
       mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
       sidecarStatus: () => transport.getSidecarStatus(),
+      startSidecar: () => transport.startSidecar(),
+      stopSidecar: () => transport.stopSidecar(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
@@ -36,6 +40,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       }),
       mode: 'desktop-thin',
       sidecarStatus: async () => null,
+      startSidecar: async () => null,
+      stopSidecar: async () => null,
       shutdown: async () => undefined
     }
   }
@@ -44,6 +50,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     client: new AuroraClient({ transport: new MockAuroraTransport() }),
     mode: 'mock',
     sidecarStatus: async () => null,
+    startSidecar: async () => null,
+    stopSidecar: async () => null,
     shutdown: async () => undefined
   }
 }
