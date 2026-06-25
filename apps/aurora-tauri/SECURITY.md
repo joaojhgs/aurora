@@ -9,7 +9,7 @@ TAURI-002, TAURI-004, and TAURI-006 expose only the minimum command and capabili
 | `aurora_command` | Proxies typed `AuroraClient` requests to the configured Aurora Gateway. | `aurora-command` | Allows loopback HTTP(S) by default. Remote Gateway origins require `AURORA_TAURI_ALLOW_REMOTE_GATEWAY=1`. Only `content-type`, `x-correlation-id`, and `x-request-id` frontend headers are forwarded. Gateway bearer tokens are read from process environment, not web storage. |
 | `aurora_request` | Compatibility alias for the prior SDK request bridge. | `aurora-request` | Delegates to `aurora_command`; retained for migration only. |
 | `aurora_subscribe` | Declares the SDK event subscription bridge. | `aurora-subscribe` | Returns `unsupported_feature` until BE-003 defines the unified backend event stream contract. |
-| `aurora_native_capability_manifest`, `native_capabilities` | Returns Tauri shell capability evidence to the SDK. | `aurora-native-capability-manifest` | Reports allowed and denied native capabilities without secrets. |
+| `aurora_native_capability_manifest`, `native_capabilities` | Returns Tauri shell capability evidence to the SDK. | `aurora-native-capability-manifest` | Reports allowed and denied native capabilities without secrets, including iOS App Intents/Shortcuts/share/deep-link baseline metadata and the unsupported Siri replacement limitation. |
 | `aurora_sidecar_session` | Returns an in-memory command token to the SDK adapter. | `aurora-sidecar-session` | Token is not written to web storage or rendered by UI. It is used only by the Tauri transport adapter. |
 | `aurora_sidecar_start` | Starts the Rust-supervised Python sidecar in thread mode. | `aurora-sidecar-start` | Disabled in desktop-thin mode. Requires loopback Gateway origin and sidecar session token. |
 | `aurora_sidecar_stop` | Stops the Rust-supervised Python sidecar. | `aurora-sidecar-stop` | Requires sidecar session token. Used by shutdown and explicit stop paths. |
@@ -54,6 +54,8 @@ The shell does not grant broad Tauri or plugin permissions for:
 Secure credential storage is enabled only through the narrow Aurora keychain command surface. The native manifest reports broad filesystem, secure file handles, shell/process spawning, audio, clipboard, notifications, dialogs, and updater surfaces as unavailable where they are part of planned future Aurora surfaces. Follow-up tasks must add explicit permissions, UX, and tests before enabling them.
 
 TAURI-005 adds the core Tauri tray feature and an Aurora-owned native status bridge. It intentionally does not grant notification delivery, native dialogs, arbitrary file reads/writes, microphone capture, live audio streaming, or playback control. Those surfaces report denied defaults through `Native.GetCapabilityManifest`, `aurora_native_permission_status`, and the per-feature status commands until downstream UI/backend tasks provide scoped consent, target selection, retention/audit language, and tests.
+
+IOS-001 adds evidence-only iOS invocation metadata to the same native manifest. It does not grant iOS App Intent, widget, share extension, deep-link, SiriKit, microphone, or background execution powers by itself. Future iOS targets must stay Xcode-managed, scoped to concrete Aurora actions and privacy labels, and must use "Siri/Shortcuts/App Intents integration" wording rather than claiming Aurora can replace Siri.
 
 ## Token And Origin Handling
 

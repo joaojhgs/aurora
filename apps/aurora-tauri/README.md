@@ -54,6 +54,25 @@ cd apps/aurora-tauri/src-tauri && cargo check
 cd apps/aurora-tauri/src-tauri && cargo test
 ```
 
+## iOS Baseline
+
+IOS-001 establishes the Tauri iOS build baseline and native-manifest contract. The manifest exposes iOS invocation states through `Native.GetCapabilityManifest` as evidence, not as executable backend truth:
+
+- `Siri/Shortcuts/App Intents integration`: planned App Intents for concrete Aurora actions.
+- `Shortcuts invocation path`: supported platform path once the iOS plugin and Xcode targets exist.
+- `Share, widgets, and deep links`: planned app-owned intake surfaces.
+- `Siri replacement`: unsupported. Aurora must not claim it can replace Siri as the default iOS assistant.
+
+Linux can run the TypeScript/Rust manifest checks, but cannot satisfy the iOS build acceptance gate. macOS/Xcode verification must run:
+
+```bash
+pnpm --filter @aurora/tauri-ui build
+pnpm --filter @aurora/tauri-ui tauri ios init
+pnpm --filter @aurora/tauri-ui tauri ios build
+```
+
+After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
+
 ## Scope Boundary
 
 The frontend must use `AuroraClient`; screens must not call Tauri `invoke` except through the SDK transport adapter or this package's runtime bootstrap. Secure credential storage is enabled through the narrow Aurora keychain command surface only. File access, native audio, event subscription streaming, and broad shell/fs permissions remain disabled or explicitly unsupported until their dedicated follow-up tasks.
