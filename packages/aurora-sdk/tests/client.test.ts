@@ -454,15 +454,15 @@ describe('AuroraClient', () => {
     expect(manifest.serviceMode).toBe('threads')
     expect(manifest.totals).toEqual(
       expect.objectContaining({
-        services: 2,
-        methods: 9,
-        externalMethods: 8,
+        services: 3,
+        methods: 16,
+        externalMethods: 15,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
       })
     )
-    expect(manifest.services[0]).toEqual(
+    expect(manifest.services.find((service) => service.module === 'Gateway')).toEqual(
       expect.objectContaining({
         module: 'Gateway',
         status: 'healthy',
@@ -2846,7 +2846,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 9,
+      checked: 16,
       issues: []
     })
 

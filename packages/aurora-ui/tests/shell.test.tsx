@@ -27,6 +27,7 @@ import {
   AdminOverviewContent,
   AdminOverviewView,
   AdminServicesView,
+  AdminRbacView,
   AppShell,
   AssistantView,
   ModelsView,
@@ -36,6 +37,8 @@ import {
   PairingQueueView,
   RouteSheet,
   buildAdminServicesSnapshot,
+  buildAdminRbacSnapshot,
+  buildRbacPermissionPatchAction,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
@@ -709,6 +712,92 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('stale_provider')
     expect(markup).toContain('explicit_selector_required')
     expect(markup).toContain('internal-only')
+  })
+
+  it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.principals.map((principal) => principal.id)).toContain('principal-owner')
+    expect(snapshot.roles.map((role) => role.label)).toEqual(expect.arrayContaining(['Owner', 'Admin', 'Automation', 'Member']))
+    expect(snapshot.permissions.map((permission) => permission.id)).toContain('Auth.manage')
+    expect(snapshot.audit.map((entry) => entry.correlationId)).toContain('corr-rbac-001')
+    expect(snapshot.principals.some((principal) => principal.patchPreview.requiresAdminAction)).toBe(true)
+    expect(markup).toContain('Access and RBAC')
+    expect(markup).toContain('Auth.PatchPermissions')
+    expect(markup).toContain('AdminAction approval')
+    expect(markup).toContain('Recent access changes')
+    expect(markup).not.toContain('secret-pending-code')
+  })
+
+  it('builds RBAC permission patch AdminAction payloads with effective diffs and cascade notes', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const principal = snapshot.principals.find((row) => row.id === 'principal-assistant')
+    expect(principal).toBeTruthy()
+    expect(principal?.patchPreview.cascade.join(' ')).toContain('effective-permission')
+
+    const action = buildRbacPermissionPatchAction(principal!, {
+      grant: ['Auth.manage'],
+      revoke: ['DB.use'],
+      reason: 'promote assistant operator'
+    })
+
+    expect(action.methodId).toBe('Auth.PatchPermissions')
+    expect(action.requiresAdminAction).toBe(true)
+    expect(action.payload).toEqual({ user_id: 'principal-assistant', grant: ['Auth.manage'], revoke: ['DB.use'] })
+    expect(action.affectedResources).toEqual(expect.arrayContaining(['principal:principal-assistant', 'grant:Auth.manage', 'revoke:DB.use']))
+    expect(action.diff.find((row) => row.key === 'principal.permissions')?.after).toContain('Auth.manage')
+    expect(action.auditReason).toBe('promote assistant operator')
+  })
+
+  it('renders RBAC loading, empty, denied, degraded, unavailable, and rollback-error states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminRbacView snapshot={rbacLoadingSnapshot()} />)
+    expect(loadingMarkup).toContain('Loading RBAC principals')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.ListPrincipals', () => ({ principals: [] }))
+    emptyTransport.register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+    const emptySnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={emptySnapshot} />)).toContain('No principals')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.ListPrincipals', 'permission', 'Auth RBAC denied')
+    const deniedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={deniedSnapshot} />)).toContain('Auth RBAC denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Auth.AuditLog', 'audit backend unavailable')
+    const degradedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={degradedSnapshot} />)).toContain('audit backend unavailable')
+
+    const unavailableSnapshot = await buildAdminRbacSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .lose('Auth.ListPrincipals')
+          .lose('Auth.AuditLog')
+          .lose('Gateway.GetRegistry')
+          .lose('Gateway.GetCapabilityCatalog')
+      })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminRbacView snapshot={unavailableSnapshot} />)).toContain('Auth RBAC SDK resources are unavailable')
+
+    const rollbackMarkup = renderToStaticMarkup(
+      <AdminRbacView
+        snapshot={{
+          ...rbacLoadingSnapshot(),
+          loadState: 'error',
+          mutationState: 'denied',
+          error: 'Rollback required after AdminAction submit failed',
+          mutationReason: 'Backend rejected the AdminAction confirmation token.'
+        }}
+      />
+    )
+    expect(rollbackMarkup).toContain('Rollback required after AdminAction submit failed')
   })
 
   it('renders pairing queue states without exposing pairing codes', () => {
@@ -1973,4 +2062,21 @@ function blockedRouteEvaluation(availability: 'privacy-blocked' | 'unsupported')
     privacyClass: availability === 'privacy-blocked' ? 'sensitive' : 'personal',
     transportKind: 'mock'
   })
+}
+
+function rbacLoadingSnapshot() {
+  return {
+    loadState: 'loading' as const,
+    generatedAt: null,
+    secretsRedacted: true,
+    principals: [],
+    roles: [],
+    permissions: [],
+    audit: [],
+    mutationState: 'pending' as const,
+    mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through AuroraClient.',
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending AuroraClient SDK calls'
+  }
 }

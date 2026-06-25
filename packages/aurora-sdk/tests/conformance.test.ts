@@ -254,6 +254,13 @@ describe('SDK transport conformance', () => {
       'Orchestrator.DownloadModel',
       'Orchestrator.BenchmarkModel',
       'Auth.ListPendingPairings',
+      'Auth.ListPrincipals',
+      'Auth.CreatePrincipal',
+      'Auth.UpdatePrincipal',
+      'Auth.DeletePrincipal',
+      'Auth.SetPermissions',
+      'Auth.PatchPermissions',
+      'Auth.AuditLog',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',
@@ -261,7 +268,7 @@ describe('SDK transport conformance', () => {
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 9, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 16, issues: [] })
   })
 })
 
