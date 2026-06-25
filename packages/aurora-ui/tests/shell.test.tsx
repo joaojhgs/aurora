@@ -1385,9 +1385,21 @@ describe('Aurora production shell', () => {
     expect(snapshot.deniedCount).toBe(1)
     expect(snapshot.removedCount).toBe(1)
     expect(snapshot.runtimePeerCount).toBe(meshStatusFixture.peers.length)
+    expect(snapshot.liveSessionCount).toBe(1)
+    expect(snapshot.deviceCount).toBe(3)
     expect(snapshot.routeCount).toBe(meshStatusFixture.routes.length)
     expect(snapshot.peers.map((peer) => peer.peerId)).toEqual(
       expect.arrayContaining(meshPeerListFixture.peers.map((peer) => peer.peer_id))
+    )
+    expect(snapshot.liveSessions[0]).toEqual(
+      expect.objectContaining({
+        sessionId: 'session-peer',
+        stablePeerId: 'stable-peer',
+        evidenceSource: 'Gateway.GetWebRTCDiagnostics'
+      })
+    )
+    expect(snapshot.devices.map((device) => device.name)).toEqual(
+      expect.arrayContaining(['Studio Mac', 'Ops tablet', 'Assistant phone'])
     )
     expect(snapshot.peers.find((peer) => peer.peerId === 'peer-kitchen')).toEqual(
       expect.objectContaining({
@@ -1412,8 +1424,12 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Active WebRTC sessions')
+    expect(markup).toContain('Auth device records')
     expect(markup).toContain('Kitchen node')
     expect(markup).toContain('Studio GPU')
+    expect(markup).toContain('session-peer')
+    expect(markup).toContain('Studio Mac')
     expect(markup).toContain('AdminAction approve')
     expect(markup).toContain('AdminAction deny')
     expect(markup).toContain('AdminAction remove')
@@ -1443,6 +1459,14 @@ describe('Aurora production shell', () => {
     )
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(degradedSnapshot.warnings.join(' ')).toContain('diagnostics down')
+
+    const deviceDegradedSnapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.ListDevices', 'unavailable_service', 'devices down') }),
+      meshRoute()
+    )
+    expect(deviceDegradedSnapshot.loadState).toBe('degraded')
+    expect(deviceDegradedSnapshot.warnings.join(' ')).toContain('devices down')
+    expect(deviceDegradedSnapshot.peers.length).toBeGreaterThan(0)
 
     const loadingMarkup = renderToStaticMarkup(
       <MeshPeersResource client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
