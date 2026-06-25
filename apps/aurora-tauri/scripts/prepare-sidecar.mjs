@@ -1,4 +1,4 @@
-import { copyFileSync, chmodSync, existsSync, mkdirSync, statSync } from 'node:fs'
+import { copyFileSync, chmodSync, existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
@@ -10,6 +10,7 @@ const targetTriple = process.env.AURORA_TAURI_TARGET_TRIPLE ?? detectHostTriple(
 const extension = process.platform === 'win32' ? '.exe' : ''
 const outputDir = join(srcTauriRoot, 'binaries')
 const outputPath = join(outputDir, `${binaryStem}-${targetTriple}${extension}`)
+const releaseConfigPath = join(srcTauriRoot, 'tauri.release.conf.json')
 
 if (!source) {
   throw new Error(
@@ -27,8 +28,21 @@ copyFileSync(sourcePath, outputPath)
 if (process.platform !== 'win32') {
   chmodSync(outputPath, 0o755)
 }
+writeReleaseConfig()
 
 console.log(`Prepared ${basename(outputPath)} from ${sourcePath}`)
+console.log(`Wrote ${releaseConfigPath}`)
+
+function writeReleaseConfig() {
+  const config = {
+    bundle: {
+      externalBin: [`binaries/${binaryStem}`]
+    }
+  }
+  const tmpPath = `${releaseConfigPath}.tmp`
+  writeFileSync(tmpPath, `${JSON.stringify(config, null, 2)}\n`)
+  renameSync(tmpPath, releaseConfigPath)
+}
 
 function detectHostTriple() {
   try {

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit --incremental false && vite build",
-    "build:bundle": "pnpm prepare:sidecar && pnpm tauri build",
+    "build:bundle": "pnpm prepare:sidecar && pnpm tauri build --config src-tauri/tauri.release.conf.json",
     "prepare:sidecar": "node ./scripts/prepare-sidecar.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment jsdom",

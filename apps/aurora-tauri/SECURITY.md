@@ -69,6 +69,6 @@ Tauri bundling is active for Linux, macOS, and Windows desktop targets. `createU
 
 The committed updater endpoint and public key are release placeholders. Publishing requires replacing the public key with the generated public key content and using an HTTPS release metadata endpoint. Insecure update transport is not enabled.
 
-`bundle.externalBin` references `binaries/aurora-sidecar`. The bundle build runs `pnpm prepare:sidecar`, which requires `AURORA_TAURI_SIDECAR_SOURCE` to point at an explicit prebuilt Aurora sidecar executable and copies it to Tauri's required target-triple suffixed filename. Generated sidecar binaries are ignored by git.
+Release builds use an ignored `src-tauri/tauri.release.conf.json` overlay whose `bundle.externalBin` references `binaries/aurora-sidecar`. The bundle build runs `pnpm prepare:sidecar`, which requires `AURORA_TAURI_SIDECAR_SOURCE` to point at an explicit prebuilt Aurora sidecar executable and copies it to Tauri's required target-triple suffixed filename before writing the overlay. Generated sidecar binaries and the release overlay are ignored by git. The default checked-in `tauri.conf.json` omits `externalBin` so `cargo check` and smoke CI do not require release-only sidecar artifacts.
 
 The webview is not granted Tauri shell plugin execute/spawn permissions for the sidecar. The Rust supervisor owns process start/stop, injects only loopback Gateway and in-memory sidecar-token environment, and stops the managed child on window close, explicit shutdown, or app exit.

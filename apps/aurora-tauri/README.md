@@ -43,7 +43,7 @@ pnpm --filter @aurora/tauri-ui build
 pnpm --filter @aurora/tauri-ui build:bundle
 ```
 
-`prepare:sidecar` copies the explicit sidecar artifact into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. The generated binaries are ignored by git.
+`prepare:sidecar` copies the explicit sidecar artifact into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. It also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts.
 
 ## Commands
 

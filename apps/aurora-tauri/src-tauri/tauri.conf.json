@@ -5,7 +5,7 @@
   "identifier": "dev.aurora.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm prepare:sidecar && pnpm build",
+    "beforeBuildCommand": "pnpm build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },
@@ -32,7 +32,6 @@
     "category": "Productivity",
     "shortDescription": "Privacy-first modular voice assistant desktop shell.",
     "longDescription": "Aurora desktop packages the official Tauri 2 shell with a constrained AuroraClient bridge, signed updater artifacts, and an explicitly prepared local sidecar binary for Desktop Local mode.",
-    "externalBin": ["binaries/aurora-sidecar"],
     "createUpdaterArtifacts": true
   },
   "plugins": {
