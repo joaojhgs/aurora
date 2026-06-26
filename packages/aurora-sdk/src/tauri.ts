@@ -11,6 +11,7 @@ import type {
   AndroidAssistantRoleStatus,
   AndroidEntrypointPayload,
   AndroidFallbackEntrypoint,
+  AndroidLocalLightInferenceStatus,
   AndroidNativePermissionRequestResult,
   AndroidVoiceForegroundServiceRequestResult,
   AndroidVoiceForegroundServiceStatus,
@@ -33,6 +34,7 @@ export interface TauriCommandNames {
   androidAssistantRoleStatus: string
   androidAssistantRoleRequest: string
   androidFallbackEntrypoints: string
+  androidLocalLightInferenceStatus: string
   androidPermissionRequest: string
   androidVoiceForegroundServiceStatus: string
   androidVoiceForegroundServiceStart: string
@@ -216,6 +218,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidAssistantRoleStatus: 'assistantRoleStatus',
   androidAssistantRoleRequest: 'requestAssistantRole',
   androidFallbackEntrypoints: 'fallbackEntrypoints',
+  androidLocalLightInferenceStatus: 'localLightInferenceStatus',
   androidPermissionRequest: 'requestAndroidPermission',
   androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
   androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
@@ -306,6 +309,10 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAndroidFallbackEntrypoints(): Promise<AndroidFallbackEntrypoint[]> {
     return this.invokeCommand<AndroidFallbackEntrypoint[]>(this.commands.androidFallbackEntrypoints)
+  }
+
+  getAndroidLocalLightInferenceStatus(): Promise<AndroidLocalLightInferenceStatus> {
+    return this.invokeCommand<AndroidLocalLightInferenceStatus>(this.commands.androidLocalLightInferenceStatus)
   }
 
   requestAndroidPermission(permission: string): Promise<AndroidNativePermissionRequestResult> {

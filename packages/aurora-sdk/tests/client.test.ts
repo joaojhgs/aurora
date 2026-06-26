@@ -671,6 +671,32 @@ describe('AuroraClient', () => {
         providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
       })
     )
+    expect(graph.byFeatureId['native:android:android.localLightInference.provider']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        privacyClass: 'personal',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerIdentity: 'native:android',
+            routeability: 'degraded',
+            requiredAction: 'use the supported subset or complete native integration'
+          })
+        ])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.modelRuntime']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        requiredPermissions: expect.arrayContaining(['aurora.android.localLightInference']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.fallback']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
     expect(graph.byFeatureId['native:android:androidWidget']).toEqual(
       expect.objectContaining({
         availability: 'degraded',
@@ -2789,6 +2815,8 @@ describe('AuroraClient', () => {
             }
           case 'fallbackEntrypoints':
             return androidNativeCapabilityManifestFixture.fallbackEntrypoints
+          case 'localLightInferenceStatus':
+            return androidNativeCapabilityManifestFixture.localLightInference
           case 'requestAndroidPermission':
             return {
               started: true,
@@ -2849,7 +2877,8 @@ describe('AuroraClient', () => {
           'aurora.android.filePick': 'degraded',
           'aurora.android.shareIntent': 'available',
           'aurora.android.quickTile': 'fallback',
-          'aurora.android.entrypointPayload': 'available'
+          'aurora.android.entrypointPayload': 'available',
+          'aurora.android.localLightInference': 'degraded'
         }),
         capabilityStates: expect.objectContaining({
           'android.assistantRole.packageQualified': 'available',
@@ -2865,7 +2894,17 @@ describe('AuroraClient', () => {
           'android.localFileRead': 'degraded',
           'android.appWidget': 'fallback',
           'android.quickTile': 'fallback',
-          'android.fallbackEntrypoints': 'fallback'
+          'android.fallbackEntrypoints': 'fallback',
+          'android.localLightInference.provider': 'degraded',
+          'android.localLightInference.modelRuntime': 'needs_native_permission',
+          'android.localLightInference.fallback': 'fallback'
+        }),
+        localLightInference: expect.objectContaining({
+          providerId: 'native:mobile-local-light',
+          state: 'degraded',
+          fallbackAvailable: true,
+          backendModelCatalogRequired: true,
+          reason: 'backend_model_catalog_and_device_model_proof_required'
         }),
         voiceForegroundService: expect.objectContaining({
           state: 'needs_native_permission',
@@ -2875,7 +2914,8 @@ describe('AuroraClient', () => {
         mobileIntegrations: expect.arrayContaining([
           expect.objectContaining({ id: 'androidShareSheet', support: 'supported' }),
           expect.objectContaining({ id: 'androidWidget', support: 'supported-path' }),
-          expect.objectContaining({ id: 'androidQuickTile', support: 'supported-path' })
+          expect.objectContaining({ id: 'androidQuickTile', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidLocalLightInference', support: 'supported-path' })
         ]),
         entrypoints: expect.arrayContaining([
           expect.objectContaining({ id: 'share_sheet', backendRequired: true, payloadCommand: 'entrypointPayload' }),
@@ -2920,6 +2960,14 @@ describe('AuroraClient', () => {
         expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true, backendRequired: true })
       ])
     )
+    await expect(transport.getAndroidLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        fallbackAvailable: true,
+        modelRuntimeProvider: false
+      })
+    )
     await expect(transport.requestAndroidPermission('aurora.android.microphone')).resolves.toEqual(
       expect.objectContaining({
         started: true,
@@ -2961,13 +3009,14 @@ describe('AuroraClient', () => {
       'assistantRoleStatus',
       'requestAssistantRole',
       'fallbackEntrypoints',
+      'localLightInferenceStatus',
       'requestAndroidPermission',
       'voiceForegroundServiceStatus',
       'startVoiceForegroundService',
       'stopVoiceForegroundService',
       'entrypointPayload'
     ])
-    expect(calls[4]?.args).toEqual({ permission: 'aurora.android.microphone' })
+    expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
