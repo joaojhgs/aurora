@@ -4,10 +4,15 @@ import android.Manifest
 import android.app.Activity
 import android.app.KeyguardManager
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.service.voice.VoiceInteractionService
+import android.util.Base64
+import androidx.biometric.BiometricManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
@@ -16,13 +21,26 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import org.json.JSONObject
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 private const val ASSISTANT_ROLE_REQUEST_CODE = 4202
 private const val ANDROID_PERMISSION_REQUEST_CODE = 4204
+private const val ADMIN_UNLOCK_REQUEST_CODE = 4206
+private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
+private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
+private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+private const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
+private const val AES_GCM_TAG_BITS = 128
 
 @TauriPlugin
 class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private var lastAssistantRoleDenied: Boolean = false
+    private var lastAdminUnlockDenied: Boolean = false
 
     @Command
     fun nativeCapabilityManifest(invoke: Invoke) {
@@ -33,6 +51,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val foregroundServiceReady = hasForegroundServiceMicrophonePermission() && microphoneGranted
         val voiceForeground = voiceForegroundServiceStatusObject(microphoneGranted, notificationsGranted, foregroundServiceReady)
         val biometricReady = hasBiometricCapability()
+        val secureStorageReady = hasSecureStorageCapability()
+        val adminUnlock = adminUnlockStatusObject()
         val localNetworkReady = hasPackagePermission(Manifest.permission.INTERNET) &&
             hasPackagePermission(Manifest.permission.ACCESS_NETWORK_STATE)
         val assistantRoleRequestable = assistantRole.getBoolean("requestable")
@@ -50,6 +70,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.notifications", notificationsGranted)
         permissions.put("aurora.android.notificationsRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         permissions.put("aurora.android.biometric", biometricReady)
+        permissions.put("aurora.android.secureStorage", secureStorageReady)
+        permissions.put("aurora.android.adminUnlock", adminUnlock.getBoolean("requestable"))
         permissions.put("aurora.android.localNetwork", localNetworkReady)
         permissions.put("aurora.android.foregroundServiceMicrophone", foregroundServiceReady)
         permissions.put("aurora.android.voiceForegroundService", foregroundServiceReady)
@@ -77,6 +99,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.notifications", notificationsGranted)
         capabilities.put("android.notificationPermissionRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         capabilities.put("android.biometric", biometricReady)
+        capabilities.put("android.secureCredentialStorage", secureStorageReady)
+        capabilities.put("android.adminUnlock", adminUnlock.getBoolean("available"))
         capabilities.put("android.localNetwork", localNetworkReady)
         capabilities.put("android.foregroundService", foregroundServiceReady)
         capabilities.put("android.voiceForegroundService", foregroundServiceReady)
@@ -101,6 +125,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.notifications", permissionState(notificationsGranted))
         permissionStates.put("aurora.android.notificationsRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         permissionStates.put("aurora.android.biometric", if (biometricReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.secureStorage", if (secureStorageReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.adminUnlock", adminUnlock.getString("state"))
         permissionStates.put("aurora.android.localNetwork", if (localNetworkReady) "available" else "degraded")
         permissionStates.put("aurora.android.foregroundServiceMicrophone", permissionState(foregroundServiceReady))
         permissionStates.put("aurora.android.voiceForegroundService", permissionState(foregroundServiceReady))
@@ -128,6 +154,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.notifications", permissionState(notificationsGranted))
         capabilityStates.put("android.notificationPermissionRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         capabilityStates.put("android.biometric", if (biometricReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.secureCredentialStorage", if (secureStorageReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.adminUnlock", adminUnlock.getString("state"))
         capabilityStates.put("android.localNetwork", if (localNetworkReady) "available" else "degraded")
         capabilityStates.put("android.foregroundService", permissionState(foregroundServiceReady))
         capabilityStates.put("android.voiceForegroundService", voiceForeground.getString("state"))
@@ -154,6 +182,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("entrypoints", entrypoints)
         ret.put("assistantRole", assistantRole)
         ret.put("voiceForegroundService", voiceForeground)
+        ret.put("adminUnlock", adminUnlock)
+        ret.put("secureStorage", secureStorageStatusObject())
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
         ret.put("lastEntrypointPayload", lastEntrypointPayloadObject())
         ret.put("evidenceSource", "android-rolemanager-package-manager")
@@ -300,6 +330,100 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("evidenceSource", "android-intent-redacted")
         ret.put("secretsRedacted", true)
         invoke.resolve(ret)
+    }
+
+    @Command
+    fun secureStorageGet(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureStorageArgs::class.java)
+        try {
+            validateSecureStorageKey(args.key)
+            val stored = securePrefs().getString(args.key, null)
+            val value = stored?.let { decryptSecureValue(it) }
+            val ret = secureStorageResult(args.key)
+            ret.put("value", value)
+            ret.put("found", stored != null)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "secure_storage_get_failed")
+        }
+    }
+
+    @Command
+    fun secureStorageSet(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureStorageArgs::class.java)
+        try {
+            validateSecureStorageKey(args.key)
+            securePrefs().edit().putString(args.key, encryptSecureValue(args.value)).apply()
+            val ret = secureStorageResult(args.key)
+            ret.put("ok", true)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "secure_storage_set_failed")
+        }
+    }
+
+    @Command
+    fun secureStorageDelete(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureStorageArgs::class.java)
+        try {
+            validateSecureStorageKey(args.key)
+            securePrefs().edit().remove(args.key).apply()
+            val ret = secureStorageResult(args.key)
+            ret.put("ok", true)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "secure_storage_delete_failed")
+        }
+    }
+
+    @Command
+    fun biometricAdminUnlockStatus(invoke: Invoke) {
+        invoke.resolve(adminUnlockStatusObject())
+    }
+
+    @Command
+    fun biometricAdminUnlock(invoke: Invoke) {
+        val status = adminUnlockStatusObject()
+        if (!status.getBoolean("requestable")) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", status.getString("reason"))
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+            return
+        }
+
+        val keyguard = activity.getSystemService(KeyguardManager::class.java)
+        val intent = keyguard?.createConfirmDeviceCredentialIntent(
+            "Aurora admin confirmation",
+            "Confirm device credentials to unlock admin-critical Aurora actions.",
+        )
+        if (intent == null) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", "credential_intent_unavailable")
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+            return
+        }
+
+        activity.startActivityForResult(intent, ADMIN_UNLOCK_REQUEST_CODE)
+        val ret = JSObject()
+        ret.put("started", true)
+        ret.put("requestCode", ADMIN_UNLOCK_REQUEST_CODE)
+        ret.put("status", status)
+        ret.put("reason", "admin_unlock_requested")
+        ret.put("secretsRedacted", true)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun recordBiometricAdminUnlockResult(invoke: Invoke) {
+        val args = invoke.parseArgs(AdminUnlockResultArgs::class.java)
+        lastAdminUnlockDenied = args.resultCode != Activity.RESULT_OK
+        invoke.resolve(adminUnlockStatusObject())
     }
 
     private fun assistantRoleStatusObject(): JSObject {
@@ -572,6 +696,41 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return ret
     }
 
+    private fun secureStorageStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("available", hasSecureStorageCapability())
+        ret.put("backend", "android-keystore")
+        ret.put("persisted", true)
+        ret.put("privacyClass", "credential")
+        ret.put("allowedKeyPrefixes", "aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin")
+        ret.put("evidenceSource", "android-keystore-shared-preferences")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun adminUnlockStatusObject(): JSObject {
+        val keyguard = activity.getSystemService(KeyguardManager::class.java)
+        val secureDevice = keyguard?.isDeviceSecure == true
+        val biometricReady = hasBiometricCapability()
+        val canAuthenticate = biometricAuthStatus()
+        val available = secureDevice
+        val requestable = secureDevice
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("available", available)
+        ret.put("requestable", requestable)
+        ret.put("deviceSecure", secureDevice)
+        ret.put("biometricReady", biometricReady)
+        ret.put("lastDenied", lastAdminUnlockDenied)
+        ret.put("state", adminUnlockState(secureDevice, requestable, available))
+        ret.put("reason", adminUnlockReason(secureDevice, requestable, available, canAuthenticate))
+        ret.put("privacyClass", "admin-critical")
+        ret.put("evidenceSource", "android-biometric-keyguard-keystore")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
     private fun runtimePermissionsFor(permission: String): List<String> =
         when (permission) {
             "aurora.android.microphone", "android.microphoneCapture" -> listOf(Manifest.permission.RECORD_AUDIO)
@@ -591,6 +750,112 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return activity.packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT) ||
             activity.packageManager.hasSystemFeature(PackageManager.FEATURE_FACE) ||
             activity.packageManager.hasSystemFeature(PackageManager.FEATURE_IRIS)
+    }
+
+    private fun hasSecureStorageCapability(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+
+    private fun biometricAuthStatus(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.from(activity).canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            )
+        } else {
+            BiometricManager.from(activity).canAuthenticate()
+        }
+
+    private fun adminUnlockState(secureDevice: Boolean, requestable: Boolean, available: Boolean): String {
+        if (available) return "available"
+        if (requestable) return "needs_native_permission"
+        if (!secureDevice) return "needs_native_permission"
+        return "unsupported_platform"
+    }
+
+    private fun adminUnlockReason(
+        secureDevice: Boolean,
+        requestable: Boolean,
+        available: Boolean,
+        canAuthenticate: Int,
+    ): String {
+        if (lastAdminUnlockDenied) return "admin_unlock_denied"
+        if (!secureDevice) return "device_credential_not_enrolled"
+        if (available && canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) return "biometric_or_device_credential_available"
+        if (available) return "device_credential_available"
+        return when (canAuthenticate) {
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "biometric_or_device_credential_not_enrolled"
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "biometric_hardware_unavailable"
+            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "biometric_hardware_temporarily_unavailable"
+            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> "biometric_security_update_required"
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> "biometric_unsupported"
+            else -> "biometric_unavailable"
+        }
+    }
+
+    private fun securePrefs() =
+        activity.getSharedPreferences(SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+
+    private fun encryptSecureValue(value: String): String {
+        val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secureStorageKey())
+        val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        val payload = JSONObject()
+        payload.put("version", 1)
+        payload.put("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+        payload.put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+        return payload.toString()
+    }
+
+    private fun decryptSecureValue(encoded: String): String {
+        val payload = JSONObject(encoded)
+        val iv = Base64.decode(payload.getString("iv"), Base64.NO_WRAP)
+        val ciphertext = Base64.decode(payload.getString("ciphertext"), Base64.NO_WRAP)
+        val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, secureStorageKey(), GCMParameterSpec(AES_GCM_TAG_BITS, iv))
+        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+    }
+
+    private fun secureStorageKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(SECURE_STORAGE_KEY_ALIAS, null) as? SecretKey)?.let { return it }
+
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        keyGenerator.init(
+            KeyGenParameterSpec.Builder(
+                SECURE_STORAGE_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build(),
+        )
+        return keyGenerator.generateKey()
+    }
+
+    private fun secureStorageResult(key: String): JSObject {
+        val ret = secureStorageStatusObject()
+        ret.put("key", key)
+        return ret
+    }
+
+    private fun validateSecureStorageKey(key: String) {
+        if (key.isEmpty() || key.length > 128) {
+            throw IllegalArgumentException("secure storage key length must be 1..128 characters")
+        }
+        if (!key.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }) {
+            throw IllegalArgumentException("secure storage key contains unsupported characters")
+        }
+        val allowed = listOf(
+            "aurora.session",
+            "aurora.auth",
+            "aurora.gateway",
+            "aurora.mesh",
+            "aurora.admin",
+        )
+        if (allowed.none { key == it || key.startsWith("${it}.") || key.startsWith("${it}-") || key.startsWith("${it}_") }) {
+            throw IllegalArgumentException("secure storage key must be in an Aurora credential namespace")
+        }
     }
 
     private fun permissionState(granted: Boolean): String =
@@ -614,4 +879,13 @@ class AssistantRoleResultArgs {
 
 class AndroidPermissionRequestArgs {
     var permission: String = ""
+}
+
+class SecureStorageArgs {
+    var key: String = ""
+    var value: String = ""
+}
+
+class AdminUnlockResultArgs {
+    var resultCode: Int = Activity.RESULT_CANCELED
 }

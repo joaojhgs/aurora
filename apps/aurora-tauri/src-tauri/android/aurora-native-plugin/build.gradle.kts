@@ -15,5 +15,6 @@ android {
 
 dependencies {
     compileOnly("app.tauri:tauri-android")
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.core:core-ktx:1.13.1")
 }

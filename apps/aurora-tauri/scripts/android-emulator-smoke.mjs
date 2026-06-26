@@ -163,6 +163,8 @@ function validateNativePayload(payloadJson) {
     'aurora.android.microphone',
     'aurora.android.notifications',
     'aurora.android.biometric',
+    'aurora.android.secureStorage',
+    'aurora.android.adminUnlock',
     'aurora.android.localNetwork',
     'aurora.android.foregroundServiceMicrophone',
     'aurora.android.filePick',
@@ -183,6 +185,8 @@ function validateNativePayload(payloadJson) {
     'android.microphoneCapture',
     'android.notifications',
     'android.biometric',
+    'android.secureCredentialStorage',
+    'android.adminUnlock',
     'android.localNetwork',
     'android.foregroundService',
     'android.filePick',
@@ -198,6 +202,29 @@ function validateNativePayload(payloadJson) {
   if (!Array.isArray(payload.fallbackEntrypoints) || payload.fallbackEntrypoints.length === 0) {
     throw new Error('Android native plugin payload is missing fallbackEntrypoints.')
   }
+
+  const secureStorage = payload.secureStorage
+  if (!secureStorage || typeof secureStorage !== 'object') {
+    throw new Error('Android native plugin payload is missing secureStorage.')
+  }
+  if (secureStorage.backend !== 'android-keystore' || secureStorage.persisted !== true || secureStorage.secretsRedacted !== true) {
+    throw new Error('Android secureStorage must report android-keystore, persisted=true, and secretsRedacted=true.')
+  }
+
+  const adminUnlock = payload.adminUnlock
+  if (!adminUnlock || typeof adminUnlock !== 'object') {
+    throw new Error('Android native plugin payload is missing adminUnlock.')
+  }
+  for (const field of ['available', 'requestable', 'deviceSecure', 'biometricReady', 'lastDenied', 'secretsRedacted']) {
+    if (typeof adminUnlock[field] !== 'boolean') {
+      throw new Error(`Android adminUnlock.${field} must be a boolean.`)
+    }
+  }
+  assertNativeState('adminUnlock.state', adminUnlock.state)
+  if (adminUnlock.privacyClass !== 'admin-critical') {
+    throw new Error('Android adminUnlock.privacyClass must be admin-critical.')
+  }
+
   for (const entry of payload.fallbackEntrypoints) {
     if (!entry || typeof entry !== 'object') {
       throw new Error('Android native plugin fallbackEntrypoints entries must be objects.')
