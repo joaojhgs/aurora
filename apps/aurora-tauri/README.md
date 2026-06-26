@@ -91,6 +91,12 @@ pnpm --filter @aurora/tauri-ui android:smoke
 
 The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a webview permission. Local Android builds require Java plus Android SDK/NDK/emulator components. The GitHub `Tauri Android Verification` workflow installs those prerequisites, initializes the generated `src-tauri/gen/android` project, builds an installable debug APK for emulator smoke, uploads the APK artifact, installs it on an emulator, launches Aurora, and records the `aurora_android_baseline_status` payload from logcat when available.
 
+## Android Native Skeleton
+
+`src-tauri/android/aurora-native-plugin/` contains the AND-002 Kotlin plugin skeleton for future Tauri mobile wiring. The plugin exposes Android-native evidence commands for `nativeCapabilityManifest`, `assistantRoleStatus`, assistant-role request probing, and fallback entrypoints. It keeps the future VoiceInteractionService declaration disabled until the package qualification and role-grant flow is completed by the Android assistant-role task.
+
+The real Android build remains gated on Tauri's generated Android project under `src-tauri/gen/android`; run `pnpm --filter @aurora/tauri-ui tauri android init` before attempting `pnpm --filter @aurora/tauri-ui tauri android build` in an Android-capable environment.
+
 ## Scope Boundary
 
 The frontend must use `AuroraClient`; screens must not call Tauri `invoke` except through the SDK transport adapter or this package's runtime bootstrap. Secure credential storage is enabled through the narrow Aurora keychain command surface only. File access, native audio, event subscription streaming, and broad shell/fs permissions remain disabled or explicitly unsupported until their dedicated follow-up tasks.

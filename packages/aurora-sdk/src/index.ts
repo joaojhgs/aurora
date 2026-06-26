@@ -119,6 +119,7 @@ export {
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
   nativeCapabilityManifestFixture,
+  androidNativeCapabilityManifestFixture,
   routeExplainFixture,
   schedulerJobsFixture,
   supportBundleFixture,

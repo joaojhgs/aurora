@@ -6,7 +6,16 @@ import {
   type AuroraStreamRequest
 } from './events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
-import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
+import type {
+  AndroidAssistantRoleRequestResult,
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AuditReceipt,
+  AuroraEvent,
+  AuroraTransportEnvelope,
+  JsonObject,
+  NativeCapabilityManifest
+} from './types.js'
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
 
@@ -17,6 +26,9 @@ export interface TauriCommandNames {
   sidecarStop: string
   sidecarStatus: string
   nativeCapabilityManifest: string
+  androidAssistantRoleStatus: string
+  androidAssistantRoleRequest: string
+  androidFallbackEntrypoints: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
@@ -168,6 +180,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   sidecarStop: 'aurora_sidecar_stop',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  androidAssistantRoleStatus: 'assistantRoleStatus',
+  androidAssistantRoleRequest: 'requestAssistantRole',
+  androidFallbackEntrypoints: 'fallbackEntrypoints',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
@@ -239,6 +254,18 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getNativeCapabilityManifest(): Promise<NativeCapabilityManifest> {
     return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
+  }
+
+  getAndroidAssistantRoleStatus(): Promise<AndroidAssistantRoleStatus> {
+    return this.invokeCommand<AndroidAssistantRoleStatus>(this.commands.androidAssistantRoleStatus)
+  }
+
+  requestAndroidAssistantRole(): Promise<AndroidAssistantRoleRequestResult> {
+    return this.invokeCommand<AndroidAssistantRoleRequestResult>(this.commands.androidAssistantRoleRequest)
+  }
+
+  getAndroidFallbackEntrypoints(): Promise<AndroidFallbackEntrypoint[]> {
+    return this.invokeCommand<AndroidFallbackEntrypoint[]>(this.commands.androidFallbackEntrypoints)
   }
 
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {

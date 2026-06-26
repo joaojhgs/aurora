@@ -1563,6 +1563,10 @@ export interface NativeCapabilityManifest {
   capabilities: Record<string, boolean>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
+  assistantRole?: AndroidAssistantRoleStatus | null
+  fallbackEntrypoints?: AndroidFallbackEntrypoint[]
+  evidenceSource?: string
+  secretsRedacted?: boolean
 }
 
 export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
@@ -1587,4 +1591,40 @@ export interface NativePlatformLimitation {
   reason: string
   userCopy: string
   evidenceSource: string
+}
+
+export type AndroidNativeState =
+  | 'available'
+  | 'needs_native_permission'
+  | 'unsupported_platform'
+  | 'degraded'
+  | 'fallback'
+
+export interface AndroidAssistantRoleStatus {
+  platform: 'android' | string
+  roleName: string
+  roleAvailable: boolean
+  packageQualified: boolean
+  roleHeld: boolean
+  requestable: boolean
+  denied: boolean
+  oemUnavailable: boolean
+  fallbackAvailable: boolean
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidAssistantRoleRequestResult {
+  started: boolean
+  requestCode?: number
+  status: AndroidAssistantRoleStatus
+  reason?: string
+}
+
+export interface AndroidFallbackEntrypoint {
+  id: string
+  state: AndroidNativeState
+  available: boolean
+  reason: string
 }

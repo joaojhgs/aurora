@@ -3044,6 +3044,66 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
   ]
 }
 
+export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = {
+  platform: 'android',
+  permissions: {
+    'aurora.android.assistantRoleStatus': true,
+    'aurora.android.assistantRoleRequest': false,
+    'aurora.android.microphone': false,
+    'aurora.android.notifications': false,
+    'aurora.android.foregroundServiceMicrophone': false,
+    'aurora.android.shareIntent': true,
+    'aurora.android.deepLink': true
+  },
+  capabilities: {
+    'android.assistantRole.status': true,
+    'android.assistantRole.request': false,
+    'android.assistantRole.held': false,
+    'android.microphoneCapture': false,
+    'android.notifications': false,
+    'android.foregroundService': false,
+    'android.shareIntent': true,
+    'android.deepLink': true,
+    'android.fallbackEntrypoints': true
+  },
+  assistantRole: {
+    platform: 'android',
+    roleName: 'android.app.role.ASSISTANT',
+    roleAvailable: true,
+    packageQualified: false,
+    roleHeld: false,
+    requestable: false,
+    denied: false,
+    oemUnavailable: false,
+    fallbackAvailable: true,
+    reason: 'package_not_qualified',
+    evidenceSource: 'android-rolemanager-package-manager',
+    secretsRedacted: true
+  },
+  fallbackEntrypoints: [
+    {
+      id: 'push_to_talk',
+      state: 'needs_native_permission',
+      available: false,
+      reason: 'requires microphone permission and backend audio evidence'
+    },
+    {
+      id: 'share_intent',
+      state: 'fallback',
+      available: true,
+      reason: 'available without assistant role'
+    },
+    {
+      id: 'deep_link',
+      state: 'fallback',
+      available: true,
+      reason: 'available without assistant role'
+    }
+  ],
+  evidenceSource: 'android-rolemanager-package-manager',
+  secretsRedacted: true
+}
+
 const idleModelProgress = (operationType: string) => ({
   operation_id: null,
   operation_type: operationType,
