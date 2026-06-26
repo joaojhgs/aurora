@@ -8,11 +8,13 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, State,
+    AppHandle,
 };
+use tauri::{Manager, State};
 use thiserror::Error;
 use url::Url;
 
@@ -1205,6 +1207,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(sidecar_state.clone())
         .setup(|app| {
+            #[cfg(desktop)]
             install_tray(app.handle())?;
             #[cfg(desktop)]
             app.handle()
@@ -1248,6 +1251,7 @@ pub fn run() {
         .expect("error while running Aurora Tauri shell");
 }
 
+#[cfg(desktop)]
 fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
