@@ -12,7 +12,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.service.voice.VoiceInteractionService
 import android.util.Base64
-import androidx.biometric.BiometricManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
@@ -713,7 +712,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val keyguard = activity.getSystemService(KeyguardManager::class.java)
         val secureDevice = keyguard?.isDeviceSecure == true
         val biometricReady = hasBiometricCapability()
-        val canAuthenticate = biometricAuthStatus()
         val available = secureDevice
         val requestable = secureDevice
         val ret = JSObject()
@@ -724,7 +722,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("biometricReady", biometricReady)
         ret.put("lastDenied", lastAdminUnlockDenied)
         ret.put("state", adminUnlockState(secureDevice, requestable, available))
-        ret.put("reason", adminUnlockReason(secureDevice, requestable, available, canAuthenticate))
+        ret.put("reason", adminUnlockReason(secureDevice, available, biometricReady))
         ret.put("privacyClass", "admin-critical")
         ret.put("evidenceSource", "android-biometric-keyguard-keystore")
         ret.put("secretsRedacted", true)
@@ -755,16 +753,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun hasSecureStorageCapability(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
 
-    private fun biometricAuthStatus(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            BiometricManager.from(activity).canAuthenticate(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            )
-        } else {
-            BiometricManager.from(activity).canAuthenticate()
-        }
-
     private fun adminUnlockState(secureDevice: Boolean, requestable: Boolean, available: Boolean): String {
         if (available) return "available"
         if (requestable) return "needs_native_permission"
@@ -774,22 +762,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun adminUnlockReason(
         secureDevice: Boolean,
-        requestable: Boolean,
         available: Boolean,
-        canAuthenticate: Int,
+        biometricReady: Boolean,
     ): String {
         if (lastAdminUnlockDenied) return "admin_unlock_denied"
         if (!secureDevice) return "device_credential_not_enrolled"
-        if (available && canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) return "biometric_or_device_credential_available"
+        if (available && biometricReady) return "biometric_or_device_credential_available"
         if (available) return "device_credential_available"
-        return when (canAuthenticate) {
-            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "biometric_or_device_credential_not_enrolled"
-            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "biometric_hardware_unavailable"
-            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "biometric_hardware_temporarily_unavailable"
-            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> "biometric_security_update_required"
-            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> "biometric_unsupported"
-            else -> "biometric_unavailable"
-        }
+        return "device_credential_unavailable"
     }
 
     private fun securePrefs() =
