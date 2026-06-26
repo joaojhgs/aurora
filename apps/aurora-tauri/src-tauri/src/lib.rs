@@ -12,9 +12,8 @@ use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use thiserror::Error;
 use url::Url;
 
@@ -158,6 +157,10 @@ struct NativePermissionStatus {
     secrets_redacted: bool,
 }
 
+struct AndroidNativePlugin<R: tauri::Runtime> {
+    handle: Option<tauri::plugin::PluginHandle<R>>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeFeatureStatus {
@@ -254,6 +257,8 @@ enum AuroraCommandError {
     InvalidGatewayResponse,
     #[error("{0} is not available because the required native permission is disabled")]
     NativePermissionMissing(String),
+    #[error("Android native plugin call failed: {0}")]
+    AndroidNativePlugin(String),
     #[error("{0}")]
     UnsupportedFeature(String),
     #[error("Desktop thin mode is connected to a remote Gateway and cannot start a local sidecar")]
@@ -609,10 +614,44 @@ async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, Auror
     Ok(status)
 }
 
+#[tauri::command]
+async fn aurora_android_native_plugin_payload(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = native.handle.as_ref().ok_or_else(|| {
+            AuroraCommandError::AndroidNativePlugin(
+                "Aurora Android native plugin handle was not registered".to_string(),
+            )
+        })?;
+        let payload = handle
+            .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
+            .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))?;
+        log_android_native_plugin_payload(&payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Aurora Android native plugin is only available in the Android Tauri shell".to_string(),
+        ))
+    }
+}
+
 fn log_android_baseline_status(status: &AndroidBaselineStatus) {
     println!(
         "aurora_android_baseline_status={}",
         serde_json::to_string(&status).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+    );
+}
+
+fn log_android_native_plugin_payload(payload: &Value) {
+    println!(
+        "aurora_android_native_plugin_payload={}",
+        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
     );
 }
 
@@ -776,6 +815,7 @@ impl AuroraCommandError {
             Self::Gateway(_) => "transport_loss",
             Self::InvalidGatewayResponse => "validation_error",
             Self::NativePermissionMissing(_) => "native_permission_missing",
+            Self::AndroidNativePlugin(_) => "native_plugin_error",
             Self::UnsupportedFeature(_) => "unsupported_feature",
             Self::ThinModeSidecarDisabled => "unsupported_feature",
             Self::SidecarLoopbackRequired(_) => "validation_error",
@@ -958,6 +998,28 @@ fn native_platform() -> &'static str {
     } else {
         "tauri-desktop"
     }
+}
+
+fn android_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("aurora-native")
+        .setup(|app, api| {
+            #[cfg(target_os = "android")]
+            {
+                let handle = api.register_android_plugin(
+                    "dev.aurora.tauri.nativeplugin",
+                    "AuroraNativePlugin",
+                )?;
+                app.manage(AndroidNativePlugin::<R> {
+                    handle: Some(handle),
+                });
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                app.manage(AndroidNativePlugin::<R> { handle: None });
+            }
+            Ok(())
+        })
+        .build()
 }
 
 fn android_baseline_status() -> AndroidBaselineStatus {
@@ -1346,12 +1408,25 @@ fn is_loopback_http_origin(url: &Url) -> bool {
 pub fn run() {
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     tauri::Builder::default()
+        .plugin(android_native_plugin())
         .manage(sidecar_state.clone())
         .setup(|app| {
             #[cfg(desktop)]
             install_tray(app.handle())?;
             #[cfg(target_os = "android")]
-            log_android_baseline_status(&android_baseline_status());
+            {
+                log_android_baseline_status(&android_baseline_status());
+                if let Some(native) = app.try_state::<AndroidNativePlugin<tauri::Wry>>() {
+                    if let Some(handle) = native.handle.as_ref() {
+                        match handle
+                            .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
+                        {
+                            Ok(payload) => log_android_native_plugin_payload(&payload),
+                            Err(error) => eprintln!("aurora_android_native_plugin_error={error}"),
+                        }
+                    }
+                }
+            }
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -1374,6 +1449,7 @@ pub fn run() {
             aurora_dialog_status,
             aurora_audio_bridge_status,
             aurora_android_baseline_status,
+            aurora_android_native_plugin_payload,
             aurora_log_tail,
             aurora_secure_storage_get,
             aurora_secure_storage_set,

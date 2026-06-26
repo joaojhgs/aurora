@@ -33,6 +33,7 @@ import {
   hasPermission,
   modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
+  androidNativeCapabilityManifestFixture,
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
   normalizeToolCatalog,
@@ -564,6 +565,44 @@ describe('AuroraClient', () => {
         state: 'privacy-blocked',
         nextRepairAction: 'grant required native permission',
         requiredPermissions: ['microphone']
+      })
+    )
+  })
+
+  it('keeps Android fallback entrypoints selectable independently from assistant-role and microphone blockers', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:android:android.assistantRole.status']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.assistantRole.request']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.microphoneCapture']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        privacyClass: 'raw-audio'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.shareIntent']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local'
       })
     )
   })
@@ -2502,6 +2541,76 @@ describe('AuroraClient', () => {
     expect(calls[15]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
     expect(calls[16]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
     expect(calls[18]?.args).toEqual({ options: { mode: 'read' } })
+  })
+
+  it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_native_capability_manifest':
+            return androidNativeCapabilityManifestFixture
+          case 'assistantRoleStatus':
+            return androidNativeCapabilityManifestFixture.assistantRole
+          case 'requestAssistantRole':
+            return {
+              started: false,
+              status: androidNativeCapabilityManifestFixture.assistantRole,
+              reason: 'package_not_qualified'
+            }
+          case 'fallbackEntrypoints':
+            return androidNativeCapabilityManifestFixture.fallbackEntrypoints
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'android',
+        assistantRole: expect.objectContaining({
+          roleAvailable: true,
+          packageQualified: false,
+          roleHeld: false,
+          requestable: false,
+          oemUnavailable: false,
+          reason: 'package_not_qualified'
+        }),
+        fallbackEntrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
+        ])
+      })
+    )
+    await expect(transport.getAndroidAssistantRoleStatus()).resolves.toEqual(
+      expect.objectContaining({
+        roleName: 'android.app.role.ASSISTANT',
+        roleAvailable: true,
+        packageQualified: false,
+        roleHeld: false,
+        requestable: false,
+        fallbackAvailable: true
+      })
+    )
+    await expect(transport.requestAndroidAssistantRole()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'package_not_qualified'
+      })
+    )
+    await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
+      ])
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_native_capability_manifest',
+      'assistantRoleStatus',
+      'requestAssistantRole',
+      'fallbackEntrypoints'
+    ])
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

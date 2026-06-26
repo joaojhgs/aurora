@@ -319,9 +319,8 @@ function candidatesFromNativeManifest(
   return [
     ...Object.entries(manifest.capabilities).map(([capability, enabled]) => {
       const featureId = `native:${manifest.platform}:${capability}`
-      const missingPermissions = Object.entries(manifest.permissions)
-        .filter(([, granted]) => !granted)
-        .map(([permission]) => permission)
+      const missingPermissions = nativeRequiredPermissions(capability, manifest.permissions)
+        .filter((permission) => manifest.permissions[permission] === false)
       const availability: AvailabilityState = enabled
         ? missingPermissions.length > 0
           ? 'privacy-blocked'
@@ -347,7 +346,7 @@ function candidatesFromNativeManifest(
         routeability: enabled ? 'native-manifest' : 'disabled',
         freshness: emptyFreshness('native-manifest'),
         requiredPermissions: missingPermissions,
-        privacyClass: capability.toLowerCase().includes('microphone') ? 'raw-audio' : 'personal',
+        privacyClass: nativePrivacyClass(capability),
         disabledReasons: enabled ? missingPermissions.map((permission) => `native permission missing: ${permission}`) : ['native capability disabled'],
         requiredAction:
           availability === 'privacy-blocked'
@@ -413,6 +412,40 @@ function requiredActionForNativeIntegration(support: NativeIntegrationSupport): 
   if (support === 'planned') return 'implement scoped iOS plugin, App Intent, or extension task'
   if (support === 'blocked') return 'satisfy platform entitlement, consent, or permission requirement'
   return 'do not claim this platform capability'
+}
+
+function nativeRequiredPermissions(capability: string, permissions: Record<string, boolean>): string[] {
+  const normalized = capability.toLowerCase()
+  const requestedTokens: string[] = []
+  if (normalized.includes('assistantrole.status')) requestedTokens.push('assistantrolestatus')
+  if (normalized.includes('assistantrole.request')) requestedTokens.push('assistantrolerequest')
+  if (normalized.includes('microphone') || normalized.includes('audiocapture')) requestedTokens.push('microphone', 'audiocapture')
+  if (normalized.includes('notification')) requestedTokens.push('notification')
+  if (normalized.includes('foregroundservice')) requestedTokens.push('foregroundservice')
+  if (normalized.includes('shareintent')) requestedTokens.push('shareintent')
+  if (normalized.includes('deeplink')) requestedTokens.push('deeplink')
+  if (normalized.includes('securecredentialstorage')) requestedTokens.push('securestorage', 'credentialstorage')
+  if (normalized.includes('securefilehandles')) requestedTokens.push('securefile')
+  if (normalized.includes('localfileread')) requestedTokens.push('localfileread')
+  if (normalized.includes('localfilewrite')) requestedTokens.push('localfilewrite')
+  if (normalized.includes('dialog')) requestedTokens.push('dialog')
+  if (normalized.includes('tray')) requestedTokens.push('tray')
+  if (normalized.includes('logtail')) requestedTokens.push('logtail')
+  if (normalized.includes('sidecar')) requestedTokens.push('sidecar')
+  if (normalized.includes('fallbackentrypoints')) requestedTokens.push('fallback', 'shareintent', 'deeplink')
+
+  const matches = Object.keys(permissions).filter((permission) => {
+    const permissionKey = permission.toLowerCase().replace(/[^a-z0-9]/g, '')
+    return requestedTokens.some((token) => permissionKey.includes(token))
+  })
+  return sortedUnique(matches)
+}
+
+function nativePrivacyClass(capability: string): PrivacyClass {
+  const normalized = capability.toLowerCase()
+  if (normalized.includes('microphone') || normalized.includes('audio')) return 'raw-audio'
+  if (normalized.includes('credential') || normalized.includes('storage')) return 'credential'
+  return 'personal'
 }
 
 function nodeFromCandidates(

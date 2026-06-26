@@ -10,6 +10,8 @@ fn main() {
             "aurora_sidecar_status",
             "aurora_native_capability_manifest",
             "native_capabilities",
+            "aurora_android_baseline_status",
+            "aurora_android_native_plugin_payload",
             "aurora_log_tail",
             "aurora_secure_storage_get",
             "aurora_secure_storage_set",
