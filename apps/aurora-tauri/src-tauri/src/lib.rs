@@ -174,6 +174,16 @@ struct NativeFeatureStatus {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct BiometricAdminUnlockRequest {
+    started: bool,
+    request_code: Option<u32>,
+    status: Value,
+    reason: String,
+    secrets_redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AndroidBaselineStatus {
     platform: String,
     state: String,
@@ -741,12 +751,27 @@ async fn aurora_log_tail(
 }
 
 #[tauri::command]
-async fn aurora_secure_storage_get(key: String) -> Result<Value, AuroraCommandError> {
-    #[cfg(not(desktop))]
+async fn aurora_secure_storage_get(
+    key: String,
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
     {
-        let _ = key;
+        validate_secure_storage_key(&key)?;
+        return run_android_plugin_command(
+            native,
+            "secureStorageGet",
+            json!({
+                "key": key
+            }),
+        );
+    }
+
+    #[cfg(not(any(desktop, target_os = "android")))]
+    {
+        let _ = (key, native);
         return Err(AuroraCommandError::UnsupportedFeature(
-            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+            "secure storage is only available on desktop keychain and Android Keystore targets"
                 .to_string(),
         ));
     }
@@ -773,12 +798,26 @@ async fn aurora_secure_storage_get(key: String) -> Result<Value, AuroraCommandEr
 async fn aurora_secure_storage_set(
     key: String,
     value: String,
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
-    #[cfg(not(desktop))]
+    #[cfg(target_os = "android")]
     {
-        let _ = (key, value);
+        validate_secure_storage_key(&key)?;
+        return run_android_plugin_command(
+            native,
+            "secureStorageSet",
+            json!({
+                "key": key,
+                "value": value
+            }),
+        );
+    }
+
+    #[cfg(not(any(desktop, target_os = "android")))]
+    {
+        let _ = (key, value, native);
         return Err(AuroraCommandError::UnsupportedFeature(
-            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+            "secure storage is only available on desktop keychain and Android Keystore targets"
                 .to_string(),
         ));
     }
@@ -800,12 +839,27 @@ async fn aurora_secure_storage_set(
 }
 
 #[tauri::command]
-async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraCommandError> {
-    #[cfg(not(desktop))]
+async fn aurora_secure_storage_delete(
+    key: String,
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
     {
-        let _ = key;
+        validate_secure_storage_key(&key)?;
+        return run_android_plugin_command(
+            native,
+            "secureStorageDelete",
+            json!({
+                "key": key
+            }),
+        );
+    }
+
+    #[cfg(not(any(desktop, target_os = "android")))]
+    {
+        let _ = (key, native);
         return Err(AuroraCommandError::UnsupportedFeature(
-            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+            "secure storage is only available on desktop keychain and Android Keystore targets"
                 .to_string(),
         ));
     }
@@ -823,6 +877,70 @@ async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraComman
             })),
             Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
         }
+    }
+}
+
+#[tauri::command]
+async fn aurora_biometric_admin_unlock_status(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "biometricAdminUnlockStatus", json!({}));
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Ok(json!({
+            "platform": native_platform(),
+            "available": false,
+            "requestable": false,
+            "deviceSecure": false,
+            "biometricReady": false,
+            "lastDenied": false,
+            "state": "unsupported_platform",
+            "reason": "android biometric admin unlock is only available in the Android Tauri shell",
+            "privacyClass": "admin-critical",
+            "evidenceSource": "tauri-capability-manifest",
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_biometric_admin_unlock(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "biometricAdminUnlock", json!({}));
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        let status = json!({
+            "platform": native_platform(),
+            "available": false,
+            "requestable": false,
+            "deviceSecure": false,
+            "biometricReady": false,
+            "lastDenied": false,
+            "state": "unsupported_platform",
+            "reason": "android biometric admin unlock is only available in the Android Tauri shell",
+            "privacyClass": "admin-critical",
+            "evidenceSource": "tauri-capability-manifest",
+            "secretsRedacted": true
+        });
+        Ok(serde_json::to_value(BiometricAdminUnlockRequest {
+            started: false,
+            request_code: None,
+            status,
+            reason: "unsupported_platform".to_string(),
+            secrets_redacted: true,
+        })
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?)
     }
 }
 
@@ -1084,6 +1202,22 @@ fn android_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             Ok(())
         })
         .build()
+}
+
+#[cfg(target_os = "android")]
+fn run_android_plugin_command(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    command: &str,
+    payload: Value,
+) -> Result<Value, AuroraCommandError> {
+    let handle = native.handle.as_ref().ok_or_else(|| {
+        AuroraCommandError::AndroidNativePlugin(
+            "Aurora Android native plugin handle was not registered".to_string(),
+        )
+    })?;
+    handle
+        .run_mobile_plugin::<Value>(command, payload)
+        .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))
 }
 
 fn android_baseline_status() -> AndroidBaselineStatus {
@@ -1518,6 +1652,8 @@ pub fn run() {
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
+            aurora_biometric_admin_unlock_status,
+            aurora_biometric_admin_unlock,
             aurora_local_file_read,
             aurora_local_file_write,
             aurora_local_file_pick,

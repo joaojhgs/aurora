@@ -609,6 +609,20 @@ describe('AuroraClient', () => {
         providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
       })
     )
+    expect(graph.byFeatureId['native:android:android.secureCredentialStorage']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        privacyClass: 'credential',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.adminUnlock']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'admin-critical',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
     expect(graph.byFeatureId['native:android:android.localFileRead']).toEqual(
       expect.objectContaining({
         availability: 'degraded',
@@ -2603,6 +2617,39 @@ describe('AuroraClient', () => {
           case 'aurora_secure_storage_set':
           case 'aurora_secure_storage_delete':
             return { key: String(args?.key), ok: true }
+          case 'aurora_biometric_admin_unlock_status':
+            return {
+              platform: 'android',
+              available: false,
+              requestable: false,
+              deviceSecure: false,
+              biometricReady: false,
+              lastDenied: false,
+              state: 'needs_native_permission',
+              reason: 'device_credential_not_enrolled',
+              privacyClass: 'admin-critical',
+              evidenceSource: 'android-biometric-keyguard-keystore',
+              secretsRedacted: true
+            }
+          case 'aurora_biometric_admin_unlock':
+            return {
+              started: false,
+              reason: 'device_credential_not_enrolled',
+              status: {
+                platform: 'android',
+                available: false,
+                requestable: false,
+                deviceSecure: false,
+                biometricReady: false,
+                lastDenied: false,
+                state: 'needs_native_permission',
+                reason: 'device_credential_not_enrolled',
+                privacyClass: 'admin-critical',
+                evidenceSource: 'android-biometric-keyguard-keystore',
+                secretsRedacted: true
+              },
+              secretsRedacted: true
+            }
           case 'aurora_local_file_read':
             return { path: String(args?.path), data: 'hello', encoding: 'utf-8' }
           case 'aurora_local_file_write':
@@ -2657,6 +2704,19 @@ describe('AuroraClient', () => {
     await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
     await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
     await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.getBiometricAdminUnlockStatus()).resolves.toEqual(
+      expect.objectContaining({
+        privacyClass: 'admin-critical',
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.requestBiometricAdminUnlock()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'device_credential_not_enrolled',
+        secretsRedacted: true
+      })
+    )
     await expect(transport.readLocalFile('/tmp/a.txt')).resolves.toEqual({
       path: '/tmp/a.txt',
       data: 'hello',
@@ -2692,6 +2752,8 @@ describe('AuroraClient', () => {
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
       'aurora_secure_storage_delete',
+      'aurora_biometric_admin_unlock_status',
+      'aurora_biometric_admin_unlock',
       'aurora_local_file_read',
       'aurora_local_file_write',
       'aurora_local_file_pick',
@@ -2703,9 +2765,9 @@ describe('AuroraClient', () => {
     expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
     expect(calls[12]?.args).toEqual({ key: 'session' })
     expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[15]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[16]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[18]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[17]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[18]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[20]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {
@@ -2781,6 +2843,8 @@ describe('AuroraClient', () => {
           'aurora.android.notificationsRequest': 'needs_native_permission',
           'aurora.android.voiceForegroundService': 'needs_native_permission',
           'aurora.android.biometric': 'unsupported_platform',
+          'aurora.android.secureStorage': 'available',
+          'aurora.android.adminUnlock': 'needs_native_permission',
           'aurora.android.localNetwork': 'available',
           'aurora.android.filePick': 'degraded',
           'aurora.android.shareIntent': 'available',
@@ -2796,6 +2860,8 @@ describe('AuroraClient', () => {
           'android.foregroundService': 'needs_native_permission',
           'android.voiceForegroundService': 'needs_native_permission',
           'android.voiceForegroundService.start': 'needs_native_permission',
+          'android.secureCredentialStorage': 'available',
+          'android.adminUnlock': 'needs_native_permission',
           'android.localFileRead': 'degraded',
           'android.appWidget': 'fallback',
           'android.quickTile': 'fallback',

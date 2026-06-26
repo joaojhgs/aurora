@@ -49,6 +49,8 @@ export interface TauriCommandNames {
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
+  biometricAdminUnlockStatus: string
+  biometricAdminUnlock: string
   localFileRead: string
   localFileWrite: string
   localFilePick: string
@@ -146,6 +148,28 @@ export interface SecureStorageWriteResult {
   ok: boolean
 }
 
+export interface BiometricAdminUnlockStatus {
+  platform: 'android' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  reason: string
+  privacyClass: 'admin-critical' | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface BiometricAdminUnlockResult {
+  started: boolean
+  requestCode?: number
+  status: BiometricAdminUnlockStatus
+  reason: string
+  secretsRedacted: boolean
+}
+
 export interface LocalFileReadOptions {
   encoding?: 'utf-8' | 'base64' | 'bytes'
 }
@@ -208,6 +232,8 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
+  biometricAdminUnlockStatus: 'aurora_biometric_admin_unlock_status',
+  biometricAdminUnlock: 'aurora_biometric_admin_unlock',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
@@ -349,6 +375,14 @@ export class TauriLocalTransport implements AuroraTransport {
 
   secureStorageDelete(key: string): Promise<SecureStorageWriteResult> {
     return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
+  }
+
+  getBiometricAdminUnlockStatus(): Promise<BiometricAdminUnlockStatus> {
+    return this.invokeCommand<BiometricAdminUnlockStatus>(this.commands.biometricAdminUnlockStatus)
+  }
+
+  requestBiometricAdminUnlock(): Promise<BiometricAdminUnlockResult> {
+    return this.invokeCommand<BiometricAdminUnlockResult>(this.commands.biometricAdminUnlock)
   }
 
   readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileReadResult> {

@@ -1567,6 +1567,8 @@ export interface NativeCapabilityManifest {
   platformLimitations?: NativePlatformLimitation[]
   assistantRole?: AndroidAssistantRoleStatus | null
   voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
+  adminUnlock?: AndroidAdminUnlockStatus | null
+  secureStorage?: AndroidSecureStorageStatus | null
   fallbackEntrypoints?: AndroidFallbackEntrypoint[]
   entrypoints?: AndroidNativeEntrypoint[]
   lastEntrypointPayload?: AndroidEntrypointPayload | null
@@ -1604,6 +1606,31 @@ export interface AndroidVoiceForegroundServiceRequestResult {
   stopped?: boolean
   status: AndroidVoiceForegroundServiceStatus
   reason: string
+}
+
+export interface AndroidAdminUnlockStatus {
+  platform: 'android' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidSecureStorageStatus {
+  platform: 'android' | string
+  available: boolean
+  backend: string
+  persisted: boolean
+  privacyClass: PrivacyClass | string
+  allowedKeyPrefixes: string
+  evidenceSource: string
+  secretsRedacted: boolean
 }
 
 export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
