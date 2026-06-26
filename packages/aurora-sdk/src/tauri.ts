@@ -10,6 +10,9 @@ import type {
   AndroidAssistantRoleRequestResult,
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
+  AndroidNativePermissionRequestResult,
+  AndroidVoiceForegroundServiceRequestResult,
+  AndroidVoiceForegroundServiceStatus,
   AuditReceipt,
   AuroraEvent,
   AuroraTransportEnvelope,
@@ -29,6 +32,10 @@ export interface TauriCommandNames {
   androidAssistantRoleStatus: string
   androidAssistantRoleRequest: string
   androidFallbackEntrypoints: string
+  androidPermissionRequest: string
+  androidVoiceForegroundServiceStatus: string
+  androidVoiceForegroundServiceStart: string
+  androidVoiceForegroundServiceStop: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
@@ -183,6 +190,10 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidAssistantRoleStatus: 'assistantRoleStatus',
   androidAssistantRoleRequest: 'requestAssistantRole',
   androidFallbackEntrypoints: 'fallbackEntrypoints',
+  androidPermissionRequest: 'requestAndroidPermission',
+  androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
+  androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
+  androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
@@ -266,6 +277,22 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAndroidFallbackEntrypoints(): Promise<AndroidFallbackEntrypoint[]> {
     return this.invokeCommand<AndroidFallbackEntrypoint[]>(this.commands.androidFallbackEntrypoints)
+  }
+
+  requestAndroidPermission(permission: string): Promise<AndroidNativePermissionRequestResult> {
+    return this.invokeCommand<AndroidNativePermissionRequestResult>(this.commands.androidPermissionRequest, { permission })
+  }
+
+  getAndroidVoiceForegroundServiceStatus(): Promise<AndroidVoiceForegroundServiceStatus> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceStatus>(this.commands.androidVoiceForegroundServiceStatus)
+  }
+
+  startAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStart)
+  }
+
+  stopAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStop)
   }
 
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {

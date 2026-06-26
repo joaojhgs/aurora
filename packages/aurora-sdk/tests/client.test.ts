@@ -2685,6 +2685,27 @@ describe('AuroraClient', () => {
             }
           case 'fallbackEntrypoints':
             return androidNativeCapabilityManifestFixture.fallbackEntrypoints
+          case 'requestAndroidPermission':
+            return {
+              started: true,
+              permission: args?.permission,
+              requestCode: 4204,
+              requestedPermissions: ['android.permission.RECORD_AUDIO']
+            }
+          case 'voiceForegroundServiceStatus':
+            return androidNativeCapabilityManifestFixture.voiceForegroundService
+          case 'startVoiceForegroundService':
+            return {
+              started: false,
+              reason: 'microphone_permission_missing',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
+          case 'stopVoiceForegroundService':
+            return {
+              stopped: false,
+              reason: 'foreground_service_not_running',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -2706,7 +2727,10 @@ describe('AuroraClient', () => {
         }),
         permissionStates: expect.objectContaining({
           'aurora.android.microphone': 'needs_native_permission',
+          'aurora.android.microphoneRequest': 'needs_native_permission',
           'aurora.android.notifications': 'needs_native_permission',
+          'aurora.android.notificationsRequest': 'needs_native_permission',
+          'aurora.android.voiceForegroundService': 'needs_native_permission',
           'aurora.android.biometric': 'unsupported_platform',
           'aurora.android.localNetwork': 'available',
           'aurora.android.filePick': 'degraded',
@@ -2719,11 +2743,19 @@ describe('AuroraClient', () => {
           'android.assistantRole.denied': 'degraded',
           'android.assistantRole.oemUnavailable': 'degraded',
           'android.foregroundService': 'needs_native_permission',
+          'android.voiceForegroundService': 'needs_native_permission',
+          'android.voiceForegroundService.start': 'needs_native_permission',
           'android.localFileRead': 'degraded',
           'android.fallbackEntrypoints': 'fallback'
         }),
+        voiceForegroundService: expect.objectContaining({
+          state: 'needs_native_permission',
+          reason: 'microphone_permission_missing',
+          backendAudioEvidenceRequired: true
+        }),
         fallbackEntrypoints: expect.arrayContaining([
           expect.objectContaining({ id: 'app_open', state: 'fallback', available: true }),
+          expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
           expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
           expect.objectContaining({ id: 'quick_tile', state: 'degraded', available: true }),
           expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
@@ -2752,16 +2784,48 @@ describe('AuroraClient', () => {
     await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
         expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
         expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
       ])
+    )
+    await expect(transport.requestAndroidPermission('aurora.android.microphone')).resolves.toEqual(
+      expect.objectContaining({
+        started: true,
+        permission: 'aurora.android.microphone',
+        requestCode: 4204,
+        requestedPermissions: ['android.permission.RECORD_AUDIO']
+      })
+    )
+    await expect(transport.getAndroidVoiceForegroundServiceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        state: 'needs_native_permission',
+        backendAudioEvidenceRequired: true
+      })
+    )
+    await expect(transport.startAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'microphone_permission_missing'
+      })
+    )
+    await expect(transport.stopAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        stopped: false,
+        reason: 'foreground_service_not_running'
+      })
     )
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_native_capability_manifest',
       'assistantRoleStatus',
       'requestAssistantRole',
-      'fallbackEntrypoints'
+      'fallbackEntrypoints',
+      'requestAndroidPermission',
+      'voiceForegroundServiceStatus',
+      'startVoiceForegroundService',
+      'stopVoiceForegroundService'
     ])
+    expect(calls[4]?.args).toEqual({ permission: 'aurora.android.microphone' })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

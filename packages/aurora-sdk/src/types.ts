@@ -1566,9 +1566,42 @@ export interface NativeCapabilityManifest {
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
   assistantRole?: AndroidAssistantRoleStatus | null
+  voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
   fallbackEntrypoints?: AndroidFallbackEntrypoint[]
   evidenceSource?: string
   secretsRedacted?: boolean
+}
+
+export interface AndroidNativePermissionRequestResult {
+  started: boolean
+  permission: string
+  requestCode?: number
+  requestedPermissions?: string[]
+  reason?: string
+  manifest?: JsonObject
+}
+
+export interface AndroidVoiceForegroundServiceStatus {
+  platform: 'android' | string
+  running: boolean
+  startable: boolean
+  microphoneGranted: boolean
+  notificationsGranted: boolean
+  foregroundServiceReady: boolean
+  manifestReady: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  backendAudioEvidenceRequired: boolean
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidVoiceForegroundServiceRequestResult {
+  started?: boolean
+  stopped?: boolean
+  status: AndroidVoiceForegroundServiceStatus
+  reason: string
 }
 
 export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
