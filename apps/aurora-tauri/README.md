@@ -93,7 +93,7 @@ The shared Tauri capability intentionally does not grant `updater:default`; upda
 
 ## Android Native Skeleton
 
-`src-tauri/android/aurora-native-plugin/` contains the AND-002 Kotlin plugin skeleton for future Tauri mobile wiring. The plugin exposes Android-native evidence commands for `nativeCapabilityManifest`, `assistantRoleStatus`, assistant-role request probing, and fallback entrypoints. It keeps the future VoiceInteractionService declaration disabled until the package qualification and role-grant flow is completed by the Android assistant-role task.
+`src-tauri/android/aurora-native-plugin/` contains the Android Kotlin plugin used by the native capability manifest. The plugin exposes Android-native evidence commands for `nativeCapabilityManifest`, `assistantRoleStatus`, assistant-role request probing, and fallback entrypoints. `Native.GetCapabilityManifest` routes through this plugin on Android, so the SDK receives explicit Android states for assistant role, mic, notifications, biometric, local network, foreground service, file, share/deep-link, and fallback entrypoints. It keeps the future VoiceInteractionService declaration disabled until the package qualification and role-grant flow is completed by the Android assistant-role task.
 
 The real Android build remains gated on Tauri's generated Android project under `src-tauri/gen/android`; run `pnpm --filter @aurora/tauri-ui tauri android init` before attempting `pnpm --filter @aurora/tauri-ui tauri android build` in an Android-capable environment.
 

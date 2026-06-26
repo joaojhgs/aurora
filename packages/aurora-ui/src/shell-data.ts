@@ -64,8 +64,8 @@ export interface AuroraShellSnapshot {
   blockedCount: number
   nativePlatform: string
   nativeAvailable: boolean
-  nativePermissions: Array<{ name: string; granted: boolean }>
-  nativeCapabilities: Array<{ name: string; enabled: boolean }>
+  nativePermissions: Array<{ name: string; granted: boolean; nativeState: string | null }>
+  nativeCapabilities: Array<{ name: string; enabled: boolean; nativeState: string | null }>
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   assistantVoiceRoutes: AssistantVoiceRoutes
@@ -140,8 +140,8 @@ export function snapshotFromGraph(
     blockedCount: routes.filter((route) => route.disabled).length,
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
-    nativePermissions: nativePermissionEntries(native?.permissions),
-    nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
+    nativePermissions: nativePermissionEntries(native?.permissions, native?.permissionStates),
+    nativeCapabilities: nativeCapabilityEntries(native?.capabilities, native?.capabilityStates),
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,
@@ -462,16 +462,22 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].sort()
 }
 
-function nativePermissionEntries(values: Record<string, boolean> | undefined): Array<{ name: string; granted: boolean }> {
+function nativePermissionEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; granted: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, granted]) => ({ name, granted }))
+    .map(([name, granted]) => ({ name, granted, nativeState: states?.[name] ?? null }))
 }
 
-function nativeCapabilityEntries(values: Record<string, boolean> | undefined): Array<{ name: string; enabled: boolean }> {
+function nativeCapabilityEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; enabled: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, enabled]) => ({ name, enabled }))
+    .map(([name, enabled]) => ({ name, enabled, nativeState: states?.[name] ?? null }))
 }
 
 function nullToPending(value: string | null): string {

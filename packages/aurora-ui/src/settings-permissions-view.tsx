@@ -325,11 +325,8 @@ function nativePermissionCards(
     const capability = snapshot.nativeCapabilities.find((candidate) => candidate.name === name)
     const granted = permission?.granted ?? false
     const capabilityEnabled = capability?.enabled ?? granted
-    const state: AvailabilityState = granted && capabilityEnabled
-      ? 'available-local'
-      : snapshot.nativeAvailable
-        ? 'privacy-blocked'
-        : 'unsupported'
+    const nativeState = capability?.nativeState ?? permission?.nativeState ?? null
+    const state = availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
     return {
       id: name,
       label: nativePermissionLabel(name),
@@ -339,11 +336,28 @@ function nativePermissionCards(
       requestEnabled: false,
       detail: granted
         ? 'Native manifest reports this permission as granted.'
-        : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.',
-      blockers: granted ? [] : [`native permission missing: ${name}`],
+        : nativeState === 'degraded'
+          ? 'Native manifest reports a degraded or partial platform path for this feature.'
+          : nativeState === 'fallback'
+            ? 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
+            : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.',
+      blockers: granted || nativeState === 'fallback' ? [] : [`native permission missing: ${name}`],
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
+}
+
+function availabilityFromNativeState(
+  nativeState: string | null,
+  granted: boolean,
+  capabilityEnabled: boolean,
+  nativeAvailable: boolean
+): AvailabilityState {
+  if (!nativeAvailable || nativeState === 'unsupported_platform') return 'unsupported'
+  if (nativeState === 'available') return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
+  if (nativeState === 'needs_native_permission') return 'privacy-blocked'
+  if (nativeState === 'degraded' || nativeState === 'fallback') return 'degraded'
+  return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
 }
 
 function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability | null {

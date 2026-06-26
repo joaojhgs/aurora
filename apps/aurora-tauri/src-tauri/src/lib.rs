@@ -507,14 +507,17 @@ async fn aurora_sidecar_status(
 }
 
 #[tauri::command]
-async fn aurora_native_capability_manifest() -> Result<NativeCapabilityManifest, AuroraCommandError>
-{
-    Ok(native_capability_manifest())
+async fn aurora_native_capability_manifest(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    native_capability_manifest_value(native).await
 }
 
 #[tauri::command]
-async fn native_capabilities() -> Result<NativeCapabilityManifest, AuroraCommandError> {
-    Ok(native_capability_manifest())
+async fn native_capabilities(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    native_capability_manifest_value(native).await
 }
 
 #[tauri::command]
@@ -641,6 +644,31 @@ async fn aurora_android_native_plugin_payload(
     }
 }
 
+async fn native_capability_manifest_value(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = native.handle.as_ref().ok_or_else(|| {
+            AuroraCommandError::AndroidNativePlugin(
+                "Aurora Android native plugin handle was not registered".to_string(),
+            )
+        })?;
+        let payload = handle
+            .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
+            .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))?;
+        log_android_native_plugin_payload(&payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        serde_json::to_value(native_capability_manifest())
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+}
+
 fn log_android_baseline_status(status: &AndroidBaselineStatus) {
     println!(
         "aurora_android_baseline_status={}",
@@ -649,10 +677,46 @@ fn log_android_baseline_status(status: &AndroidBaselineStatus) {
 }
 
 fn log_android_native_plugin_payload(payload: &Value) {
+    const CHUNK_BYTES: usize = 900;
+
+    let serialized =
+        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string());
+    let chunks = chunk_string_for_logcat(&serialized, CHUNK_BYTES);
     println!(
-        "aurora_android_native_plugin_payload={}",
-        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+        "aurora_android_native_plugin_payload_begin chunks={} bytes={}",
+        chunks.len(),
+        serialized.len()
     );
+    for (index, chunk) in chunks.iter().enumerate() {
+        println!(
+            "aurora_android_native_plugin_payload_chunk index={} total={} data={}",
+            index,
+            chunks.len(),
+            chunk
+        );
+    }
+    println!(
+        "aurora_android_native_plugin_payload_end chunks={}",
+        chunks.len()
+    );
+}
+
+fn chunk_string_for_logcat(value: &str, max_bytes: usize) -> Vec<&str> {
+    if value.is_empty() {
+        return vec![""];
+    }
+
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    while start < value.len() {
+        let mut end = usize::min(start + max_bytes, value.len());
+        while !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        chunks.push(&value[start..end]);
+        start = end;
+    }
+    chunks
 }
 
 #[tauri::command]

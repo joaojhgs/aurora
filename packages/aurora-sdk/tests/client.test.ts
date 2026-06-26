@@ -585,13 +585,34 @@ describe('AuroraClient', () => {
     )
     expect(graph.byFeatureId['native:android:android.assistantRole.request']).toEqual(
       expect.objectContaining({
-        availability: 'unsupported'
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'degraded' })])
       })
     )
     expect(graph.byFeatureId['native:android:android.microphoneCapture']).toEqual(
       expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'raw-audio',
+        requiredPermissions: expect.arrayContaining(['aurora.android.microphone']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.notifications']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.biometric']).toEqual(
+      expect.objectContaining({
         availability: 'unsupported',
-        privacyClass: 'raw-audio'
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localFileRead']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'degraded' })])
       })
     )
     expect(graph.byFeatureId['native:android:android.shareIntent']).toEqual(
@@ -602,7 +623,8 @@ describe('AuroraClient', () => {
     )
     expect(graph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
       expect.objectContaining({
-        availability: 'available-local'
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
       })
     )
   })
@@ -2578,7 +2600,25 @@ describe('AuroraClient', () => {
           oemUnavailable: false,
           reason: 'package_not_qualified'
         }),
+        permissionStates: expect.objectContaining({
+          'aurora.android.microphone': 'needs_native_permission',
+          'aurora.android.notifications': 'needs_native_permission',
+          'aurora.android.biometric': 'unsupported_platform',
+          'aurora.android.localNetwork': 'available',
+          'aurora.android.filePick': 'degraded',
+          'aurora.android.shareIntent': 'available'
+        }),
+        capabilityStates: expect.objectContaining({
+          'android.assistantRole.packageQualified': 'degraded',
+          'android.assistantRole.held': 'needs_native_permission',
+          'android.foregroundService': 'needs_native_permission',
+          'android.localFileRead': 'degraded',
+          'android.fallbackEntrypoints': 'fallback'
+        }),
         fallbackEntrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'app_open', state: 'fallback', available: true }),
+          expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
+          expect.objectContaining({ id: 'quick_tile', state: 'degraded', available: true }),
           expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
         ])
       })
@@ -2602,6 +2642,7 @@ describe('AuroraClient', () => {
     await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
         expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
       ])
     )
