@@ -9,6 +9,7 @@ import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse }
 import type {
   AndroidAssistantRoleRequestResult,
   AndroidAssistantRoleStatus,
+  AndroidEntrypointPayload,
   AndroidFallbackEntrypoint,
   AndroidNativePermissionRequestResult,
   AndroidVoiceForegroundServiceRequestResult,
@@ -36,6 +37,7 @@ export interface TauriCommandNames {
   androidVoiceForegroundServiceStatus: string
   androidVoiceForegroundServiceStart: string
   androidVoiceForegroundServiceStop: string
+  androidEntrypointPayload: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
@@ -194,6 +196,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
   androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
   androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
+  androidEntrypointPayload: 'entrypointPayload',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
@@ -293,6 +296,15 @@ export class TauriLocalTransport implements AuroraTransport {
 
   stopAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
     return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStop)
+  }
+
+  getAndroidEntrypointPayload(): Promise<{
+    payload: AndroidEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.androidEntrypointPayload)
   }
 
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {

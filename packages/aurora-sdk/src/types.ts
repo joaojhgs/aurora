@@ -1568,6 +1568,8 @@ export interface NativeCapabilityManifest {
   assistantRole?: AndroidAssistantRoleStatus | null
   voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
   fallbackEntrypoints?: AndroidFallbackEntrypoint[]
+  entrypoints?: AndroidNativeEntrypoint[]
+  lastEntrypointPayload?: AndroidEntrypointPayload | null
   evidenceSource?: string
   secretsRedacted?: boolean
 }
@@ -1667,4 +1669,35 @@ export interface AndroidFallbackEntrypoint {
   reason: string
   capability?: string
   permission?: string | null
+  intentAction?: string | null
+  manifestDeclared?: boolean
+  backendRequired?: boolean
+}
+
+export interface AndroidNativeEntrypoint {
+  id: string
+  platform: 'android' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intentAction: string
+  intakeType: string
+  manifestDeclared: boolean
+  backendRequired: boolean
+  payloadCommand: string
+  reason: string
+}
+
+export interface AndroidEntrypointPayload {
+  source: string
+  action: string | null
+  type: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  categories: string[]
+  extras: string[]
+  secretsRedacted: boolean
 }

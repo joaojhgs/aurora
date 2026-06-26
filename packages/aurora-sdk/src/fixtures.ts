@@ -3062,7 +3062,11 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'aurora.android.localFileWrite': false,
     'aurora.android.filePick': false,
     'aurora.android.shareIntent': true,
-    'aurora.android.deepLink': true
+    'aurora.android.deepLink': true,
+    'aurora.android.appWidget': true,
+    'aurora.android.appShortcut': true,
+    'aurora.android.quickTile': true,
+    'aurora.android.entrypointPayload': true
   },
   capabilities: {
     'android.assistantRole.status': true,
@@ -3087,6 +3091,10 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'android.filePick': false,
     'android.shareIntent': true,
     'android.deepLink': true,
+    'android.appWidget': true,
+    'android.appShortcut': true,
+    'android.quickTile': true,
+    'android.entrypointPayload': true,
     'android.fallbackEntrypoints': true
   },
   permissionStates: {
@@ -3105,7 +3113,11 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'aurora.android.localFileWrite': 'degraded',
     'aurora.android.filePick': 'degraded',
     'aurora.android.shareIntent': 'available',
-    'aurora.android.deepLink': 'available'
+    'aurora.android.deepLink': 'available',
+    'aurora.android.appWidget': 'fallback',
+    'aurora.android.appShortcut': 'fallback',
+    'aurora.android.quickTile': 'fallback',
+    'aurora.android.entrypointPayload': 'available'
   },
   capabilityStates: {
     'android.assistantRole.status': 'available',
@@ -3130,8 +3142,74 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'android.filePick': 'degraded',
     'android.shareIntent': 'available',
     'android.deepLink': 'available',
+    'android.appWidget': 'fallback',
+    'android.appShortcut': 'fallback',
+    'android.quickTile': 'fallback',
+    'android.entrypointPayload': 'available',
     'android.fallbackEntrypoints': 'fallback'
   },
+  mobileIntegrations: [
+    {
+      platform: 'android',
+      id: 'androidShareSheet',
+      label: 'Android share sheet',
+      support: 'supported',
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Share sheet intent filters are declared; payloads are redacted until backend context ingestion handles them.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidDeepLinks',
+      label: 'Android deep links',
+      support: 'supported',
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Aurora and https deep links are declared through Android intent filters.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidStaticShortcut',
+      label: 'Android launcher shortcut',
+      support: 'supported',
+      capability: 'android.appShortcut',
+      permission: 'aurora.android.appShortcut',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Static shortcut metadata is packaged and opens Aurora through the native entrypoint activity.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidWidget',
+      label: 'Android home-screen widget',
+      support: 'supported-path',
+      capability: 'android.appWidget',
+      permission: 'aurora.android.appWidget',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Widget provider is packaged; device launcher placement remains user/OEM controlled.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidQuickTile',
+      label: 'Android Quick Settings tile',
+      support: 'supported-path',
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Quick Settings tile service is packaged; tile placement remains user/OEM controlled.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    }
+  ],
   assistantRole: {
     platform: 'android',
     roleName: 'android.app.role.ASSISTANT',
@@ -3171,7 +3249,10 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       available: true,
       capability: 'android.deepLink',
       permission: null,
-      reason: 'available without assistant role'
+      reason: 'available without assistant role',
+      intentAction: 'android.intent.action.MAIN',
+      manifestDeclared: true,
+      backendRequired: false
     },
     {
       id: 'push_to_talk',
@@ -3179,7 +3260,9 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       available: false,
       capability: 'android.microphoneCapture',
       permission: 'aurora.android.microphone',
-      reason: 'requires microphone permission and backend audio evidence'
+      reason: 'requires microphone permission and backend audio evidence',
+      manifestDeclared: false,
+      backendRequired: true
     },
     {
       id: 'foreground_voice_controls',
@@ -3195,15 +3278,42 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       available: false,
       capability: 'android.notifications',
       permission: 'aurora.android.notifications',
-      reason: 'requires notification permission on Android 13+'
+      reason: 'requires notification permission on Android 13+',
+      manifestDeclared: false,
+      backendRequired: false
     },
     {
       id: 'quick_tile',
-      state: 'degraded',
+      state: 'fallback',
       available: true,
-      capability: 'android.fallbackEntrypoints',
-      permission: null,
-      reason: 'planned Android quick tile entrypoint; not assistant-role dependent'
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      reason: 'Quick Settings tile opens Aurora without assistant role',
+      intentAction: 'android.service.quicksettings.action.QS_TILE',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'app_widget',
+      state: 'fallback',
+      available: true,
+      capability: 'android.appWidget',
+      permission: 'aurora.android.appWidget',
+      reason: 'home-screen widget opens Aurora without assistant role',
+      intentAction: 'android.appwidget.action.APPWIDGET_UPDATE',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'app_shortcut',
+      state: 'fallback',
+      available: true,
+      capability: 'android.appShortcut',
+      permission: 'aurora.android.appShortcut',
+      reason: 'static launcher shortcut opens Aurora without assistant role',
+      intentAction: 'android.intent.action.VIEW',
+      manifestDeclared: true,
+      backendRequired: false
     },
     {
       id: 'share_intent',
@@ -3211,7 +3321,10 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       available: true,
       capability: 'android.shareIntent',
       permission: 'aurora.android.shareIntent',
-      reason: 'available without assistant role'
+      reason: 'share sheet opens Aurora and records redacted intent metadata',
+      intentAction: 'android.intent.action.SEND',
+      manifestDeclared: true,
+      backendRequired: true
     },
     {
       id: 'deep_link',
@@ -3219,9 +3332,70 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       available: true,
       capability: 'android.deepLink',
       permission: 'aurora.android.deepLink',
-      reason: 'available without assistant role'
+      reason: 'deep links open Aurora and record redacted URI metadata',
+      intentAction: 'android.intent.action.VIEW',
+      manifestDeclared: true,
+      backendRequired: true
     }
   ],
+  entrypoints: [
+    {
+      id: 'share_sheet',
+      platform: 'android',
+      label: 'Share sheet',
+      state: 'fallback',
+      available: true,
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
+      intentAction: 'android.intent.action.SEND',
+      intakeType: 'text/*, image/*, application/pdf',
+      manifestDeclared: true,
+      backendRequired: true,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success'
+    },
+    {
+      id: 'deep_link',
+      platform: 'android',
+      label: 'Aurora deep link',
+      state: 'fallback',
+      available: true,
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
+      intentAction: 'android.intent.action.VIEW',
+      intakeType: 'aurora://assistant and https://aurora.local/assistant',
+      manifestDeclared: true,
+      backendRequired: true,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success'
+    },
+    {
+      id: 'quick_tile',
+      platform: 'android',
+      label: 'Quick Settings tile',
+      state: 'fallback',
+      available: true,
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      intentAction: 'android.service.quicksettings.action.QS_TILE',
+      intakeType: 'qs_tile',
+      manifestDeclared: true,
+      backendRequired: false,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native fallback opens Aurora without assistant role'
+    }
+  ],
+  lastEntrypointPayload: {
+    source: 'none',
+    action: null,
+    type: null,
+    scheme: null,
+    host: null,
+    path: null,
+    categories: [],
+    extras: [],
+    secretsRedacted: true
+  },
   evidenceSource: 'android-rolemanager-package-manager',
   secretsRedacted: true
 }

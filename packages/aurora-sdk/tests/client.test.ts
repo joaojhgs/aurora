@@ -621,10 +621,52 @@ describe('AuroraClient', () => {
         providerIdentity: 'native:android'
       })
     )
+    expect(graph.byFeatureId['native:android:android.deepLink']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appShortcut']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.quickTile']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.entrypointPayload']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
     expect(graph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
       expect.objectContaining({
         availability: 'degraded',
         providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:androidWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            disabledReasons: expect.arrayContaining([
+              expect.stringContaining('Widget provider is packaged')
+            ])
+          })
+        ])
       })
     )
   })
@@ -2706,6 +2748,13 @@ describe('AuroraClient', () => {
               reason: 'foreground_service_not_running',
               status: androidNativeCapabilityManifestFixture.voiceForegroundService
             }
+          case 'entrypointPayload':
+            return {
+              payload: androidNativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: androidNativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'android-intent-redacted',
+              secretsRedacted: true
+            }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -2734,7 +2783,9 @@ describe('AuroraClient', () => {
           'aurora.android.biometric': 'unsupported_platform',
           'aurora.android.localNetwork': 'available',
           'aurora.android.filePick': 'degraded',
-          'aurora.android.shareIntent': 'available'
+          'aurora.android.shareIntent': 'available',
+          'aurora.android.quickTile': 'fallback',
+          'aurora.android.entrypointPayload': 'available'
         }),
         capabilityStates: expect.objectContaining({
           'android.assistantRole.packageQualified': 'available',
@@ -2746,6 +2797,8 @@ describe('AuroraClient', () => {
           'android.voiceForegroundService': 'needs_native_permission',
           'android.voiceForegroundService.start': 'needs_native_permission',
           'android.localFileRead': 'degraded',
+          'android.appWidget': 'fallback',
+          'android.quickTile': 'fallback',
           'android.fallbackEntrypoints': 'fallback'
         }),
         voiceForegroundService: expect.objectContaining({
@@ -2753,11 +2806,23 @@ describe('AuroraClient', () => {
           reason: 'microphone_permission_missing',
           backendAudioEvidenceRequired: true
         }),
+        mobileIntegrations: expect.arrayContaining([
+          expect.objectContaining({ id: 'androidShareSheet', support: 'supported' }),
+          expect.objectContaining({ id: 'androidWidget', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidQuickTile', support: 'supported-path' })
+        ]),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', backendRequired: true, payloadCommand: 'entrypointPayload' }),
+          expect.objectContaining({ id: 'deep_link', backendRequired: true }),
+          expect.objectContaining({ id: 'quick_tile', backendRequired: false })
+        ]),
+        lastEntrypointPayload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
         fallbackEntrypoints: expect.arrayContaining([
           expect.objectContaining({ id: 'app_open', state: 'fallback', available: true }),
           expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
           expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
-          expect.objectContaining({ id: 'quick_tile', state: 'degraded', available: true }),
+          expect.objectContaining({ id: 'quick_tile', state: 'fallback', available: true, manifestDeclared: true }),
+          expect.objectContaining({ id: 'app_widget', state: 'fallback', available: true, manifestDeclared: true }),
           expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
         ])
       })
@@ -2786,7 +2851,7 @@ describe('AuroraClient', () => {
         expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
         expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
         expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
-        expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
+        expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true, backendRequired: true })
       ])
     )
     await expect(transport.requestAndroidPermission('aurora.android.microphone')).resolves.toEqual(
@@ -2815,6 +2880,16 @@ describe('AuroraClient', () => {
         reason: 'foreground_service_not_running'
       })
     )
+    await expect(transport.getAndroidEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', manifestDeclared: true })
+        ]),
+        evidenceSource: 'android-intent-redacted',
+        secretsRedacted: true
+      })
+    )
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_native_capability_manifest',
       'assistantRoleStatus',
@@ -2823,7 +2898,8 @@ describe('AuroraClient', () => {
       'requestAndroidPermission',
       'voiceForegroundServiceStatus',
       'startVoiceForegroundService',
-      'stopVoiceForegroundService'
+      'stopVoiceForegroundService',
+      'entrypointPayload'
     ])
     expect(calls[4]?.args).toEqual({ permission: 'aurora.android.microphone' })
   })

@@ -167,7 +167,11 @@ function validateNativePayload(payloadJson) {
     'aurora.android.foregroundServiceMicrophone',
     'aurora.android.filePick',
     'aurora.android.shareIntent',
-    'aurora.android.deepLink'
+    'aurora.android.deepLink',
+    'aurora.android.appWidget',
+    'aurora.android.appShortcut',
+    'aurora.android.quickTile',
+    'aurora.android.entrypointPayload'
   ])
   assertStateMap('capabilityStates', payload.capabilityStates, [
     'android.assistantRole.available',
@@ -184,6 +188,10 @@ function validateNativePayload(payloadJson) {
     'android.filePick',
     'android.shareIntent',
     'android.deepLink',
+    'android.appWidget',
+    'android.appShortcut',
+    'android.quickTile',
+    'android.entrypointPayload',
     'android.fallbackEntrypoints'
   ])
 
@@ -199,6 +207,53 @@ function validateNativePayload(payloadJson) {
     }
     assertNativeState(`fallbackEntrypoints.${entry.id}.state`, entry.state)
   }
+  assertRequiredEntry(payload.fallbackEntrypoints, 'share_intent')
+  assertRequiredEntry(payload.fallbackEntrypoints, 'deep_link')
+  assertRequiredEntry(payload.fallbackEntrypoints, 'app_widget')
+  assertRequiredEntry(payload.fallbackEntrypoints, 'app_shortcut')
+  assertRequiredEntry(payload.fallbackEntrypoints, 'quick_tile')
+
+  if (!Array.isArray(payload.entrypoints) || payload.entrypoints.length === 0) {
+    throw new Error('Android native plugin payload is missing entrypoints.')
+  }
+  for (const entrypoint of payload.entrypoints) {
+    if (!entrypoint || typeof entrypoint !== 'object') {
+      throw new Error('Android native plugin entrypoints entries must be objects.')
+    }
+    for (const field of ['id', 'label', 'capability', 'permission', 'intentAction', 'payloadCommand']) {
+      if (typeof entrypoint[field] !== 'string') {
+        throw new Error(`Android native plugin entrypoint.${field} must be a string.`)
+      }
+    }
+    if (typeof entrypoint.available !== 'boolean' || typeof entrypoint.manifestDeclared !== 'boolean' || typeof entrypoint.backendRequired !== 'boolean') {
+      throw new Error('Android native plugin entrypoints must include available, manifestDeclared, and backendRequired booleans.')
+    }
+    assertNativeState(`entrypoints.${entrypoint.id}.state`, entrypoint.state)
+  }
+  assertRequiredEntry(payload.entrypoints, 'share_sheet')
+  assertRequiredEntry(payload.entrypoints, 'deep_link')
+  assertRequiredEntry(payload.entrypoints, 'quick_tile')
+
+  if (!Array.isArray(payload.mobileIntegrations) || payload.mobileIntegrations.length === 0) {
+    throw new Error('Android native plugin payload is missing mobileIntegrations.')
+  }
+  assertRequiredEntry(payload.mobileIntegrations, 'androidShareSheet')
+  assertRequiredEntry(payload.mobileIntegrations, 'androidDeepLinks')
+  assertRequiredEntry(payload.mobileIntegrations, 'androidWidget')
+  assertRequiredEntry(payload.mobileIntegrations, 'androidQuickTile')
+
+  const lastEntrypointPayload = payload.lastEntrypointPayload
+  if (!lastEntrypointPayload || typeof lastEntrypointPayload !== 'object') {
+    throw new Error('Android native plugin payload is missing lastEntrypointPayload.')
+  }
+  if (lastEntrypointPayload.secretsRedacted !== true) {
+    throw new Error('Android native plugin lastEntrypointPayload must be redacted.')
+  }
+  for (const field of ['categories', 'extras']) {
+    if (!Array.isArray(lastEntrypointPayload[field])) {
+      throw new Error(`Android native plugin lastEntrypointPayload.${field} must be an array.`)
+    }
+  }
 
   if (assistantRole.roleHeld === false) {
     const availableFallback = payload.fallbackEntrypoints.some((entry) => entry?.available === true)
@@ -208,6 +263,12 @@ function validateNativePayload(payloadJson) {
   }
 
   return payload
+}
+
+function assertRequiredEntry(entries, id) {
+  if (!entries.some((entry) => entry?.id === id)) {
+    throw new Error(`Android native plugin payload is missing entry ${id}.`)
+  }
 }
 
 function assertStateMap(label, value, requiredKeys) {

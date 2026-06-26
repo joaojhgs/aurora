@@ -27,6 +27,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun nativeCapabilityManifest(invoke: Invoke) {
         val assistantRole = assistantRoleStatusObject()
+        val entrypoints = entrypointsArray()
         val microphoneGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
         val notificationsGranted = hasPostNotificationsPermission()
         val foregroundServiceReady = hasForegroundServiceMicrophonePermission() && microphoneGranted
@@ -58,6 +59,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.filePick", false)
         permissions.put("aurora.android.shareIntent", true)
         permissions.put("aurora.android.deepLink", true)
+        permissions.put("aurora.android.appWidget", true)
+        permissions.put("aurora.android.appShortcut", true)
+        permissions.put("aurora.android.quickTile", true)
+        permissions.put("aurora.android.entrypointPayload", true)
 
         val capabilities = JSObject()
         capabilities.put("android.assistantRole.status", true)
@@ -82,6 +87,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.filePick", false)
         capabilities.put("android.shareIntent", true)
         capabilities.put("android.deepLink", true)
+        capabilities.put("android.appWidget", true)
+        capabilities.put("android.appShortcut", true)
+        capabilities.put("android.quickTile", true)
+        capabilities.put("android.entrypointPayload", true)
         capabilities.put("android.fallbackEntrypoints", true)
 
         val permissionStates = JSObject()
@@ -101,6 +110,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.filePick", "degraded")
         permissionStates.put("aurora.android.shareIntent", "available")
         permissionStates.put("aurora.android.deepLink", "available")
+        permissionStates.put("aurora.android.appWidget", "fallback")
+        permissionStates.put("aurora.android.appShortcut", "fallback")
+        permissionStates.put("aurora.android.quickTile", "fallback")
+        permissionStates.put("aurora.android.entrypointPayload", "available")
 
         val capabilityStates = JSObject()
         capabilityStates.put("android.assistantRole.status", "available")
@@ -125,6 +138,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.filePick", "degraded")
         capabilityStates.put("android.shareIntent", "available")
         capabilityStates.put("android.deepLink", "available")
+        capabilityStates.put("android.appWidget", "fallback")
+        capabilityStates.put("android.appShortcut", "fallback")
+        capabilityStates.put("android.quickTile", "fallback")
+        capabilityStates.put("android.entrypointPayload", "available")
         capabilityStates.put("android.fallbackEntrypoints", "fallback")
 
         val ret = JSObject()
@@ -133,9 +150,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("capabilities", capabilities)
         ret.put("permissionStates", permissionStates)
         ret.put("capabilityStates", capabilityStates)
+        ret.put("mobileIntegrations", mobileIntegrationsArray())
+        ret.put("entrypoints", entrypoints)
         ret.put("assistantRole", assistantRole)
         ret.put("voiceForegroundService", voiceForeground)
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
+        ret.put("lastEntrypointPayload", lastEntrypointPayloadObject())
         ret.put("evidenceSource", "android-rolemanager-package-manager")
         ret.put("secretsRedacted", true)
         invoke.resolve(ret)
@@ -190,6 +210,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun fallbackEntrypoints(invoke: Invoke) {
         val ret = JSObject()
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
+        ret.put("entrypoints", entrypointsArray())
         ret.put("evidenceSource", "android-rolemanager-package-manager")
         ret.put("secretsRedacted", true)
         invoke.resolve(ret)
@@ -271,6 +292,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(ret)
     }
 
+    @Command
+    fun entrypointPayload(invoke: Invoke) {
+        val ret = JSObject()
+        ret.put("payload", lastEntrypointPayloadObject())
+        ret.put("entrypoints", entrypointsArray())
+        ret.put("evidenceSource", "android-intent-redacted")
+        ret.put("secretsRedacted", true)
+        invoke.resolve(ret)
+    }
+
     private fun assistantRoleStatusObject(): JSObject {
         val sdkSupportsRole = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val roleManager = roleManagerOrNull()
@@ -319,13 +350,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun fallbackEntrypointsArray(): JSArray {
         val fallbacks = JSArray()
-        fallbacks.put(fallback("app_open", "fallback", true, "android.deepLink", null, "available without assistant role"))
+        fallbacks.put(fallback("app_open", "fallback", true, "android.deepLink", null, "available without assistant role", "android.intent.action.MAIN"))
         fallbacks.put(fallback("push_to_talk", "degraded", hasRuntimePermission(Manifest.permission.RECORD_AUDIO), "android.microphoneCapture", "aurora.android.microphone", "requires microphone permission and backend audio evidence"))
         fallbacks.put(fallback("foreground_voice_controls", "degraded", voiceForegroundServiceStatusObject().getBoolean("startable"), "android.voiceForegroundService", "aurora.android.voiceForegroundService", "requires microphone plus Android foreground-service microphone readiness"))
         fallbacks.put(fallback("notification", "fallback", hasPostNotificationsPermission(), "android.notifications", "aurora.android.notifications", "requires notification permission on Android 13+"))
-        fallbacks.put(fallback("quick_tile", "degraded", true, "android.fallbackEntrypoints", null, "planned Android quick tile entrypoint; not assistant-role dependent"))
-        fallbacks.put(fallback("share_intent", "fallback", true, "android.shareIntent", "aurora.android.shareIntent", "available without assistant role"))
-        fallbacks.put(fallback("deep_link", "fallback", true, "android.deepLink", "aurora.android.deepLink", "available without assistant role"))
+        fallbacks.put(fallback("quick_tile", "fallback", true, "android.quickTile", "aurora.android.quickTile", "Quick Settings tile opens Aurora without assistant role", "android.service.quicksettings.action.QS_TILE"))
+        fallbacks.put(fallback("app_widget", "fallback", true, "android.appWidget", "aurora.android.appWidget", "home-screen widget opens Aurora without assistant role", "android.appwidget.action.APPWIDGET_UPDATE"))
+        fallbacks.put(fallback("app_shortcut", "fallback", true, "android.appShortcut", "aurora.android.appShortcut", "static launcher shortcut opens Aurora without assistant role", "android.intent.action.VIEW"))
+        fallbacks.put(fallback("share_intent", "fallback", true, "android.shareIntent", "aurora.android.shareIntent", "share sheet opens Aurora and records redacted intent metadata", "android.intent.action.SEND"))
+        fallbacks.put(fallback("deep_link", "fallback", true, "android.deepLink", "aurora.android.deepLink", "deep links open Aurora and record redacted URI metadata", "android.intent.action.VIEW"))
         return fallbacks
     }
 
@@ -336,6 +369,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capability: String,
         permission: String?,
         reason: String,
+        action: String? = null,
     ): JSObject {
         val ret = JSObject()
         ret.put("id", id)
@@ -344,6 +378,96 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("capability", capability)
         ret.put("permission", permission)
         ret.put("reason", reason)
+        ret.put("manifestDeclared", available)
+        ret.put("backendRequired", id == "share_intent" || id == "deep_link")
+        if (action != null) ret.put("intentAction", action)
+        return ret
+    }
+
+    private fun entrypointsArray(): JSArray {
+        val entrypoints = JSArray()
+        entrypoints.put(entrypoint("share_sheet", "Share sheet", "android.shareIntent", "aurora.android.shareIntent", "fallback", "android.intent.action.SEND", "text/*, image/*, application/pdf", true))
+        entrypoints.put(entrypoint("share_sheet_multiple", "Share sheet multiple", "android.shareIntent", "aurora.android.shareIntent", "fallback", "android.intent.action.SEND_MULTIPLE", "image/*, application/pdf", true))
+        entrypoints.put(entrypoint("process_text", "Selected text", "android.shareIntent", "aurora.android.shareIntent", "fallback", "android.intent.action.PROCESS_TEXT", "text/plain", true))
+        entrypoints.put(entrypoint("deep_link", "Aurora deep link", "android.deepLink", "aurora.android.deepLink", "fallback", "android.intent.action.VIEW", "aurora://assistant and https://aurora.local/assistant", true))
+        entrypoints.put(entrypoint("app_shortcut", "Launcher shortcut", "android.appShortcut", "aurora.android.appShortcut", "fallback", "android.intent.action.VIEW", "aurora://assistant/new", false))
+        entrypoints.put(entrypoint("app_widget", "Home-screen widget", "android.appWidget", "aurora.android.appWidget", "fallback", "android.appwidget.action.APPWIDGET_UPDATE", "home_screen", false))
+        entrypoints.put(entrypoint("quick_tile", "Quick Settings tile", "android.quickTile", "aurora.android.quickTile", "fallback", "android.service.quicksettings.action.QS_TILE", "qs_tile", false))
+        return entrypoints
+    }
+
+    private fun entrypoint(
+        id: String,
+        label: String,
+        capability: String,
+        permission: String,
+        state: String,
+        action: String,
+        intakeType: String,
+        backendRequired: Boolean,
+    ): JSObject {
+        val ret = JSObject()
+        ret.put("id", id)
+        ret.put("platform", "android")
+        ret.put("label", label)
+        ret.put("state", state)
+        ret.put("available", true)
+        ret.put("capability", capability)
+        ret.put("permission", permission)
+        ret.put("intentAction", action)
+        ret.put("intakeType", intakeType)
+        ret.put("manifestDeclared", true)
+        ret.put("backendRequired", backendRequired)
+        ret.put("payloadCommand", "entrypointPayload")
+        ret.put("reason", if (backendRequired) "native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success" else "native fallback opens Aurora without assistant role")
+        return ret
+    }
+
+    private fun mobileIntegrationsArray(): JSArray {
+        val integrations = JSArray()
+        integrations.put(mobileIntegration("androidShareSheet", "Android share sheet", "supported", "android.shareIntent", "aurora.android.shareIntent", "personal", "Share sheet intent filters are declared; payloads are redacted until backend context ingestion handles them."))
+        integrations.put(mobileIntegration("androidDeepLinks", "Android deep links", "supported", "android.deepLink", "aurora.android.deepLink", "personal", "Aurora and https deep links are declared through Android intent filters."))
+        integrations.put(mobileIntegration("androidStaticShortcut", "Android launcher shortcut", "supported", "android.appShortcut", "aurora.android.appShortcut", "personal", "Static shortcut metadata is packaged and opens Aurora through the native entrypoint activity."))
+        integrations.put(mobileIntegration("androidWidget", "Android home-screen widget", "supported-path", "android.appWidget", "aurora.android.appWidget", "personal", "Widget provider is packaged; device launcher placement remains user/OEM controlled."))
+        integrations.put(mobileIntegration("androidQuickTile", "Android Quick Settings tile", "supported-path", "android.quickTile", "aurora.android.quickTile", "personal", "Quick Settings tile service is packaged; tile placement remains user/OEM controlled."))
+        return integrations
+    }
+
+    private fun mobileIntegration(
+        id: String,
+        label: String,
+        support: String,
+        capability: String,
+        permission: String,
+        privacyClass: String,
+        userCopy: String,
+    ): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("id", id)
+        ret.put("label", label)
+        ret.put("support", support)
+        ret.put("capability", capability)
+        ret.put("permission", permission)
+        ret.put("privacyClass", privacyClass)
+        ret.put("evidenceSource", "android-manifest-merge-native-plugin")
+        ret.put("userCopy", userCopy)
+        ret.put("verifier", "tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke")
+        return ret
+    }
+
+    private fun lastEntrypointPayloadObject(): JSObject {
+        val payload = AuroraEntrypointStore.lastPayload()
+        val ret = JSObject()
+        ret.put("source", payload.optString("source", "none"))
+        ret.put("action", payload.opt("action"))
+        ret.put("type", payload.opt("type"))
+        ret.put("scheme", payload.opt("scheme"))
+        ret.put("host", payload.opt("host"))
+        ret.put("path", payload.opt("path"))
+        ret.put("categories", payload.optJSONArray("categories") ?: JSArray())
+        ret.put("extras", payload.optJSONArray("extras") ?: JSArray())
+        ret.put("secretsRedacted", true)
         return ret
     }
 
