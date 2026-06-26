@@ -585,8 +585,8 @@ describe('AuroraClient', () => {
     )
     expect(graph.byFeatureId['native:android:android.assistantRole.request']).toEqual(
       expect.objectContaining({
-        availability: 'degraded',
-        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'degraded' })])
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
       })
     )
     expect(graph.byFeatureId['native:android:android.microphoneCapture']).toEqual(
@@ -626,6 +626,107 @@ describe('AuroraClient', () => {
         availability: 'degraded',
         providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
       })
+    )
+  })
+
+  it('distinguishes Android assistant-role held, denied, and OEM-unavailable native states', () => {
+    const heldGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.request': false,
+          'android.assistantRole.held': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'degraded',
+          'android.assistantRole.held': 'available'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleHeld: true,
+          requestable: false,
+          reason: 'role_held'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(heldGraph.byFeatureId['native:android:android.assistantRole.held']).toEqual(
+      expect.objectContaining({ availability: 'available-local' })
+    )
+
+    const deniedGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'needs_native_permission',
+          'android.assistantRole.denied': 'needs_native_permission'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          denied: true,
+          requestable: false,
+          reason: 'request_denied'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(deniedGraph.byFeatureId['native:android:android.assistantRole.denied']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+
+    const oemUnavailableGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.available': false,
+          'android.assistantRole.request': false,
+          'android.assistantRole.oemUnavailable': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.available': 'unsupported_platform',
+          'android.assistantRole.request': 'unsupported_platform',
+          'android.assistantRole.oemUnavailable': 'unsupported_platform'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleAvailable: false,
+          requestable: false,
+          oemUnavailable: true,
+          reason: 'oem_unavailable'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.assistantRole.oemUnavailable']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({ availability: 'degraded' })
     )
   })
 
@@ -2577,9 +2678,10 @@ describe('AuroraClient', () => {
             return androidNativeCapabilityManifestFixture.assistantRole
           case 'requestAssistantRole':
             return {
-              started: false,
+              started: true,
+              requestCode: 4202,
               status: androidNativeCapabilityManifestFixture.assistantRole,
-              reason: 'package_not_qualified'
+              reason: 'requestable'
             }
           case 'fallbackEntrypoints':
             return androidNativeCapabilityManifestFixture.fallbackEntrypoints
@@ -2594,11 +2696,13 @@ describe('AuroraClient', () => {
         platform: 'android',
         assistantRole: expect.objectContaining({
           roleAvailable: true,
-          packageQualified: false,
+          packageQualified: true,
           roleHeld: false,
-          requestable: false,
+          requestable: true,
           oemUnavailable: false,
-          reason: 'package_not_qualified'
+          reason: 'requestable',
+          handlesAssistActivity: true,
+          declaresVoiceInteractionService: true
         }),
         permissionStates: expect.objectContaining({
           'aurora.android.microphone': 'needs_native_permission',
@@ -2609,8 +2713,11 @@ describe('AuroraClient', () => {
           'aurora.android.shareIntent': 'available'
         }),
         capabilityStates: expect.objectContaining({
-          'android.assistantRole.packageQualified': 'degraded',
+          'android.assistantRole.packageQualified': 'available',
+          'android.assistantRole.request': 'needs_native_permission',
           'android.assistantRole.held': 'needs_native_permission',
+          'android.assistantRole.denied': 'degraded',
+          'android.assistantRole.oemUnavailable': 'degraded',
           'android.foregroundService': 'needs_native_permission',
           'android.localFileRead': 'degraded',
           'android.fallbackEntrypoints': 'fallback'
@@ -2627,16 +2734,19 @@ describe('AuroraClient', () => {
       expect.objectContaining({
         roleName: 'android.app.role.ASSISTANT',
         roleAvailable: true,
-        packageQualified: false,
+        packageQualified: true,
         roleHeld: false,
-        requestable: false,
-        fallbackAvailable: true
+        requestable: true,
+        fallbackAvailable: true,
+        handlesAssistActivity: true,
+        declaresVoiceInteractionService: true
       })
     )
     await expect(transport.requestAndroidAssistantRole()).resolves.toEqual(
       expect.objectContaining({
-        started: false,
-        reason: 'package_not_qualified'
+        started: true,
+        requestCode: 4202,
+        reason: 'requestable'
       })
     )
     await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(

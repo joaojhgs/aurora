@@ -135,10 +135,26 @@ function validateNativePayload(payloadJson) {
     throw new Error(`Android native plugin payload platform must be android, got ${String(payload.platform)}.`)
   }
 
-  for (const field of ['roleAvailable', 'packageQualified', 'roleHeld', 'requestable', 'denied', 'oemUnavailable']) {
+  for (const field of [
+    'sdkSupportsRole',
+    'handlesAssistActivity',
+    'declaresVoiceInteractionService',
+    'roleAvailable',
+    'packageQualified',
+    'roleHeld',
+    'requestable',
+    'denied',
+    'oemUnavailable'
+  ]) {
     if (typeof assistantRole[field] !== 'boolean') {
       throw new Error(`Android native plugin assistantRole.${field} must be a boolean.`)
     }
+  }
+  if (assistantRole.packageQualified && (!assistantRole.handlesAssistActivity || !assistantRole.declaresVoiceInteractionService)) {
+    throw new Error('Android assistant role packageQualified requires both ASSIST activity and VoiceInteractionService evidence.')
+  }
+  if (assistantRole.requestable && (!assistantRole.roleAvailable || !assistantRole.packageQualified || assistantRole.roleHeld)) {
+    throw new Error('Android assistant role requestable must imply roleAvailable, packageQualified, and not roleHeld.')
   }
 
   assertStateMap('permissionStates', payload.permissionStates, [

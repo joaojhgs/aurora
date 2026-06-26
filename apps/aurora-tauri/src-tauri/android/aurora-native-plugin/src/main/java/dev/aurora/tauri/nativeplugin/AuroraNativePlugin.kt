@@ -178,13 +178,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val roleManager = roleManagerOrNull()
         val roleAvailable = roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
         val roleHeld = roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
-        val packageQualified = packageHandlesAssist() || packageDeclaresVoiceInteractionService()
+        val handlesAssistActivity = packageHandlesAssist()
+        val declaresVoiceInteractionService = packageDeclaresVoiceInteractionService()
+        val packageQualified = handlesAssistActivity && declaresVoiceInteractionService
         val requestable = roleAvailable && packageQualified && !roleHeld
         val oemUnavailable = sdkSupportsRole && !roleAvailable
 
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("roleName", RoleManager.ROLE_ASSISTANT)
+        ret.put("sdkSupportsRole", sdkSupportsRole)
+        ret.put("handlesAssistActivity", handlesAssistActivity)
+        ret.put("declaresVoiceInteractionService", declaresVoiceInteractionService)
         ret.put("roleAvailable", roleAvailable)
         ret.put("packageQualified", packageQualified)
         ret.put("roleHeld", roleHeld)
@@ -192,13 +197,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("denied", lastAssistantRoleDenied)
         ret.put("oemUnavailable", oemUnavailable)
         ret.put("fallbackAvailable", true)
-        ret.put("reason", assistantRoleReason(roleAvailable, packageQualified, roleHeld, oemUnavailable))
+        ret.put("reason", assistantRoleReason(sdkSupportsRole, roleAvailable, packageQualified, roleHeld, oemUnavailable))
         ret.put("evidenceSource", "android-rolemanager-package-manager")
         ret.put("secretsRedacted", true)
         return ret
     }
 
     private fun assistantRoleReason(
+        sdkSupportsRole: Boolean,
         roleAvailable: Boolean,
         packageQualified: Boolean,
         roleHeld: Boolean,
@@ -207,6 +213,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         if (roleHeld) return "role_held"
         if (lastAssistantRoleDenied) return "request_denied"
         if (oemUnavailable) return "oem_unavailable"
+        if (!sdkSupportsRole) return "unsupported_platform"
         if (!roleAvailable) return "unsupported_platform"
         if (!packageQualified) return "package_not_qualified"
         return "requestable"
@@ -249,10 +256,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun packageDeclaresVoiceInteractionService(): Boolean {
         val intent = Intent(VoiceInteractionService.SERVICE_INTERFACE).setPackage(activity.packageName)
-        val services = activity.packageManager.queryIntentServices(intent, PackageManager.MATCH_DISABLED_COMPONENTS)
+        val services = activity.packageManager.queryIntentServices(
+            intent,
+            PackageManager.MATCH_DISABLED_COMPONENTS or PackageManager.GET_META_DATA,
+        )
         return services.any { service ->
             service.serviceInfo?.enabled == true &&
-                service.serviceInfo?.permission == Manifest.permission.BIND_VOICE_INTERACTION
+                service.serviceInfo?.permission == Manifest.permission.BIND_VOICE_INTERACTION &&
+                service.serviceInfo?.metaData?.containsKey(VoiceInteractionService.SERVICE_META_DATA) == true
         }
     }
 
