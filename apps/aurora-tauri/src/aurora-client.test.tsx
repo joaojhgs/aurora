@@ -18,6 +18,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(runtime.client.transport.kind).toBe('mock')
     await expect(runtime.sidecarStatus()).resolves.toBeNull()
     await expect(runtime.nativePermissionStatus()).resolves.toBeNull()
+    await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
     await expect(runtime.shutdown()).resolves.toBeUndefined()
   })
 
@@ -30,6 +31,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(runtime.mode).toBe('desktop-thin')
     expect(runtime.client.transport.kind).toBe('http')
     await expect(runtime.sidecarStatus()).resolves.toBeNull()
+    await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
   })
 
   it('renders the shell without inventing sidecar state in non-Tauri test hosts', () => {
@@ -42,6 +44,8 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Audio bridge')
     expect(markup).toContain('Siri/Shortcuts/App Intents integration')
     expect(markup).toContain('no Siri replacement claim')
+    expect(markup).toContain('Android baseline')
+    expect(markup).toContain('Assistant role probe')
     expect(markup).toContain('Denied native defaults')
     expect(markup).toContain('mock')
     expect(markup).toContain('not used in thin mode')

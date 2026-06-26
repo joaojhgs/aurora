@@ -180,6 +180,8 @@ export type {
   SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,
+  TauriAndroidAssistantRoleStatus,
+  TauriAndroidBaselineStatus,
   TauriCommandNames,
   TauriInvoke,
   TauriLogTailRequest,

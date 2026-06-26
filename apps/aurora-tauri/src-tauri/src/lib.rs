@@ -169,6 +169,32 @@ struct NativeFeatureStatus {
     details: BTreeMap<String, Value>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidBaselineStatus {
+    platform: String,
+    state: String,
+    feature: String,
+    available: bool,
+    assistant_role: AndroidAssistantRoleStatus,
+    fallback_entrypoints: BTreeMap<String, bool>,
+    evidence_source: String,
+    secrets_redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidAssistantRoleStatus {
+    role_available: Option<bool>,
+    package_qualified: Option<bool>,
+    role_held: Option<bool>,
+    requestable: Option<bool>,
+    denied: Option<bool>,
+    oem_unavailable: Option<bool>,
+    probe_implemented: bool,
+    reason: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeNotificationRequest {
@@ -577,6 +603,20 @@ async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraComma
 }
 
 #[tauri::command]
+async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, AuroraCommandError> {
+    let status = android_baseline_status();
+    log_android_baseline_status(&status);
+    Ok(status)
+}
+
+fn log_android_baseline_status(status: &AndroidBaselineStatus) {
+    println!(
+        "aurora_android_baseline_status={}",
+        serde_json::to_string(&status).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+    );
+}
+
+#[tauri::command]
 async fn aurora_log_tail(
     request: Option<LogTailRequest>,
 ) -> Result<LogTailResult, AuroraCommandError> {
@@ -599,19 +639,31 @@ async fn aurora_log_tail(
 
 #[tauri::command]
 async fn aurora_secure_storage_get(key: String) -> Result<Value, AuroraCommandError> {
-    let entry = secure_storage_entry(&key)?;
-    let value = match entry.get_password() {
-        Ok(value) => Some(value),
-        Err(keyring::Error::NoEntry) => None,
-        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
-    };
-    Ok(json!({
-        "key": key,
-        "value": value,
-        "backend": "platform-keychain",
-        "persisted": true,
-        "secretsRedacted": true
-    }))
+    #[cfg(not(desktop))]
+    {
+        let _ = key;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+                .to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let entry = secure_storage_entry(&key)?;
+        let value = match entry.get_password() {
+            Ok(value) => Some(value),
+            Err(keyring::Error::NoEntry) => None,
+            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+        };
+        Ok(json!({
+            "key": key,
+            "value": value,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "secretsRedacted": true
+        }))
+    }
 }
 
 #[tauri::command]
@@ -619,31 +671,55 @@ async fn aurora_secure_storage_set(
     key: String,
     value: String,
 ) -> Result<Value, AuroraCommandError> {
-    let entry = secure_storage_entry(&key)?;
-    entry
-        .set_password(&value)
-        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
-    Ok(json!({
-        "key": key,
-        "ok": true,
-        "backend": "platform-keychain",
-        "persisted": true,
-        "secretsRedacted": true
-    }))
-}
+    #[cfg(not(desktop))]
+    {
+        let _ = (key, value);
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+                .to_string(),
+        ));
+    }
 
-#[tauri::command]
-async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraCommandError> {
-    let entry = secure_storage_entry(&key)?;
-    match entry.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
+    #[cfg(desktop)]
+    {
+        let entry = secure_storage_entry(&key)?;
+        entry
+            .set_password(&value)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+        Ok(json!({
             "key": key,
             "ok": true,
             "backend": "platform-keychain",
             "persisted": true,
             "secretsRedacted": true
-        })),
-        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_secure_storage_delete(key: String) -> Result<Value, AuroraCommandError> {
+    #[cfg(not(desktop))]
+    {
+        let _ = key;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "secure storage is disabled in the Android build baseline until AND-007 defines the native storage plugin"
+                .to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let entry = secure_storage_entry(&key)?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
+                "key": key,
+                "ok": true,
+                "backend": "platform-keychain",
+                "persisted": true,
+                "secretsRedacted": true
+            })),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
     }
 }
 
@@ -739,6 +815,7 @@ fn envelope(method: String, data: Value) -> AuroraEnvelope {
 }
 
 fn native_capability_manifest() -> NativeCapabilityManifest {
+    let desktop_platform = cfg!(desktop);
     let mut permissions = BTreeMap::new();
     permissions.insert("aurora.command".to_string(), true);
     permissions.insert("aurora.request".to_string(), true);
@@ -750,10 +827,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.sidecarStop".to_string(), true);
     permissions.insert("aurora.shutdown".to_string(), true);
     permissions.insert("aurora.logTail".to_string(), true);
-    permissions.insert("aurora.updater".to_string(), true);
-    permissions.insert("aurora.secureStorage".to_string(), true);
+    permissions.insert("aurora.updater".to_string(), false);
+    permissions.insert("aurora.secureStorage".to_string(), desktop_platform);
     permissions.insert("aurora.nativePermissionStatus".to_string(), true);
-    permissions.insert("aurora.trayStatus".to_string(), true);
+    permissions.insert("aurora.trayStatus".to_string(), desktop_platform);
     permissions.insert("aurora.notificationsStatus".to_string(), true);
     permissions.insert("aurora.notificationsSend".to_string(), false);
     permissions.insert("aurora.dialogStatus".to_string(), true);
@@ -768,14 +845,20 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.processSpawn".to_string(), false);
 
     let mut capabilities = BTreeMap::new();
-    capabilities.insert("desktop.thinGateway".to_string(), true);
-    capabilities.insert("desktop.localSidecarHealth".to_string(), true);
-    capabilities.insert("desktop.signedUpdater".to_string(), true);
-    capabilities.insert("desktop.bundledSidecarPolicy".to_string(), true);
+    capabilities.insert("desktop.thinGateway".to_string(), desktop_platform);
+    capabilities.insert("desktop.localSidecarHealth".to_string(), desktop_platform);
+    capabilities.insert("desktop.signedUpdater".to_string(), desktop_platform);
+    capabilities.insert("desktop.bundledSidecarPolicy".to_string(), desktop_platform);
     capabilities.insert("desktop.logTail".to_string(), false);
-    capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
-    capabilities.insert("desktop.tray".to_string(), true);
-    capabilities.insert("native.secureCredentialStorage".to_string(), true);
+    capabilities.insert(
+        "desktop.localSidecarSupervision".to_string(),
+        desktop_platform,
+    );
+    capabilities.insert("desktop.tray".to_string(), desktop_platform);
+    capabilities.insert(
+        "native.secureCredentialStorage".to_string(),
+        desktop_platform,
+    );
     capabilities.insert("native.permissionsManifest".to_string(), true);
     capabilities.insert("native.notifications".to_string(), false);
     capabilities.insert("native.dialogs".to_string(), false);
@@ -784,9 +867,18 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audio".to_string(), false);
     capabilities.insert("native.audioCapture".to_string(), false);
     capabilities.insert("native.audioPlayback".to_string(), false);
+    capabilities.insert(
+        "android.buildBaseline".to_string(),
+        cfg!(target_os = "android"),
+    );
+    capabilities.insert("android.assistantRoleProbe".to_string(), false);
+    capabilities.insert(
+        "android.fallbackEntrypoints".to_string(),
+        cfg!(target_os = "android"),
+    );
 
     NativeCapabilityManifest {
-        platform: "tauri-desktop".to_string(),
+        platform: native_platform().to_string(),
         permissions,
         capabilities,
         mobile_integrations: ios_mobile_integrations(),
@@ -858,6 +950,54 @@ fn ios_platform_limitations() -> Vec<NativePlatformLimitation> {
     }]
 }
 
+fn native_platform() -> &'static str {
+    if cfg!(target_os = "android") {
+        "android"
+    } else if cfg!(target_os = "ios") {
+        "ios"
+    } else {
+        "tauri-desktop"
+    }
+}
+
+fn android_baseline_status() -> AndroidBaselineStatus {
+    let is_android = cfg!(target_os = "android");
+    let mut fallback_entrypoints = BTreeMap::new();
+    fallback_entrypoints.insert("manualOpen".to_string(), is_android);
+    fallback_entrypoints.insert("remoteGateway".to_string(), is_android);
+    fallback_entrypoints.insert("shareIntentPlanned".to_string(), false);
+    fallback_entrypoints.insert("deepLinkPlanned".to_string(), false);
+
+    AndroidBaselineStatus {
+        platform: native_platform().to_string(),
+        state: if is_android {
+            "degraded".to_string()
+        } else {
+            "unsupported_platform".to_string()
+        },
+        feature: "android.buildBaseline".to_string(),
+        available: is_android,
+        assistant_role: AndroidAssistantRoleStatus {
+            role_available: None,
+            package_qualified: None,
+            role_held: None,
+            requestable: None,
+            denied: None,
+            oem_unavailable: None,
+            probe_implemented: false,
+            reason: if is_android {
+                "AND-001 proves Android packaging only; RoleManager qualification waits for AND-004 native probe evidence"
+                    .to_string()
+            } else {
+                "Android assistant-role status is unsupported on this platform".to_string()
+            },
+        },
+        fallback_entrypoints,
+        evidence_source: "tauri-android-baseline".to_string(),
+        secrets_redacted: true,
+    }
+}
+
 fn denied_native_feature_status(
     permission: &str,
     capability: &str,
@@ -876,6 +1016,7 @@ fn denied_native_feature_status(
     })
 }
 
+#[cfg(desktop)]
 fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     validate_secure_storage_key(key)?;
     keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
@@ -1209,6 +1350,8 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             install_tray(app.handle())?;
+            #[cfg(target_os = "android")]
+            log_android_baseline_status(&android_baseline_status());
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -1230,6 +1373,7 @@ pub fn run() {
             aurora_notification_send,
             aurora_dialog_status,
             aurora_audio_bridge_status,
+            aurora_android_baseline_status,
             aurora_log_tail,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
@@ -1290,7 +1434,7 @@ mod tests {
         );
         assert_eq!(manifest.permissions.get("aurora.sidecarStart"), Some(&true));
         assert_eq!(manifest.permissions.get("aurora.sidecarStop"), Some(&true));
-        assert_eq!(manifest.permissions.get("aurora.updater"), Some(&true));
+        assert_eq!(manifest.permissions.get("aurora.updater"), Some(&false));
         assert_eq!(
             manifest.capabilities.get("desktop.signedUpdater"),
             Some(&true)
@@ -1354,6 +1498,25 @@ mod tests {
             .iter()
             .any(|limitation| limitation.id == "noSiriReplacement"
                 && limitation.user_copy.contains("do not claim")));
+        assert_eq!(
+            manifest.capabilities.get("android.assistantRoleProbe"),
+            Some(&false)
+        );
+    }
+
+    #[test]
+    fn android_baseline_status_never_claims_assistant_role_without_probe() {
+        let status = android_baseline_status();
+        assert_eq!(status.assistant_role.probe_implemented, false);
+        assert_eq!(status.assistant_role.role_available, None);
+        assert_eq!(status.assistant_role.package_qualified, None);
+        assert_eq!(status.assistant_role.role_held, None);
+        assert_eq!(status.assistant_role.requestable, None);
+        assert_eq!(status.secrets_redacted, true);
+        assert_eq!(
+            status.fallback_entrypoints.get("shareIntentPlanned"),
+            Some(&false)
+        );
     }
 
     #[test]
