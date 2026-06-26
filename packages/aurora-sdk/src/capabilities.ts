@@ -17,6 +17,7 @@ import type {
   GetServicesResponse,
   MethodDescriptor,
   NativeCapabilityManifest,
+  NativeIntegrationSupport,
   NativeCapabilityState,
   PrivacyClass,
   ServiceInfo
@@ -315,8 +316,8 @@ function candidatesFromNativeManifest(
   manifest: NativeCapabilityManifest | null | undefined
 ): CapabilityProviderCandidate[] {
   if (!manifest) return []
-  return Object.entries(manifest.capabilities)
-    .map(([capability, enabled]) => {
+  return [
+    ...Object.entries(manifest.capabilities).map(([capability, enabled]) => {
       const featureId = `native:${manifest.platform}:${capability}`
       const missingPermissions = Object.entries(manifest.permissions)
         .filter(([, granted]) => !granted)
@@ -358,8 +359,60 @@ function candidatesFromNativeManifest(
         source: 'native-manifest',
         raw: null
       } satisfies CapabilityProviderCandidate
+    }),
+    ...(manifest.mobileIntegrations ?? []).map((integration) => {
+      const featureId = `native:${integration.platform}:${integration.id}`
+      const availability = availabilityForNativeIntegration(integration.support)
+      const disabledReasons =
+        availability === 'available-local'
+          ? []
+          : [`${integration.label}: ${integration.userCopy}`]
+      return {
+        id: `${featureId}@native:${integration.platform}`,
+        featureId,
+        providerIdentity: `native:${integration.platform}`,
+        providerId: `native:${integration.platform}`,
+        providerKind: 'native',
+        peerId: null,
+        serviceInstanceId: null,
+        module: 'Native',
+        method: integration.capability,
+        busTopic: null,
+        toolId: null,
+        resourceId: null,
+        availability,
+        selectable: availability === 'available-local',
+        selected: false,
+        trustTier: 'device',
+        routeability: integration.support,
+        freshness: emptyFreshness(integration.evidenceSource),
+        requiredPermissions: integration.permission ? [integration.permission] : [],
+        privacyClass: integration.privacyClass,
+        disabledReasons,
+        requiredAction: requiredActionForNativeIntegration(integration.support),
+        selector: { platform: integration.platform, capability: integration.capability },
+        source: 'native-manifest',
+        raw: null
+      } satisfies CapabilityProviderCandidate
     })
+  ]
     .sort((a, b) => a.featureId.localeCompare(b.featureId))
+}
+
+function availabilityForNativeIntegration(support: NativeIntegrationSupport): AvailabilityState {
+  if (support === 'supported') return 'available-local'
+  if (support === 'supported-path') return 'degraded'
+  if (support === 'planned') return 'pending'
+  if (support === 'blocked') return 'privacy-blocked'
+  return 'unsupported'
+}
+
+function requiredActionForNativeIntegration(support: NativeIntegrationSupport): string | null {
+  if (support === 'supported') return null
+  if (support === 'supported-path') return 'verify platform path in macOS/Xcode simulator or device'
+  if (support === 'planned') return 'implement scoped iOS plugin, App Intent, or extension task'
+  if (support === 'blocked') return 'satisfy platform entitlement, consent, or permission requirement'
+  return 'do not claim this platform capability'
 }
 
 function nodeFromCandidates(

@@ -40,6 +40,8 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Native boundary')
     expect(markup).toContain('Runtime mode')
     expect(markup).toContain('Audio bridge')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('no Siri replacement claim')
     expect(markup).toContain('Denied native defaults')
     expect(markup).toContain('mock')
     expect(markup).toContain('not used in thin mode')

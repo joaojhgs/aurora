@@ -8,11 +8,13 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, State,
+    Manager,
 };
+use tauri::{AppHandle, State};
 use thiserror::Error;
 use url::Url;
 
@@ -109,10 +111,39 @@ struct SidecarSession {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NativeCapabilityManifest {
     platform: String,
     permissions: BTreeMap<String, bool>,
     capabilities: BTreeMap<String, bool>,
+    mobile_integrations: Vec<NativeMobileIntegration>,
+    platform_limitations: Vec<NativePlatformLimitation>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeMobileIntegration {
+    platform: String,
+    id: String,
+    label: String,
+    support: String,
+    capability: String,
+    permission: Option<String>,
+    privacy_class: String,
+    evidence_source: String,
+    user_copy: String,
+    verifier: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativePlatformLimitation {
+    platform: String,
+    id: String,
+    label: String,
+    reason: String,
+    user_copy: String,
+    evidence_source: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -758,7 +789,73 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         platform: "tauri-desktop".to_string(),
         permissions,
         capabilities,
+        mobile_integrations: ios_mobile_integrations(),
+        platform_limitations: ios_platform_limitations(),
     }
+}
+
+fn ios_mobile_integrations() -> Vec<NativeMobileIntegration> {
+    vec![
+        NativeMobileIntegration {
+            platform: "ios".to_string(),
+            id: "appIntents".to_string(),
+            label: "Siri/Shortcuts/App Intents integration".to_string(),
+            support: "planned".to_string(),
+            capability: "ios.appIntents".to_string(),
+            permission: Some("aurora.ios.appIntents".to_string()),
+            privacy_class: "personal".to_string(),
+            evidence_source: "IOS-001-baseline".to_string(),
+            user_copy: "Scoped App Intents are planned for concrete Aurora actions; this baseline does not ship an executable intent.".to_string(),
+            verifier: "tauri ios build plus simulator/device App Intent invocation on macOS/Xcode".to_string(),
+        },
+        NativeMobileIntegration {
+            platform: "ios".to_string(),
+            id: "shortcuts".to_string(),
+            label: "Shortcuts invocation path".to_string(),
+            support: "supported-path".to_string(),
+            capability: "ios.shortcuts".to_string(),
+            permission: Some("aurora.ios.shortcuts".to_string()),
+            privacy_class: "personal".to_string(),
+            evidence_source: "IOS-001-baseline".to_string(),
+            user_copy: "Aurora may expose app-owned Shortcuts/App Intents flows after the iOS plugin and Xcode targets exist.".to_string(),
+            verifier: "simulator/device shortcut invocation through Xcode-managed iOS target".to_string(),
+        },
+        NativeMobileIntegration {
+            platform: "ios".to_string(),
+            id: "shareWidgetDeepLinks".to_string(),
+            label: "Share, widgets, and deep links".to_string(),
+            support: "planned".to_string(),
+            capability: "ios.shareWidgetDeepLinks".to_string(),
+            permission: Some("aurora.ios.shareWidgetDeepLinks".to_string()),
+            privacy_class: "personal".to_string(),
+            evidence_source: "IOS-001-baseline".to_string(),
+            user_copy: "Share extensions, widgets, and deep links stay scoped to app-owned intake surfaces.".to_string(),
+            verifier: "Xcode extension target smoke and Tauri mobile file-association check".to_string(),
+        },
+        NativeMobileIntegration {
+            platform: "ios".to_string(),
+            id: "siriReplacement".to_string(),
+            label: "Siri replacement".to_string(),
+            support: "unsupported".to_string(),
+            capability: "ios.siriReplacement".to_string(),
+            permission: None,
+            privacy_class: "public".to_string(),
+            evidence_source: "Apple-platform-policy".to_string(),
+            user_copy: "iOS does not allow Aurora to replace Siri as the default assistant.".to_string(),
+            verifier: "copy and capability review; no executable route should be exposed".to_string(),
+        },
+    ]
+}
+
+fn ios_platform_limitations() -> Vec<NativePlatformLimitation> {
+    vec![NativePlatformLimitation {
+        platform: "ios".to_string(),
+        id: "noSiriReplacement".to_string(),
+        label: "No Siri replacement".to_string(),
+        reason: "Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.".to_string(),
+        user_copy: "Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.".to_string(),
+        evidence_source: "Apple App Intents and SiriKit extension documentation".to_string(),
+    }]
 }
 
 fn denied_native_feature_status(
@@ -1110,6 +1207,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(sidecar_state.clone())
         .setup(|app| {
+            #[cfg(desktop)]
             install_tray(app.handle())?;
             #[cfg(desktop)]
             app.handle()
@@ -1153,6 +1251,7 @@ pub fn run() {
         .expect("error while running Aurora Tauri shell");
 }
 
+#[cfg(desktop)]
 fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -1233,6 +1332,28 @@ mod tests {
         );
         assert_eq!(manifest.capabilities.get("native.dialogs"), Some(&false));
         assert_eq!(manifest.capabilities.get("native.audio"), Some(&false));
+        assert!(manifest
+            .mobile_integrations
+            .iter()
+            .any(|integration| integration.id == "appIntents"
+                && integration.support == "planned"
+                && integration.label.contains("Siri/Shortcuts/App Intents")));
+        assert!(manifest
+            .mobile_integrations
+            .iter()
+            .any(|integration| integration.id == "shortcuts"
+                && integration.support == "supported-path"));
+        assert!(manifest
+            .mobile_integrations
+            .iter()
+            .any(|integration| integration.id == "siriReplacement"
+                && integration.support == "unsupported"
+                && integration.user_copy.contains("does not allow")));
+        assert!(manifest
+            .platform_limitations
+            .iter()
+            .any(|limitation| limitation.id == "noSiriReplacement"
+                && limitation.user_copy.contains("do not claim")));
     }
 
     #[test]

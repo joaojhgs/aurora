@@ -450,6 +450,67 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('models iOS invocation through App Intents and Shortcuts without a Siri replacement claim', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: nativeCapabilityManifestFixture,
+      transportKind: 'tauri-local'
+    })
+
+    expect(nativeCapabilityManifestFixture.mobileIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'appIntents',
+          label: 'Siri/Shortcuts/App Intents integration',
+          support: 'planned'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'shortcuts',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'siriReplacement',
+          support: 'unsupported',
+          userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
+        })
+      ])
+    )
+    expect(nativeCapabilityManifestFixture.platformLimitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'noSiriReplacement',
+          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+        })
+      ])
+    )
+
+    expect(graph.explain('native:ios:appIntents')).toEqual(
+      expect.objectContaining({
+        state: 'pending',
+        routeable: false,
+        nextRepairAction: 'implement scoped iOS plugin, App Intent, or extension task'
+      })
+    )
+    expect(graph.explain('native:ios:shortcuts')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:siriReplacement')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        routeable: false,
+        nextRepairAction: 'do not claim this platform capability'
+      })
+    )
+  })
+
   it('explains policy, selector, stale, and unsupported capability states', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,

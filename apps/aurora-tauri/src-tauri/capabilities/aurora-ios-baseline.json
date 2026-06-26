@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "aurora-main",
-  "description": "Main Aurora shell capability. Grants only the TAURI-004 SDK bridge, native manifest, sidecar health, log-tail status, explicit denied native helper commands, shutdown, and minimal window/app/event primitives.",
+  "identifier": "aurora-ios-baseline",
+  "description": "IOS-001 baseline capability for the Tauri iOS shell. Grants the Aurora bridge and native manifest commands but omits desktop-only updater permissions.",
   "windows": ["main"],
   "permissions": [
     "core:app:default",

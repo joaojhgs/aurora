@@ -1561,4 +1561,30 @@ export interface NativeCapabilityManifest {
   platform: 'tauri-desktop' | 'android' | 'ios' | string
   permissions: Record<string, boolean>
   capabilities: Record<string, boolean>
+  mobileIntegrations?: NativeMobileIntegration[]
+  platformLimitations?: NativePlatformLimitation[]
+}
+
+export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
+
+export interface NativeMobileIntegration {
+  platform: 'android' | 'ios' | string
+  id: string
+  label: string
+  support: NativeIntegrationSupport
+  capability: string
+  permission: string | null
+  privacyClass: PrivacyClass
+  evidenceSource: string
+  userCopy: string
+  verifier: string
+}
+
+export interface NativePlatformLimitation {
+  platform: 'android' | 'ios' | string
+  id: string
+  label: string
+  reason: string
+  userCopy: string
+  evidenceSource: string
 }

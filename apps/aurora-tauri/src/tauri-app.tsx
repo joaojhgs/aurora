@@ -71,6 +71,7 @@ export function AuroraTauriApp() {
             <div><dt>Notifications</dt><dd>{nativeFeatureLabel(nativeFeatures.notifications)}</dd></div>
             <div><dt>Dialogs</dt><dd>{nativeFeatureLabel(nativeFeatures.dialogs)}</dd></div>
             <div><dt>Audio bridge</dt><dd>{nativeFeatureLabel(nativeFeatures.audio)}</dd></div>
+            <div><dt>iOS invocation</dt><dd>Siri/Shortcuts/App Intents integration; no Siri replacement claim.</dd></div>
             <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
           </dl>
           <button className="ata-secondary" type="button" onClick={() => void runtime.shutdown()}>

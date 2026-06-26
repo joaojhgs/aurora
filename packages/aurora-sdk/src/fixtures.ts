@@ -2967,6 +2967,8 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
   capabilities: {
     'desktop.thinGateway': true,
     'desktop.localSidecarHealth': true,
+    'desktop.signedUpdater': true,
+    'desktop.bundledSidecarPolicy': true,
     'desktop.logTail': false,
     'desktop.localSidecarSupervision': true,
     'desktop.tray': true,
@@ -2979,7 +2981,67 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'native.audio': false,
     'native.audioCapture': false,
     'native.audioPlayback': false
-  }
+  },
+  mobileIntegrations: [
+    {
+      platform: 'ios',
+      id: 'appIntents',
+      label: 'Siri/Shortcuts/App Intents integration',
+      support: 'planned',
+      capability: 'ios.appIntents',
+      permission: 'aurora.ios.appIntents',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-001-baseline',
+      userCopy: 'Scoped App Intents are planned for concrete Aurora actions; this baseline does not ship an executable intent.',
+      verifier: 'tauri ios build plus simulator/device App Intent invocation on macOS/Xcode'
+    },
+    {
+      platform: 'ios',
+      id: 'shortcuts',
+      label: 'Shortcuts invocation path',
+      support: 'supported-path',
+      capability: 'ios.shortcuts',
+      permission: 'aurora.ios.shortcuts',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-001-baseline',
+      userCopy: 'Aurora may expose app-owned Shortcuts/App Intents flows after the iOS plugin and Xcode targets exist.',
+      verifier: 'simulator/device shortcut invocation through Xcode-managed iOS target'
+    },
+    {
+      platform: 'ios',
+      id: 'shareWidgetDeepLinks',
+      label: 'Share, widgets, and deep links',
+      support: 'planned',
+      capability: 'ios.shareWidgetDeepLinks',
+      permission: 'aurora.ios.shareWidgetDeepLinks',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-001-baseline',
+      userCopy: 'Share extensions, widgets, and deep links stay scoped to app-owned intake surfaces.',
+      verifier: 'Xcode extension target smoke and Tauri mobile file-association check'
+    },
+    {
+      platform: 'ios',
+      id: 'siriReplacement',
+      label: 'Siri replacement',
+      support: 'unsupported',
+      capability: 'ios.siriReplacement',
+      permission: null,
+      privacyClass: 'public',
+      evidenceSource: 'Apple-platform-policy',
+      userCopy: 'iOS does not allow Aurora to replace Siri as the default assistant.',
+      verifier: 'copy and capability review; no executable route should be exposed'
+    }
+  ],
+  platformLimitations: [
+    {
+      platform: 'ios',
+      id: 'noSiriReplacement',
+      label: 'No Siri replacement',
+      reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.',
+      userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.',
+      evidenceSource: 'Apple App Intents and SiriKit extension documentation'
+    }
+  ]
 }
 
 const idleModelProgress = (operationType: string) => ({
