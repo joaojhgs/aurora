@@ -7,7 +7,7 @@ The skeleton is intentionally evidence-only. It reports Android package, permiss
 ## Commands
 
 - `nativeCapabilityManifest`: returns Android native capability and permission states for SDK/native manifest ingestion. The payload keeps backward-compatible boolean `permissions`/`capabilities` maps and also includes `permissionStates`/`capabilityStates` so UI can distinguish `available`, `needs_native_permission`, `unsupported_platform`, `degraded`, and `fallback`.
-- `assistantRoleStatus`: probes `RoleManager.ROLE_ASSISTANT` on Android Q+ and package qualification hints from the manifest/intent surface.
+- `assistantRoleStatus`: probes `RoleManager.ROLE_ASSISTANT` on Android Q+ and package qualification evidence from the enabled `ACTION_ASSIST` activity plus enabled `VoiceInteractionService` declaration with `BIND_VOICE_INTERACTION` and `android.voice_interaction` metadata.
 - `requestAssistantRole`: starts the Android role request only when the OS role is available and the package appears qualified.
 - `fallbackEntrypoints`: returns push-to-talk/share/deep-link fallback availability so UI can keep non-role flows visible.
 - `recordAssistantRoleResult`: records a grant/denial result code after a role request smoke test or future activity-result hook.
@@ -16,7 +16,7 @@ The skeleton is intentionally evidence-only. It reports Android package, permiss
 
 The Android provider reports status for:
 
-- assistant-role availability, package qualification, held state, requestability, denial, OEM/platform unavailability, and fallback availability;
+- assistant-role availability, package qualification, held state, requestability, denial, OEM/platform unavailability, fallback availability, and the separate `handlesAssistActivity` / `declaresVoiceInteractionService` qualification signals;
 - microphone, notifications, biometric, local-network, foreground-service microphone, local file read/write/pick, share intent, deep link, and fallback entrypoints;
 - redacted evidence source `android-rolemanager-package-manager`.
 

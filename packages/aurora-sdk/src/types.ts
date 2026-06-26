@@ -1605,6 +1605,9 @@ export type AndroidNativeState =
 export interface AndroidAssistantRoleStatus {
   platform: 'android' | string
   roleName: string
+  sdkSupportsRole?: boolean
+  handlesAssistActivity?: boolean
+  declaresVoiceInteractionService?: boolean
   roleAvailable: boolean
   packageQualified: boolean
   roleHeld: boolean

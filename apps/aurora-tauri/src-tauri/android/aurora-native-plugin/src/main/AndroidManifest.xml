@@ -7,17 +7,26 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application>
-        <!-- Disabled until AND-004 implements the complete VoiceInteractionService qualification flow. -->
         <service
             android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:label="Aurora"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/aurora_voice_interaction_service" />
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionSessionService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="Aurora"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
         <activity
             android:name="dev.aurora.tauri.nativeplugin.AuroraAssistActivity"
