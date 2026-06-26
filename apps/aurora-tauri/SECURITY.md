@@ -25,11 +25,11 @@ TAURI-002, TAURI-004, and TAURI-006 expose only the minimum command and capabili
 | `aurora_audio_bridge_status` | Reports raw-audio bridge readiness and required consent/backend evidence. | `aurora-audio-bridge` | Microphone capture, live audio streaming, and playback control are denied by default. |
 | `aurora_shutdown` | Stops managed sidecar if present, then exits the shell cleanly. | `aurora-shutdown` | Does not terminate non-managed external Aurora processes. |
 
-The Tauri updater plugin is also granted through `updater:default`. It validates signed updater artifacts against the configured public key and does not expose filesystem, shell, process-spawn, or arbitrary network powers to Aurora screens.
+The Tauri updater plugin is also granted on desktop through `updater:default`. It validates signed updater artifacts against the configured public key and does not expose filesystem, shell, process-spawn, or arbitrary network powers to Aurora screens. The IOS-001 baseline uses `aurora-ios-baseline` and does not grant updater permissions because the updater plugin is desktop-only in this shell.
 
 ## Capability File
 
-`src-tauri/capabilities/aurora-main.json` is the only enabled capability in `tauri.conf.json`. It grants:
+`src-tauri/capabilities/aurora-main.json` is the enabled desktop capability in `tauri.conf.json`. It grants:
 
 - `core:app:default`
 - `core:event:default`
@@ -37,6 +37,8 @@ The Tauri updater plugin is also granted through `updater:default`. It validates
 - Aurora native permission, tray, notification, dialog, and audio status commands
 - `updater:default`
 - the Aurora app-command permissions listed above
+
+`src-tauri/tauri.ios.conf.json` switches iOS builds to `src-tauri/capabilities/aurora-ios-baseline.json`, which grants the same Aurora bridge/status command permissions but omits desktop-only `updater:default`.
 
 ## Denied By Default
 
