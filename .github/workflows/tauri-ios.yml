@@ -67,4 +67,4 @@ jobs:
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
-        run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim
+        run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim --config src-tauri/tauri.ios.conf.json
