@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle,
+    Manager,
 };
-use tauri::{Manager, State};
+use tauri::{AppHandle, State};
 use thiserror::Error;
 use url::Url;
 
