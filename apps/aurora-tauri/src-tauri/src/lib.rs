@@ -507,14 +507,17 @@ async fn aurora_sidecar_status(
 }
 
 #[tauri::command]
-async fn aurora_native_capability_manifest() -> Result<NativeCapabilityManifest, AuroraCommandError>
-{
-    Ok(native_capability_manifest())
+async fn aurora_native_capability_manifest(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    native_capability_manifest_value(native).await
 }
 
 #[tauri::command]
-async fn native_capabilities() -> Result<NativeCapabilityManifest, AuroraCommandError> {
-    Ok(native_capability_manifest())
+async fn native_capabilities(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    native_capability_manifest_value(native).await
 }
 
 #[tauri::command]
@@ -638,6 +641,31 @@ async fn aurora_android_native_plugin_payload(
         Err(AuroraCommandError::UnsupportedFeature(
             "Aurora Android native plugin is only available in the Android Tauri shell".to_string(),
         ))
+    }
+}
+
+async fn native_capability_manifest_value(
+    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = native.handle.as_ref().ok_or_else(|| {
+            AuroraCommandError::AndroidNativePlugin(
+                "Aurora Android native plugin handle was not registered".to_string(),
+            )
+        })?;
+        let payload = handle
+            .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
+            .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))?;
+        log_android_native_plugin_payload(&payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        serde_json::to_value(native_capability_manifest())
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
     }
 }
 

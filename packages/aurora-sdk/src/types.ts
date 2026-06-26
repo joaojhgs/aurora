@@ -1561,6 +1561,8 @@ export interface NativeCapabilityManifest {
   platform: 'tauri-desktop' | 'android' | 'ios' | string
   permissions: Record<string, boolean>
   capabilities: Record<string, boolean>
+  permissionStates?: Record<string, AndroidNativeState>
+  capabilityStates?: Record<string, AndroidNativeState>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
   assistantRole?: AndroidAssistantRoleStatus | null
@@ -1627,4 +1629,6 @@ export interface AndroidFallbackEntrypoint {
   state: AndroidNativeState
   available: boolean
   reason: string
+  capability?: string
+  permission?: string | null
 }

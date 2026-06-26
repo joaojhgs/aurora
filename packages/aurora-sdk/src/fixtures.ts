@@ -3051,20 +3051,68 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'aurora.android.assistantRoleRequest': false,
     'aurora.android.microphone': false,
     'aurora.android.notifications': false,
+    'aurora.android.biometric': false,
+    'aurora.android.localNetwork': true,
     'aurora.android.foregroundServiceMicrophone': false,
+    'aurora.android.localFileRead': false,
+    'aurora.android.localFileWrite': false,
+    'aurora.android.filePick': false,
     'aurora.android.shareIntent': true,
     'aurora.android.deepLink': true
   },
   capabilities: {
     'android.assistantRole.status': true,
+    'android.assistantRole.available': true,
+    'android.assistantRole.packageQualified': false,
     'android.assistantRole.request': false,
     'android.assistantRole.held': false,
+    'android.assistantRole.denied': false,
+    'android.assistantRole.oemUnavailable': false,
     'android.microphoneCapture': false,
     'android.notifications': false,
+    'android.biometric': false,
+    'android.localNetwork': true,
     'android.foregroundService': false,
+    'android.localFileRead': false,
+    'android.localFileWrite': false,
+    'android.filePick': false,
     'android.shareIntent': true,
     'android.deepLink': true,
     'android.fallbackEntrypoints': true
+  },
+  permissionStates: {
+    'aurora.android.assistantRoleStatus': 'available',
+    'aurora.android.assistantRoleRequest': 'degraded',
+    'aurora.android.microphone': 'needs_native_permission',
+    'aurora.android.notifications': 'needs_native_permission',
+    'aurora.android.biometric': 'unsupported_platform',
+    'aurora.android.localNetwork': 'available',
+    'aurora.android.foregroundServiceMicrophone': 'needs_native_permission',
+    'aurora.android.localFileRead': 'degraded',
+    'aurora.android.localFileWrite': 'degraded',
+    'aurora.android.filePick': 'degraded',
+    'aurora.android.shareIntent': 'available',
+    'aurora.android.deepLink': 'available'
+  },
+  capabilityStates: {
+    'android.assistantRole.status': 'available',
+    'android.assistantRole.available': 'available',
+    'android.assistantRole.packageQualified': 'degraded',
+    'android.assistantRole.request': 'degraded',
+    'android.assistantRole.held': 'needs_native_permission',
+    'android.assistantRole.denied': 'available',
+    'android.assistantRole.oemUnavailable': 'available',
+    'android.microphoneCapture': 'needs_native_permission',
+    'android.notifications': 'needs_native_permission',
+    'android.biometric': 'unsupported_platform',
+    'android.localNetwork': 'available',
+    'android.foregroundService': 'needs_native_permission',
+    'android.localFileRead': 'degraded',
+    'android.localFileWrite': 'degraded',
+    'android.filePick': 'degraded',
+    'android.shareIntent': 'available',
+    'android.deepLink': 'available',
+    'android.fallbackEntrypoints': 'fallback'
   },
   assistantRole: {
     platform: 'android',
@@ -3082,21 +3130,51 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
   },
   fallbackEntrypoints: [
     {
+      id: 'app_open',
+      state: 'fallback',
+      available: true,
+      capability: 'android.deepLink',
+      permission: null,
+      reason: 'available without assistant role'
+    },
+    {
       id: 'push_to_talk',
       state: 'needs_native_permission',
       available: false,
+      capability: 'android.microphoneCapture',
+      permission: 'aurora.android.microphone',
       reason: 'requires microphone permission and backend audio evidence'
+    },
+    {
+      id: 'notification',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'android.notifications',
+      permission: 'aurora.android.notifications',
+      reason: 'requires notification permission on Android 13+'
+    },
+    {
+      id: 'quick_tile',
+      state: 'degraded',
+      available: true,
+      capability: 'android.fallbackEntrypoints',
+      permission: null,
+      reason: 'planned Android quick tile entrypoint; not assistant-role dependent'
     },
     {
       id: 'share_intent',
       state: 'fallback',
       available: true,
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
       reason: 'available without assistant role'
     },
     {
       id: 'deep_link',
       state: 'fallback',
       available: true,
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
       reason: 'available without assistant role'
     }
   ],

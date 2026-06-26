@@ -1,5 +1,6 @@
 import { describeRegistry } from './descriptors.js'
 import type {
+  AndroidNativeState,
   AdminOverviewManifest,
   AdminOverviewManifestInput,
   AdminOverviewServiceSummary,
@@ -217,7 +218,7 @@ function nativeCapabilityState(manifest: NativeCapabilityManifest | null | undef
     availability: 'available-local',
     permissions: { ...manifest.permissions },
     capabilityKeys: Object.keys(manifest.capabilities).sort(),
-    evidenceSource: 'native-manifest'
+    evidenceSource: manifest.evidenceSource ?? 'native-manifest'
   }
 }
 
@@ -319,13 +320,11 @@ function candidatesFromNativeManifest(
   return [
     ...Object.entries(manifest.capabilities).map(([capability, enabled]) => {
       const featureId = `native:${manifest.platform}:${capability}`
+      const nativeState = manifest.capabilityStates?.[capability]
       const missingPermissions = nativeRequiredPermissions(capability, manifest.permissions)
         .filter((permission) => manifest.permissions[permission] === false)
-      const availability: AvailabilityState = enabled
-        ? missingPermissions.length > 0
-          ? 'privacy-blocked'
-          : 'available-local'
-        : 'unsupported'
+      const availability = availabilityForNativeState(nativeState, enabled, missingPermissions)
+      const disabledReasons = disabledReasonsForNativeState(nativeState, enabled, missingPermissions)
       return {
         id: `${featureId}@native:${manifest.platform}`,
         featureId,
@@ -343,17 +342,12 @@ function candidatesFromNativeManifest(
         selectable: availability === 'available-local',
         selected: false,
         trustTier: 'device',
-        routeability: enabled ? 'native-manifest' : 'disabled',
-        freshness: emptyFreshness('native-manifest'),
+        routeability: nativeState ?? (enabled ? 'native-manifest' : 'disabled'),
+        freshness: emptyFreshness(manifest.evidenceSource ?? 'native-manifest'),
         requiredPermissions: missingPermissions,
         privacyClass: nativePrivacyClass(capability),
-        disabledReasons: enabled ? missingPermissions.map((permission) => `native permission missing: ${permission}`) : ['native capability disabled'],
-        requiredAction:
-          availability === 'privacy-blocked'
-            ? 'grant required native permission'
-            : availability === 'unsupported'
-              ? 'enable native capability in manifest'
-              : null,
+        disabledReasons,
+        requiredAction: requiredActionForNativeState(nativeState, availability),
         selector: { platform: manifest.platform, capability },
         source: 'native-manifest',
         raw: null
@@ -398,6 +392,55 @@ function candidatesFromNativeManifest(
     .sort((a, b) => a.featureId.localeCompare(b.featureId))
 }
 
+function availabilityForNativeState(
+  state: AndroidNativeState | undefined,
+  enabled: boolean,
+  missingPermissions: string[]
+): AvailabilityState {
+  if (state === 'available') return missingPermissions.length > 0 ? 'privacy-blocked' : 'available-local'
+  if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'degraded' || state === 'fallback') return 'degraded'
+  if (state === 'unsupported_platform') return 'unsupported'
+  return enabled
+    ? missingPermissions.length > 0
+      ? 'privacy-blocked'
+      : 'available-local'
+    : 'unsupported'
+}
+
+function disabledReasonsForNativeState(
+  state: AndroidNativeState | undefined,
+  enabled: boolean,
+  missingPermissions: string[]
+): string[] {
+  if (state === 'needs_native_permission') {
+    return missingPermissions.length > 0
+      ? missingPermissions.map((permission) => `native permission missing: ${permission}`)
+      : ['native permission missing']
+  }
+  if (state === 'degraded') return ['native capability degraded']
+  if (state === 'fallback') return ['native fallback path only']
+  if (state === 'unsupported_platform') return ['native platform unsupported']
+  return enabled
+    ? missingPermissions.map((permission) => `native permission missing: ${permission}`)
+    : ['native capability disabled']
+}
+
+function requiredActionForNativeState(
+  state: AndroidNativeState | undefined,
+  availability: AvailabilityState
+): string | null {
+  if (state === 'needs_native_permission' || availability === 'privacy-blocked') {
+    return 'grant required native permission'
+  }
+  if (state === 'degraded') return 'use the supported subset or complete native integration'
+  if (state === 'fallback') return 'use fallback entrypoint until primary native role is available'
+  if (state === 'unsupported_platform' || availability === 'unsupported') {
+    return 'do not claim this platform capability'
+  }
+  return null
+}
+
 function availabilityForNativeIntegration(support: NativeIntegrationSupport): AvailabilityState {
   if (support === 'supported') return 'available-local'
   if (support === 'supported-path') return 'degraded'
@@ -424,8 +467,11 @@ function nativeRequiredPermissions(capability: string, permissions: Record<strin
   if (normalized.includes('foregroundservice')) requestedTokens.push('foregroundservice')
   if (normalized.includes('shareintent')) requestedTokens.push('shareintent')
   if (normalized.includes('deeplink')) requestedTokens.push('deeplink')
+  if (normalized.includes('biometric')) requestedTokens.push('biometric')
+  if (normalized.includes('localnetwork')) requestedTokens.push('localnetwork')
   if (normalized.includes('securecredentialstorage')) requestedTokens.push('securestorage', 'credentialstorage')
   if (normalized.includes('securefilehandles')) requestedTokens.push('securefile')
+  if (normalized.includes('filepick')) requestedTokens.push('filepick', 'securefile')
   if (normalized.includes('localfileread')) requestedTokens.push('localfileread')
   if (normalized.includes('localfilewrite')) requestedTokens.push('localfilewrite')
   if (normalized.includes('dialog')) requestedTokens.push('dialog')
