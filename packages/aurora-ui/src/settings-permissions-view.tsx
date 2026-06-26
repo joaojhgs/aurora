@@ -327,15 +327,18 @@ function nativePermissionCards(
     const capabilityEnabled = capability?.enabled ?? granted
     const nativeState = capability?.nativeState ?? permission?.nativeState ?? null
     const state = availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
+    const requestEnabled = !granted && nativeRequestAvailable(name, snapshot)
     return {
       id: name,
       label: nativePermissionLabel(name),
       state,
       granted,
       capabilityEnabled,
-      requestEnabled: false,
+      requestEnabled,
       detail: granted
         ? 'Native manifest reports this permission as granted.'
+        : requestEnabled
+          ? 'Native manifest advertises an Android permission request command for this state.'
         : nativeState === 'degraded'
           ? 'Native manifest reports a degraded or partial platform path for this feature.'
           : nativeState === 'fallback'
@@ -345,6 +348,32 @@ function nativePermissionCards(
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
+}
+
+function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
+  if (snapshot.nativePlatform !== 'android' || !snapshot.nativeAvailable) return false
+  const normalized = name.toLowerCase()
+  const requestNames = new Set([
+    ...snapshot.nativePermissions.filter((permission) => permission.granted).map((permission) => permission.name.toLowerCase()),
+    ...snapshot.nativeCapabilities.filter((capability) => capability.enabled).map((capability) => capability.name.toLowerCase())
+  ])
+  if (normalized.includes('assistantrole')) {
+    return requestNames.has('aurora.android.assistantrolerequest') ||
+      requestNames.has('android.assistantrole.request')
+  }
+  if (normalized.includes('microphone') || normalized.includes('audiocapture')) {
+    return requestNames.has('aurora.android.microphonerequest') ||
+      requestNames.has('android.microphonepermissionrequest')
+  }
+  if (normalized.includes('notification')) {
+    return requestNames.has('aurora.android.notificationsrequest') ||
+      requestNames.has('android.notificationpermissionrequest')
+  }
+  if (normalized.includes('voiceforeground') || normalized.includes('foregroundservice')) {
+    return requestNames.has('aurora.android.voiceforegroundstart') ||
+      requestNames.has('android.voiceforegroundservice.start')
+  }
+  return false
 }
 
 function availabilityFromNativeState(

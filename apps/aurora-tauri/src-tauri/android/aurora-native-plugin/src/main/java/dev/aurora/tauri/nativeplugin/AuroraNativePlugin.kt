@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.service.voice.VoiceInteractionService
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.TauriPlugin
@@ -17,6 +18,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 
 private const val ASSISTANT_ROLE_REQUEST_CODE = 4202
+private const val ANDROID_PERMISSION_REQUEST_CODE = 4204
 
 @TauriPlugin
 class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
@@ -28,6 +30,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val microphoneGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
         val notificationsGranted = hasPostNotificationsPermission()
         val foregroundServiceReady = hasForegroundServiceMicrophonePermission() && microphoneGranted
+        val voiceForeground = voiceForegroundServiceStatusObject(microphoneGranted, notificationsGranted, foregroundServiceReady)
         val biometricReady = hasBiometricCapability()
         val localNetworkReady = hasPackagePermission(Manifest.permission.INTERNET) &&
             hasPackagePermission(Manifest.permission.ACCESS_NETWORK_STATE)
@@ -42,10 +45,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.assistantRoleStatus", true)
         permissions.put("aurora.android.assistantRoleRequest", assistantRoleRequestable)
         permissions.put("aurora.android.microphone", microphoneGranted)
+        permissions.put("aurora.android.microphoneRequest", !microphoneGranted)
         permissions.put("aurora.android.notifications", notificationsGranted)
+        permissions.put("aurora.android.notificationsRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         permissions.put("aurora.android.biometric", biometricReady)
         permissions.put("aurora.android.localNetwork", localNetworkReady)
         permissions.put("aurora.android.foregroundServiceMicrophone", foregroundServiceReady)
+        permissions.put("aurora.android.voiceForegroundService", foregroundServiceReady)
+        permissions.put("aurora.android.voiceForegroundStart", voiceForeground.getBoolean("startable"))
         permissions.put("aurora.android.localFileRead", false)
         permissions.put("aurora.android.localFileWrite", false)
         permissions.put("aurora.android.filePick", false)
@@ -61,10 +68,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.assistantRole.denied", assistantRoleDenied)
         capabilities.put("android.assistantRole.oemUnavailable", assistantRoleOemUnavailable)
         capabilities.put("android.microphoneCapture", microphoneGranted)
+        capabilities.put("android.microphonePermissionRequest", !microphoneGranted)
         capabilities.put("android.notifications", notificationsGranted)
+        capabilities.put("android.notificationPermissionRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         capabilities.put("android.biometric", biometricReady)
         capabilities.put("android.localNetwork", localNetworkReady)
         capabilities.put("android.foregroundService", foregroundServiceReady)
+        capabilities.put("android.voiceForegroundService", foregroundServiceReady)
+        capabilities.put("android.voiceForegroundService.running", voiceForeground.getBoolean("running"))
+        capabilities.put("android.voiceForegroundService.start", voiceForeground.getBoolean("startable"))
         capabilities.put("android.localFileRead", false)
         capabilities.put("android.localFileWrite", false)
         capabilities.put("android.filePick", false)
@@ -76,10 +88,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.assistantRoleStatus", "available")
         permissionStates.put("aurora.android.assistantRoleRequest", assistantRoleState(assistantRole))
         permissionStates.put("aurora.android.microphone", permissionState(microphoneGranted))
+        permissionStates.put("aurora.android.microphoneRequest", permissionRequestState(microphoneGranted, true))
         permissionStates.put("aurora.android.notifications", permissionState(notificationsGranted))
+        permissionStates.put("aurora.android.notificationsRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         permissionStates.put("aurora.android.biometric", if (biometricReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.localNetwork", if (localNetworkReady) "available" else "degraded")
         permissionStates.put("aurora.android.foregroundServiceMicrophone", permissionState(foregroundServiceReady))
+        permissionStates.put("aurora.android.voiceForegroundService", permissionState(foregroundServiceReady))
+        permissionStates.put("aurora.android.voiceForegroundStart", if (voiceForeground.getBoolean("startable")) "available" else voiceForeground.getString("state"))
         permissionStates.put("aurora.android.localFileRead", "degraded")
         permissionStates.put("aurora.android.localFileWrite", "degraded")
         permissionStates.put("aurora.android.filePick", "degraded")
@@ -95,10 +111,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.assistantRole.denied", if (assistantRoleDenied) "needs_native_permission" else "degraded")
         capabilityStates.put("android.assistantRole.oemUnavailable", if (assistantRoleOemUnavailable) "unsupported_platform" else "degraded")
         capabilityStates.put("android.microphoneCapture", permissionState(microphoneGranted))
+        capabilityStates.put("android.microphonePermissionRequest", permissionRequestState(microphoneGranted, true))
         capabilityStates.put("android.notifications", permissionState(notificationsGranted))
+        capabilityStates.put("android.notificationPermissionRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         capabilityStates.put("android.biometric", if (biometricReady) "available" else "unsupported_platform")
         capabilityStates.put("android.localNetwork", if (localNetworkReady) "available" else "degraded")
         capabilityStates.put("android.foregroundService", permissionState(foregroundServiceReady))
+        capabilityStates.put("android.voiceForegroundService", voiceForeground.getString("state"))
+        capabilityStates.put("android.voiceForegroundService.running", if (voiceForeground.getBoolean("running")) "available" else "degraded")
+        capabilityStates.put("android.voiceForegroundService.start", if (voiceForeground.getBoolean("startable")) "available" else voiceForeground.getString("state"))
         capabilityStates.put("android.localFileRead", "degraded")
         capabilityStates.put("android.localFileWrite", "degraded")
         capabilityStates.put("android.filePick", "degraded")
@@ -113,6 +134,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("permissionStates", permissionStates)
         ret.put("capabilityStates", capabilityStates)
         ret.put("assistantRole", assistantRole)
+        ret.put("voiceForegroundService", voiceForeground)
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
         ret.put("evidenceSource", "android-rolemanager-package-manager")
         ret.put("secretsRedacted", true)
@@ -173,6 +195,82 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(ret)
     }
 
+    @Command
+    fun requestAndroidPermission(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidPermissionRequestArgs::class.java)
+        val permissions = runtimePermissionsFor(args.permission)
+        if (permissions.isEmpty()) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("permission", args.permission)
+            ret.put("reason", "unsupported_or_manifest_only_permission")
+            ret.put("manifest", nativeCapabilitySnapshot())
+            invoke.resolve(ret)
+            return
+        }
+
+        val missing = permissions.filterNot { hasRuntimePermission(it) }.toTypedArray()
+        if (missing.isEmpty()) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("permission", args.permission)
+            ret.put("reason", "already_granted")
+            ret.put("manifest", nativeCapabilitySnapshot())
+            invoke.resolve(ret)
+            return
+        }
+
+        ActivityCompat.requestPermissions(activity, missing, ANDROID_PERMISSION_REQUEST_CODE)
+        val ret = JSObject()
+        ret.put("started", true)
+        ret.put("permission", args.permission)
+        ret.put("requestCode", ANDROID_PERMISSION_REQUEST_CODE)
+        val requestedPermissions = JSArray()
+        missing.forEach { requestedPermissions.put(it) }
+        ret.put("requestedPermissions", requestedPermissions)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun voiceForegroundServiceStatus(invoke: Invoke) {
+        invoke.resolve(voiceForegroundServiceStatusObject())
+    }
+
+    @Command
+    fun startVoiceForegroundService(invoke: Invoke) {
+        val status = voiceForegroundServiceStatusObject()
+        if (!status.getBoolean("startable")) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", status.getString("reason"))
+            invoke.resolve(ret)
+            return
+        }
+
+        val intent = Intent(activity, AuroraVoiceForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            activity.startForegroundService(intent)
+        } else {
+            activity.startService(intent)
+        }
+        val ret = JSObject()
+        ret.put("started", true)
+        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("reason", "foreground_service_start_requested")
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun stopVoiceForegroundService(invoke: Invoke) {
+        val stopped = activity.stopService(Intent(activity, AuroraVoiceForegroundService::class.java))
+        val ret = JSObject()
+        ret.put("stopped", stopped)
+        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("reason", if (stopped) "foreground_service_stop_requested" else "foreground_service_not_running")
+        invoke.resolve(ret)
+    }
+
     private fun assistantRoleStatusObject(): JSObject {
         val sdkSupportsRole = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val roleManager = roleManagerOrNull()
@@ -223,6 +321,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val fallbacks = JSArray()
         fallbacks.put(fallback("app_open", "fallback", true, "android.deepLink", null, "available without assistant role"))
         fallbacks.put(fallback("push_to_talk", "degraded", hasRuntimePermission(Manifest.permission.RECORD_AUDIO), "android.microphoneCapture", "aurora.android.microphone", "requires microphone permission and backend audio evidence"))
+        fallbacks.put(fallback("foreground_voice_controls", "degraded", voiceForegroundServiceStatusObject().getBoolean("startable"), "android.voiceForegroundService", "aurora.android.voiceForegroundService", "requires microphone plus Android foreground-service microphone readiness"))
         fallbacks.put(fallback("notification", "fallback", hasPostNotificationsPermission(), "android.notifications", "aurora.android.notifications", "requires notification permission on Android 13+"))
         fallbacks.put(fallback("quick_tile", "degraded", true, "android.fallbackEntrypoints", null, "planned Android quick tile entrypoint; not assistant-role dependent"))
         fallbacks.put(fallback("share_intent", "fallback", true, "android.shareIntent", "aurora.android.shareIntent", "available without assistant role"))
@@ -286,6 +385,82 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun hasForegroundServiceMicrophonePermission(): Boolean =
         Build.VERSION.SDK_INT < 34 || hasRuntimePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)
 
+    private fun voiceForegroundServiceStatusObject(
+        microphoneGranted: Boolean = hasRuntimePermission(Manifest.permission.RECORD_AUDIO),
+        notificationsGranted: Boolean = hasPostNotificationsPermission(),
+        foregroundServiceReady: Boolean = hasForegroundServiceMicrophonePermission() && microphoneGranted,
+    ): JSObject {
+        val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
+            (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("running", AuroraVoiceForegroundService.running)
+        ret.put("startable", startable)
+        ret.put("microphoneGranted", microphoneGranted)
+        ret.put("notificationsGranted", notificationsGranted)
+        ret.put("foregroundServiceReady", foregroundServiceReady)
+        ret.put("manifestReady", manifestReady)
+        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationsGranted))
+        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationsGranted))
+        ret.put("privacyClass", "raw-audio")
+        ret.put("backendAudioEvidenceRequired", true)
+        ret.put("evidenceSource", "android-permission-foreground-service")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun voiceForegroundState(
+        startable: Boolean,
+        manifestReady: Boolean,
+        microphoneGranted: Boolean,
+        notificationsGranted: Boolean,
+    ): String {
+        if (!manifestReady) return "unsupported_platform"
+        if (!microphoneGranted) return "needs_native_permission"
+        if (!notificationsGranted) return "degraded"
+        if (startable) return "available"
+        return "degraded"
+    }
+
+    private fun voiceForegroundReason(
+        startable: Boolean,
+        manifestReady: Boolean,
+        microphoneGranted: Boolean,
+        notificationsGranted: Boolean,
+    ): String {
+        if (!manifestReady) return "foreground_service_manifest_missing"
+        if (!microphoneGranted) return "microphone_permission_missing"
+        if (!notificationsGranted) return "notification_permission_missing"
+        if (startable) return "foreground_service_startable"
+        return "foreground_service_degraded"
+    }
+
+    private fun nativeCapabilitySnapshot(): JSObject {
+        val ret = JSObject()
+        val microphoneGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
+        val notificationsGranted = hasPostNotificationsPermission()
+        ret.put("microphoneGranted", microphoneGranted)
+        ret.put("notificationsGranted", notificationsGranted)
+        ret.put("foregroundService", voiceForegroundServiceStatusObject(microphoneGranted, notificationsGranted))
+        ret.put("evidenceSource", "android-permission-foreground-service")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun runtimePermissionsFor(permission: String): List<String> =
+        when (permission) {
+            "aurora.android.microphone", "android.microphoneCapture" -> listOf(Manifest.permission.RECORD_AUDIO)
+            "aurora.android.notifications", "android.notifications" ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) listOf(Manifest.permission.POST_NOTIFICATIONS) else emptyList()
+            "aurora.android.voiceForegroundService", "android.voiceForegroundService" ->
+                listOfNotNull(
+                    Manifest.permission.RECORD_AUDIO,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.POST_NOTIFICATIONS else null,
+                )
+            else -> emptyList()
+        }
+
     private fun hasBiometricCapability(): Boolean {
         val keyguard = activity.getSystemService(KeyguardManager::class.java)
         if (keyguard?.isDeviceSecure == true) return true
@@ -296,6 +471,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun permissionState(granted: Boolean): String =
         if (granted) "available" else "needs_native_permission"
+
+    private fun permissionRequestState(granted: Boolean, requestable: Boolean): String =
+        if (granted) "available" else if (requestable) "needs_native_permission" else "unsupported_platform"
 
     private fun assistantRoleState(status: JSObject): String {
         if (status.getBoolean("roleHeld")) return "available"
@@ -308,4 +486,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
 class AssistantRoleResultArgs {
     var resultCode: Int = Activity.RESULT_CANCELED
+}
+
+class AndroidPermissionRequestArgs {
+    var permission: String = ""
 }
