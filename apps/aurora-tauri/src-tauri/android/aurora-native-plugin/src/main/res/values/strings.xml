@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aurora_shortcut_assistant_short">Aurora</string>
+    <string name="aurora_shortcut_assistant_long">Open Aurora assistant</string>
+    <string name="aurora_shortcut_disabled">Aurora shortcut unavailable</string>
+    <string name="aurora_widget_description">Open Aurora from the home screen</string>
+</resources>
