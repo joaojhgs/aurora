@@ -677,10 +677,46 @@ fn log_android_baseline_status(status: &AndroidBaselineStatus) {
 }
 
 fn log_android_native_plugin_payload(payload: &Value) {
+    const CHUNK_BYTES: usize = 900;
+
+    let serialized =
+        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string());
+    let chunks = chunk_string_for_logcat(&serialized, CHUNK_BYTES);
     println!(
-        "aurora_android_native_plugin_payload={}",
-        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+        "aurora_android_native_plugin_payload_begin chunks={} bytes={}",
+        chunks.len(),
+        serialized.len()
     );
+    for (index, chunk) in chunks.iter().enumerate() {
+        println!(
+            "aurora_android_native_plugin_payload_chunk index={} total={} data={}",
+            index,
+            chunks.len(),
+            chunk
+        );
+    }
+    println!(
+        "aurora_android_native_plugin_payload_end chunks={}",
+        chunks.len()
+    );
+}
+
+fn chunk_string_for_logcat(value: &str, max_bytes: usize) -> Vec<&str> {
+    if value.is_empty() {
+        return vec![""];
+    }
+
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    while start < value.len() {
+        let mut end = usize::min(start + max_bytes, value.len());
+        while !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        chunks.push(&value[start..end]);
+        start = end;
+    }
+    chunks
 }
 
 #[tauri::command]

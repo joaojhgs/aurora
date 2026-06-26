@@ -33,3 +33,5 @@ adb shell cmd role holders android.app.role.ASSISTANT
 ```
 
 Then call the JS transport command path for `getNativeCapabilityManifest()` / `androidAssistantRoleStatus` or invoke the plugin command from the Tauri mobile shell test harness and record the returned payload. Expected results must distinguish `roleAvailable`, `packageQualified`, `roleHeld`, `requestable`, `denied`, and `oemUnavailable`; include mic/notification/biometric/local-network/foreground-service/file/share states; and keep fallback entrypoints present when `roleHeld=false`.
+
+The CI smoke harness reads chunked `aurora_android_native_plugin_payload_*` log markers and reassembles them before JSON validation. Do not rely on a single full-payload logcat line; Android log output can truncate long JSON lines before the parser sees them.
