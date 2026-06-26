@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.service.voice.VoiceInteractionService
 import androidx.core.content.ContextCompat
-import androidx.core.role.RoleManagerCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
@@ -84,7 +83,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         activity.startActivityForResult(
-            roleManager.createRequestRoleIntent(RoleManagerCompat.ROLE_ASSISTANT),
+            roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT),
             ASSISTANT_ROLE_REQUEST_CODE,
         )
         val ret = JSObject()
@@ -103,21 +102,25 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun fallbackEntrypoints(invoke: Invoke) {
-        invoke.resolve(fallbackEntrypointsArray())
+        val ret = JSObject()
+        ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
+        ret.put("evidenceSource", "android-rolemanager-package-manager")
+        ret.put("secretsRedacted", true)
+        invoke.resolve(ret)
     }
 
     private fun assistantRoleStatusObject(): JSObject {
         val sdkSupportsRole = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val roleManager = roleManagerOrNull()
-        val roleAvailable = roleManager?.isRoleAvailable(RoleManagerCompat.ROLE_ASSISTANT) == true
-        val roleHeld = roleManager?.isRoleHeld(RoleManagerCompat.ROLE_ASSISTANT) == true
+        val roleAvailable = roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
+        val roleHeld = roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
         val packageQualified = packageHandlesAssist() || packageDeclaresVoiceInteractionService()
         val requestable = roleAvailable && packageQualified && !roleHeld
         val oemUnavailable = sdkSupportsRole && !roleAvailable
 
         val ret = JSObject()
         ret.put("platform", "android")
-        ret.put("roleName", RoleManagerCompat.ROLE_ASSISTANT)
+        ret.put("roleName", RoleManager.ROLE_ASSISTANT)
         ret.put("roleAvailable", roleAvailable)
         ret.put("packageQualified", packageQualified)
         ret.put("roleHeld", roleHeld)

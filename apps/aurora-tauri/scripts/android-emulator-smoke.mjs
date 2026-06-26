@@ -16,8 +16,9 @@ run('adb', ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNC
 
 const payloadLine = waitForPayloadLine()
 if (!payloadLine) {
-  throw new Error('Android baseline payload log was not observed after app launch.')
+  throw new Error('Android native plugin payload log was not observed after app launch.')
 }
+validateNativePayload(payloadLine)
 
 console.log(`Installed APK: ${apk}`)
 console.log(`Launched package: ${appId}`)
@@ -56,9 +57,42 @@ function waitForPayloadLine() {
       throw logcat.error
     }
     const output = `${logcat.stdout}\n${logcat.stderr}`
-    const line = output.split(/\r?\n/).find((entry) => entry.includes('aurora_android_baseline_status='))
+    const line = output
+      .split(/\r?\n/)
+      .find((entry) => entry.includes('aurora_android_native_plugin_payload='))
     if (line) return line
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
   }
   return null
+}
+
+function validateNativePayload(line) {
+  const marker = 'aurora_android_native_plugin_payload='
+  const jsonStart = line.indexOf(marker)
+  if (jsonStart === -1) {
+    throw new Error('Android smoke line does not contain the native plugin payload marker.')
+  }
+
+  const payload = JSON.parse(line.slice(jsonStart + marker.length))
+  const assistantRole = payload.assistantRole
+  if (!assistantRole || typeof assistantRole !== 'object') {
+    throw new Error('Android native plugin payload is missing assistantRole.')
+  }
+
+  for (const field of ['roleAvailable', 'packageQualified', 'roleHeld', 'requestable', 'denied', 'oemUnavailable']) {
+    if (typeof assistantRole[field] !== 'boolean') {
+      throw new Error(`Android native plugin assistantRole.${field} must be a boolean.`)
+    }
+  }
+
+  if (!Array.isArray(payload.fallbackEntrypoints) || payload.fallbackEntrypoints.length === 0) {
+    throw new Error('Android native plugin payload is missing fallbackEntrypoints.')
+  }
+
+  if (assistantRole.roleHeld === false) {
+    const availableFallback = payload.fallbackEntrypoints.some((entry) => entry?.available === true)
+    if (!availableFallback) {
+      throw new Error('Android native plugin payload must keep fallback entrypoints available when roleHeld=false.')
+    }
+  }
 }

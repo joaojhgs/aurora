@@ -6,7 +6,7 @@
     <application>
         <!-- Disabled until AND-004 implements the complete VoiceInteractionService qualification flow. -->
         <service
-            android:name=".AuroraVoiceInteractionService"
+            android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService"
             android:enabled="false"
             android:exported="true"
             android:label="Aurora"
@@ -17,7 +17,7 @@
         </service>
 
         <activity
-            android:name=".AuroraAssistActivity"
+            android:name="dev.aurora.tauri.nativeplugin.AuroraAssistActivity"
             android:enabled="true"
             android:exported="true"
             android:label="Aurora">
