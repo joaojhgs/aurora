@@ -1969,6 +1969,7 @@ mod tests {
 
         let swift_package = include_str!("../ios/AuroraNativePlugin/Package.swift");
         assert!(swift_package.contains("../../.tauri/tauri-api"));
+        assert!(swift_package.contains("type: .static"));
 
         let build_script = include_str!("../build.rs");
         assert!(build_script.contains("DEP_TAURI_IOS_LIBRARY_PATH"));
@@ -1976,6 +1977,8 @@ mod tests {
         assert!(build_script.contains("std::env::remove_var(\"SDKROOT\")"));
         assert!(build_script.contains("SwiftLinker::new"));
         assert!(build_script.contains(".with_package(\"AuroraNativePlugin\""));
+        assert!(build_script.contains("emit_ios_swift_package_link_search_hints"));
+        assert!(build_script.contains("apple-ios-simulator"));
     }
 
     #[test]

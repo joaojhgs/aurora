@@ -10,6 +10,7 @@ let package = Package(
   products: [
     .library(
       name: "AuroraNativePlugin",
+      type: .static,
       targets: ["AuroraNativePlugin"]
     )
   ],

@@ -52,6 +52,8 @@ fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
     .with_package("AuroraNativePlugin", source)
     .link();
 
+    emit_ios_swift_package_link_search_hints("AuroraNativePlugin");
+
     if let Some(root) = sdk_root {
         std::env::set_var("SDKROOT", root);
     }
@@ -61,6 +63,37 @@ fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(not(target_os = "macos"))]
 fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn emit_ios_swift_package_link_search_hints(package_name: &str) {
+    let Ok(out_dir) = std::env::var("OUT_DIR") else {
+        return;
+    };
+    let configuration = if std::env::var("DEBUG").as_deref() == Ok("true") {
+        "debug"
+    } else {
+        "release"
+    };
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "aarch64".into());
+    let arch = if target_arch == "aarch64" {
+        "arm64"
+    } else {
+        target_arch.as_str()
+    };
+    let swift_build_dir = std::path::Path::new(&out_dir)
+        .join("swift-rs")
+        .join(package_name);
+
+    for triple in [
+        format!("{arch}-apple-ios-simulator"),
+        format!("{arch}-apple-ios"),
+    ] {
+        println!(
+            "cargo:rustc-link-search=native={}",
+            swift_build_dir.join(triple).join(configuration).display()
+        );
+    }
 }
 
 #[cfg(target_os = "macos")]
