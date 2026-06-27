@@ -968,6 +968,8 @@ export interface BackendInventory {
   gateway_builtin_count?: number
   methods: BackendInventoryMethod[]
   gateway_builtins?: GatewayBuiltinInventoryRoute[]
+  gateway_openapi?: JsonObject
+  gateway_openapi_paths?: string[]
   import_errors?: Array<Record<string, JsonValue>>
   ui_fixture_validation?: Record<string, JsonValue>
 }
