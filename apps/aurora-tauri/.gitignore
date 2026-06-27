@@ -1,5 +1,6 @@
 dist/
 node_modules/
 src-tauri/target/
+src-tauri/ios/.tauri/
 src-tauri/tauri.release.conf.json
 src-tauri/tauri.release.conf.json.tmp

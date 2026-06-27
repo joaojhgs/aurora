@@ -1966,6 +1966,13 @@ mod tests {
         assert!(swift_plugin.contains("\"app-intent.open-assistant\""));
         assert!(swift_plugin.contains("\"share.import-context\""));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
+
+        let build_script = include_str!("../build.rs");
+        assert!(build_script.contains("DEP_TAURI_IOS_LIBRARY_PATH"));
+        assert!(build_script.contains(".join(\".tauri\")"));
+        assert!(build_script.contains("std::env::remove_var(\"SDKROOT\")"));
+        assert!(build_script.contains("SwiftLinker::new"));
+        assert!(build_script.contains(".with_package(\"AuroraNativePlugin\""));
     }
 
     #[test]
