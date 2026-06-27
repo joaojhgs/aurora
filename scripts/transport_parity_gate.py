@@ -12,11 +12,15 @@ import argparse
 import json
 import platform
 import subprocess
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.mesh_gap_e2e_harness import HarnessReport, run_harness
 

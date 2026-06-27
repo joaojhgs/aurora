@@ -17,3 +17,11 @@ Evidence: `.omx/plans/PER-229-transport-parity-gate.md` records source docs, acc
 Status: complete
 
 Evidence: Added `scripts/transport_parity_gate.py`, `tests/e2e/test_transport_parity_gate.py`, `docs/TRANSPORT_PARITY_GATE.md`, and `.github/workflows/transport-parity.yml`. Local executed report generated at `.omx/reports/transport-parity/local-executed/transport_parity_report.json`; summary is blocked only by explicit process/Redis and iOS environment rows, with thread/HTTP/Tauri/mesh/Android rows passing.
+
+## G004 - QA Rejection Fix: Script Entrypoint
+
+Status: complete
+
+Evidence: QA reproduced `python scripts/transport_parity_gate.py ...` failing before report generation with `ModuleNotFoundError: No module named 'scripts'`.
+
+Resolution: Added file-entrypoint import bootstrapping and a direct `python scripts/transport_parity_gate.py --help` regression. Reran the rejected full gate command; it now writes `.omx/reports/transport-parity/qa-local/transport_parity_report.json` and exits through the structured `blocked` summary for process/Android/iOS release-evidence gaps instead of crashing before report generation.

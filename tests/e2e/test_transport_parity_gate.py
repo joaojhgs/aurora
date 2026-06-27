@@ -1,11 +1,28 @@
 """QA-008 transport parity release gate tests."""
 
 import json
+import subprocess
+import sys
 
 import pytest
 
 from scripts.mesh_gap_e2e_harness import HarnessReport
 from scripts.transport_parity_gate import CommandResult, GateCommand, run_transport_parity_gate
+
+
+@pytest.mark.e2e
+def test_transport_parity_gate_script_entrypoint_imports_from_file_path():
+    completed = subprocess.run(
+        [sys.executable, "scripts/transport_parity_gate.py", "--help"],
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "transport_parity_gate.py" in completed.stdout
+    assert "--execute-commands" in completed.stdout
 
 
 @pytest.mark.e2e
