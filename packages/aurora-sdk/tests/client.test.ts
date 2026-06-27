@@ -3851,6 +3851,119 @@ describe('AuroraClient assistant namespace', () => {
     )
   })
 
+  it('streams an HTTP assistant request through a correlated backend SSE envelope', async () => {
+    const requests: Array<{ url: string; body: unknown }> = []
+    const eventListeners: Record<string, (event: MessageEvent<string>) => void> = {}
+    let sourceClosed = false
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        const body = JSON.parse(String(init?.body ?? '{}')) as unknown
+        requests.push({ url, body })
+        expect(url).toBe('http://aurora.local/api/Orchestrator/ExternalUserInput')
+        expect(init?.method).toBe('POST')
+        return new Response(
+          JSON.stringify({
+            text: 'Hello from backend',
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            correlation_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-correlation-id': 'corr-http-sdk'
+            }
+          }
+        )
+      },
+      eventSourceFactory: (url) => {
+        expect(url).toBe(
+          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.completed&correlation_id=corr-http-sdk&backfill=true'
+        )
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          addEventListener(type, listener) {
+            eventListeners[type] = listener
+          },
+          close() {
+            sourceClosed = true
+          }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const eventsPromise = collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-sdk' }),
+      1
+    )
+    await sourceReadyPromise
+    eventListeners['assistant.completed']?.(
+      new MessageEvent('assistant.completed', {
+        data: JSON.stringify({
+          event_id: 'evt-http-sdk-1',
+          topic: 'Orchestrator.Response',
+          kind: 'assistant.completed',
+          category: 'assistant',
+          action: 'Response',
+          status: 'completed',
+          correlation_id: 'corr-http-sdk',
+          redacted_payload: {
+            text: { redacted: true, sha256: 'text-hash' },
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          },
+          payload_sha256: 'payload-hash'
+        }),
+        lastEventId: 'evt-http-sdk-1'
+      })
+    )
+
+    const events = await eventsPromise
+
+    expect(requests).toEqual([
+      {
+        url: 'http://aurora.local/api/Orchestrator/ExternalUserInput',
+        body: {
+          text: 'hello',
+          source: 'external',
+          request_id: 'corr-http-sdk',
+          correlation_id: 'corr-http-sdk',
+          stream: true
+        }
+      }
+    ])
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: 'completed',
+        eventId: 'evt-http-sdk-1',
+        sessionId: 'session-http-sdk',
+        requestId: 'corr-http-sdk',
+        text: 'Hello from backend',
+        textDelta: 'Hello from backend',
+        modelLabel: 'http-mock',
+        audit: expect.objectContaining({
+          correlationId: 'corr-http-sdk',
+          eventKind: 'assistant.completed',
+          transport: 'http'
+        })
+      })
+    )
+    expect(events[0]?.audit.redaction?.secretsRedacted).toBe(true)
+    expect(sourceClosed).toBe(true)
+  })
+
   it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
 
