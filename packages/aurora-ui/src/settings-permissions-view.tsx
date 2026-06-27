@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, ToggleLeft } from 'lucide-react'
-import type { AvailabilityState, PrivacyClass } from '@aurora/client'
+import type {
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AndroidNativeEntrypoint,
+  AvailabilityState,
+  PrivacyClass
+} from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
@@ -273,6 +279,7 @@ function NativePermissionRow({ permission }: { permission: SettingsNativePermiss
           <EvidenceBadge label={permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'} />
           <EvidenceBadge label={permission.evidence.join(', ') || 'no evidence'} />
         </div>
+        <small>{permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No blocker reported.'}</small>
       </div>
       <button type="button" disabled={!permission.requestEnabled}>
         {permission.requestEnabled ? 'Request permission' : permission.granted ? 'Granted' : 'Request unavailable'}
@@ -320,7 +327,7 @@ function nativePermissionCards(
     ...snapshot.nativePermissions.map((permission) => permission.name),
     ...snapshot.nativeCapabilities.map((capability) => capability.name)
   ])
-  return [...permissionNames].sort().map((name) => {
+  const genericRows = [...permissionNames].sort().map((name) => {
     const permission = snapshot.nativePermissions.find((candidate) => candidate.name === name)
     const capability = snapshot.nativeCapabilities.find((candidate) => candidate.name === name)
     const granted = permission?.granted ?? false
@@ -348,6 +355,9 @@ function nativePermissionCards(
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
+  const androidRows = androidNativePermissionCards(snapshot)
+  const androidIds = new Set(androidRows.map((row) => row.id))
+  return [...genericRows.filter((row) => !androidIds.has(row.id)), ...androidRows]
 }
 
 function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
@@ -391,6 +401,116 @@ function availabilityFromNativeState(
 
 function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability | null {
   return snapshot.routes.find((route) => route.item.id === id) ?? null
+}
+
+function androidNativePermissionCards(snapshot: AuroraShellSnapshot): SettingsNativePermissionCard[] {
+  const rows: SettingsNativePermissionCard[] = []
+  const assistant = snapshot.nativeAssistantRole
+  if (assistant) {
+    rows.push({
+      id: 'android.assistantRole',
+      label: 'Android assistant role',
+      state: androidAssistantRoleAvailability(assistant),
+      granted: assistant.roleHeld,
+      capabilityEnabled: assistant.roleAvailable && assistant.packageQualified && !assistant.denied && !assistant.oemUnavailable,
+      requestEnabled: assistant.requestable && !assistant.roleHeld && !assistant.denied,
+      detail: assistant.reason,
+      blockers: androidAssistantRoleBlockers(assistant),
+      evidence: androidAssistantRoleEvidence(assistant)
+    })
+  }
+
+  for (const entrypoint of snapshot.nativeFallbackEntrypoints) {
+    rows.push({
+      id: `android.fallback.${entrypoint.id}`,
+      label: `Android ${nativePermissionLabel(entrypoint.id)}`,
+      state: androidNativeStateToAvailability(entrypoint.state, entrypoint.available),
+      granted: entrypoint.available,
+      capabilityEnabled: entrypoint.available,
+      requestEnabled: false,
+      detail: entrypoint.reason,
+      blockers: entrypoint.available ? [] : [`android fallback unavailable: ${entrypoint.id}`],
+      evidence: androidFallbackEntrypointEvidence(entrypoint)
+    })
+  }
+
+  for (const entrypoint of snapshot.nativeEntrypoints) {
+    rows.push({
+      id: `android.entrypoint.${entrypoint.id}`,
+      label: entrypoint.label,
+      state: androidNativeStateToAvailability(entrypoint.state, entrypoint.available),
+      granted: entrypoint.available,
+      capabilityEnabled: entrypoint.available,
+      requestEnabled: false,
+      detail: entrypoint.reason,
+      blockers: entrypoint.available ? [] : [`android entrypoint unavailable: ${entrypoint.id}`],
+      evidence: androidNativeEntrypointEvidence(entrypoint)
+    })
+  }
+
+  return rows
+}
+
+function androidNativeStateToAvailability(state: string, available: boolean): AvailabilityState {
+  if (state === 'available') return 'available-local'
+  if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'unsupported_platform') return 'unsupported'
+  if (state === 'degraded') return 'degraded'
+  if (state === 'fallback') return 'degraded'
+  return available ? 'available-local' : 'unsupported'
+}
+
+function androidAssistantRoleAvailability(assistant: AndroidAssistantRoleStatus): AvailabilityState {
+  if (assistant.denied) return 'denied'
+  if (!assistant.roleAvailable || assistant.oemUnavailable) {
+    return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+  }
+  if (!assistant.packageQualified) return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+  if (assistant.roleHeld) return 'available-local'
+  if (assistant.requestable) return 'privacy-blocked'
+  return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+}
+
+function androidAssistantRoleBlockers(assistant: AndroidAssistantRoleStatus): string[] {
+  return [
+    !assistant.roleAvailable || assistant.oemUnavailable ? 'assistant_role_oem_unavailable' : '',
+    !assistant.packageQualified ? 'assistant_role_package_not_qualified' : '',
+    assistant.denied ? 'assistant_role_denied' : '',
+    assistant.requestable && !assistant.roleHeld ? 'assistant_role_user_grant_required' : ''
+  ].filter(Boolean)
+}
+
+function androidAssistantRoleEvidence(assistant: AndroidAssistantRoleStatus): string[] {
+  return unique([
+    assistant.evidenceSource,
+    `RoleManager.isRoleAvailable(${assistant.roleName})=${String(assistant.roleAvailable)}`,
+    `RoleManager.isRoleHeld(${assistant.roleName})=${String(assistant.roleHeld)}`,
+    `package qualification probe=${assistant.packageQualified ? 'qualified' : 'not-qualified'}`,
+    `requestable=${String(assistant.requestable)}`,
+    `oemUnavailable=${String(assistant.oemUnavailable)}`,
+    `fallbackAvailable=${String(assistant.fallbackAvailable)}`
+  ])
+}
+
+function androidFallbackEntrypointEvidence(entrypoint: AndroidFallbackEntrypoint): string[] {
+  return unique([
+    entrypoint.capability ?? '',
+    entrypoint.permission ?? '',
+    entrypoint.intentAction ?? '',
+    `manifestDeclared=${String(entrypoint.manifestDeclared ?? false)}`,
+    `backendRequired=${String(entrypoint.backendRequired ?? false)}`
+  ])
+}
+
+function androidNativeEntrypointEvidence(entrypoint: AndroidNativeEntrypoint): string[] {
+  return unique([
+    entrypoint.capability,
+    entrypoint.permission ?? '',
+    entrypoint.intentAction,
+    `manifestDeclared=${String(entrypoint.manifestDeclared)}`,
+    `backendRequired=${String(entrypoint.backendRequired)}`,
+    `payloadCommand=${entrypoint.payloadCommand}`
+  ])
 }
 
 function nativePermissionLabel(name: string): string {

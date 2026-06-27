@@ -1573,6 +1573,7 @@ export interface NativeCapabilityManifest {
   fallbackEntrypoints?: AndroidFallbackEntrypoint[]
   entrypoints?: AndroidNativeEntrypoint[]
   lastEntrypointPayload?: AndroidEntrypointPayload | null
+  release?: AndroidNativeReleaseStatus | null
   evidenceSource?: string
   secretsRedacted?: boolean
 }
@@ -1747,4 +1748,35 @@ export interface AndroidEntrypointPayload {
   categories: string[]
   extras: string[]
   secretsRedacted: boolean
+}
+
+export type AndroidReleaseGateStatus = 'passed' | 'blocked' | 'manual' | 'not-run'
+
+export interface AndroidReleaseMatrixRow {
+  id: string
+  label: string
+  mode: 'thin' | 'mesh' | 'assistant-role' | 'fallback'
+  apiLevel: number | null
+  architecture: string
+  expectedState: AndroidNativeState
+  status: AndroidReleaseGateStatus
+  requiredEvidence: string[]
+  actualEvidence: string[]
+  notes: string
+}
+
+export interface AndroidReleaseSigningStatus {
+  aabCommand: string
+  apkCommand: string
+  signingConfigured: boolean
+  signingEvidence: string[]
+  playUploadManual: boolean
+  notes: string
+}
+
+export interface AndroidNativeReleaseStatus {
+  signing: AndroidReleaseSigningStatus
+  deviceMatrix: AndroidReleaseMatrixRow[]
+  smokePayloadRecorded: boolean
+  generatedAt: string
 }
