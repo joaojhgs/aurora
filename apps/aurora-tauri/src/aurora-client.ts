@@ -21,6 +21,8 @@ export interface AuroraTauriRuntime {
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
   dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
   audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosSecureStorageStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosBiometricStatus: () => Promise<TauriNativeFeatureStatus | null>
   androidBaselineStatus: () => Promise<TauriAndroidBaselineStatus | null>
   shutdown: () => Promise<void>
 }
@@ -39,6 +41,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: () => transport.getNotificationStatus(),
       dialogStatus: () => transport.getDialogStatus(),
       audioBridgeStatus: () => transport.getAudioBridgeStatus(),
+      iosSecureStorageStatus: () => transport.getIosSecureStorageStatus(),
+      iosBiometricStatus: () => transport.getIosBiometricStatus(),
       androidBaselineStatus: () => transport.getAndroidBaselineStatus(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
@@ -62,6 +66,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
+      iosSecureStorageStatus: async () => null,
+      iosBiometricStatus: async () => null,
       androidBaselineStatus: async () => null,
       shutdown: async () => undefined
     }
@@ -78,6 +84,8 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     notificationStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,
+    iosSecureStorageStatus: async () => null,
+    iosBiometricStatus: async () => null,
     androidBaselineStatus: async () => null,
     shutdown: async () => undefined
   }

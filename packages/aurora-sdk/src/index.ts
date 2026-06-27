@@ -179,6 +179,7 @@ export type {
   LocalFileReadResult,
   LocalFileWriteOptions,
   LocalFileWriteResult,
+  IosAdminUnlockRequest,
   SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,

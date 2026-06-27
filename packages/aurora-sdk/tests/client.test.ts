@@ -2735,6 +2735,26 @@ describe('AuroraClient', () => {
           case 'aurora_secure_storage_set':
           case 'aurora_secure_storage_delete':
             return { key: String(args?.key), ok: true }
+          case 'aurora_ios_secure_storage_status':
+            return {
+              available: false,
+              permission: 'aurora.iosKeychain',
+              capability: 'ios.keychain.secureCredentialStorage',
+              source: 'tauri-ios-native-plugin',
+              reason: 'iOS Keychain requires Xcode',
+              details: { backend: 'keychain', secretsRedacted: true, privacyClass: 'credential' }
+            }
+          case 'aurora_ios_biometric_status':
+            return {
+              available: false,
+              permission: 'aurora.iosBiometricUnlock',
+              capability: 'ios.biometric.adminUnlock',
+              source: 'tauri-ios-native-plugin',
+              reason: 'Face ID/Touch ID requires iOS',
+              details: { framework: 'LocalAuthentication', secretsRedacted: true, privacyClass: 'credential' }
+            }
+          case 'aurora_ios_admin_unlock':
+            throw { detail: { code: 'unsupported_feature', message: 'iOS admin unlock requires Face ID/Touch ID' } }
           case 'aurora_biometric_admin_unlock_status':
             return {
               platform: 'android',
@@ -2829,6 +2849,23 @@ describe('AuroraClient', () => {
     await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
     await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
     await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.getIosSecureStorageStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        capability: 'ios.keychain.secureCredentialStorage',
+        details: expect.objectContaining({ secretsRedacted: true, privacyClass: 'credential' })
+      })
+    )
+    await expect(transport.getIosBiometricStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        capability: 'ios.biometric.adminUnlock',
+        details: expect.objectContaining({ framework: 'LocalAuthentication', secretsRedacted: true })
+      })
+    )
+    await expect(
+      transport.iosAdminUnlock({ reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' })
+    ).rejects.toMatchObject({ code: 'unsupported_feature' })
     await expect(transport.getBiometricAdminUnlockStatus()).resolves.toEqual(
       expect.objectContaining({
         privacyClass: 'admin-critical',
@@ -2887,6 +2924,9 @@ describe('AuroraClient', () => {
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
       'aurora_secure_storage_delete',
+      'aurora_ios_secure_storage_status',
+      'aurora_ios_biometric_status',
+      'aurora_ios_admin_unlock',
       'aurora_biometric_admin_unlock_status',
       'aurora_biometric_admin_unlock',
       'aurora_local_file_read',
@@ -2901,9 +2941,12 @@ describe('AuroraClient', () => {
     expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
     expect(calls[12]?.args).toEqual({ key: 'session' })
     expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[17]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[18]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[20]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[17]?.args).toEqual({
+      request: { reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' }
+    })
+    expect(calls[20]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[21]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[23]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {

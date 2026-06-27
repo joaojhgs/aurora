@@ -423,7 +423,9 @@ function nativePermissionCards(
     const granted = permission?.granted ?? false
     const capabilityEnabled = capability?.enabled ?? granted
     const nativeState = capability?.nativeState ?? permission?.nativeState ?? null
-    const state = availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
+    const state = isSiriReplacementPermission(name)
+      ? 'unsupported'
+      : availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
     const requestEnabled = !granted && nativeRequestAvailable(name, snapshot)
     return {
       id: name,
@@ -432,16 +434,8 @@ function nativePermissionCards(
       granted,
       capabilityEnabled,
       requestEnabled,
-      detail: granted
-        ? 'Native manifest reports this permission as granted.'
-        : requestEnabled
-          ? 'Native manifest advertises an Android permission request command for this state.'
-        : nativeState === 'degraded'
-          ? 'Native manifest reports a degraded or partial platform path for this feature.'
-          : nativeState === 'fallback'
-            ? 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
-            : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.',
-      blockers: granted || nativeState === 'fallback' ? [] : [`native permission missing: ${name}`],
+      detail: nativePermissionDetail(name, granted, capabilityEnabled, requestEnabled, nativeState),
+      blockers: state === 'unsupported' || granted || nativeState === 'fallback' ? [] : [`native permission missing: ${name}`],
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
@@ -493,6 +487,10 @@ function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIn
         evidence: unique([integration.evidenceSource, integration.verifier])
       }
     })
+}
+
+function isSiriReplacementPermission(name: string): boolean {
+  return name === 'aurora.iosSiriReplacement' || name === 'ios.siriReplacement'
 }
 
 function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
@@ -650,20 +648,60 @@ function androidNativeEntrypointEvidence(entrypoint: AndroidNativeEntrypoint): s
 }
 
 function nativePermissionLabel(name: string): string {
-  if (name === 'aurora.iosSiriReplacement' || name === 'ios.siriReplacement') {
-    return 'iOS Siri Replacement Unsupported'
+  const labels: Record<string, string> = {
+    'aurora.iosKeychain': 'iOS Keychain',
+    'aurora.iosBiometricUnlock': 'Face ID / Touch ID admin unlock',
+    'ios.keychain.secureCredentialStorage': 'iOS Keychain secure storage',
+    'ios.biometric.adminUnlock': 'Face ID / Touch ID admin unlock',
+    'aurora.iosSiriReplacement': 'iOS Siri Replacement Unsupported',
+    'aurora.iosAppIntents': 'iOS App Intents',
+    'aurora.iosShortcuts': 'iOS Shortcuts',
+    'ios.appIntents': 'App Intents',
+    'ios.shortcuts': 'Shortcuts',
+    'ios.shareExtension': 'Share extension',
+    'ios.widgets': 'Widgets',
+    'ios.deepLinks': 'Deep links',
+    'ios.siriReplacement': 'Siri replacement'
   }
-  if (name === 'aurora.iosAppIntents' || name === 'ios.appIntents') {
-    return 'iOS App Intents'
-  }
-  if (name === 'aurora.iosShortcuts' || name === 'ios.shortcuts') {
-    return 'iOS Shortcuts'
-  }
+  if (labels[name]) return labels[name]
   return name
     .replace(/^aurora\./, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[-_.]/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function nativePermissionDetail(
+  name: string,
+  granted: boolean,
+  capabilityEnabled: boolean,
+  requestEnabled = false,
+  nativeState: string | null = null
+): string {
+  if (name === 'aurora.iosKeychain' || name === 'ios.keychain.secureCredentialStorage') {
+    return capabilityEnabled || granted
+      ? 'Tokens, mesh credentials, and admin unlock secrets use iOS Keychain evidence from the native manifest.'
+      : 'iOS Keychain requires the Tauri iOS native plugin and Xcode-built app target.'
+  }
+  if (name === 'aurora.iosBiometricUnlock' || name === 'ios.biometric.adminUnlock') {
+    return capabilityEnabled || granted
+      ? 'Face ID/Touch ID can confirm admin unlocks before backend AdminAction confirmation and audit.'
+      : 'Face ID/Touch ID admin unlock requires LocalAuthentication on an iOS device or simulator.'
+  }
+  if (name === 'ios.appIntents' || name === 'ios.shortcuts') {
+    return 'Siri/Shortcuts/App Intents integration is app-owned and scoped to concrete Aurora actions.'
+  }
+  if (name === 'ios.shareExtension' || name === 'ios.widgets' || name === 'ios.deepLinks') {
+    return 'iOS entrypoints stay inside app-owned extension, widget, share, and deep-link surfaces.'
+  }
+  if (name === 'ios.siriReplacement') {
+    return 'iOS does not allow Aurora to replace Siri; only Siri/Shortcuts/App Intents integration is shown.'
+  }
+  if (granted) return 'Native manifest reports this permission as granted.'
+  if (requestEnabled) return 'Native manifest advertises an Android permission request command for this state.'
+  if (nativeState === 'degraded') return 'Native manifest reports a degraded or partial platform path for this feature.'
+  if (nativeState === 'fallback') return 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
+  return 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.'
 }
 
 function unique(values: string[]): string[] {

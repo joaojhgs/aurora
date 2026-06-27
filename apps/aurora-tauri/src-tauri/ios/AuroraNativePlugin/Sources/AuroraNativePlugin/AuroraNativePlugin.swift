@@ -1,4 +1,6 @@
 import Foundation
+import LocalAuthentication
+import Security
 import Tauri
 import WebKit
 
@@ -10,6 +12,13 @@ public func initPluginAuroraNative() -> UnsafeMutableRawPointer {
 struct AuroraInvocationRequest: Decodable {
   let action: String
   let correlationId: String?
+}
+
+struct AuroraAdminUnlockArgs: Decodable {
+  let reason: String
+  let action: String?
+  let correlationId: String?
+  let allowDeviceCredential: Bool?
 }
 
 @objc(AuroraNativePlugin)
@@ -170,6 +179,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.widgets": true,
         "aurora.ios.fileAssociations": true,
         "aurora.ios.entrypointPayload": true,
+        "aurora.iosKeychain": true,
+        "aurora.iosBiometricUnlock": true,
         "aurora.iosSiriReplacement": false,
         "aurora.audioCapture": false,
         "aurora.audioPlayback": false
@@ -182,6 +193,8 @@ public final class AuroraNativePlugin: Plugin {
         "ios.widgets": true,
         "ios.fileAssociations": true,
         "ios.entrypointPayload": true,
+        "ios.keychain.secureCredentialStorage": true,
+        "ios.biometric.adminUnlock": true,
         "ios.siriReplacement": false,
         "native.audioCapture": false,
         "native.audioPlayback": false
@@ -194,6 +207,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.widgets": "available",
         "aurora.ios.fileAssociations": "available",
         "aurora.ios.entrypointPayload": "available",
+        "aurora.iosKeychain": "available",
+        "aurora.iosBiometricUnlock": "available",
         "aurora.iosSiriReplacement": "unsupported_platform"
       ],
       "capabilityStates": [
@@ -204,6 +219,8 @@ public final class AuroraNativePlugin: Plugin {
         "ios.widgets": "available",
         "ios.fileAssociations": "available",
         "ios.entrypointPayload": "available",
+        "ios.keychain.secureCredentialStorage": "available",
+        "ios.biometric.adminUnlock": "available",
         "ios.siriReplacement": "unsupported_platform"
       ],
       "mobileIntegrations": mobileIntegrations,
@@ -265,6 +282,86 @@ public final class AuroraNativePlugin: Plugin {
     ])
   }
 
+  @objc public func iosSecureStorageStatus(_ invoke: Invoke) throws {
+    invoke.resolve([
+      "available": true,
+      "permission": "aurora.iosKeychain",
+      "capability": "ios.keychain.secureCredentialStorage",
+      "source": "tauri-ios-native-plugin",
+      "details": [
+        "backend": "keychain",
+        "persisted": true,
+        "privacyClass": "credential",
+        "secretsRedacted": true,
+        "namespaces": [
+          "aurora.session",
+          "aurora.auth",
+          "aurora.gateway",
+          "aurora.mesh",
+          "aurora.admin"
+        ]
+      ]
+    ])
+  }
+
+  @objc public func iosBiometricStatus(_ invoke: Invoke) throws {
+    let context = LAContext()
+    var error: NSError?
+    let available = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    let reason: Any = available ? NSNull() : (error?.localizedDescription ?? "Face ID/Touch ID is not available.")
+    invoke.resolve([
+      "available": available,
+      "permission": "aurora.iosBiometricUnlock",
+      "capability": "ios.biometric.adminUnlock",
+      "source": "tauri-ios-native-plugin",
+      "reason": reason,
+      "details": [
+        "framework": "LocalAuthentication",
+        "biometry": AuroraNativePlugin.biometryLabel(context.biometryType),
+        "usageDescriptionRequired": "NSFaceIDUsageDescription",
+        "privacyClass": "credential",
+        "secretsRedacted": true,
+        "confirmationOnly": true
+      ]
+    ])
+  }
+
+  @objc public func iosAdminUnlock(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(AuroraAdminUnlockArgs.self)
+    let context = LAContext()
+    context.localizedCancelTitle = "Cancel"
+    let policy: LAPolicy = args.allowDeviceCredential == true
+      ? .deviceOwnerAuthentication
+      : .deviceOwnerAuthenticationWithBiometrics
+    var error: NSError?
+    guard context.canEvaluatePolicy(policy, error: &error) else {
+      invoke.reject(error?.localizedDescription ?? "Face ID/Touch ID is not available.")
+      return
+    }
+
+    context.evaluatePolicy(policy, localizedReason: args.reason) { success, authError in
+      if success {
+        let action = AuroraNativePlugin.nullableString(args.action)
+        let correlationId = AuroraNativePlugin.nullableString(args.correlationId)
+        invoke.resolve([
+          "available": true,
+          "permission": "aurora.iosBiometricUnlock",
+          "capability": "ios.biometric.adminUnlock",
+          "source": "tauri-ios-native-plugin",
+          "details": [
+            "action": action,
+            "correlationId": correlationId,
+            "adminActionBackendRequired": true,
+            "confirmationOnly": true,
+            "secretsRedacted": true
+          ]
+        ])
+      } else {
+        invoke.reject(authError?.localizedDescription ?? "Biometric admin unlock failed.")
+      }
+    }
+  }
+
   @objc public func iosEntrypointPayload(_ invoke: Invoke) throws {
     invoke.resolve([
       "payload": AuroraNativePlugin.payloadDictionary(AuroraEntrypointFactory.emptyPayload()),
@@ -316,10 +413,10 @@ public final class AuroraNativePlugin: Plugin {
         "state": descriptor.state,
         "available": descriptor.available,
         "capability": descriptor.capability,
-        "permission": descriptor.permission,
+        "permission": AuroraNativePlugin.nullableString(descriptor.permission),
         "intakeType": descriptor.intakeType,
-        "urlScheme": descriptor.urlScheme ?? NSNull(),
-        "universalLinkHost": descriptor.universalLinkHost ?? NSNull(),
+        "urlScheme": AuroraNativePlugin.nullableString(descriptor.urlScheme),
+        "universalLinkHost": AuroraNativePlugin.nullableString(descriptor.universalLinkHost),
         "fileExtensions": descriptor.fileExtensions,
         "xcodeTarget": descriptor.xcodeTarget,
         "backendRequired": descriptor.backendRequired,
@@ -334,19 +431,37 @@ public final class AuroraNativePlugin: Plugin {
     [
       "source": payload.source,
       "invocation": payload.invocation,
-      "url": payload.url ?? NSNull(),
-      "scheme": payload.scheme ?? NSNull(),
-      "host": payload.host ?? NSNull(),
-      "path": payload.path ?? NSNull(),
-      "fileExtension": payload.fileExtension ?? NSNull(),
-      "uniformTypeIdentifier": payload.uniformTypeIdentifier ?? NSNull(),
-      "originatingBundleId": payload.originatingBundleId ?? NSNull(),
+      "url": AuroraNativePlugin.nullableString(payload.url),
+      "scheme": AuroraNativePlugin.nullableString(payload.scheme),
+      "host": AuroraNativePlugin.nullableString(payload.host),
+      "path": AuroraNativePlugin.nullableString(payload.path),
+      "fileExtension": AuroraNativePlugin.nullableString(payload.fileExtension),
+      "uniformTypeIdentifier": AuroraNativePlugin.nullableString(payload.uniformTypeIdentifier),
+      "originatingBundleId": AuroraNativePlugin.nullableString(payload.originatingBundleId),
       "sharedItemCount": payload.sharedItemCount,
       "privacyLabels": payload.privacyLabels,
       "backendHandoffRequired": payload.backendHandoffRequired,
-      "correlationId": payload.correlationId,
+      "correlationId": AuroraNativePlugin.nullableString(payload.correlationId),
       "secretsRedacted": payload.secretsRedacted,
       "siriReplacement": payload.siriReplacement
     ]
+  }
+
+  private static func biometryLabel(_ type: LABiometryType) -> String {
+    switch type {
+    case .faceID:
+      return "Face ID"
+    case .touchID:
+      return "Touch ID"
+    default:
+      return "none"
+    }
+  }
+
+  private static func nullableString(_ value: String?) -> Any {
+    guard let value else {
+      return NSNull()
+    }
+    return value
   }
 }
