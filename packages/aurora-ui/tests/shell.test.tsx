@@ -321,6 +321,10 @@ describe('Aurora production shell', () => {
       'askAuroraShortcut',
       'summarizeSharedContentShortcut',
       'stopAuroraSpeechAppIntent',
+      'shareExtension',
+      'deepLinks',
+      'widgets',
+      'fileAssociations',
       'siriReplacement'
     ])
     expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
@@ -332,6 +336,20 @@ describe('Aurora production shell', () => {
       })
     )
     expect(model.nativeIntegrations.find((integration) => integration.id === 'summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'fileAssociations')).toEqual(
       expect.objectContaining({
         state: 'degraded',
         privacyClass: 'sensitive',

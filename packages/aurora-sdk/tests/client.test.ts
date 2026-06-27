@@ -483,19 +483,20 @@ describe('AuroraClient', () => {
           platform: 'ios',
           id: 'shareExtension',
           capability: 'ios.shareExtension',
-          support: 'planned'
+          support: 'supported-path',
+          privacyClass: 'sensitive'
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'deepLinks',
           capability: 'ios.deepLinks',
-          support: 'planned'
+          support: 'supported-path'
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'widgets',
           capability: 'ios.widgets',
-          support: 'planned'
+          support: 'supported-path'
         }),
         expect.objectContaining({
           platform: 'ios',
@@ -546,9 +547,9 @@ describe('AuroraClient', () => {
     )
     expect(graph.explain('native:ios:shareExtension')).toEqual(
       expect.objectContaining({
-        state: 'pending',
+        state: 'degraded',
         routeable: false,
-        nextRepairAction: 'implement scoped iOS plugin, App Intent, or extension task'
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
       })
     )
     expect(graph.explain('native:ios:fileAssociations')).toEqual(

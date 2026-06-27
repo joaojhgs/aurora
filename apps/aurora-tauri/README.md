@@ -107,7 +107,7 @@ The `Tauri iOS Baseline` GitHub Actions workflow runs this baseline on macOS wit
 
 The iOS baseline uses `src-tauri/tauri.ios.conf.json` and the `aurora-ios-baseline` capability so mobile builds do not request desktop-only updater permissions. Desktop builds continue to use `aurora-main` plus the desktop-only `aurora-desktop-updater` capability from the Linux, macOS, and Windows platform config files.
 
-IOS-004 adds `src-tauri/ios/aurora-native-plugin/` as the Swift package scaffold for the official Tauri iOS plugin model. Its `Plugin` subclass exposes `nativeCapabilityManifest`, `iosInvocationStatus`, and `iosEntrypointPayload` commands with redacted payload metadata. The Swift package is not a replacement for the Xcode-managed App Intent, share extension, widget extension, associated-domain, or file-open wiring; those generated targets must call back through the SDK/backend handoff path.
+IOS-004 extends `src-tauri/ios/AuroraNativePlugin/`, the Swift package linked by the official Tauri iOS plugin model. Its `Plugin` subclass exposes `nativeCapabilityManifest`, `invocationStatus`, `iosEntrypointPayload`, and `invokeAuroraAction` commands with redacted payload metadata. The Swift package is not a replacement for the Xcode-managed App Intent, share extension, widget extension, associated-domain, or file-open wiring; those generated targets must call back through the SDK/backend handoff path.
 
 The iOS Tauri overlay declares `bundle.fileAssociations` in `src-tauri/tauri.ios.conf.json`. Tauri projects those declarations into generated mobile metadata, while iOS App Intents/share/widget targets remain Xcode-managed extension work.
 

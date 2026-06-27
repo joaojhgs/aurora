@@ -2298,6 +2298,7 @@ mod tests {
         let ios_permission = include_str!("../permissions/aurora-ios-native-plugin.toml");
         assert!(ios_permission.contains("aurora_ios_native_plugin_manifest"));
         assert!(ios_permission.contains("aurora_ios_invocation_status"));
+        assert!(ios_permission.contains("aurora_ios_entrypoint_payload"));
         assert!(ios_permission.contains("aurora_ios_invoke_action"));
 
         let swift_plugin = include_str!(
@@ -2306,10 +2307,22 @@ mod tests {
         assert!(swift_plugin.contains("@_cdecl(\"init_plugin_aurora_native\")"));
         assert!(swift_plugin.contains("nativeCapabilityManifest"));
         assert!(swift_plugin.contains("invocationStatus"));
+        assert!(swift_plugin.contains("iosEntrypointPayload"));
         assert!(swift_plugin.contains("invokeAuroraAction"));
-        assert!(swift_plugin.contains("\"app-intent.open-assistant\""));
-        assert!(swift_plugin.contains("\"share.import-context\""));
+        assert!(swift_plugin.contains("\"ios.shareExtension\": true"));
+        assert!(swift_plugin.contains("\"ios.fileAssociations\": true"));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
+
+        let swift_entrypoints = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift"
+        );
+        assert!(swift_entrypoints.contains("ios_share_extension"));
+        assert!(swift_entrypoints.contains("ios_deep_link"));
+        assert!(swift_entrypoints.contains("ios_widget"));
+        assert!(swift_entrypoints.contains("ios_file_association"));
+        assert!(swift_entrypoints.contains("backendHandoffRequired"));
+        assert!(swift_entrypoints.contains("secretsRedacted"));
+        assert!(swift_entrypoints.contains("siriReplacement: false"));
 
         let swift_package = include_str!("../ios/AuroraNativePlugin/Package.swift");
         assert!(swift_package.contains("../../.tauri/tauri-api"));
