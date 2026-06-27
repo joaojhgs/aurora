@@ -9,3 +9,15 @@ Current commands:
 - `nativeCapabilityManifest` returns the iOS native capability/permission manifest.
 - `invocationStatus` reports the allowed invocation surface and explicitly sets `siriReplacement` to `false`.
 - `invokeAuroraAction` accepts concrete Aurora action IDs and hands off to the SDK/backend boundary instead of duplicating orchestrator logic in Swift.
+
+Current App Intents/Shortcuts surfaces:
+
+- `AuroraAppIntents.swift` declares `AskAuroraIntent`, `AskAuroraShortcutIntent`, `SummarizeSharedContentIntent`, and `StopAuroraSpeechIntent`.
+- `AuroraAppShortcuts` registers app-owned shortcut phrases for those intents.
+- Intent results return `AuroraIntentHandoff` entities containing the Aurora action ID, backend method, invocation surface, privacy class, confirmation requirement, generated correlation ID, and `siriReplacement: false`.
+
+Required native verification remains macOS/Xcode-only:
+
+- `tauri ios build` or Xcode build of the generated iOS project with this package linked.
+- Simulator or device invocation of at least one App Intent or Shortcut.
+- Evidence that the handoff reaches the AuroraClient/backend boundary with correlation/provenance preserved.
