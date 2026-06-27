@@ -25,6 +25,16 @@ import type {
 } from './types.js'
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
+export type TauriListen = <TPayload = unknown>(
+  event: string,
+  handler: (event: TauriEvent<TPayload>) => void
+) => Promise<() => void>
+
+export interface TauriEvent<TPayload = unknown> {
+  event: string
+  id?: number
+  payload: TPayload
+}
 
 export interface TauriCommandNames {
   request: string
@@ -70,10 +80,12 @@ export interface TauriCommandNames {
   localFilePick: string
   secureFileHandleOpen: string
   eventSubscribe: string
+  eventUnsubscribe: string
 }
 
 export interface TauriLocalTransportOptions {
   invoke?: TauriInvoke
+  listen?: TauriListen
   commands?: Partial<TauriCommandNames>
   requestArgName?: string
   defaultTimeoutMs?: number
@@ -299,19 +311,22 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
   secureFileHandleOpen: 'aurora_secure_file_handle_open',
-  eventSubscribe: 'aurora_subscribe'
+  eventSubscribe: 'aurora_subscribe',
+  eventUnsubscribe: 'aurora_unsubscribe'
 }
 
 export class TauriLocalTransport implements AuroraTransport {
   readonly kind = 'tauri-local'
   readonly commands: TauriCommandNames
   private readonly invokeImpl: TauriInvoke
+  private readonly listenImpl: TauriListen | null
   private readonly requestArgName: string
   private readonly defaultTimeoutMs: number
   private sidecarSession: Promise<TauriSidecarSession | null> | null = null
 
   constructor(options: TauriLocalTransportOptions = {}) {
     this.invokeImpl = options.invoke ?? resolveTauriInvoke()
+    this.listenImpl = options.listen ?? resolveTauriListen()
     this.commands = { ...DEFAULT_COMMANDS, ...options.commands }
     this.requestArgName = options.requestArgName ?? 'request'
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
@@ -518,13 +533,37 @@ export class TauriLocalTransport implements AuroraTransport {
   async subscribe<TEventPayload = unknown, TPayload = unknown>(
     request: AuroraStreamRequest<TPayload>
   ): Promise<AuroraEventSubscription<TEventPayload>> {
+    const sidecarSession = await this.getSidecarSession()
+    const bridgeRequest = withSubscribeSidecarHeader(request, sidecarSession)
     const context: TauriInvokeContext = { method: this.commands.eventSubscribe }
     if (request.topics[0] !== undefined) context.busTopic = request.topics[0]
     const response = await this.invokeCommand<unknown>(
       this.commands.eventSubscribe,
-      { [this.requestArgName]: request },
+      { [this.requestArgName]: bridgeRequest },
       context
     )
+    if (isTauriSubscriptionDescriptor(response)) {
+      if (!this.listenImpl) {
+        throw new AuroraError({
+          code: 'unsupported_feature',
+          message: 'Tauri event listener API is unavailable; pass a listen implementation to TauriLocalTransport.'
+        })
+      }
+      return createTauriIpcEventSubscription<TEventPayload>(
+        response,
+        request,
+        this.listenImpl,
+        (subscriptionId) => {
+          const unsubscribeContext: TauriInvokeContext = { method: this.commands.eventUnsubscribe }
+          if (context.busTopic !== undefined) unsubscribeContext.busTopic = context.busTopic
+          void this.invokeCommand(
+            this.commands.eventUnsubscribe,
+            { [this.requestArgName]: { subscriptionId } },
+            unsubscribeContext
+          )
+        }
+      )
+    }
     return createEventSubscription(normalizeTauriEvents<TEventPayload>(response, request))
   }
 
@@ -587,6 +626,116 @@ function withSidecarSessionHeader<TPayload>(
   }
 }
 
+function withSubscribeSidecarHeader<TPayload>(
+  request: AuroraStreamRequest<TPayload>,
+  session: TauriSidecarSession | null
+): AuroraStreamRequest<TPayload> {
+  if (!session?.token) return request
+  return {
+    ...request,
+    headers: {
+      ...request.headers,
+      'x-aurora-sidecar-token': session.token
+    }
+  }
+}
+
+interface TauriSubscriptionDescriptor {
+  subscriptionId: string
+  eventName: string
+}
+
+interface TauriSubscriptionPayload {
+  subscriptionId?: string
+  event?: unknown
+}
+
+interface TauriSubscriptionClosedPayload {
+  subscriptionId?: string
+  reason?: string
+  code?: string
+  secretsRedacted?: boolean
+}
+
+function isTauriSubscriptionDescriptor(value: unknown): value is TauriSubscriptionDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string' &&
+    typeof (value as { eventName?: unknown }).eventName === 'string'
+  )
+}
+
+async function createTauriIpcEventSubscription<TPayload>(
+  descriptor: TauriSubscriptionDescriptor,
+  request: AuroraStreamRequest,
+  listen: TauriListen,
+  unsubscribe: (subscriptionId: string) => void
+): Promise<AuroraEventSubscription<TPayload>> {
+  const queue: Array<AuroraEvent<TPayload>> = []
+  const waiters: Array<() => void> = []
+  let closed = false
+  let closeError: AuroraError | null = null
+  const wake = () => waiters.splice(0).forEach((resolve) => resolve())
+  const closeFromNative = (payload: TauriSubscriptionClosedPayload) => {
+    closed = true
+    if (payload.code && payload.code !== 'closed') {
+      closeError = new AuroraError({
+        code: payload.code as AuroraErrorCode,
+        message: payload.reason ?? 'Tauri event subscription closed unexpectedly',
+        method: 'aurora_subscribe',
+        busTopic: request.topics[0],
+        detail: {
+          code: payload.code,
+          reason: payload.reason,
+          secretsRedacted: payload.secretsRedacted ?? true
+        }
+      })
+    }
+    wake()
+  }
+  const unlistenEvents = await listen<TauriSubscriptionPayload>(descriptor.eventName, ({ payload }) => {
+    const raw = payload?.event ?? payload
+    queue.push(eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit }))
+    wake()
+  })
+  const unlistenClosed = await listen<TauriSubscriptionClosedPayload>(`${descriptor.eventName}/closed`, ({ payload }) => {
+    closeFromNative(payload ?? {})
+  })
+  const cleanup = () => {
+    if (!closed) {
+      closed = true
+      unsubscribe(descriptor.subscriptionId)
+    }
+    unlistenEvents()
+    unlistenClosed()
+    wake()
+  }
+  const source: AsyncIterable<AuroraEvent<TPayload>> = {
+    async *[Symbol.asyncIterator]() {
+      try {
+        while (true) {
+          if (queue.length > 0) {
+            const event = queue.shift()
+            if (event) yield event
+            continue
+          }
+          if (closed) {
+            if (closeError) throw closeError
+            return
+          }
+          await new Promise<void>((resolve) => {
+            waiters.push(resolve)
+          })
+        }
+      } finally {
+        cleanup()
+      }
+    }
+  }
+  return createEventSubscription(source, cleanup)
+}
+
 async function* normalizeTauriEvents<TPayload>(
   response: unknown,
   request: AuroraStreamRequest
@@ -634,6 +783,15 @@ function resolveTauriInvoke(): TauriInvoke {
     })
   }
   return invoke
+}
+
+function resolveTauriListen(): TauriListen | null {
+  const tauri = (globalThis as {
+    __TAURI__?: {
+      event?: { listen?: TauriListen }
+    }
+  }).__TAURI__
+  return tauri?.event?.listen ?? null
 }
 
 function toTransportEnvelope<TData>(value: unknown): AuroraTransportEnvelope<TData> {

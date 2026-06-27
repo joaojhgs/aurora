@@ -3754,9 +3754,15 @@ describe('AuroraClient', () => {
   it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
     const tauri = new TauriLocalTransport({
       invoke: async (command, args) => {
-        expect(command).toBe('aurora_subscribe')
-        expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
-        return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') {
+          expect(args?.request).toEqual(expect.objectContaining({
+            stream: 'config',
+            headers: { 'x-aurora-sidecar-token': 'session-token' }
+          }))
+          return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+        }
+        throw new Error(`Unexpected command ${command}`)
       }
     })
     const tauriClient = new AuroraClient({ transport: tauri })
@@ -3770,6 +3776,98 @@ describe('AuroraClient', () => {
         })
       })
     )
+
+    const listeners = new Map<string, (event: { event: string; payload: unknown }) => void>()
+    let resolveIpcReady: () => void = () => undefined
+    const ipcReady = new Promise<void>((resolve) => {
+      resolveIpcReady = resolve
+    })
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const ipcTauri = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') {
+          expect(args?.request).toEqual(expect.objectContaining({
+            stream: 'health',
+            headers: { 'x-aurora-sidecar-token': 'session-token' }
+          }))
+          return { subscriptionId: 'sub-1', eventName: 'aurora://events/sub-1' }
+        }
+        if (command === 'aurora_unsubscribe') return { closed: true, subscriptionId: 'sub-1' }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        listeners.set(event, handler as (event: { event: string; payload: unknown }) => void)
+        if (event === 'aurora://events/sub-1') resolveIpcReady()
+        return () => listeners.delete(event)
+      }
+    })
+    const ipcClient = new AuroraClient({ transport: ipcTauri })
+    const ipcSubscription = ipcClient.events.watchHealth()
+    const ipcEvents = collectEvents(ipcSubscription, 1)
+    await ipcReady
+    listeners.get('aurora://events/sub-1')?.({
+      event: 'aurora://events/sub-1',
+      payload: {
+        subscriptionId: 'sub-1',
+        event: { id: 'health-1', kind: 'health.updated', payload: { status: 'healthy' }, correlation_id: 'corr-health' }
+      }
+    })
+    expect(await ipcEvents).toEqual([
+      expect.objectContaining({
+        id: 'health-1',
+        payload: { status: 'healthy' },
+        audit: expect.objectContaining({
+          correlationId: 'corr-health',
+          transport: 'tauri-local'
+        })
+      })
+    ])
+    ipcSubscription.close()
+    await ipcSubscription.closed
+    expect(calls.map((call) => call.command)).toContain('aurora_unsubscribe')
+
+    const closedTauri = new TauriLocalTransport({
+      invoke: async (command) => {
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return { subscriptionId: 'sub-closed', eventName: 'aurora://events/sub-closed' }
+        if (command === 'aurora_unsubscribe') return { closed: true }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        if (event.endsWith('/closed')) {
+          queueMicrotask(() => handler({
+            event,
+            payload: { subscriptionId: 'sub-closed', code: 'closed', reason: 'done', secretsRedacted: true }
+          } as never))
+        }
+        return () => undefined
+      }
+    })
+    const closedEvents = await collectEvents(new AuroraClient({ transport: closedTauri }).events.watchHealth(), 1)
+    expect(closedEvents).toEqual([])
+
+    const lossTauri = new TauriLocalTransport({
+      invoke: async (command) => {
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return { subscriptionId: 'sub-loss', eventName: 'aurora://events/sub-loss' }
+        if (command === 'aurora_unsubscribe') return { closed: true }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        if (event.endsWith('/closed')) {
+          queueMicrotask(() => handler({
+            event,
+            payload: { subscriptionId: 'sub-loss', code: 'transport_loss', reason: 'Gateway event stream failed', secretsRedacted: true }
+          } as never))
+        }
+        return () => undefined
+      }
+    })
+    await expect(collectEvents(new AuroraClient({ transport: lossTauri }).events.watchHealth(), 1)).rejects.toMatchObject({
+      code: 'transport_loss'
+    })
 
     const meshTransport = new MeshP2PTransport({
       defaultPeerId: 'peer-kitchen',

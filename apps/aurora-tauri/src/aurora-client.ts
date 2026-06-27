@@ -11,6 +11,7 @@ import {
   type TauriSidecarStatus
 } from '@aurora/client'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 export interface AuroraTauriRuntime {
   client: AuroraClient
@@ -35,7 +36,7 @@ export interface AuroraTauriRuntime {
 
 export function createAuroraTauriRuntime(): AuroraTauriRuntime {
   if (isTauriRuntime()) {
-    const transport = new TauriLocalTransport({ invoke })
+    const transport = new TauriLocalTransport({ invoke, listen })
     return {
       client: new AuroraClient({ transport }),
       mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
