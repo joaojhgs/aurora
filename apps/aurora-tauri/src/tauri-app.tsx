@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AppShell, RouteMatrix, StateSurface, buildShellSnapshot, loadingShellSnapshot } from '@aurora/ui'
 import type { AuroraShellSnapshot } from '@aurora/ui'
 import type {
+  AndroidLocalLightInferenceStatus,
   TauriAndroidBaselineStatus,
   TauriIosInvocationStatus,
   TauriNativeFeatureStatus,
@@ -17,6 +18,7 @@ export function AuroraTauriApp() {
   const [nativePermissions, setNativePermissions] = useState<TauriNativePermissionStatus | null>(null)
   const [nativeFeatures, setNativeFeatures] = useState<Record<string, TauriNativeFeatureStatus | null>>({})
   const [iosInvocationStatus, setIosInvocationStatus] = useState<TauriIosInvocationStatus | null>(null)
+  const [iosLocalLightStatus, setIosLocalLightStatus] = useState<AndroidLocalLightInferenceStatus | null>(null)
   const [androidBaseline, setAndroidBaseline] = useState<TauriAndroidBaselineStatus | null>(null)
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function AuroraTauriApp() {
         notifications,
         iosVoice,
         iosInvocation,
+        iosLocalLight,
         iosBackground,
         dialogs,
         audio,
@@ -53,6 +56,7 @@ export function AuroraTauriApp() {
         runtime.notificationStatus().catch(() => null),
         runtime.iosVoiceStatus().catch(() => null),
         runtime.iosInvocationStatus().catch(() => null),
+        runtime.iosLocalLightInferenceStatus().catch(() => null),
         runtime.iosBackgroundStatus().catch(() => null),
         runtime.dialogStatus().catch(() => null),
         runtime.audioBridgeStatus().catch(() => null),
@@ -66,6 +70,7 @@ export function AuroraTauriApp() {
         setNativePermissions(nextNativePermissions)
         setNativeFeatures({ tray, notifications, iosVoice, iosBackground, dialogs, audio, iosKeychain, iosBiometrics })
         setIosInvocationStatus(iosInvocation)
+        setIosLocalLightStatus(iosLocalLight)
         setAndroidBaseline(android)
       }
     }
@@ -106,6 +111,7 @@ export function AuroraTauriApp() {
             <div><dt>iOS Keychain</dt><dd>{nativeFeatureLabel(nativeFeatures.iosKeychain)}</dd></div>
             <div><dt>Face ID / Touch ID</dt><dd>{nativeFeatureLabel(nativeFeatures.iosBiometrics)}</dd></div>
             <div><dt>iOS invocation</dt><dd>{iosInvocationLabel(iosInvocationStatus)}</dd></div>
+            <div><dt>iOS local-light inference</dt><dd>{localLightInferenceLabel(iosLocalLightStatus)}</dd></div>
             <div><dt>Android baseline</dt><dd>{androidBaselineLabel(androidBaseline)}</dd></div>
             <div><dt>Assistant role probe</dt><dd>{assistantRoleProbeLabel(androidBaseline)}</dd></div>
             <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
@@ -130,6 +136,11 @@ function iosInvocationLabel(status: TauriIosInvocationStatus | null | undefined)
   if (!status) return 'Siri/Shortcuts/App Intents integration; no Siri replacement claim.'
   const state = status.available ? status.surface : 'not available'
   return `${state}; no Siri replacement claim.`
+}
+
+function localLightInferenceLabel(status: AndroidLocalLightInferenceStatus | null | undefined): string {
+  if (!status) return 'local-light inference provider pending native evidence.'
+  return `${status.platform} ${status.providerId} ${status.state}; backend model catalog required=${String(status.backendModelCatalogRequired)}`
 }
 
 function androidBaselineLabel(status: TauriAndroidBaselineStatus | null): string {

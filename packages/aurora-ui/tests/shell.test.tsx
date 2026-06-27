@@ -325,6 +325,7 @@ describe('Aurora production shell', () => {
       'deepLinks',
       'widgets',
       'fileAssociations',
+      'iosLocalLightInference',
       'siriReplacement'
     ])
     expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
@@ -475,23 +476,27 @@ describe('Aurora production shell', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
-      nativeManifest: {
-        ...nativeCapabilityManifestFixture,
-        platform: 'ios'
-      },
+      nativeManifest: iosNativeCapabilityManifestFixture,
       transportKind: 'native-mobile'
     })
-    const nativeManifest = { ...nativeCapabilityManifestFixture, platform: 'ios' as const }
-    const snapshot = snapshotFromGraph('native-mobile', graph, nativeManifest)
+    const snapshot = snapshotFromGraph('native-mobile', graph, iosNativeCapabilityManifestFixture)
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
 
     expect(model.nativeIntegrations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'shareExtension', state: 'degraded' }),
         expect.objectContaining({ id: 'fileAssociations', state: 'degraded' }),
+        expect.objectContaining({ id: 'iosLocalLightInference', state: 'degraded' }),
         expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
       ])
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosLocalLightInference')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        label: 'iOS Local Light Inference',
+        detail: expect.stringContaining('backend model catalog and device/model proof')
+      })
     )
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosMicrophoneCapture')).toEqual(
       expect.objectContaining({
@@ -526,6 +531,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('ios_background_voice_limited')
     expect(markup).toContain('iOS share extension intake')
     expect(markup).toContain('iOS file associations')
+    expect(markup).toContain('iOS local-light inference provider')
+    expect(markup).toContain('Core ML/MLC/ExecuTorch-style local-light inference')
     expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.')
   })
 

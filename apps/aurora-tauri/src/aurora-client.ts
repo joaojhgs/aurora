@@ -4,6 +4,7 @@ import {
   MockAuroraTransport,
   TauriLocalTransport,
   type TauriAndroidBaselineStatus,
+  type AndroidLocalLightInferenceStatus,
   type TauriIosInvocationStatus,
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
@@ -22,6 +23,7 @@ export interface AuroraTauriRuntime {
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
   iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>
   iosInvocationStatus: () => Promise<TauriIosInvocationStatus | null>
+  iosLocalLightInferenceStatus: () => Promise<AndroidLocalLightInferenceStatus | null>
   iosBackgroundStatus: () => Promise<TauriNativeFeatureStatus | null>
   dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
   audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
@@ -45,6 +47,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: () => transport.getNotificationStatus(),
       iosVoiceStatus: () => transport.getIosVoiceStatus(),
       iosInvocationStatus: () => transport.getIosInvocationStatus(),
+      iosLocalLightInferenceStatus: () => transport.getIosLocalLightInferenceStatus(),
       iosBackgroundStatus: () => transport.getIosBackgroundStatus(),
       dialogStatus: () => transport.getDialogStatus(),
       audioBridgeStatus: () => transport.getAudioBridgeStatus(),
@@ -73,6 +76,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       notificationStatus: async () => null,
       iosVoiceStatus: async () => null,
       iosInvocationStatus: async () => null,
+      iosLocalLightInferenceStatus: async () => null,
       iosBackgroundStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
@@ -94,6 +98,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     notificationStatus: async () => null,
     iosVoiceStatus: async () => null,
     iosInvocationStatus: async () => null,
+    iosLocalLightInferenceStatus: async () => null,
     iosBackgroundStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,

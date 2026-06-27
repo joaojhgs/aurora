@@ -4,6 +4,7 @@ description = "Allow the frontend SDK adapter to invoke the Aurora iOS Swift nat
 commands.allow = [
   "aurora_ios_native_plugin_manifest",
   "aurora_ios_invocation_status",
+  "aurora_ios_local_light_inference_status",
   "aurora_ios_entrypoint_payload",
   "aurora_ios_invoke_action",
   "aurora_ios_secure_storage_status",
