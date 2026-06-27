@@ -9,18 +9,23 @@
 - `pnpm --filter @aurora/tauri-ui test` for the desktop local/Tauri wrapper boundary.
 - Android/iOS rows with explicit skipped-with-rationale status until Android emulator/device smoke or macOS/Xcode runner evidence is attached. The non-strict Android release report is useful evidence, but does not by itself pass the Android row.
 
+Install the required Python extras before any local/manual gate run:
+
+```bash
+uv sync --extra gateway --extra mode-processes --extra test-e2e
+```
+
 Run the local report without executing package commands:
 
 ```bash
-uv run python scripts/transport_parity_gate.py --output-dir .omx/reports/transport-parity/local
+uv run --extra gateway --extra mode-processes --extra test-e2e python scripts/transport_parity_gate.py --output-dir .omx/reports/transport-parity/local
 ```
 
 Run the full local gate where Node dependencies and platform tools are installed:
 
 ```bash
-pnpm install
-pnpm --filter @aurora/client build
-uv run python scripts/transport_parity_gate.py --execute-commands --output-dir .omx/reports/transport-parity/local
+pnpm install --frozen-lockfile
+uv run --extra gateway --extra mode-processes --extra test-e2e python scripts/transport_parity_gate.py --execute-commands --output-dir .omx/reports/transport-parity/local
 ```
 
 Expected artifacts:
