@@ -1644,7 +1644,11 @@ export interface NativeMobileIntegration {
   support: NativeIntegrationSupport
   capability: string
   permission: string | null
+  invocation?: 'app-intent' | 'shortcut' | 'widget' | 'share-extension' | 'deep-link' | 'tauri-command' | string
+  backendMethod?: string | null
   privacyClass: PrivacyClass
+  requiresConfirmation?: boolean
+  siriReplacement?: false
   evidenceSource: string
   userCopy: string
   verifier: string

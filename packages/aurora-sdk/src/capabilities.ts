@@ -383,7 +383,16 @@ function candidatesFromNativeManifest(
         privacyClass: integration.privacyClass,
         disabledReasons,
         requiredAction: requiredActionForNativeIntegration(integration.support),
-        selector: { platform: integration.platform, capability: integration.capability },
+        selector: {
+          platform: integration.platform,
+          capability: integration.capability,
+          integrationId: integration.id,
+          invocation: integration.invocation ?? null,
+          backendMethod: integration.backendMethod ?? null,
+          privacyClass: integration.privacyClass,
+          requiresConfirmation: integration.requiresConfirmation ?? false,
+          siriReplacement: integration.siriReplacement ?? false
+        },
         source: 'native-manifest',
         raw: null
       } satisfies CapabilityProviderCandidate

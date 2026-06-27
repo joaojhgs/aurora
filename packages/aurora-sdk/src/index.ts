@@ -113,6 +113,7 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  iosNativeCapabilityManifestFixture,
   meshPeerListFixture,
   meshStatusFixture,
   modelRuntimeCatalogFixture,

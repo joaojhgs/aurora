@@ -34,6 +34,7 @@ import {
   modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
   androidNativeCapabilityManifestFixture,
+  iosNativeCapabilityManifestFixture,
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
   normalizeToolCatalog,
@@ -455,22 +456,28 @@ describe('AuroraClient', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
-      nativeManifest: nativeCapabilityManifestFixture,
+      nativeManifest: iosNativeCapabilityManifestFixture,
       transportKind: 'tauri-local'
     })
 
-    expect(nativeCapabilityManifestFixture.mobileIntegrations).toEqual(
+    expect(iosNativeCapabilityManifestFixture.mobileIntegrations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           platform: 'ios',
-          id: 'appIntents',
-          label: 'Siri/Shortcuts/App Intents integration',
-          support: 'planned'
+          id: 'askAuroraAppIntent',
+          invocation: 'app-intent',
+          backendMethod: 'Orchestrator.ExternalUserInput',
+          support: 'supported-path',
+          siriReplacement: false
         }),
         expect.objectContaining({
           platform: 'ios',
-          id: 'shortcuts',
-          support: 'supported-path'
+          id: 'summarizeSharedContentShortcut',
+          invocation: 'shortcut',
+          backendMethod: 'Orchestrator.IngestContext',
+          privacyClass: 'sensitive',
+          requiresConfirmation: true,
+          siriReplacement: false
         }),
         expect.objectContaining({
           platform: 'ios',
@@ -480,7 +487,7 @@ describe('AuroraClient', () => {
         })
       ])
     )
-    expect(nativeCapabilityManifestFixture.platformLimitations).toEqual(
+    expect(iosNativeCapabilityManifestFixture.platformLimitations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'noSiriReplacement',
@@ -489,14 +496,24 @@ describe('AuroraClient', () => {
       ])
     )
 
-    expect(graph.explain('native:ios:appIntents')).toEqual(
+    expect(graph.explain('native:ios:askAuroraAppIntent')).toEqual(
       expect.objectContaining({
-        state: 'pending',
+        state: 'degraded',
         routeable: false,
-        nextRepairAction: 'implement scoped iOS plugin, App Intent, or extension task'
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
       })
     )
-    expect(graph.explain('native:ios:shortcuts')).toEqual(
+    expect(graph.explain('native:ios:askAuroraAppIntent').providerCandidates[0]?.selector).toEqual(
+      expect.objectContaining({
+        integrationId: 'askAuroraAppIntent',
+        invocation: 'app-intent',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        privacyClass: 'personal',
+        requiresConfirmation: false,
+        siriReplacement: false
+      })
+    )
+    expect(graph.explain('native:ios:summarizeSharedContentShortcut')).toEqual(
       expect.objectContaining({
         state: 'degraded',
         routeable: false,
