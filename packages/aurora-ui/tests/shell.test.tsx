@@ -308,7 +308,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('secrets redacted')
   })
 
-  it('renders iOS App Intents as app-owned Shortcuts integration without claiming Siri replacement', async () => {
+  it('renders iOS App Intents as app-owned Shortcuts integration without claiming system assistant ownership', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
@@ -363,8 +363,8 @@ describe('Aurora production shell', () => {
         siriReplacement: false
       })
     )
-    expect(markup).toContain('Siri, Shortcuts, and App Intents')
-    expect(markup).toContain('does not replace Siri')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('system assistant ownership is unavailable')
     expect(markup).toContain('Orchestrator.ExternalUserInput')
     expect(markup).toContain('confirmation required')
   })
@@ -514,14 +514,14 @@ describe('Aurora production shell', () => {
     expect(model.nativePermissions.find((permission) => permission.id === 'ios.appOwnedInvocation')).toEqual(
       expect.objectContaining({
         state: 'privacy-blocked',
-        detail: expect.stringContaining('Aurora does not replace Siri')
+        detail: expect.stringContaining('system assistant ownership is unavailable')
       })
     )
     expect(model.nativeLimitations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'noSiriReplacement',
-          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.'
         })
       ])
     )
@@ -533,7 +533,25 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('iOS file associations')
     expect(markup).toContain('iOS local-light inference provider')
     expect(markup).toContain('Core ML/MLC/ExecuTorch-style local-light inference')
-    expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.')
+    expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.')
+  })
+
+  it('renders iOS Siri/Shortcuts/App Intents integration and release-gate evidence from the native manifest', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativePlatformIntegrations.map((integration) => integration.id)).toContain('ios-app-intents')
+    expect(model.nativeReleaseGates.map((gate) => gate.id)).toContain('app-store-connect-signing')
+    expect(model.nativeDeviceMatrix.map((row) => row.id)).toContain('ios-device-current')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('TestFlight/App Store signing dry run')
+    expect(markup).toContain('Credentials stay in CI secret storage')
+    expect(markup).toContain('Physical iPhone or iPad')
+    expect(markup).not.toMatch(/replace Siri|Siri replacement/i)
   })
 
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {
@@ -577,12 +595,12 @@ describe('Aurora production shell', () => {
       expect.objectContaining({ state: 'available-local', label: 'iOS Keychain' })
     )
     expect(model.nativePermissions.find((permission) => permission.id === 'ios.siriReplacement')).toEqual(
-      expect.objectContaining({ state: 'unsupported', label: 'Siri replacement' })
+      expect.objectContaining({ state: 'unsupported', label: 'System assistant role' })
     )
     expect(markup).toContain('Tokens, mesh credentials, and admin unlock secrets use iOS Keychain')
     expect(markup).toContain('Face ID/Touch ID can confirm admin unlocks')
     expect(markup).toContain('Siri/Shortcuts/App Intents integration is app-owned')
-    expect(markup).toContain('iOS does not allow Aurora to replace Siri')
+    expect(markup).toContain('iOS does not allow third-party default assistant ownership')
   })
 
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
@@ -830,9 +848,9 @@ describe('Aurora production shell', () => {
     const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-thin' })
 
     expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
-      expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS Siri Replacement Unsupported'])
+      expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS System Assistant Role Unsupported'])
     )
-    expect(settings.nativePermissions.find((permission) => permission.label === 'iOS Siri Replacement Unsupported')?.state).toBe('unsupported')
+    expect(settings.nativePermissions.find((permission) => permission.label === 'iOS System Assistant Role Unsupported')?.state).toBe('unsupported')
     expect(onboarding.modes.find((mode) => mode.id === 'ios-thin')?.repair).toContain('Siri/Shortcuts/App Intents integration')
   })
 
@@ -938,7 +956,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Android Thin')
     expect(markup).toContain('iOS Thin')
     expect(markup).toContain('iOS Local-Light')
-    expect(markup).toContain('iOS cannot replace Siri')
+    expect(markup).toContain('system assistant ownership is unavailable on iOS')
     expect(markup).toContain('Offline Local')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')

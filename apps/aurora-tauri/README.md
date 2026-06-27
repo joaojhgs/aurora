@@ -76,11 +76,47 @@ Minimum Android release evidence:
 - Fallback entrypoints such as app launcher, notification action, share sheet, deep link, shortcut/tile, or mesh/server routing remain available when the assistant role is not held.
 - Settings UI shows Android assistant-role and fallback states only from the native manifest payload.
 
+## iOS Release Gate
+
+iOS release evidence is tracked by `src-tauri/ios/release-gate.json` and exposed through the SDK native manifest shape. The approved user-facing copy is `Siri/Shortcuts/App Intents integration`; UI copy must not claim that Aurora becomes the iOS system assistant.
+
+Policy checks can run on any platform:
+
+```bash
+pnpm --filter @aurora/tauri-ui ios:policy
+```
+
+The actual iOS build and signing gate requires macOS with Xcode and the generated Tauri iOS project:
+
+```bash
+pnpm --filter @aurora/tauri-ui tauri ios init
+pnpm --filter @aurora/tauri-ui ios:gate
+pnpm --filter @aurora/tauri-ui ios:open-xcode
+```
+
+The App Store/TestFlight dry run also requires App Store Connect credentials in CI or an external macOS runner:
+
+```bash
+export APPLE_API_KEY_ID=...
+export APPLE_API_ISSUER=...
+export APPLE_API_KEY_PATH=/secure/path/AuthKey_XXXX.p8
+pnpm --filter @aurora/tauri-ui ios:build:app-store
+```
+
+Required QA evidence for IOS-008:
+
+- `tauri ios build` or `ios:gate` log from macOS/Xcode.
+- Simulator or device invocation of the native manifest plugin and at least one App Intent/Shortcut flow.
+- Simulator or device share/deep-link flow with backend attachment validation or a policy-blocked result.
+- App Store Connect/TestFlight signing dry run or explicit credential-gated substitute evidence.
+- No raw Apple API key material, provisioning secret, token, local model path, or unredacted payload in logs or screenshots.
+
 ## Commands
 
 ```bash
 pnpm --filter @aurora/tauri-ui build
 pnpm --filter @aurora/tauri-ui tauri dev
+pnpm --filter @aurora/tauri-ui ios:policy
 cd apps/aurora-tauri/src-tauri && cargo check
 cd apps/aurora-tauri/src-tauri && cargo test
 ```
@@ -95,7 +131,7 @@ IOS-001 establishes the Tauri iOS build baseline and native-manifest contract. T
 - `iOS deep links`: `aurora://` and associated-link launch paths for app-owned Aurora flows.
 - `iOS widgets`: widget actions that open Aurora entrypoints without running assistant orchestration in the extension process.
 - `iOS file associations`: Tauri mobile file associations for selected text, markdown, JSON, and `.aurora` context exports.
-- `Siri replacement`: unsupported. Aurora must not claim it can replace Siri as the default iOS assistant.
+- `System assistant role`: unsupported. Aurora must present Siri/Shortcuts/App Intents integration only and must not claim default iOS assistant ownership.
 
 Linux can run the TypeScript/Rust manifest checks, but cannot satisfy the iOS build acceptance gate. macOS/Xcode verification must run:
 

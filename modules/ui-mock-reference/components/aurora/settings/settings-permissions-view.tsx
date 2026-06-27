@@ -29,7 +29,7 @@ const iosStates = [
   ['App Intents', 'planned', 'degraded'],
   ['Shortcuts', 'supported path', 'available'],
   ['Share Sheet', 'planned extension', 'degraded'],
-  ['Siri replacement', 'not supported / not claimed', 'unsupported_platform'],
+  ['System assistant role', 'not available on iOS', 'unsupported_platform'],
 ] as const
 
 export function SettingsPermissionsView() {
@@ -84,7 +84,7 @@ export function SettingsPermissionsView() {
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><WandSparkles className="size-4 text-primary" />iOS invocation</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {iosStates.map(([label, value, state]) => <div key={label} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{value}</p></div><CapabilityStateBadge state={state} /></div>)}
-                <Badge variant="outline" className="border-warning/30 text-warning">No Siri replacement claim</Badge>
+                <Badge variant="outline" className="border-warning/30 text-warning">Siri/Shortcuts/App Intents integration only</Badge>
               </CardContent>
             </Card>
           </TabsContent>

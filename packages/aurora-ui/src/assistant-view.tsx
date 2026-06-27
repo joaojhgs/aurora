@@ -1391,7 +1391,7 @@ function voiceChip(
 
 function wakeDetail(nativePlatform: string, wakeControl: RouteAvailability, wakeProcess: RouteAvailability): string {
   if (nativePlatform.toLowerCase().includes('ios')) {
-    return 'iOS wake/background assistant behavior remains foreground-only or app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, deep links, or notifications; Aurora does not replace Siri.'
+    return 'iOS wake/background assistant behavior remains foreground-only or app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, deep links, or notifications; system assistant ownership is unavailable.'
   }
   if (nativePlatform.toLowerCase().includes('android')) {
     return 'Android wake/background behavior requires foreground service and native plugin evidence.'

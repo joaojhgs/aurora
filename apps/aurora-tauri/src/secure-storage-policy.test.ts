@@ -24,7 +24,7 @@ describe('Tauri secure storage policy', () => {
     }
   })
 
-  it('documents iOS biometric credential scope without Siri replacement claims', () => {
+  it('documents iOS biometric credential scope without system assistant ownership claims', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const swift = readFileSync(
       resolve(repoRoot, iosNativePluginPath),
@@ -36,7 +36,7 @@ describe('Tauri secure storage policy', () => {
     expect(swift).toContain('secretsRedacted')
     expect(swift).toContain('confirmationOnly')
     expect(plist).toContain('NSFaceIDUsageDescription')
-    expect(`${swift}\n${plist}`).toContain('does not allow Aurora to replace Siri')
+    expect(`${swift}\n${plist}`).toContain('does not allow third-party default assistant ownership')
     expect(`${swift}\n${plist}`).not.toMatch(/"userCopy":\s*"Aurora replaces Siri/i)
   })
 })

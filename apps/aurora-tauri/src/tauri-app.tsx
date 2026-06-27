@@ -133,9 +133,9 @@ function nativeFeatureLabel(feature: TauriNativeFeatureStatus | null | undefined
 }
 
 function iosInvocationLabel(status: TauriIosInvocationStatus | null | undefined): string {
-  if (!status) return 'Siri/Shortcuts/App Intents integration; no Siri replacement claim.'
+  if (!status) return 'Siri/Shortcuts/App Intents integration; no system assistant role claim.'
   const state = status.available ? status.surface : 'not available'
-  return `${state}; no Siri replacement claim.`
+  return `${state}; no system assistant role claim.`
 }
 
 function localLightInferenceLabel(status: AndroidLocalLightInferenceStatus | null | undefined): string {

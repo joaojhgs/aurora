@@ -5,7 +5,10 @@ import type {
   AndroidFallbackEntrypoint,
   AndroidNativeEntrypoint,
   AvailabilityState,
+  NativeDeviceMatrixRow,
   NativeMobileIntegration,
+  NativePlatformIntegration,
+  NativeReleaseGate,
   PrivacyClass
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -66,6 +69,10 @@ export interface SettingsPermissionsModel {
   nativeIntegrations: SettingsNativeIntegrationCard[]
   nativeLimitations: Array<{ id: string; label: string; detail: string; evidence: string }>
   routeDefaults: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
+  nativePlatformIntegrations: NativePlatformIntegration[]
+  nativeReleaseGates: NativeReleaseGate[]
+  nativeDeviceMatrix: NativeDeviceMatrixRow[]
+  nativePolicyNotes: string[]
   adminActionLabel: string
   fallbackLabel: string
   error: string | null
@@ -156,21 +163,58 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
         </section>
       </div>
 
-      {model.nativeIntegrations.length > 0 ? (
-        <section className="aui-settings-panel" aria-labelledby="native-integrations-title">
-          <PanelTitle
-            icon={<Smartphone size={18} aria-hidden />}
-            title="Siri, Shortcuts, and App Intents"
-            description="iOS invocation stays inside app-owned Siri/Shortcuts/App Intents integration, widgets, share, or deep-link surfaces; Aurora does not replace Siri."
-            id="native-integrations-title"
-          />
-          <div className="aui-native-list">
-            {model.nativeIntegrations.map((integration) => (
-              <NativeIntegrationRow key={integration.id} integration={integration} />
+      <section className="aui-settings-panel" aria-labelledby="ios-integration-title">
+        <PanelTitle
+          icon={<Smartphone size={18} aria-hidden />}
+          title="Siri/Shortcuts/App Intents integration"
+          description="iOS uses app-owned invocation surfaces. It is not advertised as the system Siri assistant."
+          id="ios-integration-title"
+        />
+        {model.nativePlatformIntegrations.length > 0 || model.nativeReleaseGates.length > 0 ? (
+          <div className="aui-route-defaults">
+            {model.nativePlatformIntegrations.map((integration) => (
+              <article key={integration.id}>
+                <div>
+                  <strong>{integration.label}</strong>
+                  <span>{integration.detail}</span>
+                </div>
+                <StatusBadge state={integrationStatusState(integration.status)} />
+                <code>{integration.evidence.join(', ') || 'native manifest'}</code>
+              </article>
+            ))}
+            {model.nativeReleaseGates.map((gate) => (
+              <article key={gate.id}>
+                <div>
+                  <strong>{gate.label}</strong>
+                  <span>{gate.detail}</span>
+                </div>
+                <StatusBadge state={releaseGateState(gate.status)} />
+                <code>{gate.command ?? gate.requiredEvidence}</code>
+              </article>
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <div className="aui-settings-empty">
+            <EvidenceBadge label="native-manifest" />
+            <p>No iOS integration or release-gate manifest is available for this deployment mode.</p>
+          </div>
+        )}
+        {model.nativePolicyNotes.length > 0 ? (
+          <ul className="aui-provider-list" aria-label="iOS policy notes">
+            {model.nativePolicyNotes.map((note) => <li key={note}><span>{note}</span></li>)}
+          </ul>
+        ) : null}
+        {model.nativeDeviceMatrix.length > 0 ? (
+          <dl className="aui-settings-facts">
+            {model.nativeDeviceMatrix.map((row) => (
+              <div key={row.id}>
+                <dt>{row.target}</dt>
+                <dd>{row.status}: {row.evidence}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </section>
 
       <section className="aui-settings-panel" aria-labelledby="route-policy-title">
         <PanelTitle
@@ -266,6 +310,10 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       detail: limitation.userCopy,
       evidence: limitation.evidenceSource
     })),
+    nativePlatformIntegrations: snapshot.nativePlatformIntegrations,
+    nativeReleaseGates: snapshot.nativeReleaseGates,
+    nativeDeviceMatrix: snapshot.nativeDeviceMatrix,
+    nativePolicyNotes: snapshot.nativePolicyNotes,
     routeDefaults: [
       {
         id: 'remote-providers',
@@ -319,7 +367,7 @@ function NativeIntegrationRow({ integration }: { integration: SettingsNativeInte
         <dl className="aui-settings-facts">
           <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'backend evidence required'}</dd></div>
           <div><dt>Permission</dt><dd>{integration.permission ?? 'none'}</dd></div>
-          <div><dt>Siri replacement</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
+          <div><dt>System assistant role</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
         </dl>
       </div>
       <button type="button" disabled>
@@ -678,7 +726,7 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosBackgroundStatus': 'iOS background voice status',
     'aurora.iosMicrophoneCapture': 'iOS microphone capture',
     'aurora.iosBackgroundAudio': 'iOS background voice',
-    'aurora.iosSiriReplacement': 'iOS Siri Replacement Unsupported',
+    'aurora.iosSiriReplacement': 'iOS System Assistant Role Unsupported',
     'aurora.iosAppIntents': 'iOS App Intents',
     'aurora.iosShortcuts': 'iOS Shortcuts',
     'aurora.iosLocalLightInference': 'iOS Local Light Inference',
@@ -691,7 +739,7 @@ function nativePermissionLabel(name: string): string {
     'ios.shareExtension': 'Share extension',
     'ios.widgets': 'Widgets',
     'ios.deepLinks': 'Deep links',
-    'ios.siriReplacement': 'Siri replacement',
+    'ios.siriReplacement': 'System assistant role',
     'ios.localLightInference.provider': 'iOS local-light inference provider',
     'ios.localLightInference.modelRuntime': 'iOS local-light model runtime',
     'ios.localLightInference.fallback': 'iOS local-light fallback'
@@ -734,13 +782,13 @@ function nativePermissionDetail(
     return 'Always-on background listening is unavailable on iOS; use foreground capture, notifications, Shortcuts, App Intents, widgets, share sheet, or deep links.'
   }
   if (name === 'ios.appOwnedInvocation') {
-    return 'iOS invocation stays app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, and deep links; Aurora does not replace Siri.'
+    return 'iOS invocation stays app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, and deep links; system assistant ownership is unavailable.'
   }
   if (name === 'ios.shareExtension' || name === 'ios.widgets' || name === 'ios.deepLinks') {
     return 'iOS entrypoints stay inside app-owned extension, widget, share, and deep-link surfaces.'
   }
   if (name === 'ios.siriReplacement') {
-    return 'iOS does not allow Aurora to replace Siri; only Siri/Shortcuts/App Intents integration is shown.'
+    return 'iOS does not allow third-party default assistant ownership; only Siri/Shortcuts/App Intents integration is shown.'
   }
   if (name === 'aurora.iosLocalLightInference' || name.startsWith('ios.localLightInference')) {
     return 'iOS Core ML/MLC/ExecuTorch-style local-light inference is a capability-gated provider; backend model catalog and device/model proof are required before selection.'
@@ -754,4 +802,21 @@ function nativePermissionDetail(
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort()
+}
+
+function integrationStatusState(status: NativePlatformIntegration['status']): AvailabilityState {
+  if (status === 'supported') return 'available-local'
+  if (status === 'partial') return 'degraded'
+  if (status === 'requires-native-target') return 'privacy-blocked'
+  if (status === 'deferred') return 'pending'
+  return 'unsupported'
+}
+
+function releaseGateState(status: NativeReleaseGate['status']): AvailabilityState {
+  if (status === 'passed') return 'available-local'
+  if (status === 'pending') return 'pending'
+  if (status === 'blocked') return 'denied'
+  if (status === 'requires-credentials') return 'privacy-blocked'
+  if (status === 'requires-macos' || status === 'requires-xcode') return 'degraded'
+  return 'unsupported'
 }

@@ -39,7 +39,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": false,
       "siriReplacement": false,
       "evidenceSource": "IOS-003/IOS-004 native plugin manifest",
-      "userCopy": "Runs as an app-owned Siri/Shortcuts/App Intents integration and does not replace Siri.",
+      "userCopy": "Runs as an app-owned Siri/Shortcuts/App Intents integration; system assistant ownership is unavailable.",
       "verifier": "tauri ios build plus simulator/device App Intent invocation on macOS/Xcode"
     ],
     [
@@ -93,7 +93,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "siriReplacement",
-      "label": "Siri replacement",
+      "label": "System assistant role",
       "support": "unsupported",
       "capability": "ios.siriReplacement",
       "permission": NSNull(),
@@ -101,7 +101,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": false,
       "siriReplacement": false,
       "evidenceSource": "Apple-platform-policy",
-      "userCopy": "iOS does not allow Aurora to replace Siri as the default assistant.",
+      "userCopy": "iOS does not allow third-party default assistant ownership.",
       "verifier": "copy and capability review; no executable route should be exposed"
     ],
     [
@@ -287,9 +287,9 @@ public final class AuroraNativePlugin: Plugin {
         [
           "platform": "ios",
           "id": "noSiriReplacement",
-          "label": "No Siri replacement",
-          "reason": "Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.",
-          "userCopy": "Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.",
+          "label": "No system assistant role",
+          "reason": "Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not third-party default assistant ownership.",
+          "userCopy": "Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.",
           "evidenceSource": "Apple App Intents and SiriKit extension documentation"
         ],
         [
@@ -381,7 +381,7 @@ public final class AuroraNativePlugin: Plugin {
       "permission": "aurora.iosBackgroundAudio",
       "capability": "ios.backgroundVoice",
       "source": "tauri-ios-native-plugin",
-      "reason": "iOS does not allow Aurora to run always-on background assistant listening or replace Siri; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+      "reason": "iOS does not allow Aurora to run always-on background assistant listening or claim default assistant ownership; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
       "details": [
         "platform": "ios",
         "alwaysOnWake": false,

@@ -452,7 +452,7 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('models iOS invocation through App Intents and Shortcuts without a Siri replacement claim', () => {
+  it('models iOS invocation through App Intents and Shortcuts without a system assistant ownership claim', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
@@ -516,7 +516,7 @@ describe('AuroraClient', () => {
           platform: 'ios',
           id: 'siriReplacement',
           support: 'unsupported',
-          userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
+          userCopy: expect.stringContaining('does not allow third-party default assistant ownership')
         })
       ])
     )
@@ -524,7 +524,7 @@ describe('AuroraClient', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'noSiriReplacement',
-          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.'
         })
       ])
     )
@@ -797,7 +797,7 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('keeps iOS native invocation app-owned without Siri replacement capability', () => {
+  it('keeps iOS native invocation app-owned without system assistant capability', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
