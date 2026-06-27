@@ -24,6 +24,8 @@ Override with `AURORA_TAURI_SIDECAR_PROGRAM`, `AURORA_TAURI_SIDECAR_ARGS`, `AURO
 
 The Tauri shell and SDK transport do not use `localStorage`, `sessionStorage`, or plaintext files for these values. The secure-storage commands return redacted metadata (`backend=platform-keychain`, `persisted=true`, `secretsRedacted=true`) and only return a secret value to the explicit `secureStorageGet` caller.
 
+iOS builds expose the same storage posture through the Aurora native plugin skeleton in `src-tauri/ios/`: Keychain status, Face ID/Touch ID status, and admin unlock confirmation are surfaced as app-owned native capability evidence. Admin unlock is confirmation-only and still expects backend AdminAction confirmation/audit for admin-critical mutations. The iOS app must include `NSFaceIDUsageDescription`, and `tauri ios build`/Xcode simulator or device validation must run on macOS before release.
+
 ## Packaging And Updates
 
 Tauri bundling is enabled for Linux AppImage/deb/rpm, macOS dmg, and Windows MSI/NSIS targets. Release builds create updater artifacts and signatures through Tauri's updater configuration.

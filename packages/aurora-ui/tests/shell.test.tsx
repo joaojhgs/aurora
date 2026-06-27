@@ -337,6 +337,42 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required')
   })
 
+  it('renders iOS Keychain, biometric admin unlock, and Siri limitation copy from native manifest evidence', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: {
+        'aurora.iosKeychain': true,
+        'aurora.iosBiometricUnlock': true
+      },
+      capabilities: {
+        'ios.keychain.secureCredentialStorage': true,
+        'ios.biometric.adminUnlock': true,
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.shareExtension': true,
+        'ios.widgets': true,
+        'ios.deepLinks': true,
+        'ios.siriReplacement': false
+      }
+    }))
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosKeychain')).toEqual(
+      expect.objectContaining({ state: 'available-local', label: 'iOS Keychain' })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.siriReplacement')).toEqual(
+      expect.objectContaining({ state: 'unsupported', label: 'Siri replacement' })
+    )
+    expect(markup).toContain('Tokens, mesh credentials, and admin unlock secrets use iOS Keychain')
+    expect(markup).toContain('Face ID/Touch ID can confirm admin unlocks')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration is app-owned')
+    expect(markup).toContain('iOS does not allow Aurora to replace Siri')
+  })
+
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')

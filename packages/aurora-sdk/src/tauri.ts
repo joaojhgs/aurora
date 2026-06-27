@@ -27,6 +27,9 @@ export interface TauriCommandNames {
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
+  iosSecureStorageStatus: string
+  iosBiometricStatus: string
+  iosAdminUnlock: string
   localFileRead: string
   localFileWrite: string
   localFilePick: string
@@ -102,6 +105,13 @@ export interface SecureStorageWriteResult {
   ok: boolean
 }
 
+export interface IosAdminUnlockRequest {
+  reason: string
+  action?: string
+  correlationId?: string
+  allowDeviceCredential?: boolean
+}
+
 export interface LocalFileReadOptions {
   encoding?: 'utf-8' | 'base64' | 'bytes'
 }
@@ -155,6 +165,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
+  iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
+  iosBiometricStatus: 'aurora_ios_biometric_status',
+  iosAdminUnlock: 'aurora_ios_admin_unlock',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
@@ -255,6 +268,18 @@ export class TauriLocalTransport implements AuroraTransport {
 
   secureStorageDelete(key: string): Promise<SecureStorageWriteResult> {
     return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
+  }
+
+  getIosSecureStorageStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosSecureStorageStatus)
+  }
+
+  getIosBiometricStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosBiometricStatus)
+  }
+
+  iosAdminUnlock(request: IosAdminUnlockRequest): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosAdminUnlock, { request })
   }
 
   readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileReadResult> {

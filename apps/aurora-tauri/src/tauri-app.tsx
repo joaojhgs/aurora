@@ -23,20 +23,32 @@ export function AuroraTauriApp() {
               details: {}
             }))
           : null
-      const [nextSnapshot, nextSidecar, nextNativePermissions, tray, notifications, dialogs, audio] = await Promise.all([
+      const [
+        nextSnapshot,
+        nextSidecar,
+        nextNativePermissions,
+        tray,
+        notifications,
+        dialogs,
+        audio,
+        iosKeychain,
+        iosBiometrics
+      ] = await Promise.all([
         buildShellSnapshot(runtime.client),
         localSidecar ? Promise.resolve(localSidecar) : runtime.sidecarStatus().catch(() => null),
         runtime.nativePermissionStatus().catch(() => null),
         runtime.trayStatus().catch(() => null),
         runtime.notificationStatus().catch(() => null),
         runtime.dialogStatus().catch(() => null),
-        runtime.audioBridgeStatus().catch(() => null)
+        runtime.audioBridgeStatus().catch(() => null),
+        runtime.iosSecureStorageStatus().catch(() => null),
+        runtime.iosBiometricStatus().catch(() => null)
       ])
       if (!cancelled) {
         setSnapshot(nextSnapshot)
         setSidecar(nextSidecar)
         setNativePermissions(nextNativePermissions)
-        setNativeFeatures({ tray, notifications, dialogs, audio })
+        setNativeFeatures({ tray, notifications, dialogs, audio, iosKeychain, iosBiometrics })
       }
     }
     void load()
@@ -71,6 +83,8 @@ export function AuroraTauriApp() {
             <div><dt>Notifications</dt><dd>{nativeFeatureLabel(nativeFeatures.notifications)}</dd></div>
             <div><dt>Dialogs</dt><dd>{nativeFeatureLabel(nativeFeatures.dialogs)}</dd></div>
             <div><dt>Audio bridge</dt><dd>{nativeFeatureLabel(nativeFeatures.audio)}</dd></div>
+            <div><dt>iOS Keychain</dt><dd>{nativeFeatureLabel(nativeFeatures.iosKeychain)}</dd></div>
+            <div><dt>Face ID / Touch ID</dt><dd>{nativeFeatureLabel(nativeFeatures.iosBiometrics)}</dd></div>
             <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
           </dl>
           <button className="ata-secondary" type="button" onClick={() => void runtime.shutdown()}>

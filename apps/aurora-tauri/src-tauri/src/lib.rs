@@ -145,6 +145,14 @@ struct NativeNotificationRequest {
     body: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IosAdminUnlockRequest {
+    reason: String,
+    action: Option<String>,
+    correlation_id: Option<String>,
+}
+
 struct SidecarState {
     child: Option<Child>,
     started_at: Option<Instant>,
@@ -458,20 +466,22 @@ async fn native_capabilities() -> Result<NativeCapabilityManifest, AuroraCommand
 #[tauri::command]
 async fn aurora_native_permission_status() -> Result<NativePermissionStatus, AuroraCommandError> {
     let manifest = native_capability_manifest();
+    let denied_by_default = manifest
+        .permissions
+        .iter()
+        .filter_map(|(permission, allowed)| {
+            if *allowed {
+                None
+            } else {
+                Some(permission.clone())
+            }
+        })
+        .collect();
     Ok(NativePermissionStatus {
         platform: manifest.platform,
         permissions: manifest.permissions,
         capabilities: manifest.capabilities,
-        denied_by_default: vec![
-            "aurora.shell".to_string(),
-            "aurora.processSpawn".to_string(),
-            "aurora.localFileRead".to_string(),
-            "aurora.localFileWrite".to_string(),
-            "aurora.notificationsSend".to_string(),
-            "aurora.dialogOpen".to_string(),
-            "aurora.audioCapture".to_string(),
-            "aurora.audioPlayback".to_string(),
-        ],
+        denied_by_default,
         privacy_classes: vec![
             "personal".to_string(),
             "credential".to_string(),
@@ -543,6 +553,95 @@ async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraComma
         .details
         .insert("playbackControlEnabled".to_string(), json!(false));
     Ok(status)
+}
+
+#[tauri::command]
+async fn aurora_ios_secure_storage_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = ios_native_details();
+    details.insert("backend".to_string(), json!("keychain"));
+    details.insert(
+        "namespaces".to_string(),
+        json!([
+            "aurora.session",
+            "aurora.auth",
+            "aurora.gateway",
+            "aurora.mesh",
+            "aurora.admin"
+        ]),
+    );
+    details.insert("persisted".to_string(), json!(true));
+    Ok(NativeFeatureStatus {
+        available: cfg!(target_os = "ios"),
+        permission: "aurora.iosKeychain".to_string(),
+        capability: "ios.keychain.secureCredentialStorage".to_string(),
+        source: "tauri-ios-native-plugin".to_string(),
+        reason: if cfg!(target_os = "ios") {
+            None
+        } else {
+            Some(
+                "iOS Keychain status requires an iOS target built with Xcode/Tauri mobile."
+                    .to_string(),
+            )
+        },
+        details,
+    })
+}
+
+#[tauri::command]
+async fn aurora_ios_biometric_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = ios_native_details();
+    details.insert("framework".to_string(), json!("LocalAuthentication"));
+    details.insert("biometry".to_string(), json!(["Face ID", "Touch ID"]));
+    details.insert(
+        "fallback".to_string(),
+        json!("device passcode only when native policy allows it"),
+    );
+    details.insert(
+        "usageDescriptionRequired".to_string(),
+        json!("NSFaceIDUsageDescription"),
+    );
+    Ok(NativeFeatureStatus {
+        available: cfg!(target_os = "ios"),
+        permission: "aurora.iosBiometricUnlock".to_string(),
+        capability: "ios.biometric.adminUnlock".to_string(),
+        source: "tauri-ios-native-plugin".to_string(),
+        reason: if cfg!(target_os = "ios") {
+            None
+        } else {
+            Some(
+                "Face ID/Touch ID status requires an iOS target and cannot be proven on Linux."
+                    .to_string(),
+            )
+        },
+        details,
+    })
+}
+
+#[tauri::command]
+async fn aurora_ios_admin_unlock(
+    request: IosAdminUnlockRequest,
+) -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut details = ios_native_details();
+    details.insert("reason".to_string(), json!(request.reason));
+    details.insert("action".to_string(), json!(request.action));
+    details.insert("correlationId".to_string(), json!(request.correlation_id));
+    details.insert("adminActionBackendRequired".to_string(), json!(true));
+    details.insert("confirmationOnly".to_string(), json!(true));
+    details.insert("auditSecretRedacted".to_string(), json!(true));
+    if !cfg!(target_os = "ios") {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "iOS admin unlock requires Face ID/Touch ID through the iOS Tauri native plugin and cannot run on this platform"
+                .to_string(),
+        ));
+    }
+    Ok(NativeFeatureStatus {
+        available: true,
+        permission: "aurora.iosBiometricUnlock".to_string(),
+        capability: "ios.biometric.adminUnlock".to_string(),
+        source: "tauri-ios-native-plugin".to_string(),
+        reason: None,
+        details,
+    })
 }
 
 #[tauri::command]
@@ -721,6 +820,11 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.logTail".to_string(), true);
     permissions.insert("aurora.updater".to_string(), true);
     permissions.insert("aurora.secureStorage".to_string(), true);
+    permissions.insert("aurora.iosKeychain".to_string(), cfg!(target_os = "ios"));
+    permissions.insert(
+        "aurora.iosBiometricUnlock".to_string(),
+        cfg!(target_os = "ios"),
+    );
     permissions.insert("aurora.nativePermissionStatus".to_string(), true);
     permissions.insert("aurora.trayStatus".to_string(), true);
     permissions.insert("aurora.notificationsStatus".to_string(), true);
@@ -745,6 +849,20 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("desktop.localSidecarSupervision".to_string(), true);
     capabilities.insert("desktop.tray".to_string(), true);
     capabilities.insert("native.secureCredentialStorage".to_string(), true);
+    capabilities.insert(
+        "ios.keychain.secureCredentialStorage".to_string(),
+        cfg!(target_os = "ios"),
+    );
+    capabilities.insert(
+        "ios.biometric.adminUnlock".to_string(),
+        cfg!(target_os = "ios"),
+    );
+    capabilities.insert("ios.appIntents".to_string(), cfg!(target_os = "ios"));
+    capabilities.insert("ios.shortcuts".to_string(), cfg!(target_os = "ios"));
+    capabilities.insert("ios.shareExtension".to_string(), cfg!(target_os = "ios"));
+    capabilities.insert("ios.widgets".to_string(), cfg!(target_os = "ios"));
+    capabilities.insert("ios.deepLinks".to_string(), cfg!(target_os = "ios"));
+    capabilities.insert("ios.siriReplacement".to_string(), false);
     capabilities.insert("native.permissionsManifest".to_string(), true);
     capabilities.insert("native.notifications".to_string(), false);
     capabilities.insert("native.dialogs".to_string(), false);
@@ -755,10 +873,34 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audioPlayback".to_string(), false);
 
     NativeCapabilityManifest {
-        platform: "tauri-desktop".to_string(),
+        platform: native_platform_label().to_string(),
         permissions,
         capabilities,
     }
+}
+
+fn native_platform_label() -> &'static str {
+    if cfg!(target_os = "ios") {
+        "ios"
+    } else if cfg!(target_os = "android") {
+        "android"
+    } else {
+        "tauri-desktop"
+    }
+}
+
+fn ios_native_details() -> BTreeMap<String, Value> {
+    let mut details = BTreeMap::new();
+    details.insert("platform".to_string(), json!(native_platform_label()));
+    details.insert("secretsRedacted".to_string(), json!(true));
+    details.insert("privacyClass".to_string(), json!("credential"));
+    details.insert("appOwnedSurfaceOnly".to_string(), json!(true));
+    details.insert(
+        "integrationCopy".to_string(),
+        json!("Siri/Shortcuts/App Intents integration"),
+    );
+    details.insert("siriReplacement".to_string(), json!(false));
+    details
 }
 
 fn denied_native_feature_status(
@@ -1136,6 +1278,9 @@ pub fn run() {
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
+            aurora_ios_secure_storage_status,
+            aurora_ios_biometric_status,
+            aurora_ios_admin_unlock,
             aurora_local_file_read,
             aurora_local_file_write,
             aurora_local_file_pick,
@@ -1214,6 +1359,28 @@ mod tests {
             Some(&true)
         );
         assert_eq!(
+            manifest.permissions.get("aurora.iosKeychain"),
+            Some(&cfg!(target_os = "ios"))
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.iosBiometricUnlock"),
+            Some(&cfg!(target_os = "ios"))
+        );
+        assert_eq!(
+            manifest
+                .capabilities
+                .get("ios.keychain.secureCredentialStorage"),
+            Some(&cfg!(target_os = "ios"))
+        );
+        assert_eq!(
+            manifest.capabilities.get("ios.biometric.adminUnlock"),
+            Some(&cfg!(target_os = "ios"))
+        );
+        assert_eq!(
+            manifest.capabilities.get("ios.siriReplacement"),
+            Some(&false)
+        );
+        assert_eq!(
             manifest.capabilities.get("native.secureFileHandles"),
             Some(&false)
         );
@@ -1247,6 +1414,22 @@ mod tests {
         assert!(denied.contains(&"aurora.dialogOpen".to_string()));
         assert!(denied.contains(&"aurora.audioCapture".to_string()));
         assert!(denied.contains(&"aurora.localFileRead".to_string()));
+        if !cfg!(target_os = "ios") {
+            assert!(denied.contains(&"aurora.iosKeychain".to_string()));
+            assert!(denied.contains(&"aurora.iosBiometricUnlock".to_string()));
+        }
+    }
+
+    #[test]
+    fn ios_native_details_are_redacted_and_do_not_claim_siri_replacement() {
+        let details = ios_native_details();
+        assert_eq!(details.get("secretsRedacted"), Some(&json!(true)));
+        assert_eq!(details.get("privacyClass"), Some(&json!("credential")));
+        assert_eq!(details.get("siriReplacement"), Some(&json!(false)));
+        assert_eq!(
+            details.get("integrationCopy"),
+            Some(&json!("Siri/Shortcuts/App Intents integration"))
+        );
     }
 
     #[test]

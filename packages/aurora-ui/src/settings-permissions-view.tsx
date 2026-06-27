@@ -325,11 +325,7 @@ function nativePermissionCards(
     const capability = snapshot.nativeCapabilities.find((candidate) => candidate.name === name)
     const granted = permission?.granted ?? false
     const capabilityEnabled = capability?.enabled ?? granted
-    const state: AvailabilityState = granted && capabilityEnabled
-      ? 'available-local'
-      : snapshot.nativeAvailable
-        ? 'privacy-blocked'
-        : 'unsupported'
+    const state: AvailabilityState = nativePermissionState(name, granted, capabilityEnabled, snapshot.nativeAvailable)
     return {
       id: name,
       label: nativePermissionLabel(name),
@@ -337,13 +333,24 @@ function nativePermissionCards(
       granted,
       capabilityEnabled,
       requestEnabled: false,
-      detail: granted
-        ? 'Native manifest reports this permission as granted.'
-        : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.',
-      blockers: granted ? [] : [`native permission missing: ${name}`],
+      detail: nativePermissionDetail(name, granted, capabilityEnabled),
+      blockers: state === 'available-local' ? [] : [`native permission missing: ${name}`],
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
+}
+
+function nativePermissionState(
+  name: string,
+  granted: boolean,
+  capabilityEnabled: boolean,
+  nativeAvailable: boolean
+): AvailabilityState {
+  if (name === 'ios.siriReplacement') return 'unsupported'
+  if (granted && capabilityEnabled) return 'available-local'
+  if (!nativeAvailable) return 'unsupported'
+  if (name.startsWith('ios.') || name.startsWith('aurora.ios')) return 'privacy-blocked'
+  return 'privacy-blocked'
 }
 
 function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability | null {
@@ -351,11 +358,49 @@ function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability
 }
 
 function nativePermissionLabel(name: string): string {
+  const labels: Record<string, string> = {
+    'aurora.iosKeychain': 'iOS Keychain',
+    'aurora.iosBiometricUnlock': 'Face ID / Touch ID admin unlock',
+    'ios.keychain.secureCredentialStorage': 'iOS Keychain secure storage',
+    'ios.biometric.adminUnlock': 'Face ID / Touch ID admin unlock',
+    'ios.appIntents': 'App Intents',
+    'ios.shortcuts': 'Shortcuts',
+    'ios.shareExtension': 'Share extension',
+    'ios.widgets': 'Widgets',
+    'ios.deepLinks': 'Deep links',
+    'ios.siriReplacement': 'Siri replacement'
+  }
+  if (labels[name]) return labels[name]
   return name
     .replace(/^aurora\./, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[-_.]/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function nativePermissionDetail(name: string, granted: boolean, capabilityEnabled: boolean): string {
+  if (name === 'aurora.iosKeychain' || name === 'ios.keychain.secureCredentialStorage') {
+    return capabilityEnabled || granted
+      ? 'Tokens, mesh credentials, and admin unlock secrets use iOS Keychain evidence from the native manifest.'
+      : 'iOS Keychain requires the Tauri iOS native plugin and Xcode-built app target.'
+  }
+  if (name === 'aurora.iosBiometricUnlock' || name === 'ios.biometric.adminUnlock') {
+    return capabilityEnabled || granted
+      ? 'Face ID/Touch ID can confirm admin unlocks before backend AdminAction confirmation and audit.'
+      : 'Face ID/Touch ID admin unlock requires LocalAuthentication on an iOS device or simulator.'
+  }
+  if (name === 'ios.appIntents' || name === 'ios.shortcuts') {
+    return 'Siri/Shortcuts/App Intents integration is app-owned and scoped to concrete Aurora actions.'
+  }
+  if (name === 'ios.shareExtension' || name === 'ios.widgets' || name === 'ios.deepLinks') {
+    return 'iOS entrypoints stay inside app-owned extension, widget, share, and deep-link surfaces.'
+  }
+  if (name === 'ios.siriReplacement') {
+    return 'iOS does not allow Aurora to replace Siri; only Siri/Shortcuts/App Intents integration is shown.'
+  }
+  return granted
+    ? 'Native manifest reports this permission as granted.'
+    : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.'
 }
 
 function unique(values: string[]): string[] {
