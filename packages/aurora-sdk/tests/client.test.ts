@@ -711,6 +711,42 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('keeps iOS native invocation app-owned without Siri replacement capability', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'ios',
+        permissions: {
+          'aurora.iosAppIntents': true,
+          'aurora.iosShortcuts': true,
+          'aurora.iosSiriReplacement': false
+        },
+        capabilities: {
+          'ios.appIntents': true,
+          'ios.shortcuts': true,
+          'ios.siriReplacement': false
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:ios:ios.appIntents']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:ios',
+        requiredPermissions: []
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.siriReplacement']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providerIdentity: 'native:ios',
+        routeable: false
+      })
+    )
+  })
+
   it('distinguishes Android assistant-role held, denied, and OEM-unavailable native states', () => {
     const heldGraph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
@@ -3017,6 +3053,110 @@ describe('AuroraClient', () => {
       'entrypointPayload'
     ])
     expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
+  })
+
+  it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const iosManifest = {
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosShareExtension': false,
+        'aurora.iosWidgets': false,
+        'aurora.iosDeepLinks': false,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.shareExtension': false,
+        'ios.widgets': false,
+        'ios.deepLinks': false,
+        'ios.siriReplacement': false
+      }
+    }
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_ios_native_plugin_manifest':
+            return iosManifest
+          case 'aurora_ios_invocation_status':
+            return {
+              available: true,
+              surface: 'Siri/Shortcuts/App Intents integration',
+              supportedActions: [
+                'app-intent.open-assistant',
+                'shortcut.open-assistant',
+                'share.import-context',
+                'deeplink.open'
+              ],
+              siriReplacement: false,
+              requiresBackendEvidence: true,
+              secretsRedacted: true
+            }
+          case 'aurora_ios_invoke_action':
+            return {
+              accepted: true,
+              action: (args?.request as { action?: string } | undefined)?.action,
+              handoff: 'AuroraClient',
+              correlationId: (args?.request as { correlationId?: string } | undefined)?.correlationId,
+              secretsRedacted: true
+            }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getIosNativePluginManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        capabilities: expect.objectContaining({
+          'ios.appIntents': true,
+          'ios.siriReplacement': false
+        }),
+        permissions: expect.objectContaining({
+          'aurora.iosAppIntents': true,
+          'aurora.iosSiriReplacement': false
+        })
+      })
+    )
+    await expect(transport.getIosInvocationStatus()).resolves.toEqual(
+      expect.objectContaining({
+        surface: 'Siri/Shortcuts/App Intents integration',
+        supportedActions: expect.arrayContaining(['app-intent.open-assistant', 'share.import-context']),
+        siriReplacement: false,
+        requiresBackendEvidence: true,
+        secretsRedacted: true
+      })
+    )
+    await expect(
+      transport.invokeIosAuroraAction({
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accepted: true,
+        action: 'app-intent.open-assistant',
+        handoff: 'AuroraClient',
+        correlationId: 'corr-ios-action',
+        secretsRedacted: true
+      })
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_ios_native_plugin_manifest',
+      'aurora_ios_invocation_status',
+      'aurora_ios_invoke_action'
+    ])
+    expect(calls[2]?.args).toEqual({
+      request: {
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      }
+    })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

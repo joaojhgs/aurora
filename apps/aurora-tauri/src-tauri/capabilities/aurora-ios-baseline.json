@@ -11,7 +11,7 @@
     "aurora-request",
     "aurora-subscribe",
     "aurora-native-capability-manifest",
-    "aurora-android-native-plugin",
+    "aurora-ios-native-plugin",
     "aurora-sidecar-status",
     "aurora-sidecar-session",
     "aurora-sidecar-start",

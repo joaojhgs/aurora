@@ -487,6 +487,12 @@ function nativeRequiredPermissions(capability: string, permissions: Record<strin
   if (normalized.includes('logtail')) requestedTokens.push('logtail')
   if (normalized.includes('sidecar')) requestedTokens.push('sidecar')
   if (normalized.includes('fallbackentrypoints')) requestedTokens.push('fallback', 'shareintent', 'deeplink')
+  if (normalized.includes('appintents')) requestedTokens.push('appintents')
+  if (normalized.includes('shortcuts')) requestedTokens.push('shortcut')
+  if (normalized.includes('shareextension')) requestedTokens.push('shareextension')
+  if (normalized.includes('widgets')) requestedTokens.push('widget')
+  if (normalized.includes('deeplinks')) requestedTokens.push('deeplink')
+  if (normalized.includes('sirireplacement')) requestedTokens.push('sirireplacement')
 
   const matches = Object.keys(permissions).filter((permission) => {
     const permissionKey = permission.toLowerCase().replace(/[^a-z0-9]/g, '')

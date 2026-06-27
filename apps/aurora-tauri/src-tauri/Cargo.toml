@@ -14,6 +14,7 @@ name = "aurora_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+swift-rs = { version = "1.0.7", features = ["build"] }
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]

@@ -1,4 +1,8 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
+        link_ios_aurora_native_plugin().expect("failed to link Aurora iOS native plugin");
+    }
+
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "aurora_request",
@@ -12,6 +16,9 @@ fn main() {
             "native_capabilities",
             "aurora_android_baseline_status",
             "aurora_android_native_plugin_payload",
+            "aurora_ios_native_plugin_manifest",
+            "aurora_ios_invocation_status",
+            "aurora_ios_invoke_action",
             "aurora_log_tail",
             "aurora_secure_storage_get",
             "aurora_secure_storage_set",
@@ -24,4 +31,99 @@ fn main() {
         ]),
     ))
     .expect("failed to build Aurora Tauri manifest");
+}
+
+#[cfg(target_os = "macos")]
+fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
+    use std::path::Path;
+
+    let source = Path::new("ios").join("AuroraNativePlugin");
+    let tauri_library_path = std::env::var("DEP_TAURI_IOS_LIBRARY_PATH")?;
+    let tauri_api_target = Path::new(".tauri").join("tauri-api");
+
+    replace_directory(Path::new(&tauri_library_path), &tauri_api_target)?;
+    let sdk_root = std::env::var_os("SDKROOT");
+    std::env::remove_var("SDKROOT");
+
+    swift_rs::SwiftLinker::new(
+        &std::env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| "10.15".into()),
+    )
+    .with_ios(&std::env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "14".into()))
+    .with_package("AuroraNativePlugin", source)
+    .link();
+
+    emit_ios_swift_package_link_search_hints("AuroraNativePlugin");
+
+    if let Some(root) = sdk_root {
+        std::env::set_var("SDKROOT", root);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn emit_ios_swift_package_link_search_hints(package_name: &str) {
+    let Ok(out_dir) = std::env::var("OUT_DIR") else {
+        return;
+    };
+    let configuration = if std::env::var("DEBUG").as_deref() == Ok("true") {
+        "debug"
+    } else {
+        "release"
+    };
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "aarch64".into());
+    let arch = if target_arch == "aarch64" {
+        "arm64"
+    } else {
+        target_arch.as_str()
+    };
+    let swift_build_dir = std::path::Path::new(&out_dir)
+        .join("swift-rs")
+        .join(package_name);
+
+    for triple in [
+        format!("{arch}-apple-ios-simulator"),
+        format!("{arch}-apple-ios"),
+    ] {
+        println!(
+            "cargo:rustc-link-search=native={}",
+            swift_build_dir.join(triple).join(configuration).display()
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn replace_directory(
+    source: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if target.exists() {
+        std::fs::remove_dir_all(target)?;
+    }
+    copy_directory(source, target)
+}
+
+#[cfg(target_os = "macos")]
+fn copy_directory(
+    source: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(target)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            copy_directory(&source_path, &target_path)?;
+        } else if file_type.is_file() {
+            std::fs::copy(&source_path, &target_path)?;
+        }
+    }
+    Ok(())
 }
