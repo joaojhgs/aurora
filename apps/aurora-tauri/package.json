@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit --incremental false && vite build",
-    "build:bundle": "pnpm prepare:sidecar && pnpm tauri build --config src-tauri/tauri.release.conf.json",
+    "build:bundle": "pnpm prepare:sidecar && pnpm tauri build --config src-tauri/tauri.conf.json",
     "android:init": "tauri android init --ci --skip-targets-install && node ./scripts/install-android-native-plugin.mjs",
     "android:build:apk": "tauri android build --apk",
     "android:build:apk:x86_64": "tauri android build --apk --target x86_64",
