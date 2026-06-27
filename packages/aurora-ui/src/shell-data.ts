@@ -1,6 +1,10 @@
 import type {
   AuroraClient,
   AuroraError,
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AndroidNativeEntrypoint,
+  AndroidNativeReleaseStatus,
   AvailabilityState,
   CapabilityExplanation,
   CapabilityGraph,
@@ -66,6 +70,10 @@ export interface AuroraShellSnapshot {
   nativeAvailable: boolean
   nativePermissions: Array<{ name: string; granted: boolean; nativeState: string | null }>
   nativeCapabilities: Array<{ name: string; enabled: boolean; nativeState: string | null }>
+  nativeAssistantRole: AndroidAssistantRoleStatus | null
+  nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
+  nativeEntrypoints: AndroidNativeEntrypoint[]
+  nativeRelease: AndroidNativeReleaseStatus | null
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   assistantVoiceRoutes: AssistantVoiceRoutes
@@ -95,6 +103,10 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeAvailable: false,
   nativePermissions: [],
   nativeCapabilities: [],
+  nativeAssistantRole: null,
+  nativeFallbackEntrypoints: [],
+  nativeEntrypoints: [],
+  nativeRelease: null,
   routes: [],
   assistantCancellationRoute: null,
   assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
@@ -142,6 +154,10 @@ export function snapshotFromGraph(
     nativeAvailable: native !== null,
     nativePermissions: nativePermissionEntries(native?.permissions, native?.permissionStates),
     nativeCapabilities: nativeCapabilityEntries(native?.capabilities, native?.capabilityStates),
+    nativeAssistantRole: native?.assistantRole ?? null,
+    nativeFallbackEntrypoints: native?.fallbackEntrypoints ?? [],
+    nativeEntrypoints: native?.entrypoints ?? [],
+    nativeRelease: native?.release ?? null,
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,

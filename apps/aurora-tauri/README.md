@@ -45,6 +45,35 @@ pnpm --filter @aurora/tauri-ui build:bundle
 
 `prepare:sidecar` copies the explicit sidecar artifact into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. It also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts.
 
+## Android Release Gate
+
+Android uses the official Tauri mobile project and plugin model. Run `pnpm --filter @aurora/tauri-ui tauri android init` before strict Android release verification so the generated Android project exists under Tauri's `gen/android` path. The native capability manifest is still the UI source of truth: assistant-role availability must come from Android RoleManager/package qualification probes, not from the Tauri shell existing.
+
+Release commands:
+
+```bash
+pnpm --filter @aurora/tauri-ui android:build:aab
+pnpm --filter @aurora/tauri-ui android:build:apk
+pnpm --filter @aurora/tauri-ui android:release-gate
+pnpm --filter @aurora/tauri-ui android:release-gate:strict
+```
+
+`android:release-gate` writes `apps/aurora-tauri/reports/android-release-gate.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. Strict mode fails when the generated Android project or signing inputs are missing.
+
+Signing inputs are intentionally environment-only and redacted in reports:
+
+- `ANDROID_KEYSTORE_PATH` or `TAURI_ANDROID_KEYSTORE_PATH`: path to CI/local release keystore material.
+- `AURORA_ANDROID_SIGNING_CONFIGURED=1`: explicit assertion that CI has injected the complete Android signing config.
+
+Google Play release readiness requires a signed AAB from `android:build:aab`, Play Console app-signing setup, and manual first upload or a release-manager Google Play Developer API workflow. APK builds with `--split-per-abi` are for emulator/device smoke and non-Play distribution evidence.
+
+Minimum Android release evidence:
+
+- Emulator/device native plugin payload recorded from `Native.GetCapabilityManifest`.
+- Assistant role probe records `roleAvailable`, `packageQualified`, `roleHeld`, `requestable`, `denied`, and `oemUnavailable`.
+- Fallback entrypoints such as app launcher, notification action, share sheet, deep link, shortcut/tile, or mesh/server routing remain available when the assistant role is not held.
+- Settings UI shows Android assistant-role and fallback states only from the native manifest payload.
+
 ## Commands
 
 ```bash

@@ -4,10 +4,10 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  androidNativeCapabilityManifestFixture,
   backupListFixture,
   buildAdminOverviewManifest,
   buildCapabilityGraph,
-  androidNativeCapabilityManifestFixture,
   capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
   cloneFixture,
@@ -369,6 +369,44 @@ describe('Aurora production shell', () => {
     )
     expect(markup).toContain('Android Local Light Inference')
     expect(markup).toContain('Native manifest reports a degraded or partial platform path for this feature.')
+  })
+
+  it('renders Android assistant role qualification and fallback entrypoints from native manifest evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+
+    const assistantRole = model.nativePermissions.find((permission) => permission.id === 'android.assistantRole')
+    const notificationFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.notification')
+    const foregroundVoiceFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.foreground_voice_controls')
+
+    expect(snapshot.nativePlatform).toBe('android')
+    expect(assistantRole).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      requestEnabled: true,
+      capabilityEnabled: true,
+      blockers: expect.arrayContaining(['assistant_role_user_grant_required'])
+    }))
+    expect(notificationFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+    expect(foregroundVoiceFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    expect(markup).toContain('Android assistant role')
+    expect(markup).toContain('RoleManager.isRoleAvailable(android.app.role.ASSISTANT)=true')
+    expect(markup).toContain('Share sheet')
+    expect(markup).toContain('Android Notification')
+    expect(markup).toContain('assistant_role_user_grant_required')
   })
 
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {

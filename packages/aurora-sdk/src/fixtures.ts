@@ -3465,6 +3465,71 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     extras: [],
     secretsRedacted: true
   },
+  release: {
+    signing: {
+      aabCommand: 'pnpm --filter @aurora/tauri-ui android:build:aab',
+      apkCommand: 'pnpm --filter @aurora/tauri-ui android:build:apk:split',
+      signingConfigured: false,
+      signingEvidence: [
+        'CI must provide Android signing material before Play upload.',
+        'No signing secret is stored in repo fixtures.'
+      ],
+      playUploadManual: true,
+      notes: 'Google Play first upload and app signing enrollment remain manual release-manager steps.'
+    },
+    deviceMatrix: [
+      {
+        id: 'thin-api-24',
+        label: 'Thin Android API 24+',
+        mode: 'thin',
+        apiLevel: 24,
+        architecture: 'universal',
+        expectedState: 'available',
+        status: 'manual',
+        requiredEvidence: ['AAB build artifact', 'Gateway HTTP smoke'],
+        actualEvidence: ['fixture only'],
+        notes: 'Tauri minimum Android support is API 24; backend truth still comes from Gateway.'
+      },
+      {
+        id: 'mesh-api-29',
+        label: 'Mesh shell Android API 29+',
+        mode: 'mesh',
+        apiLevel: 29,
+        architecture: 'arm64-v8a',
+        expectedState: 'degraded',
+        status: 'manual',
+        requiredEvidence: ['capability catalog route smoke', 'peer/provider identity visible'],
+        actualEvidence: ['fixture only'],
+        notes: 'Mesh behavior is degraded until a real peer route and policy result are recorded.'
+      },
+      {
+        id: 'assistant-role-qualified',
+        label: 'Assistant role qualified device',
+        mode: 'assistant-role',
+        apiLevel: 29,
+        architecture: 'arm64-v8a',
+        expectedState: 'needs_native_permission',
+        status: 'manual',
+        requiredEvidence: ['RoleManager availability probe', 'package qualification probe', 'grant or denial result'],
+        actualEvidence: ['fixture only'],
+        notes: 'Role request requires user/OEM approval and cannot be inferred from Tauri shell presence.'
+      },
+      {
+        id: 'oem-unavailable',
+        label: 'OEM/profile assistant role unavailable',
+        mode: 'fallback',
+        apiLevel: 29,
+        architecture: 'x86_64',
+        expectedState: 'fallback',
+        status: 'manual',
+        requiredEvidence: ['isRoleAvailable=false probe', 'fallback entrypoint smoke'],
+        actualEvidence: ['fixture only'],
+        notes: 'App, notification, share, deep-link, shortcut, tile, or mesh/server routing must remain available.'
+      }
+    ],
+    smokePayloadRecorded: true,
+    generatedAt: '2026-06-27T00:00:00Z'
+  },
   evidenceSource: 'android-rolemanager-package-manager',
   secretsRedacted: true
 }
