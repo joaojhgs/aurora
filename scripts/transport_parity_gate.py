@@ -205,7 +205,9 @@ def _build_rows(
     harness_report: HarnessReport,
     command_results: Sequence[CommandResult],
 ) -> list[MatrixRow]:
-    harness_rows = [_row_from_harness_mode(harness_report, mode["mode_id"]) for mode in harness_report.modes]
+    harness_rows = [
+        _row_from_harness_mode(harness_report, mode["mode_id"]) for mode in harness_report.modes
+    ]
     command_map = {result.command_id: result for result in command_results}
     harness_by_id = {row.row_id: row for row in harness_rows}
 
@@ -229,7 +231,12 @@ def _build_rows(
     _merge_command_status(http, command_map["sdk_conformance"])
 
     ui_command = command_map["ui_flow_smoke"]
-    for row_id in ("thread_localbus", "http_gateway_thin_client", "tauri_local_native", "mesh_webrtc"):
+    for row_id in (
+        "thread_localbus",
+        "http_gateway_thin_client",
+        "tauri_local_native",
+        "mesh_webrtc",
+    ):
         row = harness_by_id[row_id]
         row.commands.append(_format_command(ui_command.command))
         _merge_command_status(row, ui_command)
@@ -298,14 +305,21 @@ def _row_from_harness_mode(harness_report: HarnessReport, mode_id: str) -> Matri
 def _mobile_row(android_command: CommandResult) -> MatrixRow:
     emulator_smoke_path = Path("apps/aurora-tauri/reports/android-emulator-smoke.json")
     has_emulator_smoke = emulator_smoke_path.exists()
-    status = "pass" if android_command.status == "pass" and has_emulator_smoke else "skipped-with-rationale"
+    status = (
+        "pass"
+        if android_command.status == "pass" and has_emulator_smoke
+        else "skipped-with-rationale"
+    )
     blocks_release = status != "pass"
     return MatrixRow(
         row_id="android_thin_local_light",
         label="Android thin/local-light",
         owner="mobile",
         status=status,
-        commands=[_format_command(android_command.command), "pnpm --filter @aurora/tauri-ui android:smoke"],
+        commands=[
+            _format_command(android_command.command),
+            "pnpm --filter @aurora/tauri-ui android:smoke",
+        ],
         artifact_paths=[
             path
             for path in [
@@ -378,7 +392,9 @@ def _merge_command_status(row: MatrixRow, result: CommandResult) -> None:
     elif result.status == "not_run" and row.status == "pass":
         row.status = "blocked"
         row.blocks_release = True
-        row.rationale = f"{row.rationale} Command {result.command_id} was not run in this gate invocation."
+        row.rationale = (
+            f"{row.rationale} Command {result.command_id} was not run in this gate invocation."
+        )
 
 
 def _build_summary(
@@ -393,7 +409,9 @@ def _build_summary(
         result.command_id
         for result in command_results
         if result.status == "not_run"
-        and next(command for command in GATE_COMMANDS if command.command_id == result.command_id).required_for_release
+        and next(
+            command for command in GATE_COMMANDS if command.command_id == result.command_id
+        ).required_for_release
     ]
     status = "pass"
     if failed_rows:
@@ -407,10 +425,14 @@ def _build_summary(
         "failed_rows": failed_rows,
         "skipped_with_rationale_rows": skipped_rows,
         "blocking_rows": sorted(set(blocking_rows + not_run_required)),
-        "mock_only_evidence_passed": any(result.command_id == "sdk_conformance" and result.status == "pass" for result in command_results),
+        "mock_only_evidence_passed": any(
+            result.command_id == "sdk_conformance" and result.status == "pass"
+            for result in command_results
+        ),
         "mock_only_evidence_sufficient": False,
         "mesh_final_proof": harness_report.summary["final_mesh_mode_status"],
-        "process_redis_dependency_gap": "process_bullmq_redis" in harness_report.summary["dependency_gap_modes"],
+        "process_redis_dependency_gap": "process_bullmq_redis"
+        in harness_report.summary["dependency_gap_modes"],
         "secrets_redacted": True,
     }
 
@@ -441,7 +463,11 @@ def _coverage_for_mode(mode_id: str) -> list[str]:
         "thread_localbus": ["LocalBus request/reply", "assistant basics"],
         "process_bullmq_redis": ["BullMQBus", "Redis request/reply", "Docker/process mode smoke"],
         "http_gateway_thin_client": ["Gateway HTTP routes", "native-only degraded state"],
-        "tauri_local_native": ["Tauri command bridge", "offline fallback", "sidecar crash boundary"],
+        "tauri_local_native": [
+            "Tauri command bridge",
+            "offline fallback",
+            "sidecar crash boundary",
+        ],
         "mesh_webrtc": ["two-peer WebRTC DataChannel", "remote approval", "provider provenance"],
     }
     return common + extras[mode_id]
@@ -458,7 +484,11 @@ def _now() -> str:
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: ("[redacted]" if _is_sensitive_key(key) and key != "secrets_redacted" else _redact(item))
+            key: (
+                "[redacted]"
+                if _is_sensitive_key(key) and key != "secrets_redacted"
+                else _redact(item)
+            )
             for key, item in value.items()
         }
     if isinstance(value, list):

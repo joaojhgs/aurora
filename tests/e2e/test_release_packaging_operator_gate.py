@@ -26,9 +26,7 @@ def test_release_packaging_gate_records_platforms_commands_and_artifacts(tmp_pat
 
     persisted = json.loads(gate_json.read_text(encoding="utf-8"))
     expected_platforms = {row.row_id for row in PLATFORM_ROWS}
-    expected_commands = {
-        command.command_id for row in PLATFORM_ROWS for command in row.commands
-    }
+    expected_commands = {command.command_id for row in PLATFORM_ROWS for command in row.commands}
     assert {row["row_id"] for row in persisted["platform_rows"]} == expected_platforms
     assert set(persisted["summary"]["required_commands"]) == expected_commands
     assert persisted["summary"]["platform_count"] == len(PLATFORM_ROWS)
@@ -42,19 +40,17 @@ def test_release_packaging_gate_documents_skips_owners_and_manual_device_lab(tmp
     report = build_report(tmp_path)
     manual_items = set(report.summary["manual_device_lab_items"])
     accepted_skips = report.summary["accepted_skips"]
-    owners = {
-        command["owner"]
-        for row in report.platform_rows
-        for command in row["commands"]
-    }
+    owners = {command["owner"] for row in report.platform_rows for command in row["commands"]}
 
     assert {"android-signed-release", "ios-app-store-dry-run"}.issubset(manual_items)
-    assert "Emulator-only CI cannot prove production assistant-role behavior." in accepted_skips[
-        "android-signed-release"
-    ]
-    assert "Simulator-only CI cannot prove real-device/TestFlight behavior." in accepted_skips[
-        "ios-app-store-dry-run"
-    ]
+    assert (
+        "Emulator-only CI cannot prove production assistant-role behavior."
+        in accepted_skips["android-signed-release"]
+    )
+    assert (
+        "Simulator-only CI cannot prove real-device/TestFlight behavior."
+        in accepted_skips["ios-app-store-dry-run"]
+    )
     assert {"release-ops", "tauri-native", "android-native", "ios-native"}.issubset(owners)
 
 

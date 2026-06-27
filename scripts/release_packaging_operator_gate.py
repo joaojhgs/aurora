@@ -327,17 +327,8 @@ def build_report(output_dir: Path) -> ReleasePackagingReport:
         "markdown": str(output_dir / "release_packaging_gate.md"),
         "runbook": str(output_dir / "runbook.md"),
     }
-    manual_items = [
-        command
-        for row in PLATFORM_ROWS
-        for command in row.commands
-        if command.manual
-    ]
-    release_blockers = [
-        blocker
-        for row in PLATFORM_ROWS
-        for blocker in row.release_blockers
-    ]
+    manual_items = [command for row in PLATFORM_ROWS for command in row.commands if command.manual]
+    release_blockers = [blocker for row in PLATFORM_ROWS for blocker in row.release_blockers]
     report = ReleasePackagingReport(
         report_id="PER-227-QA-006-release-packaging-operator-runbooks",
         generated_at=datetime.now(UTC).isoformat(),

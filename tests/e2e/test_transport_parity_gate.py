@@ -204,7 +204,14 @@ def _fake_harness_report(output_dir):
             "notes": [],
         },
     ]
-    scenarios = [{"scenario_id": "required_flow", "title": "Required flow", "categories": ["audit"], "assertion": "passes"}]
+    scenarios = [
+        {
+            "scenario_id": "required_flow",
+            "title": "Required flow",
+            "categories": ["audit"],
+            "assertion": "passes",
+        }
+    ]
     results = [
         {
             "scenario_id": "required_flow",

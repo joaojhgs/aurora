@@ -413,17 +413,8 @@ def build_report(output_dir: Path) -> MatrixReport:
         "runbook": str(output_dir / "runbook.md"),
     }
     rows = [asdict(row) for row in MATRIX_ROWS]
-    manual_items = [
-        evidence
-        for row in MATRIX_ROWS
-        for evidence in row.evidence
-        if evidence.manual
-    ]
-    release_blockers = [
-        blocker
-        for row in MATRIX_ROWS
-        for blocker in row.release_blockers
-    ]
+    manual_items = [evidence for row in MATRIX_ROWS for evidence in row.evidence if evidence.manual]
+    release_blockers = [blocker for row in MATRIX_ROWS for blocker in row.release_blockers]
     checklist = _readiness_checklist(release_blockers)
     report = MatrixReport(
         report_id="PER-223-QA-002-multi-mode-e2e",
@@ -546,8 +537,7 @@ def _render_matrix_markdown(report: MatrixReport) -> str:
     )
     for case in report.negative_cases:
         lines.append(
-            f"- `{case['case_id']}`: {case['assertion']} "
-            f"Artifact: `{case['proving_artifact']}`."
+            f"- `{case['case_id']}`: {case['assertion']} Artifact: `{case['proving_artifact']}`."
         )
     lines.extend(
         [
