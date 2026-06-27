@@ -1280,14 +1280,7 @@ fn native_platform() -> &'static str {
 }
 
 #[cfg(target_os = "ios")]
-extern "C" {
-    fn init_plugin_aurora_native() -> *const std::ffi::c_void;
-}
-
-#[cfg(target_os = "ios")]
-unsafe fn init_aurora_native_plugin() -> *const std::ffi::c_void {
-    init_plugin_aurora_native()
-}
+tauri::ios_plugin_binding!(init_plugin_aurora_native);
 
 fn aurora_mobile_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("aurora-native")
@@ -1304,7 +1297,7 @@ fn aurora_mobile_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugi
             }
             #[cfg(target_os = "ios")]
             {
-                let handle = api.register_ios_plugin(init_aurora_native_plugin)?;
+                let handle = api.register_ios_plugin(init_plugin_aurora_native)?;
                 app.manage(AuroraMobileNativePlugin::<R> {
                     handle: Some(handle),
                 });
