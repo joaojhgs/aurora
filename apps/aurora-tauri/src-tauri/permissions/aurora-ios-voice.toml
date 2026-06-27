@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-ios-voice"
+description = "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or Siri replacement."
+commands.allow = ["aurora_ios_voice_status", "aurora_ios_background_status"]

@@ -2964,6 +2964,10 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.audioBridgeStatus': true,
     'aurora.audioCapture': false,
     'aurora.audioPlayback': false,
+    'aurora.iosVoiceStatus': true,
+    'aurora.iosBackgroundStatus': true,
+    'aurora.iosMicrophoneCapture': false,
+    'aurora.iosBackgroundAudio': false,
     'aurora.iosAppIntents': false,
     'aurora.iosShortcuts': false,
     'aurora.iosShareExtension': false,
@@ -2999,6 +3003,10 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'native.audio': false,
     'native.audioCapture': false,
     'native.audioPlayback': false,
+    'ios.voiceForegroundCapture': false,
+    'ios.notifications': false,
+    'ios.backgroundVoice': false,
+    'ios.appOwnedInvocation': false,
     'ios.appIntents': false,
     'ios.shortcuts': false,
     'ios.shareExtension': false,
@@ -3009,6 +3017,8 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.siriReplacement': false
   },
   permissionStates: {
+    'aurora.iosMicrophoneCapture': 'needs_native_permission',
+    'aurora.iosBackgroundAudio': 'unsupported_platform',
     'aurora.ios.appIntents': 'needs_native_permission',
     'aurora.ios.shortcuts': 'needs_native_permission',
     'aurora.ios.shareExtension': 'needs_native_permission',
@@ -3018,6 +3028,10 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.ios.entrypointPayload': 'needs_native_permission'
   },
   capabilityStates: {
+    'ios.voiceForegroundCapture': 'needs_native_permission',
+    'ios.notifications': 'needs_native_permission',
+    'ios.backgroundVoice': 'unsupported_platform',
+    'ios.appOwnedInvocation': 'needs_native_permission',
     'ios.appIntents': 'needs_native_permission',
     'ios.shortcuts': 'needs_native_permission',
     'ios.shareExtension': 'needs_native_permission',
@@ -3730,6 +3744,10 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.ios.widgets': true,
     'aurora.ios.fileAssociations': true,
     'aurora.ios.entrypointPayload': true,
+    'aurora.iosVoiceStatus': true,
+    'aurora.iosBackgroundStatus': true,
+    'aurora.iosMicrophoneCapture': false,
+    'aurora.iosBackgroundAudio': false,
     'aurora.iosSiriReplacement': false,
     'aurora.audioCapture': false,
     'aurora.audioPlayback': false
@@ -3742,9 +3760,39 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.deepLinks': true,
     'ios.fileAssociations': true,
     'ios.entrypointPayload': true,
+    'ios.voiceForegroundCapture': false,
+    'ios.notifications': false,
+    'ios.backgroundVoice': false,
+    'ios.appOwnedInvocation': true,
     'ios.siriReplacement': false,
     'native.audioCapture': false,
     'native.audioPlayback': false
+  },
+  permissionStates: {
+    'aurora.iosAppIntents': 'available',
+    'aurora.iosShortcuts': 'available',
+    'aurora.ios.shareExtension': 'available',
+    'aurora.ios.deepLinks': 'available',
+    'aurora.ios.widgets': 'available',
+    'aurora.ios.fileAssociations': 'available',
+    'aurora.ios.entrypointPayload': 'available',
+    'aurora.iosMicrophoneCapture': 'needs_native_permission',
+    'aurora.iosBackgroundAudio': 'unsupported_platform',
+    'aurora.iosSiriReplacement': 'unsupported_platform'
+  },
+  capabilityStates: {
+    'ios.appIntents': 'available',
+    'ios.shortcuts': 'available',
+    'ios.widgets': 'available',
+    'ios.shareExtension': 'available',
+    'ios.deepLinks': 'available',
+    'ios.fileAssociations': 'available',
+    'ios.entrypointPayload': 'available',
+    'ios.voiceForegroundCapture': 'needs_native_permission',
+    'ios.notifications': 'needs_native_permission',
+    'ios.backgroundVoice': 'unsupported_platform',
+    'ios.appOwnedInvocation': 'available',
+    'ios.siriReplacement': 'unsupported_platform'
   },
   mobileIntegrations: [
     {

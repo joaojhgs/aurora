@@ -4,6 +4,7 @@ import {
   MockAuroraTransport,
   TauriLocalTransport,
   type TauriAndroidBaselineStatus,
+  type TauriIosInvocationStatus,
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
   type TauriSidecarStatus
@@ -19,6 +20,9 @@ export interface AuroraTauriRuntime {
   nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>
   trayStatus: () => Promise<TauriNativeFeatureStatus | null>
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosInvocationStatus: () => Promise<TauriIosInvocationStatus | null>
+  iosBackgroundStatus: () => Promise<TauriNativeFeatureStatus | null>
   dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
   audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
   iosSecureStorageStatus: () => Promise<TauriNativeFeatureStatus | null>
@@ -39,6 +43,9 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       nativePermissionStatus: () => transport.getNativePermissionStatus(),
       trayStatus: () => transport.getTrayStatus(),
       notificationStatus: () => transport.getNotificationStatus(),
+      iosVoiceStatus: () => transport.getIosVoiceStatus(),
+      iosInvocationStatus: () => transport.getIosInvocationStatus(),
+      iosBackgroundStatus: () => transport.getIosBackgroundStatus(),
       dialogStatus: () => transport.getDialogStatus(),
       audioBridgeStatus: () => transport.getAudioBridgeStatus(),
       iosSecureStorageStatus: () => transport.getIosSecureStorageStatus(),
@@ -64,6 +71,9 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       nativePermissionStatus: async () => null,
       trayStatus: async () => null,
       notificationStatus: async () => null,
+      iosVoiceStatus: async () => null,
+      iosInvocationStatus: async () => null,
+      iosBackgroundStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
       iosSecureStorageStatus: async () => null,
@@ -82,6 +92,9 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     nativePermissionStatus: async () => null,
     trayStatus: async () => null,
     notificationStatus: async () => null,
+    iosVoiceStatus: async () => null,
+    iosInvocationStatus: async () => null,
+    iosBackgroundStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,
     iosSecureStorageStatus: async () => null,

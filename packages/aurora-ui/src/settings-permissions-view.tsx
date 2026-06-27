@@ -423,7 +423,7 @@ function nativePermissionCards(
     const granted = permission?.granted ?? false
     const capabilityEnabled = capability?.enabled ?? granted
     const nativeState = capability?.nativeState ?? permission?.nativeState ?? null
-    const state = isSiriReplacementPermission(name)
+    const state = isUnsupportedIosSurface(name)
       ? 'unsupported'
       : availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
     const requestEnabled = !granted && nativeRequestAvailable(name, snapshot)
@@ -435,7 +435,7 @@ function nativePermissionCards(
       capabilityEnabled,
       requestEnabled,
       detail: nativePermissionDetail(name, granted, capabilityEnabled, requestEnabled, nativeState),
-      blockers: state === 'unsupported' || granted || nativeState === 'fallback' ? [] : [`native permission missing: ${name}`],
+      blockers: nativePermissionBlockers(name, granted, state, nativeState),
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
@@ -491,6 +491,27 @@ function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIn
 
 function isSiriReplacementPermission(name: string): boolean {
   return name === 'aurora.iosSiriReplacement' || name === 'ios.siriReplacement'
+}
+
+function isUnsupportedIosSurface(name: string): boolean {
+  return isSiriReplacementPermission(name) ||
+    name === 'aurora.iosBackgroundAudio' ||
+    name === 'ios.backgroundVoice'
+}
+
+function nativePermissionBlockers(
+  name: string,
+  granted: boolean,
+  state: AvailabilityState,
+  nativeState: string | null
+): string[] {
+  if (granted || nativeState === 'fallback') return []
+  if (isSiriReplacementPermission(name)) return ['ios_siri_replacement_unavailable']
+  if (name === 'aurora.iosBackgroundAudio' || name === 'ios.backgroundVoice') {
+    return ['ios_background_voice_limited']
+  }
+  if (state === 'unsupported') return []
+  return [`native permission missing: ${name}`]
 }
 
 function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
@@ -653,9 +674,17 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosBiometricUnlock': 'Face ID / Touch ID admin unlock',
     'ios.keychain.secureCredentialStorage': 'iOS Keychain secure storage',
     'ios.biometric.adminUnlock': 'Face ID / Touch ID admin unlock',
+    'aurora.iosVoiceStatus': 'iOS voice status',
+    'aurora.iosBackgroundStatus': 'iOS background voice status',
+    'aurora.iosMicrophoneCapture': 'iOS microphone capture',
+    'aurora.iosBackgroundAudio': 'iOS background voice',
     'aurora.iosSiriReplacement': 'iOS Siri Replacement Unsupported',
     'aurora.iosAppIntents': 'iOS App Intents',
     'aurora.iosShortcuts': 'iOS Shortcuts',
+    'ios.voiceForegroundCapture': 'Foreground voice capture',
+    'ios.notifications': 'iOS notifications',
+    'ios.backgroundVoice': 'Background voice',
+    'ios.appOwnedInvocation': 'App-owned invocation',
     'ios.appIntents': 'App Intents',
     'ios.shortcuts': 'Shortcuts',
     'ios.shareExtension': 'Share extension',
@@ -690,6 +719,18 @@ function nativePermissionDetail(
   }
   if (name === 'ios.appIntents' || name === 'ios.shortcuts') {
     return 'Siri/Shortcuts/App Intents integration is app-owned and scoped to concrete Aurora actions.'
+  }
+  if (name === 'aurora.iosMicrophoneCapture' || name === 'ios.voiceForegroundCapture') {
+    return 'iOS microphone capture is foreground-only and requires AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path.'
+  }
+  if (name === 'ios.notifications') {
+    return 'iOS notifications require user authorization and can return users to Aurora, but they cannot provide always-on assistant wake.'
+  }
+  if (name === 'aurora.iosBackgroundAudio' || name === 'ios.backgroundVoice') {
+    return 'Always-on background listening is unavailable on iOS; use foreground capture, notifications, Shortcuts, App Intents, widgets, share sheet, or deep links.'
+  }
+  if (name === 'ios.appOwnedInvocation') {
+    return 'iOS invocation stays app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, and deep links; Aurora does not replace Siri.'
   }
   if (name === 'ios.shareExtension' || name === 'ios.widgets' || name === 'ios.deepLinks') {
     return 'iOS entrypoints stay inside app-owned extension, widget, share, and deep-link surfaces.'

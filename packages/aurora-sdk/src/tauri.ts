@@ -47,6 +47,8 @@ export interface TauriCommandNames {
   trayStatus: string
   notificationStatus: string
   notificationSend: string
+  iosVoiceStatus: string
+  iosBackgroundStatus: string
   dialogStatus: string
   audioBridgeStatus: string
   androidBaselineStatus: string
@@ -274,6 +276,8 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
   notificationSend: 'aurora_notification_send',
+  iosVoiceStatus: 'aurora_ios_voice_status',
+  iosBackgroundStatus: 'aurora_ios_background_status',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
   androidBaselineStatus: 'aurora_android_baseline_status',
@@ -415,6 +419,14 @@ export class TauriLocalTransport implements AuroraTransport {
 
   sendNotification(request: TauriNotificationRequest): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.notificationSend, { request })
+  }
+
+  getIosVoiceStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosVoiceStatus)
+  }
+
+  getIosBackgroundStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosBackgroundStatus)
   }
 
   getDialogStatus(): Promise<TauriNativeFeatureStatus> {
