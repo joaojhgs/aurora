@@ -79,3 +79,14 @@ jobs:
             exit 0
           fi
           exit "$status"
+
+      - name: Smoke Tauri EventStream bridge
+        run: xvfb-run -a pnpm --filter @aurora/tauri-ui eventstream:smoke
+
+      - name: Upload EventStream smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-eventstream-smoke-report
+          path: apps/aurora-tauri/reports/eventstream-smoke.json
+          if-no-files-found: warn
