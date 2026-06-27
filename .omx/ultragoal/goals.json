@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-19T01:26:26.610Z",
-  "updatedAt": "2026-06-20T23:46:08.529Z",
+  "updatedAt": "2026-06-27T09:25:13.957Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -345,6 +345,17 @@
       "updatedAt": "2026-06-20T23:46:08.529Z",
       "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was issue-specific instead of the aggregate Ultragoal objective. PER-204 completed in commit 845e20d and draft PR https://github.com/joaojhgs/aurora/pull/92. Verification passed: git diff --check; /home/developer/.local/bin/uv run --extra test-unit --extra service-db --extra gateway pytest tests/unit/db/test_service.py tests/unit/gateway/test_route_generator_adminaction.py -q (29 passed, 3 existing deprecation warnings). Docs now align DB.RAGSearch as internal and expose policy-gated RAG namespace/search/provenance/export/import surfaces.",
       "completedAt": "2026-06-20T23:46:08.529Z"
+    },
+    {
+      "id": "G032-per-223-multi-mode-e2e-matrix",
+      "title": "PER-223 multi-mode E2E matrix",
+      "objective": "Implement and verify PER-223 QA-002 multi-mode E2E matrix CI/report/runbook artifacts, security/privacy negative coverage, PR, and QA handoff without unrelated production UI wiring.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-06-27T09:25:13.957Z",
+      "updatedAt": "2026-06-27T09:33:11.675Z",
+      "evidence": "Manual completion repair after omx ultragoal checkpoint rejected the active Codex snapshot because the active goal objective was issue-specific instead of the aggregate Ultragoal objective. PER-223 matrix implemented. Verification passed: uv run python scripts/multi_mode_e2e_matrix.py --print-summary; uv run pytest tests/e2e/test_multi_mode_e2e_matrix.py -q; uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py tests/e2e/test_multi_mode_e2e_matrix.py -q; python -m py_compile changed Python files; pnpm --filter @aurora/client test/typecheck/build; pnpm --filter @aurora/ui test/typecheck/build; pnpm --filter @aurora/web test/typecheck/build; test-e2e workflow YAML parsed with PyYAML; git diff --check passed. Ruff passed with --extra dev.",
+      "completedAt": "2026-06-27T09:33:11.675Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
