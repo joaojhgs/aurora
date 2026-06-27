@@ -80,11 +80,16 @@ export interface OrchestratorProcessRequest {
   text: string
   source?: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
+  stream?: boolean
 }
 
 export interface OrchestratorResponse {
   text: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
   metadata?: JsonObject
 }
 
@@ -110,6 +115,7 @@ export interface AssistantStreamMessageRequest extends AssistantSendMessageReque
   signal?: AbortSignal
   lastEventId?: string | null
   replayFrom?: string | null
+  requestId?: string | null
 }
 
 export interface AssistantMessage {
@@ -137,6 +143,7 @@ export interface AssistantStreamUpdate {
   text: string
   textDelta: string
   modelLabel: string | null
+  requestId?: string | null
   error: AuroraError | null
   audit: AuditReceipt
   metadata: JsonObject
@@ -968,6 +975,8 @@ export interface BackendInventory {
   gateway_builtin_count?: number
   methods: BackendInventoryMethod[]
   gateway_builtins?: GatewayBuiltinInventoryRoute[]
+  gateway_openapi?: JsonObject
+  gateway_openapi_paths?: string[]
   import_errors?: Array<Record<string, JsonValue>>
   ui_fixture_validation?: Record<string, JsonValue>
 }
@@ -1561,8 +1570,83 @@ export interface NativeCapabilityManifest {
   platform: 'tauri-desktop' | 'android' | 'ios' | string
   permissions: Record<string, boolean>
   capabilities: Record<string, boolean>
+  permissionStates?: Record<string, AndroidNativeState>
+  capabilityStates?: Record<string, AndroidNativeState>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
+  iosInvocation?: IOSInvocationStatus | null
+  assistantRole?: AndroidAssistantRoleStatus | null
+  localLightInference?: AndroidLocalLightInferenceStatus | null
+  voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
+  adminUnlock?: AndroidAdminUnlockStatus | null
+  secureStorage?: AndroidSecureStorageStatus | null
+  fallbackEntrypoints?: AndroidFallbackEntrypoint[]
+  release?: AndroidNativeReleaseStatus | null
+  entrypoints?: NativeEntrypoint[]
+  lastEntrypointPayload?: NativeEntrypointPayload | null
+  evidenceSource?: string
+  secretsRedacted?: boolean
+  platformIntegrations?: NativePlatformIntegration[]
+  releaseGates?: NativeReleaseGate[]
+  policyNotes?: string[]
+  deviceMatrix?: NativeDeviceMatrixRow[]
+}
+
+export interface AndroidNativePermissionRequestResult {
+  started: boolean
+  permission: string
+  requestCode?: number
+  requestedPermissions?: string[]
+  reason?: string
+  manifest?: JsonObject
+}
+
+export interface AndroidVoiceForegroundServiceStatus {
+  platform: 'android' | string
+  running: boolean
+  startable: boolean
+  microphoneGranted: boolean
+  notificationsGranted: boolean
+  foregroundServiceReady: boolean
+  manifestReady: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  backendAudioEvidenceRequired: boolean
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidVoiceForegroundServiceRequestResult {
+  started?: boolean
+  stopped?: boolean
+  status: AndroidVoiceForegroundServiceStatus
+  reason: string
+}
+
+export interface AndroidAdminUnlockStatus {
+  platform: 'android' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidSecureStorageStatus {
+  platform: 'android' | string
+  available: boolean
+  backend: string
+  persisted: boolean
+  privacyClass: PrivacyClass | string
+  allowedKeyPrefixes: string
+  evidenceSource: string
+  secretsRedacted: boolean
 }
 
 export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
@@ -1574,7 +1658,11 @@ export interface NativeMobileIntegration {
   support: NativeIntegrationSupport
   capability: string
   permission: string | null
+  invocation?: 'app-intent' | 'shortcut' | 'widget' | 'share-extension' | 'deep-link' | 'tauri-command' | string
+  backendMethod?: string | null
   privacyClass: PrivacyClass
+  requiresConfirmation?: boolean
+  siriReplacement?: false
   evidenceSource: string
   userCopy: string
   verifier: string
@@ -1587,4 +1675,229 @@ export interface NativePlatformLimitation {
   reason: string
   userCopy: string
   evidenceSource: string
+}
+
+export type AndroidNativeState =
+  | 'available'
+  | 'needs_native_permission'
+  | 'unsupported_platform'
+  | 'degraded'
+  | 'fallback'
+
+export interface AndroidAssistantRoleStatus {
+  platform: 'android' | string
+  roleName: string
+  sdkSupportsRole?: boolean
+  handlesAssistActivity?: boolean
+  declaresVoiceInteractionService?: boolean
+  roleAvailable: boolean
+  packageQualified: boolean
+  roleHeld: boolean
+  requestable: boolean
+  denied: boolean
+  oemUnavailable: boolean
+  fallbackAvailable: boolean
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidAssistantRoleRequestResult {
+  started: boolean
+  requestCode?: number
+  status: AndroidAssistantRoleStatus
+  reason?: string
+}
+
+export interface AndroidLocalLightInferenceStatus {
+  platform: 'android' | string
+  providerId: string
+  available: boolean
+  requestable: boolean
+  modelRuntimeProvider: boolean
+  backendModelCatalogRequired: boolean
+  hardwareAcceleration: 'npu' | 'gpu' | 'cpu' | 'unknown' | string
+  modelId: string | null
+  modelPresent: boolean
+  permissionGranted: boolean
+  state: AndroidNativeState
+  fallbackAvailable: boolean
+  fallbackProviderId: string | null
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidFallbackEntrypoint {
+  id: string
+  state: AndroidNativeState
+  available: boolean
+  reason: string
+  capability?: string
+  permission?: string | null
+  intentAction?: string | null
+  manifestDeclared?: boolean
+  backendRequired?: boolean
+}
+
+export interface AndroidNativeEntrypoint {
+  id: string
+  platform: 'android' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intentAction: string
+  intakeType: string
+  manifestDeclared: boolean
+  backendRequired: boolean
+  payloadCommand: string
+  reason: string
+}
+
+export interface IOSNativeEntrypoint {
+  id: string
+  platform: 'ios' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intakeType: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | string
+  urlScheme?: string | null
+  universalLinkHost?: string | null
+  fileExtensions?: string[]
+  xcodeTarget: string
+  backendRequired: boolean
+  payloadCommand: string
+  privacyClass: PrivacyClass
+  reason: string
+}
+
+export type NativeEntrypoint = AndroidNativeEntrypoint | IOSNativeEntrypoint
+
+export interface AndroidEntrypointPayload {
+  source: string
+  action: string | null
+  type: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  categories: string[]
+  extras: string[]
+  secretsRedacted: boolean
+}
+
+export type AndroidReleaseGateStatus = 'passed' | 'blocked' | 'manual' | 'not-run'
+
+export interface AndroidReleaseMatrixRow {
+  id: string
+  label: string
+  mode: 'thin' | 'mesh' | 'assistant-role' | 'fallback'
+  apiLevel: number | null
+  architecture: string
+  expectedState: AndroidNativeState
+  status: AndroidReleaseGateStatus
+  requiredEvidence: string[]
+  actualEvidence: string[]
+  notes: string
+}
+
+export interface AndroidReleaseSigningStatus {
+  aabCommand: string
+  apkCommand: string
+  signingConfigured: boolean
+  signingEvidence: string[]
+  playUploadManual: boolean
+  notes: string
+}
+
+export interface AndroidNativeReleaseStatus {
+  signing: AndroidReleaseSigningStatus
+  deviceMatrix: AndroidReleaseMatrixRow[]
+  smokePayloadRecorded: boolean
+  generatedAt: string
+}
+
+export interface IOSEntrypointPayload {
+  source: string
+  invocation: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | 'none' | string
+  url: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  fileExtension: string | null
+  uniformTypeIdentifier: string | null
+  originatingBundleId: string | null
+  sharedItemCount: number
+  privacyLabels: PrivacyClass[]
+  backendHandoffRequired: boolean
+  correlationId: string | null
+  secretsRedacted: boolean
+}
+
+export type NativeEntrypointPayload = AndroidEntrypointPayload | IOSEntrypointPayload
+
+export interface IOSInvocationStatus {
+  platform: 'ios' | string
+  appIntentsAvailable: boolean
+  shortcutsAvailable: boolean
+  shareExtensionAvailable: boolean
+  deepLinksAvailable: boolean
+  widgetsAvailable: boolean
+  fileAssociationsAvailable: boolean
+  siriReplacement: false
+  backendHandoffRequired: boolean
+  privacyLabels: PrivacyClass[]
+  state: AndroidNativeState
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type NativeIntegrationStatus = 'supported' | 'partial' | 'unsupported' | 'deferred' | 'requires-native-target'
+export type NativeReleaseGateStatus =
+  | 'passed'
+  | 'pending'
+  | 'blocked'
+  | 'requires-macos'
+  | 'requires-xcode'
+  | 'requires-credentials'
+  | 'not-applicable'
+
+export interface NativePlatformIntegration {
+  id: string
+  label: string
+  status: NativeIntegrationStatus
+  detail: string
+  evidence: string[]
+  privacyClass: PrivacyClass
+  actions?: Array<{
+    id: string
+    label: string
+    privacyClass: PrivacyClass
+    backendMethod: string
+    policy: string
+  }>
+}
+
+export interface NativeReleaseGate {
+  id: string
+  label: string
+  status: NativeReleaseGateStatus
+  requiredEvidence: string
+  detail: string
+  command?: string
+  artifact?: string
+  privacyClass?: PrivacyClass
+}
+
+export interface NativeDeviceMatrixRow {
+  id: string
+  platform: string
+  target: string
+  minimumOs: string
+  evidence: string
+  status: NativeReleaseGateStatus
 }

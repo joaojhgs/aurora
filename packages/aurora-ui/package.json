@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment node"
+    "test": "vitest run --environment node",
+    "test:qa004": "pnpm --dir ../.. --filter @aurora/client build && vitest run --environment node tests/qa-004-accessibility-responsive-visual.test.tsx"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
@@ -35,8 +36,12 @@
     "react": "^19"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^24.13.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "axe-core": "^4.12.1",
+    "jsdom": "^27.4.0",
     "react-dom": "^19",
     "typescript": "5.7.3",
     "vitest": "^4.0.16"

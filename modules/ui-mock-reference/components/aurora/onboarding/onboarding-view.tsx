@@ -44,7 +44,7 @@ export function OnboardingView() {
             <CardHeader><CardTitle className="text-base">Mobile first-launch copy</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="rounded-lg border p-3"><p className="font-medium">Android</p><p className="text-muted-foreground">Aurora can request Android assistant role only when package qualification, OS availability and user/OEM grant allow it. Fallbacks stay visible.</p></div>
-              <div className="rounded-lg border p-3"><p className="font-medium">iOS</p><p className="text-muted-foreground">Aurora integrates through App Intents, Shortcuts, widgets, share sheet and deep links. It does not replace Siri.</p></div>
+              <div className="rounded-lg border p-3"><p className="font-medium">iOS</p><p className="text-muted-foreground">Aurora integrates through Siri/Shortcuts/App Intents, widgets, share sheet and deep links in app-owned surfaces.</p></div>
               <div className="flex flex-wrap gap-2"><PrivacyBadge privacy="raw-audio" /><PrivacyBadge privacy="credential" /></div>
             </CardContent>
           </Card>

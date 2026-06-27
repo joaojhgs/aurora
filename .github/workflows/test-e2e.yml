@@ -1,41 +1,102 @@
 name: End-to-End Tests
 
 on:
-  # E2E tests run only on pull request to main/develop and manual trigger
-  # pull_request:
-  #   branches: [ main, develop ]
+  pull_request:
+    paths:
+      - "app/**"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/mesh_gap_e2e_harness.py"
+      - "scripts/multi_mode_e2e_matrix.py"
+      - "tests/e2e/**"
+      - "docs/MESH_GAP_E2E_HARNESS.md"
+      - "docs/MULTI_MODE_E2E_RELEASE_RUNBOOK.md"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test-e2e.yml"
   workflow_dispatch:
 
 jobs:
-  e2e_test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]  # Limited to reduce resource usage
-        python-version: ['3.11.11']  # Using stable version
+  python_mesh_and_matrix:
+    name: Python mesh and multi-mode matrix
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        
-    - name: Install UV
-      run: pip install uv
-        
-    - name: Install dependencies
-      run: uv pip install --system -e .[dev,test-e2e]
-        
-    - name: Run end-to-end tests
-      run: |
-        pytest tests/e2e -v
-        
-    - name: Upload coverage report
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: e2etests
-        fail_ci_if_error: false
-        token: ${{ secrets.CODECOV_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install Python E2E dependencies
+        run: uv sync --extra dev --extra test-e2e --extra gateway --extra mode-processes
+
+      - name: Generate mesh production harness artifacts
+        run: |
+          uv run python scripts/mesh_gap_e2e_harness.py \
+            --mode thread_localbus \
+            --mode http_gateway_thin_client \
+            --mode tauri_local_native \
+            --mode mesh_webrtc
+
+      - name: Generate PER-223 multi-mode matrix artifacts
+        run: uv run python scripts/multi_mode_e2e_matrix.py --print-summary
+
+      - name: Run E2E gate tests
+        run: uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py tests/e2e/test_multi_mode_e2e_matrix.py -q
+
+      - name: Upload mesh E2E artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-mesh-gap-e2e
+          path: .omx/reports/mesh-gap-e2e/latest/
+
+      - name: Upload multi-mode matrix artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-multi-mode-e2e-matrix
+          path: .omx/reports/multi-mode-e2e/latest/
+
+  frontend_sdk_ui_web:
+    name: SDK, UI, and web smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test SDK package
+        run: |
+          pnpm --filter @aurora/client test
+          pnpm --filter @aurora/client typecheck
+          pnpm --filter @aurora/client build
+
+      - name: Test UI and server web packages
+        run: |
+          pnpm --filter @aurora/ui test
+          pnpm --filter @aurora/ui typecheck
+          pnpm --filter @aurora/web test
+          pnpm --filter @aurora/web typecheck
+
+      - name: Build UI and server web packages
+        run: |
+          pnpm --filter @aurora/ui build
+          pnpm --filter @aurora/web build

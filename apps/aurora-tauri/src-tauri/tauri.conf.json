@@ -32,7 +32,11 @@
     "category": "Productivity",
     "shortDescription": "Privacy-first modular voice assistant desktop shell.",
     "longDescription": "Aurora desktop packages the official Tauri 2 shell with a constrained AuroraClient bridge, signed updater artifacts, and an explicitly prepared local sidecar binary for Desktop Local mode.",
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 100
+    }
   },
   "plugins": {
     "updater": {

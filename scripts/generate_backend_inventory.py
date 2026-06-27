@@ -287,6 +287,18 @@ def build_gateway_builtins() -> list[dict[str, Any]]:
     return sorted(builtins, key=lambda item: (item["routePath"], item["http_methods"]))
 
 
+def build_gateway_openapi() -> dict[str, Any]:
+    from app.services.gateway.fastapi_app import create_gateway_app
+
+    app: FastAPI = create_gateway_app(bus=object(), registry=_EmptyRegistry())
+    schema = app.openapi()
+    return {
+        "openapi": schema.get("openapi"),
+        "info": schema.get("info", {}),
+        "paths": schema.get("paths", {}),
+    }
+
+
 def _extract_ts_string(obj: str, field: str) -> str | None:
     match = re.search(rf"{field}\s*:\s*'([^']*)'", obj)
     return match.group(1) if match else None
@@ -365,12 +377,15 @@ def validate_ui_fixture_references(
 def build_inventory() -> dict[str, Any]:
     methods, import_errors = build_method_inventory()
     gateway_builtins = build_gateway_builtins()
+    gateway_openapi = build_gateway_openapi()
     return {
         "generated_by": "scripts/generate_backend_inventory.py",
         "method_count": len(methods),
         "gateway_builtin_count": len(gateway_builtins),
         "methods": methods,
         "gateway_builtins": gateway_builtins,
+        "gateway_openapi": gateway_openapi,
+        "gateway_openapi_paths": sorted(gateway_openapi["paths"].keys()),
         "import_errors": import_errors,
         "ui_fixture_validation": validate_ui_fixture_references(methods, gateway_builtins),
     }

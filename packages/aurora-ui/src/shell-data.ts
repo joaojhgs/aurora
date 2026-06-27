@@ -1,11 +1,20 @@
 import type {
   AuroraClient,
   AuroraError,
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AndroidNativeReleaseStatus,
   AvailabilityState,
   CapabilityExplanation,
   CapabilityGraph,
   CapabilityProviderCandidate,
-  NativeCapabilityManifest
+  NativeCapabilityManifest,
+  NativeEntrypoint,
+  NativeDeviceMatrixRow,
+  NativeMobileIntegration,
+  NativePlatformIntegration,
+  NativePlatformLimitation,
+  NativeReleaseGate
 } from '@aurora/client'
 import {
   auroraAssistantCancellationItem,
@@ -64,8 +73,18 @@ export interface AuroraShellSnapshot {
   blockedCount: number
   nativePlatform: string
   nativeAvailable: boolean
-  nativePermissions: Array<{ name: string; granted: boolean }>
-  nativeCapabilities: Array<{ name: string; enabled: boolean }>
+  nativePermissions: Array<{ name: string; granted: boolean; nativeState: string | null }>
+  nativeCapabilities: Array<{ name: string; enabled: boolean; nativeState: string | null }>
+  nativeMobileIntegrations: NativeMobileIntegration[]
+  nativePlatformLimitations: NativePlatformLimitation[]
+  nativeAssistantRole: AndroidAssistantRoleStatus | null
+  nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
+  nativeEntrypoints: NativeEntrypoint[]
+  nativeRelease: AndroidNativeReleaseStatus | null
+  nativePlatformIntegrations: NativePlatformIntegration[]
+  nativeReleaseGates: NativeReleaseGate[]
+  nativeDeviceMatrix: NativeDeviceMatrixRow[]
+  nativePolicyNotes: string[]
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   assistantVoiceRoutes: AssistantVoiceRoutes
@@ -95,6 +114,16 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeAvailable: false,
   nativePermissions: [],
   nativeCapabilities: [],
+  nativeMobileIntegrations: [],
+  nativePlatformLimitations: [],
+  nativeAssistantRole: null,
+  nativeFallbackEntrypoints: [],
+  nativeEntrypoints: [],
+  nativeRelease: null,
+  nativePlatformIntegrations: [],
+  nativeReleaseGates: [],
+  nativeDeviceMatrix: [],
+  nativePolicyNotes: [],
   routes: [],
   assistantCancellationRoute: null,
   assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
@@ -140,8 +169,18 @@ export function snapshotFromGraph(
     blockedCount: routes.filter((route) => route.disabled).length,
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
-    nativePermissions: nativePermissionEntries(native?.permissions),
-    nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
+    nativePermissions: nativePermissionEntries(native?.permissions, native?.permissionStates),
+    nativeCapabilities: nativeCapabilityEntries(native?.capabilities, native?.capabilityStates),
+    nativeMobileIntegrations: native?.mobileIntegrations ?? [],
+    nativePlatformLimitations: native?.platformLimitations ?? [],
+    nativeAssistantRole: native?.assistantRole ?? null,
+    nativeFallbackEntrypoints: native?.fallbackEntrypoints ?? [],
+    nativeEntrypoints: native?.entrypoints ?? [],
+    nativeRelease: native?.release ?? null,
+    nativePlatformIntegrations: [...(native?.platformIntegrations ?? [])],
+    nativeReleaseGates: [...(native?.releaseGates ?? [])],
+    nativeDeviceMatrix: [...(native?.deviceMatrix ?? [])],
+    nativePolicyNotes: [...(native?.policyNotes ?? [])],
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,
@@ -462,16 +501,22 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].sort()
 }
 
-function nativePermissionEntries(values: Record<string, boolean> | undefined): Array<{ name: string; granted: boolean }> {
+function nativePermissionEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; granted: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, granted]) => ({ name, granted }))
+    .map(([name, granted]) => ({ name, granted, nativeState: states?.[name] ?? null }))
 }
 
-function nativeCapabilityEntries(values: Record<string, boolean> | undefined): Array<{ name: string; enabled: boolean }> {
+function nativeCapabilityEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; enabled: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, enabled]) => ({ name, enabled }))
+    .map(([name, enabled]) => ({ name, enabled, nativeState: states?.[name] ?? null }))
 }
 
 function nullToPending(value: string | null): string {

@@ -73,7 +73,7 @@ const modeMeta: Record<DeploymentMode, { tone: Tone; icon: LucideIcon; title: st
   'Desktop Thin': { tone: 'info', icon: Laptop, title: 'Desktop shell connected to a remote Gateway.' },
   Mesh: { tone: 'primary', icon: Network, title: 'UI shell routes through trusted P2P mesh peers.' },
   Android: { tone: 'info', icon: Smartphone, title: 'Android Tauri/mobile shell; native permissions and assistant role are capability-gated.' },
-  iOS: { tone: 'info', icon: Smartphone, title: 'iOS shell with App Intents/Shortcuts/share-sheet integration, not Siri replacement.' },
+  iOS: { tone: 'info', icon: Smartphone, title: 'iOS shell with Siri/Shortcuts/App Intents and share-sheet integration.' },
   Offline: { tone: 'neutral', icon: WifiOff, title: 'Fixture/offline mode for demo and visual review.' },
   Hybrid: { tone: 'primary', icon: Network, title: 'Combines local, server, mesh and native route candidates.' },
 }
