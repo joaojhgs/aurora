@@ -231,6 +231,7 @@ def _event_from_envelope(envelope: Envelope) -> GatewayEventStreamEvent:
     return GatewayEventStreamEvent(
         event_id=str(uuid.uuid4()),
         topic=envelope.type,
+        kind=_event_kind(envelope.type, payload),
         category=_event_category(envelope.type, payload),
         action=_event_action(envelope.type, payload),
         status=_event_status(envelope.type, payload),
@@ -320,6 +321,26 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
     return "unknown"
 
 
+def _event_kind(topic: str, payload: dict[str, Any]) -> str:
+    explicit = _first_string(payload, "kind", "event_kind", "eventKind", "type")
+    if explicit:
+        return explicit
+    category = _event_category(topic, payload)
+    status = _event_status(topic, payload)
+    action = _event_action(topic, payload)
+    if topic == OrchestratorMethods.RESPONSE:
+        return "assistant.failed" if status == "failed" else "assistant.completed"
+    if category == "tool_approval":
+        return f"tool.{status or action or 'requested'}"
+    if category == "tool_execution":
+        return f"tool.{status or action or 'completed'}"
+    if category == "config":
+        return "config.updated" if status != "failed" else "config.validation_failed"
+    if category == "service":
+        return f"service.{status or action or 'updated'}"
+    return f"{category}.{action}" if category != "unknown" and action else category
+
+
 def _event_action(topic: str, payload: dict[str, Any]) -> str:
     if payload.get("action"):
         return str(payload["action"])
@@ -339,6 +360,11 @@ def _event_status(topic: str, payload: dict[str, Any]) -> str:
         return "disconnected"
     if topic == GatewayMethods.SERVICE_ANNOUNCE:
         return "connected"
+    metadata = payload.get("metadata")
+    if topic == OrchestratorMethods.RESPONSE and isinstance(metadata, dict) and metadata.get("error"):
+        return "failed"
+    if topic == OrchestratorMethods.RESPONSE:
+        return "completed"
     if payload.get("approved") is True:
         return "approved"
     if payload.get("approved") is False:
@@ -1098,10 +1124,20 @@ class GatewayService(BaseService):
         self,
         request: GatewayListEventsRequest,
     ) -> list[GatewayEventStreamEvent]:
+        topics = set(request.topics or [])
         categories = set(request.categories or [])
+        kinds = set(request.kinds or [])
         events: list[GatewayEventStreamEvent] = []
         for event in list(self._event_stream):
+            if request.last_event_id and event.event_id == request.last_event_id:
+                break
+            if request.replay_from and event.timestamp < request.replay_from:
+                continue
+            if topics and event.topic not in topics:
+                continue
             if categories and event.category not in categories:
+                continue
+            if kinds and event.kind not in kinds and event.category not in kinds:
                 continue
             if request.action and event.action != request.action:
                 continue

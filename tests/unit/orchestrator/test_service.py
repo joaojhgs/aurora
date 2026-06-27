@@ -198,7 +198,13 @@ class TestOrchestratorServiceUserInputHandling:
             OrchestratorResponse,
         )
 
-        request = OrchestratorProcessRequest(text="External command", session_id="external-session")
+        request = OrchestratorProcessRequest(
+            text="External command",
+            session_id="external-session",
+            request_id="request-1",
+            correlation_id="corr-1",
+            stream=True,
+        )
 
         with patch.object(
             orchestrator_service, "_process_input", new_callable=AsyncMock
@@ -211,10 +217,15 @@ class TestOrchestratorServiceUserInputHandling:
             assert isinstance(response, OrchestratorResponse)
             assert response.text == "Test response"
             assert response.session_id == "external-session"
+            assert response.request_id == "request-1"
+            assert response.correlation_id == "corr-1"
+            assert response.metadata["stream"] is True
             mock_process.assert_called_once_with(
                 "External command",
                 source="external",
                 session_id="external-session",
+                request_id="request-1",
+                correlation_id="corr-1",
                 return_response=True,
             )
 

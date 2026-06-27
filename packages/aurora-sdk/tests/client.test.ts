@@ -3668,7 +3668,7 @@ describe('AuroraClient', () => {
     const sseTransport = new HttpGatewayTransport({
       baseUrl: 'http://aurora.local',
       eventSourceFactory: (url) => {
-        expect(url).toContain('/api/events?stream=health')
+        expect(url).toContain('/api/events/stream?stream=health')
         sse = { onmessage: null, onerror: null, close: () => undefined }
         return sse
       }
@@ -3697,7 +3697,7 @@ describe('AuroraClient', () => {
     const wsTransport = new HttpGatewayTransport({
       baseUrl: 'https://aurora.local',
       webSocketFactory: (url) => {
-        expect(url.startsWith('wss://aurora.local/api/events?stream=assistant')).toBe(true)
+        expect(url.startsWith('wss://aurora.local/api/events/stream?stream=assistant')).toBe(true)
         socket = {
           onmessage: null,
           onerror: null,
@@ -3800,6 +3800,7 @@ describe('AuroraClient', () => {
 
 describe('AuroraClient assistant namespace', () => {
   it('streams assistant deltas, final event evidence, and model metadata', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport().stream('assistant', [
       { id: 's1', kind: 'assistant.delta', payload: { textDelta: 'Hel' }, correlation_id: 'corr-stream' },
       { id: 's2', kind: 'assistant.delta', payload: { delta: 'lo' }, correlation_id: 'corr-stream' },
@@ -3810,10 +3811,32 @@ describe('AuroraClient assistant namespace', () => {
         correlation_id: 'corr-stream'
       }
     ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      calls.push({ method: request.method, payload: request.payload })
+      return {
+        text: 'Hello',
+        session_id: 'session-stream',
+        correlation_id: 'corr-stream',
+        request_id: (request.payload as { request_id?: string }).request_id,
+        metadata: { model: 'mock-stream' }
+      }
+    })
     const client = new AuroraClient({ transport })
 
-    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 3)
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello', requestId: 'corr-stream' }), 3)
 
+    expect(calls).toEqual([
+      {
+        method: ORCHESTRATOR_METHODS.externalUserInput,
+        payload: {
+          text: 'hello',
+          source: 'external',
+          request_id: 'corr-stream',
+          correlation_id: 'corr-stream',
+          stream: true
+        }
+      }
+    ])
     expect(events.map((event) => event.kind)).toEqual(['delta', 'delta', 'completed'])
     expect(events[0]?.textDelta).toBe('Hel')
     expect(events[1]?.textDelta).toBe('lo')
@@ -3862,15 +3885,15 @@ describe('AuroraClient assistant namespace', () => {
   })
 
   it('closes assistant stream on external abort without falling back to sendMessage', async () => {
-    let sendCalls = 0
+    let triggerCalls = 0
     const transport = new MockAuroraTransport().stream('assistant', async function* () {
       yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
       await new Promise(() => undefined)
     })
     transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
-      sendCalls += 1
+      triggerCalls += 1
       return {
-        text: 'fallback should not run',
+        text: 'trigger response',
         session_id: 'session-fallback',
         metadata: { model: 'fallback-model' }
       }
@@ -3888,7 +3911,7 @@ describe('AuroraClient assistant namespace', () => {
     controller.abort()
 
     await expect(raceWithTimeout(iterator.next(), 100)).resolves.toEqual({ done: true, value: undefined })
-    expect(sendCalls).toBe(0)
+    expect(triggerCalls).toBe(1)
   })
 
   it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {

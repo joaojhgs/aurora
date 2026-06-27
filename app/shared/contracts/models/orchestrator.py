@@ -54,6 +54,9 @@ class OrchestratorProcessRequest(IOModel):
     text: str
     source: str = "external"
     session_id: str | None = None
+    request_id: str | None = None
+    correlation_id: str | None = None
+    stream: bool = False
 
 
 class OrchestratorResponse(IOModel):
@@ -61,6 +64,8 @@ class OrchestratorResponse(IOModel):
 
     text: str
     session_id: str | None = None
+    request_id: str | None = None
+    correlation_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
