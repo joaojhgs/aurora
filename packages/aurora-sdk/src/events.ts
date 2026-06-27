@@ -17,6 +17,7 @@ export interface AuroraSubscribeOptions<TPayload = unknown> {
   signal?: AbortSignal | undefined
   lastEventId?: string | null | undefined
   replayFrom?: string | null | undefined
+  correlationId?: string | null | undefined
   backfill?: boolean | undefined
   reconnect?: boolean | AuroraReconnectOptions | undefined
   audit?: Partial<AuditReceipt> | undefined
@@ -362,6 +363,7 @@ function readPayload(raw: unknown): unknown {
   if (!isObject(raw)) return raw
   if ('payload' in raw) return raw.payload
   if ('data' in raw) return raw.data
+  if ('redacted_payload' in raw) return raw.redacted_payload
   return raw
 }
 

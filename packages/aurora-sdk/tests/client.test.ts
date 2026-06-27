@@ -3668,7 +3668,7 @@ describe('AuroraClient', () => {
     const sseTransport = new HttpGatewayTransport({
       baseUrl: 'http://aurora.local',
       eventSourceFactory: (url) => {
-        expect(url).toContain('/api/events?stream=health')
+        expect(url).toContain('/api/events/stream?stream=health')
         sse = { onmessage: null, onerror: null, close: () => undefined }
         return sse
       }
@@ -3697,7 +3697,7 @@ describe('AuroraClient', () => {
     const wsTransport = new HttpGatewayTransport({
       baseUrl: 'https://aurora.local',
       webSocketFactory: (url) => {
-        expect(url.startsWith('wss://aurora.local/api/events?stream=assistant')).toBe(true)
+        expect(url.startsWith('wss://aurora.local/api/events/stream?stream=assistant')).toBe(true)
         socket = {
           onmessage: null,
           onerror: null,
@@ -3800,6 +3800,7 @@ describe('AuroraClient', () => {
 
 describe('AuroraClient assistant namespace', () => {
   it('streams assistant deltas, final event evidence, and model metadata', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport().stream('assistant', [
       { id: 's1', kind: 'assistant.delta', payload: { textDelta: 'Hel' }, correlation_id: 'corr-stream' },
       { id: 's2', kind: 'assistant.delta', payload: { delta: 'lo' }, correlation_id: 'corr-stream' },
@@ -3810,10 +3811,32 @@ describe('AuroraClient assistant namespace', () => {
         correlation_id: 'corr-stream'
       }
     ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      calls.push({ method: request.method, payload: request.payload })
+      return {
+        text: 'Hello',
+        session_id: 'session-stream',
+        correlation_id: 'corr-stream',
+        request_id: (request.payload as { request_id?: string }).request_id,
+        metadata: { model: 'mock-stream' }
+      }
+    })
     const client = new AuroraClient({ transport })
 
-    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 3)
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello', requestId: 'corr-stream' }), 3)
 
+    expect(calls).toEqual([
+      {
+        method: ORCHESTRATOR_METHODS.externalUserInput,
+        payload: {
+          text: 'hello',
+          source: 'external',
+          request_id: 'corr-stream',
+          correlation_id: 'corr-stream',
+          stream: true
+        }
+      }
+    ])
     expect(events.map((event) => event.kind)).toEqual(['delta', 'delta', 'completed'])
     expect(events[0]?.textDelta).toBe('Hel')
     expect(events[1]?.textDelta).toBe('lo')
@@ -3826,6 +3849,119 @@ describe('AuroraClient assistant namespace', () => {
         audit: expect.objectContaining({ correlationId: 'corr-stream' })
       })
     )
+  })
+
+  it('streams an HTTP assistant request through a correlated backend SSE envelope', async () => {
+    const requests: Array<{ url: string; body: unknown }> = []
+    const eventListeners: Record<string, (event: MessageEvent<string>) => void> = {}
+    let sourceClosed = false
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        const body = JSON.parse(String(init?.body ?? '{}')) as unknown
+        requests.push({ url, body })
+        expect(url).toBe('http://aurora.local/api/Orchestrator/ExternalUserInput')
+        expect(init?.method).toBe('POST')
+        return new Response(
+          JSON.stringify({
+            text: 'Hello from backend',
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            correlation_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-correlation-id': 'corr-http-sdk'
+            }
+          }
+        )
+      },
+      eventSourceFactory: (url) => {
+        expect(url).toBe(
+          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.completed&correlation_id=corr-http-sdk&backfill=true'
+        )
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          addEventListener(type, listener) {
+            eventListeners[type] = listener
+          },
+          close() {
+            sourceClosed = true
+          }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const eventsPromise = collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-sdk' }),
+      1
+    )
+    await sourceReadyPromise
+    eventListeners['assistant.completed']?.(
+      new MessageEvent('assistant.completed', {
+        data: JSON.stringify({
+          event_id: 'evt-http-sdk-1',
+          topic: 'Orchestrator.Response',
+          kind: 'assistant.completed',
+          category: 'assistant',
+          action: 'Response',
+          status: 'completed',
+          correlation_id: 'corr-http-sdk',
+          redacted_payload: {
+            text: { redacted: true, sha256: 'text-hash' },
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          },
+          payload_sha256: 'payload-hash'
+        }),
+        lastEventId: 'evt-http-sdk-1'
+      })
+    )
+
+    const events = await eventsPromise
+
+    expect(requests).toEqual([
+      {
+        url: 'http://aurora.local/api/Orchestrator/ExternalUserInput',
+        body: {
+          text: 'hello',
+          source: 'external',
+          request_id: 'corr-http-sdk',
+          correlation_id: 'corr-http-sdk',
+          stream: true
+        }
+      }
+    ])
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: 'completed',
+        eventId: 'evt-http-sdk-1',
+        sessionId: 'session-http-sdk',
+        requestId: 'corr-http-sdk',
+        text: 'Hello from backend',
+        textDelta: 'Hello from backend',
+        modelLabel: 'http-mock',
+        audit: expect.objectContaining({
+          correlationId: 'corr-http-sdk',
+          eventKind: 'assistant.completed',
+          transport: 'http'
+        })
+      })
+    )
+    expect(events[0]?.audit.redaction?.secretsRedacted).toBe(true)
+    expect(sourceClosed).toBe(true)
   })
 
   it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
@@ -3862,15 +3998,15 @@ describe('AuroraClient assistant namespace', () => {
   })
 
   it('closes assistant stream on external abort without falling back to sendMessage', async () => {
-    let sendCalls = 0
+    let triggerCalls = 0
     const transport = new MockAuroraTransport().stream('assistant', async function* () {
       yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
       await new Promise(() => undefined)
     })
     transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
-      sendCalls += 1
+      triggerCalls += 1
       return {
-        text: 'fallback should not run',
+        text: 'trigger response',
         session_id: 'session-fallback',
         metadata: { model: 'fallback-model' }
       }
@@ -3888,7 +4024,7 @@ describe('AuroraClient assistant namespace', () => {
     controller.abort()
 
     await expect(raceWithTimeout(iterator.next(), 100)).resolves.toEqual({ done: true, value: undefined })
-    expect(sendCalls).toBe(0)
+    expect(triggerCalls).toBe(1)
   })
 
   it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {

@@ -80,11 +80,16 @@ export interface OrchestratorProcessRequest {
   text: string
   source?: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
+  stream?: boolean
 }
 
 export interface OrchestratorResponse {
   text: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
   metadata?: JsonObject
 }
 
@@ -110,6 +115,7 @@ export interface AssistantStreamMessageRequest extends AssistantSendMessageReque
   signal?: AbortSignal
   lastEventId?: string | null
   replayFrom?: string | null
+  requestId?: string | null
 }
 
 export interface AssistantMessage {
@@ -137,6 +143,7 @@ export interface AssistantStreamUpdate {
   text: string
   textDelta: string
   modelLabel: string | null
+  requestId?: string | null
   error: AuroraError | null
   audit: AuditReceipt
   metadata: JsonObject

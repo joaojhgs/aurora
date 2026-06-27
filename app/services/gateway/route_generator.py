@@ -568,6 +568,7 @@ class RouteGenerator:
                     timeout=timeout,
                     origin="external",
                     principal_id=principal_id,
+                    correlation_id=payload.get("correlation_id") if isinstance(payload, dict) else None,
                 )
                 log_debug(f"Gateway received result: ok={result.ok}, data={result.data}")
 

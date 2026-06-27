@@ -225,12 +225,16 @@ class OrchestratorService(BaseService):
                 cmd.text,
                 source="external",
                 session_id=cmd.session_id,
+                request_id=cmd.request_id,
+                correlation_id=cmd.correlation_id,
                 return_response=True,  # Return the response for external API
             )
             return OrchestratorResponse(
                 text=response_text or "",
                 session_id=cmd.session_id,
-                metadata={"source": "external"},
+                request_id=cmd.request_id,
+                correlation_id=cmd.correlation_id,
+                metadata={"source": "external", "stream": cmd.stream},
             )
 
         except Exception as e:
@@ -238,7 +242,9 @@ class OrchestratorService(BaseService):
             return OrchestratorResponse(
                 text=f"Error: {e!s}",
                 session_id=cmd.session_id,
-                metadata={"source": "external", "error": True},
+                request_id=cmd.request_id,
+                correlation_id=cmd.correlation_id,
+                metadata={"source": "external", "stream": cmd.stream, "error": True},
             )
 
     @method_contract(
@@ -686,6 +692,8 @@ class OrchestratorService(BaseService):
         text: str,
         source: str,
         session_id: str | None = None,
+        request_id: str | None = None,
+        correlation_id: str | None = None,
         return_response: bool = False,
     ) -> str | None:
         """Process user input through LangGraph agent.
@@ -727,12 +735,17 @@ class OrchestratorService(BaseService):
                     LLMResponseReady(
                         text=response_text,
                         session_id=session_id,
-                        metadata={"source": source},
+                        metadata={
+                            "source": source,
+                            "request_id": request_id,
+                            "correlation_id": correlation_id,
+                        },
                     ),
                     event=True,  # Broadcast to all subscribers (UI, TTS, etc.)
                     mesh=True,
                     priority=get_interactive_priority(),
                     origin="internal",
+                    correlation_id=correlation_id,
                 )
 
                 # Send TTS request to speak the response

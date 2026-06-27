@@ -47,6 +47,7 @@ class AuroraEventStreamEvent(IOModel):
 
     event_id: str
     topic: str
+    kind: str = ""
     category: AuroraEventCategory = "unknown"
     action: str = ""
     status: str = ""
