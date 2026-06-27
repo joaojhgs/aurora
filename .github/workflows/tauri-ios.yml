@@ -68,3 +68,23 @@ jobs:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim --config src-tauri/tauri.ios.conf.json
+
+      - name: Smoke invoke Aurora App Intent handoff
+        run: |
+          xcrun swiftc \
+            -parse-as-library \
+            apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraAppIntents.swift \
+            .github/scripts/ios_app_intent_smoke.swift \
+            -o /tmp/aurora-ios-app-intent-smoke
+          /tmp/aurora-ios-app-intent-smoke | tee /tmp/aurora-ios-app-intent-smoke.json
+          grep '"action":"askAuroraAppIntent"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"backendMethod":"Orchestrator.ExternalUserInput"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"invocation":"app-intent"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"privacyClass":"personal"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"siriReplacement":false' /tmp/aurora-ios-app-intent-smoke.json
+
+      - name: Upload Aurora App Intent smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-app-intent-smoke
+          path: /tmp/aurora-ios-app-intent-smoke.json

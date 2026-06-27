@@ -1,8 +1,8 @@
 import AppIntents
 import Foundation
 
-@available(iOS 16.0, *)
-public struct AuroraIntentHandoff: AppEntity {
+@available(iOS 16.0, macOS 13.0, *)
+public struct AuroraIntentHandoff: AppEntity, Encodable {
   public static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Aurora handoff")
   public static var defaultQuery = AuroraIntentHandoffQuery()
 
@@ -23,7 +23,7 @@ public struct AuroraIntentHandoff: AppEntity {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct AuroraIntentHandoffQuery: EntityQuery {
   public init() {}
 
@@ -47,7 +47,7 @@ public struct AuroraIntentHandoffQuery: EntityQuery {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public enum AuroraIntentHandoffFactory {
   public static func make(
     action: String,
@@ -73,7 +73,7 @@ public enum AuroraIntentHandoffFactory {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct AskAuroraIntent: AppIntent {
   public static var title: LocalizedStringResource = "Ask Aurora"
   public static var description = IntentDescription("Send an app-owned prompt handoff to Aurora.")
@@ -84,8 +84,8 @@ public struct AskAuroraIntent: AppIntent {
 
   public init() {}
 
-  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
-    let handoff = AuroraIntentHandoffFactory.make(
+  public func makeHandoff() -> AuroraIntentHandoff {
+    AuroraIntentHandoffFactory.make(
       action: "askAuroraAppIntent",
       backendMethod: "Orchestrator.ExternalUserInput",
       invocation: "app-intent",
@@ -93,6 +93,10 @@ public struct AskAuroraIntent: AppIntent {
       requiresConfirmation: false,
       prompt: prompt
     )
+  }
+
+  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
+    let handoff = makeHandoff()
     return .result(
       value: handoff,
       dialog: IntentDialog("Aurora handoff prepared for Orchestrator.")
@@ -100,7 +104,7 @@ public struct AskAuroraIntent: AppIntent {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct AskAuroraShortcutIntent: AppIntent {
   public static var title: LocalizedStringResource = "Ask Aurora Shortcut"
   public static var description = IntentDescription("Open Aurora from a Shortcut and preserve backend handoff metadata.")
@@ -111,8 +115,8 @@ public struct AskAuroraShortcutIntent: AppIntent {
 
   public init() {}
 
-  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
-    let handoff = AuroraIntentHandoffFactory.make(
+  public func makeHandoff() -> AuroraIntentHandoff {
+    AuroraIntentHandoffFactory.make(
       action: "askAuroraShortcut",
       backendMethod: "Orchestrator.ExternalUserInput",
       invocation: "shortcut",
@@ -120,6 +124,10 @@ public struct AskAuroraShortcutIntent: AppIntent {
       requiresConfirmation: false,
       prompt: prompt
     )
+  }
+
+  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
+    let handoff = makeHandoff()
     return .result(
       value: handoff,
       dialog: IntentDialog("Aurora shortcut handoff prepared.")
@@ -127,7 +135,7 @@ public struct AskAuroraShortcutIntent: AppIntent {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SummarizeSharedContentIntent: AppIntent {
   public static var title: LocalizedStringResource = "Summarize shared content"
   public static var description = IntentDescription("Hand shared text to Aurora with sensitive-data confirmation.")
@@ -138,8 +146,8 @@ public struct SummarizeSharedContentIntent: AppIntent {
 
   public init() {}
 
-  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
-    let handoff = AuroraIntentHandoffFactory.make(
+  public func makeHandoff() -> AuroraIntentHandoff {
+    AuroraIntentHandoffFactory.make(
       action: "summarizeSharedContentShortcut",
       backendMethod: "Orchestrator.IngestContext",
       invocation: "shortcut",
@@ -147,6 +155,10 @@ public struct SummarizeSharedContentIntent: AppIntent {
       requiresConfirmation: true,
       prompt: sharedText
     )
+  }
+
+  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
+    let handoff = makeHandoff()
     return .result(
       value: handoff,
       dialog: IntentDialog("Aurora shared-content handoff prepared.")
@@ -154,7 +166,7 @@ public struct SummarizeSharedContentIntent: AppIntent {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct StopAuroraSpeechIntent: AppIntent {
   public static var title: LocalizedStringResource = "Stop Aurora speech"
   public static var description = IntentDescription("Stop Aurora-owned playback without controlling Siri or system assistant audio.")
@@ -162,14 +174,18 @@ public struct StopAuroraSpeechIntent: AppIntent {
 
   public init() {}
 
-  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
-    let handoff = AuroraIntentHandoffFactory.make(
+  public func makeHandoff() -> AuroraIntentHandoff {
+    AuroraIntentHandoffFactory.make(
       action: "stopAuroraSpeechAppIntent",
       backendMethod: "TTS.Stop",
       invocation: "app-intent",
       privacyClass: "personal",
       requiresConfirmation: false
     )
+  }
+
+  public func perform() async throws -> some IntentResult & ReturnsValue<AuroraIntentHandoff> {
+    let handoff = makeHandoff()
     return .result(
       value: handoff,
       dialog: IntentDialog("Aurora speech stop handoff prepared.")
@@ -177,7 +193,7 @@ public struct StopAuroraSpeechIntent: AppIntent {
   }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct AuroraAppShortcuts: AppShortcutsProvider {
   public static var appShortcuts: [AppShortcut] {
     AppShortcut(
