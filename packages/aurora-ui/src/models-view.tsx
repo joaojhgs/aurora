@@ -190,7 +190,7 @@ export function buildModelsViewModel(input: {
   const candidates = providerCandidates(input.graph)
   const mobile = mobileLocalLight(input.nativeManifest, input.catalog)
   const providers = input.catalog.providers.map((provider) =>
-    providerModel(provider, candidates.get(provider.provider_id), input.catalog!.selected_provider_id)
+    providerModel(provider, candidates.get(provider.provider_id), input.catalog!.selected_provider_id, input.nativeManifest)
   )
   const loadState = input.loadState ?? (providers.length > 0 ? 'ready' : 'empty')
   return {
@@ -316,12 +316,15 @@ function providerCandidates(graph: CapabilityGraph | null): Map<string, Capabili
 function providerModel(
   provider: ModelRuntimeProviderInfo,
   candidate: CapabilityProviderCandidate | undefined,
-  selectedProviderId: string | null
+  selectedProviderId: string | null,
+  nativeManifest: NativeCapabilityManifest | null
 ): ModelProviderViewModel {
-  const availability = availabilityForProvider(provider, candidate)
+  const nativeLocalLight = nativeLocalLightForProvider(provider, nativeManifest)
+  const availability = nativeLocalLight?.state ?? availabilityForProvider(provider, candidate)
   const privacyClass = candidate?.privacyClass ?? privacyForProvider(provider)
   const blockers = sortedUnique([
     ...(candidate?.disabledReasons ?? []),
+    nativeLocalLight?.reason,
     ...(!provider.enabled ? [provider.health_reason ?? 'provider disabled by backend catalog'] : []),
     ...(!provider.secrets_redacted ? ['secrets_redacted_false'] : [])
   ])
@@ -335,7 +338,7 @@ function providerModel(
     privacyClass,
     providerType: provider.provider_type,
     backendKind: provider.backend_kind,
-    routeLabel: routeLabel(provider, candidate),
+    routeLabel: nativeLocalLight?.routeLabel ?? routeLabel(provider, candidate),
     health: provider.health,
     healthReason: provider.health_reason ?? 'backend catalog did not provide a health reason',
     hardware: hardwareLabel(provider.hardware),
@@ -418,11 +421,38 @@ function mobileLocalLight(
   catalog: ModelRuntimeCatalogResponse
 ): { state: AvailabilityState; reason: string } {
   const provider = catalog.providers.find((item) => item.provider_type.includes('mobile') || item.provider_id.includes('mobile'))
-  const manifestEnabled = Boolean(nativeManifest?.capabilities.mobileLocalLightRuntime)
-  const permissionGranted = nativeManifest ? nativeManifest.permissions.mobileLocalLightRuntime !== false : false
+  const status = nativeManifest?.localLightInference
+  if (status) {
+    return {
+      state: availabilityFromLocalLightStatus(status.state),
+      reason: `${status.evidenceSource}: ${status.reason}`
+    }
+  }
+  const manifestEnabled = Boolean(nativeManifest?.capabilities['android.localLightInference.provider'])
+  const permissionGranted = nativeManifest ? nativeManifest.permissions['aurora.android.localLightInference'] !== false : false
   if (manifestEnabled && permissionGranted) return { state: 'available-local', reason: `native:${nativeManifest?.platform}` }
   if (provider?.health_reason) return { state: availabilityForProvider(provider, undefined), reason: provider.health_reason }
   return { state: 'unsupported', reason: 'Native mobile runtime provider proof is unavailable.' }
+}
+
+function nativeLocalLightForProvider(
+  provider: ModelRuntimeProviderInfo,
+  nativeManifest: NativeCapabilityManifest | null
+): { state: AvailabilityState; reason: string; routeLabel: string } | null {
+  const status = nativeManifest?.localLightInference
+  if (!status || provider.provider_id !== status.providerId) return null
+  return {
+    state: availabilityFromLocalLightStatus(status.state),
+    reason: status.reason,
+    routeLabel: `native:${status.platform} / ${status.providerId}`
+  }
+}
+
+function availabilityFromLocalLightStatus(state: string): AvailabilityState {
+  if (state === 'available') return 'available-local'
+  if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'degraded' || state === 'fallback') return 'degraded'
+  return 'unsupported'
 }
 
 function sortedUnique(values: Array<string | null | undefined>): string[] {

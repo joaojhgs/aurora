@@ -33,6 +33,8 @@ import {
   hasPermission,
   modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
+  androidNativeCapabilityManifestFixture,
+  iosNativeCapabilityManifestFixture,
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
   normalizeToolCatalog,
@@ -450,6 +452,122 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('models iOS invocation through App Intents and Shortcuts without a Siri replacement claim', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: iosNativeCapabilityManifestFixture,
+      transportKind: 'tauri-local'
+    })
+
+    expect(iosNativeCapabilityManifestFixture.mobileIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'askAuroraAppIntent',
+          invocation: 'app-intent',
+          backendMethod: 'Orchestrator.ExternalUserInput',
+          support: 'supported-path',
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'summarizeSharedContentShortcut',
+          invocation: 'shortcut',
+          backendMethod: 'Orchestrator.IngestContext',
+          privacyClass: 'sensitive',
+          requiresConfirmation: true,
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'shareExtension',
+          capability: 'ios.shareExtension',
+          support: 'supported-path',
+          privacyClass: 'sensitive'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'deepLinks',
+          capability: 'ios.deepLinks',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'widgets',
+          capability: 'ios.widgets',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'fileAssociations',
+          capability: 'ios.fileAssociations',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'siriReplacement',
+          support: 'unsupported',
+          userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
+        })
+      ])
+    )
+    expect(iosNativeCapabilityManifestFixture.platformLimitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'noSiriReplacement',
+          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+        })
+      ])
+    )
+
+    expect(graph.explain('native:ios:askAuroraAppIntent')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:askAuroraAppIntent').providerCandidates[0]?.selector).toEqual(
+      expect.objectContaining({
+        integrationId: 'askAuroraAppIntent',
+        invocation: 'app-intent',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        privacyClass: 'personal',
+        requiresConfirmation: false,
+        siriReplacement: false
+      })
+    )
+    expect(graph.explain('native:ios:summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:fileAssociations')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:siriReplacement')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        routeable: false,
+        nextRepairAction: 'do not claim this platform capability'
+      })
+    )
+  })
+
   it('explains policy, selector, stale, and unsupported capability states', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
@@ -504,6 +622,285 @@ describe('AuroraClient', () => {
         nextRepairAction: 'grant required native permission',
         requiredPermissions: ['microphone']
       })
+    )
+  })
+
+  it('keeps Android fallback entrypoints selectable independently from assistant-role and microphone blockers', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:android:android.assistantRole.status']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.assistantRole.request']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.microphoneCapture']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'raw-audio',
+        requiredPermissions: expect.arrayContaining(['aurora.android.microphone']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.notifications']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.biometric']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.secureCredentialStorage']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        privacyClass: 'credential',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.adminUnlock']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'admin-critical',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localFileRead']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'degraded' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.shareIntent']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.deepLink']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appShortcut']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.quickTile']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.entrypointPayload']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.provider']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        privacyClass: 'personal',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerIdentity: 'native:android',
+            routeability: 'degraded',
+            requiredAction: 'use the supported subset or complete native integration'
+          })
+        ])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.modelRuntime']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        requiredPermissions: expect.arrayContaining(['aurora.android.localLightInference']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.fallback']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:androidWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            disabledReasons: expect.arrayContaining([
+              expect.stringContaining('Widget provider is packaged')
+            ])
+          })
+        ])
+      })
+    )
+  })
+
+  it('keeps iOS native invocation app-owned without Siri replacement capability', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'ios',
+        permissions: {
+          'aurora.iosAppIntents': true,
+          'aurora.iosShortcuts': true,
+          'aurora.iosSiriReplacement': false
+        },
+        capabilities: {
+          'ios.appIntents': true,
+          'ios.shortcuts': true,
+          'ios.siriReplacement': false
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:ios:ios.appIntents']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:ios',
+        requiredPermissions: []
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.siriReplacement']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providerIdentity: 'native:ios',
+        routeable: false
+      })
+    )
+  })
+
+  it('distinguishes Android assistant-role held, denied, and OEM-unavailable native states', () => {
+    const heldGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.request': false,
+          'android.assistantRole.held': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'degraded',
+          'android.assistantRole.held': 'available'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleHeld: true,
+          requestable: false,
+          reason: 'role_held'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(heldGraph.byFeatureId['native:android:android.assistantRole.held']).toEqual(
+      expect.objectContaining({ availability: 'available-local' })
+    )
+
+    const deniedGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'needs_native_permission',
+          'android.assistantRole.denied': 'needs_native_permission'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          denied: true,
+          requestable: false,
+          reason: 'request_denied'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(deniedGraph.byFeatureId['native:android:android.assistantRole.denied']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+
+    const oemUnavailableGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.available': false,
+          'android.assistantRole.request': false,
+          'android.assistantRole.oemUnavailable': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.available': 'unsupported_platform',
+          'android.assistantRole.request': 'unsupported_platform',
+          'android.assistantRole.oemUnavailable': 'unsupported_platform'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleAvailable: false,
+          requestable: false,
+          oemUnavailable: true,
+          reason: 'oem_unavailable'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.assistantRole.oemUnavailable']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({ availability: 'degraded' })
     )
   })
 
@@ -2358,6 +2755,39 @@ describe('AuroraClient', () => {
             }
           case 'aurora_ios_admin_unlock':
             throw { detail: { code: 'unsupported_feature', message: 'iOS admin unlock requires Face ID/Touch ID' } }
+          case 'aurora_biometric_admin_unlock_status':
+            return {
+              platform: 'android',
+              available: false,
+              requestable: false,
+              deviceSecure: false,
+              biometricReady: false,
+              lastDenied: false,
+              state: 'needs_native_permission',
+              reason: 'device_credential_not_enrolled',
+              privacyClass: 'admin-critical',
+              evidenceSource: 'android-biometric-keyguard-keystore',
+              secretsRedacted: true
+            }
+          case 'aurora_biometric_admin_unlock':
+            return {
+              started: false,
+              reason: 'device_credential_not_enrolled',
+              status: {
+                platform: 'android',
+                available: false,
+                requestable: false,
+                deviceSecure: false,
+                biometricReady: false,
+                lastDenied: false,
+                state: 'needs_native_permission',
+                reason: 'device_credential_not_enrolled',
+                privacyClass: 'admin-critical',
+                evidenceSource: 'android-biometric-keyguard-keystore',
+                secretsRedacted: true
+              },
+              secretsRedacted: true
+            }
           case 'aurora_local_file_read':
             return { path: String(args?.path), data: 'hello', encoding: 'utf-8' }
           case 'aurora_local_file_write':
@@ -2366,6 +2796,13 @@ describe('AuroraClient', () => {
             return { paths: ['/tmp/a.txt'], cancelled: false }
           case 'aurora_secure_file_handle_open':
             return { paths: ['/tmp/a.txt'], cancelled: false }
+          case 'aurora_ios_entrypoint_payload':
+            return {
+              payload: nativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: nativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'tauri-ios-native-manifest',
+              secretsRedacted: true
+            }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -2429,6 +2866,19 @@ describe('AuroraClient', () => {
     await expect(
       transport.iosAdminUnlock({ reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' })
     ).rejects.toMatchObject({ code: 'unsupported_feature' })
+    await expect(transport.getBiometricAdminUnlockStatus()).resolves.toEqual(
+      expect.objectContaining({
+        privacyClass: 'admin-critical',
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.requestBiometricAdminUnlock()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'device_credential_not_enrolled',
+        secretsRedacted: true
+      })
+    )
     await expect(transport.readLocalFile('/tmp/a.txt')).resolves.toEqual({
       path: '/tmp/a.txt',
       data: 'hello',
@@ -2447,6 +2897,16 @@ describe('AuroraClient', () => {
       paths: ['/tmp/a.txt'],
       cancelled: false
     })
+    await expect(transport.getIOSEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ invocation: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'ios_share_extension', backendRequired: true }),
+          expect.objectContaining({ id: 'ios_file_association', payloadCommand: 'iosEntrypointPayload' })
+        ]),
+        secretsRedacted: true
+      })
+    )
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
@@ -2467,10 +2927,13 @@ describe('AuroraClient', () => {
       'aurora_ios_secure_storage_status',
       'aurora_ios_biometric_status',
       'aurora_ios_admin_unlock',
+      'aurora_biometric_admin_unlock_status',
+      'aurora_biometric_admin_unlock',
       'aurora_local_file_read',
       'aurora_local_file_write',
       'aurora_local_file_pick',
-      'aurora_secure_file_handle_open'
+      'aurora_secure_file_handle_open',
+      'aurora_ios_entrypoint_payload'
     ])
     expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
     expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })
@@ -2481,9 +2944,336 @@ describe('AuroraClient', () => {
     expect(calls[17]?.args).toEqual({
       request: { reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' }
     })
-    expect(calls[18]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[19]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[21]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[20]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[21]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[23]?.args).toEqual({ options: { mode: 'read' } })
+  })
+
+  it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_native_capability_manifest':
+            return androidNativeCapabilityManifestFixture
+          case 'assistantRoleStatus':
+            return androidNativeCapabilityManifestFixture.assistantRole
+          case 'requestAssistantRole':
+            return {
+              started: true,
+              requestCode: 4202,
+              status: androidNativeCapabilityManifestFixture.assistantRole,
+              reason: 'requestable'
+            }
+          case 'fallbackEntrypoints':
+            return androidNativeCapabilityManifestFixture.fallbackEntrypoints
+          case 'localLightInferenceStatus':
+            return androidNativeCapabilityManifestFixture.localLightInference
+          case 'requestAndroidPermission':
+            return {
+              started: true,
+              permission: args?.permission,
+              requestCode: 4204,
+              requestedPermissions: ['android.permission.RECORD_AUDIO']
+            }
+          case 'voiceForegroundServiceStatus':
+            return androidNativeCapabilityManifestFixture.voiceForegroundService
+          case 'startVoiceForegroundService':
+            return {
+              started: false,
+              reason: 'microphone_permission_missing',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
+          case 'stopVoiceForegroundService':
+            return {
+              stopped: false,
+              reason: 'foreground_service_not_running',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
+          case 'entrypointPayload':
+            return {
+              payload: androidNativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: androidNativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'android-intent-redacted',
+              secretsRedacted: true
+            }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'android',
+        assistantRole: expect.objectContaining({
+          roleAvailable: true,
+          packageQualified: true,
+          roleHeld: false,
+          requestable: true,
+          oemUnavailable: false,
+          reason: 'requestable',
+          handlesAssistActivity: true,
+          declaresVoiceInteractionService: true
+        }),
+        permissionStates: expect.objectContaining({
+          'aurora.android.microphone': 'needs_native_permission',
+          'aurora.android.microphoneRequest': 'needs_native_permission',
+          'aurora.android.notifications': 'needs_native_permission',
+          'aurora.android.notificationsRequest': 'needs_native_permission',
+          'aurora.android.voiceForegroundService': 'needs_native_permission',
+          'aurora.android.biometric': 'unsupported_platform',
+          'aurora.android.secureStorage': 'available',
+          'aurora.android.adminUnlock': 'needs_native_permission',
+          'aurora.android.localNetwork': 'available',
+          'aurora.android.filePick': 'degraded',
+          'aurora.android.shareIntent': 'available',
+          'aurora.android.quickTile': 'fallback',
+          'aurora.android.entrypointPayload': 'available',
+          'aurora.android.localLightInference': 'degraded'
+        }),
+        capabilityStates: expect.objectContaining({
+          'android.assistantRole.packageQualified': 'available',
+          'android.assistantRole.request': 'needs_native_permission',
+          'android.assistantRole.held': 'needs_native_permission',
+          'android.assistantRole.denied': 'degraded',
+          'android.assistantRole.oemUnavailable': 'degraded',
+          'android.foregroundService': 'needs_native_permission',
+          'android.voiceForegroundService': 'needs_native_permission',
+          'android.voiceForegroundService.start': 'needs_native_permission',
+          'android.secureCredentialStorage': 'available',
+          'android.adminUnlock': 'needs_native_permission',
+          'android.localFileRead': 'degraded',
+          'android.appWidget': 'fallback',
+          'android.quickTile': 'fallback',
+          'android.fallbackEntrypoints': 'fallback',
+          'android.localLightInference.provider': 'degraded',
+          'android.localLightInference.modelRuntime': 'needs_native_permission',
+          'android.localLightInference.fallback': 'fallback'
+        }),
+        localLightInference: expect.objectContaining({
+          providerId: 'native:mobile-local-light',
+          state: 'degraded',
+          fallbackAvailable: true,
+          backendModelCatalogRequired: true,
+          reason: 'backend_model_catalog_and_device_model_proof_required'
+        }),
+        voiceForegroundService: expect.objectContaining({
+          state: 'needs_native_permission',
+          reason: 'microphone_permission_missing',
+          backendAudioEvidenceRequired: true
+        }),
+        mobileIntegrations: expect.arrayContaining([
+          expect.objectContaining({ id: 'androidShareSheet', support: 'supported' }),
+          expect.objectContaining({ id: 'androidWidget', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidQuickTile', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidLocalLightInference', support: 'supported-path' })
+        ]),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', backendRequired: true, payloadCommand: 'entrypointPayload' }),
+          expect.objectContaining({ id: 'deep_link', backendRequired: true }),
+          expect.objectContaining({ id: 'quick_tile', backendRequired: false })
+        ]),
+        lastEntrypointPayload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
+        fallbackEntrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'app_open', state: 'fallback', available: true }),
+          expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
+          expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
+          expect.objectContaining({ id: 'quick_tile', state: 'fallback', available: true, manifestDeclared: true }),
+          expect.objectContaining({ id: 'app_widget', state: 'fallback', available: true, manifestDeclared: true }),
+          expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
+        ])
+      })
+    )
+    await expect(transport.getAndroidAssistantRoleStatus()).resolves.toEqual(
+      expect.objectContaining({
+        roleName: 'android.app.role.ASSISTANT',
+        roleAvailable: true,
+        packageQualified: true,
+        roleHeld: false,
+        requestable: true,
+        fallbackAvailable: true,
+        handlesAssistActivity: true,
+        declaresVoiceInteractionService: true
+      })
+    )
+    await expect(transport.requestAndroidAssistantRole()).resolves.toEqual(
+      expect.objectContaining({
+        started: true,
+        requestCode: 4202,
+        reason: 'requestable'
+      })
+    )
+    await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true, backendRequired: true })
+      ])
+    )
+    await expect(transport.getAndroidLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        fallbackAvailable: true,
+        modelRuntimeProvider: false
+      })
+    )
+    await expect(transport.requestAndroidPermission('aurora.android.microphone')).resolves.toEqual(
+      expect.objectContaining({
+        started: true,
+        permission: 'aurora.android.microphone',
+        requestCode: 4204,
+        requestedPermissions: ['android.permission.RECORD_AUDIO']
+      })
+    )
+    await expect(transport.getAndroidVoiceForegroundServiceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        state: 'needs_native_permission',
+        backendAudioEvidenceRequired: true
+      })
+    )
+    await expect(transport.startAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'microphone_permission_missing'
+      })
+    )
+    await expect(transport.stopAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        stopped: false,
+        reason: 'foreground_service_not_running'
+      })
+    )
+    await expect(transport.getAndroidEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', manifestDeclared: true })
+        ]),
+        evidenceSource: 'android-intent-redacted',
+        secretsRedacted: true
+      })
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_native_capability_manifest',
+      'assistantRoleStatus',
+      'requestAssistantRole',
+      'fallbackEntrypoints',
+      'localLightInferenceStatus',
+      'requestAndroidPermission',
+      'voiceForegroundServiceStatus',
+      'startVoiceForegroundService',
+      'stopVoiceForegroundService',
+      'entrypointPayload'
+    ])
+    expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
+  })
+
+  it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const iosManifest = {
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosShareExtension': false,
+        'aurora.iosWidgets': false,
+        'aurora.iosDeepLinks': false,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.shareExtension': false,
+        'ios.widgets': false,
+        'ios.deepLinks': false,
+        'ios.siriReplacement': false
+      }
+    }
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_ios_native_plugin_manifest':
+            return iosManifest
+          case 'aurora_ios_invocation_status':
+            return {
+              available: true,
+              surface: 'Siri/Shortcuts/App Intents integration',
+              supportedActions: [
+                'app-intent.open-assistant',
+                'shortcut.open-assistant',
+                'share.import-context',
+                'deeplink.open'
+              ],
+              siriReplacement: false,
+              requiresBackendEvidence: true,
+              secretsRedacted: true
+            }
+          case 'aurora_ios_invoke_action':
+            return {
+              accepted: true,
+              action: (args?.request as { action?: string } | undefined)?.action,
+              handoff: 'AuroraClient',
+              correlationId: (args?.request as { correlationId?: string } | undefined)?.correlationId,
+              secretsRedacted: true
+            }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getIosNativePluginManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        capabilities: expect.objectContaining({
+          'ios.appIntents': true,
+          'ios.siriReplacement': false
+        }),
+        permissions: expect.objectContaining({
+          'aurora.iosAppIntents': true,
+          'aurora.iosSiriReplacement': false
+        })
+      })
+    )
+    await expect(transport.getIosInvocationStatus()).resolves.toEqual(
+      expect.objectContaining({
+        surface: 'Siri/Shortcuts/App Intents integration',
+        supportedActions: expect.arrayContaining(['app-intent.open-assistant', 'share.import-context']),
+        siriReplacement: false,
+        requiresBackendEvidence: true,
+        secretsRedacted: true
+      })
+    )
+    await expect(
+      transport.invokeIosAuroraAction({
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accepted: true,
+        action: 'app-intent.open-assistant',
+        handoff: 'AuroraClient',
+        correlationId: 'corr-ios-action',
+        secretsRedacted: true
+      })
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_ios_native_plugin_manifest',
+      'aurora_ios_invocation_status',
+      'aurora_ios_invoke_action'
+    ])
+    expect(calls[2]?.args).toEqual({
+      request: {
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      }
+    })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {

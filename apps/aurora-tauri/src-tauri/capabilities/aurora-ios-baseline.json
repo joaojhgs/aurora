@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-ios-baseline",
+  "description": "IOS-001 baseline capability for the Tauri iOS shell. Grants the Aurora bridge and native manifest commands but omits desktop-only updater permissions.",
+  "windows": ["main"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "aurora-command",
+    "aurora-request",
+    "aurora-subscribe",
+    "aurora-native-capability-manifest",
+    "aurora-ios-native-plugin",
+    "aurora-sidecar-status",
+    "aurora-sidecar-session",
+    "aurora-sidecar-start",
+    "aurora-sidecar-stop",
+    "aurora-log-tail",
+    "aurora-secure-storage",
+    "aurora-native-permissions",
+    "aurora-tray",
+    "aurora-notifications",
+    "aurora-dialogs",
+    "aurora-local-file",
+    "aurora-secure-file-handle",
+    "aurora-audio-bridge",
+    "aurora-shutdown"
+  ]
+}

@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, ToggleLeft } from 'lucide-react'
-import type { AvailabilityState, PrivacyClass } from '@aurora/client'
+import type {
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AndroidNativeEntrypoint,
+  AvailabilityState,
+  NativeMobileIntegration,
+  PrivacyClass
+} from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
@@ -33,12 +40,31 @@ export interface SettingsNativePermissionCard {
   evidence: string[]
 }
 
+export interface SettingsNativeIntegrationCard {
+  id: string
+  label: string
+  state: AvailabilityState
+  support: NativeMobileIntegration['support']
+  capability: string
+  permission: string | null
+  privacyClass: PrivacyClass
+  invocation: string | null
+  backendMethod: string | null
+  requiresConfirmation: boolean
+  siriReplacement: false
+  detail: string
+  blockers: string[]
+  evidence: string[]
+}
+
 export interface SettingsPermissionsModel {
   loadState: AuroraShellSnapshot['loadState']
   settingsRoute: RouteAvailability | null
   nativeRoute: RouteAvailability | null
   privacyControls: SettingsPrivacyControl[]
   nativePermissions: SettingsNativePermissionCard[]
+  nativeIntegrations: SettingsNativeIntegrationCard[]
+  nativeLimitations: Array<{ id: string; label: string; detail: string; evidence: string }>
   routeDefaults: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
   adminActionLabel: string
   fallbackLabel: string
@@ -95,7 +121,7 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           <PanelTitle
             icon={<Smartphone size={18} aria-hidden />}
             title="Native permissions"
-            description="Desktop, Android, and iOS claims only appear when the SDK native manifest reports them."
+            description="Desktop, Android, and iOS claims only appear when the SDK native manifest reports them; iOS is limited to Siri/Shortcuts/App Intents integration and app-owned surfaces."
             id="native-permissions-title"
           />
           {model.nativePermissions.length > 0 ? (
@@ -110,8 +136,41 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
               <p>No native permission manifest is available for this deployment mode.</p>
             </div>
           )}
+          {model.nativeIntegrations.length > 0 ? (
+            <div className="aui-native-list" aria-label="Native integrations">
+              {model.nativeIntegrations.map((integration) => (
+                <NativeIntegrationRow key={integration.id} integration={integration} />
+              ))}
+            </div>
+          ) : null}
+          {model.nativeLimitations.length > 0 ? (
+            <dl className="aui-settings-facts">
+              {model.nativeLimitations.map((limitation) => (
+                <div key={limitation.id}>
+                  <dt>{limitation.label}</dt>
+                  <dd>{limitation.detail} Evidence: {limitation.evidence}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
         </section>
       </div>
+
+      {model.nativeIntegrations.length > 0 ? (
+        <section className="aui-settings-panel" aria-labelledby="native-integrations-title">
+          <PanelTitle
+            icon={<Smartphone size={18} aria-hidden />}
+            title="Siri, Shortcuts, and App Intents"
+            description="iOS invocation stays inside app-owned Siri/Shortcuts/App Intents integration, widgets, share, or deep-link surfaces; Aurora does not replace Siri."
+            id="native-integrations-title"
+          />
+          <div className="aui-native-list">
+            {model.nativeIntegrations.map((integration) => (
+              <NativeIntegrationRow key={integration.id} integration={integration} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="aui-settings-panel" aria-labelledby="route-policy-title">
         <PanelTitle
@@ -200,6 +259,13 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       })
     ],
     nativePermissions: nativePermissionCards(snapshot, nativeRoute),
+    nativeIntegrations: nativeIntegrationCards(snapshot),
+    nativeLimitations: (snapshot.nativePlatformLimitations ?? []).map((limitation) => ({
+      id: limitation.id,
+      label: limitation.label,
+      detail: limitation.userCopy,
+      evidence: limitation.evidenceSource
+    })),
     routeDefaults: [
       {
         id: 'remote-providers',
@@ -231,6 +297,36 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       : 'No fallback route is currently reported by the capability graph.',
     error: errorText
   }
+}
+
+function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
+  return (
+    <article className="aui-native-card">
+      <div className="aui-settings-control-icon">
+        {integration.state === 'unsupported' ? <AlertTriangle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
+      </div>
+      <div>
+        <h3>{integration.label}</h3>
+        <p>{integration.detail}</p>
+        <div className="aui-settings-inline">
+          <StatusBadge state={integration.state} />
+          <PrivacyBadge privacy={integration.privacyClass} />
+          <EvidenceBadge label={integration.support} />
+          {integration.invocation ? <EvidenceBadge label={integration.invocation} /> : null}
+          {integration.requiresConfirmation ? <EvidenceBadge label="confirmation required" /> : null}
+        </div>
+        <small>{integration.blockers.length > 0 ? integration.blockers.join(', ') : 'No blocker reported.'}</small>
+        <dl className="aui-settings-facts">
+          <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'backend evidence required'}</dd></div>
+          <div><dt>Permission</dt><dd>{integration.permission ?? 'none'}</dd></div>
+          <div><dt>Siri replacement</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
+        </dl>
+      </div>
+      <button type="button" disabled>
+        {integration.state === 'unsupported' ? 'Unsupported' : 'Requires native verification'}
+      </button>
+    </article>
+  )
 }
 
 function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
@@ -273,6 +369,7 @@ function NativePermissionRow({ permission }: { permission: SettingsNativePermiss
           <EvidenceBadge label={permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'} />
           <EvidenceBadge label={permission.evidence.join(', ') || 'no evidence'} />
         </div>
+        <small>{permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No blocker reported.'}</small>
       </div>
       <button type="button" disabled={!permission.requestEnabled}>
         {permission.requestEnabled ? 'Request permission' : permission.granted ? 'Granted' : 'Request unavailable'}
@@ -320,41 +417,234 @@ function nativePermissionCards(
     ...snapshot.nativePermissions.map((permission) => permission.name),
     ...snapshot.nativeCapabilities.map((capability) => capability.name)
   ])
-  return [...permissionNames].sort().map((name) => {
+  const genericRows = [...permissionNames].sort().map((name) => {
     const permission = snapshot.nativePermissions.find((candidate) => candidate.name === name)
     const capability = snapshot.nativeCapabilities.find((candidate) => candidate.name === name)
     const granted = permission?.granted ?? false
     const capabilityEnabled = capability?.enabled ?? granted
-    const state: AvailabilityState = nativePermissionState(name, granted, capabilityEnabled, snapshot.nativeAvailable)
+    const nativeState = capability?.nativeState ?? permission?.nativeState ?? null
+    const state = isSiriReplacementPermission(name)
+      ? 'unsupported'
+      : availabilityFromNativeState(nativeState, granted, capabilityEnabled, snapshot.nativeAvailable)
+    const requestEnabled = !granted && nativeRequestAvailable(name, snapshot)
     return {
       id: name,
       label: nativePermissionLabel(name),
       state,
       granted,
       capabilityEnabled,
-      requestEnabled: false,
-      detail: nativePermissionDetail(name, granted, capabilityEnabled),
-      blockers: state === 'available-local' ? [] : [`native permission missing: ${name}`],
+      requestEnabled,
+      detail: nativePermissionDetail(name, granted, capabilityEnabled, requestEnabled, nativeState),
+      blockers: state === 'unsupported' || granted || nativeState === 'fallback' ? [] : [`native permission missing: ${name}`],
       evidence: nativeRoute?.evidenceSources ?? (snapshot.nativeAvailable ? ['native-manifest'] : [])
     }
   })
+  const androidRows = androidNativePermissionCards(snapshot)
+  const androidIds = new Set(androidRows.map((row) => row.id))
+  return [...genericRows.filter((row) => !androidIds.has(row.id)), ...androidRows]
 }
 
-function nativePermissionState(
-  name: string,
+function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
+  if (support === 'supported') return 'available-local'
+  if (support === 'supported-path') return 'degraded'
+  if (support === 'planned') return 'pending'
+  if (support === 'blocked') return 'privacy-blocked'
+  return 'unsupported'
+}
+
+function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIntegrationCard[] {
+  return snapshot.nativeMobileIntegrations
+    .filter((integration) => {
+      if (integration.platform === snapshot.nativePlatform) {
+        return true
+      }
+      return snapshot.nativePlatform === 'tauri-desktop' && integration.platform === 'ios'
+    })
+    .map((integration) => {
+      const state = availabilityFromNativeIntegration(integration.support)
+      const blockers = [
+        state === 'unsupported' ? integration.userCopy : '',
+        integration.permission && snapshot.nativePermissions.some((permission) =>
+          permission.name === integration.permission && !permission.granted
+        )
+          ? `native permission missing: ${integration.permission}`
+          : ''
+      ].filter(Boolean)
+      return {
+        id: integration.id,
+        label: integration.label,
+        state,
+        support: integration.support,
+        capability: integration.capability,
+        permission: integration.permission,
+        privacyClass: integration.privacyClass,
+        invocation: integration.invocation ?? null,
+        backendMethod: integration.backendMethod ?? null,
+        requiresConfirmation: integration.requiresConfirmation ?? false,
+        siriReplacement: false,
+        detail: integration.userCopy,
+        blockers,
+        evidence: unique([integration.evidenceSource, integration.verifier])
+      }
+    })
+}
+
+function isSiriReplacementPermission(name: string): boolean {
+  return name === 'aurora.iosSiriReplacement' || name === 'ios.siriReplacement'
+}
+
+function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
+  if (snapshot.nativePlatform !== 'android' || !snapshot.nativeAvailable) return false
+  const normalized = name.toLowerCase()
+  const requestNames = new Set([
+    ...snapshot.nativePermissions.filter((permission) => permission.granted).map((permission) => permission.name.toLowerCase()),
+    ...snapshot.nativeCapabilities.filter((capability) => capability.enabled).map((capability) => capability.name.toLowerCase())
+  ])
+  if (normalized.includes('assistantrole')) {
+    return requestNames.has('aurora.android.assistantrolerequest') ||
+      requestNames.has('android.assistantrole.request')
+  }
+  if (normalized.includes('microphone') || normalized.includes('audiocapture')) {
+    return requestNames.has('aurora.android.microphonerequest') ||
+      requestNames.has('android.microphonepermissionrequest')
+  }
+  if (normalized.includes('notification')) {
+    return requestNames.has('aurora.android.notificationsrequest') ||
+      requestNames.has('android.notificationpermissionrequest')
+  }
+  if (normalized.includes('voiceforeground') || normalized.includes('foregroundservice')) {
+    return requestNames.has('aurora.android.voiceforegroundstart') ||
+      requestNames.has('android.voiceforegroundservice.start')
+  }
+  return false
+}
+
+function availabilityFromNativeState(
+  nativeState: string | null,
   granted: boolean,
   capabilityEnabled: boolean,
   nativeAvailable: boolean
 ): AvailabilityState {
-  if (name === 'ios.siriReplacement') return 'unsupported'
-  if (granted && capabilityEnabled) return 'available-local'
-  if (!nativeAvailable) return 'unsupported'
-  if (name.startsWith('ios.') || name.startsWith('aurora.ios')) return 'privacy-blocked'
-  return 'privacy-blocked'
+  if (!nativeAvailable || nativeState === 'unsupported_platform') return 'unsupported'
+  if (nativeState === 'available') return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
+  if (nativeState === 'needs_native_permission') return 'privacy-blocked'
+  if (nativeState === 'degraded' || nativeState === 'fallback') return 'degraded'
+  return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
 }
 
 function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability | null {
   return snapshot.routes.find((route) => route.item.id === id) ?? null
+}
+
+function androidNativePermissionCards(snapshot: AuroraShellSnapshot): SettingsNativePermissionCard[] {
+  const rows: SettingsNativePermissionCard[] = []
+  const assistant = snapshot.nativeAssistantRole
+  if (assistant) {
+    rows.push({
+      id: 'android.assistantRole',
+      label: 'Android assistant role',
+      state: androidAssistantRoleAvailability(assistant),
+      granted: assistant.roleHeld,
+      capabilityEnabled: assistant.roleAvailable && assistant.packageQualified && !assistant.denied && !assistant.oemUnavailable,
+      requestEnabled: assistant.requestable && !assistant.roleHeld && !assistant.denied,
+      detail: assistant.reason,
+      blockers: androidAssistantRoleBlockers(assistant),
+      evidence: androidAssistantRoleEvidence(assistant)
+    })
+  }
+
+  for (const entrypoint of snapshot.nativeFallbackEntrypoints) {
+    rows.push({
+      id: `android.fallback.${entrypoint.id}`,
+      label: `Android ${nativePermissionLabel(entrypoint.id)}`,
+      state: androidNativeStateToAvailability(entrypoint.state, entrypoint.available),
+      granted: entrypoint.available,
+      capabilityEnabled: entrypoint.available,
+      requestEnabled: false,
+      detail: entrypoint.reason,
+      blockers: entrypoint.available ? [] : [`android fallback unavailable: ${entrypoint.id}`],
+      evidence: androidFallbackEntrypointEvidence(entrypoint)
+    })
+  }
+
+  for (const entrypoint of snapshot.nativeEntrypoints) {
+    if (!('intentAction' in entrypoint)) continue
+    rows.push({
+      id: `android.entrypoint.${entrypoint.id}`,
+      label: entrypoint.label,
+      state: androidNativeStateToAvailability(entrypoint.state, entrypoint.available),
+      granted: entrypoint.available,
+      capabilityEnabled: entrypoint.available,
+      requestEnabled: false,
+      detail: entrypoint.reason,
+      blockers: entrypoint.available ? [] : [`android entrypoint unavailable: ${entrypoint.id}`],
+      evidence: androidNativeEntrypointEvidence(entrypoint)
+    })
+  }
+
+  return rows
+}
+
+function androidNativeStateToAvailability(state: string, available: boolean): AvailabilityState {
+  if (state === 'available') return 'available-local'
+  if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'unsupported_platform') return 'unsupported'
+  if (state === 'degraded') return 'degraded'
+  if (state === 'fallback') return 'degraded'
+  return available ? 'available-local' : 'unsupported'
+}
+
+function androidAssistantRoleAvailability(assistant: AndroidAssistantRoleStatus): AvailabilityState {
+  if (assistant.denied) return 'denied'
+  if (!assistant.roleAvailable || assistant.oemUnavailable) {
+    return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+  }
+  if (!assistant.packageQualified) return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+  if (assistant.roleHeld) return 'available-local'
+  if (assistant.requestable) return 'privacy-blocked'
+  return assistant.fallbackAvailable ? 'degraded' : 'unsupported'
+}
+
+function androidAssistantRoleBlockers(assistant: AndroidAssistantRoleStatus): string[] {
+  return [
+    !assistant.roleAvailable || assistant.oemUnavailable ? 'assistant_role_oem_unavailable' : '',
+    !assistant.packageQualified ? 'assistant_role_package_not_qualified' : '',
+    assistant.denied ? 'assistant_role_denied' : '',
+    assistant.requestable && !assistant.roleHeld ? 'assistant_role_user_grant_required' : ''
+  ].filter(Boolean)
+}
+
+function androidAssistantRoleEvidence(assistant: AndroidAssistantRoleStatus): string[] {
+  return unique([
+    assistant.evidenceSource,
+    `RoleManager.isRoleAvailable(${assistant.roleName})=${String(assistant.roleAvailable)}`,
+    `RoleManager.isRoleHeld(${assistant.roleName})=${String(assistant.roleHeld)}`,
+    `package qualification probe=${assistant.packageQualified ? 'qualified' : 'not-qualified'}`,
+    `requestable=${String(assistant.requestable)}`,
+    `oemUnavailable=${String(assistant.oemUnavailable)}`,
+    `fallbackAvailable=${String(assistant.fallbackAvailable)}`
+  ])
+}
+
+function androidFallbackEntrypointEvidence(entrypoint: AndroidFallbackEntrypoint): string[] {
+  return unique([
+    entrypoint.capability ?? '',
+    entrypoint.permission ?? '',
+    entrypoint.intentAction ?? '',
+    `manifestDeclared=${String(entrypoint.manifestDeclared ?? false)}`,
+    `backendRequired=${String(entrypoint.backendRequired ?? false)}`
+  ])
+}
+
+function androidNativeEntrypointEvidence(entrypoint: AndroidNativeEntrypoint): string[] {
+  return unique([
+    entrypoint.capability,
+    entrypoint.permission ?? '',
+    entrypoint.intentAction,
+    `manifestDeclared=${String(entrypoint.manifestDeclared)}`,
+    `backendRequired=${String(entrypoint.backendRequired)}`,
+    `payloadCommand=${entrypoint.payloadCommand}`
+  ])
 }
 
 function nativePermissionLabel(name: string): string {
@@ -363,6 +653,9 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosBiometricUnlock': 'Face ID / Touch ID admin unlock',
     'ios.keychain.secureCredentialStorage': 'iOS Keychain secure storage',
     'ios.biometric.adminUnlock': 'Face ID / Touch ID admin unlock',
+    'aurora.iosSiriReplacement': 'iOS Siri Replacement Unsupported',
+    'aurora.iosAppIntents': 'iOS App Intents',
+    'aurora.iosShortcuts': 'iOS Shortcuts',
     'ios.appIntents': 'App Intents',
     'ios.shortcuts': 'Shortcuts',
     'ios.shareExtension': 'Share extension',
@@ -378,7 +671,13 @@ function nativePermissionLabel(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-function nativePermissionDetail(name: string, granted: boolean, capabilityEnabled: boolean): string {
+function nativePermissionDetail(
+  name: string,
+  granted: boolean,
+  capabilityEnabled: boolean,
+  requestEnabled = false,
+  nativeState: string | null = null
+): string {
   if (name === 'aurora.iosKeychain' || name === 'ios.keychain.secureCredentialStorage') {
     return capabilityEnabled || granted
       ? 'Tokens, mesh credentials, and admin unlock secrets use iOS Keychain evidence from the native manifest.'
@@ -398,9 +697,11 @@ function nativePermissionDetail(name: string, granted: boolean, capabilityEnable
   if (name === 'ios.siriReplacement') {
     return 'iOS does not allow Aurora to replace Siri; only Siri/Shortcuts/App Intents integration is shown.'
   }
-  return granted
-    ? 'Native manifest reports this permission as granted.'
-    : 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.'
+  if (granted) return 'Native manifest reports this permission as granted.'
+  if (requestEnabled) return 'Native manifest advertises an Android permission request command for this state.'
+  if (nativeState === 'degraded') return 'Native manifest reports a degraded or partial platform path for this feature.'
+  if (nativeState === 'fallback') return 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
+  return 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.'
 }
 
 function unique(values: string[]): string[] {

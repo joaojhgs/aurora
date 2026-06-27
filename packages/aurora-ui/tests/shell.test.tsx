@@ -4,6 +4,7 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  androidNativeCapabilityManifestFixture,
   backupListFixture,
   buildAdminOverviewManifest,
   buildCapabilityGraph,
@@ -13,9 +14,11 @@ import {
   deploymentTopologyFixture,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
+  iosNativeCapabilityManifestFixture,
   modelRuntimeCatalogFixture,
   meshPeerListFixture,
   meshStatusFixture,
+  nativeCapabilityManifestFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -91,6 +94,7 @@ import {
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
   meshPeerErrorMessage,
@@ -224,6 +228,22 @@ describe('Aurora production shell', () => {
       })
     )
     expect(model.mobileLocalLightState).toBe('unsupported')
+
+    const nativeModel = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      loadState: 'ready'
+    })
+    expect(nativeModel.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        routeLabel: 'native:android / native:mobile-local-light',
+        blockers: expect.arrayContaining(['backend_model_catalog_and_device_model_proof_required'])
+      })
+    )
+    expect(nativeModel.mobileLocalLightState).toBe('degraded')
+    expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
   it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
@@ -234,7 +254,12 @@ describe('Aurora production shell', () => {
     })
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const markup = renderToStaticMarkup(
-      <ModelsView client={client} initialCatalog={modelRuntimeCatalogFixture} initialGraph={graph} />
+      <ModelsView
+        client={client}
+        initialCatalog={modelRuntimeCatalogFixture}
+        initialGraph={graph}
+        initialNativeManifest={androidNativeCapabilityManifestFixture}
+      />
     )
 
     expect(markup).toContain('Models and runtime')
@@ -247,7 +272,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Benchmark action stays disabled')
     expect(markup).toContain('Select: Backend model selection contract is not active')
     expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
-    expect(markup).toContain('native_provider_missing')
+    expect(markup).toContain('backend_model_catalog_and_device_model_proof_required')
+    expect(markup).toContain('android-native-local-light-adapter')
     expect(markup).toContain('Mobile local-light')
 
     const errorMarkup = renderToStaticMarkup(
@@ -280,6 +306,66 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required')
     expect(markup).toContain('Request unavailable')
     expect(markup).toContain('secrets redacted')
+  })
+
+  it('renders iOS App Intents as app-owned Shortcuts integration without claiming Siri replacement', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativeIntegrations.map((integration) => integration.id)).toEqual([
+      'askAuroraAppIntent',
+      'askAuroraShortcut',
+      'summarizeSharedContentShortcut',
+      'stopAuroraSpeechAppIntent',
+      'shareExtension',
+      'deepLinks',
+      'widgets',
+      'fileAssociations',
+      'siriReplacement'
+    ])
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        invocation: 'app-intent',
+        siriReplacement: false
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'fileAssociations')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'siriReplacement')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        siriReplacement: false
+      })
+    )
+    expect(markup).toContain('Siri, Shortcuts, and App Intents')
+    expect(markup).toContain('does not replace Siri')
+    expect(markup).toContain('Orchestrator.ExternalUserInput')
+    expect(markup).toContain('confirmation required')
   })
 
   it('maps settings state matrix for denied, degraded, native-unavailable, optimistic and rollback/error states', async () => {
@@ -322,6 +408,103 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Request unavailable')
     expect(markup).toContain('Granted')
     expect(markup).toContain('Fallback is visible as degraded capability evidence.')
+  })
+
+  it('renders Android local-light inference as a degraded native provider in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const localLight = model.nativePermissions.find((permission) => permission.id === 'aurora.android.localLightInference')
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(localLight).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        granted: false,
+        requestEnabled: false
+      })
+    )
+    expect(markup).toContain('Android Local Light Inference')
+    expect(markup).toContain('Native manifest reports a degraded or partial platform path for this feature.')
+  })
+
+  it('renders Android assistant role qualification and fallback entrypoints from native manifest evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+
+    const assistantRole = model.nativePermissions.find((permission) => permission.id === 'android.assistantRole')
+    const notificationFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.notification')
+    const foregroundVoiceFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.foreground_voice_controls')
+
+    expect(snapshot.nativePlatform).toBe('android')
+    expect(assistantRole).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      requestEnabled: true,
+      capabilityEnabled: true,
+      blockers: expect.arrayContaining(['assistant_role_user_grant_required'])
+    }))
+    expect(notificationFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+    expect(foregroundVoiceFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    expect(markup).toContain('Android assistant role')
+    expect(markup).toContain('RoleManager.isRoleAvailable(android.app.role.ASSISTANT)=true')
+    expect(markup).toContain('Share sheet')
+    expect(markup).toContain('Android Notification')
+    expect(markup).toContain('assistant_role_user_grant_required')
+  })
+
+  it('renders iOS native integration states and no-Siri-replacement limits in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...nativeCapabilityManifestFixture,
+        platform: 'ios'
+      },
+      transportKind: 'native-mobile'
+    })
+    const nativeManifest = { ...nativeCapabilityManifestFixture, platform: 'ios' as const }
+    const snapshot = snapshotFromGraph('native-mobile', graph, nativeManifest)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.nativeIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'fileAssociations', state: 'degraded' }),
+        expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
+      ])
+    )
+    expect(model.nativeLimitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'noSiriReplacement',
+          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+        })
+      ])
+    )
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('iOS share extension intake')
+    expect(markup).toContain('iOS file associations')
+    expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.')
   })
 
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {
@@ -597,6 +780,33 @@ describe('Aurora production shell', () => {
     expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
   })
 
+  it('renders iOS permission copy as Siri Shortcuts App Intents integration without replacement claims', async () => {
+    const mobileTransport = new MockAuroraTransport()
+    mobileTransport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.siriReplacement': false
+      }
+    }))
+    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const snapshot = await buildShellSnapshot(mobileClient)
+    const settings = buildSettingsPermissionsModel(snapshot)
+    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-thin' })
+
+    expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
+      expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS Siri Replacement Unsupported'])
+    )
+    expect(settings.nativePermissions.find((permission) => permission.label === 'iOS Siri Replacement Unsupported')?.state).toBe('unsupported')
+    expect(onboarding.modes.find((mode) => mode.id === 'ios-thin')?.repair).toContain('Siri/Shortcuts/App Intents integration')
+  })
+
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
     const item = attachmentToContextItem({
       id: 'context-1',
@@ -698,6 +908,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Mesh Peer')
     expect(markup).toContain('Android Thin')
     expect(markup).toContain('iOS Thin')
+    expect(markup).toContain('iOS Local-Light')
+    expect(markup).toContain('iOS cannot replace Siri')
     expect(markup).toContain('Offline Local')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')

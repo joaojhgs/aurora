@@ -62,6 +62,9 @@ jobs:
       - name: Test Tauri frontend runtime wrapper
         run: pnpm --filter @aurora/tauri-ui test
 
+      - name: Record Android release gate matrix
+        run: pnpm --filter @aurora/tauri-ui android:release-gate
+
       - name: Check Tauri Rust package
         run: cargo check
         working-directory: apps/aurora-tauri/src-tauri

@@ -6,7 +6,23 @@ import {
   type AuroraStreamRequest
 } from './events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
-import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
+import type {
+  AndroidAssistantRoleRequestResult,
+  AndroidAssistantRoleStatus,
+  AndroidEntrypointPayload,
+  AndroidFallbackEntrypoint,
+  AndroidLocalLightInferenceStatus,
+  AndroidNativePermissionRequestResult,
+  AndroidVoiceForegroundServiceRequestResult,
+  AndroidVoiceForegroundServiceStatus,
+  AuditReceipt,
+  AuroraEvent,
+  AuroraTransportEnvelope,
+  IOSEntrypointPayload,
+  IOSInvocationStatus,
+  JsonObject,
+  NativeCapabilityManifest
+} from './types.js'
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
 
@@ -17,12 +33,26 @@ export interface TauriCommandNames {
   sidecarStop: string
   sidecarStatus: string
   nativeCapabilityManifest: string
+  androidAssistantRoleStatus: string
+  androidAssistantRoleRequest: string
+  androidFallbackEntrypoints: string
+  androidLocalLightInferenceStatus: string
+  androidPermissionRequest: string
+  androidVoiceForegroundServiceStatus: string
+  androidVoiceForegroundServiceStart: string
+  androidVoiceForegroundServiceStop: string
+  androidEntrypointPayload: string
+  iosEntrypointPayload: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
   notificationSend: string
   dialogStatus: string
   audioBridgeStatus: string
+  androidBaselineStatus: string
+  iosNativePluginManifest: string
+  iosInvocationStatus: string
+  iosInvokeAction: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
@@ -30,6 +60,8 @@ export interface TauriCommandNames {
   iosSecureStorageStatus: string
   iosBiometricStatus: string
   iosAdminUnlock: string
+  biometricAdminUnlockStatus: string
+  biometricAdminUnlock: string
   localFileRead: string
   localFileWrite: string
   localFilePick: string
@@ -90,6 +122,57 @@ export interface TauriNativeFeatureStatus {
   details?: JsonObject
 }
 
+export interface TauriAndroidAssistantRoleStatus {
+  roleAvailable?: boolean | null
+  packageQualified?: boolean | null
+  roleHeld?: boolean | null
+  requestable?: boolean | null
+  denied?: boolean | null
+  oemUnavailable?: boolean | null
+  probeImplemented: boolean
+  reason: string
+}
+
+export interface TauriAndroidBaselineStatus {
+  platform: string
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  feature: string
+  available: boolean
+  assistantRole: TauriAndroidAssistantRoleStatus
+  fallbackEntrypoints: Record<string, boolean>
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type IosAuroraActionId =
+  | 'app-intent.open-assistant'
+  | 'shortcut.open-assistant'
+  | 'share.import-context'
+  | 'deeplink.open'
+
+export interface TauriIosInvocationStatus {
+  available: boolean
+  surface: string
+  supportedActions: IosAuroraActionId[]
+  siriReplacement: false
+  requiresBackendEvidence: boolean
+  secretsRedacted: boolean
+}
+
+export interface TauriIosInvokeActionRequest {
+  action: IosAuroraActionId
+  correlationId?: string
+}
+
+export interface TauriIosInvokeActionResult {
+  accepted: boolean
+  action: string
+  handoff?: string
+  reason?: string
+  correlationId?: string
+  secretsRedacted: boolean
+}
+
 export interface TauriNotificationRequest {
   title: string
   body: string
@@ -110,6 +193,28 @@ export interface IosAdminUnlockRequest {
   action?: string
   correlationId?: string
   allowDeviceCredential?: boolean
+}
+
+export interface BiometricAdminUnlockStatus {
+  platform: 'android' | 'ios' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  reason: string
+  privacyClass: 'admin-critical' | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface BiometricAdminUnlockResult {
+  started: boolean
+  requestCode?: number
+  status: BiometricAdminUnlockStatus
+  reason: string
+  secretsRedacted: boolean
 }
 
 export interface LocalFileReadOptions {
@@ -155,12 +260,26 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   sidecarStop: 'aurora_sidecar_stop',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  androidAssistantRoleStatus: 'assistantRoleStatus',
+  androidAssistantRoleRequest: 'requestAssistantRole',
+  androidFallbackEntrypoints: 'fallbackEntrypoints',
+  androidLocalLightInferenceStatus: 'localLightInferenceStatus',
+  androidPermissionRequest: 'requestAndroidPermission',
+  androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
+  androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
+  androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
+  androidEntrypointPayload: 'entrypointPayload',
+  iosEntrypointPayload: 'aurora_ios_entrypoint_payload',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
   notificationSend: 'aurora_notification_send',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
+  androidBaselineStatus: 'aurora_android_baseline_status',
+  iosNativePluginManifest: 'aurora_ios_native_plugin_manifest',
+  iosInvocationStatus: 'aurora_ios_invocation_status',
+  iosInvokeAction: 'aurora_ios_invoke_action',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
@@ -168,6 +287,8 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
   iosBiometricStatus: 'aurora_ios_biometric_status',
   iosAdminUnlock: 'aurora_ios_admin_unlock',
+  biometricAdminUnlockStatus: 'aurora_biometric_admin_unlock_status',
+  biometricAdminUnlock: 'aurora_biometric_admin_unlock',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
@@ -230,6 +351,56 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
   }
 
+  getAndroidAssistantRoleStatus(): Promise<AndroidAssistantRoleStatus> {
+    return this.invokeCommand<AndroidAssistantRoleStatus>(this.commands.androidAssistantRoleStatus)
+  }
+
+  requestAndroidAssistantRole(): Promise<AndroidAssistantRoleRequestResult> {
+    return this.invokeCommand<AndroidAssistantRoleRequestResult>(this.commands.androidAssistantRoleRequest)
+  }
+
+  getAndroidFallbackEntrypoints(): Promise<AndroidFallbackEntrypoint[]> {
+    return this.invokeCommand<AndroidFallbackEntrypoint[]>(this.commands.androidFallbackEntrypoints)
+  }
+
+  getAndroidLocalLightInferenceStatus(): Promise<AndroidLocalLightInferenceStatus> {
+    return this.invokeCommand<AndroidLocalLightInferenceStatus>(this.commands.androidLocalLightInferenceStatus)
+  }
+
+  requestAndroidPermission(permission: string): Promise<AndroidNativePermissionRequestResult> {
+    return this.invokeCommand<AndroidNativePermissionRequestResult>(this.commands.androidPermissionRequest, { permission })
+  }
+
+  getAndroidVoiceForegroundServiceStatus(): Promise<AndroidVoiceForegroundServiceStatus> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceStatus>(this.commands.androidVoiceForegroundServiceStatus)
+  }
+
+  startAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStart)
+  }
+
+  stopAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStop)
+  }
+
+  getAndroidEntrypointPayload(): Promise<{
+    payload: AndroidEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.androidEntrypointPayload)
+  }
+
+  getIOSEntrypointPayload(): Promise<{
+    payload: IOSEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.iosEntrypointPayload)
+  }
+
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {
     return this.invokeCommand<TauriNativePermissionStatus>(this.commands.nativePermissionStatus)
   }
@@ -252,6 +423,22 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAudioBridgeStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.audioBridgeStatus)
+  }
+
+  getAndroidBaselineStatus(): Promise<TauriAndroidBaselineStatus> {
+    return this.invokeCommand<TauriAndroidBaselineStatus>(this.commands.androidBaselineStatus)
+  }
+
+  getIosNativePluginManifest(): Promise<NativeCapabilityManifest> {
+    return this.invokeCommand<NativeCapabilityManifest>(this.commands.iosNativePluginManifest)
+  }
+
+  getIosInvocationStatus(): Promise<TauriIosInvocationStatus> {
+    return this.invokeCommand<TauriIosInvocationStatus>(this.commands.iosInvocationStatus)
+  }
+
+  invokeIosAuroraAction(request: TauriIosInvokeActionRequest): Promise<TauriIosInvokeActionResult> {
+    return this.invokeCommand<TauriIosInvokeActionResult>(this.commands.iosInvokeAction, { request })
   }
 
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {
@@ -280,6 +467,14 @@ export class TauriLocalTransport implements AuroraTransport {
 
   iosAdminUnlock(request: IosAdminUnlockRequest): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosAdminUnlock, { request })
+  }
+
+  getBiometricAdminUnlockStatus(): Promise<BiometricAdminUnlockStatus> {
+    return this.invokeCommand<BiometricAdminUnlockStatus>(this.commands.biometricAdminUnlockStatus)
+  }
+
+  requestBiometricAdminUnlock(): Promise<BiometricAdminUnlockResult> {
+    return this.invokeCommand<BiometricAdminUnlockResult>(this.commands.biometricAdminUnlock)
   }
 
   readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileReadResult> {

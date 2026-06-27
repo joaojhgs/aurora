@@ -1,0 +1,96 @@
+name: Tauri Android Verification
+
+on:
+  pull_request:
+    paths:
+      - "apps/aurora-tauri/**"
+      - "packages/aurora-sdk/**"
+      - "packages/aurora-ui/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/tauri-android.yml"
+  workflow_dispatch:
+
+jobs:
+  android-tauri:
+    name: Android APK build and emulator smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install Android build components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.0.12077973" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared UI packages
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Build Tauri frontend bundle
+        run: pnpm --filter @aurora/tauri-ui build
+
+      - name: Test Tauri runtime wrapper
+        run: pnpm --filter @aurora/tauri-ui test
+
+      - name: Initialize Tauri Android project
+        run: pnpm --filter @aurora/tauri-ui android:init
+
+      - name: Build Android APK
+        run: pnpm --filter @aurora/tauri-ui android:build:apk:x86_64:debug
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-tauri-android-apk
+          path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+      - name: Emulator install and native payload smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 1200
+          script: pnpm --filter @aurora/tauri-ui android:smoke

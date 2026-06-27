@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-android-native-plugin"
+description = "Allow the Android smoke harness and frontend SDK adapter to read the native Android Kotlin plugin capability payload."
+commands.allow = ["aurora_android_baseline_status", "aurora_android_native_plugin_payload"]
