@@ -10,8 +10,11 @@ import type {
   CapabilityProviderCandidate,
   NativeCapabilityManifest,
   NativeEntrypoint,
+  NativeDeviceMatrixRow,
   NativeMobileIntegration,
-  NativePlatformLimitation
+  NativePlatformIntegration,
+  NativePlatformLimitation,
+  NativeReleaseGate
 } from '@aurora/client'
 import {
   auroraAssistantCancellationItem,
@@ -78,6 +81,10 @@ export interface AuroraShellSnapshot {
   nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
   nativeEntrypoints: NativeEntrypoint[]
   nativeRelease: AndroidNativeReleaseStatus | null
+  nativePlatformIntegrations: NativePlatformIntegration[]
+  nativeReleaseGates: NativeReleaseGate[]
+  nativeDeviceMatrix: NativeDeviceMatrixRow[]
+  nativePolicyNotes: string[]
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   assistantVoiceRoutes: AssistantVoiceRoutes
@@ -113,6 +120,10 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeFallbackEntrypoints: [],
   nativeEntrypoints: [],
   nativeRelease: null,
+  nativePlatformIntegrations: [],
+  nativeReleaseGates: [],
+  nativeDeviceMatrix: [],
+  nativePolicyNotes: [],
   routes: [],
   assistantCancellationRoute: null,
   assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
@@ -166,6 +177,10 @@ export function snapshotFromGraph(
     nativeFallbackEntrypoints: native?.fallbackEntrypoints ?? [],
     nativeEntrypoints: native?.entrypoints ?? [],
     nativeRelease: native?.release ?? null,
+    nativePlatformIntegrations: [...(native?.platformIntegrations ?? [])],
+    nativeReleaseGates: [...(native?.releaseGates ?? [])],
+    nativeDeviceMatrix: [...(native?.deviceMatrix ?? [])],
+    nativePolicyNotes: [...(native?.policyNotes ?? [])],
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,

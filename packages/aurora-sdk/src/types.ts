@@ -1577,6 +1577,10 @@ export interface NativeCapabilityManifest {
   lastEntrypointPayload?: NativeEntrypointPayload | null
   evidenceSource?: string
   secretsRedacted?: boolean
+  platformIntegrations?: NativePlatformIntegration[]
+  releaseGates?: NativeReleaseGate[]
+  policyNotes?: string[]
+  deviceMatrix?: NativeDeviceMatrixRow[]
 }
 
 export interface AndroidNativePermissionRequestResult {
@@ -1841,4 +1845,50 @@ export interface IOSInvocationStatus {
   reason: string
   evidenceSource: string
   secretsRedacted: boolean
+}
+
+export type NativeIntegrationStatus = 'supported' | 'partial' | 'unsupported' | 'deferred' | 'requires-native-target'
+export type NativeReleaseGateStatus =
+  | 'passed'
+  | 'pending'
+  | 'blocked'
+  | 'requires-macos'
+  | 'requires-xcode'
+  | 'requires-credentials'
+  | 'not-applicable'
+
+export interface NativePlatformIntegration {
+  id: string
+  label: string
+  status: NativeIntegrationStatus
+  detail: string
+  evidence: string[]
+  privacyClass: PrivacyClass
+  actions?: Array<{
+    id: string
+    label: string
+    privacyClass: PrivacyClass
+    backendMethod: string
+    policy: string
+  }>
+}
+
+export interface NativeReleaseGate {
+  id: string
+  label: string
+  status: NativeReleaseGateStatus
+  requiredEvidence: string
+  detail: string
+  command?: string
+  artifact?: string
+  privacyClass?: PrivacyClass
+}
+
+export interface NativeDeviceMatrixRow {
+  id: string
+  platform: string
+  target: string
+  minimumOs: string
+  evidence: string
+  status: NativeReleaseGateStatus
 }

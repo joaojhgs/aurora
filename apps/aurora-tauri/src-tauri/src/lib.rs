@@ -796,7 +796,7 @@ fn ios_background_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
     let mut status = denied_native_feature_status(
         "aurora.iosBackgroundAudio",
         "ios.backgroundVoice",
-        "iOS does not allow Aurora to run always-on background assistant listening or replace Siri; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+        "iOS does not allow Aurora to run always-on background assistant listening or claim default assistant ownership; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
     )?;
     status.details.insert("platform".to_string(), json!("ios"));
     status
@@ -1749,13 +1749,13 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
         NativeMobileIntegration {
             platform: "ios".to_string(),
             id: "siriReplacement".to_string(),
-            label: "Siri replacement".to_string(),
+            label: "System assistant role".to_string(),
             support: "unsupported".to_string(),
             capability: "ios.siriReplacement".to_string(),
             permission: None,
             privacy_class: "public".to_string(),
             evidence_source: "Apple-platform-policy".to_string(),
-            user_copy: "iOS does not allow Aurora to replace Siri as the default assistant.".to_string(),
+            user_copy: "iOS does not allow third-party default assistant ownership.".to_string(),
             verifier: "copy and capability review; no executable route should be exposed".to_string(),
         },
     ]
@@ -1927,9 +1927,9 @@ fn ios_platform_limitations() -> Vec<NativePlatformLimitation> {
     vec![NativePlatformLimitation {
         platform: "ios".to_string(),
         id: "noSiriReplacement".to_string(),
-        label: "No Siri replacement".to_string(),
-        reason: "Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.".to_string(),
-        user_copy: "Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.".to_string(),
+        label: "No system assistant role".to_string(),
+        reason: "Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not third-party default assistant ownership.".to_string(),
+        user_copy: "Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.".to_string(),
         evidence_source: "Apple App Intents and SiriKit extension documentation".to_string(),
     }]
 }

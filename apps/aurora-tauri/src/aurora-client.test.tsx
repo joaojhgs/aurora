@@ -53,7 +53,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Face ID / Touch ID')
     expect(markup).toContain('Siri/Shortcuts/App Intents integration')
     expect(markup).toContain('local-light inference')
-    expect(markup).toContain('no Siri replacement claim')
+    expect(markup).toContain('no system assistant role claim')
     expect(markup).toContain('Android baseline')
     expect(markup).toContain('Assistant role probe')
     expect(markup).toContain('Denied native defaults')

@@ -3117,13 +3117,13 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     {
       platform: 'ios',
       id: 'siriReplacement',
-      label: 'Siri replacement',
+      label: 'System assistant role',
       support: 'unsupported',
       capability: 'ios.siriReplacement',
       permission: null,
       privacyClass: 'public',
       evidenceSource: 'Apple-platform-policy',
-      userCopy: 'iOS does not allow Aurora to replace Siri as the default assistant.',
+      userCopy: 'iOS does not allow third-party default assistant ownership.',
       verifier: 'copy and capability review; no executable route should be exposed'
     }
   ],
@@ -3131,7 +3131,7 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     {
       platform: 'ios',
       id: 'noSiriReplacement',
-      label: 'No Siri replacement',
+      label: 'No system assistant role',
       reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.',
       userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.',
       evidenceSource: 'Apple App Intents and SiriKit extension documentation'
@@ -3816,7 +3816,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       requiresConfirmation: false,
       siriReplacement: false,
       evidenceSource: 'IOS-003 native plugin manifest',
-      userCopy: 'Runs as an app-owned Siri/Shortcuts/App Intents integration and does not replace Siri.',
+      userCopy: 'Runs as an app-owned Siri/Shortcuts/App Intents integration; system assistant ownership is unavailable.',
       verifier: 'tauri ios build plus simulator/device App Intent invocation on macOS/Xcode'
     },
     {
@@ -3950,7 +3950,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     {
       platform: 'ios',
       id: 'siriReplacement',
-      label: 'Siri replacement',
+      label: 'System assistant role',
       support: 'unsupported',
       capability: 'ios.siriReplacement',
       permission: null,
@@ -3958,7 +3958,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       requiresConfirmation: false,
       siriReplacement: false,
       evidenceSource: 'Apple-platform-policy',
-      userCopy: 'iOS does not allow Aurora to replace Siri as the default assistant.',
+      userCopy: 'iOS does not allow third-party default assistant ownership.',
       verifier: 'copy and capability review; no executable route should be exposed'
     }
   ],
@@ -3984,9 +3984,9 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     {
       platform: 'ios',
       id: 'noSiriReplacement',
-      label: 'No Siri replacement',
-      reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.',
-      userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.',
+      label: 'No system assistant role',
+      reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not third-party default assistant ownership.',
+      userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.',
       evidenceSource: 'Apple App Intents and SiriKit extension documentation'
     },
     {
@@ -3997,6 +3997,105 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       userCopy: 'Audio and shared-content actions require app-owned user invocation and backend privacy evidence.',
       evidenceSource: 'Apple App Intents, extensions, and privacy review requirements'
     }
+  ],
+  platformIntegrations: [
+    {
+      id: 'ios-app-intents',
+      label: 'App Intents',
+      status: 'supported',
+      detail: 'Concrete Aurora prompt, open, and status actions bridge to the SDK/backend from app-owned surfaces.',
+      evidence: ['IOS-003', 'aurora-ios-release-gate'],
+      privacyClass: 'personal',
+      actions: [
+        {
+          id: 'ask-aurora',
+          label: 'Ask Aurora',
+          privacyClass: 'personal',
+          backendMethod: 'Orchestrator.ExternalUserInput',
+          policy: 'Requires foreground app/session context and SDK/backend route evidence.'
+        },
+        {
+          id: 'open-aurora',
+          label: 'Open Aurora',
+          privacyClass: 'public',
+          backendMethod: 'Native.OpenApp',
+          policy: 'Opens an app-owned surface without claiming system assistant ownership.'
+        }
+      ]
+    },
+    {
+      id: 'ios-share-extension',
+      label: 'Share extension and deep links',
+      status: 'supported',
+      detail: 'Shared URLs/text/files ingest through attachment contracts with privacy labels and backend validation.',
+      evidence: ['IOS-004', 'BE-008'],
+      privacyClass: 'sensitive'
+    },
+    {
+      id: 'ios-siri-system-assistant',
+      label: 'System assistant role',
+      status: 'unsupported',
+      detail: 'Aurora exposes Siri/Shortcuts/App Intents integration only; iOS does not provide a default system assistant path.',
+      evidence: ['Apple platform policy'],
+      privacyClass: 'public'
+    }
+  ],
+  releaseGates: [
+    {
+      id: 'macos-xcode-tauri-build',
+      label: 'macOS Xcode Tauri build',
+      status: 'requires-macos',
+      requiredEvidence: 'tauri ios build on macOS with Xcode command line tools',
+      detail: 'Linux cannot satisfy this gate; macOS CI or an external runner must produce the build log.',
+      command: 'pnpm --filter @aurora/tauri-ui ios:gate'
+    },
+    {
+      id: 'simulator-plugin-app-intent',
+      label: 'Simulator native plugin and App Intent',
+      status: 'pending',
+      requiredEvidence: 'Simulator invocation of the native manifest plugin and one App Intent/Shortcut flow',
+      detail: 'Proof must include platform, simulator/device target, action ID, and redacted backend/audit evidence.'
+    },
+    {
+      id: 'share-extension-flow',
+      label: 'Share extension flow',
+      status: 'pending',
+      requiredEvidence: 'Simulator or device share/deep-link invocation with accepted or policy-blocked attachment result',
+      detail: 'Shared payloads must preserve source channel, privacy class, and backend validation outcome.'
+    },
+    {
+      id: 'app-store-connect-signing',
+      label: 'TestFlight/App Store signing dry run',
+      status: 'requires-credentials',
+      requiredEvidence: 'App Store Connect export/upload dry run with API-key auth in CI or external runner',
+      detail: 'Credentials stay in CI secret storage; no key material is rendered in UI, logs, or manifest.',
+      command: 'pnpm --filter @aurora/tauri-ui ios:build:app-store',
+      artifact: 'apps/aurora-tauri/src-tauri/gen/apple/build/arm64/Aurora.ipa',
+      privacyClass: 'credential'
+    }
+  ],
+  deviceMatrix: [
+    {
+      id: 'ios-simulator-current',
+      platform: 'ios',
+      target: 'iPhone simulator, current stable Xcode runtime',
+      minimumOs: '17.0',
+      evidence: 'Native plugin, App Intent, and share/deep-link smoke evidence required.',
+      status: 'pending'
+    },
+    {
+      id: 'ios-device-current',
+      platform: 'ios',
+      target: 'Physical iPhone or iPad on a supported iOS release',
+      minimumOs: '17.0',
+      evidence: 'Signing/provisioning plus TestFlight or App Store Connect dry-run evidence required.',
+      status: 'requires-credentials'
+    }
+  ],
+  policyNotes: [
+    'Siri/Shortcuts/App Intents integration is supported through app-owned surfaces only.',
+    'iOS does not advertise a default system assistant role for Aurora.',
+    'Native iOS code must bridge to AuroraClient/backend truth instead of duplicating orchestrator logic in Swift.'
   ],
   evidenceSource: 'IOS-003 native plugin manifest',
   secretsRedacted: true
