@@ -47,6 +47,9 @@ export interface TauriCommandNames {
   dialogStatus: string
   audioBridgeStatus: string
   androidBaselineStatus: string
+  iosNativePluginManifest: string
+  iosInvocationStatus: string
+  iosInvokeAction: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
@@ -132,6 +135,35 @@ export interface TauriAndroidBaselineStatus {
   assistantRole: TauriAndroidAssistantRoleStatus
   fallbackEntrypoints: Record<string, boolean>
   evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type IosAuroraActionId =
+  | 'app-intent.open-assistant'
+  | 'shortcut.open-assistant'
+  | 'share.import-context'
+  | 'deeplink.open'
+
+export interface TauriIosInvocationStatus {
+  available: boolean
+  surface: string
+  supportedActions: IosAuroraActionId[]
+  siriReplacement: false
+  requiresBackendEvidence: boolean
+  secretsRedacted: boolean
+}
+
+export interface TauriIosInvokeActionRequest {
+  action: IosAuroraActionId
+  correlationId?: string
+}
+
+export interface TauriIosInvokeActionResult {
+  accepted: boolean
+  action: string
+  handoff?: string
+  reason?: string
+  correlationId?: string
   secretsRedacted: boolean
 }
 
@@ -231,6 +263,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
   androidBaselineStatus: 'aurora_android_baseline_status',
+  iosNativePluginManifest: 'aurora_ios_native_plugin_manifest',
+  iosInvocationStatus: 'aurora_ios_invocation_status',
+  iosInvokeAction: 'aurora_ios_invoke_action',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
@@ -366,6 +401,18 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAndroidBaselineStatus(): Promise<TauriAndroidBaselineStatus> {
     return this.invokeCommand<TauriAndroidBaselineStatus>(this.commands.androidBaselineStatus)
+  }
+
+  getIosNativePluginManifest(): Promise<NativeCapabilityManifest> {
+    return this.invokeCommand<NativeCapabilityManifest>(this.commands.iosNativePluginManifest)
+  }
+
+  getIosInvocationStatus(): Promise<TauriIosInvocationStatus> {
+    return this.invokeCommand<TauriIosInvocationStatus>(this.commands.iosInvocationStatus)
+  }
+
+  invokeIosAuroraAction(request: TauriIosInvokeActionRequest): Promise<TauriIosInvokeActionResult> {
+    return this.invokeCommand<TauriIosInvokeActionResult>(this.commands.iosInvokeAction, { request })
   }
 
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {

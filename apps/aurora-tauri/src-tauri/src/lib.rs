@@ -157,7 +157,7 @@ struct NativePermissionStatus {
     secrets_redacted: bool,
 }
 
-struct AndroidNativePlugin<R: tauri::Runtime> {
+struct AuroraMobileNativePlugin<R: tauri::Runtime> {
     handle: Option<tauri::plugin::PluginHandle<R>>,
 }
 
@@ -215,6 +215,13 @@ struct NativeNotificationRequest {
     body: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IosAuroraActionRequest {
+    action: String,
+    correlation_id: Option<String>,
+}
+
 struct SidecarState {
     child: Option<Child>,
     started_at: Option<Instant>,
@@ -267,8 +274,8 @@ enum AuroraCommandError {
     InvalidGatewayResponse,
     #[error("{0} is not available because the required native permission is disabled")]
     NativePermissionMissing(String),
-    #[error("Android native plugin call failed: {0}")]
-    AndroidNativePlugin(String),
+    #[error("Aurora mobile native plugin call failed: {0}")]
+    AuroraMobileNativePlugin(String),
     #[error("{0}")]
     UnsupportedFeature(String),
     #[error("Desktop thin mode is connected to a remote Gateway and cannot start a local sidecar")]
@@ -518,14 +525,14 @@ async fn aurora_sidecar_status(
 
 #[tauri::command]
 async fn aurora_native_capability_manifest(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     native_capability_manifest_value(native).await
 }
 
 #[tauri::command]
 async fn native_capabilities(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     native_capability_manifest_value(native).await
 }
@@ -629,18 +636,18 @@ async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, Auror
 
 #[tauri::command]
 async fn aurora_android_native_plugin_payload(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
         let handle = native.handle.as_ref().ok_or_else(|| {
-            AuroraCommandError::AndroidNativePlugin(
+            AuroraCommandError::AuroraMobileNativePlugin(
                 "Aurora Android native plugin handle was not registered".to_string(),
             )
         })?;
         let payload = handle
             .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
-            .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))?;
+            .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))?;
         log_android_native_plugin_payload(&payload);
         Ok(payload)
     }
@@ -655,27 +662,97 @@ async fn aurora_android_native_plugin_payload(
 }
 
 async fn native_capability_manifest_value(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
         let handle = native.handle.as_ref().ok_or_else(|| {
-            AuroraCommandError::AndroidNativePlugin(
+            AuroraCommandError::AuroraMobileNativePlugin(
                 "Aurora Android native plugin handle was not registered".to_string(),
             )
         })?;
         let payload = handle
             .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
-            .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))?;
+            .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))?;
         log_android_native_plugin_payload(&payload);
         Ok(payload)
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "nativeCapabilityManifest", json!({}))?;
+        log_ios_native_plugin_payload("nativeCapabilityManifest", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let _ = native;
         serde_json::to_value(native_capability_manifest())
             .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_native_plugin_manifest(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "nativeCapabilityManifest", json!({}))?;
+        log_ios_native_plugin_payload("nativeCapabilityManifest", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Aurora iOS native plugin is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_invocation_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "invocationStatus", json!({}))?;
+        log_ios_native_plugin_payload("invocationStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Aurora iOS invocation status is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_invoke_action(
+    request: IosAuroraActionRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = serde_json::to_value(request)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+        let result = run_ios_plugin_command(native, "invokeAuroraAction", payload)?;
+        log_ios_native_plugin_payload("invokeAuroraAction", &result);
+        Ok(result)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Aurora iOS action invocation is only available in the iOS Tauri shell".to_string(),
+        ))
     }
 }
 
@@ -708,6 +785,14 @@ fn log_android_native_plugin_payload(payload: &Value) {
     println!(
         "aurora_android_native_plugin_payload_end chunks={}",
         chunks.len()
+    );
+}
+
+fn log_ios_native_plugin_payload(command: &str, payload: &Value) {
+    println!(
+        "aurora_ios_native_plugin_command command={} payload={}",
+        command,
+        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
     );
 }
 
@@ -753,7 +838,7 @@ async fn aurora_log_tail(
 #[tauri::command]
 async fn aurora_secure_storage_get(
     key: String,
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
@@ -798,7 +883,7 @@ async fn aurora_secure_storage_get(
 async fn aurora_secure_storage_set(
     key: String,
     value: String,
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
@@ -841,7 +926,7 @@ async fn aurora_secure_storage_set(
 #[tauri::command]
 async fn aurora_secure_storage_delete(
     key: String,
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
@@ -882,7 +967,7 @@ async fn aurora_secure_storage_delete(
 
 #[tauri::command]
 async fn aurora_biometric_admin_unlock_status(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
@@ -910,7 +995,7 @@ async fn aurora_biometric_admin_unlock_status(
 
 #[tauri::command]
 async fn aurora_biometric_admin_unlock(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
@@ -997,7 +1082,7 @@ impl AuroraCommandError {
             Self::Gateway(_) => "transport_loss",
             Self::InvalidGatewayResponse => "validation_error",
             Self::NativePermissionMissing(_) => "native_permission_missing",
-            Self::AndroidNativePlugin(_) => "native_plugin_error",
+            Self::AuroraMobileNativePlugin(_) => "native_plugin_error",
             Self::UnsupportedFeature(_) => "unsupported_feature",
             Self::ThinModeSidecarDisabled => "unsupported_feature",
             Self::SidecarLoopbackRequired(_) => "validation_error",
@@ -1194,7 +1279,17 @@ fn native_platform() -> &'static str {
     }
 }
 
-fn android_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+#[cfg(target_os = "ios")]
+extern "C" {
+    fn init_plugin_aurora_native() -> *const std::ffi::c_void;
+}
+
+#[cfg(target_os = "ios")]
+unsafe fn init_aurora_native_plugin() -> *const std::ffi::c_void {
+    init_plugin_aurora_native()
+}
+
+fn aurora_mobile_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("aurora-native")
         .setup(|app, api| {
             #[cfg(target_os = "android")]
@@ -1203,13 +1298,20 @@ fn android_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
                     "dev.aurora.tauri.nativeplugin",
                     "AuroraNativePlugin",
                 )?;
-                app.manage(AndroidNativePlugin::<R> {
+                app.manage(AuroraMobileNativePlugin::<R> {
                     handle: Some(handle),
                 });
             }
-            #[cfg(not(target_os = "android"))]
+            #[cfg(target_os = "ios")]
             {
-                app.manage(AndroidNativePlugin::<R> { handle: None });
+                let handle = api.register_ios_plugin(init_aurora_native_plugin)?;
+                app.manage(AuroraMobileNativePlugin::<R> {
+                    handle: Some(handle),
+                });
+            }
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                app.manage(AuroraMobileNativePlugin::<R> { handle: None });
             }
             Ok(())
         })
@@ -1218,18 +1320,34 @@ fn android_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 
 #[cfg(target_os = "android")]
 fn run_android_plugin_command(
-    native: State<'_, AndroidNativePlugin<tauri::Wry>>,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
     command: &str,
     payload: Value,
 ) -> Result<Value, AuroraCommandError> {
     let handle = native.handle.as_ref().ok_or_else(|| {
-        AuroraCommandError::AndroidNativePlugin(
+        AuroraCommandError::AuroraMobileNativePlugin(
             "Aurora Android native plugin handle was not registered".to_string(),
         )
     })?;
     handle
         .run_mobile_plugin::<Value>(command, payload)
-        .map_err(|error| AuroraCommandError::AndroidNativePlugin(error.to_string()))
+        .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))
+}
+
+#[cfg(target_os = "ios")]
+fn run_ios_plugin_command(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    command: &str,
+    payload: Value,
+) -> Result<Value, AuroraCommandError> {
+    let handle = native.handle.as_ref().ok_or_else(|| {
+        AuroraCommandError::AuroraMobileNativePlugin(
+            "Aurora iOS native plugin handle was not registered".to_string(),
+        )
+    })?;
+    handle
+        .run_mobile_plugin::<Value>(command, payload)
+        .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))
 }
 
 fn android_baseline_status() -> AndroidBaselineStatus {
@@ -1618,7 +1736,7 @@ fn is_loopback_http_origin(url: &Url) -> bool {
 pub fn run() {
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     tauri::Builder::default()
-        .plugin(android_native_plugin())
+        .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
         .setup(|app| {
             #[cfg(desktop)]
@@ -1626,7 +1744,7 @@ pub fn run() {
             #[cfg(target_os = "android")]
             {
                 log_android_baseline_status(&android_baseline_status());
-                if let Some(native) = app.try_state::<AndroidNativePlugin<tauri::Wry>>() {
+                if let Some(native) = app.try_state::<AuroraMobileNativePlugin<tauri::Wry>>() {
                     if let Some(handle) = native.handle.as_ref() {
                         match handle
                             .run_mobile_plugin::<Value>("nativeCapabilityManifest", json!({}))
@@ -1660,6 +1778,9 @@ pub fn run() {
             aurora_audio_bridge_status,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
+            aurora_ios_native_plugin_manifest,
+            aurora_ios_invocation_status,
+            aurora_ios_invoke_action,
             aurora_log_tail,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
@@ -1829,6 +1950,29 @@ mod tests {
         assert!(denied.contains(&"aurora.dialogOpen".to_string()));
         assert!(denied.contains(&"aurora.audioCapture".to_string()));
         assert!(denied.contains(&"aurora.localFileRead".to_string()));
+    }
+
+    #[test]
+    fn ios_native_plugin_surface_is_registered_and_permissioned() {
+        let ios_capability = include_str!("../capabilities/aurora-ios-baseline.json");
+        assert!(ios_capability.contains("\"aurora-ios-native-plugin\""));
+        assert!(!ios_capability.contains("\"aurora-android-native-plugin\""));
+
+        let ios_permission = include_str!("../permissions/aurora-ios-native-plugin.toml");
+        assert!(ios_permission.contains("aurora_ios_native_plugin_manifest"));
+        assert!(ios_permission.contains("aurora_ios_invocation_status"));
+        assert!(ios_permission.contains("aurora_ios_invoke_action"));
+
+        let swift_plugin = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift"
+        );
+        assert!(swift_plugin.contains("@_cdecl(\"init_plugin_aurora_native\")"));
+        assert!(swift_plugin.contains("nativeCapabilityManifest"));
+        assert!(swift_plugin.contains("invocationStatus"));
+        assert!(swift_plugin.contains("invokeAuroraAction"));
+        assert!(swift_plugin.contains("\"app-intent.open-assistant\""));
+        assert!(swift_plugin.contains("\"share.import-context\""));
+        assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
     }
 
     #[test]

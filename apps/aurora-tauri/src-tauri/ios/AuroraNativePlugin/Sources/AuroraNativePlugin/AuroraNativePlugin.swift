@@ -2,6 +2,11 @@ import Foundation
 import Tauri
 import WebKit
 
+@_cdecl("init_plugin_aurora_native")
+public func initPluginAuroraNative() -> UnsafeMutableRawPointer {
+  Unmanaged.passRetained(AuroraNativePlugin()).toOpaque()
+}
+
 struct AuroraInvocationRequest: Decodable {
   let action: String
   let correlationId: String?
