@@ -1,0 +1,78 @@
+name: SDK Backend Contract Conformance
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "scripts/generate_backend_inventory.py"
+      - "scripts/check_sdk_backend_conformance.py"
+      - "packages/aurora-sdk/**"
+      - "modules/ui-mock-reference/lib/aurora/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/sdk-backend-contract-conformance.yml"
+  workflow_dispatch:
+
+jobs:
+  sdk-backend-contract-conformance:
+    name: Generate inventory and validate SDK contract fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install backend inventory dependencies
+        run: |
+          uv pip install --system -e '.[gateway,service-auth,service-db,service-scheduler,service-tooling,service-orchestrator]'
+
+      - name: Generate backend inventory and Gateway OpenAPI evidence
+        run: |
+          mkdir -p .artifacts/sdk-backend-conformance
+          python scripts/generate_backend_inventory.py \
+            --fail-on-ui-fixture-errors \
+            --output .artifacts/sdk-backend-conformance/backend-inventory.json
+
+      - name: Check SDK/backend contract conformance
+        run: |
+          python scripts/check_sdk_backend_conformance.py \
+            --inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+            --evidence-dir .artifacts/sdk-backend-conformance
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck SDK generated contract surface
+        run: pnpm --filter @aurora/client typecheck
+
+      - name: Run SDK transport and security/privacy conformance tests
+        run: pnpm --filter @aurora/client test
+
+      - name: Build SDK package
+        run: pnpm --filter @aurora/client build
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-backend-contract-conformance
+          path: .artifacts/sdk-backend-conformance/
+          if-no-files-found: error
