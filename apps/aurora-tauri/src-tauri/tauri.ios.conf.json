@@ -30,7 +30,6 @@
         "name": "Aurora context export",
         "exportedType": {
           "identifier": "dev.aurora.context",
-          "description": "Aurora context export",
           "conformsTo": ["public.json"]
         }
       }
