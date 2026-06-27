@@ -582,7 +582,9 @@ async def _stream_backfill_events(
     for event in reversed(events):
         yield event
     if (last_event_id or replay_from) and not events:
-        yield _degraded_event("requested replay cursor is not present in the bounded Gateway event buffer")
+        yield _degraded_event(
+            "requested replay cursor is not present in the bounded Gateway event buffer"
+        )
 
 
 def _degraded_event(message: str) -> AuroraEventStreamEvent:

@@ -361,7 +361,11 @@ def _event_status(topic: str, payload: dict[str, Any]) -> str:
     if topic == GatewayMethods.SERVICE_ANNOUNCE:
         return "connected"
     metadata = payload.get("metadata")
-    if topic == OrchestratorMethods.RESPONSE and isinstance(metadata, dict) and metadata.get("error"):
+    if (
+        topic == OrchestratorMethods.RESPONSE
+        and isinstance(metadata, dict)
+        and metadata.get("error")
+    ):
         return "failed"
     if topic == OrchestratorMethods.RESPONSE:
         return "completed"
