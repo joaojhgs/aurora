@@ -2961,6 +2961,12 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.audioBridgeStatus': true,
     'aurora.audioCapture': false,
     'aurora.audioPlayback': false,
+    'aurora.iosAppIntents': false,
+    'aurora.iosShortcuts': false,
+    'aurora.iosShareExtension': false,
+    'aurora.iosWidgets': false,
+    'aurora.iosDeepLinks': false,
+    'aurora.iosSiriReplacement': false,
     'aurora.shell': false,
     'aurora.processSpawn': false
   },
@@ -2980,7 +2986,13 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'native.filesystem': false,
     'native.audio': false,
     'native.audioCapture': false,
-    'native.audioPlayback': false
+    'native.audioPlayback': false,
+    'ios.appIntents': false,
+    'ios.shortcuts': false,
+    'ios.shareExtension': false,
+    'ios.widgets': false,
+    'ios.deepLinks': false,
+    'ios.siriReplacement': false
   },
   mobileIntegrations: [
     {

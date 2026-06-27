@@ -101,7 +101,7 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           <PanelTitle
             icon={<Smartphone size={18} aria-hidden />}
             title="Native permissions"
-            description="Desktop, Android, and iOS claims only appear when the SDK native manifest reports them."
+            description="Desktop, Android, and iOS claims only appear when the SDK native manifest reports them; iOS is limited to Siri/Shortcuts/App Intents integration and app-owned surfaces."
             id="native-permissions-title"
           />
           {model.nativePermissions.length > 0 ? (
@@ -514,6 +514,15 @@ function androidNativeEntrypointEvidence(entrypoint: AndroidNativeEntrypoint): s
 }
 
 function nativePermissionLabel(name: string): string {
+  if (name === 'aurora.iosSiriReplacement' || name === 'ios.siriReplacement') {
+    return 'iOS Siri Replacement Unsupported'
+  }
+  if (name === 'aurora.iosAppIntents' || name === 'ios.appIntents') {
+    return 'iOS App Intents'
+  }
+  if (name === 'aurora.iosShortcuts' || name === 'ios.shortcuts') {
+    return 'iOS Shortcuts'
+  }
   return name
     .replace(/^aurora\./, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')

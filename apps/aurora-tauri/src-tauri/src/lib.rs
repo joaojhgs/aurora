@@ -1063,6 +1063,12 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.audioBridgeStatus".to_string(), true);
     permissions.insert("aurora.audioCapture".to_string(), false);
     permissions.insert("aurora.audioPlayback".to_string(), false);
+    permissions.insert("aurora.iosAppIntents".to_string(), false);
+    permissions.insert("aurora.iosShortcuts".to_string(), false);
+    permissions.insert("aurora.iosShareExtension".to_string(), false);
+    permissions.insert("aurora.iosWidgets".to_string(), false);
+    permissions.insert("aurora.iosDeepLinks".to_string(), false);
+    permissions.insert("aurora.iosSiriReplacement".to_string(), false);
     permissions.insert("aurora.shell".to_string(), false);
     permissions.insert("aurora.processSpawn".to_string(), false);
 
@@ -1098,6 +1104,12 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         "android.fallbackEntrypoints".to_string(),
         cfg!(target_os = "android"),
     );
+    capabilities.insert("ios.appIntents".to_string(), false);
+    capabilities.insert("ios.shortcuts".to_string(), false);
+    capabilities.insert("ios.shareExtension".to_string(), false);
+    capabilities.insert("ios.widgets".to_string(), false);
+    capabilities.insert("ios.deepLinks".to_string(), false);
+    capabilities.insert("ios.siriReplacement".to_string(), false);
 
     NativeCapabilityManifest {
         platform: native_platform().to_string(),
@@ -1747,11 +1759,21 @@ mod tests {
             Some(&false)
         );
         assert_eq!(
+            manifest.permissions.get("aurora.iosSiriReplacement"),
+            Some(&false)
+        );
+        assert_eq!(
             manifest.capabilities.get("native.notifications"),
             Some(&false)
         );
         assert_eq!(manifest.capabilities.get("native.dialogs"), Some(&false));
         assert_eq!(manifest.capabilities.get("native.audio"), Some(&false));
+        assert_eq!(manifest.capabilities.get("ios.appIntents"), Some(&false));
+        assert_eq!(manifest.capabilities.get("ios.shortcuts"), Some(&false));
+        assert_eq!(
+            manifest.capabilities.get("ios.siriReplacement"),
+            Some(&false)
+        );
         assert!(manifest
             .mobile_integrations
             .iter()

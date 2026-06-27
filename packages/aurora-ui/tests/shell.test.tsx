@@ -646,6 +646,33 @@ describe('Aurora production shell', () => {
     expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
   })
 
+  it('renders iOS permission copy as Siri Shortcuts App Intents integration without replacement claims', async () => {
+    const mobileTransport = new MockAuroraTransport()
+    mobileTransport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.siriReplacement': false
+      }
+    }))
+    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const snapshot = await buildShellSnapshot(mobileClient)
+    const settings = buildSettingsPermissionsModel(snapshot)
+    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-thin' })
+
+    expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
+      expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS Siri Replacement Unsupported'])
+    )
+    expect(settings.nativePermissions.find((permission) => permission.label === 'iOS Siri Replacement Unsupported')?.state).toBe('privacy-blocked')
+    expect(onboarding.modes.find((mode) => mode.id === 'ios-thin')?.repair).toContain('Siri/Shortcuts/App Intents integration')
+  })
+
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
     const item = attachmentToContextItem({
       id: 'context-1',

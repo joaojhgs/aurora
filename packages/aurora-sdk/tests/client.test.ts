@@ -711,6 +711,42 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('keeps iOS native invocation app-owned without Siri replacement capability', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'ios',
+        permissions: {
+          'aurora.iosAppIntents': true,
+          'aurora.iosShortcuts': true,
+          'aurora.iosSiriReplacement': false
+        },
+        capabilities: {
+          'ios.appIntents': true,
+          'ios.shortcuts': true,
+          'ios.siriReplacement': false
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:ios:ios.appIntents']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:ios',
+        requiredPermissions: []
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.siriReplacement']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providerIdentity: 'native:ios',
+        routeable: false
+      })
+    )
+  })
+
   it('distinguishes Android assistant-role held, denied, and OEM-unavailable native states', () => {
     const heldGraph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
