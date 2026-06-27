@@ -1284,8 +1284,10 @@ function nativeCaptureState(
   nativePermissions: Array<{ name: string; granted: boolean }>,
   nativeCapabilities: Array<{ name: string; enabled: boolean }>
 ): VoiceCapabilityChip {
-  const permission = nativePermissions.find((entry) => voiceNativeKey(entry.name))
-  const capability = nativeCapabilities.find((entry) => voiceNativeKey(entry.name))
+  const permissionCandidates = nativePermissions.filter((entry) => voiceNativeKey(entry.name))
+  const capabilityCandidates = nativeCapabilities.filter((entry) => voiceNativeKey(entry.name))
+  const permission = permissionCandidates.find((entry) => !entry.granted) ?? permissionCandidates[0]
+  const capability = capabilityCandidates.find((entry) => entry.enabled) ?? capabilityCandidates[0]
   const state = !nativeAvailable
     ? 'unsupported'
     : permission && !permission.granted
@@ -1302,7 +1304,9 @@ function nativeCaptureState(
     detail: state === 'available-local'
       ? 'SDK native manifest reports microphone or voice capture support.'
       : state === 'privacy-blocked'
-        ? 'Native capture is blocked until the platform microphone permission is granted.'
+        ? nativePlatform.toLowerCase().includes('ios')
+          ? 'iOS foreground capture is blocked until microphone permission, raw-audio consent, and a visible stop/revoke path are available.'
+          : 'Native capture is blocked until the platform microphone permission is granted.'
         : 'Tauri, Android, and iOS capture stay disabled until native manifest support lands.',
     blockers: state === 'available-local' ? [] : [permission && !permission.granted ? `native permission missing: ${permission.name}` : 'native voice capture unavailable'],
     evidence: nativeAvailable ? ['native-manifest'] : []
@@ -1387,7 +1391,7 @@ function voiceChip(
 
 function wakeDetail(nativePlatform: string, wakeControl: RouteAvailability, wakeProcess: RouteAvailability): string {
   if (nativePlatform.toLowerCase().includes('ios')) {
-    return 'iOS wake/background assistant behavior remains foreground-only or app-owned unless native capability evidence proves otherwise.'
+    return 'iOS wake/background assistant behavior remains foreground-only or app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, deep links, or notifications; Aurora does not replace Siri.'
   }
   if (nativePlatform.toLowerCase().includes('android')) {
     return 'Android wake/background behavior requires foreground service and native plugin evidence.'

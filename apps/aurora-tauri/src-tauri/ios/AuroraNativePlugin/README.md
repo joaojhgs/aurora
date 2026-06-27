@@ -8,6 +8,9 @@ Current commands:
 
 - `nativeCapabilityManifest` returns the iOS native capability/permission manifest.
 - `invocationStatus` reports the allowed invocation surface and explicitly sets `siriReplacement` to `false`.
+- `voiceStatus` reports foreground-only microphone capture state from `AVAudioSession` and keeps raw-audio consent/backend evidence required.
+- `notificationStatus` reports `UNUserNotificationCenter` authorization without claiming background assistant wake.
+- `backgroundStatus` reports always-on background voice and Siri replacement as unsupported, with app-owned fallback surfaces listed.
 - `iosEntrypointPayload` returns redacted IOS-004 entrypoint descriptors and the last payload envelope shape.
 - `invokeAuroraAction` accepts concrete Aurora action IDs and hands off to the SDK/backend boundary instead of duplicating orchestrator logic in Swift.
 
@@ -28,4 +31,5 @@ Required native verification remains macOS/Xcode-only:
 - `tauri ios build` or Xcode build of the generated iOS project with this package linked.
 - Simulator or device invocation of at least one App Intent or Shortcut.
 - Simulator or device invocation of at least one share extension, deep-link, widget, or file-open entrypoint.
+- Simulator or device verification of microphone permission, notification authorization, and background-limit status.
 - Evidence that each handoff reaches the AuroraClient/backend boundary with correlation/provenance preserved.

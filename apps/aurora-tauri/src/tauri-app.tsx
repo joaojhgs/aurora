@@ -3,6 +3,7 @@ import { AppShell, RouteMatrix, StateSurface, buildShellSnapshot, loadingShellSn
 import type { AuroraShellSnapshot } from '@aurora/ui'
 import type {
   TauriAndroidBaselineStatus,
+  TauriIosInvocationStatus,
   TauriNativeFeatureStatus,
   TauriNativePermissionStatus,
   TauriSidecarStatus
@@ -15,6 +16,7 @@ export function AuroraTauriApp() {
   const [sidecar, setSidecar] = useState<TauriSidecarStatus | null>(null)
   const [nativePermissions, setNativePermissions] = useState<TauriNativePermissionStatus | null>(null)
   const [nativeFeatures, setNativeFeatures] = useState<Record<string, TauriNativeFeatureStatus | null>>({})
+  const [iosInvocationStatus, setIosInvocationStatus] = useState<TauriIosInvocationStatus | null>(null)
   const [androidBaseline, setAndroidBaseline] = useState<TauriAndroidBaselineStatus | null>(null)
 
   useEffect(() => {
@@ -35,6 +37,9 @@ export function AuroraTauriApp() {
         nextNativePermissions,
         tray,
         notifications,
+        iosVoice,
+        iosInvocation,
+        iosBackground,
         dialogs,
         audio,
         iosKeychain,
@@ -46,6 +51,9 @@ export function AuroraTauriApp() {
         runtime.nativePermissionStatus().catch(() => null),
         runtime.trayStatus().catch(() => null),
         runtime.notificationStatus().catch(() => null),
+        runtime.iosVoiceStatus().catch(() => null),
+        runtime.iosInvocationStatus().catch(() => null),
+        runtime.iosBackgroundStatus().catch(() => null),
         runtime.dialogStatus().catch(() => null),
         runtime.audioBridgeStatus().catch(() => null),
         runtime.iosSecureStorageStatus().catch(() => null),
@@ -56,7 +64,8 @@ export function AuroraTauriApp() {
         setSnapshot(nextSnapshot)
         setSidecar(nextSidecar)
         setNativePermissions(nextNativePermissions)
-        setNativeFeatures({ tray, notifications, dialogs, audio, iosKeychain, iosBiometrics })
+        setNativeFeatures({ tray, notifications, iosVoice, iosBackground, dialogs, audio, iosKeychain, iosBiometrics })
+        setIosInvocationStatus(iosInvocation)
         setAndroidBaseline(android)
       }
     }
@@ -90,11 +99,13 @@ export function AuroraTauriApp() {
             <div><dt>Native manifest</dt><dd>{snapshot.nativeAvailable ? snapshot.nativePlatform : 'unavailable'}</dd></div>
             <div><dt>Tray</dt><dd>{nativeFeatureLabel(nativeFeatures.tray)}</dd></div>
             <div><dt>Notifications</dt><dd>{nativeFeatureLabel(nativeFeatures.notifications)}</dd></div>
+            <div><dt>iOS microphone capture</dt><dd>{nativeFeatureLabel(nativeFeatures.iosVoice)}</dd></div>
+            <div><dt>iOS background voice</dt><dd>{nativeFeatureLabel(nativeFeatures.iosBackground)}</dd></div>
             <div><dt>Dialogs</dt><dd>{nativeFeatureLabel(nativeFeatures.dialogs)}</dd></div>
             <div><dt>Audio bridge</dt><dd>{nativeFeatureLabel(nativeFeatures.audio)}</dd></div>
             <div><dt>iOS Keychain</dt><dd>{nativeFeatureLabel(nativeFeatures.iosKeychain)}</dd></div>
             <div><dt>Face ID / Touch ID</dt><dd>{nativeFeatureLabel(nativeFeatures.iosBiometrics)}</dd></div>
-            <div><dt>iOS invocation</dt><dd>Siri/Shortcuts/App Intents integration; no Siri replacement claim.</dd></div>
+            <div><dt>iOS invocation</dt><dd>{iosInvocationLabel(iosInvocationStatus)}</dd></div>
             <div><dt>Android baseline</dt><dd>{androidBaselineLabel(androidBaseline)}</dd></div>
             <div><dt>Assistant role probe</dt><dd>{assistantRoleProbeLabel(androidBaseline)}</dd></div>
             <div><dt>Denied native defaults</dt><dd>{nativePermissions?.deniedByDefault.join(', ') ?? 'not available'}</dd></div>
@@ -113,6 +124,12 @@ function nativeFeatureLabel(feature: TauriNativeFeatureStatus | null | undefined
   if (!feature) return 'not available'
   if (feature.available) return `${feature.capability} available`
   return `${feature.capability} denied by default`
+}
+
+function iosInvocationLabel(status: TauriIosInvocationStatus | null | undefined): string {
+  if (!status) return 'Siri/Shortcuts/App Intents integration; no Siri replacement claim.'
+  const state = status.available ? status.surface : 'not available'
+  return `${state}; no Siri replacement claim.`
 }
 
 function androidBaselineLabel(status: TauriAndroidBaselineStatus | null): string {

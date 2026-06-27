@@ -45,6 +45,8 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Native boundary')
     expect(markup).toContain('Runtime mode')
     expect(markup).toContain('Audio bridge')
+    expect(markup).toContain('iOS microphone capture')
+    expect(markup).toContain('iOS background voice')
     expect(markup).toContain('iOS Keychain')
     expect(markup).toContain('Face ID / Touch ID')
     expect(markup).toContain('Siri/Shortcuts/App Intents integration')

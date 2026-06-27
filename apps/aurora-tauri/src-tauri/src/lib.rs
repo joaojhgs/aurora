@@ -705,6 +705,100 @@ async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraComma
 }
 
 #[tauri::command]
+async fn aurora_ios_voice_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceStatus", json!({}))?;
+        log_ios_native_plugin_payload("voiceStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        serde_json::to_value(ios_voice_status()?)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+}
+
+fn ios_voice_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut status = denied_native_feature_status(
+        "aurora.iosMicrophoneCapture",
+        "ios.voiceForegroundCapture",
+        "iOS microphone capture requires foreground AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path.",
+    )?;
+    status.details.insert("platform".to_string(), json!("ios"));
+    status
+        .details
+        .insert("privacyClass".to_string(), json!("raw-audio"));
+    status
+        .details
+        .insert("foregroundOnly".to_string(), json!(true));
+    status
+        .details
+        .insert("supportsBackgroundListening".to_string(), json!(false));
+    status
+        .details
+        .insert("supportsSiriReplacement".to_string(), json!(false));
+    status
+        .details
+        .insert("consentRequired".to_string(), json!(true));
+    status
+        .details
+        .insert("stopRevokeRequired".to_string(), json!(true));
+    Ok(status)
+}
+
+#[tauri::command]
+async fn aurora_ios_background_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "backgroundStatus", json!({}))?;
+        log_ios_native_plugin_payload("backgroundStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        serde_json::to_value(ios_background_status()?)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+}
+
+fn ios_background_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
+    let mut status = denied_native_feature_status(
+        "aurora.iosBackgroundAudio",
+        "ios.backgroundVoice",
+        "iOS does not allow Aurora to run always-on background assistant listening or replace Siri; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+    )?;
+    status.details.insert("platform".to_string(), json!("ios"));
+    status
+        .details
+        .insert("alwaysOnWake".to_string(), json!(false));
+    status
+        .details
+        .insert("supportsSiriReplacement".to_string(), json!(false));
+    status.details.insert(
+        "allowedFallbackSurfaces".to_string(),
+        json!([
+            "foreground microphone permission",
+            "user notifications",
+            "App Intents",
+            "Shortcuts",
+            "widgets",
+            "share sheet",
+            "deep links"
+        ]),
+    );
+    Ok(status)
+}
+
+#[tauri::command]
 async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, AuroraCommandError> {
     let status = android_baseline_status();
     log_android_baseline_status(&status);
@@ -1340,6 +1434,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.audioBridgeStatus".to_string(), true);
     permissions.insert("aurora.audioCapture".to_string(), false);
     permissions.insert("aurora.audioPlayback".to_string(), false);
+    permissions.insert("aurora.iosVoiceStatus".to_string(), true);
+    permissions.insert("aurora.iosBackgroundStatus".to_string(), true);
+    permissions.insert("aurora.iosMicrophoneCapture".to_string(), false);
+    permissions.insert("aurora.iosBackgroundAudio".to_string(), false);
     permissions.insert("aurora.iosAppIntents".to_string(), false);
     permissions.insert("aurora.iosShortcuts".to_string(), false);
     permissions.insert("aurora.iosShareExtension".to_string(), false);
@@ -1379,6 +1477,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audio".to_string(), false);
     capabilities.insert("native.audioCapture".to_string(), false);
     capabilities.insert("native.audioPlayback".to_string(), false);
+    capabilities.insert("ios.voiceForegroundCapture".to_string(), false);
+    capabilities.insert("ios.notifications".to_string(), false);
+    capabilities.insert("ios.backgroundVoice".to_string(), false);
+    capabilities.insert("ios.appOwnedInvocation".to_string(), ios_platform);
     capabilities.insert("ios.appIntents".to_string(), ios_platform);
     capabilities.insert("ios.shortcuts".to_string(), ios_platform);
     capabilities.insert("ios.shareExtension".to_string(), ios_platform);
@@ -1401,12 +1503,44 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         "android.fallbackEntrypoints".to_string(),
         cfg!(target_os = "android"),
     );
+    let mut permission_states = ios_state_map("aurora.ios.", ios_platform);
+    permission_states.insert(
+        "aurora.iosMicrophoneCapture".to_string(),
+        "needs_native_permission".to_string(),
+    );
+    permission_states.insert(
+        "aurora.iosBackgroundAudio".to_string(),
+        "unsupported_platform".to_string(),
+    );
+    let mut capability_states = ios_state_map("ios.", ios_platform);
+    capability_states.insert(
+        "ios.voiceForegroundCapture".to_string(),
+        "needs_native_permission".to_string(),
+    );
+    capability_states.insert(
+        "ios.notifications".to_string(),
+        "needs_native_permission".to_string(),
+    );
+    capability_states.insert(
+        "ios.backgroundVoice".to_string(),
+        "unsupported_platform".to_string(),
+    );
+    capability_states.insert(
+        "ios.appOwnedInvocation".to_string(),
+        if ios_platform {
+            "available"
+        } else {
+            "needs_native_permission"
+        }
+        .to_string(),
+    );
+
     NativeCapabilityManifest {
         platform: native_platform().to_string(),
         permissions,
         capabilities,
-        permission_states: ios_state_map("aurora.ios.", ios_platform),
-        capability_states: ios_state_map("ios.", ios_platform),
+        permission_states,
+        capability_states,
         mobile_integrations: ios_mobile_integrations(ios_platform),
         platform_limitations: ios_platform_limitations(),
         ios_invocation: ios_invocation_status(ios_platform),
@@ -2192,6 +2326,8 @@ pub fn run() {
             aurora_tray_status,
             aurora_notification_status,
             aurora_notification_send,
+            aurora_ios_voice_status,
+            aurora_ios_background_status,
             aurora_dialog_status,
             aurora_audio_bridge_status,
             aurora_android_baseline_status,
@@ -2324,6 +2460,22 @@ mod tests {
             Some(&false)
         );
         assert_eq!(
+            manifest.permissions.get("aurora.iosVoiceStatus"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.iosBackgroundStatus"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.iosMicrophoneCapture"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.iosBackgroundAudio"),
+            Some(&false)
+        );
+        assert_eq!(
             manifest.permissions.get("aurora.iosSiriReplacement"),
             Some(&false)
         );
@@ -2337,6 +2489,19 @@ mod tests {
         assert_eq!(manifest.capabilities.get("ios.shortcuts"), Some(&false));
         assert_eq!(
             manifest.capabilities.get("ios.siriReplacement"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.capabilities.get("ios.voiceForegroundCapture"),
+            Some(&false)
+        );
+        assert_eq!(manifest.capabilities.get("ios.notifications"), Some(&false));
+        assert_eq!(
+            manifest.capabilities.get("ios.backgroundVoice"),
+            Some(&false)
+        );
+        assert_eq!(
+            manifest.capabilities.get("ios.appOwnedInvocation"),
             Some(&false)
         );
         assert!(manifest
@@ -2418,6 +2583,38 @@ mod tests {
     }
 
     #[test]
+    fn ios_statuses_preserve_apple_platform_limits() {
+        let voice = ios_voice_status().unwrap();
+        assert!(!voice.available);
+        assert_eq!(voice.permission, "aurora.iosMicrophoneCapture");
+        assert_eq!(voice.capability, "ios.voiceForegroundCapture");
+        assert_eq!(voice.details.get("privacyClass"), Some(&json!("raw-audio")));
+        assert_eq!(voice.details.get("foregroundOnly"), Some(&json!(true)));
+        assert_eq!(
+            voice.details.get("supportsBackgroundListening"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            voice.details.get("supportsSiriReplacement"),
+            Some(&json!(false))
+        );
+
+        let background = ios_background_status().unwrap();
+        assert!(!background.available);
+        assert_eq!(background.permission, "aurora.iosBackgroundAudio");
+        assert_eq!(background.capability, "ios.backgroundVoice");
+        assert_eq!(background.details.get("alwaysOnWake"), Some(&json!(false)));
+        assert_eq!(
+            background.details.get("supportsSiriReplacement"),
+            Some(&json!(false))
+        );
+        assert!(background
+            .reason
+            .as_ref()
+            .is_some_and(|reason| reason.contains("does not allow Aurora")));
+    }
+
+    #[test]
     fn native_permission_status_lists_denied_sensitive_surfaces() {
         let manifest = native_capability_manifest();
         let denied: Vec<String> = manifest
@@ -2461,6 +2658,10 @@ mod tests {
         assert!(ios_permission.contains("aurora_ios_secure_storage_status"));
         assert!(ios_permission.contains("aurora_ios_biometric_status"));
         assert!(ios_permission.contains("aurora_ios_admin_unlock"));
+        let ios_voice_permission = include_str!("../permissions/aurora-ios-voice.toml");
+        assert!(ios_capability.contains("\"aurora-ios-voice\""));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_status"));
+        assert!(ios_voice_permission.contains("aurora_ios_background_status"));
 
         let swift_plugin = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift"
@@ -2468,6 +2669,9 @@ mod tests {
         assert!(swift_plugin.contains("@_cdecl(\"init_plugin_aurora_native\")"));
         assert!(swift_plugin.contains("nativeCapabilityManifest"));
         assert!(swift_plugin.contains("invocationStatus"));
+        assert!(swift_plugin.contains("voiceStatus"));
+        assert!(swift_plugin.contains("notificationStatus"));
+        assert!(swift_plugin.contains("backgroundStatus"));
         assert!(swift_plugin.contains("iosEntrypointPayload"));
         assert!(swift_plugin.contains("invokeAuroraAction"));
         assert!(swift_plugin.contains("iosSecureStorageStatus"));
@@ -2477,6 +2681,8 @@ mod tests {
         assert!(swift_plugin.contains("\"ios.fileAssociations\": true"));
         assert!(swift_plugin.contains("\"ios.keychain.secureCredentialStorage\": true"));
         assert!(swift_plugin.contains("\"ios.biometric.adminUnlock\": true"));
+        assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": false"));
+        assert!(swift_plugin.contains("\"ios.backgroundVoice\": false"));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
 
         let swift_entrypoints = include_str!(

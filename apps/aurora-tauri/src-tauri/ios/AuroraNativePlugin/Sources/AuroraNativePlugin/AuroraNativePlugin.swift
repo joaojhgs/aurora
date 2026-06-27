@@ -1,7 +1,9 @@
+import AVFAudio
 import Foundation
 import LocalAuthentication
 import Security
 import Tauri
+import UserNotifications
 import WebKit
 
 @_cdecl("init_plugin_aurora_native")
@@ -181,6 +183,10 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.entrypointPayload": true,
         "aurora.iosKeychain": true,
         "aurora.iosBiometricUnlock": true,
+        "aurora.iosVoiceStatus": true,
+        "aurora.iosBackgroundStatus": true,
+        "aurora.iosMicrophoneCapture": false,
+        "aurora.iosBackgroundAudio": false,
         "aurora.iosSiriReplacement": false,
         "aurora.audioCapture": false,
         "aurora.audioPlayback": false
@@ -195,6 +201,10 @@ public final class AuroraNativePlugin: Plugin {
         "ios.entrypointPayload": true,
         "ios.keychain.secureCredentialStorage": true,
         "ios.biometric.adminUnlock": true,
+        "ios.voiceForegroundCapture": false,
+        "ios.notifications": false,
+        "ios.backgroundVoice": false,
+        "ios.appOwnedInvocation": true,
         "ios.siriReplacement": false,
         "native.audioCapture": false,
         "native.audioPlayback": false
@@ -209,6 +219,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.entrypointPayload": "available",
         "aurora.iosKeychain": "available",
         "aurora.iosBiometricUnlock": "available",
+        "aurora.iosMicrophoneCapture": "needs_native_permission",
+        "aurora.iosBackgroundAudio": "unsupported_platform",
         "aurora.iosSiriReplacement": "unsupported_platform"
       ],
       "capabilityStates": [
@@ -221,6 +233,10 @@ public final class AuroraNativePlugin: Plugin {
         "ios.entrypointPayload": "available",
         "ios.keychain.secureCredentialStorage": "available",
         "ios.biometric.adminUnlock": "available",
+        "ios.voiceForegroundCapture": "needs_native_permission",
+        "ios.notifications": "needs_native_permission",
+        "ios.backgroundVoice": "unsupported_platform",
+        "ios.appOwnedInvocation": "available",
         "ios.siriReplacement": "unsupported_platform"
       ],
       "mobileIntegrations": mobileIntegrations,
@@ -279,6 +295,79 @@ public final class AuroraNativePlugin: Plugin {
       "requiresBackendEvidence": true,
       "entrypoints": AuroraNativePlugin.entrypoints(),
       "secretsRedacted": true
+    ])
+  }
+
+  @objc public func voiceStatus(_ invoke: Invoke) throws {
+    let permission = AVAudioSession.sharedInstance().recordPermission
+    let reason: Any = permission == .granted
+      ? NSNull()
+      : "iOS microphone capture requires foreground AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path."
+    invoke.resolve([
+      "available": permission == .granted,
+      "permission": "aurora.iosMicrophoneCapture",
+      "capability": "ios.voiceForegroundCapture",
+      "source": "tauri-ios-native-plugin",
+      "reason": reason,
+      "details": [
+        "platform": "ios",
+        "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
+        "privacyClass": "raw-audio",
+        "foregroundOnly": true,
+        "supportsBackgroundListening": false,
+        "supportsSiriReplacement": false,
+        "consentRequired": true,
+        "stopRevokeRequired": true,
+        "secretsRedacted": true
+      ]
+    ])
+  }
+
+  @objc public func notificationStatus(_ invoke: Invoke) throws {
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+      let available = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+      let reason: Any = available
+        ? NSNull()
+        : "iOS notifications require explicit user authorization and cannot provide always-on assistant wake."
+      invoke.resolve([
+        "available": available,
+        "permission": "aurora.notificationsSend",
+        "capability": "ios.notifications",
+        "source": "tauri-ios-native-plugin",
+        "reason": reason,
+        "details": [
+          "platform": "ios",
+          "authorizationStatus": AuroraNativePlugin.notificationAuthorizationLabel(settings.authorizationStatus),
+          "supportsSiriReplacement": false,
+          "backgroundAssistantWake": false,
+          "secretsRedacted": true
+        ]
+      ])
+    }
+  }
+
+  @objc public func backgroundStatus(_ invoke: Invoke) throws {
+    invoke.resolve([
+      "available": false,
+      "permission": "aurora.iosBackgroundAudio",
+      "capability": "ios.backgroundVoice",
+      "source": "tauri-ios-native-plugin",
+      "reason": "iOS does not allow Aurora to run always-on background assistant listening or replace Siri; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+      "details": [
+        "platform": "ios",
+        "alwaysOnWake": false,
+        "supportsSiriReplacement": false,
+        "allowedFallbackSurfaces": [
+          "foreground microphone permission",
+          "user notifications",
+          "App Intents",
+          "Shortcuts",
+          "widgets",
+          "share sheet",
+          "deep links"
+        ],
+        "secretsRedacted": true
+      ]
     ])
   }
 
@@ -463,5 +552,35 @@ public final class AuroraNativePlugin: Plugin {
       return NSNull()
     }
     return value
+  }
+
+  private static func recordPermissionLabel(_ permission: AVAudioSession.RecordPermission) -> String {
+    switch permission {
+    case .granted:
+      return "granted"
+    case .denied:
+      return "denied"
+    case .undetermined:
+      return "undetermined"
+    @unknown default:
+      return "unknown"
+    }
+  }
+
+  private static func notificationAuthorizationLabel(_ status: UNAuthorizationStatus) -> String {
+    switch status {
+    case .authorized:
+      return "authorized"
+    case .denied:
+      return "denied"
+    case .notDetermined:
+      return "notDetermined"
+    case .provisional:
+      return "provisional"
+    case .ephemeral:
+      return "ephemeral"
+    @unknown default:
+      return "unknown"
+    }
   }
 }

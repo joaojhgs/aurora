@@ -493,6 +493,25 @@ describe('Aurora production shell', () => {
         expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
       ])
     )
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosMicrophoneCapture')).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        label: 'iOS microphone capture',
+        detail: expect.stringContaining('raw-audio consent')
+      })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.backgroundVoice')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        blockers: ['ios_background_voice_limited']
+      })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.appOwnedInvocation')).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        detail: expect.stringContaining('Aurora does not replace Siri')
+      })
+    )
     expect(model.nativeLimitations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -502,6 +521,9 @@ describe('Aurora production shell', () => {
       ])
     )
     expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('iOS microphone capture')
+    expect(markup).toContain('Always-on background listening is unavailable on iOS')
+    expect(markup).toContain('ios_background_voice_limited')
     expect(markup).toContain('iOS share extension intake')
     expect(markup).toContain('iOS file associations')
     expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.')
