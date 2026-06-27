@@ -46,6 +46,7 @@ jobs:
         run: |
           python scripts/check_sdk_backend_conformance.py \
             --inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+            --sdk-types packages/aurora-sdk/src/types.ts \
             --evidence-dir .artifacts/sdk-backend-conformance
 
       - name: Set up pnpm

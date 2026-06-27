@@ -12,9 +12,15 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SDK_FIXTURE = REPO_ROOT / "packages/aurora-sdk/src/fixtures.ts"
+DEFAULT_SDK_TYPES = REPO_ROOT / "packages/aurora-sdk/src/types.ts"
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / ".artifacts/sdk-backend-conformance"
 DOC_ONLY_OPENAPI_PATHS = {"/api/docs", "/api/openapi.json", "/api/redoc"}
 SDK_MOCK_ONLY_METHODS = {"Gateway.InternalOnly"}
+SDK_TYPE_INTERFACES = (
+    "BackendInventory",
+    "BackendInventoryMethod",
+    "GatewayBuiltinInventoryRoute",
+)
 
 SECRET_VALUE_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
@@ -196,6 +202,167 @@ def _parse_sdk_fixture(
             required_perms=_string_array_field(obj, "required_perms"),
         )
     return methods, builtins
+
+
+def _parse_typescript_interface_fields(path: Path, interface_name: str) -> dict[str, bool]:
+    text = path.read_text()
+    match = re.search(rf"\bexport\s+interface\s+{re.escape(interface_name)}\b", text)
+    if match is None:
+        raise ValueError(f"Could not find {interface_name} interface in {path}")
+    brace = text.find("{", match.end())
+    if brace < 0:
+        raise ValueError(f"Could not find {interface_name} interface body in {path}")
+    body = _balanced_span(text, brace, "{", "}")
+
+    fields: dict[str, bool] = {}
+    for line in body[1:-1].splitlines():
+        match = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\??\s*:", line)
+        if match:
+            fields[match.group(1)] = "?" in line[: line.find(":")]
+    return fields
+
+
+def _parse_sdk_type_surface(path: Path) -> dict[str, dict[str, bool]]:
+    return {
+        interface_name: _parse_typescript_interface_fields(path, interface_name)
+        for interface_name in SDK_TYPE_INTERFACES
+    }
+
+
+def _check_required_type_fields(
+    item: dict[str, Any],
+    fields: dict[str, bool],
+    *,
+    kind: str,
+    item_id: str,
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for field, optional in sorted(fields.items()):
+        if not optional and field not in item:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": f"{kind}_missing_sdk_required_field",
+                    "field": field,
+                    "item": item_id,
+                }
+            )
+    return issues
+
+
+def _check_unknown_type_fields(
+    item: dict[str, Any],
+    fields: dict[str, bool],
+    *,
+    kind: str,
+    item_id: str,
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for field in sorted(set(item) - set(fields)):
+        issues.append(
+            {
+                "fatal": True,
+                "kind": f"{kind}_field_missing_from_sdk_type",
+                "field": field,
+                "item": item_id,
+            }
+        )
+    return issues
+
+
+def _check_sdk_type_surface(
+    inventory: dict[str, Any],
+    sdk_types_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    surface = _parse_sdk_type_surface(sdk_types_path)
+    issues: list[dict[str, Any]] = []
+
+    inventory_fields = surface["BackendInventory"]
+    method_fields = surface["BackendInventoryMethod"]
+    builtin_fields = surface["GatewayBuiltinInventoryRoute"]
+
+    issues.extend(
+        _check_required_type_fields(
+            inventory,
+            inventory_fields,
+            kind="backend_inventory",
+            item_id="$",
+        )
+    )
+    issues.extend(
+        _check_unknown_type_fields(
+            inventory,
+            inventory_fields,
+            kind="backend_inventory",
+            item_id="$",
+        )
+    )
+
+    for method in inventory.get("methods", []):
+        if not isinstance(method, dict):
+            issues.append(
+                {"fatal": True, "kind": "backend_inventory_method_not_object", "item": repr(method)}
+            )
+            continue
+        item_id = str(method.get("bus_topic") or method.get("name") or "<unknown>")
+        issues.extend(
+            _check_required_type_fields(
+                method,
+                method_fields,
+                kind="backend_inventory_method",
+                item_id=item_id,
+            )
+        )
+        issues.extend(
+            _check_unknown_type_fields(
+                method,
+                method_fields,
+                kind="backend_inventory_method",
+                item_id=item_id,
+            )
+        )
+
+    for route in inventory.get("gateway_builtins", []):
+        if not isinstance(route, dict):
+            issues.append(
+                {"fatal": True, "kind": "gateway_builtin_route_not_object", "item": repr(route)}
+            )
+            continue
+        item_id = str(route.get("routePath") or route.get("route_path") or "<unknown>")
+        issues.extend(
+            _check_required_type_fields(
+                route,
+                builtin_fields,
+                kind="gateway_builtin_route",
+                item_id=item_id,
+            )
+        )
+        issues.extend(
+            _check_unknown_type_fields(
+                route,
+                builtin_fields,
+                kind="gateway_builtin_route",
+                item_id=item_id,
+            )
+        )
+
+    evidence = {
+        "sdk_types": _rel(sdk_types_path),
+        "interfaces": {
+            name: {
+                "required": sorted(field for field, optional in fields.items() if not optional),
+                "optional": sorted(field for field, optional in fields.items() if optional),
+            }
+            for name, fields in surface.items()
+        },
+        "checked": {
+            "backend_inventory_fields": len(inventory),
+            "backend_inventory_methods": len(inventory.get("methods", [])),
+            "gateway_builtin_routes": len(inventory.get("gateway_builtins", [])),
+            "issues": len(issues),
+        },
+    }
+    return issues, evidence
 
 
 def _inventory_descriptors(
@@ -413,6 +580,7 @@ def _write_json(path: Path, payload: Any) -> None:
 def build_report(
     inventory_path: Path,
     sdk_fixture_path: Path,
+    sdk_types_path: Path,
     *,
     strict_imports: bool,
     strict_sdk_coverage: bool,
@@ -424,6 +592,8 @@ def build_report(
 
     issues = []
     issues.extend(_check_inventory_metadata(inventory, strict_imports=strict_imports))
+    sdk_type_issues, sdk_type_surface = _check_sdk_type_surface(inventory, sdk_types_path)
+    issues.extend(sdk_type_issues)
     issues.extend(
         _compare_descriptors(
             live_methods,
@@ -462,6 +632,7 @@ def build_report(
         ],
         "permission_exposure_matrix": permission_exposure_matrix,
         "openapi_paths": inventory.get("gateway_openapi_paths") or [],
+        "sdk_type_surface": sdk_type_surface,
     }
     report = {
         "ok": not fatal_issues,
@@ -469,12 +640,14 @@ def build_report(
         "issue": "PER-222",
         "inventory": _rel(inventory_path),
         "sdk_fixture": _rel(sdk_fixture_path),
+        "sdk_types": _rel(sdk_types_path),
         "checked": {
             "backend_methods": len(live_methods),
             "sdk_fixture_methods": len(sdk_methods),
             "gateway_builtins": len(live_builtins),
             "sdk_fixture_builtins": len(sdk_builtins),
             "openapi_paths": len(inventory.get("gateway_openapi_paths") or []),
+            "sdk_type_surface_issues": len(sdk_type_issues),
             "fatal_issues": len(fatal_issues),
             "non_fatal_findings": len(issues) - len(fatal_issues),
         },
@@ -510,6 +683,12 @@ def main() -> int:
         "--sdk-fixture", type=Path, default=DEFAULT_SDK_FIXTURE, help="SDK fixtures.ts path"
     )
     parser.add_argument(
+        "--sdk-types",
+        type=Path,
+        default=DEFAULT_SDK_TYPES,
+        help="SDK types.ts path used to validate backend inventory type surface",
+    )
+    parser.add_argument(
         "--evidence-dir",
         type=Path,
         default=DEFAULT_EVIDENCE_DIR,
@@ -535,6 +714,7 @@ def main() -> int:
     report, evidence = build_report(
         args.inventory,
         args.sdk_fixture,
+        args.sdk_types,
         strict_imports=args.strict_imports,
         strict_sdk_coverage=args.strict_sdk_coverage,
         strict_field_drift=args.strict_field_drift,
@@ -554,6 +734,7 @@ def main() -> int:
         evidence["permission_exposure_matrix"],
     )
     _write_json(args.evidence_dir / "openapi-paths.json", evidence["openapi_paths"])
+    _write_json(args.evidence_dir / "sdk-type-surface.json", evidence["sdk_type_surface"])
 
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["ok"] else 1

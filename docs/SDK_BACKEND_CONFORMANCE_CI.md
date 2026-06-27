@@ -14,6 +14,7 @@ It checks:
 - Gateway built-in routes and Gateway OpenAPI paths
 - route, permission, method type, exposure, and model descriptor evidence
 - `packages/aurora-sdk/src/fixtures.ts` `backendInventoryFixture`
+- `packages/aurora-sdk/src/types.ts` backend inventory type surface
 - `modules/ui-mock-reference/lib/aurora/data.ts` backend method references
 - `@aurora/client` typecheck, transport conformance tests, and package build
 
@@ -28,6 +29,7 @@ python scripts/generate_backend_inventory.py \
 
 python scripts/check_sdk_backend_conformance.py \
   --inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+  --sdk-types packages/aurora-sdk/src/types.ts \
   --evidence-dir .artifacts/sdk-backend-conformance
 
 pnpm --filter @aurora/client typecheck
@@ -51,8 +53,11 @@ The workflow uploads `sdk-backend-contract-conformance` with:
 - `gateway-builtin-descriptors.json`
 - `permission-exposure-matrix.json`
 - `openapi-paths.json`
+- `sdk-type-surface.json`
 
 `conformance-report.json` separates fatal `issues` from non-fatal `findings`. Current non-fatal findings include backend methods not yet represented in the curated SDK fixture and optional service import warnings when audio-only dependencies are not installed. Fatal issues include stale SDK fixture methods, route/exposure drift for SDK-covered methods, UI fixture reference errors, count mismatches, OpenAPI route drift for non-doc Gateway built-ins, and possible unredacted secret-like values.
+
+`sdk-type-surface.json` records the SDK `BackendInventory`, `BackendInventoryMethod`, and `GatewayBuiltinInventoryRoute` fields used by the checker. The CI gate fails when generated backend inventory emits an artifact field that is missing from the SDK type surface, or omits a required SDK field.
 
 ## Security and privacy negative cases
 
