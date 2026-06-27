@@ -5,6 +5,7 @@ import type {
   AndroidFallbackEntrypoint,
   AndroidNativeEntrypoint,
   AvailabilityState,
+  NativeMobileIntegration,
   PrivacyClass
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -39,12 +40,30 @@ export interface SettingsNativePermissionCard {
   evidence: string[]
 }
 
+export interface SettingsNativeIntegrationCard {
+  id: string
+  label: string
+  state: AvailabilityState
+  support: NativeMobileIntegration['support']
+  capability: string
+  permission: string | null
+  privacyClass: PrivacyClass
+  invocation: string | null
+  backendMethod: string | null
+  requiresConfirmation: boolean
+  siriReplacement: false
+  detail: string
+  blockers: string[]
+  evidence: string[]
+}
+
 export interface SettingsPermissionsModel {
   loadState: AuroraShellSnapshot['loadState']
   settingsRoute: RouteAvailability | null
   nativeRoute: RouteAvailability | null
   privacyControls: SettingsPrivacyControl[]
   nativePermissions: SettingsNativePermissionCard[]
+  nativeIntegrations: SettingsNativeIntegrationCard[]
   routeDefaults: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
   adminActionLabel: string
   fallbackLabel: string
@@ -118,6 +137,22 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           )}
         </section>
       </div>
+
+      {model.nativeIntegrations.length > 0 ? (
+        <section className="aui-settings-panel" aria-labelledby="native-integrations-title">
+          <PanelTitle
+            icon={<Smartphone size={18} aria-hidden />}
+            title="Siri, Shortcuts, and App Intents"
+            description="iOS invocation stays inside app-owned Siri/Shortcuts/App Intents integration, widgets, share, or deep-link surfaces; Aurora does not replace Siri."
+            id="native-integrations-title"
+          />
+          <div className="aui-native-list">
+            {model.nativeIntegrations.map((integration) => (
+              <NativeIntegrationRow key={integration.id} integration={integration} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="aui-settings-panel" aria-labelledby="route-policy-title">
         <PanelTitle
@@ -206,6 +241,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       })
     ],
     nativePermissions: nativePermissionCards(snapshot, nativeRoute),
+    nativeIntegrations: nativeIntegrationCards(snapshot),
     routeDefaults: [
       {
         id: 'remote-providers',
@@ -237,6 +273,36 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       : 'No fallback route is currently reported by the capability graph.',
     error: errorText
   }
+}
+
+function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
+  return (
+    <article className="aui-native-card">
+      <div className="aui-settings-control-icon">
+        {integration.state === 'unsupported' ? <AlertTriangle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
+      </div>
+      <div>
+        <h3>{integration.label}</h3>
+        <p>{integration.detail}</p>
+        <div className="aui-settings-inline">
+          <StatusBadge state={integration.state} />
+          <PrivacyBadge privacy={integration.privacyClass} />
+          <EvidenceBadge label={integration.support} />
+          {integration.invocation ? <EvidenceBadge label={integration.invocation} /> : null}
+          {integration.requiresConfirmation ? <EvidenceBadge label="confirmation required" /> : null}
+        </div>
+        <small>{integration.blockers.length > 0 ? integration.blockers.join(', ') : 'No blocker reported.'}</small>
+        <dl className="aui-settings-facts">
+          <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'backend evidence required'}</dd></div>
+          <div><dt>Permission</dt><dd>{integration.permission ?? 'none'}</dd></div>
+          <div><dt>Siri replacement</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
+        </dl>
+      </div>
+      <button type="button" disabled>
+        {integration.state === 'unsupported' ? 'Unsupported' : 'Requires native verification'}
+      </button>
+    </article>
+  )
 }
 
 function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
@@ -358,6 +424,46 @@ function nativePermissionCards(
   const androidRows = androidNativePermissionCards(snapshot)
   const androidIds = new Set(androidRows.map((row) => row.id))
   return [...genericRows.filter((row) => !androidIds.has(row.id)), ...androidRows]
+}
+
+function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIntegrationCard[] {
+  return snapshot.nativeMobileIntegrations
+    .filter((integration) => integration.platform === 'ios')
+    .map((integration) => {
+      const state = availabilityFromNativeIntegration(integration.support)
+      const blockers = [
+        state === 'unsupported' ? integration.userCopy : '',
+        integration.permission && snapshot.nativePermissions.some((permission) =>
+          permission.name === integration.permission && !permission.granted
+        )
+          ? `native permission missing: ${integration.permission}`
+          : ''
+      ].filter(Boolean)
+      return {
+        id: integration.id,
+        label: integration.label,
+        state,
+        support: integration.support,
+        capability: integration.capability,
+        permission: integration.permission,
+        privacyClass: integration.privacyClass,
+        invocation: integration.invocation ?? null,
+        backendMethod: integration.backendMethod ?? null,
+        requiresConfirmation: integration.requiresConfirmation ?? false,
+        siriReplacement: false,
+        detail: integration.userCopy,
+        blockers,
+        evidence: unique([integration.evidenceSource, integration.verifier])
+      }
+    })
+}
+
+function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
+  if (support === 'supported') return 'available-local'
+  if (support === 'supported-path') return 'degraded'
+  if (support === 'planned') return 'pending'
+  if (support === 'blocked') return 'privacy-blocked'
+  return 'unsupported'
 }
 
 function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {

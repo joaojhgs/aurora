@@ -9,7 +9,9 @@ import type {
   CapabilityExplanation,
   CapabilityGraph,
   CapabilityProviderCandidate,
-  NativeCapabilityManifest
+  NativeCapabilityManifest,
+  NativeMobileIntegration,
+  NativePlatformLimitation
 } from '@aurora/client'
 import {
   auroraAssistantCancellationItem,
@@ -70,6 +72,8 @@ export interface AuroraShellSnapshot {
   nativeAvailable: boolean
   nativePermissions: Array<{ name: string; granted: boolean; nativeState: string | null }>
   nativeCapabilities: Array<{ name: string; enabled: boolean; nativeState: string | null }>
+  nativeMobileIntegrations: NativeMobileIntegration[]
+  nativePlatformLimitations: NativePlatformLimitation[]
   nativeAssistantRole: AndroidAssistantRoleStatus | null
   nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
   nativeEntrypoints: AndroidNativeEntrypoint[]
@@ -103,6 +107,8 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeAvailable: false,
   nativePermissions: [],
   nativeCapabilities: [],
+  nativeMobileIntegrations: [],
+  nativePlatformLimitations: [],
   nativeAssistantRole: null,
   nativeFallbackEntrypoints: [],
   nativeEntrypoints: [],
@@ -154,6 +160,8 @@ export function snapshotFromGraph(
     nativeAvailable: native !== null,
     nativePermissions: nativePermissionEntries(native?.permissions, native?.permissionStates),
     nativeCapabilities: nativeCapabilityEntries(native?.capabilities, native?.capabilityStates),
+    nativeMobileIntegrations: native?.mobileIntegrations ?? [],
+    nativePlatformLimitations: native?.platformLimitations ?? [],
     nativeAssistantRole: native?.assistantRole ?? null,
     nativeFallbackEntrypoints: native?.fallbackEntrypoints ?? [],
     nativeEntrypoints: native?.entrypoints ?? [],

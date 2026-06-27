@@ -14,6 +14,7 @@ import {
   deploymentTopologyFixture,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
+  iosNativeCapabilityManifestFixture,
   modelRuntimeCatalogFixture,
   meshPeerListFixture,
   meshStatusFixture,
@@ -304,6 +305,48 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required')
     expect(markup).toContain('Request unavailable')
     expect(markup).toContain('secrets redacted')
+  })
+
+  it('renders iOS App Intents as app-owned Shortcuts integration without claiming Siri replacement', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativeIntegrations.map((integration) => integration.id)).toEqual([
+      'askAuroraAppIntent',
+      'askAuroraShortcut',
+      'summarizeSharedContentShortcut',
+      'stopAuroraSpeechAppIntent',
+      'siriReplacement'
+    ])
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        invocation: 'app-intent',
+        siriReplacement: false
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'siriReplacement')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        siriReplacement: false
+      })
+    )
+    expect(markup).toContain('Siri, Shortcuts, and App Intents')
+    expect(markup).toContain('does not replace Siri')
+    expect(markup).toContain('Orchestrator.ExternalUserInput')
+    expect(markup).toContain('confirmation required')
   })
 
   it('maps settings state matrix for denied, degraded, native-unavailable, optimistic and rollback/error states', async () => {
