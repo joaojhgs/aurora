@@ -18,6 +18,8 @@ import type {
   AuditReceipt,
   AuroraEvent,
   AuroraTransportEnvelope,
+  IOSEntrypointPayload,
+  IOSInvocationStatus,
   JsonObject,
   NativeCapabilityManifest
 } from './types.js'
@@ -40,6 +42,7 @@ export interface TauriCommandNames {
   androidVoiceForegroundServiceStart: string
   androidVoiceForegroundServiceStop: string
   androidEntrypointPayload: string
+  iosEntrypointPayload: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
@@ -256,6 +259,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
   androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
   androidEntrypointPayload: 'entrypointPayload',
+  iosEntrypointPayload: 'aurora_ios_entrypoint_payload',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
@@ -373,6 +377,15 @@ export class TauriLocalTransport implements AuroraTransport {
     secretsRedacted: boolean
   }> {
     return this.invokeCommand(this.commands.androidEntrypointPayload)
+  }
+
+  getIOSEntrypointPayload(): Promise<{
+    payload: IOSEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.iosEntrypointPayload)
   }
 
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {

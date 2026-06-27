@@ -1,4 +1,41 @@
 {
+  "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["txt"],
+        "mimeType": "text/plain",
+        "role": "Viewer",
+        "rank": "Alternate",
+        "name": "Plain text"
+      },
+      {
+        "ext": ["md", "markdown"],
+        "mimeType": "text/markdown",
+        "role": "Viewer",
+        "rank": "Alternate",
+        "name": "Markdown"
+      },
+      {
+        "ext": ["json"],
+        "mimeType": "application/json",
+        "role": "Viewer",
+        "rank": "Alternate",
+        "name": "JSON"
+      },
+      {
+        "ext": ["aurora"],
+        "mimeType": "application/vnd.aurora.context+json",
+        "role": "Viewer",
+        "rank": "Owner",
+        "name": "Aurora context export",
+        "exportedType": {
+          "identifier": "dev.aurora.context",
+          "description": "Aurora context export",
+          "conformsTo": ["public.json"]
+        }
+      }
+    ]
+  },
   "app": {
     "security": {
       "capabilities": ["aurora-ios-baseline"]

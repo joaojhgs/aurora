@@ -2968,7 +2968,14 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.iosDeepLinks': false,
     'aurora.iosSiriReplacement': false,
     'aurora.shell': false,
-    'aurora.processSpawn': false
+    'aurora.processSpawn': false,
+    'aurora.ios.appIntents': false,
+    'aurora.ios.shortcuts': false,
+    'aurora.ios.shareExtension': false,
+    'aurora.ios.deepLinks': false,
+    'aurora.ios.widgets': false,
+    'aurora.ios.fileAssociations': false,
+    'aurora.ios.entrypointPayload': false
   },
   capabilities: {
     'desktop.thinGateway': true,
@@ -2990,9 +2997,30 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.appIntents': false,
     'ios.shortcuts': false,
     'ios.shareExtension': false,
-    'ios.widgets': false,
     'ios.deepLinks': false,
+    'ios.widgets': false,
+    'ios.fileAssociations': false,
+    'ios.entrypointPayload': false,
     'ios.siriReplacement': false
+  },
+  permissionStates: {
+    'aurora.ios.appIntents': 'needs_native_permission',
+    'aurora.ios.shortcuts': 'needs_native_permission',
+    'aurora.ios.shareExtension': 'needs_native_permission',
+    'aurora.ios.deepLinks': 'needs_native_permission',
+    'aurora.ios.widgets': 'needs_native_permission',
+    'aurora.ios.fileAssociations': 'needs_native_permission',
+    'aurora.ios.entrypointPayload': 'needs_native_permission'
+  },
+  capabilityStates: {
+    'ios.appIntents': 'needs_native_permission',
+    'ios.shortcuts': 'needs_native_permission',
+    'ios.shareExtension': 'needs_native_permission',
+    'ios.deepLinks': 'needs_native_permission',
+    'ios.widgets': 'needs_native_permission',
+    'ios.fileAssociations': 'needs_native_permission',
+    'ios.entrypointPayload': 'needs_native_permission',
+    'ios.siriReplacement': 'unsupported_platform'
   },
   mobileIntegrations: [
     {
@@ -3021,15 +3049,51 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     },
     {
       platform: 'ios',
-      id: 'shareWidgetDeepLinks',
-      label: 'Share, widgets, and deep links',
+      id: 'shareExtension',
+      label: 'iOS share extension intake',
       support: 'planned',
-      capability: 'ios.shareWidgetDeepLinks',
-      permission: 'aurora.ios.shareWidgetDeepLinks',
+      capability: 'ios.shareExtension',
+      permission: 'aurora.ios.shareExtension',
       privacyClass: 'personal',
-      evidenceSource: 'IOS-001-baseline',
-      userCopy: 'Share extensions, widgets, and deep links stay scoped to app-owned intake surfaces.',
-      verifier: 'Xcode extension target smoke and Tauri mobile file-association check'
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'The share extension accepts user-selected text, URLs, and files, then hands redacted metadata to Aurora backend context ingestion.',
+      verifier: 'Xcode share-extension target smoke plus simulator/device share sheet invocation'
+    },
+    {
+      platform: 'ios',
+      id: 'deepLinks',
+      label: 'iOS deep links',
+      support: 'planned',
+      capability: 'ios.deepLinks',
+      permission: 'aurora.ios.deepLinks',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'aurora:// app links launch app-owned Aurora flows; backend state still proves any session or context handoff.',
+      verifier: 'simulator/device aurora:// URL open smoke through the iOS Tauri target'
+    },
+    {
+      platform: 'ios',
+      id: 'widgets',
+      label: 'iOS widgets',
+      support: 'planned',
+      capability: 'ios.widgets',
+      permission: 'aurora.ios.widgets',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'Widget actions open Aurora through app-owned entrypoints and do not execute assistant work in the extension process.',
+      verifier: 'Xcode widget extension build plus simulator widget tap smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'fileAssociations',
+      label: 'iOS file associations',
+      support: 'supported-path',
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.ios.fileAssociations',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-tauri-file-associations',
+      userCopy: 'Tauri iOS file associations declare Aurora as a viewer for selected text, markdown, JSON, and Aurora exports.',
+      verifier: 'Tauri mobile file association metadata plus simulator document-open smoke'
     },
     {
       platform: 'ios',
@@ -3053,7 +3117,106 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
       userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.',
       evidenceSource: 'Apple App Intents and SiriKit extension documentation'
     }
-  ]
+  ],
+  iosInvocation: {
+    platform: 'ios',
+    appIntentsAvailable: false,
+    shortcutsAvailable: false,
+    shareExtensionAvailable: false,
+    deepLinksAvailable: false,
+    widgetsAvailable: false,
+    fileAssociationsAvailable: false,
+    siriReplacement: false,
+    backendHandoffRequired: true,
+    privacyLabels: ['personal', 'sensitive'],
+    state: 'needs_native_permission',
+    reason: 'iOS invocation requires macOS/Xcode-generated targets and simulator/device proof before it can be claimed available.',
+    evidenceSource: 'IOS-004-native-manifest',
+    secretsRedacted: true
+  },
+  entrypoints: [
+    {
+      id: 'ios_share_extension',
+      platform: 'ios',
+      label: 'iOS share extension',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.shareExtension',
+      permission: 'aurora.ios.shareExtension',
+      intakeType: 'share_extension',
+      xcodeTarget: 'AuroraShareExtension',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Share extension target must hand redacted payload metadata to backend attachment/context ingestion.'
+    },
+    {
+      id: 'ios_deep_link',
+      platform: 'ios',
+      label: 'iOS deep link',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.deepLinks',
+      permission: 'aurora.ios.deepLinks',
+      intakeType: 'deep_link',
+      urlScheme: 'aurora',
+      universalLinkHost: 'link.aurora.local',
+      xcodeTarget: 'Aurora',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Deep links launch Aurora-owned flows only; backend evidence decides whether content/session intake succeeded.'
+    },
+    {
+      id: 'ios_widget',
+      platform: 'ios',
+      label: 'iOS widget',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.widgets',
+      permission: 'aurora.ios.widgets',
+      intakeType: 'widget',
+      xcodeTarget: 'AuroraWidgetExtension',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Widgets can open Aurora entrypoints but must not run orchestrator logic in the extension.'
+    },
+    {
+      id: 'ios_file_association',
+      platform: 'ios',
+      label: 'iOS file association',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.ios.fileAssociations',
+      intakeType: 'file_association',
+      fileExtensions: ['txt', 'md', 'json', 'aurora'],
+      xcodeTarget: 'Aurora',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'File open events pass file URL metadata to the app; backend ingestion owns storage and redaction decisions.'
+    }
+  ],
+  lastEntrypointPayload: {
+    source: 'none',
+    invocation: 'none',
+    url: null,
+    scheme: null,
+    host: null,
+    path: null,
+    fileExtension: null,
+    uniformTypeIdentifier: null,
+    originatingBundleId: null,
+    sharedItemCount: 0,
+    privacyLabels: ['personal'],
+    backendHandoffRequired: true,
+    correlationId: null,
+    secretsRedacted: true
+  },
+  evidenceSource: 'tauri-ios-native-manifest',
+  secretsRedacted: true
 }
 
 export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = {
@@ -3555,6 +3718,8 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.iosShareExtension': false,
     'aurora.iosWidgets': false,
     'aurora.iosDeepLinks': false,
+    'aurora.iosFileAssociations': false,
+    'aurora.iosEntrypointPayload': false,
     'aurora.iosSiriReplacement': false,
     'aurora.audioCapture': false,
     'aurora.audioPlayback': false
@@ -3565,6 +3730,8 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.widgets': false,
     'ios.shareExtension': false,
     'ios.deepLinks': false,
+    'ios.fileAssociations': false,
+    'ios.entrypointPayload': false,
     'ios.siriReplacement': false,
     'native.audioCapture': false,
     'native.audioPlayback': false
@@ -3633,6 +3800,70 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       evidenceSource: 'IOS-003 native plugin manifest',
       userCopy: 'Controls Aurora-owned playback only; it cannot control Siri or system assistant audio.',
       verifier: 'simulator/device App Intent invocation with TTS stop route evidence'
+    },
+    {
+      platform: 'ios',
+      id: 'shareExtension',
+      label: 'iOS share extension intake',
+      support: 'planned',
+      capability: 'ios.shareExtension',
+      permission: 'aurora.iosShareExtension',
+      invocation: 'share-extension',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'personal',
+      requiresConfirmation: true,
+      siriReplacement: false,
+      evidenceSource: 'IOS-004 native plugin manifest',
+      userCopy: 'The share extension accepts user-selected text, URLs, and files, then hands redacted metadata to Aurora backend context ingestion.',
+      verifier: 'Xcode share-extension target smoke plus simulator/device share sheet invocation'
+    },
+    {
+      platform: 'ios',
+      id: 'deepLinks',
+      label: 'iOS deep links',
+      support: 'planned',
+      capability: 'ios.deepLinks',
+      permission: 'aurora.iosDeepLinks',
+      invocation: 'deep-link',
+      backendMethod: 'Gateway.DeepLinkIntake',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-004 native plugin manifest',
+      userCopy: 'aurora:// app links launch app-owned Aurora flows; backend state still proves any session or context handoff.',
+      verifier: 'simulator/device aurora:// URL open smoke through the iOS Tauri target'
+    },
+    {
+      platform: 'ios',
+      id: 'widgets',
+      label: 'iOS widgets',
+      support: 'planned',
+      capability: 'ios.widgets',
+      permission: 'aurora.iosWidgets',
+      invocation: 'widget',
+      backendMethod: 'Gateway.WidgetIntake',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-004 native plugin manifest',
+      userCopy: 'Widget actions open Aurora through app-owned entrypoints and do not execute assistant work in the extension process.',
+      verifier: 'Xcode widget extension build plus simulator widget tap smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'fileAssociations',
+      label: 'iOS file associations',
+      support: 'supported-path',
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.iosFileAssociations',
+      invocation: 'file-association',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'personal',
+      requiresConfirmation: true,
+      siriReplacement: false,
+      evidenceSource: 'IOS-004 Tauri file associations',
+      userCopy: 'Tauri iOS file associations declare Aurora as a viewer for selected text, markdown, JSON, and Aurora exports.',
+      verifier: 'Tauri mobile file association metadata plus simulator document-open smoke'
     },
     {
       platform: 'ios',

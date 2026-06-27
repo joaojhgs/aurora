@@ -89,7 +89,10 @@ IOS-001 establishes the Tauri iOS build baseline and native-manifest contract. T
 
 - `Siri/Shortcuts/App Intents integration`: planned App Intents for concrete Aurora actions.
 - `Shortcuts invocation path`: supported platform path once the iOS plugin and Xcode targets exist.
-- `Share, widgets, and deep links`: planned app-owned intake surfaces.
+- `iOS share extension intake`: app-owned share extension entrypoint for text, URL, and file metadata handoff.
+- `iOS deep links`: `aurora://` and associated-link launch paths for app-owned Aurora flows.
+- `iOS widgets`: widget actions that open Aurora entrypoints without running assistant orchestration in the extension process.
+- `iOS file associations`: Tauri mobile file associations for selected text, markdown, JSON, and `.aurora` context exports.
 - `Siri replacement`: unsupported. Aurora must not claim it can replace Siri as the default iOS assistant.
 
 Linux can run the TypeScript/Rust manifest checks, but cannot satisfy the iOS build acceptance gate. macOS/Xcode verification must run:
@@ -104,7 +107,11 @@ The `Tauri iOS Baseline` GitHub Actions workflow runs this baseline on macOS wit
 
 The iOS baseline uses `src-tauri/tauri.ios.conf.json` and the `aurora-ios-baseline` capability so mobile builds do not request desktop-only updater permissions. Desktop builds continue to use `aurora-main` plus the desktop-only `aurora-desktop-updater` capability from the Linux, macOS, and Windows platform config files.
 
-After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
+IOS-004 adds `src-tauri/ios/aurora-native-plugin/` as the Swift package scaffold for the official Tauri iOS plugin model. Its `Plugin` subclass exposes `nativeCapabilityManifest`, `iosInvocationStatus`, and `iosEntrypointPayload` commands with redacted payload metadata. The Swift package is not a replacement for the Xcode-managed App Intent, share extension, widget extension, associated-domain, or file-open wiring; those generated targets must call back through the SDK/backend handoff path.
+
+The iOS Tauri overlay declares `bundle.fileAssociations` in `src-tauri/tauri.ios.conf.json`. Tauri projects those declarations into generated mobile metadata, while iOS App Intents/share/widget targets remain Xcode-managed extension work.
+
+After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link/file-open flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
 
 ## Android Baseline
 

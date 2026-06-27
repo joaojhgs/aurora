@@ -287,8 +287,32 @@ function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot): 
     mode('mesh-peer', 'Mesh Peer', 'Pair with or reconnect to a mesh node.', meshRoute?.state ?? 'unsupported', meshRoute?.providerLabel ?? 'mesh route not advertised', meshRoute?.explanation ?? 'Mesh pairing waits for Auth/Gateway capability evidence.'),
     mode('android-thin', 'Android Thin', 'Android client against a remote Gateway.', transportKind === 'native-mobile' && snapshot.nativePlatform.toLowerCase().includes('android') ? 'available-remote' : 'unsupported', snapshot.nativePlatform, 'Android native/local features require native manifest support.'),
     mode('ios-thin', 'iOS Thin', 'iOS client against a remote Gateway.', transportKind === 'native-mobile' && snapshot.nativePlatform.toLowerCase().includes('ios') ? 'available-remote' : 'unsupported', snapshot.nativePlatform, 'iOS remains app-owned surfaces only with Siri/Shortcuts/App Intents integration; Siri replacement is unsupported.'),
+    mode('ios-local-light', 'iOS Local-Light', 'App Intents, Shortcuts, widgets, share extension, deep links, and file associations.', iosLocalLightState(snapshot), iosLocalLightEvidence(snapshot), 'Requires the iOS native manifest, Xcode-managed extension targets, and backend handoff evidence; iOS cannot replace Siri.'),
     mode('offline-local', 'Offline Local', 'Local degraded mode without Gateway reachability.', transportKind === 'mock' ? 'degraded' : transportKind === 'tauri-local' ? 'available-local' : 'unsupported', transportKind === 'mock' ? 'development fixture only' : clientTransportEvidence(transportKind), 'Offline/local mode must be proven by SDK/native service evidence.')
   ]
+}
+
+function iosLocalLightState(snapshot: AuroraShellSnapshot): AvailabilityState {
+  if (!snapshot.nativePlatform.toLowerCase().includes('ios')) return 'unsupported'
+  const integrations = snapshot.nativeMobileIntegrations ?? []
+  if (integrations.some((integration) => integration.platform === 'ios' && integration.support === 'supported')) {
+    return 'available-local'
+  }
+  if (integrations.some((integration) => integration.platform === 'ios' && integration.support === 'supported-path')) {
+    return 'degraded'
+  }
+  if (integrations.some((integration) => integration.platform === 'ios' && integration.support === 'planned')) {
+    return 'pending'
+  }
+  return 'unsupported'
+}
+
+function iosLocalLightEvidence(snapshot: AuroraShellSnapshot): string {
+  if (!snapshot.nativePlatform.toLowerCase().includes('ios')) return snapshot.nativePlatform
+  const ids = (snapshot.nativeMobileIntegrations ?? [])
+    .filter((integration) => integration.platform === 'ios' && integration.id !== 'siriReplacement')
+    .map((integration) => integration.id)
+  return ids.length > 0 ? `iOS native manifest: ${ids.join(', ')}` : 'iOS native manifest missing'
 }
 
 function mode(id: string, label: string, description: string, state: AvailabilityState, evidence: string, repair: string): DeploymentModeCard {
@@ -393,7 +417,7 @@ function ModeIcon({ id }: { id: string }) {
   if (id === 'server-web') return <Server {...props} />
   if (id === 'desktop-local') return <Monitor {...props} />
   if (id === 'mesh-peer') return <RadioTower {...props} />
-  if (id === 'android-thin' || id === 'ios-thin') return <Smartphone {...props} />
+  if (id === 'android-thin' || id === 'ios-thin' || id === 'ios-local-light') return <Smartphone {...props} />
   if (id === 'offline-local') return <PlugZap {...props} />
   if (id === 'auth') return <KeyRound {...props} />
   return <ShieldCheck {...props} />

@@ -1565,15 +1565,16 @@ export interface NativeCapabilityManifest {
   capabilityStates?: Record<string, AndroidNativeState>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
+  iosInvocation?: IOSInvocationStatus | null
   assistantRole?: AndroidAssistantRoleStatus | null
   localLightInference?: AndroidLocalLightInferenceStatus | null
   voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
   adminUnlock?: AndroidAdminUnlockStatus | null
   secureStorage?: AndroidSecureStorageStatus | null
   fallbackEntrypoints?: AndroidFallbackEntrypoint[]
-  entrypoints?: AndroidNativeEntrypoint[]
-  lastEntrypointPayload?: AndroidEntrypointPayload | null
   release?: AndroidNativeReleaseStatus | null
+  entrypoints?: NativeEntrypoint[]
+  lastEntrypointPayload?: NativeEntrypointPayload | null
   evidenceSource?: string
   secretsRedacted?: boolean
 }
@@ -1742,6 +1743,27 @@ export interface AndroidNativeEntrypoint {
   reason: string
 }
 
+export interface IOSNativeEntrypoint {
+  id: string
+  platform: 'ios' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intakeType: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | string
+  urlScheme?: string | null
+  universalLinkHost?: string | null
+  fileExtensions?: string[]
+  xcodeTarget: string
+  backendRequired: boolean
+  payloadCommand: string
+  privacyClass: PrivacyClass
+  reason: string
+}
+
+export type NativeEntrypoint = AndroidNativeEntrypoint | IOSNativeEntrypoint
+
 export interface AndroidEntrypointPayload {
   source: string
   action: string | null
@@ -1783,4 +1805,40 @@ export interface AndroidNativeReleaseStatus {
   deviceMatrix: AndroidReleaseMatrixRow[]
   smokePayloadRecorded: boolean
   generatedAt: string
+}
+
+export interface IOSEntrypointPayload {
+  source: string
+  invocation: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | 'none' | string
+  url: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  fileExtension: string | null
+  uniformTypeIdentifier: string | null
+  originatingBundleId: string | null
+  sharedItemCount: number
+  privacyLabels: PrivacyClass[]
+  backendHandoffRequired: boolean
+  correlationId: string | null
+  secretsRedacted: boolean
+}
+
+export type NativeEntrypointPayload = AndroidEntrypointPayload | IOSEntrypointPayload
+
+export interface IOSInvocationStatus {
+  platform: 'ios' | string
+  appIntentsAvailable: boolean
+  shortcutsAvailable: boolean
+  shareExtensionAvailable: boolean
+  deepLinksAvailable: boolean
+  widgetsAvailable: boolean
+  fileAssociationsAvailable: boolean
+  siriReplacement: false
+  backendHandoffRequired: boolean
+  privacyLabels: PrivacyClass[]
+  state: AndroidNativeState
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
 }
