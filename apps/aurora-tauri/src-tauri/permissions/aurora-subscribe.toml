@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "aurora-subscribe"
-description = "Allow the frontend SDK adapter to open and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
-commands.allow = ["aurora_subscribe", "aurora_unsubscribe"]
+description = "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
+commands.allow = ["aurora_subscribe", "aurora_activate_subscription", "aurora_unsubscribe"]

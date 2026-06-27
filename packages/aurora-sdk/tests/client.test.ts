@@ -3782,6 +3782,11 @@ describe('AuroraClient', () => {
     const ipcReady = new Promise<void>((resolve) => {
       resolveIpcReady = resolve
     })
+    let resolveActivated: () => void = () => undefined
+    const activationReady = new Promise<void>((resolve) => {
+      resolveActivated = resolve
+    })
+    let activated = false
     const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
     const ipcTauri = new TauriLocalTransport({
       invoke: async (command, args) => {
@@ -3793,6 +3798,13 @@ describe('AuroraClient', () => {
             headers: { 'x-aurora-sidecar-token': 'session-token' }
           }))
           return { subscriptionId: 'sub-1', eventName: 'aurora://events/sub-1' }
+        }
+        if (command === 'aurora_activate_subscription') {
+          expect(listeners.has('aurora://events/sub-1')).toBe(true)
+          expect(listeners.has('aurora://events/sub-1/closed')).toBe(true)
+          activated = true
+          resolveActivated()
+          return { activated: true, subscriptionId: 'sub-1' }
         }
         if (command === 'aurora_unsubscribe') return { closed: true, subscriptionId: 'sub-1' }
         throw new Error(`Unexpected command ${command}`)
@@ -3807,6 +3819,8 @@ describe('AuroraClient', () => {
     const ipcSubscription = ipcClient.events.watchHealth()
     const ipcEvents = collectEvents(ipcSubscription, 1)
     await ipcReady
+    await activationReady
+    expect(activated).toBe(true)
     listeners.get('aurora://events/sub-1')?.({
       event: 'aurora://events/sub-1',
       payload: {
@@ -3832,6 +3846,7 @@ describe('AuroraClient', () => {
       invoke: async (command) => {
         if (command === 'aurora_sidecar_session') return { token: 'session-token' }
         if (command === 'aurora_subscribe') return { subscriptionId: 'sub-closed', eventName: 'aurora://events/sub-closed' }
+        if (command === 'aurora_activate_subscription') return { activated: true }
         if (command === 'aurora_unsubscribe') return { closed: true }
         throw new Error(`Unexpected command ${command}`)
       },
@@ -3852,6 +3867,7 @@ describe('AuroraClient', () => {
       invoke: async (command) => {
         if (command === 'aurora_sidecar_session') return { token: 'session-token' }
         if (command === 'aurora_subscribe') return { subscriptionId: 'sub-loss', eventName: 'aurora://events/sub-loss' }
+        if (command === 'aurora_activate_subscription') return { activated: true }
         if (command === 'aurora_unsubscribe') return { closed: true }
         throw new Error(`Unexpected command ${command}`)
       },

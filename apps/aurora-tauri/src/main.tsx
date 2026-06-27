@@ -4,8 +4,16 @@ import '@aurora/ui/styles.css'
 import './styles.css'
 import { AuroraTauriApp } from './tauri-app'
 
-createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <AuroraTauriApp />
-  </React.StrictMode>
-)
+const root = document.getElementById('root') as HTMLElement
+
+if (import.meta.env.VITE_AURORA_EVENTSTREAM_SMOKE === '1') {
+  void import('./eventstream-smoke').then(({ mountEventStreamSmoke }) => {
+    mountEventStreamSmoke(root)
+  })
+} else {
+  createRoot(root).render(
+    <React.StrictMode>
+      <AuroraTauriApp />
+    </React.StrictMode>
+  )
+}

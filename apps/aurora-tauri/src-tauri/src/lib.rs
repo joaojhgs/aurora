@@ -16,6 +16,7 @@ use tauri::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
+use tokio::sync::watch;
 use url::Url;
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
@@ -59,6 +60,12 @@ struct AuroraSubscribeRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AuroraUnsubscribeRequest {
+    subscription_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraActivateSubscriptionRequest {
     subscription_id: String,
 }
 
@@ -404,7 +411,12 @@ type SharedSubscriptionState = Arc<Mutex<SubscriptionState>>;
 
 struct SubscriptionState {
     next_id: AtomicU64,
-    tasks: HashMap<String, tauri::async_runtime::JoinHandle<()>>,
+    tasks: HashMap<String, SubscriptionTask>,
+}
+
+struct SubscriptionTask {
+    handle: tauri::async_runtime::JoinHandle<()>,
+    ready: watch::Sender<bool>,
 }
 
 impl SubscriptionState {
@@ -420,21 +432,30 @@ impl SubscriptionState {
         format!("aurora-sub-{id}")
     }
 
-    fn insert(&mut self, id: String, task: tauri::async_runtime::JoinHandle<()>) {
+    fn insert(&mut self, id: String, task: SubscriptionTask) {
         if let Some(existing) = self.tasks.insert(id, task) {
-            existing.abort();
+            existing.handle.abort();
+        }
+    }
+
+    fn activate(&self, id: &str) -> bool {
+        if let Some(task) = self.tasks.get(id) {
+            task.ready.send_replace(true);
+            true
+        } else {
+            false
         }
     }
 
     fn remove(&mut self, id: &str) {
         if let Some(task) = self.tasks.remove(id) {
-            task.abort();
+            task.handle.abort();
         }
     }
 
     fn abort_all(&mut self) {
         for (_, task) in self.tasks.drain() {
-            task.abort();
+            task.handle.abort();
         }
     }
 }
@@ -581,8 +602,14 @@ async fn aurora_subscribe(
     let task_closed_event_name = closed_event_name.clone();
     let task_app = app.clone();
     let task_subscriptions = subscription_state.inner().clone();
+    let (ready_tx, mut ready_rx) = watch::channel(false);
 
     let task = tauri::async_runtime::spawn(async move {
+        while !*ready_rx.borrow_and_update() {
+            if ready_rx.changed().await.is_err() {
+                return;
+            }
+        }
         run_gateway_event_stream(
             task_app,
             client,
@@ -602,7 +629,13 @@ async fn aurora_subscribe(
         let mut subscriptions = subscription_state
             .lock()
             .map_err(|_| AuroraCommandError::SidecarState)?;
-        subscriptions.insert(subscription_id.clone(), task);
+        subscriptions.insert(
+            subscription_id.clone(),
+            SubscriptionTask {
+                handle: task,
+                ready: ready_tx,
+            },
+        );
     }
 
     Ok(AuroraSubscribeResponse {
@@ -626,6 +659,27 @@ async fn aurora_subscribe(
             warnings: Vec::new(),
         },
     })
+}
+
+#[tauri::command]
+async fn aurora_activate_subscription(
+    request: AuroraActivateSubscriptionRequest,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<Value, AuroraCommandError> {
+    let subscriptions = subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    if subscriptions.activate(&request.subscription_id) {
+        Ok(json!({
+            "subscriptionId": request.subscription_id,
+            "activated": true,
+            "secretsRedacted": true
+        }))
+    } else {
+        Err(AuroraCommandError::Gateway(
+            "subscription is no longer active".to_string(),
+        ))
+    }
 }
 
 #[tauri::command]
@@ -2776,6 +2830,7 @@ pub fn run() {
             aurora_request,
             aurora_command,
             aurora_subscribe,
+            aurora_activate_subscription,
             aurora_unsubscribe,
             aurora_sidecar_session,
             aurora_sidecar_start,

@@ -80,6 +80,7 @@ export interface TauriCommandNames {
   localFilePick: string
   secureFileHandleOpen: string
   eventSubscribe: string
+  eventActivateSubscription: string
   eventUnsubscribe: string
 }
 
@@ -312,6 +313,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   localFilePick: 'aurora_local_file_pick',
   secureFileHandleOpen: 'aurora_secure_file_handle_open',
   eventSubscribe: 'aurora_subscribe',
+  eventActivateSubscription: 'aurora_activate_subscription',
   eventUnsubscribe: 'aurora_unsubscribe'
 }
 
@@ -554,6 +556,15 @@ export class TauriLocalTransport implements AuroraTransport {
         request,
         this.listenImpl,
         (subscriptionId) => {
+          const activateContext: TauriInvokeContext = { method: this.commands.eventActivateSubscription }
+          if (context.busTopic !== undefined) activateContext.busTopic = context.busTopic
+          return this.invokeCommand(
+            this.commands.eventActivateSubscription,
+            { [this.requestArgName]: { subscriptionId } },
+            activateContext
+          )
+        },
+        (subscriptionId) => {
           const unsubscribeContext: TauriInvokeContext = { method: this.commands.eventUnsubscribe }
           if (context.busTopic !== undefined) unsubscribeContext.busTopic = context.busTopic
           void this.invokeCommand(
@@ -670,6 +681,7 @@ async function createTauriIpcEventSubscription<TPayload>(
   descriptor: TauriSubscriptionDescriptor,
   request: AuroraStreamRequest,
   listen: TauriListen,
+  activate: (subscriptionId: string) => Promise<unknown>,
   unsubscribe: (subscriptionId: string) => void
 ): Promise<AuroraEventSubscription<TPayload>> {
   const queue: Array<AuroraEvent<TPayload>> = []
@@ -702,6 +714,14 @@ async function createTauriIpcEventSubscription<TPayload>(
   const unlistenClosed = await listen<TauriSubscriptionClosedPayload>(`${descriptor.eventName}/closed`, ({ payload }) => {
     closeFromNative(payload ?? {})
   })
+  try {
+    await activate(descriptor.subscriptionId)
+  } catch (error) {
+    unlistenEvents()
+    unlistenClosed()
+    unsubscribe(descriptor.subscriptionId)
+    throw error
+  }
   const cleanup = () => {
     if (!closed) {
       closed = true
