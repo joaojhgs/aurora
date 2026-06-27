@@ -25,3 +25,11 @@ Status: complete
 Evidence: QA reproduced `python scripts/transport_parity_gate.py ...` failing before report generation with `ModuleNotFoundError: No module named 'scripts'`.
 
 Resolution: Added file-entrypoint import bootstrapping and a direct `python scripts/transport_parity_gate.py --help` regression. Reran the rejected full gate command; it now writes `.omx/reports/transport-parity/qa-local/transport_parity_report.json` and exits through the structured `blocked` summary for process/Android/iOS release-evidence gaps instead of crashing before report generation.
+
+## G005 - Architect Rejection Fix: Workflow Extras
+
+Status: complete
+
+Evidence: Architect reproduced the workflow-level Python environment failing before report generation with `ModuleNotFoundError: No module named 'fastapi'` because the manual workflow installed only `dev` and `test-e2e` extras while the gate imports the Gateway/mesh harness and process-mode dependencies.
+
+Resolution: Updated `.github/workflows/transport-parity.yml` so dependency sync and gate execution both include `gateway`, `mode-processes`, and `test-e2e` extras. Verified from a fresh uv project environment at `/tmp/per229-workflow-venv-qa008`; the workflow-equivalent command wrote `.omx/reports/transport-parity/workflow-equivalent/transport_parity_report.json` and exited through the structured `blocked` summary instead of crashing before report generation.

@@ -39,7 +39,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install uv
-          uv sync --extra dev --extra test-e2e
+          uv sync --extra gateway --extra mode-processes --extra test-e2e
 
       - name: Install workspace packages
         run: pnpm install --frozen-lockfile
@@ -48,7 +48,7 @@ jobs:
         env:
           REDIS_URL: redis://localhost:6379
           AURORA_ARCHITECTURE_MODE: processes
-        run: uv run python scripts/transport_parity_gate.py --execute-commands --output-dir .omx/reports/transport-parity/ci
+        run: uv run --extra gateway --extra mode-processes --extra test-e2e python scripts/transport_parity_gate.py --execute-commands --output-dir .omx/reports/transport-parity/ci
 
       - name: Upload QA-008 transport parity artifacts
         if: always()
