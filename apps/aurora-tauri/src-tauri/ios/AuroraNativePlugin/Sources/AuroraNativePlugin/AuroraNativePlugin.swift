@@ -167,6 +167,22 @@ public final class AuroraNativePlugin: Plugin {
       "evidenceSource": "IOS-004 native plugin manifest",
       "userCopy": "File-open events pass redacted file URL metadata to AuroraClient/backend ingestion; file contents are not embedded in native diagnostics.",
       "verifier": "tauri ios build plus Tauri mobile file-association config and compiled IOS-004 payload smoke"
+    ],
+    [
+      "platform": "ios",
+      "id": "iosLocalLightInference",
+      "label": "iOS local-light inference provider",
+      "support": "supported-path",
+      "capability": "ios.localLightInference.provider",
+      "permission": "aurora.iosLocalLightInference",
+      "invocation": "tauri-command",
+      "backendMethod": "Orchestrator.GetModelRuntimeCatalog",
+      "privacyClass": "personal",
+      "requiresConfirmation": false,
+      "siriReplacement": false,
+      "evidenceSource": "ios-native-local-light-adapter",
+      "userCopy": "Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.",
+      "verifier": "tauri ios build plus simulator/device nativeCapabilityManifest payload smoke"
     ]
   ]
 
@@ -181,6 +197,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.widgets": true,
         "aurora.ios.fileAssociations": true,
         "aurora.ios.entrypointPayload": true,
+        "aurora.iosLocalLightInference": false,
         "aurora.iosKeychain": true,
         "aurora.iosBiometricUnlock": true,
         "aurora.iosVoiceStatus": true,
@@ -199,6 +216,9 @@ public final class AuroraNativePlugin: Plugin {
         "ios.widgets": true,
         "ios.fileAssociations": true,
         "ios.entrypointPayload": true,
+        "ios.localLightInference.provider": true,
+        "ios.localLightInference.modelRuntime": false,
+        "ios.localLightInference.fallback": true,
         "ios.keychain.secureCredentialStorage": true,
         "ios.biometric.adminUnlock": true,
         "ios.voiceForegroundCapture": false,
@@ -217,6 +237,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.widgets": "available",
         "aurora.ios.fileAssociations": "available",
         "aurora.ios.entrypointPayload": "available",
+        "aurora.iosLocalLightInference": "degraded",
         "aurora.iosKeychain": "available",
         "aurora.iosBiometricUnlock": "available",
         "aurora.iosMicrophoneCapture": "needs_native_permission",
@@ -231,6 +252,9 @@ public final class AuroraNativePlugin: Plugin {
         "ios.widgets": "available",
         "ios.fileAssociations": "available",
         "ios.entrypointPayload": "available",
+        "ios.localLightInference.provider": "degraded",
+        "ios.localLightInference.modelRuntime": "needs_native_permission",
+        "ios.localLightInference.fallback": "fallback",
         "ios.keychain.secureCredentialStorage": "available",
         "ios.biometric.adminUnlock": "available",
         "ios.voiceForegroundCapture": "needs_native_permission",
@@ -256,6 +280,7 @@ public final class AuroraNativePlugin: Plugin {
         "evidenceSource": "IOS-004 native plugin manifest",
         "secretsRedacted": true
       ],
+      "localLightInference": AuroraNativePlugin.localLightInferenceStatusPayload(),
       "entrypoints": AuroraNativePlugin.entrypoints(),
       "lastEntrypointPayload": AuroraNativePlugin.payloadDictionary(AuroraEntrypointFactory.emptyPayload()),
       "platformLimitations": [
@@ -296,6 +321,10 @@ public final class AuroraNativePlugin: Plugin {
       "entrypoints": AuroraNativePlugin.entrypoints(),
       "secretsRedacted": true
     ])
+  }
+
+  @objc public func localLightInferenceStatus(_ invoke: Invoke) throws {
+    invoke.resolve(AuroraNativePlugin.localLightInferenceStatusPayload())
   }
 
   @objc public func voiceStatus(_ invoke: Invoke) throws {
@@ -533,6 +562,27 @@ public final class AuroraNativePlugin: Plugin {
       "correlationId": AuroraNativePlugin.nullableString(payload.correlationId),
       "secretsRedacted": payload.secretsRedacted,
       "siriReplacement": payload.siriReplacement
+    ]
+  }
+
+  private static func localLightInferenceStatusPayload() -> [String: Any] {
+    [
+      "platform": "ios",
+      "providerId": "native:mobile-local-light",
+      "available": false,
+      "requestable": false,
+      "modelRuntimeProvider": false,
+      "backendModelCatalogRequired": true,
+      "hardwareAcceleration": "unknown",
+      "modelId": NSNull(),
+      "modelPresent": false,
+      "permissionGranted": false,
+      "state": "degraded",
+      "fallbackAvailable": true,
+      "fallbackProviderId": "local:Orchestrator:llama-cpp",
+      "reason": "backend_model_catalog_and_device_model_proof_required",
+      "evidenceSource": "ios-native-local-light-adapter",
+      "secretsRedacted": true
     ]
   }
 

@@ -54,6 +54,7 @@ export interface TauriCommandNames {
   androidBaselineStatus: string
   iosNativePluginManifest: string
   iosInvocationStatus: string
+  iosLocalLightInferenceStatus: string
   iosInvokeAction: string
   logTail: string
   secureStorageGet: string
@@ -283,6 +284,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidBaselineStatus: 'aurora_android_baseline_status',
   iosNativePluginManifest: 'aurora_ios_native_plugin_manifest',
   iosInvocationStatus: 'aurora_ios_invocation_status',
+  iosLocalLightInferenceStatus: 'aurora_ios_local_light_inference_status',
   iosInvokeAction: 'aurora_ios_invoke_action',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
@@ -447,6 +449,10 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getIosInvocationStatus(): Promise<TauriIosInvocationStatus> {
     return this.invokeCommand<TauriIosInvocationStatus>(this.commands.iosInvocationStatus)
+  }
+
+  getIosLocalLightInferenceStatus(): Promise<AndroidLocalLightInferenceStatus> {
+    return this.invokeCommand<AndroidLocalLightInferenceStatus>(this.commands.iosLocalLightInferenceStatus)
   }
 
   invokeIosAuroraAction(request: TauriIosInvokeActionRequest): Promise<TauriIosInvokeActionResult> {

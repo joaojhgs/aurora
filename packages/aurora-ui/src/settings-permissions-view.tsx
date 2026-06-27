@@ -681,6 +681,7 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosSiriReplacement': 'iOS Siri Replacement Unsupported',
     'aurora.iosAppIntents': 'iOS App Intents',
     'aurora.iosShortcuts': 'iOS Shortcuts',
+    'aurora.iosLocalLightInference': 'iOS Local Light Inference',
     'ios.voiceForegroundCapture': 'Foreground voice capture',
     'ios.notifications': 'iOS notifications',
     'ios.backgroundVoice': 'Background voice',
@@ -690,7 +691,10 @@ function nativePermissionLabel(name: string): string {
     'ios.shareExtension': 'Share extension',
     'ios.widgets': 'Widgets',
     'ios.deepLinks': 'Deep links',
-    'ios.siriReplacement': 'Siri replacement'
+    'ios.siriReplacement': 'Siri replacement',
+    'ios.localLightInference.provider': 'iOS local-light inference provider',
+    'ios.localLightInference.modelRuntime': 'iOS local-light model runtime',
+    'ios.localLightInference.fallback': 'iOS local-light fallback'
   }
   if (labels[name]) return labels[name]
   return name
@@ -737,6 +741,9 @@ function nativePermissionDetail(
   }
   if (name === 'ios.siriReplacement') {
     return 'iOS does not allow Aurora to replace Siri; only Siri/Shortcuts/App Intents integration is shown.'
+  }
+  if (name === 'aurora.iosLocalLightInference' || name.startsWith('ios.localLightInference')) {
+    return 'iOS Core ML/MLC/ExecuTorch-style local-light inference is a capability-gated provider; backend model catalog and device/model proof are required before selection.'
   }
   if (granted) return 'Native manifest reports this permission as granted.'
   if (requestEnabled) return 'Native manifest advertises an Android permission request command for this state.'

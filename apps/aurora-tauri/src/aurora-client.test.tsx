@@ -20,6 +20,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     await expect(runtime.nativePermissionStatus()).resolves.toBeNull()
     await expect(runtime.iosSecureStorageStatus()).resolves.toBeNull()
     await expect(runtime.iosBiometricStatus()).resolves.toBeNull()
+    await expect(runtime.iosLocalLightInferenceStatus()).resolves.toBeNull()
     await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
     await expect(runtime.shutdown()).resolves.toBeUndefined()
   })
@@ -34,6 +35,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(runtime.client.transport.kind).toBe('http')
     await expect(runtime.sidecarStatus()).resolves.toBeNull()
     await expect(runtime.iosSecureStorageStatus()).resolves.toBeNull()
+    await expect(runtime.iosLocalLightInferenceStatus()).resolves.toBeNull()
     await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
   })
 
@@ -50,6 +52,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('iOS Keychain')
     expect(markup).toContain('Face ID / Touch ID')
     expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('local-light inference')
     expect(markup).toContain('no Siri replacement claim')
     expect(markup).toContain('Android baseline')
     expect(markup).toContain('Assistant role probe')

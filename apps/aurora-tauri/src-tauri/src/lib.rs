@@ -120,6 +120,7 @@ struct NativeCapabilityManifest {
     mobile_integrations: Vec<NativeMobileIntegration>,
     platform_limitations: Vec<NativePlatformLimitation>,
     ios_invocation: IosInvocationStatus,
+    local_light_inference: LocalLightInferenceStatus,
     entrypoints: Vec<IosNativeEntrypoint>,
     last_entrypoint_payload: IosEntrypointPayload,
     evidence_source: String,
@@ -166,6 +167,27 @@ struct IosInvocationStatus {
     backend_handoff_required: bool,
     privacy_labels: Vec<String>,
     state: String,
+    reason: String,
+    evidence_source: String,
+    secrets_redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalLightInferenceStatus {
+    platform: String,
+    provider_id: String,
+    available: bool,
+    requestable: bool,
+    model_runtime_provider: bool,
+    backend_model_catalog_required: bool,
+    hardware_acceleration: String,
+    model_id: Option<String>,
+    model_present: bool,
+    permission_granted: bool,
+    state: String,
+    fallback_available: bool,
+    fallback_provider_id: Option<String>,
     reason: String,
     evidence_source: String,
     secrets_redacted: bool,
@@ -905,6 +927,27 @@ async fn aurora_ios_invocation_status(
 }
 
 #[tauri::command]
+async fn aurora_ios_local_light_inference_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "localLightInferenceStatus", json!({}))?;
+        log_ios_native_plugin_payload("localLightInferenceStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Aurora iOS local-light inference status is only available in the iOS Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
 async fn aurora_ios_entrypoint_payload(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
@@ -1453,6 +1496,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.ios.widgets".to_string(), ios_platform);
     permissions.insert("aurora.ios.fileAssociations".to_string(), ios_platform);
     permissions.insert("aurora.ios.entrypointPayload".to_string(), ios_platform);
+    permissions.insert("aurora.iosLocalLightInference".to_string(), false);
 
     let mut capabilities = BTreeMap::new();
     capabilities.insert("desktop.thinGateway".to_string(), desktop_platform);
@@ -1488,6 +1532,9 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("ios.widgets".to_string(), ios_platform);
     capabilities.insert("ios.fileAssociations".to_string(), ios_platform);
     capabilities.insert("ios.entrypointPayload".to_string(), ios_platform);
+    capabilities.insert("ios.localLightInference.provider".to_string(), ios_platform);
+    capabilities.insert("ios.localLightInference.modelRuntime".to_string(), false);
+    capabilities.insert("ios.localLightInference.fallback".to_string(), ios_platform);
     capabilities.insert(
         "ios.keychain.secureCredentialStorage".to_string(),
         ios_platform,
@@ -1512,6 +1559,15 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         "aurora.iosBackgroundAudio".to_string(),
         "unsupported_platform".to_string(),
     );
+    permission_states.insert(
+        "aurora.iosLocalLightInference".to_string(),
+        if ios_platform {
+            "degraded"
+        } else {
+            "needs_native_permission"
+        }
+        .to_string(),
+    );
     let mut capability_states = ios_state_map("ios.", ios_platform);
     capability_states.insert(
         "ios.voiceForegroundCapture".to_string(),
@@ -1534,6 +1590,28 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         }
         .to_string(),
     );
+    capability_states.insert(
+        "ios.localLightInference.provider".to_string(),
+        if ios_platform {
+            "degraded"
+        } else {
+            "needs_native_permission"
+        }
+        .to_string(),
+    );
+    capability_states.insert(
+        "ios.localLightInference.modelRuntime".to_string(),
+        "needs_native_permission".to_string(),
+    );
+    capability_states.insert(
+        "ios.localLightInference.fallback".to_string(),
+        if ios_platform {
+            "fallback"
+        } else {
+            "needs_native_permission"
+        }
+        .to_string(),
+    );
 
     NativeCapabilityManifest {
         platform: native_platform().to_string(),
@@ -1544,6 +1622,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         mobile_integrations: ios_mobile_integrations(ios_platform),
         platform_limitations: ios_platform_limitations(),
         ios_invocation: ios_invocation_status(ios_platform),
+        local_light_inference: ios_local_light_inference_status(ios_platform),
         entrypoints: ios_native_entrypoints(ios_platform),
         last_entrypoint_payload: ios_entrypoint_payload(),
         evidence_source: "tauri-ios-native-manifest".to_string(),
@@ -1657,6 +1736,18 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
         },
         NativeMobileIntegration {
             platform: "ios".to_string(),
+            id: "iosLocalLightInference".to_string(),
+            label: "iOS local-light inference provider".to_string(),
+            support: supported_path.to_string(),
+            capability: "ios.localLightInference.provider".to_string(),
+            permission: Some("aurora.iosLocalLightInference".to_string()),
+            privacy_class: "personal".to_string(),
+            evidence_source: "ios-native-local-light-adapter".to_string(),
+            user_copy: "Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.".to_string(),
+            verifier: "tauri ios build plus simulator/device nativeCapabilityManifest payload smoke".to_string(),
+        },
+        NativeMobileIntegration {
+            platform: "ios".to_string(),
             id: "siriReplacement".to_string(),
             label: "Siri replacement".to_string(),
             support: "unsupported".to_string(),
@@ -1668,6 +1759,35 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
             verifier: "copy and capability review; no executable route should be exposed".to_string(),
         },
     ]
+}
+
+fn ios_local_light_inference_status(available: bool) -> LocalLightInferenceStatus {
+    LocalLightInferenceStatus {
+        platform: "ios".to_string(),
+        provider_id: "native:mobile-local-light".to_string(),
+        available: false,
+        requestable: false,
+        model_runtime_provider: false,
+        backend_model_catalog_required: true,
+        hardware_acceleration: "unknown".to_string(),
+        model_id: None,
+        model_present: false,
+        permission_granted: false,
+        state: if available {
+            "degraded".to_string()
+        } else {
+            "needs_native_permission".to_string()
+        },
+        fallback_available: available,
+        fallback_provider_id: if available {
+            Some("local:Orchestrator:llama-cpp".to_string())
+        } else {
+            None
+        },
+        reason: "backend_model_catalog_and_device_model_proof_required".to_string(),
+        evidence_source: "ios-native-local-light-adapter".to_string(),
+        secrets_redacted: true,
+    }
 }
 
 fn ios_invocation_status(available: bool) -> IosInvocationStatus {
@@ -2334,6 +2454,7 @@ pub fn run() {
             aurora_android_native_plugin_payload,
             aurora_ios_native_plugin_manifest,
             aurora_ios_invocation_status,
+            aurora_ios_local_light_inference_status,
             aurora_ios_entrypoint_payload,
             aurora_ios_invoke_action,
             aurora_log_tail,
@@ -2653,6 +2774,7 @@ mod tests {
         let ios_permission = include_str!("../permissions/aurora-ios-native-plugin.toml");
         assert!(ios_permission.contains("aurora_ios_native_plugin_manifest"));
         assert!(ios_permission.contains("aurora_ios_invocation_status"));
+        assert!(ios_permission.contains("aurora_ios_local_light_inference_status"));
         assert!(ios_permission.contains("aurora_ios_entrypoint_payload"));
         assert!(ios_permission.contains("aurora_ios_invoke_action"));
         assert!(ios_permission.contains("aurora_ios_secure_storage_status"));
@@ -2669,6 +2791,7 @@ mod tests {
         assert!(swift_plugin.contains("@_cdecl(\"init_plugin_aurora_native\")"));
         assert!(swift_plugin.contains("nativeCapabilityManifest"));
         assert!(swift_plugin.contains("invocationStatus"));
+        assert!(swift_plugin.contains("localLightInferenceStatus"));
         assert!(swift_plugin.contains("voiceStatus"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
@@ -2679,6 +2802,8 @@ mod tests {
         assert!(swift_plugin.contains("iosAdminUnlock"));
         assert!(swift_plugin.contains("\"ios.shareExtension\": true"));
         assert!(swift_plugin.contains("\"ios.fileAssociations\": true"));
+        assert!(swift_plugin.contains("\"ios.localLightInference.provider\": true"));
+        assert!(swift_plugin.contains("\"ios.localLightInference.modelRuntime\": false"));
         assert!(swift_plugin.contains("\"ios.keychain.secureCredentialStorage\": true"));
         assert!(swift_plugin.contains("\"ios.biometric.adminUnlock\": true"));
         assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": false"));

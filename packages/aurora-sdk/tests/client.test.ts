@@ -506,6 +506,14 @@ describe('AuroraClient', () => {
         }),
         expect.objectContaining({
           platform: 'ios',
+          id: 'iosLocalLightInference',
+          capability: 'ios.localLightInference.provider',
+          support: 'supported-path',
+          backendMethod: 'Orchestrator.GetModelRuntimeCatalog',
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
           id: 'siriReplacement',
           support: 'unsupported',
           userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
@@ -536,6 +544,28 @@ describe('AuroraClient', () => {
         privacyClass: 'personal',
         requiresConfirmation: false,
         siriReplacement: false
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.localLightInference.provider']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        privacyClass: 'personal',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerIdentity: 'native:ios',
+            routeability: 'degraded',
+            requiredAction: 'use the supported subset or complete native integration'
+          })
+        ])
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.localLightInference).toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        backendModelCatalogRequired: true,
+        reason: 'backend_model_catalog_and_device_model_proof_required'
       })
     )
     expect(graph.explain('native:ios:summarizeSharedContentShortcut')).toEqual(
@@ -2753,6 +2783,8 @@ describe('AuroraClient', () => {
               reason: 'Face ID/Touch ID requires iOS',
               details: { framework: 'LocalAuthentication', secretsRedacted: true, privacyClass: 'credential' }
             }
+          case 'aurora_ios_local_light_inference_status':
+            return iosNativeCapabilityManifestFixture.localLightInference
           case 'aurora_ios_admin_unlock':
             throw { detail: { code: 'unsupported_feature', message: 'iOS admin unlock requires Face ID/Touch ID' } }
           case 'aurora_biometric_admin_unlock_status':
@@ -2863,6 +2895,15 @@ describe('AuroraClient', () => {
         details: expect.objectContaining({ framework: 'LocalAuthentication', secretsRedacted: true })
       })
     )
+    await expect(transport.getIosLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        backendModelCatalogRequired: true,
+        secretsRedacted: true
+      })
+    )
     await expect(
       transport.iosAdminUnlock({ reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' })
     ).rejects.toMatchObject({ code: 'unsupported_feature' })
@@ -2926,6 +2967,7 @@ describe('AuroraClient', () => {
       'aurora_secure_storage_delete',
       'aurora_ios_secure_storage_status',
       'aurora_ios_biometric_status',
+      'aurora_ios_local_light_inference_status',
       'aurora_ios_admin_unlock',
       'aurora_biometric_admin_unlock_status',
       'aurora_biometric_admin_unlock',
@@ -2941,12 +2983,12 @@ describe('AuroraClient', () => {
     expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
     expect(calls[12]?.args).toEqual({ key: 'session' })
     expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[17]?.args).toEqual({
+    expect(calls[18]?.args).toEqual({
       request: { reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' }
     })
-    expect(calls[20]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[21]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[23]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[21]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[22]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[24]?.args).toEqual({ options: { mode: 'read' } })
   })
 
   it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {
@@ -3187,6 +3229,7 @@ describe('AuroraClient', () => {
       capabilities: {
         'ios.appIntents': true,
         'ios.shortcuts': true,
+        'ios.localLightInference.provider': true,
         'ios.shareExtension': false,
         'ios.widgets': false,
         'ios.deepLinks': false,
@@ -3213,6 +3256,8 @@ describe('AuroraClient', () => {
               requiresBackendEvidence: true,
               secretsRedacted: true
             }
+          case 'aurora_ios_local_light_inference_status':
+            return iosNativeCapabilityManifestFixture.localLightInference
           case 'aurora_ios_invoke_action':
             return {
               accepted: true,
@@ -3249,6 +3294,15 @@ describe('AuroraClient', () => {
         secretsRedacted: true
       })
     )
+    await expect(transport.getIosLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        fallbackAvailable: true,
+        backendModelCatalogRequired: true
+      })
+    )
     await expect(
       transport.invokeIosAuroraAction({
         action: 'app-intent.open-assistant',
@@ -3266,9 +3320,10 @@ describe('AuroraClient', () => {
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_ios_native_plugin_manifest',
       'aurora_ios_invocation_status',
+      'aurora_ios_local_light_inference_status',
       'aurora_ios_invoke_action'
     ])
-    expect(calls[2]?.args).toEqual({
+    expect(calls[3]?.args).toEqual({
       request: {
         action: 'app-intent.open-assistant',
         correlationId: 'corr-ios-action'

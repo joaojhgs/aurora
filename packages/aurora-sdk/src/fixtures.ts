@@ -3744,6 +3744,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.ios.widgets': true,
     'aurora.ios.fileAssociations': true,
     'aurora.ios.entrypointPayload': true,
+    'aurora.iosLocalLightInference': false,
     'aurora.iosVoiceStatus': true,
     'aurora.iosBackgroundStatus': true,
     'aurora.iosMicrophoneCapture': false,
@@ -3760,6 +3761,9 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.deepLinks': true,
     'ios.fileAssociations': true,
     'ios.entrypointPayload': true,
+    'ios.localLightInference.provider': true,
+    'ios.localLightInference.modelRuntime': false,
+    'ios.localLightInference.fallback': true,
     'ios.voiceForegroundCapture': false,
     'ios.notifications': false,
     'ios.backgroundVoice': false,
@@ -3776,6 +3780,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.ios.widgets': 'available',
     'aurora.ios.fileAssociations': 'available',
     'aurora.ios.entrypointPayload': 'available',
+    'aurora.iosLocalLightInference': 'degraded',
     'aurora.iosMicrophoneCapture': 'needs_native_permission',
     'aurora.iosBackgroundAudio': 'unsupported_platform',
     'aurora.iosSiriReplacement': 'unsupported_platform'
@@ -3788,6 +3793,9 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'ios.deepLinks': 'available',
     'ios.fileAssociations': 'available',
     'ios.entrypointPayload': 'available',
+    'ios.localLightInference.provider': 'degraded',
+    'ios.localLightInference.modelRuntime': 'needs_native_permission',
+    'ios.localLightInference.fallback': 'fallback',
     'ios.voiceForegroundCapture': 'needs_native_permission',
     'ios.notifications': 'needs_native_permission',
     'ios.backgroundVoice': 'unsupported_platform',
@@ -3925,6 +3933,22 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
     },
     {
       platform: 'ios',
+      id: 'iosLocalLightInference',
+      label: 'iOS local-light inference provider',
+      support: 'supported-path',
+      capability: 'ios.localLightInference.provider',
+      permission: 'aurora.iosLocalLightInference',
+      invocation: 'tauri-command',
+      backendMethod: 'Orchestrator.GetModelRuntimeCatalog',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'ios-native-local-light-adapter',
+      userCopy: 'Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.',
+      verifier: 'tauri ios build plus simulator/device nativeCapabilityManifest payload smoke'
+    },
+    {
+      platform: 'ios',
       id: 'siriReplacement',
       label: 'Siri replacement',
       support: 'unsupported',
@@ -3938,6 +3962,24 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       verifier: 'copy and capability review; no executable route should be exposed'
     }
   ],
+  localLightInference: {
+    platform: 'ios',
+    providerId: 'native:mobile-local-light',
+    available: false,
+    requestable: false,
+    modelRuntimeProvider: false,
+    backendModelCatalogRequired: true,
+    hardwareAcceleration: 'unknown',
+    modelId: null,
+    modelPresent: false,
+    permissionGranted: false,
+    state: 'degraded',
+    fallbackAvailable: true,
+    fallbackProviderId: 'local:Orchestrator:llama-cpp',
+    reason: 'backend_model_catalog_and_device_model_proof_required',
+    evidenceSource: 'ios-native-local-light-adapter',
+    secretsRedacted: true
+  },
   platformLimitations: [
     {
       platform: 'ios',
