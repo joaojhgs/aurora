@@ -1,0 +1,58 @@
+name: QA-008 Transport Parity Gate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  transport-parity:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Python dependencies
+        run: |
+          pip install uv
+          uv sync --extra gateway --extra mode-processes --extra test-e2e
+
+      - name: Install workspace packages
+        run: pnpm install --frozen-lockfile
+
+      - name: Run QA-008 transport parity gate
+        env:
+          REDIS_URL: redis://localhost:6379
+          AURORA_ARCHITECTURE_MODE: processes
+        run: uv run --extra gateway --extra mode-processes --extra test-e2e python scripts/transport_parity_gate.py --execute-commands --output-dir .omx/reports/transport-parity/ci
+
+      - name: Upload QA-008 transport parity artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-008-transport-parity
+          path: .omx/reports/transport-parity/ci
