@@ -3068,7 +3068,8 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'aurora.android.appWidget': true,
     'aurora.android.appShortcut': true,
     'aurora.android.quickTile': true,
-    'aurora.android.entrypointPayload': true
+    'aurora.android.entrypointPayload': true,
+    'aurora.android.localLightInference': false
   },
   capabilities: {
     'android.assistantRole.status': true,
@@ -3099,7 +3100,10 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'android.appShortcut': true,
     'android.quickTile': true,
     'android.entrypointPayload': true,
-    'android.fallbackEntrypoints': true
+    'android.fallbackEntrypoints': true,
+    'android.localLightInference.provider': true,
+    'android.localLightInference.modelRuntime': false,
+    'android.localLightInference.fallback': true
   },
   permissionStates: {
     'aurora.android.assistantRoleStatus': 'available',
@@ -3123,7 +3127,8 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'aurora.android.appWidget': 'fallback',
     'aurora.android.appShortcut': 'fallback',
     'aurora.android.quickTile': 'fallback',
-    'aurora.android.entrypointPayload': 'available'
+    'aurora.android.entrypointPayload': 'available',
+    'aurora.android.localLightInference': 'degraded'
   },
   capabilityStates: {
     'android.assistantRole.status': 'available',
@@ -3154,7 +3159,10 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     'android.appShortcut': 'fallback',
     'android.quickTile': 'fallback',
     'android.entrypointPayload': 'available',
-    'android.fallbackEntrypoints': 'fallback'
+    'android.fallbackEntrypoints': 'fallback',
+    'android.localLightInference.provider': 'degraded',
+    'android.localLightInference.modelRuntime': 'needs_native_permission',
+    'android.localLightInference.fallback': 'fallback'
   },
   mobileIntegrations: [
     {
@@ -3216,6 +3224,18 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
       evidenceSource: 'android-manifest-merge-native-plugin',
       userCopy: 'Quick Settings tile service is packaged; tile placement remains user/OEM controlled.',
       verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidLocalLightInference',
+      label: 'Android local-light inference provider',
+      support: 'supported-path',
+      capability: 'android.localLightInference.provider',
+      permission: 'aurora.android.localLightInference',
+      privacyClass: 'personal',
+      evidenceSource: 'android-native-local-light-adapter',
+      userCopy: 'Native adapter reports Android local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.',
+      verifier: 'tauri android build plus emulator/device nativeCapabilityManifest payload smoke'
     }
   ],
   assistantRole: {
@@ -3233,6 +3253,24 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     fallbackAvailable: true,
     reason: 'requestable',
     evidenceSource: 'android-rolemanager-package-manager',
+    secretsRedacted: true
+  },
+  localLightInference: {
+    platform: 'android',
+    providerId: 'native:mobile-local-light',
+    available: false,
+    requestable: false,
+    modelRuntimeProvider: false,
+    backendModelCatalogRequired: true,
+    hardwareAcceleration: 'unknown',
+    modelId: null,
+    modelPresent: false,
+    permissionGranted: false,
+    state: 'degraded',
+    fallbackAvailable: true,
+    fallbackProviderId: 'local:Orchestrator:llama-cpp',
+    reason: 'backend_model_catalog_and_device_model_proof_required',
+    evidenceSource: 'android-native-local-light-adapter',
     secretsRedacted: true
   },
   voiceForegroundService: {

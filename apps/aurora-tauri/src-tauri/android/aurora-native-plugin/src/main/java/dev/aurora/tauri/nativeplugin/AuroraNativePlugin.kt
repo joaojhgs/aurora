@@ -60,6 +60,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val assistantRolePackageQualified = assistantRole.getBoolean("packageQualified")
         val assistantRoleDenied = assistantRole.getBoolean("denied")
         val assistantRoleOemUnavailable = assistantRole.getBoolean("oemUnavailable")
+        val localLightInference = localLightInferenceStatusObject()
 
         val permissions = JSObject()
         permissions.put("aurora.android.assistantRoleStatus", true)
@@ -84,6 +85,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.appShortcut", true)
         permissions.put("aurora.android.quickTile", true)
         permissions.put("aurora.android.entrypointPayload", true)
+        permissions.put("aurora.android.localLightInference", localLightInference.getBoolean("permissionGranted"))
 
         val capabilities = JSObject()
         capabilities.put("android.assistantRole.status", true)
@@ -115,6 +117,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.quickTile", true)
         capabilities.put("android.entrypointPayload", true)
         capabilities.put("android.fallbackEntrypoints", true)
+        capabilities.put("android.localLightInference.provider", true)
+        capabilities.put("android.localLightInference.modelRuntime", localLightInference.getBoolean("modelRuntimeProvider"))
+        capabilities.put("android.localLightInference.fallback", localLightInference.getBoolean("fallbackAvailable"))
 
         val permissionStates = JSObject()
         permissionStates.put("aurora.android.assistantRoleStatus", "available")
@@ -139,6 +144,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.appShortcut", "fallback")
         permissionStates.put("aurora.android.quickTile", "fallback")
         permissionStates.put("aurora.android.entrypointPayload", "available")
+        permissionStates.put("aurora.android.localLightInference", localLightInference.getString("state"))
 
         val capabilityStates = JSObject()
         capabilityStates.put("android.assistantRole.status", "available")
@@ -170,6 +176,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.quickTile", "fallback")
         capabilityStates.put("android.entrypointPayload", "available")
         capabilityStates.put("android.fallbackEntrypoints", "fallback")
+        capabilityStates.put("android.localLightInference.provider", localLightInference.getString("state"))
+        capabilityStates.put("android.localLightInference.modelRuntime", if (localLightInference.getBoolean("modelRuntimeProvider")) "available" else "needs_native_permission")
+        capabilityStates.put("android.localLightInference.fallback", if (localLightInference.getBoolean("fallbackAvailable")) "fallback" else "unsupported_platform")
 
         val ret = JSObject()
         ret.put("platform", "android")
@@ -180,6 +189,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("mobileIntegrations", mobileIntegrationsArray())
         ret.put("entrypoints", entrypoints)
         ret.put("assistantRole", assistantRole)
+        ret.put("localLightInference", localLightInference)
         ret.put("voiceForegroundService", voiceForeground)
         ret.put("adminUnlock", adminUnlock)
         ret.put("secureStorage", secureStorageStatusObject())
@@ -243,6 +253,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("evidenceSource", "android-rolemanager-package-manager")
         ret.put("secretsRedacted", true)
         invoke.resolve(ret)
+    }
+
+    @Command
+    fun localLightInferenceStatus(invoke: Invoke) {
+        invoke.resolve(localLightInferenceStatusObject())
     }
 
     @Command
@@ -553,6 +568,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         integrations.put(mobileIntegration("androidStaticShortcut", "Android launcher shortcut", "supported", "android.appShortcut", "aurora.android.appShortcut", "personal", "Static shortcut metadata is packaged and opens Aurora through the native entrypoint activity."))
         integrations.put(mobileIntegration("androidWidget", "Android home-screen widget", "supported-path", "android.appWidget", "aurora.android.appWidget", "personal", "Widget provider is packaged; device launcher placement remains user/OEM controlled."))
         integrations.put(mobileIntegration("androidQuickTile", "Android Quick Settings tile", "supported-path", "android.quickTile", "aurora.android.quickTile", "personal", "Quick Settings tile service is packaged; tile placement remains user/OEM controlled."))
+        integrations.put(mobileIntegration("androidLocalLightInference", "Android local-light inference provider", "supported-path", "android.localLightInference.provider", "aurora.android.localLightInference", "personal", "Native adapter reports Android local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection."))
         return integrations
     }
 
@@ -590,6 +606,27 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("path", payload.opt("path"))
         ret.put("categories", payload.optJSONArray("categories") ?: JSArray())
         ret.put("extras", payload.optJSONArray("extras") ?: JSArray())
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun localLightInferenceStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("providerId", "native:mobile-local-light")
+        ret.put("available", false)
+        ret.put("requestable", false)
+        ret.put("modelRuntimeProvider", false)
+        ret.put("backendModelCatalogRequired", true)
+        ret.put("hardwareAcceleration", "unknown")
+        ret.put("modelId", JSONObject.NULL)
+        ret.put("modelPresent", false)
+        ret.put("permissionGranted", false)
+        ret.put("state", "degraded")
+        ret.put("fallbackAvailable", true)
+        ret.put("fallbackProviderId", "local:Orchestrator:llama-cpp")
+        ret.put("reason", "backend_model_catalog_and_device_model_proof_required")
+        ret.put("evidenceSource", "android-native-local-light-adapter")
         ret.put("secretsRedacted", true)
         return ret
     }

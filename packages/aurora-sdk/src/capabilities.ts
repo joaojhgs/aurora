@@ -471,6 +471,9 @@ function nativeRequiredPermissions(capability: string, permissions: Record<strin
   if (normalized.includes('appshortcut')) requestedTokens.push('appshortcut', 'shortcut')
   if (normalized.includes('quicktile')) requestedTokens.push('quicktile', 'tile')
   if (normalized.includes('entrypointpayload')) requestedTokens.push('entrypointpayload')
+  if (normalized.includes('locallight') || normalized.includes('inference') || normalized.includes('modelruntime')) {
+    requestedTokens.push('locallight', 'inference', 'modelruntime')
+  }
   if (normalized.includes('biometric')) requestedTokens.push('biometric')
   if (normalized.includes('adminunlock')) requestedTokens.push('adminunlock', 'biometric')
   if (normalized.includes('localnetwork')) requestedTokens.push('localnetwork')
@@ -495,6 +498,9 @@ function nativeRequiredPermissions(capability: string, permissions: Record<strin
 function nativePrivacyClass(capability: string): PrivacyClass {
   const normalized = capability.toLowerCase()
   if (normalized.includes('microphone') || normalized.includes('audio')) return 'raw-audio'
+  if (normalized.includes('locallight') || normalized.includes('inference') || normalized.includes('modelruntime')) {
+    return 'personal'
+  }
   if (normalized.includes('adminunlock')) return 'admin-critical'
   if (normalized.includes('credential') || normalized.includes('storage')) return 'credential'
   return 'personal'

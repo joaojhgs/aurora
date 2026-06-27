@@ -7,6 +7,7 @@ import {
   backupListFixture,
   buildAdminOverviewManifest,
   buildCapabilityGraph,
+  androidNativeCapabilityManifestFixture,
   capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
   cloneFixture,
@@ -91,6 +92,7 @@ import {
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
   meshPeerErrorMessage,
@@ -224,6 +226,22 @@ describe('Aurora production shell', () => {
       })
     )
     expect(model.mobileLocalLightState).toBe('unsupported')
+
+    const nativeModel = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      loadState: 'ready'
+    })
+    expect(nativeModel.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        routeLabel: 'native:android / native:mobile-local-light',
+        blockers: expect.arrayContaining(['backend_model_catalog_and_device_model_proof_required'])
+      })
+    )
+    expect(nativeModel.mobileLocalLightState).toBe('degraded')
+    expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
   it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
@@ -234,7 +252,12 @@ describe('Aurora production shell', () => {
     })
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const markup = renderToStaticMarkup(
-      <ModelsView client={client} initialCatalog={modelRuntimeCatalogFixture} initialGraph={graph} />
+      <ModelsView
+        client={client}
+        initialCatalog={modelRuntimeCatalogFixture}
+        initialGraph={graph}
+        initialNativeManifest={androidNativeCapabilityManifestFixture}
+      />
     )
 
     expect(markup).toContain('Models and runtime')
@@ -247,7 +270,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Benchmark action stays disabled')
     expect(markup).toContain('Select: Backend model selection contract is not active')
     expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
-    expect(markup).toContain('native_provider_missing')
+    expect(markup).toContain('backend_model_catalog_and_device_model_proof_required')
+    expect(markup).toContain('android-native-local-light-adapter')
     expect(markup).toContain('Mobile local-light')
 
     const errorMarkup = renderToStaticMarkup(
@@ -322,6 +346,29 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Request unavailable')
     expect(markup).toContain('Granted')
     expect(markup).toContain('Fallback is visible as degraded capability evidence.')
+  })
+
+  it('renders Android local-light inference as a degraded native provider in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const localLight = model.nativePermissions.find((permission) => permission.id === 'aurora.android.localLightInference')
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(localLight).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        granted: false,
+        requestEnabled: false
+      })
+    )
+    expect(markup).toContain('Android Local Light Inference')
+    expect(markup).toContain('Native manifest reports a degraded or partial platform path for this feature.')
   })
 
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {

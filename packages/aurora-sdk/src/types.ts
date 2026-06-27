@@ -1566,6 +1566,7 @@ export interface NativeCapabilityManifest {
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
   assistantRole?: AndroidAssistantRoleStatus | null
+  localLightInference?: AndroidLocalLightInferenceStatus | null
   voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
   adminUnlock?: AndroidAdminUnlockStatus | null
   secureStorage?: AndroidSecureStorageStatus | null
@@ -1687,6 +1688,25 @@ export interface AndroidAssistantRoleRequestResult {
   requestCode?: number
   status: AndroidAssistantRoleStatus
   reason?: string
+}
+
+export interface AndroidLocalLightInferenceStatus {
+  platform: 'android' | string
+  providerId: string
+  available: boolean
+  requestable: boolean
+  modelRuntimeProvider: boolean
+  backendModelCatalogRequired: boolean
+  hardwareAcceleration: 'npu' | 'gpu' | 'cpu' | 'unknown' | string
+  modelId: string | null
+  modelPresent: boolean
+  permissionGranted: boolean
+  state: AndroidNativeState
+  fallbackAvailable: boolean
+  fallbackProviderId: string | null
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
 }
 
 export interface AndroidFallbackEntrypoint {
