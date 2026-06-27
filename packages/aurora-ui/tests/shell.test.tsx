@@ -18,6 +18,7 @@ import {
   modelRuntimeCatalogFixture,
   meshPeerListFixture,
   meshStatusFixture,
+  nativeCapabilityManifestFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -320,6 +321,10 @@ describe('Aurora production shell', () => {
       'askAuroraShortcut',
       'summarizeSharedContentShortcut',
       'stopAuroraSpeechAppIntent',
+      'shareExtension',
+      'deepLinks',
+      'widgets',
+      'fileAssociations',
       'siriReplacement'
     ])
     expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
@@ -331,6 +336,20 @@ describe('Aurora production shell', () => {
       })
     )
     expect(model.nativeIntegrations.find((integration) => integration.id === 'summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'fileAssociations')).toEqual(
       expect.objectContaining({
         state: 'degraded',
         privacyClass: 'sensitive',
@@ -450,6 +469,42 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Share sheet')
     expect(markup).toContain('Android Notification')
     expect(markup).toContain('assistant_role_user_grant_required')
+  })
+
+  it('renders iOS native integration states and no-Siri-replacement limits in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...nativeCapabilityManifestFixture,
+        platform: 'ios'
+      },
+      transportKind: 'native-mobile'
+    })
+    const nativeManifest = { ...nativeCapabilityManifestFixture, platform: 'ios' as const }
+    const snapshot = snapshotFromGraph('native-mobile', graph, nativeManifest)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.nativeIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'fileAssociations', state: 'degraded' }),
+        expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
+      ])
+    )
+    expect(model.nativeLimitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'noSiriReplacement',
+          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+        })
+      ])
+    )
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('iOS share extension intake')
+    expect(markup).toContain('iOS file associations')
+    expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.')
   })
 
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {
@@ -817,6 +872,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Mesh Peer')
     expect(markup).toContain('Android Thin')
     expect(markup).toContain('iOS Thin')
+    expect(markup).toContain('iOS Local-Light')
+    expect(markup).toContain('iOS cannot replace Siri')
     expect(markup).toContain('Offline Local')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')

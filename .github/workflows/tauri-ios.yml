@@ -9,6 +9,8 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - ".github/scripts/ios_app_intent_smoke.swift"
+      - ".github/scripts/ios_entrypoint_payload_smoke.swift"
       - ".github/workflows/tauri-ios.yml"
   workflow_dispatch:
 
@@ -83,8 +85,34 @@ jobs:
           grep '"privacyClass":"personal"' /tmp/aurora-ios-app-intent-smoke.json
           grep '"siriReplacement":false' /tmp/aurora-ios-app-intent-smoke.json
 
+      - name: Smoke IOS-004 entrypoint payload handoffs
+        run: |
+          xcrun swiftc \
+            -parse-as-library \
+            apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift \
+            .github/scripts/ios_entrypoint_payload_smoke.swift \
+            -o /tmp/aurora-ios-entrypoint-payload-smoke
+          /tmp/aurora-ios-entrypoint-payload-smoke | tee /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_share_extension"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_deep_link"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_widget"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_file_association"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"share_extension"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"deep_link"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"widget:open-assistant"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"file_association"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"backendHandoffRequired":true' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"secretsRedacted":true' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"siriReplacement":false' /tmp/aurora-ios-entrypoint-payload-smoke.json
+
       - name: Upload Aurora App Intent smoke artifact
         uses: actions/upload-artifact@v4
         with:
           name: aurora-ios-app-intent-smoke
           path: /tmp/aurora-ios-app-intent-smoke.json
+
+      - name: Upload Aurora IOS-004 entrypoint payload smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-entrypoint-payload-smoke
+          path: /tmp/aurora-ios-entrypoint-payload-smoke.json

@@ -481,6 +481,31 @@ describe('AuroraClient', () => {
         }),
         expect.objectContaining({
           platform: 'ios',
+          id: 'shareExtension',
+          capability: 'ios.shareExtension',
+          support: 'supported-path',
+          privacyClass: 'sensitive'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'deepLinks',
+          capability: 'ios.deepLinks',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'widgets',
+          capability: 'ios.widgets',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'fileAssociations',
+          capability: 'ios.fileAssociations',
+          support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
           id: 'siriReplacement',
           support: 'unsupported',
           userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
@@ -514,6 +539,20 @@ describe('AuroraClient', () => {
       })
     )
     expect(graph.explain('native:ios:summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:fileAssociations')).toEqual(
       expect.objectContaining({
         state: 'degraded',
         routeable: false,
@@ -2737,6 +2776,13 @@ describe('AuroraClient', () => {
             return { paths: ['/tmp/a.txt'], cancelled: false }
           case 'aurora_secure_file_handle_open':
             return { paths: ['/tmp/a.txt'], cancelled: false }
+          case 'aurora_ios_entrypoint_payload':
+            return {
+              payload: nativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: nativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'tauri-ios-native-manifest',
+              secretsRedacted: true
+            }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -2814,6 +2860,16 @@ describe('AuroraClient', () => {
       paths: ['/tmp/a.txt'],
       cancelled: false
     })
+    await expect(transport.getIOSEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ invocation: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'ios_share_extension', backendRequired: true }),
+          expect.objectContaining({ id: 'ios_file_association', payloadCommand: 'iosEntrypointPayload' })
+        ]),
+        secretsRedacted: true
+      })
+    )
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
@@ -2836,7 +2892,8 @@ describe('AuroraClient', () => {
       'aurora_local_file_read',
       'aurora_local_file_write',
       'aurora_local_file_pick',
-      'aurora_secure_file_handle_open'
+      'aurora_secure_file_handle_open',
+      'aurora_ios_entrypoint_payload'
     ])
     expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
     expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })

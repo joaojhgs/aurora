@@ -64,6 +64,7 @@ export interface SettingsPermissionsModel {
   privacyControls: SettingsPrivacyControl[]
   nativePermissions: SettingsNativePermissionCard[]
   nativeIntegrations: SettingsNativeIntegrationCard[]
+  nativeLimitations: Array<{ id: string; label: string; detail: string; evidence: string }>
   routeDefaults: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
   adminActionLabel: string
   fallbackLabel: string
@@ -135,6 +136,23 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
               <p>No native permission manifest is available for this deployment mode.</p>
             </div>
           )}
+          {model.nativeIntegrations.length > 0 ? (
+            <div className="aui-native-list" aria-label="Native integrations">
+              {model.nativeIntegrations.map((integration) => (
+                <NativeIntegrationRow key={integration.id} integration={integration} />
+              ))}
+            </div>
+          ) : null}
+          {model.nativeLimitations.length > 0 ? (
+            <dl className="aui-settings-facts">
+              {model.nativeLimitations.map((limitation) => (
+                <div key={limitation.id}>
+                  <dt>{limitation.label}</dt>
+                  <dd>{limitation.detail} Evidence: {limitation.evidence}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
         </section>
       </div>
 
@@ -242,6 +260,12 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
     ],
     nativePermissions: nativePermissionCards(snapshot, nativeRoute),
     nativeIntegrations: nativeIntegrationCards(snapshot),
+    nativeLimitations: (snapshot.nativePlatformLimitations ?? []).map((limitation) => ({
+      id: limitation.id,
+      label: limitation.label,
+      detail: limitation.userCopy,
+      evidence: limitation.evidenceSource
+    })),
     routeDefaults: [
       {
         id: 'remote-providers',
@@ -426,9 +450,22 @@ function nativePermissionCards(
   return [...genericRows.filter((row) => !androidIds.has(row.id)), ...androidRows]
 }
 
+function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
+  if (support === 'supported') return 'available-local'
+  if (support === 'supported-path') return 'degraded'
+  if (support === 'planned') return 'pending'
+  if (support === 'blocked') return 'privacy-blocked'
+  return 'unsupported'
+}
+
 function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIntegrationCard[] {
   return snapshot.nativeMobileIntegrations
-    .filter((integration) => integration.platform === 'ios')
+    .filter((integration) => {
+      if (integration.platform === snapshot.nativePlatform) {
+        return true
+      }
+      return snapshot.nativePlatform === 'tauri-desktop' && integration.platform === 'ios'
+    })
     .map((integration) => {
       const state = availabilityFromNativeIntegration(integration.support)
       const blockers = [
@@ -456,14 +493,6 @@ function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIn
         evidence: unique([integration.evidenceSource, integration.verifier])
       }
     })
-}
-
-function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
-  if (support === 'supported') return 'available-local'
-  if (support === 'supported-path') return 'degraded'
-  if (support === 'planned') return 'pending'
-  if (support === 'blocked') return 'privacy-blocked'
-  return 'unsupported'
 }
 
 function nativeRequestAvailable(name: string, snapshot: AuroraShellSnapshot): boolean {
@@ -541,6 +570,7 @@ function androidNativePermissionCards(snapshot: AuroraShellSnapshot): SettingsNa
   }
 
   for (const entrypoint of snapshot.nativeEntrypoints) {
+    if (!('intentAction' in entrypoint)) continue
     rows.push({
       id: `android.entrypoint.${entrypoint.id}`,
       label: entrypoint.label,

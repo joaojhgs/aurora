@@ -3,13 +3,13 @@ import type {
   AuroraError,
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
-  AndroidNativeEntrypoint,
   AndroidNativeReleaseStatus,
   AvailabilityState,
   CapabilityExplanation,
   CapabilityGraph,
   CapabilityProviderCandidate,
   NativeCapabilityManifest,
+  NativeEntrypoint,
   NativeMobileIntegration,
   NativePlatformLimitation
 } from '@aurora/client'
@@ -76,7 +76,7 @@ export interface AuroraShellSnapshot {
   nativePlatformLimitations: NativePlatformLimitation[]
   nativeAssistantRole: AndroidAssistantRoleStatus | null
   nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
-  nativeEntrypoints: AndroidNativeEntrypoint[]
+  nativeEntrypoints: NativeEntrypoint[]
   nativeRelease: AndroidNativeReleaseStatus | null
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
