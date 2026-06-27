@@ -308,12 +308,13 @@ public final class AuroraNativePlugin: Plugin {
     let context = LAContext()
     var error: NSError?
     let available = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    let reason: Any = available ? NSNull() : (error?.localizedDescription ?? "Face ID/Touch ID is not available.")
     invoke.resolve([
       "available": available,
       "permission": "aurora.iosBiometricUnlock",
       "capability": "ios.biometric.adminUnlock",
       "source": "tauri-ios-native-plugin",
-      "reason": available ? NSNull() : (error?.localizedDescription ?? "Face ID/Touch ID is not available."),
+      "reason": reason,
       "details": [
         "framework": "LocalAuthentication",
         "biometry": AuroraNativePlugin.biometryLabel(context.biometryType),
@@ -340,14 +341,16 @@ public final class AuroraNativePlugin: Plugin {
 
     context.evaluatePolicy(policy, localizedReason: args.reason) { success, authError in
       if success {
+        let action = AuroraNativePlugin.nullableString(args.action)
+        let correlationId = AuroraNativePlugin.nullableString(args.correlationId)
         invoke.resolve([
           "available": true,
           "permission": "aurora.iosBiometricUnlock",
           "capability": "ios.biometric.adminUnlock",
           "source": "tauri-ios-native-plugin",
           "details": [
-            "action": args.action ?? NSNull(),
-            "correlationId": args.correlationId ?? NSNull(),
+            "action": action,
+            "correlationId": correlationId,
             "adminActionBackendRequired": true,
             "confirmationOnly": true,
             "secretsRedacted": true
@@ -410,10 +413,10 @@ public final class AuroraNativePlugin: Plugin {
         "state": descriptor.state,
         "available": descriptor.available,
         "capability": descriptor.capability,
-        "permission": descriptor.permission,
+        "permission": AuroraNativePlugin.nullableString(descriptor.permission),
         "intakeType": descriptor.intakeType,
-        "urlScheme": descriptor.urlScheme ?? NSNull(),
-        "universalLinkHost": descriptor.universalLinkHost ?? NSNull(),
+        "urlScheme": AuroraNativePlugin.nullableString(descriptor.urlScheme),
+        "universalLinkHost": AuroraNativePlugin.nullableString(descriptor.universalLinkHost),
         "fileExtensions": descriptor.fileExtensions,
         "xcodeTarget": descriptor.xcodeTarget,
         "backendRequired": descriptor.backendRequired,
@@ -428,17 +431,17 @@ public final class AuroraNativePlugin: Plugin {
     [
       "source": payload.source,
       "invocation": payload.invocation,
-      "url": payload.url ?? NSNull(),
-      "scheme": payload.scheme ?? NSNull(),
-      "host": payload.host ?? NSNull(),
-      "path": payload.path ?? NSNull(),
-      "fileExtension": payload.fileExtension ?? NSNull(),
-      "uniformTypeIdentifier": payload.uniformTypeIdentifier ?? NSNull(),
-      "originatingBundleId": payload.originatingBundleId ?? NSNull(),
+      "url": AuroraNativePlugin.nullableString(payload.url),
+      "scheme": AuroraNativePlugin.nullableString(payload.scheme),
+      "host": AuroraNativePlugin.nullableString(payload.host),
+      "path": AuroraNativePlugin.nullableString(payload.path),
+      "fileExtension": AuroraNativePlugin.nullableString(payload.fileExtension),
+      "uniformTypeIdentifier": AuroraNativePlugin.nullableString(payload.uniformTypeIdentifier),
+      "originatingBundleId": AuroraNativePlugin.nullableString(payload.originatingBundleId),
       "sharedItemCount": payload.sharedItemCount,
       "privacyLabels": payload.privacyLabels,
       "backendHandoffRequired": payload.backendHandoffRequired,
-      "correlationId": payload.correlationId,
+      "correlationId": AuroraNativePlugin.nullableString(payload.correlationId),
       "secretsRedacted": payload.secretsRedacted,
       "siriReplacement": payload.siriReplacement
     ]
@@ -453,5 +456,12 @@ public final class AuroraNativePlugin: Plugin {
     default:
       return "none"
     }
+  }
+
+  private static func nullableString(_ value: String?) -> Any {
+    guard let value else {
+      return NSNull()
+    }
+    return value
   }
 }

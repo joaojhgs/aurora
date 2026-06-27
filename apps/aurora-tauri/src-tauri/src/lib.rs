@@ -704,6 +704,7 @@ async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraComma
     Ok(status)
 }
 
+#[tauri::command]
 async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, AuroraCommandError> {
     let status = android_baseline_status();
     log_android_baseline_status(&status);
