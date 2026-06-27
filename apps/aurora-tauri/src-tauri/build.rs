@@ -39,11 +39,7 @@ fn link_ios_aurora_native_plugin() -> Result<(), Box<dyn std::error::Error>> {
 
     let source = Path::new("ios").join("AuroraNativePlugin");
     let tauri_library_path = std::env::var("DEP_TAURI_IOS_LIBRARY_PATH")?;
-    let tauri_api_target = source
-        .parent()
-        .expect("iOS plugin source must have a parent directory")
-        .join(".tauri")
-        .join("tauri-api");
+    let tauri_api_target = Path::new(".tauri").join("tauri-api");
 
     replace_directory(Path::new(&tauri_library_path), &tauri_api_target)?;
     let sdk_root = std::env::var_os("SDKROOT");
