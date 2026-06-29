@@ -22,6 +22,7 @@
     "ios:build:app-store": "pnpm ios:gate:signing && pnpm tauri ios build --export-method app-store-connect && node ./scripts/ios-release-gate.mjs --require-macos --require-ios-project --require-signing-env --validate-ipa",
     "ios:open-xcode": "pnpm tauri ios build --open",
     "prepare:sidecar": "node ./scripts/prepare-sidecar.mjs",
+    "eventstream:smoke": "node ./scripts/eventstream-smoke.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment jsdom",
     "tauri": "tauri"

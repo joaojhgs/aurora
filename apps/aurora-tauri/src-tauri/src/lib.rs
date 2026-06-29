@@ -1,11 +1,12 @@
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 #[cfg(desktop)]
@@ -13,8 +14,9 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
+use tokio::sync::watch;
 use url::Url;
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
@@ -47,6 +49,51 @@ struct AuroraEnvelope {
 struct AuroraSubscribeRequest {
     topics: Vec<String>,
     stream: Option<String>,
+    kinds: Option<Vec<String>>,
+    headers: Option<BTreeMap<String, String>>,
+    last_event_id: Option<String>,
+    replay_from: Option<String>,
+    correlation_id: Option<String>,
+    backfill: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraUnsubscribeRequest {
+    subscription_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraActivateSubscriptionRequest {
+    subscription_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraSubscribeResponse {
+    subscription_id: String,
+    event_name: String,
+    stream_url: String,
+    transport: String,
+    mode: String,
+    redaction: RedactionMetadata,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraSubscriptionEvent {
+    subscription_id: String,
+    event: Value,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraSubscriptionClosed {
+    subscription_id: String,
+    reason: String,
+    code: String,
+    secrets_redacted: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -360,6 +407,58 @@ impl SidecarState {
 }
 
 type SharedSidecarState = Arc<Mutex<SidecarState>>;
+type SharedSubscriptionState = Arc<Mutex<SubscriptionState>>;
+
+struct SubscriptionState {
+    next_id: AtomicU64,
+    tasks: HashMap<String, SubscriptionTask>,
+}
+
+struct SubscriptionTask {
+    handle: tauri::async_runtime::JoinHandle<()>,
+    ready: watch::Sender<bool>,
+}
+
+impl SubscriptionState {
+    fn new() -> Self {
+        Self {
+            next_id: AtomicU64::new(1),
+            tasks: HashMap::new(),
+        }
+    }
+
+    fn next_subscription_id(&self) -> String {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        format!("aurora-sub-{id}")
+    }
+
+    fn insert(&mut self, id: String, task: SubscriptionTask) {
+        if let Some(existing) = self.tasks.insert(id, task) {
+            existing.handle.abort();
+        }
+    }
+
+    fn activate(&self, id: &str) -> bool {
+        if let Some(task) = self.tasks.get(id) {
+            task.ready.send_replace(true);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn remove(&mut self, id: &str) {
+        if let Some(task) = self.tasks.remove(id) {
+            task.handle.abort();
+        }
+    }
+
+    fn abort_all(&mut self) {
+        for (_, task) in self.tasks.drain() {
+            task.handle.abort();
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 enum AuroraCommandError {
@@ -477,14 +576,126 @@ async fn aurora_command(
 #[tauri::command]
 async fn aurora_subscribe(
     request: AuroraSubscribeRequest,
-) -> Result<Vec<Value>, AuroraCommandError> {
-    let topics = request.topics.join(",");
-    let stream = request.stream.unwrap_or_else(|| "event".to_string());
-    Err(AuroraCommandError::UnsupportedFeature(
-        format!(
-            "aurora_subscribe is deferred until BE-003 provides a unified event stream contract; stream={stream}, topics={topics}"
-        ),
-    ))
+    app: AppHandle,
+    sidecar_state: State<'_, SharedSidecarState>,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<AuroraSubscribeResponse, AuroraCommandError> {
+    if !subscribe_has_valid_sidecar_token(&request, &sidecar_state)? {
+        return Err(AuroraCommandError::SidecarTokenInvalid);
+    }
+
+    let gateway = gateway_url()?;
+    let url = event_stream_url(&gateway, &request)?;
+    let subscription_id = {
+        let subscriptions = subscription_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        subscriptions.next_subscription_id()
+    };
+    let event_name = format!("aurora://events/{subscription_id}");
+    let closed_event_name = format!("aurora://events/{subscription_id}/closed");
+    let client = reqwest::Client::new();
+    let headers = filtered_headers(request.headers.clone());
+    let task_subscription_id = subscription_id.clone();
+    let cleanup_subscription_id = subscription_id.clone();
+    let task_event_name = event_name.clone();
+    let task_closed_event_name = closed_event_name.clone();
+    let task_app = app.clone();
+    let task_subscriptions = subscription_state.inner().clone();
+    let (ready_tx, mut ready_rx) = watch::channel(false);
+
+    let task = tauri::async_runtime::spawn(async move {
+        while !*ready_rx.borrow_and_update() {
+            if ready_rx.changed().await.is_err() {
+                return;
+            }
+        }
+        run_gateway_event_stream(
+            task_app,
+            client,
+            url,
+            headers,
+            task_subscription_id,
+            task_event_name,
+            task_closed_event_name,
+        )
+        .await;
+        if let Ok(mut subscriptions) = task_subscriptions.lock() {
+            subscriptions.tasks.remove(&cleanup_subscription_id);
+        }
+    });
+
+    {
+        let mut subscriptions = subscription_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        subscriptions.insert(
+            subscription_id.clone(),
+            SubscriptionTask {
+                handle: task,
+                ready: ready_tx,
+            },
+        );
+    }
+
+    Ok(AuroraSubscribeResponse {
+        subscription_id,
+        event_name,
+        stream_url: "/api/events/stream".to_string(),
+        transport: "tauri-local".to_string(),
+        mode: if is_thin_mode() {
+            "desktop-thin-gateway-proxy".to_string()
+        } else {
+            "desktop-local-sidecar-gateway-proxy".to_string()
+        },
+        redaction: RedactionMetadata {
+            secrets_redacted: true,
+            source: "tauri-gateway-sse-proxy".to_string(),
+            redacted_fields: vec![
+                "authorization".to_string(),
+                "token".to_string(),
+                "x-aurora-sidecar-token".to_string(),
+            ],
+            warnings: Vec::new(),
+        },
+    })
+}
+
+#[tauri::command]
+async fn aurora_activate_subscription(
+    request: AuroraActivateSubscriptionRequest,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<Value, AuroraCommandError> {
+    let subscriptions = subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    if subscriptions.activate(&request.subscription_id) {
+        Ok(json!({
+            "subscriptionId": request.subscription_id,
+            "activated": true,
+            "secretsRedacted": true
+        }))
+    } else {
+        Err(AuroraCommandError::Gateway(
+            "subscription is no longer active".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_unsubscribe(
+    request: AuroraUnsubscribeRequest,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<Value, AuroraCommandError> {
+    let mut subscriptions = subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    subscriptions.remove(&request.subscription_id);
+    Ok(json!({
+        "subscriptionId": request.subscription_id,
+        "closed": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[tauri::command]
@@ -1392,7 +1603,14 @@ async fn aurora_secure_file_handle_open(
 async fn aurora_shutdown(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
+    subscription_state: State<'_, SharedSubscriptionState>,
 ) -> Result<(), AuroraCommandError> {
+    {
+        let mut subscriptions = subscription_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        subscriptions.abort_all();
+    }
     {
         let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
         stop_sidecar(&mut sidecar)?;
@@ -2284,6 +2502,179 @@ async fn check_gateway_health(gateway: &Url) -> Result<Value, AuroraCommandError
     }
 }
 
+async fn run_gateway_event_stream(
+    app: AppHandle,
+    client: reqwest::Client,
+    url: Url,
+    headers: HeaderMap,
+    subscription_id: String,
+    event_name: String,
+    closed_event_name: String,
+) {
+    let result = async {
+        let response = client
+            .get(url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|error| redacted_gateway_error(&error))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("Gateway event stream returned HTTP {status}"));
+        }
+
+        let mut buffer = String::new();
+        let mut response = response;
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    let text = String::from_utf8_lossy(&chunk);
+                    buffer.push_str(&text);
+                    drain_sse_frames(&app, &event_name, &subscription_id, &mut buffer);
+                }
+                Ok(None) => return Ok(()),
+                Err(error) => return Err(redacted_gateway_error(&error)),
+            }
+        }
+    }
+    .await;
+
+    let (code, reason) = match result {
+        Ok(()) => (
+            "closed".to_string(),
+            "gateway event stream closed".to_string(),
+        ),
+        Err(reason) => ("transport_loss".to_string(), reason),
+    };
+    let _ = app.emit(
+        &closed_event_name,
+        AuroraSubscriptionClosed {
+            subscription_id,
+            reason,
+            code,
+            secrets_redacted: true,
+        },
+    );
+}
+
+fn drain_sse_frames(app: &AppHandle, event_name: &str, subscription_id: &str, buffer: &mut String) {
+    while let Some(index) = find_sse_frame_boundary(buffer) {
+        let frame = buffer[..index].to_string();
+        let drain_to = if buffer[index..].starts_with("\r\n\r\n") {
+            index + 4
+        } else {
+            index + 2
+        };
+        buffer.drain(..drain_to);
+        if let Some(event) = parse_sse_frame(&frame) {
+            let _ = app.emit(
+                event_name,
+                AuroraSubscriptionEvent {
+                    subscription_id: subscription_id.to_string(),
+                    event,
+                },
+            );
+        }
+    }
+}
+
+fn find_sse_frame_boundary(buffer: &str) -> Option<usize> {
+    match (buffer.find("\r\n\r\n"), buffer.find("\n\n")) {
+        (Some(crlf), Some(lf)) => Some(usize::min(crlf, lf)),
+        (Some(crlf), None) => Some(crlf),
+        (None, Some(lf)) => Some(lf),
+        (None, None) => None,
+    }
+}
+
+fn parse_sse_frame(frame: &str) -> Option<Value> {
+    let data = frame
+        .lines()
+        .filter_map(|line| line.strip_prefix("data:"))
+        .map(str::trim_start)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if data.is_empty() || data == "[DONE]" {
+        return None;
+    }
+    serde_json::from_str::<Value>(&data).ok().or_else(|| {
+        Some(json!({
+            "kind": "event",
+            "payload": data,
+            "redaction": {
+                "secretsRedacted": true,
+                "source": "tauri-gateway-sse-proxy"
+            }
+        }))
+    })
+}
+
+fn event_stream_url(
+    base: &Url,
+    request: &AuroraSubscribeRequest,
+) -> Result<Url, AuroraCommandError> {
+    let mut url = base
+        .join("api/events/stream")
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        if let Some(stream) = request.stream.as_deref() {
+            pairs.append_pair("stream", stream);
+        }
+        for topic in &request.topics {
+            pairs.append_pair("topic", topic);
+        }
+        for kind in request.kinds.as_deref().unwrap_or(&[]) {
+            pairs.append_pair("kind", kind);
+        }
+        if let Some(last_event_id) = request.last_event_id.as_deref() {
+            pairs.append_pair("last_event_id", last_event_id);
+        }
+        if let Some(replay_from) = request.replay_from.as_deref() {
+            pairs.append_pair("replay_from", replay_from);
+        }
+        if let Some(correlation_id) = request.correlation_id.as_deref() {
+            pairs.append_pair("correlation_id", correlation_id);
+        }
+        if let Some(backfill) = request.backfill {
+            pairs.append_pair("backfill", if backfill { "true" } else { "false" });
+        }
+    }
+    Ok(url)
+}
+
+fn subscribe_has_valid_sidecar_token(
+    request: &AuroraSubscribeRequest,
+    state: &State<'_, SharedSidecarState>,
+) -> Result<bool, AuroraCommandError> {
+    if is_thin_mode() {
+        return Ok(true);
+    }
+    let Some(headers) = &request.headers else {
+        return Ok(false);
+    };
+    let Some(token) = headers
+        .get("x-aurora-sidecar-token")
+        .or_else(|| headers.get("X-Aurora-Sidecar-Token"))
+    else {
+        return Ok(false);
+    };
+    let sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(token == &sidecar.token)
+}
+
+fn redacted_gateway_error(error: &reqwest::Error) -> String {
+    if error.is_timeout() {
+        "Gateway event stream timed out".to_string()
+    } else if error.is_connect() {
+        "Gateway event stream connection failed".to_string()
+    } else if error.is_decode() {
+        "Gateway event stream payload decode failed".to_string()
+    } else {
+        "Gateway event stream failed".to_string()
+    }
+}
+
 fn sidecar_program() -> String {
     env::var("AURORA_TAURI_SIDECAR_PROGRAM").unwrap_or_else(|_| "python".to_string())
 }
@@ -2407,9 +2798,12 @@ fn is_loopback_http_origin(url: &Url) -> bool {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
+    let subscription_state: SharedSubscriptionState =
+        Arc::new(Mutex::new(SubscriptionState::new()));
     tauri::Builder::default()
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
+        .manage(subscription_state.clone())
         .setup(|app| {
             #[cfg(desktop)]
             install_tray(app.handle())?;
@@ -2436,6 +2830,8 @@ pub fn run() {
             aurora_request,
             aurora_command,
             aurora_subscribe,
+            aurora_activate_subscription,
+            aurora_unsubscribe,
             aurora_sidecar_session,
             aurora_sidecar_start,
             aurora_sidecar_stop,
@@ -2474,6 +2870,9 @@ pub fn run() {
         ])
         .on_window_event(move |_window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                if let Ok(mut subscriptions) = subscription_state.lock() {
+                    subscriptions.abort_all();
+                }
                 if let Ok(mut sidecar) = sidecar_state.lock() {
                     let _ = stop_sidecar(&mut sidecar);
                 }

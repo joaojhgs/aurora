@@ -8,6 +8,8 @@ fn main() {
             "aurora_request",
             "aurora_command",
             "aurora_subscribe",
+            "aurora_activate_subscription",
+            "aurora_unsubscribe",
             "aurora_sidecar_session",
             "aurora_sidecar_start",
             "aurora_sidecar_stop",
