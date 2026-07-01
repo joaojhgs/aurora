@@ -31,7 +31,8 @@ import {
   type DeploymentTopologyResponse,
   type GetRegistryResponse,
   type GetServicesResponse,
-  type PendingPairingEntry
+  type PendingPairingEntry,
+  type VoiceRuntimeEvent
 } from '@aurora/client'
 import {
   AdminOverviewContent,
@@ -742,6 +743,33 @@ describe('Aurora production shell', () => {
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
     expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('typed audio session')
     expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
+
+    const eventDrivenModel = buildAssistantVoiceModel({
+      client,
+      route: enabledRoute(route(snapshot, 'assistant')),
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      nativeAvailable: snapshot.nativeAvailable,
+      nativePlatform: snapshot.nativePlatform,
+      nativePermissions: snapshot.nativePermissions,
+      nativeCapabilities: snapshot.nativeCapabilities,
+      captureStatus: 'listening',
+      consentGranted: true,
+      voiceEvents: voiceEvidenceEvents()
+    })
+
+    expect(eventDrivenModel.events.find((event) => event.id === 'partial')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      detail: expect.stringContaining('STTCoordinator.Partial evidence')
+    }))
+    expect(eventDrivenModel.events.find((event) => event.id === 'final')?.detail).toContain('session voice-session-1')
+    expect(eventDrivenModel.events.find((event) => event.id === 'tts-started')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      detail: expect.stringContaining('TTS.Started evidence')
+    }))
+    expect(eventDrivenModel.events.find((event) => event.id === 'remote-denied')).toEqual(expect.objectContaining({
+      state: 'denied',
+      detail: expect.stringContaining('policy_denied')
+    }))
   })
 
   it('keeps remote STT consent-gated, denial visible, and revoked consent blocking dispatch', async () => {
@@ -2837,6 +2865,48 @@ function streamUpdate(textDelta: string) {
     },
     metadata: {}
   }
+}
+
+function voiceEvidenceEvents(): VoiceRuntimeEvent[] {
+  const audit = {
+    correlationId: 'corr-voice-1',
+    eventKind: 'voice.event',
+    peerId: 'peer-local',
+    principalId: null,
+    targetPeerId: 'peer-kitchen',
+    method: null,
+    busTopic: null,
+    toolId: null,
+    resourceId: null,
+    status: null,
+    transport: 'mock',
+    redaction: {
+      secretsRedacted: true,
+      redactedFields: [],
+      source: 'backend' as const,
+      warnings: []
+    }
+  }
+  const base = {
+    sessionId: 'voice-session-1',
+    correlationId: 'corr-voice-1',
+    sourcePeerId: 'peer-local',
+    targetPeerId: 'peer-kitchen',
+    targetDeviceId: 'mic-kitchen',
+    consentDecision: 'approved',
+    policyDecisionId: 'policy-voice-1',
+    privacyClass: 'raw-audio',
+    redacted: true,
+    occurredAt: '2026-06-27T16:00:00Z',
+    audit,
+    raw: {}
+  }
+  return [
+    { ...base, id: 'voice-partial', kind: 'transcription_partial', topic: 'STTCoordinator.Partial', state: 'processing', text: 'turn', reason: null },
+    { ...base, id: 'voice-final', kind: 'transcription_final', topic: 'STTCoordinator.Final', state: 'processing', text: 'turn on lights', reason: null },
+    { ...base, id: 'voice-tts', kind: 'tts_started', topic: 'TTS.Started', state: 'speaking', text: 'Turning on lights.', reason: null, privacyClass: 'personal' },
+    { ...base, id: 'voice-denied', kind: 'audio_denied', topic: 'AudioSession.Events', state: 'denied', text: null, reason: 'policy_denied' }
+  ]
 }
 
 function enabledRoute(match: ReturnType<typeof route>, overrides: Partial<ReturnType<typeof route>> = {}) {

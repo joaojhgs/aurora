@@ -38,6 +38,7 @@ import {
   type ToolApprovalDecisionResult,
   type ToolCatalogResponse
 } from './tools.js'
+import { normalizeVoiceRuntimeEvent, VOICE_EVENT_KINDS, VOICE_EVENT_TOPICS } from './voice.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -130,6 +131,7 @@ import type {
   TokenRevokeResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
+import type { VoiceRuntimeEvent } from './voice.js'
 import type {
   EffectivePermissionInput,
   PermissionAccessDecision,
@@ -768,6 +770,26 @@ export class AssistantClient {
         return
       }
       yield streamFailure(fallback.error, this.client.transport.kind, 'fallback')
+    }
+  }
+
+  async *streamVoiceEvents(
+    options: AuroraSubscribeOptions = {}
+  ): AsyncIterable<VoiceRuntimeEvent> {
+    const stream = this.client.events.subscribe<unknown>({
+      stream: 'voice',
+      topics: [...VOICE_EVENT_TOPICS],
+      kinds: [...VOICE_EVENT_KINDS],
+      reconnect: { maxAttempts: 1, initialDelayMs: 250, maxDelayMs: 1_000 },
+      ...options,
+      audit: {
+        ...options.audit,
+        transport: this.client.transport.kind
+      }
+    })
+    for await (const event of stream) {
+      const normalized = normalizeVoiceRuntimeEvent(event)
+      if (normalized) yield normalized
     }
   }
 
