@@ -1,9 +1,13 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  backendInventoryFixture,
   androidNativeCapabilityManifestFixture,
   backupListFixture,
   buildAdminOverviewManifest,
@@ -12,6 +16,7 @@ import {
   capabilityGraphCatalogFixture,
   cloneFixture,
   deploymentTopologyFixture,
+  describeBackendInventory,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
   iosNativeCapabilityManifestFixture,
@@ -94,6 +99,7 @@ import {
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  productionSurfaceContracts,
   snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
@@ -104,7 +110,10 @@ import {
   routePolicyFromRoute,
   routePolicyScenarios,
   routeSheetErrorMessage,
-  SettingsPermissionsView
+  SettingsPermissionsView,
+  auroraAssistantCancellationItem,
+  auroraAssistantVoiceItems,
+  auroraNavSections
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -118,6 +127,89 @@ describe('Aurora production shell', () => {
     expect(snapshot.routes.some((route) => route.requiresAdminAction)).toBe(true)
     expect(snapshot.routes.every((route) => route.repairActions.length > 0)).toBe(true)
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
+  })
+
+  it('documents every PER-273 production surface with backend or explicit degraded evidence', () => {
+    const requiredSurfaceIds = [
+      'assistant-route-sheet',
+      'admin-overview',
+      'admin-services',
+      'admin-rbac',
+      'admin-audit',
+      'admin-plugins',
+      'admin-devices',
+      'admin-scheduler',
+      'config-editor',
+      'memory-rag',
+      'backup-restore',
+      'models-runtime',
+      'mesh-peers',
+      'mesh-diagnostics',
+      'route-policy',
+      'resource-diagnostics',
+      'settings-permissions-privacy',
+      'native-capabilities',
+      'onboarding-auth-pairing'
+    ]
+    const surfaceIds = productionSurfaceContracts.map((surface) => surface.id)
+    const navIds = new Set([
+      ...auroraNavSections.flatMap((section) => section.items.map((item) => item.id)),
+      auroraAssistantCancellationItem.id,
+      ...Object.values(auroraAssistantVoiceItems).map((item) => item.id)
+    ])
+    const descriptorMethods = new Set(
+      describeBackendInventory(backendInventoryFixture).methods.map((method) => method.busTopic)
+    )
+
+    expect(surfaceIds).toEqual(requiredSurfaceIds)
+    for (const surface of productionSurfaceContracts) {
+      expect(surface.navItemIds.length, `${surface.id} nav bindings`).toBeGreaterThan(0)
+      expect(surface.componentFiles.length, `${surface.id} components`).toBeGreaterThan(0)
+      expect(surface.truthSources.length, `${surface.id} truth sources`).toBeGreaterThan(0)
+      expect(surface.coverage.length, `${surface.id} coverage`).toBeGreaterThan(0)
+      expect(surface.fixturePolicy, `${surface.id} fixture policy`).toBe('test-only')
+      expect(surface.truthSources.some((source) => source.kind !== 'unsupported-degraded'), `${surface.id} live source`).toBe(true)
+      expect(surface.navItemIds.every((id) => navIds.has(id)), `${surface.id} nav ids`).toBe(true)
+
+      if (surface.mutatingMethodType === 'manage') {
+        expect(surface.adminActionRequired, `${surface.id} AdminAction`).toBe(true)
+        expect(
+          surface.truthSources.some((source) => source.kind === 'admin-action'),
+          `${surface.id} AdminAction truth source`
+        ).toBe(true)
+      }
+
+      const descriptorBackedMethods = surface.truthSources
+        .flatMap((source) => source.methods)
+        .filter((method) => descriptorMethods.has(method))
+      expect(
+        descriptorBackedMethods.length > 0 ||
+          surface.truthSources.some((source) =>
+            ['admin-action', 'capability-graph', 'native-manifest', 'unsupported-degraded'].includes(source.kind)
+          ),
+        `${surface.id} descriptor or explicit gated/degraded evidence`
+      ).toBe(true)
+    }
+  })
+
+  it('keeps production UI screens behind AuroraClient and away from mock fixtures as live truth', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const scannedFiles = [
+      ...filesUnder(join(repoRoot, 'packages/aurora-ui/src'), /\.(ts|tsx)$/),
+      ...filesUnder(join(repoRoot, 'apps/aurora-web/app'), /\.(ts|tsx)$/),
+      ...filesUnder(join(repoRoot, 'apps/aurora-tauri/src'), /\.(ts|tsx)$/)
+    ].filter((file) => !isAllowedAdapterFile(repoRoot, file))
+
+    expect(scannedFiles.length).toBeGreaterThan(0)
+    for (const file of scannedFiles) {
+      const rel = relative(repoRoot, file)
+      const text = readFileSync(file, 'utf8')
+      expect(text, `${rel} must not call fetch directly`).not.toMatch(/\bfetch\s*\(/)
+      expect(text, `${rel} must not call Tauri invoke directly`).not.toMatch(/\binvoke\s*\(/)
+      expect(text, `${rel} must not import SDK fixtures`).not.toMatch(/@aurora\/client.*Fixture|packages\/aurora-sdk\/src\/fixtures/)
+      expect(text, `${rel} must not import mock reference fixtures`).not.toMatch(/modules\/ui-mock-reference|ui-mock-reference\/lib\/aurora\/data/)
+      expect(text, `${rel} must not call raw service objects`).not.toMatch(/\b(LocalBus|BullMQBus|MeshBus|ConfigManager)\b/)
+    }
   })
 
   it('renders accessible navigation and route state without direct backend calls', async () => {
@@ -3320,6 +3412,23 @@ function blockedRouteEvaluation(availability: 'privacy-blocked' | 'unsupported')
     privacyClass: availability === 'privacy-blocked' ? 'sensitive' : 'personal',
     transportKind: 'mock'
   })
+}
+
+function filesUnder(dir: string, pattern: RegExp): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return filesUnder(path, pattern)
+    return pattern.test(entry.name) ? [path] : []
+  })
+}
+
+function isAllowedAdapterFile(repoRoot: string, file: string): boolean {
+  const rel = relative(repoRoot, file)
+  return [
+    'apps/aurora-web/app/aurora-client.ts',
+    'apps/aurora-tauri/src/aurora-client.ts',
+    'apps/aurora-tauri/src/eventstream-smoke.tsx'
+  ].includes(rel)
 }
 
 function rbacLoadingSnapshot() {

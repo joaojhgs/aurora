@@ -51,4 +51,4 @@ Use this vocabulary consistently in UI specs and future copy:
 
 ## Mock Reference Status
 
-The issue references `modules/ui-mock-reference/`, but this checkout only contains `modules/openrecall` and `modules/ui`. No mock-reference inventory or visual refresh was performed. Future tasks that restore or introduce the mock should treat it as a component/visual reference only, not production truth.
+`modules/ui-mock-reference/` exists on `feat/ui-multi-platform-integration` and remains a visual/component reference only. Production UI truth comes from `AuroraClient`, capability graph/catalog data, native manifests, or explicit unsupported/degraded states. Mock-reference data must not be imported by production screens as live state.
