@@ -14,7 +14,8 @@ import type {
   AssistantStreamUpdate,
   AuroraClient,
   AuroraError,
-  AuroraResponse
+  AuroraResponse,
+  VoiceRuntimeEvent
 } from '@aurora/client'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
@@ -29,6 +30,7 @@ export interface AssistantViewProps {
   nativeAvailable?: boolean | undefined
   nativePermissions?: Array<{ name: string; granted: boolean }> | undefined
   nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
+  recentVoiceEvents?: VoiceRuntimeEvent[] | undefined
   storageKey?: string
 }
 
@@ -154,6 +156,7 @@ export function AssistantView({
   nativeAvailable = false,
   nativePermissions = [],
   nativeCapabilities = [],
+  recentVoiceEvents = [],
   storageKey = defaultStorageKey
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())
@@ -170,6 +173,7 @@ export function AssistantView({
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
   const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
   const [voiceCaptureStatus, setVoiceCaptureStatus] = useState<VoiceCaptureStatus>('idle')
+  const [voiceEvents, setVoiceEvents] = useState<VoiceRuntimeEvent[]>(recentVoiceEvents)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const voiceStreamRef = useRef<MediaStream | null>(null)
@@ -196,7 +200,8 @@ export function AssistantView({
       nativePermissions,
       nativeCapabilities,
       captureStatus: voiceCaptureStatus,
-      consentGranted: voiceConsentGranted
+      consentGranted: voiceConsentGranted,
+      voiceEvents
     }),
     [
       client,
@@ -207,7 +212,8 @@ export function AssistantView({
       nativePermissions,
       nativeCapabilities,
       voiceCaptureStatus,
-      voiceConsentGranted
+      voiceConsentGranted,
+      voiceEvents
     ]
   )
 
@@ -223,6 +229,32 @@ export function AssistantView({
     abortRef.current?.abort()
     stopLocalCapture()
   }, [])
+
+  useEffect(() => {
+    setVoiceEvents(recentVoiceEvents)
+  }, [recentVoiceEvents])
+
+  useEffect(() => {
+    if (recentVoiceEvents.length > 0) return
+    const controller = new AbortController()
+    let active = true
+    void (async () => {
+      try {
+        for await (const event of client.assistant.streamVoiceEvents({ signal: controller.signal })) {
+          if (!active) return
+          setVoiceEvents((current) => [event, ...current].slice(0, 12))
+        }
+      } catch {
+        if (active) {
+          setVoiceEvents((current) => current)
+        }
+      }
+    })()
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [client, recentVoiceEvents.length])
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -804,6 +836,7 @@ export function buildAssistantVoiceModel(input: {
   nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
   captureStatus: VoiceCaptureStatus
   consentGranted: boolean
+  voiceEvents?: VoiceRuntimeEvent[] | undefined
 }): AssistantVoiceModel {
   const transcription = input.voiceRoutes?.transcription ?? missingVoiceRoute('voice-transcription', 'Remote transcription', 'Transcription.Transcribe', 'raw-audio')
   const wakeProcess = input.voiceRoutes?.wakeProcess ?? missingVoiceRoute('voice-wake-process', 'Wake audio processing', 'WakeWord.ProcessAudio', 'raw-audio')
@@ -865,7 +898,7 @@ export function buildAssistantVoiceModel(input: {
       voiceAction('tts-synthesize', 'Synthesize speech', ttsSynthesize, input.captureStatus, input.consentGranted),
       voiceAction('playback-stop', 'Stop playback', ttsStop, input.captureStatus, input.consentGranted)
     ],
-    events: voiceEventRows(input.captureStatus, transcription),
+    events: voiceEventRows(input.captureStatus, transcription, input.voiceEvents ?? []),
     routeSheetRoute: remoteAudioRoute,
     remoteAudioRoute,
     waveformBars: waveformBars(input.captureStatus)
@@ -1454,22 +1487,78 @@ function voiceAction(
   }
 }
 
-function voiceEventRows(captureStatus: VoiceCaptureStatus, transcription: RouteAvailability): VoiceEventRow[] {
+function voiceEventRows(
+  captureStatus: VoiceCaptureStatus,
+  transcription: RouteAvailability,
+  voiceEvents: VoiceRuntimeEvent[]
+): VoiceEventRow[] {
   const captureFailure: VoiceEventRow | null =
     captureStatus === 'permission-denied'
       ? { id: 'permission-loss', label: 'Local permission loss', state: 'denied', detail: 'Browser or native microphone permission was lost or denied.' }
       : captureStatus === 'no-device' || captureStatus === 'error'
         ? { id: 'capture-error', label: 'Capture error', state: captureStatus === 'no-device' ? 'unsupported' : 'degraded', detail: 'Local capture failed before audio could be routed.' }
         : null
-  return [
+  const rows = [
     { id: 'partial', label: 'Partial transcription', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Incremental text remains tied to backend stream events.' },
     { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription backend evidence.' },
+    { id: 'tts-started', label: 'TTS started', state: 'pending', detail: 'Playback start waits for TTS.Started evidence.' },
+    { id: 'tts-stopped', label: 'TTS stopped', state: 'pending', detail: 'Stop/cancel controls require TTS.Stopped or interrupt evidence.' },
     { id: 'timeout', label: 'Timeout', state: 'degraded', detail: 'Timeouts remain visible as retryable voice session outcomes.' },
     { id: 'cancelled', label: 'Cancelled', state: 'pending', detail: 'Cancellation must revoke or stop the current audio session.' },
     { id: 'remote-denied', label: 'Remote denial', state: 'denied', detail: 'Policy, selector, or peer denial is shown without silent fallback.' },
     { id: 'peer-disconnect', label: 'Peer disconnect', state: 'stale', detail: 'Remote peer loss makes the current provider unselectable.' },
     ...(captureFailure ? [captureFailure] : [])
-  ]
+  ] satisfies VoiceEventRow[]
+  return applyVoiceEvidenceRows(rows, voiceEvents)
+}
+
+function applyVoiceEvidenceRows(rows: VoiceEventRow[], voiceEvents: VoiceRuntimeEvent[]): VoiceEventRow[] {
+  if (voiceEvents.length === 0) return rows
+  const latestByRow = new Map<string, VoiceRuntimeEvent>()
+  for (const event of voiceEvents) {
+    const rowId = voiceEventRowId(event)
+    if (!rowId || latestByRow.has(rowId)) continue
+    latestByRow.set(rowId, event)
+  }
+  return rows.map((row) => {
+    const event = latestByRow.get(row.id)
+    if (!event) return row
+    return {
+      ...row,
+      state: availabilityForVoiceEvent(event, row.state),
+      detail: voiceEvidenceDetail(event)
+    }
+  })
+}
+
+function voiceEventRowId(event: VoiceRuntimeEvent): string | null {
+  if (event.kind === 'transcription_partial') return 'partial'
+  if (event.kind === 'transcription_final') return 'final'
+  if (event.kind === 'tts_started') return 'tts-started'
+  if (event.kind === 'tts_stopped' || event.kind === 'tts_paused' || event.kind === 'tts_resumed') return 'tts-stopped'
+  if (event.kind === 'stt_timeout') return 'timeout'
+  if (event.kind === 'audio_cancelled' || event.kind === 'session_ended') return 'cancelled'
+  if (event.kind === 'audio_denied' || event.kind === 'stt_error' || event.kind === 'tts_error') return 'remote-denied'
+  if (event.kind === 'audio_disconnected') return 'peer-disconnect'
+  return null
+}
+
+function availabilityForVoiceEvent(event: VoiceRuntimeEvent, fallback: VoiceEventRow['state']): VoiceEventRow['state'] {
+  if (event.state === 'denied' || event.state === 'error') return 'denied'
+  if (event.state === 'disconnected') return 'stale'
+  if (event.state === 'timeout') return 'degraded'
+  if (event.state === 'cancelled') return 'pending'
+  if (event.state === 'listening' || event.state === 'processing' || event.state === 'speaking' || event.state === 'paused') return 'available-local'
+  return fallback
+}
+
+function voiceEvidenceDetail(event: VoiceRuntimeEvent): string {
+  const text = event.text ? ` / ${event.text}` : ''
+  const reason = event.reason ? ` / ${event.reason}` : ''
+  const peer = event.targetPeerId ?? event.sourcePeerId ?? 'local'
+  const session = event.sessionId ?? 'no-session'
+  const correlation = event.correlationId ?? 'no-correlation'
+  return `${event.topic ?? event.kind} evidence from ${peer}; session ${session}; correlation ${correlation}; privacy ${event.privacyClass}${text}${reason}`
 }
 
 function waveformBars(captureStatus: VoiceCaptureStatus): number[] {

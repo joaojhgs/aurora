@@ -38,6 +38,7 @@ import {
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
   normalizeToolCatalog,
+  normalizeVoiceRuntimeEvent,
   routeExplainFixture,
   resolveEffectivePermissions,
   supportBundleFixture,
@@ -3585,6 +3586,109 @@ describe('AuroraClient', () => {
         redaction: expect.objectContaining({ secretsRedacted: true })
       })
     )
+  })
+
+  it('normalizes voice runtime events with session correlation and peer provenance', () => {
+    const partial = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.transcription.partial', {
+      id: 'evt-voice-1',
+      topic: 'STTCoordinator.Partial',
+      session_id: 'voice-session-1',
+      correlation_id: 'corr-voice-1',
+      source_peer_id: 'peer-handset',
+      target_peer_id: 'peer-kitchen',
+      target_device_id: 'mic-1',
+      privacy_class: 'raw-audio',
+      text: 'turn on',
+      redacted: true
+    }, {
+      busTopic: 'STTCoordinator.Partial',
+      transport: 'mock'
+    }))
+
+    expect(partial).toEqual(expect.objectContaining({
+      id: 'evt-voice-1',
+      kind: 'transcription_partial',
+      topic: 'STTCoordinator.Partial',
+      sessionId: 'voice-session-1',
+      correlationId: 'corr-voice-1',
+      sourcePeerId: 'peer-handset',
+      targetPeerId: 'peer-kitchen',
+      targetDeviceId: 'mic-1',
+      privacyClass: 'raw-audio',
+      state: 'processing',
+      text: 'turn on',
+      redacted: true
+    }))
+
+    const denied = normalizeVoiceRuntimeEvent(createAuroraEvent('audio.denied', {
+      id: 'evt-voice-2',
+      topic: 'AudioSession.Events',
+      event_type: 'denied',
+      session_id: 'voice-session-2',
+      status: 'denied',
+      reason: 'policy_denied',
+      policy_decision_id: 'policy-7',
+      consent_decision: 'rejected',
+      target_peer_id: 'peer-den'
+    }, {
+      busTopic: 'AudioSession.Events',
+      transport: 'mock'
+    }))
+
+    expect(denied).toEqual(expect.objectContaining({
+      kind: 'audio_denied',
+      state: 'denied',
+      consentDecision: 'rejected',
+      policyDecisionId: 'policy-7',
+      reason: 'policy_denied',
+      targetPeerId: 'peer-den'
+    }))
+  })
+
+  it('streams normalized voice events through the assistant SDK surface', async () => {
+    const transport = new MockAuroraTransport()
+    transport.stream('voice', [
+      {
+        id: 'voice-1',
+        kind: 'voice.transcription.final',
+        topic: 'STTCoordinator.Final',
+        payload: {
+          session_id: 'session-final',
+          text: 'lights on',
+          target_peer_id: 'peer-kitchen',
+          correlation_id: 'corr-final',
+          privacy_class: 'raw-audio'
+        }
+      },
+      {
+        id: 'voice-2',
+        kind: 'tts.started',
+        topic: 'TTS.Started',
+        payload: {
+          session_id: 'session-final',
+          current_text: 'Turning lights on',
+          correlation_id: 'corr-tts',
+          privacy_class: 'personal'
+        }
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamVoiceEvents(), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['transcription_final', 'tts_started'])
+    expect(events[0]).toEqual(expect.objectContaining({
+      sessionId: 'session-final',
+      targetPeerId: 'peer-kitchen',
+      correlationId: 'corr-final',
+      text: 'lights on',
+      state: 'processing'
+    }))
+    expect(events[1]).toEqual(expect.objectContaining({
+      privacyClass: 'personal',
+      state: 'speaking',
+      text: 'Turning lights on'
+    }))
   })
 
   it('subscribes to mock event streams with filtered event envelopes', async () => {
