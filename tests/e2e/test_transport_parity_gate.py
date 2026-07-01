@@ -47,6 +47,9 @@ def test_transport_parity_gate_emits_required_rows_and_artifacts(tmp_path):
     assert set(rows) == required_rows
     assert report["summary"]["row_count"] == len(required_rows)
     assert report["summary"]["mock_only_evidence_sufficient"] is False
+    assert report["summary"]["event_flow_gate"]["mesh_required_when_available"] == (
+        "mesh_provenance_event"
+    )
     assert report["summary"]["mesh_final_proof"] == "pass"
     assert report["secrets_redacted"] is True
 
@@ -57,16 +60,46 @@ def test_transport_parity_gate_emits_required_rows_and_artifacts(tmp_path):
         assert row["status"] in {"pass", "fail", "blocked", "skipped-with-rationale"}
         assert row["coverage"]
         assert row["rationale"]
+        assert {item["requirement_id"] for item in row["event_flow"]} == {
+            "registry_capability_graph",
+            "assistant_request_stream_cancel",
+            "config_or_service_health_event",
+            "mesh_provenance_event",
+            "denied_or_privacy_blocked_state",
+            "audit_correlation_redacted",
+        }
 
     assert rows["thread_localbus"]["status"] == "pass"
     assert rows["http_gateway_thin_client"]["status"] == "pass"
     assert rows["tauri_local_native"]["status"] == "pass"
     assert rows["mesh_webrtc"]["status"] == "pass"
+    mesh_flow = {
+        item["requirement_id"]: item for item in rows["mesh_webrtc"]["event_flow"]
+    }
+    assert mesh_flow["mesh_provenance_event"]["status"] == "pass"
+    assert mesh_flow["mesh_provenance_event"]["required"] is True
+    thread_flow = {
+        item["requirement_id"]: item for item in rows["thread_localbus"]["event_flow"]
+    }
+    assert thread_flow["mesh_provenance_event"]["status"] == "not_applicable"
+    assert thread_flow["mesh_provenance_event"]["required"] is False
     assert rows["ios_thin_local_light"]["status"] == "skipped-with-rationale"
     assert rows["ios_thin_local_light"]["blocks_release"] is True
 
     persisted = json.loads((tmp_path / "transport_parity_report.json").read_text(encoding="utf-8"))
     assert persisted["summary"] == report["summary"]
+    assert any(
+        command["command_id"] == "sdk_conformance"
+        and command["command"] == [
+            "pnpm",
+            "--filter",
+            "@aurora/client",
+            "test",
+            "--",
+            "--runInBand",
+        ]
+        for command in persisted["command_results"]
+    )
 
 
 @pytest.mark.e2e
@@ -82,6 +115,7 @@ def test_transport_parity_gate_blocks_when_required_commands_are_not_run(tmp_pat
     rows = {row["row_id"]: row for row in report["rows"]}
     assert rows["http_gateway_thin_client"]["status"] == "blocked"
     assert rows["mesh_webrtc"]["status"] == "blocked"
+    assert rows["http_gateway_thin_client"]["event_flow"][1]["status"] == "not_run"
 
 
 @pytest.mark.e2e
@@ -110,6 +144,32 @@ def test_transport_parity_gate_does_not_allow_mock_only_success_to_pass(tmp_path
     assert report["summary"]["mock_only_evidence_sufficient"] is False
     assert report["summary"]["status"] == "blocked"
     assert report["release_ready"] is False
+    rows = {row["row_id"]: row for row in report["rows"]}
+    assert rows["thread_localbus"]["event_flow"][1]["status"] == "not_run"
+
+
+@pytest.mark.e2e
+def test_transport_parity_gate_blocks_missing_event_flow_scenarios(tmp_path):
+    def incomplete_harness(output_dir):
+        report = _fake_harness_report(output_dir)
+        report.results = [
+            result
+            for result in report.results
+            if result["scenario_id"] != "unified_event_stream"
+        ]
+        return report
+
+    report = run_transport_parity_gate(
+        output_dir=tmp_path,
+        command_runner=_passing_command,
+        harness_runner=incomplete_harness,
+    )
+
+    rows = {row["row_id"]: row for row in report["rows"]}
+    assert report["summary"]["status"] == "blocked"
+    assert rows["thread_localbus"]["status"] == "blocked"
+    flow = {item["requirement_id"]: item for item in rows["thread_localbus"]["event_flow"]}
+    assert flow["config_or_service_health_event"]["status"] == "missing"
 
 
 @pytest.mark.e2e
@@ -204,25 +264,37 @@ def _fake_harness_report(output_dir):
             "notes": [],
         },
     ]
+    required_scenarios = (
+        "catalog_local_remote_blocked",
+        "route_explain",
+        "unified_event_stream",
+        "safe_remote_tool",
+        "support_bundle",
+        "auth_config_denied",
+        "dangerous_local_approval",
+        "streaming_audio_consent",
+    )
     scenarios = [
         {
-            "scenario_id": "required_flow",
-            "title": "Required flow",
+            "scenario_id": scenario_id,
+            "title": scenario_id.replace("_", " ").title(),
             "categories": ["audit"],
             "assertion": "passes",
         }
+        for scenario_id in required_scenarios
     ]
     results = [
         {
-            "scenario_id": "required_flow",
+            "scenario_id": scenario["scenario_id"],
             "mode_id": mode["mode_id"],
             "status": "pass",
             "assertion": "passes",
             "evidence": {"transport_path": mode["transport"]},
-            "correlation_id": f"{mode['mode_id']}-required_flow",
+            "correlation_id": f"{mode['mode_id']}-{scenario['scenario_id']}",
             "events": [],
         }
         for mode in modes
+        for scenario in scenarios
     ]
     summary = {
         "status": "pass",
@@ -230,7 +302,7 @@ def _fake_harness_report(output_dir):
         "failed": 0,
         "preflight": 0,
         "dependency_gap": 0,
-        "scenario_count": 1,
+        "scenario_count": len(scenarios),
         "mode_count": len(modes),
         "result_count": len(results),
         "component_modes": [mode["mode_id"] for mode in modes],

@@ -71,6 +71,7 @@ class MatrixRow:
     blocks_release: bool
     rationale: str
     evidence: dict[str, Any] = field(default_factory=dict)
+    event_flow: list[dict[str, Any]] = field(default_factory=list)
 
 
 GATE_COMMANDS: tuple[GateCommand, ...] = (
@@ -83,8 +84,8 @@ GATE_COMMANDS: tuple[GateCommand, ...] = (
     GateCommand(
         command_id="sdk_conformance",
         owner="sdk",
-        command=("pnpm", "--filter", "@aurora/client", "test"),
-        rationale="Runs the shared AuroraClient behavior suite across mock, HTTP, Tauri command, and mesh mock transports.",
+        command=("pnpm", "--filter", "@aurora/client", "test", "--", "--runInBand"),
+        rationale="Runs the shared AuroraClient event-flow suite across mock, HTTP, Tauri command, and mesh mock transports.",
     ),
     GateCommand(
         command_id="ui_flow_smoke",
@@ -128,7 +129,8 @@ def run_transport_parity_gate(
     summary = _build_summary(rows, command_results, harness_report)
     report = {
         "gate_id": "QA-008",
-        "issue": "PER-229",
+        "issue": "PER-274",
+        "supersedes_issue": "PER-229",
         "generated_at": _now(),
         "release_ready": summary["status"] == "pass",
         "summary": summary,
@@ -243,7 +245,7 @@ def _build_rows(
 
     android = _mobile_row(command_map["android_release_gate"])
     ios = _ios_row()
-    return [
+    rows = [
         harness_by_id["thread_localbus"],
         harness_by_id["process_bullmq_redis"],
         harness_by_id["http_gateway_thin_client"],
@@ -252,6 +254,8 @@ def _build_rows(
         android,
         ios,
     ]
+    _attach_event_flow_evidence(rows, harness_report, command_map)
+    return rows
 
 
 def _row_from_harness_mode(harness_report: HarnessReport, mode_id: str) -> MatrixRow:
@@ -381,6 +385,241 @@ def _ios_row() -> MatrixRow:
     )
 
 
+def _attach_event_flow_evidence(
+    rows: Sequence[MatrixRow],
+    harness_report: HarnessReport,
+    command_map: dict[str, CommandResult],
+) -> None:
+    for row in rows:
+        row.event_flow = _event_flow_for_row(row, harness_report, command_map)
+        _apply_event_flow_gate(row)
+
+
+def _event_flow_for_row(
+    row: MatrixRow,
+    harness_report: HarnessReport,
+    command_map: dict[str, CommandResult],
+) -> list[dict[str, Any]]:
+    if row.row_id in {"android_thin_local_light", "ios_thin_local_light"}:
+        return _mobile_event_flow(row)
+
+    assistant_commands = ["sdk_conformance", "ui_flow_smoke"]
+    if row.row_id == "tauri_local_native":
+        assistant_commands.append("tauri_local_smoke")
+
+    return [
+        _scenario_requirement(
+            harness_report,
+            row.row_id,
+            requirement_id="registry_capability_graph",
+            label="SDK client loads registry/capability graph",
+            scenario_ids=("catalog_local_remote_blocked", "route_explain"),
+        ),
+        _command_requirement(
+            command_map,
+            requirement_id="assistant_request_stream_cancel",
+            label="Assistant request/stream/cancel basics are exercised or explicitly degraded",
+            command_ids=tuple(assistant_commands),
+        ),
+        _scenario_requirement(
+            harness_report,
+            row.row_id,
+            requirement_id="config_or_service_health_event",
+            label="A config or service-health event reaches the UI/SDK event subscriber",
+            scenario_ids=("unified_event_stream",),
+        ),
+        _mesh_requirement(row, harness_report),
+        _scenario_requirement(
+            harness_report,
+            row.row_id,
+            requirement_id="denied_or_privacy_blocked_state",
+            label="A denied or privacy-blocked action surfaces a typed state",
+            scenario_ids=(
+                "auth_config_denied",
+                "dangerous_local_approval",
+                "streaming_audio_consent",
+            ),
+        ),
+        _scenario_requirement(
+            harness_report,
+            row.row_id,
+            requirement_id="audit_correlation_redacted",
+            label="Audit/correlation IDs are present and redacted",
+            scenario_ids=("support_bundle",),
+        ),
+    ]
+
+
+def _mobile_event_flow(row: MatrixRow) -> list[dict[str, Any]]:
+    status = "pass" if row.status == "pass" else "dependency_gap"
+    rationale = (
+        "Mobile platform event-flow evidence is attached for this row."
+        if row.status == "pass"
+        else row.rationale
+    )
+    return [
+        {
+            "requirement_id": requirement_id,
+            "label": label,
+            "status": status,
+            "required": True,
+            "source": "mobile-platform-smoke",
+            "rationale": rationale,
+        }
+        for requirement_id, label in (
+            ("registry_capability_graph", "SDK client loads registry/capability graph"),
+            (
+                "assistant_request_stream_cancel",
+                "Assistant request/stream/cancel basics are exercised or explicitly degraded",
+            ),
+            (
+                "config_or_service_health_event",
+                "A config or service-health event reaches the UI/SDK event subscriber",
+            ),
+            (
+                "denied_or_privacy_blocked_state",
+                "A denied or privacy-blocked action surfaces a typed state",
+            ),
+            ("audit_correlation_redacted", "Audit/correlation IDs are present and redacted"),
+        )
+    ] + [
+        {
+            "requirement_id": "mesh_provenance_event",
+            "label": "Mesh/provenance event proves source/target peer behavior where mesh is available",
+            "status": "not_applicable",
+            "required": False,
+            "source": "mobile-platform-smoke",
+            "rationale": "Mobile thin/local-light rows do not claim two-peer mesh support without a platform mesh smoke.",
+        }
+    ]
+
+
+def _scenario_requirement(
+    harness_report: HarnessReport,
+    mode_id: str,
+    *,
+    requirement_id: str,
+    label: str,
+    scenario_ids: tuple[str, ...],
+) -> dict[str, Any]:
+    results = [
+        result
+        for result in harness_report.results
+        if result["mode_id"] == mode_id and result["scenario_id"] in scenario_ids
+    ]
+    found = {result["scenario_id"] for result in results}
+    missing = sorted(set(scenario_ids) - found)
+    statuses = {result["status"] for result in results}
+    if missing:
+        status = "missing"
+        rationale = f"Missing harness scenarios: {missing}"
+    elif statuses == {"pass"}:
+        status = "pass"
+        rationale = "Required harness scenario evidence passed."
+    elif "fail" in statuses:
+        status = "fail"
+        rationale = "At least one required harness scenario failed."
+    elif statuses == {"dependency_gap"}:
+        status = "dependency_gap"
+        rationale = "Required runtime dependency was unavailable for this row."
+    else:
+        status = "blocked"
+        rationale = f"Mixed required harness statuses: {sorted(statuses)}"
+    return {
+        "requirement_id": requirement_id,
+        "label": label,
+        "status": status,
+        "required": True,
+        "source": "mesh_gap_e2e_harness",
+        "scenario_ids": list(scenario_ids),
+        "correlation_ids": [
+            result.get("correlation_id") for result in results if result.get("correlation_id")
+        ],
+        "rationale": rationale,
+    }
+
+
+def _command_requirement(
+    command_map: dict[str, CommandResult],
+    *,
+    requirement_id: str,
+    label: str,
+    command_ids: tuple[str, ...],
+) -> dict[str, Any]:
+    statuses = {
+        command_id: command_map[command_id].status
+        for command_id in command_ids
+        if command_id in command_map
+    }
+    missing = sorted(set(command_ids) - set(statuses))
+    if missing:
+        status = "missing"
+        rationale = f"Missing command results: {missing}"
+    elif all(command_status == "pass" for command_status in statuses.values()):
+        status = "pass"
+        rationale = "Required SDK/UI event-flow command evidence passed."
+    elif any(command_status == "fail" for command_status in statuses.values()):
+        status = "fail"
+        rationale = "At least one required SDK/UI event-flow command failed."
+    elif any(command_status == "not_run" for command_status in statuses.values()):
+        status = "not_run"
+        rationale = "Required SDK/UI event-flow command was not run."
+    else:
+        status = "blocked"
+        rationale = f"Unexpected command statuses: {statuses}"
+    return {
+        "requirement_id": requirement_id,
+        "label": label,
+        "status": status,
+        "required": True,
+        "source": "sdk_ui_commands",
+        "command_ids": list(command_ids),
+        "command_statuses": statuses,
+        "rationale": rationale,
+    }
+
+
+def _mesh_requirement(row: MatrixRow, harness_report: HarnessReport) -> dict[str, Any]:
+    if row.row_id != "mesh_webrtc":
+        return {
+            "requirement_id": "mesh_provenance_event",
+            "label": "Mesh/provenance event proves source/target peer behavior where mesh is available",
+            "status": "not_applicable",
+            "required": False,
+            "source": "mesh_gap_e2e_harness",
+            "rationale": "This row does not claim mesh/WebRTC transport support.",
+        }
+    return _scenario_requirement(
+        harness_report,
+        row.row_id,
+        requirement_id="mesh_provenance_event",
+        label="Mesh/provenance event proves source/target peer behavior where mesh is available",
+        scenario_ids=("safe_remote_tool", "route_explain", "support_bundle"),
+    )
+
+
+def _apply_event_flow_gate(row: MatrixRow) -> None:
+    required = [item for item in row.event_flow if item.get("required", True)]
+    failed = [item["requirement_id"] for item in required if item["status"] == "fail"]
+    blocked = [
+        item["requirement_id"]
+        for item in required
+        if item["status"] in {"blocked", "dependency_gap", "missing", "not_run"}
+    ]
+    row.evidence["event_flow_requirements"] = {
+        item["requirement_id"]: item["status"] for item in row.event_flow
+    }
+    if failed:
+        row.status = "fail"
+        row.blocks_release = True
+        row.rationale = f"{row.rationale} Event-flow requirement(s) failed: {failed}."
+    elif blocked:
+        row.blocks_release = True
+        if row.status == "pass":
+            row.status = "blocked"
+        row.rationale = f"{row.rationale} Event-flow requirement(s) incomplete: {blocked}."
+
+
 def _merge_command_status(row: MatrixRow, result: CommandResult) -> None:
     if result.artifact_path:
         row.artifact_paths.append(result.artifact_path)
@@ -430,6 +669,25 @@ def _build_summary(
             for result in command_results
         ),
         "mock_only_evidence_sufficient": False,
+        "event_flow_gate": {
+            "required_requirements": [
+                "registry_capability_graph",
+                "assistant_request_stream_cancel",
+                "config_or_service_health_event",
+                "denied_or_privacy_blocked_state",
+                "audit_correlation_redacted",
+            ],
+            "mesh_required_when_available": "mesh_provenance_event",
+            "missing_or_incomplete": {
+                row.row_id: [
+                    item["requirement_id"]
+                    for item in row.event_flow
+                    if item.get("required", True)
+                    and item["status"] in {"blocked", "dependency_gap", "missing", "not_run"}
+                ]
+                for row in rows
+            },
+        },
         "mesh_final_proof": harness_report.summary["final_mesh_mode_status"],
         "process_redis_dependency_gap": "process_bullmq_redis"
         in harness_report.summary["dependency_gap_modes"],
