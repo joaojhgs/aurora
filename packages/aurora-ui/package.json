@@ -25,9 +25,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
+    "build": "pnpm --dir ../.. --filter @aurora/client build && tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment node",
+    "test": "pnpm --dir ../.. --filter @aurora/client build && vitest run --environment node",
     "test:qa004": "pnpm --dir ../.. --filter @aurora/client build && vitest run --environment node tests/qa-004-accessibility-responsive-visual.test.tsx"
   },
   "dependencies": {
