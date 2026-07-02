@@ -738,10 +738,43 @@ describe('Aurora production shell', () => {
         nativePlatform={snapshot.nativePlatform}
         nativePermissions={snapshot.nativePermissions}
         nativeCapabilities={snapshot.nativeCapabilities}
+        initialSession={{
+          sessionId: 'assistant-session-tool-card',
+          messages: [
+            {
+              id: 'assistant-tool-call-message',
+              role: 'assistant',
+              text: 'I need a tool approval before continuing.',
+              createdAt: '2026-06-19T00:00:00Z',
+              status: 'streaming',
+              toolCalls: [
+                {
+                  id: 'tool-call-local-health',
+                  name: 'Gateway.GetServices',
+                  status: 'requested',
+                  riskClass: 'read-only',
+                  target: 'local Gateway',
+                  dataLeavesDevice: false,
+                  summary: 'Read service health from the local Gateway before answering.',
+                  auditId: 'corr-tool-call-001'
+                }
+              ]
+            }
+          ]
+        }}
       />
     )
 
     expect(markup).toContain('Text chat')
+    expect(markup).toContain('Recent chats')
+    expect(markup).toContain('Conversation rail')
+    expect(markup).toContain('New conversation')
+    expect(markup).toContain('Assistant conversation list')
+    expect(markup).toContain('Orchestrator.ExternalUserInput')
+    expect(markup).toContain('Assistant tool call cards')
+    expect(markup).toContain('Gateway.GetServices')
+    expect(markup).toContain('Review in Tools')
+    expect(markup).toContain('corr-tool-call-001')
     expect(markup).toContain('Voice modes')
     expect(markup).toContain('Browser capture')
     expect(markup).toContain('Native capture')
@@ -750,7 +783,6 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('local / Orchestrator.ExternalUserInput')
     expect(markup).toContain('model pending')
     expect(markup).toContain('personal')
-    expect(markup).toContain('Start with a prompt')
     expect(markup).toContain('Ask Aurora...')
     expect(markup).toContain('Attachments and shared content')
     expect(markup).toContain('Privacy label')
@@ -759,6 +791,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Add files or images')
     expect(markup).toContain('Native mobile share payloads remain disabled')
     expect(markup).toContain('0 context ready')
+    expect(markup).toContain('Route sheet')
 
     const disabledMarkup = renderToStaticMarkup(
       <AssistantView
@@ -769,6 +802,7 @@ describe('Aurora production shell', () => {
     )
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
+    expect(disabledMarkup).toContain('Start with a prompt')
   })
 
   it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {

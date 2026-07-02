@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, Mic, Paperclip, Radio, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, Volume2, WifiOff } from 'lucide-react'
+import { Link, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, Volume2, WifiOff, Wrench } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -32,9 +32,21 @@ export interface AssistantViewProps {
   nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
   recentVoiceEvents?: VoiceRuntimeEvent[] | undefined
   storageKey?: string
+  initialSession?: AssistantSessionSnapshot | undefined
 }
 
 export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'failed' | 'cancelled'
+
+export interface AssistantToolCallCard {
+  id: string
+  name: string
+  status: 'requested' | 'running' | 'completed' | 'failed'
+  riskClass: string
+  target: string
+  dataLeavesDevice: boolean
+  summary: string
+  auditId: string | null
+}
 
 export interface AssistantUiMessage {
   id: string
@@ -43,6 +55,7 @@ export interface AssistantUiMessage {
   createdAt: string
   status: AssistantUiMessageStatus
   error?: string | undefined
+  toolCalls?: AssistantToolCallCard[] | undefined
 }
 
 export interface AssistantSessionSnapshot {
@@ -160,9 +173,10 @@ export function AssistantView({
   nativePermissions = emptyNativePermissionList,
   nativeCapabilities = emptyNativeCapabilityList,
   recentVoiceEvents = emptyVoiceEventList,
-  storageKey = defaultStorageKey
+  storageKey = defaultStorageKey,
+  initialSession
 }: AssistantViewProps) {
-  const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())
+  const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? emptyAssistantSession())
   const [text, setText] = useState('')
   const [urlDraft, setUrlDraft] = useState('')
   const [sharedTextDraft, setSharedTextDraft] = useState('')
@@ -221,8 +235,8 @@ export function AssistantView({
   )
 
   useEffect(() => {
-    setSession(loadAssistantSession(storageKey))
-  }, [storageKey])
+    setSession(initialSession ?? loadAssistantSession(storageKey))
+  }, [initialSession, storageKey])
 
   useEffect(() => {
     persistAssistantSession(storageKey, session)
@@ -452,6 +466,23 @@ export function AssistantView({
       }))
       return
     }
+    if (update.kind === 'tool') {
+      const toolCall = assistantToolCallFromUpdate(update)
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : 'Aurora requested a tool call. Review the approval card before execution.',
+                toolCalls: upsertAssistantToolCall(message.toolCalls, toolCall)
+              }
+            : message
+        )
+      }))
+      setStreamState((current) => ({ ...current, status: 'streaming', message: 'Tool call approval card received from assistant stream.' }))
+      return
+    }
     if (update.kind === 'failed') {
       const error = assistantErrorMessage(update.error ?? new Error(update.text))
       setLastError(error)
@@ -598,6 +629,21 @@ export function AssistantView({
     voiceStreamRef.current = null
   }
 
+  function startNewConversation() {
+    abortRef.current?.abort()
+    stopLocalCapture()
+    cancelledPendingIdsRef.current.clear()
+    activePendingIdRef.current = null
+    setSession(emptyAssistantSession())
+    setLastResult(null)
+    setModelLabel(null)
+    setLastError(null)
+    setLastPrompt(null)
+    setStreamState(idleAssistantStreamState())
+    setText('')
+    textAreaRef.current?.focus()
+  }
+
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
       <header className="aui-assistant-header">
@@ -629,6 +675,13 @@ export function AssistantView({
       ) : null}
 
       <div className="aui-assistant-grid">
+        <ConversationRail
+          session={session}
+          route={route}
+          transportKind={client.transport.kind}
+          onNewConversation={startNewConversation}
+        />
+
         <div className="aui-chat-panel" aria-live="polite">
           {session.messages.length === 0 ? (
             <div className="aui-chat-empty">
@@ -826,6 +879,21 @@ export function AssistantView({
         </button>
       </form>
     </section>
+  )
+}
+
+function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard {
+  if (typeof value !== 'object' || value === null) return false
+  const tool = value as Partial<AssistantToolCallCard>
+  return (
+    typeof tool.id === 'string' &&
+    typeof tool.name === 'string' &&
+    (tool.status === 'requested' || tool.status === 'running' || tool.status === 'completed' || tool.status === 'failed') &&
+    typeof tool.riskClass === 'string' &&
+    typeof tool.target === 'string' &&
+    typeof tool.dataLeavesDevice === 'boolean' &&
+    typeof tool.summary === 'string' &&
+    (tool.auditId === null || typeof tool.auditId === 'string')
   )
 }
 
@@ -1593,6 +1661,57 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function ConversationRail({
+  session,
+  route,
+  transportKind,
+  onNewConversation
+}: {
+  session: AssistantSessionSnapshot
+  route: RouteAvailability
+  transportKind: string
+  onNewConversation: () => void
+}) {
+  const recentMessages = session.messages.slice(-4).reverse()
+  return (
+    <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
+      <header>
+        <div>
+          <p className="aui-kicker">Recent chats</p>
+          <h2 id="assistant-recent-chats-title">Conversation rail</h2>
+        </div>
+        <button type="button" onClick={onNewConversation} aria-label="New conversation">
+          <MessageSquarePlus size={16} aria-hidden />
+          <span>New</span>
+        </button>
+      </header>
+      <ul aria-label="Assistant conversation list">
+        <li className="active">
+          <button type="button" aria-current="true">
+            <strong>{session.sessionId ?? 'Current thread'}</strong>
+            <span>{session.messages.length} message(s) / {route.state}</span>
+          </button>
+        </li>
+        {recentMessages.length === 0 ? (
+          <li className="empty">No prior turns in this local browser session.</li>
+        ) : recentMessages.map((message) => (
+          <li key={message.id}>
+            <button type="button">
+              <strong>{message.role === 'user' ? 'You' : 'Aurora'} · {message.status}</strong>
+              <span>{message.text.slice(0, 84) || 'Tool call update'}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <dl>
+        <div><dt>Transport</dt><dd>{transportKind}</dd></div>
+        <div><dt>Backend</dt><dd>Orchestrator.ExternalUserInput</dd></div>
+        <div><dt>Route sheet</dt><dd>shown before remote or mesh dispatch</dd></div>
+      </dl>
+    </aside>
+  )
+}
+
 function ChatBubble({ message }: { message: AssistantUiMessage }) {
   return (
     <article className={`aui-chat-bubble aui-chat-${message.role} aui-chat-${message.status}`}>
@@ -1601,8 +1720,77 @@ function ChatBubble({ message }: { message: AssistantUiMessage }) {
         <span>{message.status}</span>
       </header>
       <p>{message.text}</p>
+      {message.toolCalls?.length ? (
+        <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
+          {message.toolCalls.map((tool) => <AssistantToolCallCardView key={tool.id} tool={tool} />)}
+        </div>
+      ) : null}
     </article>
   )
+}
+
+function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
+  return (
+    <section className={`aui-assistant-tool-card aui-tool-call-${tool.status}`} aria-label={`${tool.name} tool call card`}>
+      <header>
+        <Wrench size={15} aria-hidden />
+        <strong>{tool.name}</strong>
+        <span>{tool.riskClass}</span>
+      </header>
+      <dl>
+        <div><dt>Status</dt><dd>{tool.status}</dd></div>
+        <div><dt>Target</dt><dd>{tool.target}</dd></div>
+        <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'yes' : 'no'}</dd></div>
+        <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
+      </dl>
+      <p>{tool.summary}</p>
+      <a href="/tools" className="aui-action-chip">Review in Tools</a>
+    </section>
+  )
+}
+
+function assistantToolCallFromUpdate(update: AssistantStreamUpdate): AssistantToolCallCard {
+  const metadata = update.metadata ?? {}
+  const name = metadataStringValue(metadata, 'tool_name') ?? metadataStringValue(metadata, 'toolName') ?? metadataStringValue(metadata, 'name') ?? 'tool.requested'
+  const status = toolStatusFromUpdate(update)
+  return {
+    id: update.eventId ?? `${name}-${Date.now()}`,
+    name,
+    status,
+    riskClass: metadataStringValue(metadata, 'risk_class') ?? metadataStringValue(metadata, 'riskClass') ?? 'backend-evaluated',
+    target: metadataStringValue(metadata, 'target') ?? metadataStringValue(metadata, 'provider') ?? 'Aurora tool provider',
+    dataLeavesDevice: metadataBooleanValue(metadata, 'data_leaves_device') ?? metadataBooleanValue(metadata, 'dataLeavesDevice') ?? false,
+    summary: update.text || metadataStringValue(metadata, 'summary') || 'The assistant stream reported a backend tool event; approve or deny through the Tools approval surface.',
+    auditId: update.audit.correlationId ?? null
+  }
+}
+
+function upsertAssistantToolCall(
+  current: AssistantToolCallCard[] | undefined,
+  next: AssistantToolCallCard
+): AssistantToolCallCard[] {
+  const existing = current ?? []
+  const index = existing.findIndex((tool) => tool.id === next.id || tool.name === next.name)
+  if (index === -1) return [...existing, next]
+  return existing.map((tool, currentIndex) => currentIndex === index ? { ...tool, ...next } : tool)
+}
+
+function toolStatusFromUpdate(update: AssistantStreamUpdate): AssistantToolCallCard['status'] {
+  const value = metadataStringValue(update.metadata ?? {}, 'status')?.toLowerCase()
+  if (value === 'running' || value === 'completed' || value === 'failed') return value
+  if (update.text.toLowerCase().includes('completed')) return 'completed'
+  if (update.text.toLowerCase().includes('failed')) return 'failed'
+  return 'requested'
+}
+
+function metadataStringValue(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key]
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function metadataBooleanValue(metadata: Record<string, unknown>, key: string): boolean | null {
+  const value = metadata[key]
+  return typeof value === 'boolean' ? value : null
 }
 
 function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
@@ -1613,6 +1801,7 @@ function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
     (message.role === 'user' || message.role === 'assistant') &&
     typeof message.text === 'string' &&
     typeof message.createdAt === 'string' &&
+    (message.toolCalls === undefined || (Array.isArray(message.toolCalls) && message.toolCalls.every(isAssistantToolCallCard))) &&
     (message.status === 'sent' ||
       message.status === 'sending' ||
       message.status === 'streaming' ||
