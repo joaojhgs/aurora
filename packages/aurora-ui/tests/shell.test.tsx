@@ -664,6 +664,39 @@ describe('Aurora production shell', () => {
 
     expect(model.providerCount).toBe(4)
     expect(model.selectedProviderId).toBe('local:Orchestrator:llama-cpp')
+    expect(model.remoteCount).toBe(2)
+    expect(model.categoryRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: 'Currently selected provider',
+        value: 'llama.cpp desktop'
+      }),
+      expect.objectContaining({
+        label: 'Configured providers',
+        value: '4 configured'
+      }),
+      expect.objectContaining({
+        label: 'Installed local models',
+        value: '1 installed',
+        detail: expect.stringContaining('llama-3-8b-instruct.Q4_K_M.gguf')
+      }),
+      expect.objectContaining({
+        label: 'Downloadable/importable models',
+        value: '0 active operations',
+        detail: expect.stringContaining('AdminAction import and download contracts remain disabled')
+      }),
+      expect.objectContaining({
+        label: 'Benchmarkable providers',
+        value: '2 with benchmark evidence'
+      }),
+      expect.objectContaining({
+        label: 'Mesh/remote providers',
+        value: '2 remote-capable'
+      }),
+      expect.objectContaining({
+        label: 'Mobile local-light availability',
+        value: 'unsupported'
+      })
+    ]))
     expect(model.providers.find((provider) => provider.id === 'local:Orchestrator:llama-cpp')).toEqual(
       expect.objectContaining({
         availability: 'available-local',
@@ -736,6 +769,21 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Mobile local-light runtime')
     expect(markup).toContain('3 routeable')
     expect(markup).not.toContain('0 selectable')
+    expect(markup).toContain('2 remote')
+    expect(markup).toContain('Model runtime categories')
+    expect(markup).toContain('Currently selected provider')
+    expect(markup).toContain('Configured providers')
+    expect(markup).toContain('4 configured')
+    expect(markup).toContain('Installed local models')
+    expect(markup).toContain('1 installed')
+    expect(markup).toContain('Downloadable/importable models')
+    expect(markup).toContain('0 active operations')
+    expect(markup).toContain('No import/download operation is active')
+    expect(markup).toContain('Benchmarkable providers')
+    expect(markup).toContain('2 with benchmark evidence')
+    expect(markup).toContain('Mesh/remote providers')
+    expect(markup).toContain('2 remote-capable')
+    expect(markup).toContain('Mobile local-light availability')
     expect(markup).toContain('Provider route policy')
     expect(markup).toContain('Benchmark snapshot')
     expect(markup).toContain('Runtime warnings')

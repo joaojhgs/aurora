@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:40:34.452Z",
+  "updatedAt": "2026-07-02T13:46:07.831Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1506,10 +1506,12 @@
       "id": "G130-distinguish",
       "title": "Distinguish:",
       "objective": "Distinguish:\ncurrently selected provider;\nconfigured providers;\ninstalled local models;\ndownloadable/importable models;\nbenchmarkable providers;\nmesh/remote providers;\nmobile local-light availability.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:46:07.831Z",
+      "completedAt": "2026-07-02T13:46:07.831Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'model runtime'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G131-ui",

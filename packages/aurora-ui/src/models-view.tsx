@@ -56,6 +56,14 @@ export interface ModelBenchmarkSnapshotRow {
   state: AvailabilityState
 }
 
+export interface ModelRuntimeCategoryRow {
+  id: string
+  label: string
+  value: string
+  detail: string
+  state: AvailabilityState
+}
+
 export interface ModelsViewModel {
   loadState: 'loading' | 'ready' | 'empty' | 'error'
   generatedAt: string | null
@@ -68,6 +76,7 @@ export interface ModelsViewModel {
   secretsRedacted: boolean
   error: string | null
   providers: ModelProviderViewModel[]
+  categoryRows: ModelRuntimeCategoryRow[]
   benchmarkRows: ModelBenchmarkSnapshotRow[]
   warnings: string[]
 }
@@ -84,6 +93,7 @@ const emptyModel: ModelsViewModel = {
   secretsRedacted: true,
   error: null,
   providers: [],
+  categoryRows: [],
   benchmarkRows: [],
   warnings: []
 }
@@ -166,6 +176,7 @@ export function ModelsView({
 
       {model.providers.length > 0 ? (
         <>
+          <ModelRuntimeCategories rows={model.categoryRows} />
           <div className="aui-model-grid">
             {model.providers.map((provider) => (
               <ModelProviderCard key={provider.id} provider={provider} />
@@ -213,12 +224,13 @@ export function buildModelsViewModel(input: {
     selectedProviderId: input.catalog.selected_provider_id,
     providerCount: providers.length,
     availableCount: providers.filter(providerRouteable).length,
-    remoteCount: providers.filter((provider) => provider.providerType !== 'local').length,
+    remoteCount: providers.filter(isMeshOrRemoteProvider).length,
     mobileLocalLightState: mobile.state,
     mobileLocalLightReason: mobile.reason,
     secretsRedacted: input.catalog.secrets_redacted,
     error: null,
     providers,
+    categoryRows: modelCategoryRows(providers, mobile),
     benchmarkRows: benchmarkSnapshotRows(providers),
     warnings: modelWarnings(providers, mobile)
   }
@@ -226,6 +238,10 @@ export function buildModelsViewModel(input: {
 
 function providerRouteable(provider: ModelProviderViewModel): boolean {
   return ['available-local', 'available-remote', 'degraded'].includes(provider.availability)
+}
+
+function isMeshOrRemoteProvider(provider: ModelProviderViewModel): boolean {
+  return provider.providerType === 'mesh' || provider.providerType === 'cloud' || provider.providerType === 'remote'
 }
 
 function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
@@ -263,6 +279,32 @@ function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
         </ul>
       ) : null}
     </article>
+  )
+}
+
+function ModelRuntimeCategories({ rows }: { rows: ModelRuntimeCategoryRow[] }) {
+  return (
+    <section className="aui-model-categories" aria-labelledby="model-categories-title">
+      <div className="aui-model-panel-title">
+        <span><HardDrive size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="model-categories-title">Model runtime categories</h2>
+          <p>Provider inventory separates selection, configured backends, local files, operations, benchmarks, mesh routes, and mobile-native proof.</p>
+        </div>
+      </div>
+      <dl>
+        {rows.map((row) => (
+          <div key={row.id}>
+            <dt>{row.label}</dt>
+            <dd>
+              <StatusBadge state={row.state} />
+              <strong>{row.value}</strong>
+              <small>{row.detail}</small>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   )
 }
 
@@ -527,6 +569,92 @@ function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchm
       state: unavailable.length > 0 ? 'degraded' : 'available-local'
     }
   ]
+}
+
+function modelCategoryRows(
+  providers: ModelProviderViewModel[],
+  mobile: { state: AvailabilityState; reason: string }
+): ModelRuntimeCategoryRow[] {
+  const selected = providers.find((provider) => provider.selected)
+  const configured = providers
+  const installedLocal = providers.filter((provider) =>
+    provider.providerType === 'local' && provider.files !== 'no local files reported'
+  )
+  const activeImportDownload = providers.filter((provider) => provider.canImport || provider.canDownload)
+  const benchmarkable = providers.filter(hasBenchmarkEvidence)
+  const meshRemote = providers.filter(isMeshOrRemoteProvider)
+
+  return [
+    {
+      id: 'selected-provider',
+      label: 'Currently selected provider',
+      value: selected ? selected.name : 'not selected',
+      detail: selected
+        ? `${selected.id}; ${selected.selectReason}`
+        : 'Backend catalog did not report a selected provider.',
+      state: selected?.availability ?? 'pending'
+    },
+    {
+      id: 'configured-providers',
+      label: 'Configured providers',
+      value: `${configured.length} configured`,
+      detail: configured.length > 0
+        ? configured.map((provider) => `${provider.name} (${provider.providerType})`).join(', ')
+        : 'No providers were returned by the model runtime catalog.',
+      state: configured.length > 0 ? 'available-local' : 'unsupported'
+    },
+    {
+      id: 'installed-local-models',
+      label: 'Installed local models',
+      value: `${installedLocal.length} installed`,
+      detail: installedLocal.length > 0
+        ? installedLocal.map((provider) => `${provider.name}: ${provider.files}`).join(', ')
+        : 'No installed local model files were reported by the backend catalog.',
+      state: installedLocal.length > 0 ? 'available-local' : 'unsupported'
+    },
+    {
+      id: 'downloadable-importable-models',
+      label: 'Downloadable/importable models',
+      value: `${activeImportDownload.length} active operations`,
+      detail: activeImportDownload.length > 0
+        ? activeImportDownload.map((provider) => `${provider.name}: ${provider.operationStatus}`).join(', ')
+        : 'No import/download operation is active; AdminAction import and download contracts remain disabled.',
+      state: activeImportDownload.length > 0 ? 'degraded' : 'pending'
+    },
+    {
+      id: 'benchmarkable-providers',
+      label: 'Benchmarkable providers',
+      value: `${benchmarkable.length} with benchmark evidence`,
+      detail: benchmarkable.length > 0
+        ? benchmarkable.map((provider) => `${provider.name}: ${provider.benchmark}`).join(', ')
+        : 'No benchmarkable providers or completed benchmark measurements were returned.',
+      state: benchmarkable.length > 0 ? 'available-local' : 'pending'
+    },
+    {
+      id: 'mesh-remote-providers',
+      label: 'Mesh/remote providers',
+      value: `${meshRemote.length} remote-capable`,
+      detail: meshRemote.length > 0
+        ? meshRemote.map((provider) => `${provider.name}: ${provider.routeLabel}`).join(', ')
+        : 'No mesh, cloud, or remote provider routes were reported.',
+      state: meshRemote.some(providerRouteable) ? 'available-remote' : meshRemote.length > 0 ? 'privacy-blocked' : 'unsupported'
+    },
+    {
+      id: 'mobile-local-light-availability',
+      label: 'Mobile local-light availability',
+      value: mobile.state,
+      detail: mobile.reason,
+      state: mobile.state
+    }
+  ]
+}
+
+function hasBenchmarkEvidence(provider: ModelProviderViewModel): boolean {
+  if (provider.canBenchmark) return true
+  return !provider.benchmark.includes('unsupported')
+    && !provider.benchmark.includes('unavailable')
+    && !provider.benchmark.includes('idle')
+    && !provider.benchmark.includes('pending')
 }
 
 function modelWarnings(
