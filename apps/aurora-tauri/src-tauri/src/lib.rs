@@ -3662,7 +3662,13 @@ mod tests {
     #[test]
     fn default_sidecar_working_dir_points_to_repo_root() {
         let cwd = sidecar_working_dir();
-        assert!(cwd.ends_with("aurora"));
+        assert!(cwd.join("main.py").is_file());
+        assert!(cwd
+            .join("app")
+            .join("services")
+            .join("config")
+            .join("config_defaults.json")
+            .is_file());
     }
 
     #[test]

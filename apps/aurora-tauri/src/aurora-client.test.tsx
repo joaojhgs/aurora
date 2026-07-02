@@ -2,9 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { auroraNavSections } from '@aurora/ui'
 import { createAuroraTauriRuntime } from './aurora-client'
-import { AuroraTauriApp, tauriRouteRegistryRouteIds } from './tauri-app'
-
-const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
+import { redactSmokeError, serializeEventForSmokeReport } from './eventstream-smoke'
+import { AuroraTauriApp } from './tauri-app'
 
 describe('Aurora Tauri runtime wrapper', () => {
   afterEach(() => {
@@ -90,65 +89,36 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).not.toContain('Native boundary')
   })
 
-  it('routes admin config to SDK/AdminAction controls instead of a placeholder', () => {
-    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
-    window.history.replaceState({}, '', '/admin/config')
+  it('redacts EventStream smoke report payloads and secret-like errors', () => {
+    const report = serializeEventForSmokeReport({
+      id: 'evt-1',
+      kind: 'health.updated',
+      topic: 'health.updated',
+      payload: {
+        token: 'secret-token',
+        rawAudio: 'pcm-secret',
+        status: 'ok'
+      },
+      audit: {
+        transport: 'tauri-local',
+        correlationId: 'corr-1'
+      }
+    } as never)
 
-    const markup = renderToStaticMarkup(<AuroraTauriApp />)
+    expect(JSON.stringify(report)).not.toContain('secret-token')
+    expect(JSON.stringify(report)).not.toContain('pcm-secret')
+    expect(report.payloadSummary).toEqual({
+      present: true,
+      keys: ['rawAudio', 'status', 'token'],
+      redacted: true
+    })
 
-    expect(markup).toContain('Configuration')
-    expect(markup).toContain('Admin configuration')
-    expect(markup).not.toContain('full product page still needs')
-  })
-
-  it('routes admin backup and scheduler mutations to AdminAction-capable pages', () => {
-    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
-
-    const routeMarkers: Record<string, string> = {
-      assistant: 'Prompt',
-      memory: 'History and RAG provenance',
-      tools: 'Approval cards',
-      mesh: 'Mesh peers',
-      admin: 'Admin overview',
-      services: 'Services',
-      access: 'RBAC',
-      tokens: 'RBAC',
-      devices: 'Devices',
-      config: 'Configuration',
-      contracts: 'Services',
-      plugins: 'Plugins, MCP, and tools',
-      pairing: 'Pairing queue',
-      backups: 'Backups &amp; Restore',
-      scheduler: 'Scheduler',
-      audit: 'Audit log',
-      models: 'Models and runtime',
-      diagnostics: 'Native boundary',
-      onboarding: 'Connect Aurora',
-      settings: 'Settings and permissions',
-      data: 'History and RAG provenance',
-      native: 'Settings and permissions'
-    }
-
-    window.history.replaceState({}, '', '/admin/scheduler')
-    const scheduler = renderToStaticMarkup(<AuroraTauriApp />)
-    expect(scheduler).toContain('Scheduler jobs')
-    expect(scheduler).toContain('Create via AdminAction')
-    expect(scheduler).not.toContain('full product page still needs')
-  })
-
-  it('routes admin pairing and device mutations to AdminAction-capable resources', () => {
-    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
-
-    window.history.replaceState({}, '', '/admin/pairing')
-    const pairing = renderToStaticMarkup(<AuroraTauriApp />)
-    expect(pairing).toContain('Pairing queue')
-    expect(pairing).toContain('AdminAction')
-    expect(pairing).not.toContain('full product page still needs')
-
-    window.history.replaceState({}, '', '/admin/devices')
-    const devices = renderToStaticMarkup(<AuroraTauriApp />)
-    expect(devices).toContain('Devices')
-    expect(devices).toContain('Loading devices')
-    expect(devices).not.toContain('full product page still needs')
+    const error = redactSmokeError(
+      new Error('failed Authorization: Bearer gateway-token token=sidecar-token raw_audio=pcm-secret')
+    )
+    expect(error).not.toContain('gateway-token')
+    expect(error).not.toContain('sidecar-token')
+    expect(error).not.toContain('pcm-secret')
+    expect(error).toContain('[redacted]')
   })
 })

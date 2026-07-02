@@ -7,17 +7,23 @@ import { listen } from '@tauri-apps/api/event'
 interface SmokeReport {
   ok: boolean
   scenario: string
-  receivedEvent?: {
-    id?: string | null
-    kind?: string
-    topic?: string | null
-    payload?: unknown
-    transport?: string | null
-    correlationId?: string | null
-  }
+  receivedEvent?: SmokeReceivedEvent
   sdkClosed?: boolean
   error?: string
   secretsRedacted: true
+}
+
+interface SmokeReceivedEvent {
+  id?: string | null
+  kind?: string
+  topic?: string | null
+  payloadSummary: {
+    present: boolean
+    keys: string[]
+    redacted: true
+  }
+  transport?: string | null
+  correlationId?: string | null
 }
 
 export function mountEventStreamSmoke(element: HTMLElement) {
@@ -36,7 +42,7 @@ function EventStreamSmoke() {
     runEventStreamSmoke((next) => {
       if (!cancelled) setStatus(next)
     }).catch((error: unknown) => {
-      console.error('Aurora EventStream smoke failed', error)
+      console.error('Aurora EventStream smoke failed', redactSmokeError(error))
       if (!cancelled) setStatus('failed')
     })
     return () => {
@@ -90,7 +96,7 @@ async function runEventStreamSmoke(setStatus: (status: string) => void) {
     })
     setStatus('passed')
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = redactSmokeError(error)
     await postReport(reportUrl, {
       ...reportBase,
       error: message
@@ -100,15 +106,40 @@ async function runEventStreamSmoke(setStatus: (status: string) => void) {
   }
 }
 
-function serializeEvent(event: AuroraEvent): SmokeReport['receivedEvent'] {
+export function serializeEventForSmokeReport(event: AuroraEvent): SmokeReceivedEvent {
   return {
     id: event.id,
     kind: event.kind,
     topic: event.topic,
-    payload: event.payload,
+    payloadSummary: summarizePayload(event.payload),
     transport: event.audit?.transport ?? null,
     correlationId: event.audit?.correlationId ?? null
   }
+}
+
+function serializeEvent(event: AuroraEvent): SmokeReceivedEvent {
+  return serializeEventForSmokeReport(event)
+}
+
+function summarizePayload(payload: unknown): SmokeReceivedEvent['payloadSummary'] {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { present: payload !== undefined && payload !== null, keys: [], redacted: true }
+  }
+  return {
+    present: true,
+    keys: Object.keys(payload).sort(),
+    redacted: true
+  }
+}
+
+export function redactSmokeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message
+    .replace(/\bBearer\s+[^,\s;'"}`\]]+/gi, 'Bearer [redacted]')
+    .replace(
+      /\b(authorization|x-aurora-sidecar-token|token|secret|password|api[_-]?key|private[_-]?key|raw[_-]?audio|audio(?:[_-]?(?:bytes|data|samples))?|pcm16)\s*[:=]\s*["']?[^,\s;'"}`\]]+/gi,
+      '$1=[redacted]'
+    )
 }
 
 async function postReport(url: string | undefined, report: SmokeReport) {
