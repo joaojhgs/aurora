@@ -2612,6 +2612,7 @@ where
             for line in reader.lines() {
                 match line {
                     Ok(line) => {
+                        let line = redact_sensitive_text(&line);
                         if stderr {
                             eprintln!("[aurora:python:{stream}] {line}");
                         } else {
@@ -2665,7 +2666,8 @@ async fn check_gateway_health(gateway: &Url) -> Result<Value, AuroraCommandError
         Ok(value)
     } else {
         Err(AuroraCommandError::Gateway(format!(
-            "HTTP {status}: {value}"
+            "HTTP {status}: {}",
+            serialize_redacted_value(&value)
         )))
     }
 }
