@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { auroraNavSections } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { auroraNavSections } from '@aurora/ui'
 import { createAuroraTauriRuntime } from './aurora-client'
-import { AuroraTauriApp } from './tauri-app'
+import { AuroraTauriApp, tauriRouteRegistryRouteIds } from './tauri-app'
+
+const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 
 describe('Aurora Tauri runtime wrapper', () => {
   afterEach(() => {
@@ -88,19 +91,50 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).not.toContain('Native boundary')
   })
 
-  it('renders route-specific production UI for every nav route', () => {
+  it('registers a production Tauri component for every primary nav route', () => {
+    const routeIds = new Set(tauriRouteRegistryRouteIds)
+    const missing = primaryNavItems.filter((item) => !routeIds.has(item.id)).map((item) => `${item.id}:${item.href}`)
+
+    expect(missing).toEqual([])
+    expect(routeIds.size).toBe(primaryNavItems.length)
+  })
+
+  it('renders every primary route without the legacy route placeholder copy', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
-    const routes = auroraNavSections.flatMap((section) => section.items)
 
-    expect(routes).toHaveLength(22)
+    const routeMarkers: Record<string, string> = {
+      assistant: 'Prompt',
+      memory: 'History and RAG provenance',
+      tools: 'Approval cards',
+      mesh: 'Mesh peers',
+      admin: 'Admin overview',
+      services: 'Services',
+      access: 'RBAC',
+      tokens: 'RBAC',
+      devices: 'Devices',
+      config: 'Configuration',
+      contracts: 'Services',
+      plugins: 'Plugin operations',
+      pairing: 'Pairing queue',
+      backups: 'Backups &amp; Restore',
+      scheduler: 'Scheduler',
+      audit: 'Audit log',
+      models: 'Models and runtime',
+      diagnostics: 'Native boundary',
+      onboarding: 'Connect Aurora',
+      settings: 'Settings and permissions',
+      data: 'History and RAG provenance',
+      native: 'Settings and permissions'
+    }
 
-    for (const route of routes) {
-      window.history.replaceState({}, '', route.href)
+    for (const item of primaryNavItems) {
+      window.history.replaceState({}, '', item.href)
       const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
-      expect(markup, route.id).not.toContain('A full product page still needs to be mounted')
-      expect(markup, route.id).not.toContain('rendering the assistant diagnostics on the wrong page')
-      expect(markup, route.id).toContain(route.label)
+      expect(markup, item.href).toContain(routeMarkers[item.id])
+      expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
+      expect(markup, item.href).not.toContain('This Tauri route is now navigable')
+      expect(markup, item.href).not.toContain('route is unregistered')
     }
   })
 })
