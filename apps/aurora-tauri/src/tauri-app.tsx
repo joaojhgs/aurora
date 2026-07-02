@@ -27,8 +27,7 @@ import {
   buildShellSnapshot,
   loadingShellSnapshot,
   navItemSnapshot,
-  type AdminRbacAction,
-  type AdminServiceControlAction,
+  redactDiagnosticText,
   type AuroraNavItem,
   type AuroraShellSnapshot,
   type RouteAvailability,
@@ -210,8 +209,8 @@ export function AuroraTauriApp() {
 
   const localMode = runtime.mode === "desktop-local";
   const sidecarEvidence = sidecar
-    ? `${sidecar.mode ?? "unknown"}; gateway=${sidecar.gatewayUrl ?? "not configured"}; running=${String(sidecar.running)}`
-    : "native sidecar status unavailable in this runtime";
+    ? redactDiagnosticText(`${sidecar.mode ?? 'unknown'}; gateway=${sidecar.gatewayUrl ?? 'not configured'}; running=${String(sidecar.running)}`)
+    : 'native sidecar status unavailable in this runtime'
   const nativeContext: NativeContext = {
     runtimeMode: runtime.mode,
     localMode,
@@ -352,7 +351,7 @@ function TauriDiagnosticsPage({
         }
         description="Aurora desktop uses the official Tauri shell while keeping service truth behind AuroraClient."
         evidence={nativeContext.sidecarEvidence}
-        actionLabel={nativeContext.sidecar?.lastError ?? null}
+        actionLabel={redactDiagnosticText(nativeContext.sidecar?.lastError) || null}
       />
       <section className="ata-panel">
         <h2>Native boundary</h2>

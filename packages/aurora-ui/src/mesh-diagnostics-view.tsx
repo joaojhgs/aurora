@@ -104,6 +104,17 @@ export interface MeshDiagnosticsViewProps {
   onRefresh?: () => void
 }
 
+export function redactDiagnosticText(value: string | null | undefined): string {
+  if (!value) return ''
+  return value
+    .replace(/"((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)"\s*:\s*"[^"]*"/gi, '"$1":"[redacted]"')
+    .replace(/\b(authorization)\b(\s*[:=]\s*)(?:bearer\s+)?[^\s,;<>\"']+/gi, '$1$2[redacted]')
+    .replace(/\b((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)\b(\s*[:=]\s*)(["']?)[^\s,;<>\"']+/gi, '$1$2$3[redacted]')
+    .replace(/([?&](?:(?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)=)[^&#\s]+/gi, '$1[redacted]')
+    .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+    .replace(/\b(raw[-_ ]?audio\s+payload)(\s*[:=]\s*)?(["']?)[^\s,;<>\"']*/gi, '$1$2$3[redacted]')
+}
+
 export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   loadState: 'loading',
   generatedAt: null,
@@ -152,7 +163,9 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   catalog: SettledDiagnostic<CapabilityCatalogResponse>
 }): MeshDiagnosticsSnapshot {
   const diagnosticsCapability = input.catalog.data?.actions.find((action) => action.topic === 'Gateway.GetWebRTCDiagnostics' || action.action_id.includes('Gateway.GetWebRTCDiagnostics')) ?? null
-  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error].filter((error): error is string => Boolean(error))
+  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error]
+    .filter((error): error is string => Boolean(error))
+    .map(redactDiagnosticText)
   const denied = Boolean(input.webrtc.denied || input.mesh.denied || input.catalog.denied || input.route.state === 'denied')
   const webRtc = input.webrtc.data
   const mesh = input.mesh.data
@@ -163,7 +176,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     ...signalingWarnings(webRtc),
     ...(mesh?.compatibility_failures ?? []).map((failure) => `${failure.peer_id} ${failure.module} ${failure.direction}: ${failure.reason}`),
     ...(input.route.disabled ? [input.route.explanation] : [])
-  ]
+  ].map(redactDiagnosticText)
   const loadState: MeshDiagnosticsLoadState = denied
     ? 'denied'
     : errors.length > 0
@@ -189,17 +202,21 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     appLayerE2eeEnabled: Boolean(webRtc?.app_layer_e2ee_enabled),
     secretsRedacted: Boolean(webRtc?.secrets_redacted ?? mesh?.secrets_redacted ?? input.catalog.data?.secrets_redacted ?? true),
     signalingState: signalingState(webRtc, input.webrtc.error),
-    signalingEvidence: signalingEvidence(webRtc, input.webrtc.error),
-    signalingRepair: signalingRepair(webRtc, input.webrtc.error),
+    signalingEvidence: redactDiagnosticText(signalingEvidence(webRtc, input.webrtc.error)),
+    signalingRepair: redactDiagnosticText(signalingRepair(webRtc, input.webrtc.error)),
     diagnosticsCapabilityState: capabilityState(diagnosticsCapability, input.catalog.error),
-    diagnosticsCapabilityReason: capabilityReason(diagnosticsCapability, input.catalog.error),
+    diagnosticsCapabilityReason: redactDiagnosticText(capabilityReason(diagnosticsCapability, input.catalog.error)),
     connectedPeerCount: webRtc?.connected_peer_count ?? 0,
     authenticatedPeerCount: webRtc?.authenticated_peer_count ?? 0,
     pairingPeerCount: webRtc?.pairing_peer_count ?? 0,
     pendingRpcCount: webRtc?.pending_rpc_count ?? 0,
     transportRows,
     routeRows,
-    recentErrors: webRtc?.recent_errors ?? [],
+    recentErrors: (webRtc?.recent_errors ?? []).map((error) => ({
+      ...error,
+      message: redactDiagnosticText(error.message),
+      peer_id: error.peer_id ? redactDiagnosticText(error.peer_id) : error.peer_id
+    })),
     warnings,
     errors,
     evidenceSource: errors.length ? 'partial AuroraClient diagnostics responses' : 'AuroraClient Gateway diagnostics, mesh status, and capability catalog'
@@ -402,18 +419,20 @@ function peerState(peer: WebRTCPeerDiagnostic, meshPeer: MeshPeerDiagnostic | nu
 }
 
 function routeRow(route: MeshRouteDiagnostic): MeshRouteDiagnosticRow {
-  const blockers = route.providers.filter((provider) => !provider.eligible).map((provider) => `${provider.node_name}: ${provider.reason_code} (${provider.reason})`)
+  const blockers = route.providers
+    .filter((provider) => !provider.eligible)
+    .map((provider) => redactDiagnosticText(`${provider.node_name}: ${provider.reason_code} (${provider.reason})`))
   return {
-    module: route.module,
+    module: redactDiagnosticText(route.module),
     state: routeState(route),
-    decisionTarget: route.decision_target,
-    decisionPeerId: route.decision_peer_id ?? 'local',
+    decisionTarget: redactDiagnosticText(route.decision_target),
+    decisionPeerId: redactDiagnosticText(route.decision_peer_id ?? 'local'),
     routeQuality: routeQuality(route.decision_latency_ms, route.decision_target),
     latency: formatMs(route.decision_latency_ms),
-    fallback: route.fallback,
+    fallback: redactDiagnosticText(route.fallback),
     providerSummary: `${route.providers.filter((provider) => provider.eligible).length}/${route.providers.length} eligible`,
     blockers,
-    reason: route.reason
+    reason: redactDiagnosticText(route.reason)
   }
 }
 
@@ -523,7 +542,7 @@ function trustLabel(peer: WebRTCPeerDiagnostic, meshPeer: MeshPeerDiagnostic | n
 
 function routeProvider(mesh: MeshStatusResponse | null, peerId: string): string {
   const routes = (mesh?.routes ?? []).filter((route) => route.decision_peer_id === peerId)
-  return routes.length ? routes.map((route) => `${route.module}:${route.reason}`).join('; ') : 'no selected route'
+  return routes.length ? redactDiagnosticText(routes.map((route) => `${route.module}:${route.reason}`).join('; ')) : 'no selected route'
 }
 
 function compatibilityLabel(peer: MeshPeerDiagnostic | null): string {

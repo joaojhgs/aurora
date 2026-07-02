@@ -107,6 +107,7 @@ import {
   meshPeerErrorMessage,
   meshDiagnosticsSnapshotFromResults,
   parseMeshPermissionList,
+  redactDiagnosticText,
   routePolicyDraftChange,
   routePolicyFromRoute,
   routePolicyScenarios,
@@ -1935,6 +1936,46 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('rpc_timeout')
     expect(markup).toContain('secrets redacted')
     expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('redacts diagnostic credentials, API keys, and raw-audio payload evidence before rendering', () => {
+    const route = meshRoute({ disabled: true, explanation: 'authorization=Bearer route-secret raw audio payload=bytes' })
+    const webrtc = cloneFixture(webrtcDiagnosticsFixture)
+    webrtc.recent_errors = [
+      {
+        timestamp: '2026-06-19T00:00:00Z',
+        code: 'rpc_timeout',
+        message: 'Authorization: Bearer transport-secret token=secret-token audio_buffer=base64 raw audio payload=pcm',
+        peer_id: 'peer-token=secret-peer'
+      }
+    ]
+    const mesh = cloneFixture(meshStatusFixture)
+    mesh.routes[0]!.reason = 'fallback used because api_key=secret-key'
+    mesh.routes[0]!.providers[1]!.reason = 'raw-audio payload=bytes password=secret'
+    mesh.compatibility_failures = [
+      {
+        peer_id: 'peer-den',
+        module: 'Tooling',
+        direction: 'local',
+        reason: 'credential=mesh-secret'
+      }
+    ]
+    const snapshot = meshDiagnosticsSnapshotFromResults({
+      route,
+      webrtc: { data: webrtc, error: 'Gateway token=secret-token unavailable' },
+      mesh: { data: mesh, error: 'mesh secret=mesh-secret unavailable' },
+      catalog: { data: null, error: 'catalog api_key=secret-key unavailable' }
+    })
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={snapshot} route={route} />)
+
+    expect(redactDiagnosticText('Authorization: Bearer secret-token audio_buffer=abc raw audio payload=pcm')).not.toContain('secret-token')
+    for (const leaked of ['secret-token', 'transport-secret', 'secret-key', 'mesh-secret', 'secret-peer', 'audio_buffer=base64', 'raw audio payload=pcm']) {
+      expect(markup).not.toContain(leaked)
+      expect(snapshot.errors.join(' ')).not.toContain(leaked)
+      expect(snapshot.warnings.join(' ')).not.toContain(leaked)
+      expect(snapshot.recentErrors.map((error) => error.message).join(' ')).not.toContain(leaked)
+    }
+    expect(markup).toContain('[redacted]')
   })
 
   it('maps WebRTC diagnostics empty, denied, and SDK error states with repair evidence', async () => {
