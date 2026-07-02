@@ -24,6 +24,21 @@ describe('Tauri secure storage policy', () => {
     }
   })
 
+  it('persists onboarding mode preference only through the platform secure-storage namespace', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const onboardingSource = readFileSync(resolve(repoRoot, 'packages/aurora-ui/src/onboarding-view.tsx'), 'utf8')
+
+    expect(runtimeSource).toContain("ONBOARDING_MODE_KEY = 'aurora.session.onboarding-mode'")
+    expect(runtimeSource).toContain('secureStorageGet(ONBOARDING_MODE_KEY)')
+    expect(runtimeSource).toContain('secureStorageSet(ONBOARDING_MODE_KEY, modeId)')
+    expect(runtimeSource).toContain('browser thin mode preference is memory-only; no web storage persistence')
+    expect(onboardingSource).toContain('isSupportedModeId(modeId)')
+    for (const term of webStorageTerms) {
+      expect(`${runtimeSource}\n${onboardingSource}`, `selected mode must not use ${term}`).not.toContain(term)
+    }
+  })
+
   it('documents iOS biometric credential scope without system assistant ownership claims', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const swift = readFileSync(

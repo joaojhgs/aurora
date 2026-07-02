@@ -18,6 +18,7 @@ import {
   MeshDiagnosticsResource,
   MeshPeersResource,
   ModelsView,
+  type OnboardingModePreferenceStore,
   OnboardingView,
   PairingQueueView,
   RouteMatrix,
@@ -57,6 +58,7 @@ type TauriRouteRenderer = (input: {
   nativeContext: NativeContext
   client: AuroraTauriClient
   shutdown: () => Promise<void>
+  modePreferenceStore?: OnboardingModePreferenceStore | undefined
   assistantNativePermissions: Array<{ name: string; granted: boolean }>
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
 }) => ReactElement
@@ -137,7 +139,7 @@ export const tauriRouteRegistry = {
   diagnostics: ({ route, snapshot, nativeContext, client, shutdown }) => (
     <TauriDiagnosticsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
   ),
-  onboarding: ({ snapshot, client }) => <OnboardingView client={client} snapshot={snapshot} />,
+  onboarding: ({ snapshot, client, modePreferenceStore }) => <OnboardingView client={client} snapshot={snapshot} modePreferenceStore={modePreferenceStore} />,
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
   data: ({ route, client }) => <DataPolicyResource client={client} route={route} />,
   native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
@@ -278,6 +280,7 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
         snapshot={snapshot}
         nativeContext={nativeContext}
         client={runtime.client}
+        modePreferenceStore={runtime.modePreferenceStore}
         shutdown={runtime.shutdown}
       />
     </AppShell>
@@ -333,12 +336,14 @@ function TauriRouteContent({
   snapshot,
   nativeContext,
   client,
+  modePreferenceStore,
   shutdown,
 }: {
   path: string;
   snapshot: AuroraShellSnapshot;
   nativeContext: NativeContext;
   client: ReturnType<typeof createAuroraTauriRuntime>["client"];
+  modePreferenceStore?: OnboardingModePreferenceStore | undefined;
   shutdown: () => Promise<void>;
 }) {
   const route = routeForPath(snapshot, path)
@@ -362,6 +367,7 @@ function TauriRouteContent({
     nativeContext,
     client,
     shutdown,
+    modePreferenceStore,
     assistantNativePermissions,
     assistantNativeCapabilities
   })

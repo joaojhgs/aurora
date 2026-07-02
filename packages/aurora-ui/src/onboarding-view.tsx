@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Compass, KeyRound, Monitor, PlugZap, RadioTower, Rocket, Server, ShieldCheck, Smartphone } from 'lucide-react'
 import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -9,6 +9,13 @@ import { EvidenceBadge, StatusBadge } from './status-badges'
 export interface OnboardingViewProps {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
+  modePreferenceStore?: OnboardingModePreferenceStore | undefined
+}
+
+export interface OnboardingModePreferenceStore {
+  evidence: string
+  readSelectedMode: () => Promise<string | null>
+  writeSelectedMode: (modeId: string) => Promise<boolean>
 }
 
 export interface DeploymentModeCard {
@@ -65,9 +72,12 @@ export interface OnboardingViewModel {
 
 const credentialStorageEvidence = 'browser token persistence disabled'
 
-export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
+export function OnboardingView({ client, snapshot, modePreferenceStore }: OnboardingViewProps) {
   const [session, setSession] = useState(() => client.auth.refreshClock())
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind, snapshot))
+  const [modePreferenceReady, setModePreferenceReady] = useState(() => !modePreferenceStore)
+  const [modePreferenceEvidence, setModePreferenceEvidence] = useState(() => modePreferenceStore?.evidence ?? 'mode preference memory only')
+  const modeSelectionTouchedRef = useRef(false)
   const [endpoint, setEndpoint] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -85,6 +95,57 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
   useEffect(() => {
     return client.auth.subscribe(setSession)
   }, [client])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!modePreferenceStore) {
+      setModePreferenceReady(true)
+      setModePreferenceEvidence('mode preference memory only')
+      return () => {
+        cancelled = true
+      }
+    }
+    modeSelectionTouchedRef.current = false
+    setModePreferenceReady(false)
+    setModePreferenceEvidence(`${modePreferenceStore.evidence} · checking saved mode`)
+    void modePreferenceStore.readSelectedMode().then(
+      (modeId) => {
+        if (cancelled) return
+        if (modeId && isSupportedModeId(modeId) && !modeSelectionTouchedRef.current) {
+          setSelectedModeId(modeId)
+          setModePreferenceEvidence(`${modePreferenceStore.evidence} · restored ${modeLabel(modeId)}`)
+        } else if (modeId && !isSupportedModeId(modeId)) {
+          setModePreferenceEvidence(`${modePreferenceStore.evidence} · ignored unsupported saved mode`)
+        } else {
+          setModePreferenceEvidence(`${modePreferenceStore.evidence} · no saved mode`)
+        }
+        setModePreferenceReady(true)
+      },
+      () => {
+        if (!cancelled) {
+          setModePreferenceEvidence(`${modePreferenceStore.evidence} · restore unavailable; select a mode to retry save`)
+          setModePreferenceReady(true)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client.transport.kind, modePreferenceStore, snapshot.nativePlatform])
+
+  function onSelectMode(modeId: string) {
+    if (!modePreferenceReady || !isSupportedModeId(modeId)) return
+    modeSelectionTouchedRef.current = true
+    setSelectedModeId(modeId)
+    if (!modePreferenceStore) return
+    setModePreferenceEvidence(`${modePreferenceStore.evidence} · saving ${modeLabel(modeId)}`)
+    void modePreferenceStore.writeSelectedMode(modeId).then(
+      (ok) => {
+        setModePreferenceEvidence(ok ? `${modePreferenceStore.evidence} · saved ${modeLabel(modeId)}` : `${modePreferenceStore.evidence} · save unavailable`)
+      },
+      () => setModePreferenceEvidence(`${modePreferenceStore.evidence} · save unavailable`)
+    )
+  }
 
   async function onLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -162,6 +223,7 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
           <EvidenceBadge label={client.transport.kind} />
           <EvidenceBadge label={snapshot.evidenceSource} />
           <EvidenceBadge label={credentialStorageEvidence} />
+          <EvidenceBadge label={modePreferenceEvidence} />
         </div>
       </header>
 
@@ -176,8 +238,8 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
                 className={mode.id === model.selectedModeId ? 'aui-mode-card active' : 'aui-mode-card'}
                 role="radio"
                 aria-checked={mode.id === model.selectedModeId}
-                disabled={mode.disabled}
-                onClick={() => setSelectedModeId(mode.id)}
+                disabled={mode.disabled || !modePreferenceReady}
+                onClick={() => onSelectMode(mode.id)}
               >
                 <ModeIcon id={mode.id} />
                 <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
@@ -627,6 +689,24 @@ function defaultModeId(transportKind: string, snapshot?: AuroraShellSnapshot): s
   if (transportKind === 'native-mobile') return 'android-mobile-thin'
   if (transportKind === 'mock') return 'offline-demo'
   return 'server-web'
+}
+
+function isSupportedModeId(modeId: string): boolean {
+  return supportedModeIds.has(modeId)
+}
+
+const supportedModeIds = new Set([
+  'server-web',
+  'desktop-local',
+  'desktop-thin',
+  'mesh-shell',
+  'android-mobile-thin',
+  'ios-mobile-thin',
+  'offline-demo'
+])
+
+function modeLabel(modeId: string): string {
+  return modeId.replace(/-/g, ' ')
 }
 
 function clientTransportEvidence(transportKind: string): string {

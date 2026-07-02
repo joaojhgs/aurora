@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:25:39.935Z",
+  "updatedAt": "2026-07-02T14:37:05.028Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1583,10 +1583,12 @@
       "id": "G137-persist-selected-mode-safely-per-pla",
       "title": "Persist selected mode safely per platform.",
       "objective": "Persist selected mode safely per platform.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:37:05.028Z",
+      "completedAt": "2026-07-02T14:37:05.028Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test -- -t \"secure storage policy|onboarding mode|unsupported stored onboarding|preference restore\"; git diff --check; code-reviewer rework addressed: failure evidence, restore lock, invalid/deferred tests"
     },
     {
       "id": "G138-show-resumable-setup-steps-and-repai",

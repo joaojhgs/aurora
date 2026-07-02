@@ -65,10 +65,11 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
   }
 }
 
-function testRuntime(client: AuroraClient): AuroraTauriRuntime {
+function testRuntime(client: AuroraClient, modePreferenceStore?: AuroraTauriRuntime['modePreferenceStore']): AuroraTauriRuntime {
   return {
     client,
     mode: 'mock',
+    modePreferenceStore,
     sidecarStatus: async () => null,
     startSidecar: async () => null,
     stopSidecar: async () => null,
@@ -1370,6 +1371,111 @@ describe('Tauri CI/E2E route gates', () => {
       })
       expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
       expect(requestMethods(transport)).not.toContain('Config.Set')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('e2e:runtime restores onboarding mode through platform preference store without browser storage', async () => {
+    const writes: string[] = []
+    const modePreferenceStore: NonNullable<AuroraTauriRuntime['modePreferenceStore']> = {
+      evidence: 'test platform secure storage',
+      readSelectedMode: async () => 'desktop-thin',
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+    }
+    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    window.history.replaceState({}, '', '/onboarding')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        const activeCard = container.querySelector('.aui-mode-card.active')
+        expect(activeCard?.textContent).toContain('Desktop Thin')
+        expect(container.textContent).toContain('test platform secure storage')
+        expect(container.textContent).toContain('restored desktop thin')
+      })
+      expect(writes).toEqual([])
+      await clickButtonByLabel(container, 'Desktop Thin')
+      await waitUntil(() => {
+        expect(writes).toEqual(['desktop-thin'])
+        expect(container.textContent).toContain('saved desktop thin')
+      })
+      expect(container.textContent).not.toContain('localStorage')
+      expect(container.textContent).not.toContain('sessionStorage')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('e2e:runtime rejects unsupported stored onboarding modes and reports failed saves', async () => {
+    const writes: string[] = []
+    const modePreferenceStore: NonNullable<AuroraTauriRuntime['modePreferenceStore']> = {
+      evidence: 'test platform secure storage',
+      readSelectedMode: async () => 'mobile-thin',
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return false
+      },
+    }
+    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    window.history.replaceState({}, '', '/onboarding')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        const activeCard = container.querySelector('.aui-mode-card.active')
+        expect(activeCard?.textContent).toContain('Offline Demo')
+        expect(container.textContent).toContain('ignored unsupported saved mode')
+      })
+      expect(writes).toEqual([])
+      await clickButtonByLabel(container, 'Desktop Thin')
+      await waitUntil(() => {
+        expect(writes).toEqual(['desktop-thin'])
+        expect(container.textContent).toContain('save unavailable')
+      })
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('e2e:runtime keeps mode selection locked until preference restore completes', async () => {
+    let resolveRead: (modeId: string | null) => void = () => undefined
+    const writes: string[] = []
+    const modePreferenceStore: NonNullable<AuroraTauriRuntime['modePreferenceStore']> = {
+      evidence: 'test platform secure storage',
+      readSelectedMode: async () => new Promise<string | null>((resolve) => {
+        resolveRead = resolve
+      }),
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+    }
+    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    window.history.replaceState({}, '', '/onboarding')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      const desktopThinButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((candidate) => candidate.textContent?.includes('Desktop Thin'))
+      expect(desktopThinButton?.disabled).toBe(true)
+      expect(container.textContent).toContain('checking saved mode')
+      await act(async () => {
+        resolveRead('desktop-thin')
+        await flushReactWork()
+      })
+      await waitUntil(() => {
+        const activeCard = container.querySelector('.aui-mode-card.active')
+        expect(activeCard?.textContent).toContain('Desktop Thin')
+        expect(container.textContent).toContain('restored desktop thin')
+      })
+      expect(writes).toEqual([])
     } finally {
       await act(async () => root.unmount())
       container.remove()
