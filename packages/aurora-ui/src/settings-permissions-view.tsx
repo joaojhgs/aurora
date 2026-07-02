@@ -283,7 +283,8 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
   const denied = snapshot.routes.filter((route) => route.state === 'denied')
   const privacyBlocked = snapshot.routes.filter((route) => route.state === 'privacy-blocked')
   const errorText = snapshot.loadState === 'error' ? snapshot.error ?? 'AuroraClient settings evidence failed to load.' : null
-  const adminRequired = Boolean(settingsRoute?.requiresAdminAction)
+  const routeAdminRequired = Boolean(settingsRoute?.requiresAdminAction)
+  const mutationAdminRequired = true
   const settingsDisabled = !settingsRoute || settingsRoute.disabled || snapshot.loadState !== 'ready'
 
   return {
@@ -300,7 +301,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         providerLabel: settingsRoute?.providerLabel ?? 'Config.Get pending',
         enabled: !settingsDisabled && availableRemote.length === 0,
         disabled: settingsDisabled,
-        requiresAdminAction: adminRequired,
+        requiresAdminAction: mutationAdminRequired,
         blockers: settingsRoute?.blockers ?? ['settings_route_missing'],
         evidence: settingsRoute?.evidenceSources ?? []
       }),
@@ -313,7 +314,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         providerLabel: `${selectorRequired.length} selector-gated routes`,
         enabled: selectorRequired.length > 0,
         disabled: settingsDisabled,
-        requiresAdminAction: adminRequired,
+        requiresAdminAction: mutationAdminRequired,
         blockers: selectorRequired.flatMap((route) => route.blockers),
         evidence: selectorRequired.flatMap((route) => route.evidenceSources)
       }),
@@ -326,7 +327,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         providerLabel: `${denied.length + privacyBlocked.length} hard-blocked routes`,
         enabled: true,
         disabled: settingsDisabled,
-        requiresAdminAction: adminRequired,
+        requiresAdminAction: mutationAdminRequired,
         blockers: [...denied, ...privacyBlocked].flatMap((route) => route.blockers),
         evidence: [...denied, ...privacyBlocked].flatMap((route) => route.evidenceSources)
       })
@@ -367,8 +368,10 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         detail: denied.length + privacyBlocked.length > 0 ? 'Repair requires backend permission, selector, consent, or policy changes.' : 'No denied route is reported.'
       }
     ],
-    adminActionLabel: adminRequired
-      ? 'AdminAction draft, confirmation, and audit are required before settings mutations.'
+    adminActionLabel: mutationAdminRequired
+      ? routeAdminRequired
+        ? 'AdminAction draft, confirmation, and audit are required before settings route access or mutations.'
+        : 'Settings route access is read-only; AdminAction draft, confirmation, and audit are required before settings mutations.'
       : 'No AdminAction requirement was reported for this settings route.',
     fallbackLabel: degraded.length > 0
       ? 'Fallback is visible as degraded capability evidence.'

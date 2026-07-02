@@ -58,15 +58,15 @@ export const auroraNavSections: AuroraNavSection[] = [
     items: [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'ADM-001', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'ADM-002', true),
-      item('access', 'Access', '/admin/access', ShieldCheck, 'Auth', 'ListRoles', 'manage', 'admin-critical', 'unsupported', 'ADM-003', true),
-      item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'manage', 'credential', 'unsupported', 'ADM-004', true),
-      item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'manage', 'credential', 'unsupported', 'ADM-005', true),
-      item('config', 'Config', '/admin/config', Settings, 'Config', 'Get', 'manage', 'secret', 'unsupported', 'ADM-006', true),
+      item('access', 'Access', '/admin/access', ShieldCheck, 'Auth', 'ListRoles', 'use', 'admin-critical', 'unsupported', 'ADM-003', true),
+      item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'ADM-004', true),
+      item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'ADM-005', true),
+      item('config', 'Config', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'ADM-006', true),
       item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'ADM-002', true),
-      item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'manage', 'admin-critical', 'unsupported', 'ADM-007', true),
-      item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'manage', 'credential', 'unsupported', 'ADM-011', true),
-      item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'manage', 'admin-critical', 'unsupported', 'ADM-010', true),
-      item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'manage', 'admin-critical', 'unsupported', 'ADM-012', true),
+      item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'ADM-007', true),
+      item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'ADM-011', true),
+      item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'use', 'admin-critical', 'unsupported', 'ADM-010', true),
+      item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'use', 'admin-critical', 'unsupported', 'ADM-012', true),
       item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'ADM-008', true)
     ]
   },
@@ -76,7 +76,7 @@ export const auroraNavSections: AuroraNavSection[] = [
       item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'UIA-007'),
       item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetCapabilityCatalog', 'use', 'sensitive', 'available-local', 'ADM-009'),
       item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'UI-003'),
-      item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'manage', 'secret', 'unsupported', 'UI-004'),
+      item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'UI-004'),
       item('data', 'Data Policy', '/memory/policy', Database, 'DB', 'RAGSearch', 'use', 'sensitive', 'privacy-blocked', 'BE-017'),
       item('native', 'Native', '/settings/native', MemoryStick, 'Native', 'GetCapabilityManifest', 'use', 'credential', 'unsupported', 'TAURI-004')
     ]

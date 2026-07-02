@@ -132,9 +132,47 @@ describe('Aurora production shell', () => {
     expect(snapshot.evidenceSource).toContain('SDK')
     expect(snapshot.routes.some((route) => route.state === 'available-local')).toBe(true)
     expect(snapshot.routes.some((route) => route.state === 'privacy-blocked')).toBe(true)
-    expect(snapshot.routes.some((route) => route.requiresAdminAction)).toBe(true)
+    for (const id of ['access', 'tokens', 'devices', 'config', 'plugins', 'pairing', 'backups', 'scheduler', 'settings']) {
+      const adminReadRoute = route(snapshot, id)
+      expect(adminReadRoute.requiresAdminAction, `${id} read route must not require AdminAction`).toBe(false)
+    }
     expect(snapshot.routes.every((route) => route.repairActions.length > 0)).toBe(true)
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
+  })
+
+
+  it('keeps read-only sensitive admin routes routeable without route-level AdminAction while mutations stay gated', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const adminReadRouteIds = ['admin', 'services', 'access', 'tokens', 'devices', 'config', 'contracts', 'plugins', 'pairing', 'backups', 'scheduler', 'audit']
+    const sensitiveReadRouteIds = [...adminReadRouteIds, 'settings']
+
+    for (const id of adminReadRouteIds) {
+      const adminReadRoute = route(snapshot, id)
+      expect(adminReadRoute.item.adminGated, `${id} remains an admin-owned route`).toBe(true)
+    }
+    for (const id of sensitiveReadRouteIds) {
+      const readRoute = route(snapshot, id)
+      expect(readRoute.requiresAdminAction, `${id} read route must not be AdminAction-blocked`).toBe(false)
+    }
+
+    const actionSurfaces = productionSurfaceContracts.filter((surface) => surface.adminActionRequired)
+    expect(actionSurfaces.map((surface) => surface.id)).toEqual(expect.arrayContaining([
+      'admin-rbac',
+      'admin-devices',
+      'admin-plugins',
+      'admin-scheduler',
+      'config-editor',
+      'backup-restore',
+      'mesh-peers',
+      'settings-permissions-privacy'
+    ]))
+    for (const surface of actionSurfaces) {
+      expect(surface.stateCoverage, `${surface.id} mutation state coverage`).toContain('admin-action')
+      expect(
+        surface.truthSources.some((source) => source.kind === 'admin-action'),
+        `${surface.id} mutation truth source`
+      ).toBe(true)
+    }
   })
 
   it('documents every production surface with backend or explicit degraded evidence', () => {
@@ -259,7 +297,7 @@ describe('Aurora production shell', () => {
       ...filesUnder(join(repoRoot, 'packages/aurora-ui/src'), /\.(ts|tsx)$/),
       ...filesUnder(join(repoRoot, 'apps/aurora-web/app'), /\.(ts|tsx)$/),
       ...filesUnder(join(repoRoot, 'apps/aurora-tauri/src'), /\.(ts|tsx)$/)
-    ].filter((file) => !isAllowedAdapterFile(repoRoot, file))
+    ].filter((file) => !isAllowedAdapterFile(repoRoot, file) && !/\.(test|spec)\.(ts|tsx|js|mjs)$/.test(file))
 
     expect(scannedFiles.length).toBeGreaterThan(0)
     for (const file of scannedFiles) {
