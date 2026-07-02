@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:53:51.752Z",
+  "updatedAt": "2026-07-02T12:00:07.576Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1253,10 +1253,12 @@
       "id": "G107-user-can-send-a-text-prompt-against",
       "title": "User can send a text prompt against local Gateway in Tauri dev and se...",
       "objective": "User can send a text prompt against local Gateway in Tauri dev and see a real response or a precise backend error.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:00:07.576Z",
+      "completedAt": "2026-07-02T12:00:07.576Z",
+      "evidence": "Added Tauri jsdom E2E that mounts AuroraTauriApp with desktop-local local Gateway readiness, advertises Orchestrator.ExternalUserInput through Gateway.GetCapabilityCatalog, submits the assistant composer, verifies final backend response/model text, captures the ExternalUserInput stream payload, then verifies a separate auth-failure transport renders a precise authentication error. Verified: pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/client test -- -t 'assistant|ExternalUserInput|Gateway|auth|transport_loss'; pnpm --filter @aurora/ui typecheck; git diff --check."
     },
     {
       "id": "G108-assistant-page-no-longer-shows-globa",

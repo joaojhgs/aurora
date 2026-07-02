@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -137,6 +137,116 @@ function writeOutcomeArtifact(name: string, html: string) {
   const reportDir = join(process.cwd(), 'reports', 'e2e-outcomes')
   mkdirSync(reportDir, { recursive: true })
   writeFileSync(join(reportDir, `${name}.html`), html)
+}
+
+
+function assistantCapabilityCatalog() {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const provider = {
+    ...baseProvider,
+    provider_id: 'local:Orchestrator',
+    provider_kind: 'local',
+    peer_id: 'local-peer',
+    node_name: 'local Aurora node',
+    service_instance_id: 'orchestrator-local',
+    module: 'Orchestrator',
+    eligible: true,
+    reason_code: 'available',
+    reason: 'Local Gateway advertises Orchestrator.ExternalUserInput for assistant prompts.',
+    policy: {
+      ...baseProvider.policy,
+      required_permissions: ['Orchestrator.use'],
+      explicit_selector_required: false,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      selector_required: false,
+      denial_reasons: []
+    }
+  }
+  const action = {
+    ...baseAction,
+    action_id: 'orchestrator-external-user-input-local',
+    module: 'Orchestrator',
+    method: 'ExternalUserInput',
+    topic: ORCHESTRATOR_METHODS.externalUserInput,
+    provider_id: provider.provider_id,
+    provider_kind: provider.provider_kind,
+    peer_id: provider.peer_id,
+    service_instance_id: provider.service_instance_id,
+    selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: provider.provider_id },
+    bindability: 'available',
+    route_blockers: [],
+    summary: 'Send an assistant prompt through the local Gateway and Orchestrator.',
+    policy: provider.policy,
+    freshness: provider.freshness
+  }
+  catalog.providers = [...catalog.providers, provider]
+  catalog.actions = [...catalog.actions, action]
+  catalog.provider_index = {
+    ...catalog.provider_index,
+    Orchestrator: [provider.provider_id]
+  }
+  catalog.action_index = {
+    ...catalog.action_index,
+    Orchestrator: [action.action_id],
+    [ORCHESTRATOR_METHODS.externalUserInput]: [action.action_id]
+  }
+  return catalog
+}
+
+function assistantGatewayTransport(responseText = 'Local Gateway says hello from Orchestrator.'): RecordingMockAuroraTransport {
+  const transport = new RecordingMockAuroraTransport()
+  transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+  transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+  transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => assistantCapabilityCatalog())
+  transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
+    text: responseText,
+    session_id: 'tauri-assistant-session',
+    request_id: (request.payload as { request_id?: string }).request_id,
+    correlation_id: (request.payload as { correlation_id?: string }).correlation_id,
+    metadata: { model: 'local-gateway-test' }
+  }))
+  return transport
+}
+
+function assistantGatewayAuthFailureTransport(): RecordingMockAuroraTransport {
+  const transport = new RecordingMockAuroraTransport()
+  transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => assistantCapabilityCatalog())
+  transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
+    throw new AuroraError({
+      code: 'auth',
+      message: 'Gateway returned 401 for assistant prompt',
+      method: ORCHESTRATOR_METHODS.externalUserInput,
+      busTopic: ORCHESTRATOR_METHODS.externalUserInput
+    })
+  })
+  return transport
+}
+
+async function submitAssistantPrompt(container: HTMLElement, prompt: string) {
+  await waitUntil(() => {
+    const textarea = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
+    expect(textarea).not.toBeNull()
+    expect(textarea?.disabled).toBe(false)
+  })
+  const textarea = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')!
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+  await act(async () => {
+    valueSetter?.call(textarea, prompt)
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    textarea.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushReactWork()
+  })
+  const form = container.querySelector<HTMLFormElement>('form.aui-assistant-form')
+  expect(form).not.toBeNull()
+  await act(async () => {
+    form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushReactWork()
+    await flushReactWork()
+  })
 }
 
 function renderTauriRoute(href: string) {
@@ -384,6 +494,75 @@ describe('Tauri CI/E2E route gates', () => {
       for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
         expect(markup, `${route.id} must not render diagnostics dashboard marker ${marker}`).not.toContain(marker)
       }
+    }
+  })
+
+
+  it('e2e:assistant sends a text prompt to local Gateway and renders response or precise backend error', async () => {
+    const successTransport = assistantGatewayTransport()
+    const successRuntime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport: successTransport })),
+      mode: 'desktop-local',
+      sidecarStatus: async () => ({
+        running: true,
+        mode: 'threads',
+        pid: 6060,
+        gatewayUrl: 'http://127.0.0.1:8000',
+        lastError: null,
+        details: { healthPath: '/api/health' }
+      }),
+      startSidecar: async () => ({
+        running: true,
+        mode: 'threads',
+        pid: 6060,
+        gatewayUrl: 'http://127.0.0.1:8000',
+        lastError: null,
+        details: { healthPath: '/api/health' }
+      })
+    }
+    window.history.replaceState({}, '', '/')
+
+    const success = await mountOutcomeApp(successRuntime)
+    try {
+      await submitAssistantPrompt(success.container, 'hello local gateway')
+      await waitUntil(() => {
+        expect(success.container.textContent).toContain('Local Gateway says hello from Orchestrator.')
+        expect(success.container.textContent).toContain('local-gateway-test')
+      })
+      const assistantRequests = successTransport.requests.filter((request) => request.method === ORCHESTRATOR_METHODS.externalUserInput)
+      expect(assistantRequests).toHaveLength(1)
+      expect(assistantRequests[0]?.payload).toEqual(expect.objectContaining({
+        text: 'hello local gateway',
+        source: 'external',
+        stream: true
+      }))
+      expect(requestMethods(successTransport)).toContain(GATEWAY_METHODS.getCapabilityCatalog)
+      writeOutcomeArtifact('assistant-send-success', success.container.innerHTML)
+    } finally {
+      await act(async () => success.root.unmount())
+      success.container.remove()
+    }
+
+    const failureTransport = assistantGatewayAuthFailureTransport()
+    const failureRuntime = testRuntime(new AuroraClient({ transport: failureTransport }))
+    window.history.replaceState({}, '', '/')
+    const failure = await mountOutcomeApp(failureRuntime)
+    try {
+      await submitAssistantPrompt(failure.container, 'hello with expired token')
+      await waitUntil(() => {
+        expect(failure.container.textContent).toContain('Assistant request denied by authentication or permissions.')
+      })
+      const assistantRequests = failureTransport.requests.filter((request) => request.method === ORCHESTRATOR_METHODS.externalUserInput)
+      expect(assistantRequests).toHaveLength(1)
+      expect(assistantRequests[0]?.payload).toEqual(expect.objectContaining({
+        text: 'hello with expired token',
+        source: 'external',
+        stream: true
+      }))
+      writeOutcomeArtifact('assistant-send-auth-error', failure.container.innerHTML)
+    } finally {
+      await act(async () => failure.root.unmount())
+      failure.container.remove()
     }
   })
 
