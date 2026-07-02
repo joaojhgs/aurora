@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:31:37.690Z",
+  "updatedAt": "2026-07-02T09:32:15.518Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -791,10 +791,13 @@
       "id": "G066-ensure-pnpm-filter-aurora-tauri-ui-t",
       "title": "Ensure `pnpm --filter @aurora/tauri-ui tauri dev` starts:",
       "objective": "Ensure `pnpm --filter @aurora/tauri-ui tauri dev` starts:\nVite frontend;\nRust/Tauri shell;\nPython Aurora services in `threads` mode via sidecar/dev process;\nGateway on `http://127.0.0.1:8000` unless overridden.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:32:15.518Z",
+      "startedAt": "2026-07-02T09:31:42.769Z",
+      "completedAt": "2026-07-02T09:32:15.518Z",
+      "evidence": "One-command Tauri dev bootstrap is ensured by apps/aurora-tauri/scripts/tauri-cli.mjs and tests/docs: pnpm --filter @aurora/tauri-ui test:dev-bootstrap passed (4 tests). The wrapper routes pnpm tauri commands through node ./scripts/tauri-cli.mjs, applies dev defaults only for tauri dev, sets AURORA_ARCHITECTURE_MODE=threads, AURORA_TAURI_DEV_AUTOSIDECAR=1, sidecar cwd repo root, sidecar args main.py, Gateway http://127.0.0.1:8000 unless overridden, .venv/python fallback, and prints a real local stack banner for Vite + Tauri + Rust-supervised Python sidecar. apps/aurora-tauri/README.md and docs/TAURI_DESKTOP_BUILD.md document Vite/Rust/Python unified logs and no prepare-sidecar/AURORA_TAURI_SIDECAR_SOURCE ritual for dev."
     },
     {
       "id": "G067-never-require-a-prebuilt-packaged-si",
