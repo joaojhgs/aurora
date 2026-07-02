@@ -2862,6 +2862,34 @@ describe('Aurora production shell', () => {
     expect(loadingMarkup).toContain('Loading mesh peers')
   })
 
+  it('explains how to pair from an empty mesh state', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const emptySnapshot = {
+      ...snapshot,
+      loadState: 'empty' as const,
+      peers: [],
+      liveSessions: [],
+      devices: [],
+      pendingCount: 0,
+      approvedCount: 0,
+      deniedCount: 0,
+      removedCount: 0,
+      runtimePeerCount: 0,
+      liveSessionCount: 0,
+      deviceCount: 0,
+      routeCount: 0
+    }
+    const markup = renderToStaticMarkup(<MeshPeersView snapshot={emptySnapshot} route={route} />)
+
+    expect(markup).toContain('No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.')
+    expect(markup).toContain('To pair, open')
+    expect(markup).toContain('href="/admin/pairing"')
+    expect(markup).toContain('request or approve a code')
+    expect(markup).toContain('confirm Gateway mesh is enabled')
+    expect(markup).toContain('refresh diagnostics')
+  })
+
   it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability evidence', async () => {
     const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
 

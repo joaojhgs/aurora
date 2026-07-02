@@ -473,7 +473,12 @@ export function MeshPeersView({
       {mutationError ? <p className="aui-message aui-message-danger" role="alert">{mutationError}</p> : null}
       {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
       {snapshot.loadState === 'loading' ? <p className="aui-message" aria-live="polite">Loading mesh peers from AuroraClient.</p> : null}
-      {snapshot.loadState === 'empty' ? <p className="aui-message">No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.</p> : null}
+      {snapshot.loadState === 'empty' ? (
+        <p className="aui-message">
+          No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.
+          {' '}To pair, open <a href="/admin/pairing">Admin pairing</a>, request or approve a code, confirm Gateway mesh is enabled, then refresh diagnostics.
+        </p>
+      ) : null}
 
       <MeshLiveSessionsPanel sessions={snapshot.liveSessions} fixtureOnly={snapshot.fixtureOnly} />
       <MeshDevicesPanel devices={snapshot.devices} fixtureOnly={snapshot.fixtureOnly} />

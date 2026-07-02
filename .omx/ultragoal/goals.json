@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:30:30.042Z",
+  "updatedAt": "2026-07-02T13:33:01.225Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1473,10 +1473,12 @@
       "id": "G127-empty-mesh-state-clearly-explains-ho",
       "title": "Empty mesh state clearly explains how to pair.",
       "objective": "Empty mesh state clearly explains how to pair.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:33:01.225Z",
+      "completedAt": "2026-07-02T13:33:01.225Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'empty mesh|mesh disabled|mesh peer lifecycle'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G128-e2e-covers-status-load-pair-flow-ent",
