@@ -77,7 +77,7 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
       <RoutePolicyResource client={client} route={route} />
     </div>
   ),
-  admin: ({ client }) => <AdminOverviewResource client={client} />,
+  admin: ({ client }) => <TauriAdminOverviewPage client={client} />,
   services: ({ client }) => <AdminServicesResource client={client} />,
   access: ({ client }) => <AdminRbacResource client={client} />,
   tokens: ({ client }) => <AdminRbacResource client={client} />,
@@ -321,6 +321,38 @@ function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
   return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
 }
 
+function TauriAdminOverviewPage({
+  client
+}: {
+  client: ReturnType<typeof createAuroraTauriRuntime>['client']
+}) {
+  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
+  const [error, setError] = useState<unknown>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    client.adminOverview.getManifest().then(
+      (next) => {
+        if (!cancelled) {
+          setManifest(next)
+          setError(null)
+        }
+      },
+      (nextError: unknown) => {
+        if (!cancelled) {
+          setManifest(null)
+          setError(nextError)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+}
+
 function TauriDiagnosticsPage({
   route,
   snapshot,
@@ -485,18 +517,6 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   );
 }
 
-function TauriAdminActionPage({ children, status }: { children: ReactNode; status: string | null }) {
-  return (
-    <div className="ata-page-stack">
-      {status ? <p className="aui-message" role="status">{status}</p> : null}
-      {children}
-    </div>
-  )
-}
-
-function isRbacAction(action: AdminRbacAction | AdminServiceControlAction): action is AdminRbacAction {
-  return 'payload' in action
-}
 
 function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailability {
   const normalized = normalizePath(path)
