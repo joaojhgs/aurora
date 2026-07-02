@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:26:25.560Z",
+  "updatedAt": "2026-07-02T08:31:02.301Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -467,10 +467,13 @@
       "id": "G039-services-communicate-through-aurora",
       "title": "Services communicate through Aurora bus/contracts. No UI or Tauri cod...",
       "objective": "Services communicate through Aurora bus/contracts. No UI or Tauri code imports Python service internals directly.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:31:02.301Z",
+      "startedAt": "2026-07-02T08:28:14.006Z",
+      "completedAt": "2026-07-02T08:31:02.301Z",
+      "evidence": "Added apps/aurora-tauri/src/ui-service-boundary.test.ts and wired test:service-boundary into tauri:smoke:linux. Verified pnpm --filter @aurora/tauri-ui test:service-boundary; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui tauri:smoke:linux."
     },
     {
       "id": "G040-frontend-accesses-backend-truth-only",
