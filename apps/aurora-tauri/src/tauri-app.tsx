@@ -30,6 +30,7 @@ import {
   type RouteAvailability,
 } from "@aurora/ui";
 import type {
+  AdminOverviewManifest,
   AndroidLocalLightInferenceStatus,
   TauriAndroidBaselineStatus,
   TauriIosInvocationStatus,
@@ -39,7 +40,56 @@ import type {
 } from "@aurora/client";
 import { createAuroraTauriRuntime } from "./aurora-client";
 
-const navItems = auroraNavSections.flatMap((section) => section.items);
+const navItems = auroraNavSections.flatMap((section) => section.items)
+type AuroraTauriRuntime = ReturnType<typeof createAuroraTauriRuntime>
+type AuroraTauriClient = AuroraTauriRuntime['client']
+type TauriRouteRenderer = (input: {
+  route: RouteAvailability
+  snapshot: AuroraShellSnapshot
+  nativeContext: NativeContext
+  client: AuroraTauriClient
+  shutdown: () => Promise<void>
+  assistantNativePermissions: Array<{ name: string; granted: boolean }>
+  assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
+}) => JSX.Element
+
+export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
+  assistant: ({ route, snapshot, client, assistantNativePermissions, assistantNativeCapabilities }) => (
+    <AssistantView
+      client={client}
+      route={route}
+      cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+      voiceRoutes={snapshot.assistantVoiceRoutes}
+      nativePlatform={snapshot.nativePlatform}
+      nativeAvailable={snapshot.nativeAvailable}
+      nativePermissions={assistantNativePermissions}
+      nativeCapabilities={assistantNativeCapabilities}
+    />
+  ),
+  memory: ({ route, client }) => <MemoryView client={client} route={route} />,
+  tools: ({ route, client }) => <ToolApprovalPanel client={client} route={route} />,
+  mesh: ({ route, client }) => <MeshPeersResource client={client} route={route} />,
+  admin: ({ client }) => <AdminOverviewResource client={client} />,
+  services: ({ client }) => <AdminServicesResource client={client} />,
+  access: ({ client }) => <AdminRbacResource client={client} />,
+  tokens: ({ client }) => <AdminRbacResource client={client} />,
+  devices: ({ client }) => <AdminDevicesResource client={client} />,
+  config: ({ route, client }) => <ConfigEditorView client={client} route={route} />,
+  contracts: ({ client }) => <AdminServicesResource client={client} />,
+  plugins: ({ route, client }) => <AdminPluginsView client={client} route={route} />,
+  pairing: ({ route, client }) => <PairingQueueView client={client} route={route} />,
+  backups: ({ route, client }) => <BackupRestoreView client={client} route={route} />,
+  scheduler: ({ route, client }) => <AdminSchedulerView client={client} route={route} />,
+  audit: ({ client }) => <AdminAuditResource client={client} />,
+  models: ({ client }) => <ModelsView client={client} />,
+  diagnostics: ({ snapshot, nativeContext, shutdown }) => <TauriDiagnosticsPage snapshot={snapshot} nativeContext={nativeContext} shutdown={shutdown} />,
+  onboarding: ({ snapshot, client }) => <OnboardingView client={client} snapshot={snapshot} />,
+  settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
+  data: ({ route, client }) => <MemoryView client={client} route={route} />,
+  native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
+}
+
+export const tauriRouteRegistryRouteIds = Object.freeze(Object.keys(tauriRouteRegistry))
 
 export function AuroraTauriApp() {
   const runtime = useMemo(() => createAuroraTauriRuntime(), []);
@@ -205,7 +255,8 @@ function TauriRouteContent({
   client: ReturnType<typeof createAuroraTauriRuntime>["client"];
   shutdown: () => Promise<void>;
 }) {
-  const route = routeForPath(snapshot, path);
+  const route = routeForPath(snapshot, path)
+  const renderRoute = tauriRouteRegistry[route.item.id]
   const assistantNativePermissions = useMemo(
     () =>
       snapshot.nativePermissions.map((permission) => ({
@@ -215,75 +266,49 @@ function TauriRouteContent({
     [snapshot.nativePermissions],
   );
   const assistantNativeCapabilities = useMemo(
-    () =>
-      snapshot.nativeCapabilities.map((capability) => ({
-        name: capability.name,
-        enabled: capability.enabled,
-      })),
-    [snapshot.nativeCapabilities],
-  );
-  switch (route.item.id) {
-    case "assistant":
-      return (
-        <AssistantView
-          client={client}
-          route={route}
-          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
-          voiceRoutes={snapshot.assistantVoiceRoutes}
-          nativePlatform={snapshot.nativePlatform}
-          nativeAvailable={snapshot.nativeAvailable}
-          nativePermissions={assistantNativePermissions}
-          nativeCapabilities={assistantNativeCapabilities}
-        />
-      );
-    case "models":
-      return <ModelsView client={client} />;
-    case "memory":
-      return <MemoryView client={client} route={route} />;
-    case "data":
-      return <RoutePolicyResource client={client} route={route} />;
-    case "tools":
-      return <ToolApprovalPanel client={client} route={route} />;
-    case "mesh":
-      return <MeshPeersResource client={client} route={route} />;
-    case "admin":
-      return <TauriAdminOverview client={client} />;
-    case "services":
-    case "contracts":
-      return <AdminServicesResource client={client} />;
-    case "access":
-      return <AdminRbacResource client={client} />;
-    case "tokens":
-    case "devices":
-      return <AdminDevicesResource client={client} />;
-    case "config":
-      return <ConfigEditorView client={client} route={route} />;
-    case "plugins":
-      return <AdminPluginsView client={client} route={route} />;
-    case "pairing":
-      return <PairingQueueView client={client} route={route} />;
-    case "backups":
-      return <BackupRestoreView client={client} route={route} />;
-    case "scheduler":
-      return <AdminSchedulerView client={client} route={route} />;
-    case "audit":
-      return <AdminAuditResource client={client} />;
-    case "settings":
-    case "native":
-      return <SettingsPermissionsView snapshot={snapshot} />;
-    case "onboarding":
-      return <OnboardingView client={client} snapshot={snapshot} />;
-    case "diagnostics":
-      return (
-        <TauriDiagnosticsPage
-          snapshot={snapshot}
-          nativeContext={nativeContext}
-          shutdown={shutdown}
-        />
-      );
-    default:
-      return <TauriUnknownRoute route={route} />;
-  }
+    () => snapshot.nativeCapabilities.map((capability) => ({ name: capability.name, enabled: capability.enabled })),
+    [snapshot.nativeCapabilities]
+  )
+  if (!renderRoute) return <MissingTauriRoute route={route} />
+  return renderRoute({
+    route,
+    snapshot,
+    nativeContext,
+    client,
+    shutdown,
+    assistantNativePermissions,
+    assistantNativeCapabilities
+  })
+}
+
+function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
+  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
+  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from AuroraClient.'))
+
+  useEffect(() => {
+    let cancelled = false
+    setManifest(null)
+    setError(new Error('Loading admin overview manifest from AuroraClient.'))
+    void client.adminOverview.getManifest().then(
+      (next) => {
+        if (!cancelled) {
+          setManifest(next)
+          setError(undefined)
+        }
+      },
+      (nextError: unknown) => {
+        if (!cancelled) {
+          setManifest(null)
+          setError(nextError)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
 }
 
 function TauriDiagnosticsPage({
@@ -422,58 +447,25 @@ function TauriDiagnosticsPage({
   );
 }
 
-function TauriAdminOverview({
-  client,
-}: {
-  client: ReturnType<typeof createAuroraTauriRuntime>["client"];
-}) {
-  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null);
-  const [error, setError] = useState<unknown>(
-    "Loading admin overview manifest from AuroraClient.",
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    setError("Loading admin overview manifest from AuroraClient.");
-    void client.adminOverview
-      .getManifest()
-      .then((next) => {
-        if (!cancelled) {
-          setManifest(next);
-          setError(undefined);
-        }
-      })
-      .catch((nextError: unknown) => {
-        if (!cancelled) {
-          setManifest(null);
-          setError(nextError);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
-
-  return (
-    <AdminOverviewContent
-      manifest={manifest}
-      transportKind={client.transport.kind}
-      error={error}
-    />
-  );
-}
-
-function TauriUnknownRoute({ route }: { route: RouteAvailability }) {
+function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   return (
     <div className="ata-page-stack">
       <StateSurface
-        title="Unknown route"
-        state="unsupported"
-        description="The requested Aurora route is not registered in the SDK-backed navigation map."
-        evidence={`${route.item.href}; ${route.providerLabel}`}
-        actionLabel="Open a registered route"
+        title={`${route.item.label} route registry error`}
+        state="denied"
+        description="The Tauri shell could not find a production route component for this nav item."
+        evidence={`${route.providerLabel}; blockers=${route.blockers.join(', ') || 'none'}`}
+        actionLabel="Route registry repair required"
       />
-      <RouteMatrix routes={[route]} />
+      <section className="ata-panel">
+        <h2>{route.item.label} route is unregistered</h2>
+        <dl className="ata-facts">
+          <div><dt>Expected task</dt><dd>{route.item.expectedTask}</dd></div>
+          <div><dt>Privacy class</dt><dd>{route.item.privacyClass}</dd></div>
+          <div><dt>Routeable</dt><dd>{route.routeable ? 'yes' : 'no'}</dd></div>
+          <div><dt>Route id</dt><dd>{route.item.id}</dd></div>
+        </dl>
+      </section>
     </div>
   );
 }
