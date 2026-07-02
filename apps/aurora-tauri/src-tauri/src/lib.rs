@@ -1280,39 +1280,73 @@ fn redact_sensitive_value(value: &Value) -> Value {
 }
 
 fn redact_sensitive_text(input: &str) -> String {
-    let mut redacted = input.to_string();
+    let mut redacted = redact_embedded_json(input);
     for marker in [
-        "authorization:",
-        "authorization=",
         "bearer ",
         "x-aurora-sidecar-token:",
         "x-aurora-sidecar-token=",
         "token:",
         "token=",
+        "\"token\":",
         "secret:",
         "secret=",
+        "\"secret\":",
         "password:",
         "password=",
+        "\"password\":",
         "api_key:",
         "api_key=",
+        "\"api_key\":",
         "apikey:",
         "apikey=",
+        "\"apikey\":",
         "private_key:",
         "private_key=",
+        "\"private_key\":",
         "raw_audio:",
         "raw_audio=",
+        "\"raw_audio\":",
         "rawaudio:",
         "rawaudio=",
+        "\"rawaudio\":",
         "audio_bytes:",
         "audio_bytes=",
+        "\"audio_bytes\":",
+        "\"audiobytes\":",
         "audio_data:",
         "audio_data=",
+        "\"audio_data\":",
+        "\"audiodata\":",
         "pcm16:",
         "pcm16=",
+        "\"pcm16\":",
     ] {
         redacted = redact_after_marker(&redacted, marker);
     }
     redacted
+}
+
+fn redact_embedded_json(input: &str) -> String {
+    let Some(start) = input.find('{') else {
+        return input.to_string();
+    };
+    let Some(end) = input.rfind('}') else {
+        return input.to_string();
+    };
+    if end <= start {
+        return input.to_string();
+    }
+
+    let candidate = &input[start..=end];
+    let Ok(value) = serde_json::from_str::<Value>(candidate) else {
+        return input.to_string();
+    };
+    format!(
+        "{}{}{}",
+        &input[..start],
+        serialize_redacted_value(&value),
+        &input[end + 1..]
+    )
 }
 
 fn redact_after_marker(input: &str, marker: &str) -> String {
@@ -1326,15 +1360,23 @@ fn redact_after_marker(input: &str, marker: &str) -> String {
         output.push_str(&input[cursor..value_start]);
         output.push_str("[redacted]");
 
-        let mut value_end = value_start;
+        let mut scan_start = value_start;
         for (offset, character) in input[value_start..].char_indices() {
+            if !matches!(character, ' ' | '\t' | '"' | '\'') {
+                break;
+            }
+            scan_start = value_start + offset + character.len_utf8();
+        }
+
+        let mut value_end = scan_start;
+        for (offset, character) in input[scan_start..].char_indices() {
             if matches!(
                 character,
                 ' ' | '\t' | '\n' | '\r' | ',' | ';' | '&' | '"' | '\'' | '}' | ']'
             ) {
                 break;
             }
-            value_end = value_start + offset + character.len_utf8();
+            value_end = scan_start + offset + character.len_utf8();
         }
         cursor = value_end;
     }
