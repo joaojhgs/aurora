@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:33:01.225Z",
+  "updatedAt": "2026-07-02T13:37:04.657Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1484,10 +1484,12 @@
       "id": "G128-e2e-covers-status-load-pair-flow-ent",
       "title": "E2E covers status load, pair flow entry, approve/deny disabled/live s...",
       "objective": "E2E covers status load, pair flow entry, approve/deny disabled/live state, route preview, WebRTC diagnostic error state.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:37:04.657Z",
+      "completedAt": "2026-07-02T13:37:04.657Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G129-fix-contradiction-where-page-says-lo",

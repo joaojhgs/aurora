@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -965,6 +965,61 @@ describe('Tauri CI/E2E route gates', () => {
     } finally {
       await act(async () => tools.root.unmount())
       tools.container.remove()
+    }
+  })
+
+  it('e2e:routes covers mesh status load, pairing entry, actions, route preview, and diagnostics errors', async () => {
+    const meshTransport = new RecordingMockAuroraTransport()
+    window.history.replaceState({}, '', '/mesh')
+    const mesh = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: meshTransport })))
+    try {
+      await waitUntil(() => {
+        expect(mesh.container.textContent).toContain('Mesh peers')
+        expect(mesh.container.textContent).toContain('Topology')
+        expect(mesh.container.textContent).toContain('Trust queue')
+        expect(mesh.container.textContent).toContain('Route preview')
+        expect(mesh.container.textContent).toContain('Open pairing queue')
+        expect(mesh.container.textContent).toContain('Refresh diagnostics')
+        expect(mesh.container.textContent).toContain('Explain route through peer')
+        expect(mesh.container.textContent).toContain('Gateway.GetMeshStatus route decision / capability graph')
+        expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getMeshStatus)
+        expect(requestMethods(meshTransport)).toContain(AUTH_METHODS.meshListPeers)
+        expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getWebRTCDiagnostics)
+      })
+      const pairingLink = Array.from(mesh.container.querySelectorAll<HTMLAnchorElement>('a[href="/admin/pairing"]'))
+        .find((link) => link.textContent?.includes('Open pairing queue'))
+      expect(pairingLink?.textContent).toContain('Open pairing queue')
+      const actionButtons = Array.from(mesh.container.querySelectorAll<HTMLButtonElement>('button'))
+      const approveButtons = actionButtons.filter((button) => button.textContent?.includes('AdminAction approve') || button.textContent?.includes('Approve peer'))
+      const denyButtons = actionButtons.filter((button) => button.textContent?.includes('AdminAction deny') || button.textContent?.includes('Deny peer'))
+      expect(approveButtons.length, 'mesh approve action controls').toBeGreaterThan(0)
+      expect(denyButtons.length, 'mesh deny action controls').toBeGreaterThan(0)
+      expect(approveButtons.some((button) => !button.disabled), 'at least one live approve control').toBe(true)
+      expect(approveButtons.some((button) => button.disabled), 'at least one disabled approve control').toBe(true)
+      expect(denyButtons.some((button) => !button.disabled), 'at least one live deny control').toBe(true)
+      expect(denyButtons.some((button) => button.disabled), 'at least one disabled deny control').toBe(true)
+      writeOutcomeArtifact('mesh-route-status-pair-actions-route-preview', mesh.container.innerHTML)
+    } finally {
+      await act(async () => mesh.root.unmount())
+      mesh.container.remove()
+    }
+
+    const diagnosticsTransport = new RecordingMockAuroraTransport().fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
+    window.history.replaceState({}, '', '/diagnostics')
+    const diagnostics = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: diagnosticsTransport })))
+    try {
+      await waitUntil(() => {
+        expect(diagnostics.container.textContent).toContain('Diagnostics')
+        expect(diagnostics.container.textContent).toContain('WebRTC and ICE diagnostics')
+        expect(diagnostics.container.textContent).toContain('Degraded diagnostics inputs')
+        expect(diagnostics.container.textContent).toContain('diagnostics down')
+        expect(diagnostics.container.textContent).toContain('Repair Gateway.GetWebRTCDiagnostics')
+        expect(requestMethods(diagnosticsTransport)).toContain(GATEWAY_METHODS.getWebRTCDiagnostics)
+      })
+      writeOutcomeArtifact('diagnostics-webrtc-error-state', diagnostics.container.innerHTML)
+    } finally {
+      await act(async () => diagnostics.root.unmount())
+      diagnostics.container.remove()
     }
   })
 
