@@ -48,9 +48,9 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: 'a4607300cf11',
-    tablet: '4d474888e893',
-    mobile: '33705355a5ef'
+    desktop: 'a0167bc483df',
+    tablet: 'e1dda9af152f',
+    mobile: '231babcb2d75'
   },
   admin: {
     desktop: '446080dcb58c',

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:47:09.722Z",
+  "updatedAt": "2026-07-02T12:50:38.708Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1374,10 +1374,12 @@
       "id": "G118-avoid-presenting-unavailable-tooling",
       "title": "Avoid presenting unavailable tooling as working.",
       "objective": "Avoid presenting unavailable tooling as working.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:50:38.708Z",
+      "completedAt": "2026-07-02T12:50:38.708Z",
+      "evidence": "Unavailable/terminal tooling is no longer presented as working: ToolApprovalPanel status copy says unavailable tools are disabled until provider/service repair; Admin plugins inventory maps unavailable/denied/expired/replay/stale tools to unavailable policy surfaces, disables all policy controls, and approvalMode reports unavailable/denied/expired/replay instead of approval-ready copy. Updated deterministic assistant visual fingerprints for the changed static markup. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'plugin|tool approval|unavailable'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G119-tool-catalog-can-be-browsed-and-filt",

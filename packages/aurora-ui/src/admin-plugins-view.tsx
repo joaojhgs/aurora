@@ -374,7 +374,7 @@ function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
 function buildToolInventoryRow(tool: ToolApprovalCardModel, methods: MethodDescriptor[]): AdminToolInventoryRow {
   const providerGroup = classifyProvider(tool)
   const remote = providerGroup === 'remote-peer-built-in' || providerGroup === 'remote-peer-plugin-mcp'
-  const unavailable = tool.state === 'unavailable' || tool.state === 'denied' || tool.providerLabel.toLowerCase().includes('stale')
+  const unavailable = isUnavailableTool(tool)
   return {
     id: tool.id,
     name: tool.name,
@@ -400,7 +400,7 @@ function buildToolInventoryRow(tool: ToolApprovalCardModel, methods: MethodDescr
     approvalMode: approvalMode(tool),
     defaultTtl: tool.tokenTtlSeconds ? `${tool.tokenTtlSeconds}s` : 'backend default',
     lastAuditOutcome: tool.result?.auditReceipt ?? tool.auditDestination ?? tool.correlationId ?? 'audit pending',
-    policyControls: buildPolicyControls(tool, methods, remote),
+    policyControls: buildPolicyControls(tool, methods, remote, unavailable),
     secretsRedacted: tool.secretsRedacted
   }
 }
@@ -459,13 +459,25 @@ function actionPreview(input: {
   }
 }
 
-function buildPolicyControls(tool: ToolApprovalCardModel, methods: MethodDescriptor[], remote: boolean): AdminToolPolicyControl[] {
+function buildPolicyControls(tool: ToolApprovalCardModel, methods: MethodDescriptor[], remote: boolean, unavailable: boolean): AdminToolPolicyControl[] {
   const methodId = 'Tooling.UpdateToolSharingPolicy'
   const advertised = methods.some((method) => method.busTopic === methodId && method.availableOverHttp && method.methodType === 'manage')
   const readOnly = remote
   const unsupportedReason = advertised
     ? 'Policy changes require AdminAction draft/confirm/audit.'
     : `${methodId} is not advertised; policy is read-only in this checkout.`
+  if (unavailable) {
+    const reason = 'Unavailable tooling is not presented as working; repair the provider/service before changing sharing policy or executing.'
+    return [
+      policyControl('share-none', 'Share none', methodId, false, false, reason),
+      policyControl('share-service', 'Share service/toolkit', methodId, false, false, reason),
+      policyControl('share-selected', 'Share selected', methodId, false, false, reason),
+      policyControl('deny-selected', 'Deny selected', methodId, false, false, reason),
+      policyControl('require-confirmation', 'Require confirmation', methodId, false, false, reason),
+      policyControl('dry-run-only', 'Dry-run only', methodId, false, false, reason),
+      policyControl('allowed-peers', 'Allowed peers/providers', methodId, false, false, reason)
+    ]
+  }
   return [
     policyControl('share-none', 'Share none', methodId, advertised, readOnly, unsupportedReason),
     policyControl('share-service', 'Share service/toolkit', methodId, advertised, readOnly, unsupportedReason),
@@ -517,10 +529,22 @@ function stateForTool(tool: ToolApprovalCardModel): AvailabilityState {
 }
 
 function approvalMode(tool: ToolApprovalCardModel): string {
+  if (tool.state === 'unavailable') return `unavailable: ${tool.disabledReason ?? 'provider/service unavailable'}`
+  if (tool.state === 'denied') return `denied: ${tool.denialReason ?? 'backend policy denied'}`
+  if (tool.state === 'expired') return 'expired approval; request a fresh backend approval'
+  if (tool.state === 'replay-rejected') return `replay rejected: ${tool.denialReason ?? 'backend replay protection'}`
   if (tool.dryRunRequired) return 'dry-run-only'
   if (tool.providerSelectorRequired) return 'provider selector required'
   if (tool.approvalRequired) return tool.requestedApprovalScope ?? tool.approvalScopes[0] ?? 'approval required'
   return 'no approval required'
+}
+
+function isUnavailableTool(tool: ToolApprovalCardModel): boolean {
+  return tool.state === 'unavailable'
+    || tool.state === 'denied'
+    || tool.state === 'expired'
+    || tool.state === 'replay-rejected'
+    || tool.providerLabel.toLowerCase().includes('stale')
 }
 
 function dataClassesForTool(tool: ToolApprovalCardModel): string[] {

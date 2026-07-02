@@ -690,7 +690,7 @@ function stateCopy(tool: ToolApprovalCardModel): string {
   if (tool.state === 'denied') return `Denied: ${tool.denialReason ?? 'backend policy denied approval'}.`
   if (tool.state === 'expired') return 'Approval expired; request a fresh backend approval.'
   if (tool.state === 'replay-rejected') return `Replay rejected: ${tool.denialReason ?? 'backend replay protection blocked it'}.`
-  if (tool.state === 'unavailable') return `Unavailable: ${tool.disabledReason ?? 'service unavailable'}.`
+  if (tool.state === 'unavailable') return `Unavailable: ${tool.disabledReason ?? 'service unavailable'}. Disabled until provider/service repair completes.`
   if (tool.state === 'executed') return 'Tool result includes audit and correlation evidence.'
   if (tool.requiresAdminAction) return 'AdminAction confirmation required before approval or execution.'
   if (tool.approvalRequired) return 'Approval required before execution.'
