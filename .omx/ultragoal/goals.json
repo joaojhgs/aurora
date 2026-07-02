@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:30:19.005Z",
+  "updatedAt": "2026-07-02T11:32:27.119Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1187,10 +1187,12 @@
       "id": "G101-keyboard-navigation-and-focus-indica",
       "title": "Keyboard navigation and focus indicators work for nav/menu/dialog/sheet.",
       "objective": "Keyboard navigation and focus indicators work for nav/menu/dialog/sheet.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:32:27.119Z",
+      "completedAt": "2026-07-02T11:32:27.119Z",
+      "evidence": "Implemented Playwright keyboard/focus route gate in apps/aurora-tauri/tests/playwright/route-crawl.spec.ts. The gate proves desktop Tab focus reaches primary nav with a visible focus outline, keyboard Enter navigates to Mesh, mobile Tab focuses the menu summary with visible outline, Enter opens the mobile navigation sheet dialog, and Tab reaches a sheet route link with visible outline. Verified with: pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G102-lighthouse-axe-or-equivalent-accessi",

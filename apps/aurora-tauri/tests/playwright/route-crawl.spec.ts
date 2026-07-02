@@ -12,6 +12,29 @@ const cockpitScreenshotViewports = [
   { id: 'mobile', width: 390, height: 844, expects: { sidebar: false, mobileTabs: true } },
 ] as const
 
+
+
+async function expectFocusedWithVisibleOutline(page: import('@playwright/test').Page, label: string): Promise<void> {
+  const focusState = await page.evaluate(() => {
+    const element = document.activeElement as HTMLElement | null
+    if (!element) return null
+    const style = window.getComputedStyle(element)
+    return {
+      tagName: element.tagName,
+      className: element.className,
+      ariaLabel: element.getAttribute('aria-label'),
+      text: element.textContent?.replace(/\s+/g, ' ').trim().slice(0, 80) ?? '',
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineColor: style.outlineColor,
+    }
+  })
+
+  expect(focusState, `${label} should have a focused element`).not.toBeNull()
+  expect(focusState?.outlineStyle, `${label} should use a visible focus outline`).not.toBe('none')
+  expect(Number.parseFloat(focusState?.outlineWidth ?? '0'), `${label} should use a non-zero focus outline`).toBeGreaterThan(0)
+}
+
 const PLACEHOLDER_COPY_MARKERS = [
   'A full product page still needs to be mounted',
   'full product page still needs to be mounted',
@@ -79,6 +102,35 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
       }, null, 2)}\n`,
     )
   })
+
+
+  test('supports keyboard focus through desktop nav and mobile menu sheet', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1024 })
+    await page.goto('/')
+    await expect(page.locator('.aui-shell')).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('.aui-sidebar a').first()).toBeFocused()
+    await expectFocusedWithVisibleOutline(page, 'desktop primary nav')
+
+    await page.getByRole('link', { name: /Mesh Mesh route state/i }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/mesh$/)
+    await expect(page.getByRole('heading', { name: /Mesh/i }).first()).toBeVisible()
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    await expect(page.getByLabel('Mobile navigation', { exact: true })).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(page.getByLabel('Open menu')).toBeFocused()
+    await expectFocusedWithVisibleOutline(page, 'mobile menu summary')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('dialog', { name: 'Mobile navigation sheet' })).toBeVisible()
+
+    await page.keyboard.press('Tab')
+    await expect(page.locator('.aui-mobile-sheet a').first()).toBeFocused()
+    await expectFocusedWithVisibleOutline(page, 'mobile sheet route link')
+  })
+
 
   test('fails if any primary route renders placeholder copy', async ({ page }) => {
     const failures: string[] = []
