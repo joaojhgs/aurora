@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:00:07.576Z",
+  "updatedAt": "2026-07-02T12:04:07.824Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1264,10 +1264,12 @@
       "id": "G108-assistant-page-no-longer-shows-globa",
       "title": "Assistant page no longer shows global backend-state dashboard as prim...",
       "objective": "Assistant page no longer shows global backend-state dashboard as primary content.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:04:07.824Z",
+      "completedAt": "2026-07-02T12:04:07.824Z",
+      "evidence": "Added assistant main#content regression proving root route renders route-specific assistant chat UI (Text chat, Prompt, Voice modes, Route guard) and excludes Runtime snapshot plus diagnostics/dashboard markers from primary content. Verified: pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; git diff --check."
     },
     {
       "id": "G109-e2e-covers-send-streaming-fallback-s",

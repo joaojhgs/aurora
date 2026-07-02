@@ -261,6 +261,14 @@ function expectNoPlaceholderOrDebugUi(markup: string, routeId: string) {
   }
 }
 
+function mainContentText(markup: string) {
+  const host = document.createElement('div')
+  host.innerHTML = markup
+  const main = host.querySelector('main#content')
+  expect(main, 'route markup should expose the production main content landmark').not.toBeNull()
+  return main?.textContent ?? ''
+}
+
 function assertNoRouteReachesPlaceholderCopyForTests() {
   const failures: string[] = []
 
@@ -568,14 +576,20 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:assistant keeps the assistant landing page separate from diagnostics', () => {
     const markup = renderTauriRoute('/')
+    const mainText = mainContentText(markup)
 
     expectNoPlaceholderOrDebugUi(markup, 'assistant')
-    expect(markup).toContain('Assistant')
-    expect(markup).toContain('Prompt')
-    expect(markup).toContain('Assistant capability is unavailable')
-    expect(markup).not.toContain('Native boundary')
-    expect(markup).not.toContain('Denied native defaults')
-    expect(markup).not.toContain('route registry error')
+    expect(mainText).toContain('Assistant')
+    expect(mainText).toContain('Text chat')
+    expect(mainText).toContain('Prompt')
+    expect(mainText).toContain('Voice modes')
+    expect(mainText).toContain('Assistant send is disabled: loading.')
+    expect(mainText).toContain('Route guard')
+    expect(mainText).not.toContain('Runtime snapshot')
+    for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
+      expect(mainText, `assistant main content must not render diagnostics/dashboard marker ${marker}`).not.toContain(marker)
+    }
+    expect(mainText).not.toContain('route registry error')
   })
 
   it('e2e:admin renders admin routes with admin-specific components instead of placeholders', () => {
