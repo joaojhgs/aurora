@@ -45,7 +45,12 @@
     "tauri": "node ./scripts/tauri-cli.mjs",
     "build:bundle:linux-rpm:thin": "node ./scripts/prepare-sidecar.mjs --profile thin && pnpm tauri build --config src-tauri/tauri.release.conf.json --no-sign --bundles rpm",
     "ios:preflight": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project",
-    "ios:preflight:signing": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project --require-signing-env"
+    "ios:preflight:signing": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project --require-signing-env",
+    "test:e2e:routes": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:routes\"",
+    "test:e2e:assistant": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:assistant\"",
+    "test:e2e:admin": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:admin\"",
+    "test:e2e:runtime": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:runtime\"",
+    "tauri:smoke:linux": "pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",

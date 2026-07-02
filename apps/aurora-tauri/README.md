@@ -36,6 +36,21 @@ Desktop local sidecar defaults:
 
 Override with `AURORA_TAURI_SIDECAR_PROGRAM`, `AURORA_TAURI_SIDECAR_ARGS`, `AURORA_TAURI_SIDECAR_CWD`, `AURORA_TAURI_SIDECAR_CONFIG_FILE`, or `AURORA_GATEWAY_URL` when packaging provides a bundled Python entrypoint.
 
+
+## CI/E2E route gates
+
+The lightweight Linux-safe gates below run in Vitest/jsdom and are intended for pull-request CI before any GUI or platform-specific Tauri smoke. They fail if the Tauri shell regresses to placeholder or debug-only UI, if admin/runtime routes fall back to broad route-registry placeholders, or if non-data runtime routes are falsely privacy-blocked.
+
+```bash
+pnpm --filter @aurora/tauri-ui test:e2e:routes
+pnpm --filter @aurora/tauri-ui test:e2e:assistant
+pnpm --filter @aurora/tauri-ui test:e2e:admin
+pnpm --filter @aurora/tauri-ui test:e2e:runtime
+pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+```
+
+`tauri:smoke:linux` is a deterministic headless aggregate of the route gates above. It does not launch a desktop webview and does not replace `pnpm --filter @aurora/tauri-ui tauri dev` or the platform-specific Android/iOS/native smoke checks.
+
 ## Secure storage
 
 `aurora_secure_storage_get`, `aurora_secure_storage_set`, and `aurora_secure_storage_delete` persist only Aurora credential keys in the platform keychain through the Rust shell. Accepted keys are limited to `aurora.session*`, `aurora.auth*`, `aurora.gateway*`, `aurora.mesh*`, and `aurora.admin*` namespaces for session tokens, refresh material, mesh credentials, Gateway tokens, and admin unlock secrets.

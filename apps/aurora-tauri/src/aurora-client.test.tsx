@@ -152,3 +152,94 @@ describe('Aurora Tauri runtime wrapper', () => {
     }
   })
 })
+
+function resetTauriRouteGateState() {
+  vi.unstubAllEnvs()
+  window.history.replaceState({}, '', '/')
+}
+
+describe('Tauri CI/E2E route gates', () => {
+  afterEach(resetTauriRouteGateState)
+
+  it('e2e:routes renders every registered route without placeholder or debug dashboard UI', () => {
+    const routes = auroraNavSections.flatMap((section) => section.items)
+    expect(routes).toHaveLength(22)
+    expect(new Set(tauriRouteRegistryRouteIds)).toEqual(
+      new Set(routes.map((route) => route.id)),
+    )
+
+    for (const route of routes) {
+      const markup = renderTauriRoute(route.href)
+
+      expectNoPlaceholderOrDebugUi(markup, route.id)
+      expect(markup, route.id).toContain(route.label)
+      expect(markup, route.id).not.toContain(`${route.label} route registry error`)
+    }
+  })
+
+  it('e2e:assistant keeps the assistant landing page separate from diagnostics', () => {
+    const markup = renderTauriRoute('/')
+
+    expectNoPlaceholderOrDebugUi(markup, 'assistant')
+    expect(markup).toContain('Assistant')
+    expect(markup).toContain('Prompt')
+    expect(markup).toContain('Assistant capability is unavailable')
+    expect(markup).not.toContain('Native boundary')
+    expect(markup).not.toContain('Denied native defaults')
+    expect(markup).not.toContain('route registry error')
+  })
+
+  it('e2e:admin renders admin routes with admin-specific components instead of placeholders', () => {
+    const routes = routesByGroup(adminRouteIds)
+    expect(routes.map((route) => route.id)).toEqual([
+      'admin',
+      'services',
+      'access',
+      'tokens',
+      'devices',
+      'config',
+      'contracts',
+      'plugins',
+      'pairing',
+      'backups',
+      'scheduler',
+      'audit',
+    ])
+
+    for (const route of routes) {
+      const markup = renderTauriRoute(route.href)
+
+      expectNoPlaceholderOrDebugUi(markup, route.id)
+      expect(markup, route.id).toContain(route.label)
+      expect(markup, route.id).not.toContain('route registry error')
+      expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
+    }
+  })
+
+  it('e2e:runtime renders runtime routes without false global privacy blocking', () => {
+    const routes = routesByGroup(runtimeRouteIds)
+    expect(routes.map((route) => route.id)).toEqual([
+      'models',
+      'diagnostics',
+      'onboarding',
+      'settings',
+      'data',
+      'native',
+    ])
+
+    for (const route of routes) {
+      const markup = renderTauriRoute(route.href)
+
+      expectNoPlaceholderOrDebugUi(markup, route.id)
+      expect(markup, route.id).toContain(route.label)
+      expect(markup, route.id).not.toContain('route registry error')
+      if (route.id !== 'diagnostics') {
+        expect(markup, route.id).not.toContain('Native boundary')
+        expect(markup, route.id).not.toContain('Denied native defaults')
+      }
+      if (route.id !== 'data') {
+        expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
+      }
+    }
+  })
+})
