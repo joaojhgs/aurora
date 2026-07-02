@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:04:07.824Z",
+  "updatedAt": "2026-07-02T12:10:52.098Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1275,10 +1275,12 @@
       "id": "G109-e2e-covers-send-streaming-fallback-s",
       "title": "E2E covers send, streaming/fallback, stop/retry, route sheet open/sel...",
       "objective": "E2E covers send, streaming/fallback, stop/retry, route sheet open/select, tool approval mock/live path, and no-model state.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:10:52.098Z",
+      "completedAt": "2026-07-02T12:10:52.098Z",
+      "evidence": "Added mounted Tauri assistant E2E covering fallback banner, no-model state, route sheet selected-route control, live assistant stream delta, tool approval card with redacted payload, Stop via Orchestrator.Interrupt, Retry issuing a second Orchestrator.ExternalUserInput request, and navigation to Tools approval UI. Verified: pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'assistant state matrix|assistant text chat|assistant backend integration boundaries|RouteSheet|tool approval'; pnpm --filter @aurora/client test -- -t 'assistant|ExternalUserInput|Interrupt|stream|fallback|tool|auth|transport_loss'; git diff --check."
     },
     {
       "id": "G110-memory",

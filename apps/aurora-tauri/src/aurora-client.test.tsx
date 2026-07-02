@@ -129,6 +129,17 @@ async function navigateByHref(container: HTMLElement, href: string) {
   })
 }
 
+async function clickButtonByLabel(container: HTMLElement, label: string) {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    .find((candidate) => candidate.getAttribute('aria-label') === label || candidate.textContent?.includes(label))
+  expect(button, `button ${label}`).toBeDefined()
+  expect(button?.disabled, `button ${label} should be enabled`).toBe(false)
+  await act(async () => {
+    button!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushReactWork()
+  })
+}
+
 function requestMethods(transport: RecordingMockAuroraTransport): string[] {
   return transport.requests.map((request) => request.method)
 }
@@ -183,16 +194,34 @@ function assistantCapabilityCatalog() {
     policy: provider.policy,
     freshness: provider.freshness
   }
+  const interruptAction = {
+    ...baseAction,
+    action_id: 'orchestrator-interrupt-local',
+    module: 'Orchestrator',
+    method: 'Interrupt',
+    topic: ORCHESTRATOR_METHODS.interrupt,
+    provider_id: provider.provider_id,
+    provider_kind: provider.provider_kind,
+    peer_id: provider.peer_id,
+    service_instance_id: provider.service_instance_id,
+    selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: provider.provider_id },
+    bindability: 'available',
+    route_blockers: [],
+    summary: 'Stop or cancel the active assistant generation through the local Orchestrator interrupt contract.',
+    policy: provider.policy,
+    freshness: provider.freshness
+  }
   catalog.providers = [...catalog.providers, provider]
-  catalog.actions = [...catalog.actions, action]
+  catalog.actions = [...catalog.actions, action, interruptAction]
   catalog.provider_index = {
     ...catalog.provider_index,
     Orchestrator: [provider.provider_id]
   }
   catalog.action_index = {
     ...catalog.action_index,
-    Orchestrator: [action.action_id],
-    [ORCHESTRATOR_METHODS.externalUserInput]: [action.action_id]
+    Orchestrator: [action.action_id, interruptAction.action_id],
+    [ORCHESTRATOR_METHODS.externalUserInput]: [action.action_id],
+    [ORCHESTRATOR_METHODS.interrupt]: [interruptAction.action_id]
   }
   return catalog
 }
@@ -202,6 +231,54 @@ function assistantGatewayTransport(responseText = 'Local Gateway says hello from
   transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
   transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
   transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => assistantCapabilityCatalog())
+  transport.register(GATEWAY_METHODS.explainRoute, () => ({
+    topic: ORCHESTRATOR_METHODS.externalUserInput,
+    module: 'Orchestrator',
+    selected_target: 'local',
+    selected_peer_id: 'local-peer',
+    selected_service_instance_id: 'orchestrator-local',
+    selected_provider_id: 'local:Orchestrator',
+    selector_valid: true,
+    selector_validation_code: 'ok',
+    selector_validation_message: 'Local assistant route selected by backend policy.',
+    fallback_behavior: 'none',
+    candidates: [{
+      provider_id: 'local:Orchestrator',
+      peer_id: 'local-peer',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      module: 'Orchestrator',
+      version: 'test',
+      included: true,
+      selected: true,
+      reason_code: 'available',
+      reason: 'Local Gateway advertises Orchestrator.ExternalUserInput.',
+      latency_ms: 8,
+      active_calls: 0,
+      max_concurrent: 4,
+      available_capacity: 4,
+      blockers: []
+    }],
+    blockers: [],
+    security_privacy_blockers: [],
+    secrets_redacted: true
+  }))
+  transport.register(ORCHESTRATOR_METHODS.interrupt, (request) => ({
+    interrupt_id: 'interrupt-tauri-assistant',
+    status: 'cancelled',
+    requested_scopes: (request.payload as { scopes?: string[] } | undefined)?.scopes ?? ['generation', 'tool_call', 'tts_playback', 'session'],
+    results: [{
+      scope: 'generation',
+      status: 'cancelled',
+      message: 'mock assistant generation cancelled',
+      cancelled_count: 1
+    }],
+    session_id: (request.payload as { session_id?: string | null } | undefined)?.session_id ?? null,
+    request_id: (request.payload as { request_id?: string | null } | undefined)?.request_id ?? null,
+    event_topic: 'Orchestrator.Interrupted',
+    audit_event: 'audit:orchestrator:interrupt:tauri-assistant',
+    idempotent: false
+  }))
   transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
     text: responseText,
     session_id: 'tauri-assistant-session',
@@ -212,9 +289,55 @@ function assistantGatewayTransport(responseText = 'Local Gateway says hello from
   return transport
 }
 
+function assistantGatewayStreamingTransport(): RecordingMockAuroraTransport {
+  const transport = assistantGatewayTransport('Streaming request accepted by local Orchestrator.')
+  transport.stream('assistant', async function* (request) {
+    yield {
+      id: 'assistant-stream-delta-e2e',
+      kind: 'assistant.delta',
+      correlation_id: request.correlationId,
+      payload: {
+        delta: 'Streaming partial backend text...',
+        session_id: 'tauri-stream-session',
+        request_id: request.correlationId,
+        metadata: { model: 'local-stream-test' }
+      }
+    }
+    yield {
+      id: 'assistant-stream-tool-e2e',
+      kind: 'tool.requested',
+      correlation_id: 'corr-tool-e2e',
+      payload: {
+        text: 'Tool approval pending until the Tools route returns a decision.',
+        session_id: 'tauri-stream-session',
+        request_id: request.correlationId,
+        metadata: {
+          model: 'local-stream-test',
+          name: 'Tooling.RequestApproval',
+          status: 'requested',
+          risk_class: 'requires-approval',
+          target: 'local tool registry',
+          data_leaves_device: false,
+          summary: 'Approve or deny through the Tools approval surface.',
+          payload_preview: { token: '[redacted]', args_hash: 'payload_hash' }
+        }
+      }
+    }
+    await new Promise<void>((resolve) => {
+      if (request.signal?.aborted) {
+        resolve()
+        return
+      }
+      request.signal?.addEventListener('abort', () => resolve(), { once: true })
+    })
+  })
+  return transport
+}
+
 function assistantGatewayAuthFailureTransport(): RecordingMockAuroraTransport {
   const transport = new RecordingMockAuroraTransport()
   transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => assistantCapabilityCatalog())
+  transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
   transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
     throw new AuroraError({
       code: 'auth',
@@ -571,6 +694,74 @@ describe('Tauri CI/E2E route gates', () => {
     } finally {
       await act(async () => failure.root.unmount())
       failure.container.remove()
+    }
+  })
+
+  it('e2e:assistant covers live stream, fallback banner, stop/retry, route sheet, tool approval, and no-model state', async () => {
+    const fallbackTransport = assistantGatewayTransport('Fallback final response from local Orchestrator.')
+    const fallbackRuntime = testRuntime(new AuroraClient({ transport: fallbackTransport }))
+    window.localStorage.clear()
+    window.history.replaceState({}, '', '/')
+    const fallback = await mountOutcomeApp(fallbackRuntime)
+    try {
+      await waitUntil(() => {
+        expect(fallback.container.textContent).toContain('no model configured / awaiting backend model evidence')
+        expect(fallback.container.textContent).toContain('Assistant route preview')
+      })
+      await submitAssistantPrompt(fallback.container, 'exercise fallback path')
+      await waitUntil(() => {
+        expect(fallback.container.textContent).toContain('Fallback final response from local Orchestrator.')
+        expect(fallback.container.textContent).toContain('Streaming was unavailable; Aurora returned a final non-streaming response.')
+        expect(fallback.container.textContent).toContain('Assistant route preview')
+        expect(fallback.container.textContent).toContain('Use selected route')
+      })
+      const routeButton = Array.from(fallback.container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Use selected route'))
+      expect(routeButton, 'route sheet selected-route confirmation').toBeDefined()
+      expect(routeButton?.disabled).toBe(false)
+      writeOutcomeArtifact('assistant-stream-fallback-route-sheet', fallback.container.innerHTML)
+    } finally {
+      await act(async () => fallback.root.unmount())
+      fallback.container.remove()
+    }
+
+    const streamTransport = assistantGatewayStreamingTransport()
+    const streamRuntime = testRuntime(new AuroraClient({ transport: streamTransport }))
+    window.localStorage.clear()
+    window.history.replaceState({}, '', '/')
+    const live = await mountOutcomeApp(streamRuntime)
+    try {
+      await submitAssistantPrompt(live.container, 'exercise live stream and tool approval')
+      await waitUntil(() => {
+        expect(live.container.textContent).toContain('Streaming partial backend text...')
+        expect(live.container.textContent).toContain('Tooling.RequestApproval')
+        expect(live.container.textContent).toContain('Payload preview')
+        expect(live.container.textContent).toContain('[redacted]')
+        expect(live.container.textContent).toContain('Approve in Tools')
+        expect(live.container.textContent).toContain('Deny in Tools')
+        expect(live.container.textContent).toContain('Retry')
+      })
+      expect(requestMethods(streamTransport).filter((method) => method === ORCHESTRATOR_METHODS.externalUserInput)).toHaveLength(1)
+      await clickButtonByLabel(live.container, 'Stop assistant generation')
+      await waitUntil(() => {
+        expect(live.container.textContent).toContain('stream cancelled')
+        expect(live.container.textContent).toContain('Aurora · cancelled')
+        expect(requestMethods(streamTransport)).toContain(ORCHESTRATOR_METHODS.interrupt)
+      })
+      await clickButtonByLabel(live.container, 'Retry last assistant prompt')
+      await waitUntil(() => {
+        expect(requestMethods(streamTransport).filter((method) => method === ORCHESTRATOR_METHODS.externalUserInput)).toHaveLength(2)
+        expect(live.container.textContent).toContain('Tooling.RequestApproval')
+      })
+      await navigateByHref(live.container, '/tools')
+      await waitUntil(() => {
+        expect(live.container.textContent).toContain('Tools & Automations')
+        expect(live.container.textContent).toContain('Tool registry and Approval cards')
+      })
+      writeOutcomeArtifact('assistant-live-stream-tool-stop-retry-tools', live.container.innerHTML)
+    } finally {
+      await act(async () => live.root.unmount())
+      live.container.remove()
     }
   })
 
