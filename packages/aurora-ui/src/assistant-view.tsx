@@ -1748,7 +1748,7 @@ function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
       <p>{tool.summary}</p>
       <details className="aui-assistant-tool-payload">
         <summary>Payload preview</summary>
-        <pre>{tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : 'No redacted tool payload was reported by the backend stream.'}</pre>
+        <code>{tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : 'No redacted tool payload was reported by the backend stream.'}</code>
       </details>
       <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
         <a href="/tools" className="aui-action-chip">Approve in Tools</a>

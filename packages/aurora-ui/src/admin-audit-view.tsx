@@ -459,9 +459,9 @@ function AuditRow({ row }: { row: AdminAuditRow }) {
               <div><dt>Audio session</dt><dd>{row.audioSessionId}</dd></div>
               <div><dt>Scheduler job</dt><dd>{row.schedulerJobId}</dd></div>
             </dl>
-            <div className="aui-json-preview">
+            <div className="aui-redacted-preview">
               <h3>Redacted payload preview</h3>
-              <pre>{row.redactedPreview}</pre>
+              <code>{row.redactedPreview}</code>
             </div>
           </div>
         </details>

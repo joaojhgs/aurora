@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:21:49.342Z",
+  "updatedAt": "2026-07-02T11:24:30.099Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1165,10 +1165,12 @@
       "id": "G099-remove-debug-dump-styling-from-produ",
       "title": "Remove debug dump styling from product routes.",
       "objective": "Remove debug dump styling from product routes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:24:30.099Z",
+      "completedAt": "2026-07-02T11:24:30.099Z",
+      "evidence": "Removed product debug dump styling by replacing legacy aui-json-preview/preformatted raw payload previews with redacted preview code blocks, and added a source gate rejecting aui-json-preview, raw <pre>, debug-dashboard, and debug dump copy in production UI src. Verified: pnpm --filter @aurora/ui test -- -t 'debug dump styling|tool approval|audit'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G100-desktop-and-mobile-screenshots-show",

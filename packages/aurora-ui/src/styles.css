@@ -172,7 +172,7 @@ button, input, select, textarea { font: inherit; }
 .aui-assistant-tool-card p { margin: 0; color: var(--aui-muted); }
 .aui-assistant-tool-payload { display: grid; gap: .45rem; }
 .aui-assistant-tool-payload summary { color: var(--aui-primary); cursor: pointer; font-size: .82rem; font-weight: 800; }
-.aui-assistant-tool-payload pre { max-height: 11rem; margin: 0; overflow: auto; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .65rem; font-size: .78rem; }
+.aui-assistant-tool-payload code { display: block; max-height: 11rem; margin: 0; overflow: auto; white-space: pre-wrap; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .65rem; font-size: .78rem; }
 .aui-assistant-tool-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .aui-chat-panel { display: flex; min-width: 0; flex-direction: column; gap: .65rem; overflow: auto; padding: .9rem; }
 .aui-chat-empty { display: grid; min-height: 16rem; place-content: center; gap: .45rem; color: var(--aui-muted); text-align: center; }
@@ -321,9 +321,9 @@ button, input, select, textarea { font: inherit; }
 .aui-tool-details summary { display: inline-flex; align-items: center; gap: .4rem; color: var(--aui-primary); cursor: pointer; font-size: .82rem; font-weight: 800; list-style: none; }
 .aui-tool-details summary::-webkit-details-marker { display: none; }
 .aui-tool-details[open] { display: grid; gap: .75rem; }
-.aui-json-preview { display: grid; gap: .35rem; margin-top: .65rem; }
-.aui-json-preview h3, .aui-tool-result h3 { margin: 0; color: var(--aui-muted); font-size: .78rem; text-transform: uppercase; }
-.aui-json-preview pre { max-width: 100%; overflow: auto; margin: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-ink); padding: .65rem; font-size: .78rem; line-height: 1.45; }
+.aui-redacted-preview { display: grid; gap: .35rem; margin-top: .65rem; }
+.aui-redacted-preview h3, .aui-tool-result h3 { margin: 0; color: var(--aui-muted); font-size: .78rem; text-transform: uppercase; }
+.aui-redacted-preview code { display: block; max-width: 100%; overflow: auto; white-space: pre-wrap; margin: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: color-mix(in srgb, var(--aui-info) 6%, var(--aui-surface)); color: var(--aui-ink); padding: .65rem; font-size: .78rem; line-height: 1.45; }
 .aui-tool-result { display: grid; gap: .65rem; border: 1px solid color-mix(in srgb, var(--aui-info) 24%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-info) 7%, white); padding: .75rem; }
 .aui-tool-status-row { display: flex; align-items: center; gap: .45rem; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-muted); padding: .55rem .65rem; line-height: 1.35; }
 .aui-tool-status-row svg { flex: 0 0 auto; color: var(--aui-primary); }

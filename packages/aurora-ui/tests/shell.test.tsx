@@ -453,6 +453,20 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('removes debug dump styling from production route previews', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const scannedFiles = filesUnder(join(repoRoot, 'packages/aurora-ui/src'), /\.(ts|tsx|css)$/)
+      .filter((file) => !/\.(test|spec)\.(ts|tsx|js|mjs)$/.test(file))
+
+    for (const file of scannedFiles) {
+      const rel = relative(repoRoot, file)
+      const text = readFileSync(file, 'utf8')
+      expect(text, `${rel} must not use legacy JSON dump preview styling`).not.toContain('aui-json-preview')
+      expect(text, `${rel} must not render raw preformatted debug dumps`).not.toMatch(/<pre[\s>]/)
+      expect(text, `${rel} must not expose debug dashboard copy`).not.toMatch(/debug-dashboard|debug dump/i)
+    }
+  })
+
   it('renders accessible navigation and route state without direct backend calls', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(

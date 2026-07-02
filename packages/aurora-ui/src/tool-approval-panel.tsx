@@ -383,8 +383,8 @@ function ToolApprovalCard({
 
       <details className="aui-tool-details">
         <summary><FileDiff size={15} aria-hidden />Arguments and result</summary>
-        <JsonPreview label="Redacted arguments" value={tool.argsPreview} fallback="No argument preview reported." />
-        <JsonPreview label="Dry-run preview" value={tool.dryRunPreview} fallback="No dry-run preview reported." />
+        <RedactedPreview label="Redacted arguments" value={tool.argsPreview} fallback="No argument preview reported." />
+        <RedactedPreview label="Dry-run preview" value={tool.dryRunPreview} fallback="No dry-run preview reported." />
         {tool.result ? <ToolResultCard result={tool.result} /> : null}
       </details>
 
@@ -435,7 +435,7 @@ function ToolResultCard({ result }: { result: NonNullable<ToolApprovalCardModel[
         <KeyValue label="Redaction" value={result.redactionStatus ?? 'not reported'} />
         <KeyValue label="Retry/fallback" value={`${result.retryEligible ? 'retry' : 'no retry'} / ${result.fallbackEligible ? 'fallback' : 'no fallback'}`} />
       </div>
-      <JsonPreview label="Redacted output" value={result.outputPreview} fallback={result.error ?? 'No output preview reported.'} />
+      <RedactedPreview label="Redacted output" value={result.outputPreview} fallback={result.error ?? 'No output preview reported.'} />
     </section>
   )
 }
@@ -444,11 +444,11 @@ function KeyValue({ label, value }: { label: string; value: string }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>
 }
 
-function JsonPreview({ label, value, fallback }: { label: string; value: object | null; fallback: string }) {
+function RedactedPreview({ label, value, fallback }: { label: string; value: object | null; fallback: string }) {
   return (
-    <div className="aui-json-preview">
+    <div className="aui-redacted-preview">
       <h3>{label}</h3>
-      <pre>{value ? JSON.stringify(value, null, 2) : fallback}</pre>
+      <code>{value ? JSON.stringify(value, null, 2) : fallback}</code>
     </div>
   )
 }
