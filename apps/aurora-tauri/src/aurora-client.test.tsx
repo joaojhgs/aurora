@@ -803,6 +803,28 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
+  it('e2e:routes renders /settings and /settings/native as distinct runtime surfaces', () => {
+    const settingsMarkup = renderTauriRoute('/settings')
+    const nativeMarkup = renderTauriRoute('/settings/native')
+    const settingsText = mainContentText(settingsMarkup)
+    const nativeText = mainContentText(nativeMarkup)
+
+    expectNoPlaceholderOrDebugUi(settingsMarkup, 'settings')
+    expectNoPlaceholderOrDebugUi(nativeMarkup, 'native')
+    expect(settingsText).toContain('Settings and permissions')
+    expect(settingsText).toContain('Privacy defaults')
+    expect(settingsText).toContain('Voice behavior')
+    expect(settingsText).toContain('Theme, accessibility, and local storage')
+    expect(settingsText).toContain('Route and fallback policy')
+    expect(settingsText).not.toContain('Native permissions and capabilities')
+
+    expect(nativeText).toContain('Native platform settings')
+    expect(nativeText).toContain('Native permissions and capabilities')
+    expect(nativeText).toContain('request buttons are enabled only when that platform advertises a native request command')
+    expect(nativeText).not.toContain('Theme, accessibility, and local storage')
+    expect(nativeText).not.toBe(settingsText)
+  })
+
   it('e2e:routes renders the memory cockpit with summaries, search, provenance, and gated actions', async () => {
     const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
     window.history.replaceState({}, '', '/memory')

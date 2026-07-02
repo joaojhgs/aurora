@@ -140,9 +140,9 @@ export const tauriRouteRegistry = {
     <TauriDiagnosticsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
   ),
   onboarding: ({ snapshot, client, modePreferenceStore }) => <OnboardingView client={client} snapshot={snapshot} modePreferenceStore={modePreferenceStore} />,
-  settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
+  settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} surface="settings" currentPath="/settings" />,
   data: ({ route, client }) => <DataPolicyResource client={client} route={route} />,
-  native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
+  native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
 } satisfies Record<TauriRouteId, TauriRouteRenderer>
 
 const tauriRouteIdSet = new Set<string>(tauriRouteIds)

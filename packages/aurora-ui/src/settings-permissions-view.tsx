@@ -87,17 +87,42 @@ export interface SettingsPermissionsModel {
   nativeReleaseGates: NativeReleaseGate[]
   nativeDeviceMatrix: NativeDeviceMatrixRow[]
   nativePolicyNotes: string[]
+  assistantBehavior: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
+  userExperienceDefaults: Array<{ id: string; label: string; value: string; state: AvailabilityState; detail: string }>
   adminActionLabel: string
   fallbackLabel: string
   error: string | null
 }
 
+export type SettingsPermissionsSurface = 'settings' | 'native'
+
 export interface SettingsPermissionsViewProps {
   snapshot: AuroraShellSnapshot
+  surface?: SettingsPermissionsSurface
+  currentPath?: string
 }
 
-export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewProps) {
+export function SettingsPermissionsView({ snapshot, surface, currentPath }: SettingsPermissionsViewProps) {
+  const routePath = currentPath ?? browserPathname()
+  const activeSurface = surface ?? (routePath === '/settings/native' ? 'native' : 'settings')
   const model = buildSettingsPermissionsModel(snapshot)
+  if (activeSurface === 'native') {
+    return <NativeSettingsSurface snapshot={snapshot} model={model} />
+  }
+  return <RouteSettingsSurface snapshot={snapshot} model={model} />
+}
+
+function browserPathname(): string | null {
+  return typeof globalThis.location?.pathname === 'string' ? globalThis.location.pathname : null
+}
+
+function RouteSettingsSurface({
+  snapshot,
+  model
+}: {
+  snapshot: AuroraShellSnapshot
+  model: SettingsPermissionsModel
+}) {
   return (
     <section className="aui-settings" aria-labelledby="settings-permissions-title">
       <header className="aui-settings-header">
@@ -105,8 +130,9 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           <p className="aui-kicker">Settings</p>
           <h1 id="settings-permissions-title">Settings and permissions</h1>
           <p>
-            Privacy defaults, permission posture, native capability claims, and fallback behavior are rendered from
-            AuroraClient capability evidence. Unsupported native or backend features stay disabled with a repair path.
+            Route privacy defaults, voice defaults, assistant behavior, theme/accessibility/local storage posture, and
+            fallback behavior are rendered from AuroraClient capability evidence. Native permission details live on
+            /settings/native.
           </p>
         </div>
         <div className="aui-settings-badges" aria-label="Settings evidence">
@@ -152,50 +178,157 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           </div>
         </section>
 
-        <section className="aui-settings-panel" aria-labelledby="native-permissions-title">
+        <section className="aui-settings-panel" aria-labelledby="assistant-behavior-title">
           <PanelTitle
-            icon={<Smartphone size={18} aria-hidden />}
-            title="Native permissions"
-            description="Desktop, Android, and iOS claims only appear when the SDK native manifest reports them; iOS is limited to Siri/Shortcuts/App Intents integration and app-owned surfaces."
-            id="native-permissions-title"
+            icon={<Mic size={18} aria-hidden />}
+            title="Assistant behavior"
+            description="Assistant defaults stay tied to route evidence and explicit controls; native foreground/background constraints live on /settings/native."
+            id="assistant-behavior-title"
           />
-          {model.nativePermissions.length > 0 ? (
-            <div className="aui-native-list">
-              {model.nativePermissions.map((permission) => (
-                <NativePermissionRow key={permission.id} permission={permission} />
-              ))}
-            </div>
-          ) : (
-            <div className="aui-settings-empty">
-              <EvidenceBadge label="empty" />
-              <p>No native permission manifest is available for this deployment mode.</p>
-            </div>
-          )}
-          {model.nativeIntegrations.length > 0 ? (
-            <div className="aui-native-list" aria-label="Native integrations">
-              {model.nativeIntegrations.map((integration) => (
-                <NativeIntegrationRow key={integration.id} integration={integration} />
-              ))}
-            </div>
-          ) : null}
-          {model.nativeLimitations.length > 0 ? (
-            <dl className="aui-settings-facts">
-              {model.nativeLimitations.map((limitation) => (
-                <div key={limitation.id}>
-                  <dt>{limitation.label}</dt>
-                  <dd>{limitation.detail} Evidence: {limitation.evidence}</dd>
+          <div className="aui-route-defaults">
+            {model.assistantBehavior.map((item) => (
+              <article key={item.id}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
                 </div>
-              ))}
-            </dl>
-          ) : null}
+                <StatusBadge state={item.state} />
+                <code>{item.value}</code>
+              </article>
+            ))}
+          </div>
         </section>
       </div>
+
+      <section className="aui-settings-panel" aria-labelledby="theme-accessibility-storage-title">
+        <PanelTitle
+          icon={<ToggleLeft size={18} aria-hidden />}
+          title="Theme, accessibility, and local storage"
+          description="Display and local persistence defaults are user-scoped and do not imply native platform permission state."
+          id="theme-accessibility-storage-title"
+        />
+        <div className="aui-route-defaults">
+          {model.userExperienceDefaults.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.label}</strong>
+                <span>{item.detail}</span>
+              </div>
+              <StatusBadge state={item.state} />
+              <code>{item.value}</code>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="aui-settings-panel" aria-labelledby="route-policy-title">
+        <PanelTitle
+          icon={<RefreshCw size={18} aria-hidden />}
+          title="Route and fallback policy"
+          description="Fallback success is shown only when route/capability evidence supports it; explicit selector failures remain hard failures."
+          id="route-policy-title"
+        />
+        <div className="aui-route-defaults">
+          {model.routeDefaults.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.label}</strong>
+                <span>{item.detail}</span>
+              </div>
+              <StatusBadge state={item.state} />
+              <code>{item.value}</code>
+            </article>
+          ))}
+        </div>
+        <dl className="aui-settings-facts">
+          <div><dt>Admin confirmation</dt><dd>{model.adminActionLabel}</dd></div>
+          <div><dt>Fallback behavior</dt><dd>{model.fallbackLabel}</dd></div>
+          <div><dt>Backend truth</dt><dd>{snapshot.evidenceSource}</dd></div>
+        </dl>
+      </section>
+    </section>
+  )
+}
+
+function NativeSettingsSurface({
+  snapshot,
+  model
+}: {
+  snapshot: AuroraShellSnapshot
+  model: SettingsPermissionsModel
+}) {
+  return (
+    <section className="aui-settings" aria-labelledby="settings-native-title">
+      <header className="aui-settings-header">
+        <div>
+          <p className="aui-kicker">Settings / Native</p>
+          <h1 id="settings-native-title">Native platform settings</h1>
+          <p>
+            Native desktop, Android, and iOS capability claims are rendered only from the SDK/native manifest. Browser
+            deployments show unsupported status instead of pretending native permission state exists.
+          </p>
+        </div>
+        <div className="aui-settings-badges" aria-label="Native settings evidence">
+          <EvidenceBadge label={snapshot.evidenceSource} />
+          <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
+          <EvidenceBadge label={model.nativeRoute?.providerLabel ?? 'Native.GetCapabilityManifest'} />
+        </div>
+      </header>
+
+      {model.error ? (
+        <div className="aui-settings-alert" role="alert">
+          <AlertTriangle size={17} aria-hidden />
+          <span>{model.error}</span>
+        </div>
+      ) : null}
+
+      <section className="aui-settings-panel" aria-labelledby="native-permissions-title">
+        <PanelTitle
+          icon={<Smartphone size={18} aria-hidden />}
+          title="Native permissions and capabilities"
+          description="Tauri desktop, Android, and iOS rows come from the manifest; request buttons are enabled only when that platform advertises a native request command."
+          id="native-permissions-title"
+        />
+        {model.nativePermissions.length > 0 ? (
+          <div className="aui-native-list">
+            {model.nativePermissions.map((permission) => (
+              <NativePermissionRow key={permission.id} permission={permission} />
+            ))}
+          </div>
+        ) : (
+          <div className="aui-settings-empty">
+            <EvidenceBadge label="empty" />
+            <p>No native permission manifest is available for this deployment mode.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="aui-settings-panel" aria-labelledby="native-integrations-title">
+        <PanelTitle
+          icon={<Smartphone size={18} aria-hidden />}
+          title="Native integrations"
+          description="Android assistant role, foreground voice, notifications, share/deep-link entrypoints, and iOS app-owned App Intents/Shortcuts/widgets/share/deep-link surfaces remain separated from browser settings."
+          id="native-integrations-title"
+        />
+        {model.nativeIntegrations.length > 0 ? (
+          <div className="aui-native-list" aria-label="Native integrations">
+            {model.nativeIntegrations.map((integration) => (
+              <NativeIntegrationRow key={integration.id} integration={integration} />
+            ))}
+          </div>
+        ) : (
+          <div className="aui-settings-empty">
+            <EvidenceBadge label="native-integrations" />
+            <p>No mobile integration manifest is available for this platform.</p>
+          </div>
+        )}
+      </section>
 
       <section className="aui-settings-panel" aria-labelledby="ios-integration-title">
         <PanelTitle
           icon={<Smartphone size={18} aria-hidden />}
-          title="Siri/Shortcuts/App Intents integration"
-          description="iOS uses app-owned invocation surfaces. It is not advertised as the system Siri assistant."
+          title="iOS App Intents, Shortcuts, widgets, share, and deep links"
+          description="iOS uses app-owned invocation surfaces and foreground constraints. It is not advertised as the system Siri assistant."
           id="ios-integration-title"
         />
         {model.nativePlatformIntegrations.length > 0 || model.nativeReleaseGates.length > 0 ? (
@@ -244,30 +377,28 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
         ) : null}
       </section>
 
-      <section className="aui-settings-panel" aria-labelledby="route-policy-title">
+      <section className="aui-settings-panel" aria-labelledby="native-limitations-title">
         <PanelTitle
-          icon={<RefreshCw size={18} aria-hidden />}
-          title="Route and fallback policy"
-          description="Fallback success is shown only when route/capability evidence supports it; explicit selector failures remain hard failures."
-          id="route-policy-title"
+          icon={<AlertTriangle size={18} aria-hidden />}
+          title="Native limitations and foreground constraints"
+          description="Unsupported native surfaces are explicit blockers, not browser fallbacks."
+          id="native-limitations-title"
         />
-        <div className="aui-route-defaults">
-          {model.routeDefaults.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>{item.label}</strong>
-                <span>{item.detail}</span>
+        {model.nativeLimitations.length > 0 ? (
+          <dl className="aui-settings-facts">
+            {model.nativeLimitations.map((limitation) => (
+              <div key={limitation.id}>
+                <dt>{limitation.label}</dt>
+                <dd>{limitation.detail} Evidence: {limitation.evidence}</dd>
               </div>
-              <StatusBadge state={item.state} />
-              <code>{item.value}</code>
-            </article>
-          ))}
-        </div>
-        <dl className="aui-settings-facts">
-          <div><dt>Admin confirmation</dt><dd>{model.adminActionLabel}</dd></div>
-          <div><dt>Fallback behavior</dt><dd>{model.fallbackLabel}</dd></div>
-          <div><dt>Backend truth</dt><dd>{snapshot.evidenceSource}</dd></div>
-        </dl>
+            ))}
+          </dl>
+        ) : (
+          <div className="aui-settings-empty">
+            <EvidenceBadge label="native-limitations" />
+            <p>No native platform limitation manifest is available for this deployment mode.</p>
+          </div>
+        )}
       </section>
     </section>
   )
@@ -345,6 +476,8 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
     nativeReleaseGates: snapshot.nativeReleaseGates,
     nativeDeviceMatrix: snapshot.nativeDeviceMatrix,
     nativePolicyNotes: snapshot.nativePolicyNotes,
+    assistantBehavior: assistantBehaviorDefaults(snapshot),
+    userExperienceDefaults: userExperienceDefaults(settingsRoute, snapshot),
     routeDefaults: [
       {
         id: 'remote-providers',
@@ -378,6 +511,67 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       : 'No fallback route is currently reported by the capability graph.',
     error: errorText
   }
+}
+
+function assistantBehaviorDefaults(snapshot: AuroraShellSnapshot): SettingsPermissionsModel['assistantBehavior'] {
+  const assistantRoute = routeById(snapshot, 'assistant')
+  return [
+    {
+      id: 'assistant-route',
+      label: 'Assistant route default',
+      value: assistantRoute?.providerLabel ?? 'Orchestrator.ExternalUserInput pending',
+      state: assistantRoute?.state ?? 'unsupported',
+      detail: 'Assistant requests use route policy evidence before any provider or peer is selected.'
+    },
+    {
+      id: 'cancellation',
+      label: 'Cancellation behavior',
+      value: snapshot.assistantCancellationRoute?.providerLabel ?? 'Interrupt pending',
+      state: snapshot.assistantCancellationRoute?.state ?? 'unsupported',
+      detail: 'Stop/cancel stays visible as a route-backed behavior so spoken replies can be interrupted.'
+    },
+    {
+      id: 'voice-consent',
+      label: 'Voice consent default',
+      value: 'foreground explicit consent',
+      state: worstVoiceState([
+        snapshot.assistantVoiceRoutes.transcription.state,
+        snapshot.assistantVoiceRoutes.wakeProcess.state,
+        snapshot.assistantVoiceRoutes.ttsSynthesize.state
+      ]),
+      detail: 'Raw-audio capture and wake behavior are disabled unless route evidence and consent/native gates allow them.'
+    }
+  ]
+}
+
+function userExperienceDefaults(
+  settingsRoute: RouteAvailability | null,
+  snapshot: AuroraShellSnapshot
+): SettingsPermissionsModel['userExperienceDefaults'] {
+  const settingsState = snapshot.loadState === 'loading' ? 'pending' : settingsRoute?.state ?? 'unsupported'
+  return [
+    {
+      id: 'theme',
+      label: 'Theme default',
+      value: 'system theme',
+      state: settingsState,
+      detail: 'Theme follows the user/system preference until a Config/AdminAction-backed mutation is available.'
+    },
+    {
+      id: 'accessibility',
+      label: 'Accessibility default',
+      value: 'reduced-motion/responsive safe',
+      state: settingsState,
+      detail: 'Accessibility preferences remain local UI defaults and do not require native permission state.'
+    },
+    {
+      id: 'local-storage',
+      label: 'Local storage default',
+      value: snapshot.secretsRedacted ? 'redacted non-secret UI preferences' : 'redaction unknown',
+      state: snapshot.secretsRedacted ? 'available-local' : 'degraded',
+      detail: 'Local storage is limited to non-secret UI state; credentials and native secure storage are shown on /settings/native.'
+    }
+  ]
 }
 
 function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
@@ -883,7 +1077,65 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosSiriReplacement': 'iOS System Assistant Role Unsupported',
     'aurora.iosAppIntents': 'iOS App Intents',
     'aurora.iosShortcuts': 'iOS Shortcuts',
+    'aurora.iosShareExtension': 'iOS share extension',
+    'aurora.iosWidgets': 'iOS widgets',
+    'aurora.iosDeepLinks': 'iOS deep links',
+    'aurora.iosFileAssociations': 'iOS file associations',
+    'aurora.iosEntrypointPayload': 'iOS entrypoint payload',
     'aurora.iosLocalLightInference': 'iOS Local Light Inference',
+    'aurora.nativeCapabilityManifest': 'Tauri native manifest',
+    'aurora.nativePermissionStatus': 'Tauri native permission status',
+    'aurora.trayStatus': 'Tauri tray status',
+    'aurora.notificationsStatus': 'Tauri notifications status',
+    'aurora.notificationsSend': 'Tauri notifications send',
+    'aurora.dialogStatus': 'Tauri dialog status',
+    'aurora.dialogOpen': 'Tauri dialog open',
+    'aurora.localFileRead': 'Tauri local file read',
+    'aurora.localFileWrite': 'Tauri local file write',
+    'aurora.secureFileHandle': 'Tauri secure file handle',
+    'aurora.audioBridgeStatus': 'Tauri audio bridge status',
+    'aurora.audioCapture': 'Tauri audio capture',
+    'aurora.audioPlayback': 'Tauri audio playback',
+    'aurora.updater': 'Tauri updater',
+    'aurora.secureStorage': 'Tauri secure storage',
+    'desktop.signedUpdater': 'Tauri signed updater',
+    'desktop.tray': 'Tauri tray',
+    'native.notifications': 'Native notifications',
+    'native.dialogs': 'Native dialogs',
+    'native.secureFileHandles': 'Native secure file handles',
+    'native.filesystem': 'Native filesystem',
+    'native.audio': 'Native audio',
+    'native.audioCapture': 'Native audio capture',
+    'native.audioPlayback': 'Native audio playback',
+    'native.secureCredentialStorage': 'Native secure credential storage',
+    'aurora.android.assistantRoleStatus': 'Android assistant role status',
+    'aurora.android.assistantRoleRequest': 'Android assistant role request',
+    'aurora.android.microphone': 'Android microphone audio',
+    'aurora.android.microphoneRequest': 'Android microphone permission request',
+    'aurora.android.notifications': 'Android notifications',
+    'aurora.android.notificationsRequest': 'Android notifications request',
+    'aurora.android.foregroundServiceMicrophone': 'Android foreground microphone service',
+    'aurora.android.voiceForegroundService': 'Android foreground voice service',
+    'aurora.android.voiceForegroundStart': 'Android foreground voice start',
+    'aurora.android.secureStorage': 'Android Keystore secure storage',
+    'aurora.android.biometric': 'Android biometrics',
+    'aurora.android.adminUnlock': 'Android biometric admin unlock',
+    'aurora.android.shareIntent': 'Android share sheet',
+    'aurora.android.deepLink': 'Android deep link',
+    'android.assistantRole.status': 'Android assistant role status',
+    'android.assistantRole.request': 'Android assistant role request',
+    'android.microphoneCapture': 'Android microphone audio',
+    'android.microphonePermissionRequest': 'Android microphone permission request',
+    'android.notifications': 'Android notifications',
+    'android.notificationPermissionRequest': 'Android notifications request',
+    'android.foregroundService': 'Android foreground service',
+    'android.voiceForegroundService': 'Android foreground voice service',
+    'android.voiceForegroundService.start': 'Android foreground voice start',
+    'android.secureCredentialStorage': 'Android Keystore secure storage',
+    'android.biometric': 'Android biometrics',
+    'android.adminUnlock': 'Android biometric admin unlock',
+    'android.shareIntent': 'Android share sheet',
+    'android.deepLink': 'Android deep link',
     'ios.voiceForegroundCapture': 'Foreground voice capture',
     'ios.notifications': 'iOS notifications',
     'ios.backgroundVoice': 'Background voice',
@@ -946,6 +1198,14 @@ function nativePermissionDetail(
   }
   if (name === 'aurora.iosLocalLightInference' || name.startsWith('ios.localLightInference')) {
     return 'iOS Core ML/MLC/ExecuTorch-style local-light inference is a capability-gated provider; backend model catalog and device/model proof are required before selection.'
+  }
+  if (name.startsWith('aurora.android.') || name.startsWith('android.')) {
+    return requestEnabled
+      ? 'Android native manifest advertises a supported request command for this permission or role.'
+      : 'Android native status is shown only from RoleManager, permission, foreground service, Keystore, biometric, share, or deep-link manifest evidence.'
+  }
+  if (name.startsWith('aurora.') || name.startsWith('native.') || name.startsWith('desktop.')) {
+    return 'Tauri desktop native status is shown only from the manifest for permissions, tray, notifications, dialogs, audio, local file access, secure storage, or updater capability.'
   }
   if (granted) return 'Native manifest reports this permission as granted.'
   if (requestEnabled) return 'Native manifest advertises an Android permission request command for this state.'
