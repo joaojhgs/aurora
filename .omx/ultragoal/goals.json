@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:01:28.520Z",
+  "updatedAt": "2026-07-02T11:04:35.176Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1110,10 +1110,12 @@
       "id": "G094-tauri-and-web-route-registries-use-t",
       "title": "Tauri and web route registries use the same nav contract unless a pla...",
       "objective": "Tauri and web route registries use the same nav contract unless a platform intentionally hides a route.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:04:35.176Z",
+      "completedAt": "2026-07-02T11:04:35.176Z",
+      "evidence": "Added apps/aurora-web/app/route-registry.ts derived from shared auroraNavSections with explicit empty hidden-route list, switched AuroraRoutePage to use auroraWebRouteById, and added app/route-registry.test.ts. The tests assert web route IDs/hrefs equal the shared nav contract, every visible route has a Next page file, hidden routes are explicit/empty, and the Tauri tauriRouteIds tuple matches both shared nav and web route IDs. Verified: pnpm --filter @aurora/web test; pnpm --filter @aurora/web typecheck; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G095-implement-mock-inspired-desktop-side",

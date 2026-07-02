@@ -1,9 +1,6 @@
-import { RouteMatrix, StateSurface, auroraNavSections, type AuroraNavItem } from '@aurora/ui'
+import { RouteMatrix, StateSurface } from '@aurora/ui'
 import { getShellSnapshot } from './shell-state'
-
-const routeById = new Map<string, AuroraNavItem>(
-  auroraNavSections.flatMap((section) => section.items).map((item) => [item.id, item])
-)
+import { auroraWebRouteById } from './route-registry'
 
 export interface AuroraRoutePageProps {
   routeId: string
@@ -13,7 +10,7 @@ export interface AuroraRoutePageProps {
 
 export async function AuroraRoutePage({ routeId, title, description }: AuroraRoutePageProps) {
   const snapshot = await getShellSnapshot()
-  const item = routeById.get(routeId)
+  const item = auroraWebRouteById.get(routeId)
   const route = snapshot.routes.find((candidate) => candidate.item.id === routeId)
   const state = route?.state ?? item?.fallbackState ?? 'unsupported'
   const evidence = route
