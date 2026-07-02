@@ -585,10 +585,11 @@ function availabilityRank(state: AvailabilityState): number {
     'available-remote': 1,
     degraded: 2,
     pending: 3,
-    'privacy-blocked': 4,
-    denied: 5,
-    stale: 6,
-    unsupported: 7
+    offline: 4,
+    'privacy-blocked': 5,
+    denied: 6,
+    stale: 7,
+    unsupported: 8
   }
   return ranks[state]
 }
@@ -673,6 +674,7 @@ function isAvailabilityState(value: string): value is AvailabilityState {
     'available-local',
     'available-remote',
     'pending',
+    'offline',
     'denied',
     'degraded',
     'stale',

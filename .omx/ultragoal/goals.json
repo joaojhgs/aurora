@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:54:58.496Z",
+  "updatedAt": "2026-07-02T10:02:03.055Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -922,10 +922,13 @@
       "id": "G077-distinguish-these-states-everywhere",
       "title": "Distinguish these states everywhere:",
       "objective": "Distinguish these states everywhere:\n`available-local`;\n`available-remote`;\n`degraded`;\n`unsupported`;\n`pending`;\n`offline`;\nselector-required;\nconsent-required;\nprivacy-indicator-required;\nnative-permission-required;\nAdminAction-required.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:02:03.055Z",
+      "startedAt": "2026-07-02T09:55:30.840Z",
+      "completedAt": "2026-07-02T10:02:03.055Z",
+      "evidence": "Worker-4 mailbox nudge was stale because .omx/state/team/aurora-tauri-web-mobi-b7864a3c/mailbox/leader-fixed.json is missing and omx team status reports no team state. Completed G077 in leader worktree: AvailabilityState now includes distinct offline SDK state; capabilities ranking/repair action and admin services rank handle offline; admin badge guards/styles include offline; shell test covers available-local, available-remote, degraded, unsupported, pending, offline plus selector/consent/privacy-indicator/native-permission/AdminAction policy signals. Verified: pnpm --filter @aurora/client build; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'distinguishes the required availability|RouteSheet selector|settings, privacy defaults'; pnpm --filter @aurora/client test; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G078-ensure-local-selector-required-route",

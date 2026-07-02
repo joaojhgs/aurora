@@ -1009,6 +1009,7 @@ export type AvailabilityState =
   | 'available-local'
   | 'available-remote'
   | 'pending'
+  | 'offline'
   | 'denied'
   | 'degraded'
   | 'stale'

@@ -725,12 +725,14 @@ function availabilityRank(availability: AvailabilityState): number {
       return 3
     case 'pending':
       return 4
-    case 'stale':
+    case 'offline':
       return 5
-    case 'denied':
+    case 'stale':
       return 6
-    case 'unsupported':
+    case 'denied':
       return 7
+    case 'unsupported':
+      return 8
   }
 }
 
@@ -784,6 +786,8 @@ function repairActionForState(availability: AvailabilityState): string | null {
       return 'refresh provider state'
     case 'pending':
       return 'wait for backend approval or completion'
+    case 'offline':
+      return 'connect to Gateway or use clearly labeled offline demo mode'
     case 'degraded':
       return 'inspect fallback and capacity warnings'
     case 'unsupported':

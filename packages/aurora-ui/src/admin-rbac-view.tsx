@@ -802,6 +802,7 @@ function isAvailabilityState(value: string): value is AvailabilityState {
     'available-local',
     'available-remote',
     'pending',
+    'offline',
     'denied',
     'degraded',
     'stale',

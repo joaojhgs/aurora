@@ -122,12 +122,53 @@ import {
   routeSheetErrorMessage,
   routeSheetPolicySignals,
   SettingsPermissionsView,
+  StatusBadge,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
   auroraNavSections
 } from '../src/index'
 
 describe('Aurora production shell', () => {
+  it('distinguishes the required availability and policy blocker states', () => {
+    const requiredAvailabilityStates = [
+      'available-local',
+      'available-remote',
+      'degraded',
+      'unsupported',
+      'pending',
+      'offline',
+    ] as const
+    const markup = renderToStaticMarkup(
+      <div>
+        {requiredAvailabilityStates.map((state) => <StatusBadge key={state} state={state} />)}
+      </div>
+    )
+
+    for (const state of requiredAvailabilityStates) {
+      expect(markup).toContain(`aui-badge-${state}`)
+      expect(markup).toContain(state)
+    }
+
+    const privacyBlocked = blockedRouteEvaluation('privacy-blocked')
+    const policySignals = routeSheetPolicySignals({
+      ...privacyBlocked,
+      blockers: [
+        ...privacyBlocked.blockers,
+        { code: 'consent_required', message: 'Consent required.', severity: 'error' as const, provider_id: null, peer_id: null, security_privacy: true },
+        { code: 'privacy_indicator_required', message: 'Privacy indicator required.', severity: 'error' as const, provider_id: null, peer_id: null, security_privacy: true },
+        { code: 'native_permission_missing', message: 'Native permission required.', severity: 'error' as const, provider_id: null, peer_id: null, security_privacy: true }
+      ]
+    }, 'required')
+
+    expect(policySignals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
+      expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
+      expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
+      expect.objectContaining({ id: 'native-permission', label: 'Native permission', state: 'blocked' }),
+      expect.objectContaining({ id: 'admin-action', label: 'AdminAction', state: 'blocked' })
+    ]))
+  })
+
   it('builds route availability from AuroraClient capability catalog', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
 
