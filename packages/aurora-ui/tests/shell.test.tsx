@@ -469,6 +469,34 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('confirm the local provider selection before execution')
   })
 
+  it('does not mark desktop-local RouteMatrix read routes as broad privacy-blocked', () => {
+    const graph = buildCapabilityGraph({
+      catalog: localSelectorRequiredRouteCatalog(),
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    })
+    const snapshot = snapshotFromGraph('tauri-local', graph, null)
+    const localReadRouteIds = ['mesh', 'tokens', 'devices', 'backups', 'scheduler', 'audit', 'models']
+    const localReadRoutes = localReadRouteIds.map((id) => route(snapshot, id))
+
+    for (const localRoute of localReadRoutes) {
+      expect(localRoute.state, `${localRoute.item.id} must stay routeable in desktop-local mode`).toBe('available-local')
+      expect(localRoute.disabled, `${localRoute.item.id} must stay clickable in desktop-local mode`).toBe(false)
+      expect(localRoute.requiresAdminAction, `${localRoute.item.id} is a read route and must not require route-level AdminAction`).toBe(false)
+      expect(localRoute.blockers.join(' '), `${localRoute.item.id} must not carry privacy blockers`).not.toMatch(/privacy|consent|indicator/i)
+
+      const cardMarkup = renderToStaticMarkup(<RouteMatrix routes={[localRoute]} />)
+      expect(cardMarkup, `${localRoute.item.id} card must not display privacy-blocked`).not.toContain('privacy-blocked')
+      expect(cardMarkup, `${localRoute.item.id} card must show local availability`).toContain('available-local')
+    }
+
+    const scheduler = route(snapshot, 'scheduler')
+    expect(scheduler.selectorRequired).toBe(true)
+    expect(scheduler.repairActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'configure-route', disabled: false })
+    ]))
+  })
+
   it('keeps SDK errors visible as disabled shell state', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
 

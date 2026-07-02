@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:29:20.450Z",
+  "updatedAt": "2026-07-02T10:32:23.087Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -989,10 +989,12 @@
       "id": "G083-route-matrix-in-desktop-local-mode-d",
       "title": "Route matrix in desktop local mode does not report broad false `priva...",
       "objective": "Route matrix in desktop local mode does not report broad false `privacy-blocked` for local read routes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:32:23.087Z",
+      "completedAt": "2026-07-02T10:32:23.087Z",
+      "evidence": "Added desktop-local RouteMatrix regression proving fixture-backed local read routes (mesh, tokens, devices, backups, scheduler, audit, models) remain available-local, clickable, non-AdminAction-blocked, and do not render privacy-blocked when local selector confirmation is required. Verified: pnpm --filter @aurora/ui test -- -t 'desktop-local RouteMatrix|local selector|required routes clickable|route availability'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G084-tests-cover-selector-required-vs-con",
