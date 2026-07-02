@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:34:48.415Z",
+  "updatedAt": "2026-07-02T12:35:30.021Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1330,10 +1330,12 @@
       "id": "G114-data-policy-route-is-separate-from-m",
       "title": "Data policy route is separate from memory browse and does not duplica...",
       "objective": "Data policy route is separate from memory browse and does not duplicate `/memory`.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:35:30.021Z",
+      "completedAt": "2026-07-02T12:35:30.021Z",
+      "evidence": "G114 data policy route separation completed: commit 65e4e63 mounted /memory/policy to DataPolicyResource instead of MemoryView, updated production route oracles to require Data policy and retention plus Audit trail for policy changes, and added a mounted Tauri regression asserting /memory/policy renders #data-policy-title and no #memory-query. Fresh verification: pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest passed (5 route tests, 18 skipped by filter). Prior G111 verification also passed pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'data policy|memory namespaces|route policy editor|production surface'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/client test -- -t 'memory|RAG|route policy|Gateway.ExplainRoute|DB.RAG'; git diff --check."
     },
     {
       "id": "G115-e2e-covers-search-empty-results-erro",
