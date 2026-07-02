@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:12:17.645Z",
+  "updatedAt": "2026-07-02T14:14:25.855Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1561,10 +1561,12 @@
       "id": "G135-e2e-covers-catalog-load-provider-sel",
       "title": "E2E covers catalog load, provider select/draft, no-provider state, mo...",
       "objective": "E2E covers catalog load, provider select/draft, no-provider state, mobile local-light unsupported state.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:14:25.855Z",
+      "completedAt": "2026-07-02T14:14:25.855Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:runtime; git diff --check"
     },
     {
       "id": "G136-implement-mode-cards",

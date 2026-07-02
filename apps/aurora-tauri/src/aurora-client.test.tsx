@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -158,6 +158,44 @@ function writeOutcomeArtifact(name: string, html: string) {
   const reportDir = join(process.cwd(), 'reports', 'e2e-outcomes')
   mkdirSync(reportDir, { recursive: true })
   writeFileSync(join(reportDir, `${name}.html`), html)
+}
+
+function adminDraftFixture(methodId: string) {
+  const suffix = methodId.replace('.', '-')
+  return {
+    action_id: `aa-${suffix}`,
+    nonce: `nonce-${suffix}`,
+    digest: `digest-${suffix}`,
+    method_id: methodId,
+    affected_resources: ['services.orchestrator.llm.provider'],
+    required_phrase: 'CONFIRM',
+    required_reason: true,
+    required_reauth: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest',
+    },
+  }
+}
+
+function adminConfirmFixture(actionId: string) {
+  const suffix = actionId.replace('aa-', '')
+  return {
+    action_id: actionId,
+    confirmation_token: `token-${suffix}`,
+    digest: `digest-${suffix}`,
+    confirmed: true,
+    expires_at: '2026-06-25T12:05:00Z',
+    audit_receipt: `audit-${suffix}`,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest',
+    },
+  }
 }
 
 
@@ -1202,6 +1240,139 @@ describe('Tauri CI/E2E route gates', () => {
       expect(markup, route.id).toContain(route.label)
       expect(markup, route.id).not.toContain('route registry error')
       expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
+    }
+  })
+
+  it('e2e:runtime loads model catalog and selects local provider through Config.Set AdminAction', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    let selectedProvider = 'cloud:openai:Orchestrator'
+    transport
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => {
+        const catalog = cloneFixture(modelRuntimeCatalogFixture)
+        catalog.selected_provider_id = selectedProvider
+        catalog.providers = catalog.providers.map((provider) => ({
+          ...provider,
+          selected: provider.provider_id === selectedProvider,
+        }))
+        return catalog
+      })
+      .register('Gateway.AdminActionDraft', (request) => {
+        expect(request.payload).toEqual({
+          method_id: 'Config.Set',
+          payload: {
+            key_path: 'services.orchestrator.llm.provider',
+            value: 'llama_cpp',
+          },
+          affected_resources: ['services.orchestrator.llm.provider'],
+        })
+        return adminDraftFixture('Config.Set')
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        expect(request.payload).toEqual(expect.objectContaining({
+          action_id: 'aa-Config-Set',
+          reason: 'Select model provider llama.cpp desktop from Aurora Models runtime',
+          reauth_confirmed: true,
+        }))
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register('Config.Set', (request) => {
+        expect(request.payload).toEqual({
+          key_path: 'services.orchestrator.llm.provider',
+          value: 'llama_cpp',
+        })
+        expect(request.headers).toEqual({
+          'X-Aurora-AdminAction-Id': 'aa-Config-Set',
+          'X-Aurora-AdminAction-Token': 'token-Config-Set',
+          'X-Aurora-AdminAction-Digest': 'digest-Config-Set',
+        })
+        selectedProvider = 'local:Orchestrator:llama-cpp'
+        return { success: true, previous_value: 'openai' }
+      })
+    const runtime = testRuntime(new AuroraClient({ transport }))
+    window.history.replaceState({}, '', '/models')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('llama.cpp desktop')
+        expect(container.textContent).toContain('Provider route policy')
+        expect(container.textContent).toContain('yes; writes llama_cpp through Config.Set AdminAction')
+        expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
+      })
+      await clickButtonByLabel(container, 'Select llama.cpp desktop')
+      await waitUntil(() => {
+        expect(requestMethods(transport)).toEqual(expect.arrayContaining([
+          'Gateway.AdminActionDraft',
+          'Gateway.AdminActionConfirm',
+          'Config.Set',
+        ]))
+        expect(container.textContent).toContain('Provider selection applied through Config.Set AdminAction')
+        expect(container.textContent).toContain('audit-Config-Set')
+      })
+      expect(requestMethods(transport).filter((method) => method === ORCHESTRATOR_MODEL_METHODS.getCatalog).length).toBeGreaterThanOrEqual(2)
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('e2e:runtime renders model no-provider empty state without writes', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    transport.register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => ({
+      ...cloneFixture(modelRuntimeCatalogFixture),
+      selected_provider_id: null,
+      providers: [],
+      provider_index: {},
+      unavailable: [],
+    }))
+    const runtime = testRuntime(new AuroraClient({ transport }))
+    window.history.replaceState({}, '', '/models')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('No model runtime providers were returned by the backend catalog.')
+      })
+      expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
+      expect(requestMethods(transport)).not.toContain('Config.Set')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('e2e:runtime renders mobile local-light unsupported evidence without claiming native model support', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    transport.register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => {
+      const nativeProvider = cloneFixture(modelRuntimeCatalogFixture.providers.find((provider) => provider.provider_id === 'native:mobile-local-light')!)
+      return {
+        ...cloneFixture(modelRuntimeCatalogFixture),
+        selected_provider_id: null,
+        providers: [nativeProvider],
+        provider_index: { 'native-mobile': ['native:mobile-local-light'] },
+        unavailable: ['native:mobile-local-light'],
+      }
+    })
+    const runtime = testRuntime(new AuroraClient({ transport }))
+    window.history.replaceState({}, '', '/models')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('Mobile local-light runtime')
+        expect(container.textContent).toContain('No provider is currently selected')
+        expect(container.textContent).toContain('Native Android/iOS provider proof is not available in this manifest.')
+        expect(container.textContent).toContain('unsupported')
+        expect(container.textContent).toContain('Open Assistant model repair')
+      })
+      expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
+      expect(requestMethods(transport)).not.toContain('Config.Set')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
     }
   })
 
