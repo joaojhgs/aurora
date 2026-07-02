@@ -25,6 +25,26 @@ const excludedFiles = new Set([
 
 const allowedSidecarServiceResource = 'app/services/config/config_defaults.json'
 
+
+const approvedClientFactoryFiles = new Set([
+  'apps/aurora-tauri/src/aurora-client.ts',
+  'apps/aurora-tauri/src/eventstream-smoke.tsx',
+  'apps/aurora-web/app/aurora-client.ts',
+  'packages/aurora-sdk/src/http.ts',
+  'packages/aurora-sdk/src/mock.ts',
+  'packages/aurora-sdk/src/tauri.ts',
+  'packages/aurora-sdk/src/test-utils.ts'
+])
+
+const forbiddenClientFactoryPatterns: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'AuroraClient construction', pattern: /\bnew\s+AuroraClient\s*\(/ },
+  { label: 'HTTP Gateway transport construction', pattern: /\bnew\s+HttpGatewayTransport\s*\(/ },
+  { label: 'Tauri local transport construction', pattern: /\bnew\s+TauriLocalTransport\s*\(/ },
+  { label: 'mock transport construction as live truth', pattern: /\bnew\s+MockAuroraTransport\s*\(/ },
+  { label: 'direct Tauri API import', pattern: /from\s+['"]@tauri-apps\/api\/(?:core|event)['"]/ },
+  { label: 'direct browser fetch', pattern: /\bfetch\s*\(/ }
+]
+
 const forbiddenBoundaryPatterns: Array<{ label: string; pattern: RegExp }> = [
   {
     label: 'Python service package import',
@@ -74,6 +94,27 @@ describe('UI and Tauri service boundary contract', () => {
 
       for (const { label, pattern } of forbiddenBoundaryPatterns) {
         expect(text, `${rel} must not cross the service boundary via ${label}`).not.toMatch(pattern)
+      }
+    }
+  })
+
+  it('limits frontend client and transport construction to approved boundary adapters', () => {
+    const scannedFiles = [
+      ...filesUnder(resolve(repoRoot, 'apps/aurora-tauri/src')),
+      ...filesUnder(resolve(repoRoot, 'apps/aurora-web/app')),
+      ...filesUnder(resolve(repoRoot, 'packages/aurora-ui/src')),
+      ...filesUnder(resolve(repoRoot, 'packages/aurora-sdk/src'))
+    ].filter((file) => !excludedFiles.has(relative(repoRoot, file)))
+
+    expect(scannedFiles.length).toBeGreaterThan(0)
+
+    for (const file of scannedFiles) {
+      const rel = relative(repoRoot, file)
+      if (approvedClientFactoryFiles.has(rel)) continue
+      const text = readFileSync(file, 'utf8')
+
+      for (const { label, pattern } of forbiddenClientFactoryPatterns) {
+        expect(text, `${rel} must not bypass the app client factory via ${label}`).not.toMatch(pattern)
       }
     }
   })
