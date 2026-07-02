@@ -196,7 +196,7 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
         ) : (
           <div className="aui-settings-empty">
             <EvidenceBadge label="native-manifest" />
-            <p>No iOS integration or release-gate manifest is available for this deployment mode.</p>
+            <p>No iOS integration or preflight manifest is available for this deployment mode.</p>
           </div>
         )}
         {model.nativePolicyNotes.length > 0 ? (

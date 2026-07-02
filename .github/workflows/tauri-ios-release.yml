@@ -1,4 +1,4 @@
-name: Tauri iOS Release Gate
+name: Tauri iOS Policy and Signing
 
 on:
   pull_request:
@@ -51,11 +51,11 @@ jobs:
       - name: Test shared UI
         run: pnpm --filter @aurora/ui test
 
-      - name: Validate iOS release-gate policy
+      - name: Validate iOS preflight policy
         run: pnpm --filter @aurora/tauri-ui ios:policy
 
   ios-macos-xcode:
-    name: macOS Xcode iOS gate
+    name: macOS Xcode iOS preflight
     runs-on: macos-latest
     if: github.event_name == 'workflow_dispatch'
     needs: ios-policy
@@ -85,7 +85,7 @@ jobs:
           pnpm --filter @aurora/tauri-ui build
 
       - name: Verify macOS, Xcode, and generated iOS project
-        run: pnpm --filter @aurora/tauri-ui ios:gate
+        run: pnpm --filter @aurora/tauri-ui ios:preflight
 
       - name: Run App Store Connect signing dry run
         if: inputs.app_store_dry_run == 'true'

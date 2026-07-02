@@ -2,7 +2,7 @@
 
 ## Owner
 
-Aurora backend engineer owns this release gate. QA verifies the uploaded evidence before production readiness sign-off.
+Aurora backend engineer owns this release check. QA verifies the uploaded evidence before production readiness sign-off.
 
 ## Purpose
 
@@ -85,22 +85,20 @@ The backend conformance checker also scans generated artifacts for obvious unred
 
 ## Platform and skipped-test policy
 
-This gate is contract/SDK evidence only. It does not replace:
+This workflow is contract/SDK evidence only. It does not replace:
 
-- Tauri desktop packaging smoke logs from `tauri-desktop.yml`
-- Android APK/emulator and physical/OEM matrix evidence from Android release tasks
-- iOS simulator/TestFlight/device evidence from iOS release tasks
-- multi-mode live backend E2E coverage from QA-002
-- security/privacy adversarial regression coverage from QA-003
+- Tauri desktop packaging smoke logs from `tauri-desktop.yml`.
+- Android APK/emulator and physical/OEM matrix evidence from Android workflows and release operations.
+- iOS simulator/TestFlight/device evidence from iOS workflows and release operations.
+- Mesh transport E2E coverage from `e2e.yml`.
+- Frontend accessibility/responsive/visual checks from `frontend-sdk.yml`.
 
-Emulator-only mobile evidence must stay marked as partial until physical/device/OEM evidence is attached to the relevant release issue.
+Emulator-only mobile evidence must stay marked as partial until physical/device/OEM evidence is attached to the relevant release record.
 
 ## Final readiness checklist
 
-- PER-222 / QA-001: this CI gate passes and artifact is attached.
-- SDK-014: transport conformance tests pass for mock, HTTP, Tauri-local mock, and mesh mock.
-- P0-002: generated backend inventory remains current.
-- QA-002: live multi-mode E2E matrix is green or explicitly deferred with accepted rationale.
-- QA-003: security/privacy regression suite is green.
-- QA-006: release packaging and operator runbooks are linked.
-- QA-007: final production readiness audit closes remaining deferred findings.
+- SDK/backend contract conformance passes and uploads its artifact.
+- SDK transport conformance tests pass for mock, HTTP, Tauri-local mock, and mesh mock.
+- Generated backend inventory remains current.
+- Mesh transport E2E is green or explicitly blocked with dependency-gap evidence.
+- Frontend accessibility/responsive/visual and SDK resilience suites are green.

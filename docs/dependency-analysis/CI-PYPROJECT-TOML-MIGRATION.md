@@ -11,36 +11,36 @@ Updated all CI/CD configurations and documentation to use `pyproject.toml` as th
 
 ### GitHub Actions Workflows
 
-All workflows updated to use `pip install -e .[<extras>]` instead of `pip install -r requirements-*.txt`:
+Current durable workflows use `uv sync --extra ...`/pyproject extras instead of requirements files:
 
-1. **`.github/workflows/test-core.yml`**
-   - **Before**: `pip install -r requirements-dev.txt` and `pip install -r requirements-test.txt`
-   - **After**: `pip install -e .[dev,test]`
+1. **`.github/workflows/python-tests.yml`**
+   - **Before**: `requirements file: requirements-dev.txt` and `requirements file: requirements-test.txt`
+   - **After**: `uv sync --extra dev,test`
 
-2. **`.github/workflows/test-all.yml`**
-   - **Before**: `pip install -r requirements-dev.txt` and `pip install -r requirements-test.txt`
-   - **After**: `pip install -e .[dev,test-all]`
+2. **`release.yml` readiness/manual test lanes**
+   - **Before**: `requirements file: requirements-dev.txt` and `requirements file: requirements-test.txt`
+   - **After**: `uv sync --extra dev,test-all`
 
-3. **`.github/workflows/test-modules.yml`**
-   - **Before**: `pip install -r requirements-dev.txt`, `pip install -r requirements-test.txt`, and `pip install -r modules/ui/requirements.txt`
+3. **package/module-specific local test lanes**
+   - **Before**: `requirements file: requirements-dev.txt`, `requirements file: requirements-test.txt`, and `requirements file: modules/ui/requirements.txt`
    - **After**: 
-     - UI module: `pip install -e .[dev,test,ui]`
-     - OpenRecall module: `pip install -e .[dev,test,openrecall]`
+     - UI module: `uv sync --extra dev,test,ui`
+     - OpenRecall module: `uv sync --extra dev,test,openrecall`
 
-4. **`.github/workflows/test-e2e.yml`**
-   - **Before**: `pip install -r requirements-dev.txt` and `pip install -r requirements-test.txt`
-   - **After**: `pip install -e .[dev,test-e2e]`
+4. **`.github/workflows/e2e.yml`**
+   - **Before**: `requirements file: requirements-dev.txt` and `requirements file: requirements-test.txt`
+   - **After**: `uv sync --extra dev,test-e2e`
 
-5. **`.github/workflows/test-performance.yml`**
-   - **Before**: `pip install -r requirements-dev.txt` and `pip install -r requirements-test.txt`
-   - **After**: `pip install -e .[dev,test-performance]`
+5. **`.github/workflows/performance.yml`**
+   - **Before**: `requirements file: requirements-dev.txt` and `requirements file: requirements-test.txt`
+   - **After**: `uv sync --extra dev,test-performance`
 
-6. **`.github/workflows/lint.yml`**
-   - **Before**: `pip install -r requirements-lint.txt`
-   - **After**: `pip install -e .[dev]` (linting tools are in the `dev` extra)
+6. **`.github/workflows/quality.yml`**
+   - **Before**: `requirements file: requirements-lint.txt`
+   - **After**: `uv sync --extra dev` (linting tools are in the `dev` extra)
 
 7. **`.github/workflows/release.yml`**
-   - **Already using pyproject.toml**: `pip install -e .[build,dev]` and `pip install -e .[runtime,build,torch-cpu]`
+   - **Already using pyproject.toml**: `uv sync --extra build,dev` and `uv sync --extra runtime,build,torch-cpu`
    - **No changes needed**
 
 ### tox.ini
@@ -55,18 +55,18 @@ All workflows updated to use `pip install -e .[<extras>]` instead of `pip instal
 - **After**: 
   ```ini
   deps = 
-      -e {toxinidir}[dev,test]
+      -e {toxinidir}[dev,test
   ```
 
 ### Documentation Updates
 
 1. **`.github/copilot-instructions.md`**
-   - Updated installation command from `pip install -r requirements-dev.txt` to `pip install -e .[dev]`
+   - Updated installation command from `requirements file: requirements-dev.txt` to `uv sync --extra dev`
    - Updated dependency management notes to reflect `pyproject.toml` as primary source
    - Updated file structure documentation
 
 2. **`docs/CONTRIBUTE.md`**
-   - Updated test installation command from `pip install -r requirements-test.txt` to `pip install -e .[test]`
+   - Updated test installation command from `requirements file: requirements-test.txt` to `uv sync --extra test`
 
 ## pyproject.toml Optional Dependency Groups Used
 
@@ -104,13 +104,13 @@ Legacy requirements.txt files are still kept for:
 
 **Old way**:
 ```bash
-pip install -r requirements-dev.txt
-pip install -r requirements-test.txt
+requirements file: requirements-dev.txt
+requirements file: requirements-test.txt
 ```
 
 **New way**:
 ```bash
-pip install -e .[dev,test]
+uv sync --extra dev,test
 ```
 
 ### For CI/CD
@@ -119,8 +119,8 @@ pip install -e .[dev,test]
 ```yaml
 - name: Install dependencies
   run: |
-    pip install -r requirements-dev.txt
-    pip install -r requirements-test.txt
+    requirements file: requirements-dev.txt
+    requirements file: requirements-test.txt
 ```
 
 **New way**:
@@ -128,7 +128,7 @@ pip install -e .[dev,test]
 - name: Install dependencies
   run: |
     python -m pip install --upgrade pip setuptools wheel
-    pip install -e .[dev,test]
+    uv sync --extra dev,test
 ```
 
 ## Next Steps
@@ -149,9 +149,9 @@ All CI/CD workflows should be tested to ensure:
 
 ## Related Documentation
 
-- [Dependency Restructuring Summary](../DEPENDENCY_RESTRUCTURE_SUMMARY.md)
-- [Requirements Files Cleanup](./REQUIREMENTS-FILES-CLEANUP.md)
-- [pyproject.toml Structure](../../pyproject.toml)
+- [Dependency Restructuring Summary(../DEPENDENCY_RESTRUCTURE_SUMMARY.md)
+- [Requirements Files Cleanup(./REQUIREMENTS-FILES-CLEANUP.md)
+- [pyproject.toml Structure(../../pyproject.toml)
 
 
 

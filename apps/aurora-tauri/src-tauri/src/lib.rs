@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -700,6 +700,7 @@ async fn aurora_unsubscribe(
 
 #[tauri::command]
 async fn aurora_sidecar_start(
+    app: AppHandle,
     state: State<'_, SharedSidecarState>,
     command_token: Option<SidecarCommandToken>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
@@ -717,7 +718,7 @@ async fn aurora_sidecar_start(
     {
         let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
         if !sidecar.is_running() {
-            let child = spawn_sidecar(&gateway, &sidecar.token)?;
+            let child = spawn_sidecar(&app, &gateway, &sidecar.token)?;
             sidecar.started_at = Some(Instant::now());
             sidecar.child = Some(child);
             sidecar.last_error = None;
@@ -795,7 +796,7 @@ async fn aurora_sidecar_status(
     );
     details.insert(
         "bundledSidecarPolicy".to_string(),
-        json!("explicit-prebuilt-artifact"),
+        json!("automatic-build-and-bundle-with-env-override"),
     );
     details.insert("updaterArtifactsEnabled".to_string(), json!(true));
     if let Some(ms) = started_at_ms {
@@ -2435,15 +2436,16 @@ fn verify_sidecar_command_token(
     }
 }
 
-fn spawn_sidecar(gateway: &Url, token: &str) -> Result<Child, AuroraCommandError> {
-    let mut command = Command::new(sidecar_program());
-    command.args(sidecar_args());
-    command.current_dir(sidecar_working_dir());
+fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, AuroraCommandError> {
+    let launch = sidecar_launch(app)?;
+    let mut command = Command::new(&launch.program);
+    command.args(&launch.args);
+    command.current_dir(&launch.working_dir);
     command.env("AURORA_ARCHITECTURE_MODE", "threads");
     command.env("AURORA_TAURI_MANAGED_SIDECAR", "1");
     command.env("AURORA_GATEWAY_URL", gateway.to_string());
     command.env("AURORA_TAURI_SIDECAR_TOKEN", token);
-    command.env("AURORA_CONFIG_FILE", sidecar_config_file(gateway)?);
+    command.env("AURORA_CONFIG_FILE", sidecar_config_file(app, gateway)?);
     command.env(
         "AURORA_GATEWAY_HOST",
         gateway.host_str().unwrap_or("127.0.0.1"),
@@ -2675,6 +2677,40 @@ fn redacted_gateway_error(error: &reqwest::Error) -> String {
     }
 }
 
+struct SidecarLaunch {
+    program: String,
+    args: Vec<String>,
+    working_dir: PathBuf,
+}
+
+fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> {
+    if env::var("AURORA_TAURI_SIDECAR_PROGRAM").is_ok() {
+        return Ok(SidecarLaunch {
+            program: sidecar_program(),
+            args: sidecar_args(),
+            working_dir: sidecar_working_dir(),
+        });
+    }
+
+    if let Some(program) = bundled_sidecar_path(app) {
+        let working_dir = program
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| sidecar_working_dir());
+        return Ok(SidecarLaunch {
+            program: program.display().to_string(),
+            args: Vec::new(),
+            working_dir,
+        });
+    }
+
+    Ok(SidecarLaunch {
+        program: "python".to_string(),
+        args: vec!["main.py".to_string()],
+        working_dir: sidecar_working_dir(),
+    })
+}
+
 fn sidecar_program() -> String {
     env::var("AURORA_TAURI_SIDECAR_PROGRAM").unwrap_or_else(|_| "python".to_string())
 }
@@ -2703,17 +2739,61 @@ fn sidecar_working_dir() -> PathBuf {
         })
 }
 
-fn sidecar_config_file(gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
-    if let Ok(path) = env::var("AURORA_TAURI_SIDECAR_CONFIG_FILE") {
-        return Ok(PathBuf::from(path));
+fn bundled_sidecar_path(app: &AppHandle) -> Option<PathBuf> {
+    let extension = if cfg!(windows) { ".exe" } else { "" };
+    let filename = format!(
+        "{}-{}{}",
+        BUNDLED_SIDECAR_NAME,
+        env!("TAURI_ENV_TARGET_TRIPLE"),
+        extension
+    );
+    let mut candidates = Vec::new();
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("binaries").join(&filename));
     }
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(&filename),
+    );
+    candidates.into_iter().find(|path| path.is_file())
+}
 
-    let defaults_path = sidecar_working_dir()
+fn sidecar_config_defaults_path(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
+    let dev_path = sidecar_working_dir()
         .join("app")
         .join("services")
         .join("config")
         .join("config_defaults.json");
-    let defaults = fs::read_to_string(&defaults_path).map_err(|error| {
+    if dev_path.is_file() {
+        return Ok(dev_path);
+    }
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let resource_path = resource_dir
+            .join("app")
+            .join("services")
+            .join("config")
+            .join("config_defaults.json");
+        if resource_path.is_file() {
+            return Ok(resource_path);
+        }
+    }
+    Err(AuroraCommandError::SidecarProcess(
+        "failed to locate config_defaults.json for managed sidecar; run prepare:sidecar before bundling".to_string(),
+    ))
+}
+
+fn sidecar_config_file(app: &AppHandle, gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
+    if let Ok(path) = env::var("AURORA_TAURI_SIDECAR_CONFIG_FILE") {
+        return Ok(PathBuf::from(path));
+    }
+
+    let defaults_path = sidecar_config_defaults_path(app)?;
+    sidecar_config_file_from_defaults(&defaults_path, gateway)
+}
+
+fn sidecar_config_file_from_defaults(defaults_path: &Path, gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
+    let defaults = fs::read_to_string(defaults_path).map_err(|error| {
         AuroraCommandError::SidecarProcess(format!(
             "failed to read config defaults at {}: {error}",
             defaults_path.display()
@@ -3274,7 +3354,16 @@ mod tests {
 
     #[test]
     fn generated_sidecar_config_enables_loopback_gateway() {
-        let path = sidecar_config_file(&Url::parse("http://127.0.0.1:8765").unwrap()).unwrap();
+        let defaults_path = sidecar_working_dir()
+            .join("app")
+            .join("services")
+            .join("config")
+            .join("config_defaults.json");
+        let path = sidecar_config_file_from_defaults(
+            &defaults_path,
+            &Url::parse("http://127.0.0.1:8765").unwrap(),
+        )
+        .unwrap();
         let config = fs::read_to_string(path).unwrap();
         let value: Value = serde_json::from_str(&config).unwrap();
         assert_eq!(

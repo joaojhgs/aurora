@@ -1,8 +1,8 @@
-# PER-273 Production UI Contract Hardening
+# Production UI Contract Hardening
 
 ## Scope
 
-PER-273 audits production UI surfaces that render service, mesh, admin, privacy, native, onboarding, model, memory, and backup state. The enforceable source is `packages/aurora-ui/src/production-surface-contracts.ts`; this document summarizes the same contract for review.
+This document audits production UI surfaces that render service, mesh, admin, privacy, native, onboarding, model, memory, and backup state. The enforceable source is `packages/aurora-ui/src/production-surface-contracts.ts`; this document summarizes the same contract for review.
 
 ## Source Rules
 
@@ -28,6 +28,6 @@ PER-273 audits production UI surfaces that render service, mesh, admin, privacy,
 
 ## Regression Gates
 
-- `packages/aurora-ui/tests/shell.test.tsx` now verifies the PER-273 surface matrix, nav bindings, evidence sources, AdminAction declarations, and test-only fixture policy.
+- `packages/aurora-ui/tests/shell.test.tsx` verifies the production surface matrix, nav bindings, evidence sources, AdminAction declarations, and test-only fixture policy.
 - The same test scans production UI files under `packages/aurora-ui/src`, `apps/aurora-web/app`, and `apps/aurora-tauri/src` so screen code cannot directly call `fetch`, Tauri `invoke`, SDK fixtures, mock-reference data, raw service objects, or raw bus implementations outside adapter internals.
 - SDK conformance remains covered by `packages/aurora-sdk/tests/conformance.test.ts` and `scripts/check_sdk_backend_conformance.py`.

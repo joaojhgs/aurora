@@ -28,11 +28,12 @@ iOS builds expose the same storage posture through the Aurora native plugin skel
 
 ## Packaging And Updates
 
-Tauri bundling is enabled for Linux AppImage/deb/rpm, macOS dmg, and Windows MSI/NSIS targets. Release builds create updater artifacts and signatures through Tauri's updater configuration.
+Tauri bundling is enabled for Linux AppImage/deb by default, macOS dmg, and Windows MSI/NSIS targets. RPM is explicit via `build:bundle:linux-rpm:thin` on RPM-capable runners. Default local/CI bundle scripts pass `--no-sign`; secret-backed release builds create updater artifacts and signatures through Tauri's updater configuration.
 
 Release inputs:
 
-- `AURORA_TAURI_SIDECAR_SOURCE`: required path to a prebuilt Aurora sidecar executable before `tauri build`.
+- `AURORA_TAURI_SIDECAR_PROFILE`: optional sidecar profile override; defaults to `thin`. Supported profiles are `thin`, `local-cpu`, `local-cuda`, `local-rocm`, `local-metal`, `local-vulkan`, `local-sycl`, `local-rpc`, and `full`.
+- `AURORA_TAURI_SIDECAR_SOURCE`: optional trusted prebuilt Aurora sidecar override for CI cache/artifact reuse. If unset, `prepare:sidecar` builds the selected profile automatically from `dist/sidecars/<profile>/aurora-sidecar` or by invoking the Python builder in an isolated `uv --no-dev` environment.
 - `AURORA_TAURI_TARGET_TRIPLE`: optional override for cross-build sidecar naming; defaults to the host Rust target triple.
 - `TAURI_SIGNING_PRIVATE_KEY`: required by Tauri when producing signed updater artifacts. Use a secure CI secret or a local secret path/content.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: optional signing key password.
@@ -40,12 +41,12 @@ Release inputs:
 The updater public key and endpoint in `src-tauri/tauri.conf.json` are release placeholders. A production release must replace `AURORA_RELEASE_PUBLIC_KEY_REPLACE_BEFORE_RELEASE` with the generated public key content and point the HTTPS endpoint at the signed release metadata service before publishing.
 
 ```bash
-pnpm --filter @aurora/tauri-ui prepare:sidecar
+pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
 pnpm --filter @aurora/tauri-ui build
-pnpm --filter @aurora/tauri-ui build:bundle
+pnpm --filter @aurora/tauri-ui build:bundle:thin
 ```
 
-`prepare:sidecar` copies the explicit sidecar artifact into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. It also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts.
+`build:bundle` aliases `build:bundle:thin`. Heavier local assistant packages are explicit (`build:bundle:local-cpu`, `build:bundle:local-cuda`, `build:bundle:local-metal`, etc.) so default desktop packaging does not bundle every STT/TTS/local-model dependency. `prepare:sidecar` builds `aurora-sidecar` automatically with `uv run --isolated --no-dev python scripts/build.py --target exe --clean --sidecar --sidecar-profile <profile>` unless `AURORA_TAURI_SIDECAR_SOURCE` points to a trusted prebuilt executable. Profile outputs live under `dist/sidecars/<profile>/aurora-sidecar`, are size-guarded before staging, and are then copied into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. The script also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` and the config-defaults resource for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
 
 ## Android Release Gate
 
@@ -56,11 +57,11 @@ Release commands:
 ```bash
 pnpm --filter @aurora/tauri-ui android:build:aab
 pnpm --filter @aurora/tauri-ui android:build:apk
-pnpm --filter @aurora/tauri-ui android:release-gate
-pnpm --filter @aurora/tauri-ui android:release-gate:strict
+pnpm --filter @aurora/tauri-ui android:preflight
+pnpm --filter @aurora/tauri-ui android:preflight:strict
 ```
 
-`android:release-gate` writes `apps/aurora-tauri/reports/android-release-gate.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. Strict mode fails when the generated Android project or signing inputs are missing.
+`android:preflight` writes `apps/aurora-tauri/reports/android-preflight.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. Strict mode fails when the generated Android project or signing inputs are missing.
 
 Signing inputs are intentionally environment-only and redacted in reports:
 
@@ -78,7 +79,7 @@ Minimum Android release evidence:
 
 ## iOS Release Gate
 
-iOS release evidence is tracked by `src-tauri/ios/release-gate.json` and exposed through the SDK native manifest shape. The approved user-facing copy is `Siri/Shortcuts/App Intents integration`; UI copy must not claim that Aurora becomes the iOS system assistant.
+iOS release evidence is tracked by `src-tauri/ios/preflight.json` and exposed through the SDK native manifest shape. The approved user-facing copy is `Siri/Shortcuts/App Intents integration`; UI copy must not claim that Aurora becomes the iOS system assistant.
 
 Policy checks can run on any platform:
 
@@ -90,7 +91,7 @@ The actual iOS build and signing gate requires macOS with Xcode and the generate
 
 ```bash
 pnpm --filter @aurora/tauri-ui tauri ios init
-pnpm --filter @aurora/tauri-ui ios:gate
+pnpm --filter @aurora/tauri-ui ios:preflight
 pnpm --filter @aurora/tauri-ui ios:open-xcode
 ```
 
@@ -105,7 +106,7 @@ pnpm --filter @aurora/tauri-ui ios:build:app-store
 
 Required QA evidence for IOS-008:
 
-- `tauri ios build` or `ios:gate` log from macOS/Xcode.
+- `tauri ios build` or `ios:preflight` log from macOS/Xcode.
 - Simulator or device invocation of the native manifest plugin and at least one App Intent/Shortcut flow.
 - Simulator or device share/deep-link flow with backend attachment validation or a policy-blocked result.
 - App Store Connect/TestFlight signing dry run or explicit credential-gated substitute evidence.

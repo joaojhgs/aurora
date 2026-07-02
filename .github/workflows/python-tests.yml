@@ -1,0 +1,122 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  unit-and-integration:
+    name: Unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install test dependencies
+        run: >-
+          uv sync
+          --extra dev
+          --extra test-unit
+          --extra test-integration
+          --extra gateway
+          --extra service-auth
+          --extra service-db
+          --extra service-scheduler
+          --extra service-tooling
+          --extra service-orchestrator
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit -v --cov=app --cov-report=xml:unit-coverage.xml --cov-report=html:unit-coverage.html
+
+      - name: Run non-process integration tests
+        run: >-
+          uv run pytest tests/integration -v
+          -m "not process_mode and not bullmq_redis"
+          --cov=app
+          --cov-append
+          --cov-report=xml:integration-coverage.xml
+          --cov-report=html:integration-coverage.html
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./unit-coverage.xml,./integration-coverage.xml
+          flags: python
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload HTML coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-html
+          path: |
+            unit-coverage.html/
+            integration-coverage.html/
+
+  process-mode:
+    name: Process-mode integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install process-mode dependencies
+        run: >-
+          uv sync
+          --extra dev
+          --extra test-integration
+          --extra mode-processes
+          --extra gateway
+          --extra service-auth
+          --extra service-db
+          --extra service-scheduler
+          --extra service-tooling
+          --extra service-orchestrator
+
+      - name: Run process-mode tests
+        env:
+          AURORA_ARCHITECTURE_MODE: processes
+          REDIS_URL: redis://localhost:6379
+        run: uv run pytest tests/integration -v -m "process_mode or bullmq_redis"

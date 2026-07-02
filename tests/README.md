@@ -94,19 +94,19 @@ pytest --cov=app --cov-report=html
 
 ## CI/CD Pipeline
 
-Aurora's CI/CD pipeline is configured with separate workflows for different test categories:
+Aurora's CI/CD pipeline is configured with durable workflow lanes. See `docs/CI_CD.md` for the full map.
 
-1. **Unit and Integration Tests** - Run on every push
-   - Workflow file: `.github/workflows/test-core.yml`
+1. **Python Tests** - Unit, integration, and Redis-backed process-mode tests
+   - Workflow file: `.github/workflows/python-tests.yml`
 
-2. **End-to-End Tests** - Run on pull requests
-   - Workflow file: `.github/workflows/test-e2e.yml`
+2. **End-to-End Tests** - Mesh transport E2E harness
+   - Workflow file: `.github/workflows/e2e.yml`
 
-3. **Performance Tests** - Run on schedule and manually
-   - Workflow file: `.github/workflows/test-performance.yml`
+3. **Performance and Benchmarks** - Scheduled/manual performance and SDK resilience tests
+   - Workflow file: `.github/workflows/performance.yml`
 
-4. **Full Test Suite** - Run on releases and manually
-   - Workflow file: `.github/workflows/test-all.yml`
+4. **Frontend and SDK** - TypeScript SDK/UI/web tests and builds
+   - Workflow file: `.github/workflows/frontend-sdk.yml`
 
 ## Writing Tests
 

@@ -76,6 +76,16 @@ jobs:
       - name: Initialize Tauri Android project
         run: pnpm --filter @aurora/tauri-ui android:init
 
+      - name: Run Android preflight
+        run: pnpm --filter @aurora/tauri-ui android:preflight:strict
+
+      - name: Upload Android preflight report
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-preflight
+          path: apps/aurora-tauri/reports/android-preflight.json
+          if-no-files-found: error
+
       - name: Build Android APK
         run: pnpm --filter @aurora/tauri-ui android:build:apk:x86_64:debug
 

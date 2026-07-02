@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const scriptDir = fileURLToPath(new URL('.', import.meta.url))
 const appDir = join(scriptDir, '..')
 const repoRoot = join(appDir, '..', '..')
-const gatePath = join(appDir, 'src-tauri', 'ios', 'release-gate.json')
+const gatePath = join(appDir, 'src-tauri', 'ios', 'preflight.json')
 
 const args = new Set(process.argv.slice(2))
 const policyOnly = args.has('--policy-only')
@@ -28,13 +28,13 @@ if (!policyOnly) {
   if (validateIpa) validateIpaArtifact()
 }
 
-console.log(`iOS release gate passed: ${policyOnly ? 'policy' : 'macOS/Xcode'} checks`)
+console.log(`iOS preflight passed: ${policyOnly ? 'policy' : 'macOS/Xcode'} checks`)
 
 function validateGateShape(value) {
-  assert(value.platform === 'ios', 'release gate platform must be ios')
+  assert(value.platform === 'ios', 'iOS preflight platform must be ios')
   assert(value.policyCopy === 'Siri/Shortcuts/App Intents integration', 'policy copy must use the approved iOS wording')
   assert(Array.isArray(value.integrations) && value.integrations.length > 0, 'integrations must be listed')
-  assert(Array.isArray(value.releaseGates) && value.releaseGates.length >= 4, 'release gates must include build, simulator, share, and signing gates')
+  assert(Array.isArray(value.releaseGates) && value.releaseGates.length >= 4, 'preflight checks must include build, simulator, share, and signing checks')
   assert(Array.isArray(value.deviceMatrix) && value.deviceMatrix.length >= 2, 'device matrix must include simulator and physical-device rows')
   assert(value.unsupportedClaims.includes('default system assistant'), 'unsupported iOS system assistant claim must be explicit')
 
@@ -84,7 +84,7 @@ function validateIosProject() {
   const appleProject = join(appDir, 'src-tauri', 'gen', 'apple')
   assert(
     existsSync(appleProject),
-    'Tauri iOS project is missing. Run `pnpm --filter @aurora/tauri-ui tauri ios init` on macOS and commit the generated project before release-gate builds.'
+    'Tauri iOS project is missing. Run `pnpm --filter @aurora/tauri-ui tauri ios init` on macOS and commit the generated project before preflight builds.'
   )
 }
 

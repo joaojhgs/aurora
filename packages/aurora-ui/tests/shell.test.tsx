@@ -130,7 +130,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
   })
 
-  it('documents every PER-273 production surface with backend or explicit degraded evidence', () => {
+  it('documents every production surface with backend or explicit degraded evidence', () => {
     const requiredSurfaceIds = [
       'assistant-route-sheet',
       'admin-overview',
@@ -629,7 +629,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.')
   })
 
-  it('renders iOS Siri/Shortcuts/App Intents integration and release-gate evidence from the native manifest', async () => {
+  it('renders iOS Siri/Shortcuts/App Intents integration and preflight evidence from the native manifest', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))

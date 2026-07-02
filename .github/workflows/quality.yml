@@ -1,0 +1,69 @@
+name: Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  python-quality:
+    name: Python lint, format, and generated config
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install quality dependencies
+        run: uv sync --extra dev
+
+      - name: Check generated config artifacts
+        run: uv run make check-config-generated
+
+      - name: Ruff lint
+        run: uv run ruff check app tests scripts
+
+      - name: Ruff format check
+        run: uv run ruff format --check app tests scripts
+
+  node-quality:
+    name: Workspace typecheck and package metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK and shared UI for downstream package resolution
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Typecheck SDK, UI, web, and Tauri frontend
+        run: |
+          pnpm --filter @aurora/client typecheck
+          pnpm --filter @aurora/ui typecheck
+          pnpm --filter @aurora/web typecheck
+          pnpm --filter @aurora/tauri-ui typecheck

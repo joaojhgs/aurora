@@ -11,7 +11,7 @@ const strict = args.has('--strict')
 const requireAndroidProject = strict || args.has('--require-android-project')
 const reportPath = resolve(
   appDir,
-  process.env.AURORA_ANDROID_RELEASE_REPORT ?? 'reports/android-release-gate.json'
+  process.env.AURORA_ANDROID_PREFLIGHT_REPORT ?? 'reports/android-preflight.json'
 )
 
 const packageJson = readJson(join(appDir, 'package.json'))
@@ -149,11 +149,11 @@ mkdirSync(dirname(reportPath), { recursive: true })
 writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
 
 const failed = checks.filter((item) => item.required && item.status === 'blocked')
-console.log(`Android release gate report: ${relative(reportPath)}`)
+console.log(`Android preflight report: ${relative(reportPath)}`)
 console.log(`Checks: ${checks.filter((item) => item.status === 'passed').length} passed, ${checks.filter((item) => item.status === 'blocked').length} blocked`)
 
 if (failed.length > 0) {
-  console.error(`Android release gate failed: ${failed.map((item) => item.id).join(', ')}`)
+  console.error(`Android preflight failed: ${failed.map((item) => item.id).join(', ')}`)
   process.exit(1)
 }
 
@@ -191,7 +191,7 @@ function signingInputs() {
       : [
           'ANDROID_KEYSTORE_PATH/TAURI_ANDROID_KEYSTORE_PATH not set',
           'AURORA_ANDROID_SIGNING_CONFIGURED=1 not set',
-          'release gate did not read or print secret material'
+          'preflight did not read or print secret material'
         ]
   }
 }
@@ -236,7 +236,7 @@ function matrixRow(id, label, mode, apiLevel, architecture, expectedState, requi
     expectedState,
     status: 'manual',
     requiredEvidence,
-    actualEvidence: ['release gate generated expected payload; device/emulator run must attach concrete logs'],
+    actualEvidence: ['preflight generated expected payload; device/emulator run must attach concrete logs'],
     notes: 'Use strict mode with a generated Android project and signing inputs for release readiness.'
   }
 }

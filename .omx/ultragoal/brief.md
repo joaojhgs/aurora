@@ -1,28 +1,16 @@
-# PER-160 Audio Session Consent And Event Streaming Plan
+Consolidate Aurora CI/CD, test scripts, and release gates into a durable production-grade shape.
 
-## Requirements Summary
+Target result:
+- Remove or archive issue-specific PER/QA gate/report-generator workflows and scripts that only create .omx report artifacts or stale release checklists.
+- Preserve useful behavior by converting it into normal tests, package scripts, or clear CI jobs.
+- CI should be organized around actual durable lanes: lint/format/generated-config checks, Python unit tests, integration tests, e2e tests, process-mode Redis tests, frontend/SDK checks, Tauri desktop/mobile verification, SDK/backend conformance, Docker build validation, performance/benchmarks, and release packaging where real.
+- Remove stale workflow clutter and misleading names, especially release-packaging operator gates, transport parity gates, PER/QA matrix/preflight report generators, and tests that only assert generated report shape.
+- Keep useful build/developer scripts such as sidecar preparation, backend inventory/conformance, process-mode/docker/Tilt helpers, and real smoke tests.
+- Update docs to describe simple standard local and CI commands.
+- Preserve existing smart Tauri sidecar packaging work and avoid package signing scope.
 
-- Source of truth: Multica PER-160 / MESH-GAP-008.
-- Preserve batch remote candidates: `TTS.Synthesize`, `Transcription.Transcribe`, and `WakeWord.Detect`.
-- Require explicit target selector plus consent token for streaming methods: `Transcription.ProcessAudio`, `WakeWord.ProcessAudio`, and future live mic stream paths.
-- Keep `STTCoordinator.Listen`, `STTCoordinator.Audio`, `STTCoordinator.Control`, and playback controls local-only/internal by default.
-- Expose typed session lifecycle methods and status/events for UI/SDK consumption without raw microphone stream exposure.
-
-## Implementation Steps
-
-1. Add typed audio session contract models and topic constants in `app/shared/contracts/models/stt.py`.
-2. Register `AudioSession.Prepare`, `RequestConsent`, `Start`, `Stop`, `Status`, and `Events` on `GatewayService`, backed by an in-memory session registry suitable for process-local Gateway runtime.
-3. Add consent/session fields to streaming audio payloads, validate selector/session/token/sample format in STT transcription and wakeword streaming handlers, and publish typed `AudioSession.Events` updates for accepted/denied/result events.
-4. Keep batch TTS/transcription/wakeword request behavior unchanged and update capability catalog/graph policy metadata where needed so UI sees session/privacy/TTL requirements.
-5. Add focused unit tests for contract classification, session lifecycle, streaming denial without selector/token, approved event publication, and route/catalog policy visibility.
-
-## Verification
-
-- `uv run pytest tests/unit/gateway/test_routing_table.py tests/unit/gateway/test_capability_graph.py tests/unit/gateway/test_capability_catalog.py -q`
-- `uv run pytest tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py -q`
-- `uv run ruff check app/shared/contracts/models/stt.py app/services/gateway/service.py app/services/stt_transcription/service.py app/services/stt_wakeword/service.py tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py`
-
-## Risks
-
-- Consent tokens in this slice are process-local and intentionally not durable across Gateway restarts.
-- The event stream is a bus-level unified contract; full HTTP SSE/WebSocket transport can build on it without changing STT/TTS service internals.
+Constraints:
+- Do not delete normal unit/integration/e2e/performance tests for real behavior.
+- Do not weaken architecture rules: services communicate by bus, typed contracts remain source of truth, generated config artifacts stay checked.
+- Do not add new dependencies unless strictly necessary.
+- Verify with targeted lint/tests and YAML/package script sanity checks.

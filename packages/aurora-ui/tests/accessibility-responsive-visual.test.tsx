@@ -39,7 +39,7 @@ interface SurfaceRender {
   html: string
 }
 
-const reportsDir = join(process.cwd(), 'reports', 'qa-004')
+const reportsDir = join(process.cwd(), 'reports', 'accessibility')
 const viewports: Viewport[] = [
   { id: 'desktop', width: 1440, height: 1024 },
   { id: 'tablet', width: 900, height: 1180 },
@@ -58,13 +58,13 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
     mobile: '047630b7a59a'
   },
   'mobile-settings': {
-    desktop: 'dc83102bde46',
-    tablet: '71408c6bc32e',
-    mobile: 'ae7a8fcd0ef6'
+    desktop: '451ab9ebcf87',
+    tablet: '25c04aa56752',
+    mobile: '9032cab56dad'
   }
 }
 
-describe('QA-004 accessibility, responsive, and visual regression gate', () => {
+describe('Accessibility, responsive, and visual regression suite', () => {
   it('passes axe accessibility checks for assistant, admin, and mobile settings surfaces', async () => {
     const renders = await renderQaSurfaces()
     const results = []
@@ -84,7 +84,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
     }
 
     writeJsonReport('accessibility.json', {
-      command: 'pnpm --filter @aurora/ui test:qa004',
+      command: 'pnpm --filter @aurora/ui test:accessibility',
       checker: 'axe-core',
       surfaces: results,
       acceptedSkips: [
@@ -127,7 +127,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
     expect(css).toContain(':focus-visible')
 
     writeJsonReport('responsive.json', {
-      command: 'pnpm --filter @aurora/ui test:qa004',
+      command: 'pnpm --filter @aurora/ui test:accessibility',
       viewports,
       surfaces: responsiveReport,
       cssBreakpoints: ['1100px', '860px', '680px'],
@@ -144,7 +144,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
         surface: surface.id,
         viewport: surface.viewport.id,
         fingerprint: actual,
-        artifact: `packages/aurora-ui/reports/qa-004/${surface.id}-${surface.viewport.id}.html`
+        artifact: `packages/aurora-ui/reports/accessibility/${surface.id}-${surface.viewport.id}.html`
       }
     })
 
@@ -158,7 +158,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
     expect(stateCoverage).toContain('secrets redacted')
 
     writeJsonReport('visual-regression.json', {
-      command: 'pnpm --filter @aurora/ui test:qa004',
+      command: 'pnpm --filter @aurora/ui test:accessibility',
       baselineType: 'normalized static markup fingerprint',
       fingerprints,
       stateCoverage: ['loading', 'privacy-blocked', 'denied', 'degraded', 'unsupported', 'native unavailable']
@@ -180,7 +180,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
     expect(text).not.toMatch(/api[_ -]?key|password|token value|credential hash/i)
 
     writeJsonReport('security-privacy-negative-cases.json', {
-      command: 'pnpm --filter @aurora/ui test:qa004',
+      command: 'pnpm --filter @aurora/ui test:accessibility',
       negativeCases: [
         'no secret-like token values rendered in settings/mobile surface',
         'fallback is not presented as success for explicit selector failures',
@@ -188,7 +188,7 @@ describe('QA-004 accessibility, responsive, and visual regression gate', () => {
         'admin-critical settings remain AdminAction-gated'
       ],
       owner: 'aurora-frontend-engineer',
-      qaIssue: 'PER-225'
+      suite: 'accessibility-responsive-visual'
     })
   })
 })
@@ -213,7 +213,7 @@ function renderShell(snapshot: AuroraShellSnapshot, surface: SurfaceId, viewport
   const path = surface === 'assistant' ? '/assistant' : surface === 'admin' ? '/admin' : '/settings'
   const content =
     surface === 'assistant' ? (
-      <AssistantView client={client} route={route(snapshot, 'assistant')} storageKey={`qa-004-${viewport.id}`} />
+      <AssistantView client={client} route={route(snapshot, 'assistant')} storageKey={`accessibility-${viewport.id}`} />
     ) : surface === 'admin' ? (
       <AdminOverviewContent
         manifest={buildAdminOverviewManifest({

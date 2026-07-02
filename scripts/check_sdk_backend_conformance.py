@@ -637,7 +637,6 @@ def build_report(
     report = {
         "ok": not fatal_issues,
         "owner": "aurora-engineer",
-        "issue": "PER-222",
         "inventory": _rel(inventory_path),
         "sdk_fixture": _rel(sdk_fixture_path),
         "sdk_types": _rel(sdk_types_path),

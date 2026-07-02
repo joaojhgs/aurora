@@ -1,34 +1,82 @@
-name: 🐳 Build and Push Docker Images
+name: Docker Images
 
 on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "docker/**"
+      - "docker-compose.process.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docker-build.yml"
   push:
     tags:
       - "v*.*.*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version tag"
+      push_images:
+        description: "Push images to registry"
         required: true
-        default: "latest"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      version:
+        description: "Image version tag for manual pushes"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-images-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  DOCKER_REGISTRY: docker.io
-  DOCKER_NAMESPACE: aurora-ai
+  DOCKER_REGISTRY: ghcr.io
+  DOCKER_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
-  build-and-push:
-    name: 🏗️ Build ${{ matrix.service }}:${{ matrix.variant }}
+  compose-config:
+    name: Validate process-mode Compose config
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.process.yml
+        run: docker compose -f docker-compose.process.yml config --quiet
+
+  docker-build:
+    name: Validate ${{ matrix.service }} (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    needs: compose-config
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Config Service
+          - service: auth
+            variant: latest
+            dockerfile: docker/services/Dockerfile.auth
+            build_args: ""
           - service: config
             variant: latest
             dockerfile: docker/services/Dockerfile.config
             build_args: ""
-          # Orchestrator Service
+          - service: db
+            variant: openai
+            dockerfile: docker/services/Dockerfile.db
+            build_args: DB_EMBEDDINGS_MODE=openai
+          - service: db
+            variant: local-cpu
+            dockerfile: docker/services/Dockerfile.db
+            build_args: DB_EMBEDDINGS_MODE=local
+          - service: gateway
+            variant: latest
+            dockerfile: docker/services/Dockerfile.gateway
+            build_args: ""
           - service: orchestrator
             variant: openai
             dockerfile: docker/services/Dockerfile.orchestrator
@@ -39,88 +87,147 @@ jobs:
             build_args: |
               ORCHESTRATOR_LLM_MODE=llama-cpp
               ORCHESTRATOR_HARDWARE=cpu
-          - service: orchestrator
-            variant: llama-cpp-cuda
-            dockerfile: docker/services/Dockerfile.orchestrator
-            build_args: |
-              ORCHESTRATOR_LLM_MODE=llama-cpp
-              ORCHESTRATOR_HARDWARE=cuda
-          # TTS Service
-          - service: tts
-            variant: cpu
-            dockerfile: docker/services/Dockerfile.tts
-            build_args: TTS_HARDWARE=cpu
-          - service: tts
-            variant: cuda
-            dockerfile: docker/services/Dockerfile.tts
-            build_args: TTS_HARDWARE=cuda
-          # STT Transcription Service
-          - service: stt-transcription
-            variant: cpu
-            dockerfile: docker/services/Dockerfile.transcription
-            build_args: STT_TRANSCRIPTION_HARDWARE=cpu
-          - service: stt-transcription
-            variant: cuda
-            dockerfile: docker/services/Dockerfile.transcription
-            build_args: STT_TRANSCRIPTION_HARDWARE=cuda
-          # STT Wakeword Service
-          - service: stt-wakeword
-            variant: cpu
-            dockerfile: docker/services/Dockerfile.wakeword
-            build_args: STT_WAKEWORD_HARDWARE=cpu
-          - service: stt-wakeword
-            variant: cuda
-            dockerfile: docker/services/Dockerfile.wakeword
-            build_args: STT_WAKEWORD_HARDWARE=cuda
-          # Scheduler Service
           - service: scheduler
             variant: latest
             dockerfile: docker/services/Dockerfile.scheduler
             build_args: ""
-          # Tooling Service
           - service: tooling
             variant: latest
             dockerfile: docker/services/Dockerfile.tooling
             build_args: ""
-          # STT Coordinator Service
+          - service: tts
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.tts
+            build_args: TTS_HARDWARE=cpu
           - service: stt-coordinator
             variant: latest
             dockerfile: docker/services/Dockerfile.stt-coordinator
             build_args: ""
+          - service: stt-transcription
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.transcription
+            build_args: STT_TRANSCRIPTION_HARDWARE=cpu
+          - service: stt-wakeword
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.wakeword
+            build_args: STT_WAKEWORD_HARDWARE=cpu
 
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐳 Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: 🔐 Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Build image without publishing
+        uses: docker/build-push-action@v5
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: aurora-${{ matrix.service }}:${{ matrix.variant }}-ci
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.variant }}
 
-      - name: 📋 Extract version
-        id: version
+  docker-publish:
+    name: Publish ${{ matrix.service }} (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push_images == 'true')
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            variant: latest
+            dockerfile: docker/services/Dockerfile.auth
+            build_args: ""
+          - service: config
+            variant: latest
+            dockerfile: docker/services/Dockerfile.config
+            build_args: ""
+          - service: db
+            variant: openai
+            dockerfile: docker/services/Dockerfile.db
+            build_args: DB_EMBEDDINGS_MODE=openai
+          - service: db
+            variant: local-cpu
+            dockerfile: docker/services/Dockerfile.db
+            build_args: DB_EMBEDDINGS_MODE=local
+          - service: gateway
+            variant: latest
+            dockerfile: docker/services/Dockerfile.gateway
+            build_args: ""
+          - service: orchestrator
+            variant: openai
+            dockerfile: docker/services/Dockerfile.orchestrator
+            build_args: ORCHESTRATOR_LLM_MODE=openai
+          - service: orchestrator
+            variant: llama-cpp-cpu
+            dockerfile: docker/services/Dockerfile.orchestrator
+            build_args: |
+              ORCHESTRATOR_LLM_MODE=llama-cpp
+              ORCHESTRATOR_HARDWARE=cpu
+          - service: scheduler
+            variant: latest
+            dockerfile: docker/services/Dockerfile.scheduler
+            build_args: ""
+          - service: tooling
+            variant: latest
+            dockerfile: docker/services/Dockerfile.tooling
+            build_args: ""
+          - service: tts
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.tts
+            build_args: TTS_HARDWARE=cpu
+          - service: stt-coordinator
+            variant: latest
+            dockerfile: docker/services/Dockerfile.stt-coordinator
+            build_args: ""
+          - service: stt-transcription
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.transcription
+            build_args: STT_TRANSCRIPTION_HARDWARE=cpu
+          - service: stt-wakeword
+            variant: cpu
+            dockerfile: docker/services/Dockerfile.wakeword
+            build_args: STT_WAKEWORD_HARDWARE=cpu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Decide version
+        id: meta
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
-            # Extract from tag (e.g., v1.0.0 -> 1.0.0)
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 🏗️ Build and push Docker image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-${{ steps.version.outputs.version }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-latest
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-${{ steps.meta.outputs.version }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/aurora-${{ matrix.service }}:${{ matrix.variant }}
           build-args: ${{ matrix.build_args }}
-          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/aurora-${{ matrix.service }}:${{ matrix.variant }}-latest
-          cache-to: type=inline
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.variant }}

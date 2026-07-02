@@ -1,7 +1,15 @@
 {
   "app": {
     "security": {
-      "capabilities": ["aurora-main", "aurora-desktop-updater"]
+      "capabilities": [
+        "aurora-main",
+        "aurora-desktop-updater"
+      ]
     }
+  },
+  "bundle": {
+    "targets": [
+      "dmg"
+    ]
   }
 }

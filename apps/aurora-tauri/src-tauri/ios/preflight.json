@@ -73,7 +73,7 @@
       "id": "macos-xcode-tauri-build",
       "label": "macOS Xcode Tauri build",
       "status": "requires-macos",
-      "requiredEvidence": "pnpm --filter @aurora/tauri-ui ios:gate on macOS with Xcode command line tools"
+      "requiredEvidence": "pnpm --filter @aurora/tauri-ui ios:preflight on macOS with Xcode command line tools"
     },
     {
       "id": "simulator-plugin-app-intent",

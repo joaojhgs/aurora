@@ -4004,7 +4004,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       label: 'App Intents',
       status: 'supported',
       detail: 'Concrete Aurora prompt, open, and status actions bridge to the SDK/backend from app-owned surfaces.',
-      evidence: ['IOS-003', 'aurora-ios-release-gate'],
+      evidence: ['IOS-003', 'aurora-ios-preflight'],
       privacyClass: 'personal',
       actions: [
         {
@@ -4047,7 +4047,7 @@ export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
       status: 'requires-macos',
       requiredEvidence: 'tauri ios build on macOS with Xcode command line tools',
       detail: 'Linux cannot satisfy this gate; macOS CI or an external runner must produce the build log.',
-      command: 'pnpm --filter @aurora/tauri-ui ios:gate'
+      command: 'pnpm --filter @aurora/tauri-ui ios:preflight'
     },
     {
       id: 'simulator-plugin-app-intent',

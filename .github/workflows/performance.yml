@@ -1,0 +1,62 @@
+name: Performance and Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
+
+jobs:
+  python-performance:
+    name: Python performance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install performance dependencies
+        run: uv sync --extra dev --extra test-performance
+
+      - name: Run performance tests
+        run: uv run pytest tests/performance -v
+
+      - name: Upload performance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-performance-results
+          path: |
+            tests/performance/results/
+            tests/performance/reports/
+          if-no-files-found: ignore
+
+  sdk-resilience:
+    name: SDK performance, offline, and resilience tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run SDK resilience benchmark-style checks
+        run: pnpm --filter @aurora/client test:resilience

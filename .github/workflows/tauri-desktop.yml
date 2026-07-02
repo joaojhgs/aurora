@@ -34,7 +34,17 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             webkit2gtk-driver \
+            portaudio19-dev \
+            python3-dev \
             xvfb
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -62,12 +72,22 @@ jobs:
       - name: Test Tauri frontend runtime wrapper
         run: pnpm --filter @aurora/tauri-ui test
 
-      - name: Record Android release gate matrix
-        run: pnpm --filter @aurora/tauri-ui android:release-gate
+      - name: Prepare bundled desktop sidecar automatically
+        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
+
+      - name: Upload sidecar prepare report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-prepare-report-thin
+          path: apps/aurora-tauri/reports/sidecar-prepare.json
+          if-no-files-found: error
 
       - name: Check Tauri Rust package
         run: cargo check
         working-directory: apps/aurora-tauri/src-tauri
+
+      - name: Build lean Linux Tauri bundle
+        run: pnpm --filter @aurora/tauri-ui build:bundle:thin
 
       - name: Smoke launch Tauri shell
         run: |
@@ -90,3 +110,62 @@ jobs:
           name: tauri-eventstream-smoke-report
           path: apps/aurora-tauri/reports/eventstream-smoke.json
           if-no-files-found: warn
+
+  sidecar-profile-matrix:
+    name: Sidecar profile staging (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - thin
+          - local-cpu
+          - local-cuda
+          - local-rocm
+          - local-metal
+          - local-vulkan
+          - local-sycl
+          - local-rpc
+          - full
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create fake profile sidecar executable
+        run: |
+          mkdir -p /tmp/aurora-sidecar-${{ matrix.profile }}
+          printf '#!/bin/sh\necho aurora sidecar profile %s\n' '${{ matrix.profile }}' > /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
+          chmod +x /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
+
+      - name: Stage sidecar profile
+        env:
+          AURORA_TAURI_SIDECAR_BUILD_OUTPUT: /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
+        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:${{ matrix.profile }}
+
+      - name: Verify sidecar profile report
+        run: |
+          jq -e '.sidecarProfile == "${{ matrix.profile }}"' apps/aurora-tauri/reports/sidecar-prepare.json
+          jq -e '.sourceKind == "existing-build-output"' apps/aurora-tauri/reports/sidecar-prepare.json
+          jq -e '.secretsRedacted == true' apps/aurora-tauri/reports/sidecar-prepare.json
+
+      - name: Upload sidecar profile report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-prepare-report-${{ matrix.profile }}
+          path: apps/aurora-tauri/reports/sidecar-prepare.json
+          if-no-files-found: error

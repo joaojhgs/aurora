@@ -28,7 +28,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment node",
-    "test:qa005": "vitest run --environment node tests/qa-005-performance-offline-resilience.test.ts"
+    "test:resilience": "vitest run --environment node tests/performance-offline-resilience.test.ts"
   },
   "devDependencies": {
     "typescript": "5.7.3",

@@ -1,0 +1,72 @@
+name: Frontend and SDK
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/aurora-web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/frontend-sdk.yml"
+  pull_request:
+    paths:
+      - "apps/aurora-web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/frontend-sdk.yml"
+  workflow_dispatch:
+
+jobs:
+  frontend-sdk:
+    name: SDK, shared UI, and web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test, typecheck, and build SDK
+        run: |
+          pnpm --filter @aurora/client test
+          pnpm --filter @aurora/client test:resilience
+          pnpm --filter @aurora/client typecheck
+          pnpm --filter @aurora/client build
+
+      - name: Test, typecheck, and build shared UI
+        run: |
+          pnpm --filter @aurora/ui test
+          pnpm --filter @aurora/ui test:accessibility
+          pnpm --filter @aurora/ui typecheck
+          pnpm --filter @aurora/ui build
+
+      - name: Test, typecheck, and build web app
+        run: |
+          pnpm --filter @aurora/web test
+          pnpm --filter @aurora/web typecheck
+          pnpm --filter @aurora/web build
+
+      - name: Upload UI and SDK test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sdk-reports
+          path: |
+            packages/aurora-ui/reports/
+            apps/aurora-tauri/reports/
+          if-no-files-found: ignore

@@ -22,7 +22,7 @@ import {
 
 const LARGE_LIST_BUDGET_MS = 100
 
-describe('QA-005 performance, offline, and resilience gate', () => {
+describe('Performance, offline, and resilience suite', () => {
   it('reconnects assistant event streams from the last backend-proven event id without duplicate replay', async () => {
     const subscribeLastEventIds: Array<string | null | undefined> = []
     let streamAttempt = 0
@@ -93,7 +93,7 @@ describe('QA-005 performance, offline, and resilience gate', () => {
             gatewayUrl: null,
             version: null,
             lastError: 'gateway offline',
-            details: { artifact: 'apps/aurora-tauri/reports/qa-005-sidecar-smoke.log' }
+            details: { artifact: 'apps/aurora-tauri/reports/sidecar-smoke.log' }
           }
         }
         throw new TypeError(`offline ${command}`)
@@ -103,7 +103,7 @@ describe('QA-005 performance, offline, and resilience gate', () => {
     await expect(tauriTransport.getSidecarStatus()).resolves.toMatchObject({
       running: false,
       lastError: 'gateway offline',
-      details: { artifact: 'apps/aurora-tauri/reports/qa-005-sidecar-smoke.log' }
+      details: { artifact: 'apps/aurora-tauri/reports/sidecar-smoke.log' }
     })
     await expect(tauriTransport.startSidecar()).rejects.toMatchObject({ code: 'native_permission_missing' })
   })
@@ -200,7 +200,7 @@ describe('QA-005 performance, offline, and resilience gate', () => {
     }
   })
 
-  it('keeps large capability and tool lists within the QA-005 budget without dropping policy fields', () => {
+  it('keeps large capability and tool lists within the Performance budget without dropping policy fields', () => {
     const catalog = largeCapabilityCatalog(1_200)
     const tools = largeToolCatalog(1_200)
 
@@ -249,7 +249,7 @@ function assistantEvent(id: string, kind: string, text: string): Record<string, 
     topic: 'Orchestrator.Response',
     payload: {
       text_delta: text,
-      session_id: 'qa-005-session',
+      session_id: 'resilience-session',
       correlation_id: `corr-${id}`,
       secrets_redacted: true
     }
