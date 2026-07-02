@@ -150,6 +150,8 @@ struct LogTailResult {
     truncated: bool,
     reason: Option<String>,
     max_lines: usize,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -499,12 +501,13 @@ impl Serialize for AuroraCommandError {
     {
         let mut state = serializer.serialize_struct("AuroraCommandError", 3)?;
         state.serialize_field("code", self.code())?;
-        state.serialize_field("message", &self.to_string())?;
+        let message = redact_sensitive_text(&self.to_string());
+        state.serialize_field("message", &message)?;
         state.serialize_field(
             "detail",
             &json!({
                 "code": self.code(),
-                "message": self.to_string(),
+                "message": message,
                 "secrets_redacted": true,
             }),
         )?;
@@ -570,7 +573,8 @@ async fn aurora_command(
         Ok(envelope(request.method, data))
     } else {
         Err(AuroraCommandError::Gateway(format!(
-            "HTTP {status}: {data}"
+            "HTTP {status}: {}",
+            serialize_redacted_value(&data)
         )))
     }
 }
@@ -1207,15 +1211,14 @@ async fn aurora_ios_invoke_action(
 fn log_android_baseline_status(status: &AndroidBaselineStatus) {
     println!(
         "aurora_android_baseline_status={}",
-        serde_json::to_string(&status).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+        serialize_redacted_json(status)
     );
 }
 
 fn log_android_native_plugin_payload(payload: &Value) {
     const CHUNK_BYTES: usize = 900;
 
-    let serialized =
-        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string());
+    let serialized = serialize_redacted_value(payload);
     let chunks = chunk_string_for_logcat(&serialized, CHUNK_BYTES);
     println!(
         "aurora_android_native_plugin_payload_begin chunks={} bytes={}",
@@ -1240,8 +1243,133 @@ fn log_ios_native_plugin_payload(command: &str, payload: &Value) {
     println!(
         "aurora_ios_native_plugin_command command={} payload={}",
         command,
-        serde_json::to_string(payload).unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+        serialize_redacted_value(payload)
     );
+}
+
+fn serialize_redacted_json<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(value) => serialize_redacted_value(&value),
+        Err(_) => "{\"secretsRedacted\":true}".to_string(),
+    }
+}
+
+fn serialize_redacted_value(value: &Value) -> String {
+    serde_json::to_string(&redact_sensitive_value(value))
+        .unwrap_or_else(|_| "{\"secretsRedacted\":true}".to_string())
+}
+
+fn redact_sensitive_value(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| {
+                    let redacted = if is_sensitive_log_key(key) {
+                        json!("[redacted]")
+                    } else {
+                        redact_sensitive_value(value)
+                    };
+                    (key.clone(), redacted)
+                })
+                .collect(),
+        ),
+        Value::Array(values) => Value::Array(values.iter().map(redact_sensitive_value).collect()),
+        Value::String(value) => Value::String(redact_sensitive_text(value)),
+        _ => value.clone(),
+    }
+}
+
+fn redact_sensitive_text(input: &str) -> String {
+    let mut redacted = input.to_string();
+    for marker in [
+        "authorization:",
+        "authorization=",
+        "bearer ",
+        "x-aurora-sidecar-token:",
+        "x-aurora-sidecar-token=",
+        "token:",
+        "token=",
+        "secret:",
+        "secret=",
+        "password:",
+        "password=",
+        "api_key:",
+        "api_key=",
+        "apikey:",
+        "apikey=",
+        "private_key:",
+        "private_key=",
+        "raw_audio:",
+        "raw_audio=",
+        "rawaudio:",
+        "rawaudio=",
+        "audio_bytes:",
+        "audio_bytes=",
+        "audio_data:",
+        "audio_data=",
+        "pcm16:",
+        "pcm16=",
+    ] {
+        redacted = redact_after_marker(&redacted, marker);
+    }
+    redacted
+}
+
+fn redact_after_marker(input: &str, marker: &str) -> String {
+    let lower = input.to_ascii_lowercase();
+    let mut output = String::with_capacity(input.len());
+    let mut cursor = 0;
+
+    while let Some(relative_start) = lower[cursor..].find(marker) {
+        let start = cursor + relative_start;
+        let value_start = start + marker.len();
+        output.push_str(&input[cursor..value_start]);
+        output.push_str("[redacted]");
+
+        let mut value_end = value_start;
+        for (offset, character) in input[value_start..].char_indices() {
+            if matches!(
+                character,
+                ' ' | '\t' | '\n' | '\r' | ',' | ';' | '&' | '"' | '\'' | '}' | ']'
+            ) {
+                break;
+            }
+            value_end = value_start + offset + character.len_utf8();
+        }
+        cursor = value_end;
+    }
+
+    output.push_str(&input[cursor..]);
+    output
+}
+
+fn is_sensitive_log_key(key: &str) -> bool {
+    let normalized = key
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    [
+        "authorization",
+        "bearer",
+        "token",
+        "secret",
+        "password",
+        "apikey",
+        "privatekey",
+        "signingkey",
+        "credential",
+        "refresh",
+        "rawaudio",
+        "audiobytes",
+        "audiodata",
+        "audiosamples",
+        "samplebuffer",
+        "pcm16",
+        "wavbytes",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
 }
 
 fn chunk_string_for_logcat(value: &str, max_bytes: usize) -> Vec<&str> {
@@ -1354,6 +1482,8 @@ async fn aurora_log_tail(
                 .to_string(),
         ),
         max_lines,
+        secrets_redacted: true,
+        redacted_fields: sensitive_log_redacted_fields(),
     })
 }
 
