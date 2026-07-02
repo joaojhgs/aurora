@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:26:08.026Z",
+  "updatedAt": "2026-07-02T13:30:30.042Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1462,10 +1462,12 @@
       "id": "G126-no-stale-sample-peers-are-presented",
       "title": "No stale sample peers are presented as live truth.",
       "objective": "No stale sample peers are presented as live truth.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:30:30.042Z",
+      "completedAt": "2026-07-02T13:30:30.042Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'mesh peer lifecycle|fixture'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G127-empty-mesh-state-clearly-explains-ho",

@@ -2789,7 +2789,12 @@ describe('Aurora production shell', () => {
       />
     )
 
+    expect(snapshot.fixtureOnly).toBe(true)
+    expect(snapshot.evidenceSource).toContain('sample peers are not live truth')
     expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Demo fixture peer data')
+    expect(markup).toContain('sample peers are not live truth')
+    expect(markup).toContain('SDK fixture, not live truth')
     expect(markup).toContain('Topology')
     expect(markup).toContain('Trust queue')
     expect(markup).toContain('Pair new peer')

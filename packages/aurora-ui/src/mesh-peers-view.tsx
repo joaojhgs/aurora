@@ -130,6 +130,8 @@ export interface MeshPeersSnapshot {
   warnings: string[]
   error: string | null
   evidenceSource: string
+  transportKind: string
+  fixtureOnly: boolean
 }
 
 export interface MeshPeersResourceProps {
@@ -184,7 +186,9 @@ const loadingSnapshot: MeshPeersSnapshot = {
   mutationReason: 'Loading Auth mesh peer manage capabilities before enabling AdminAction controls.',
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending AuroraClient SDK calls',
+  transportKind: 'pending',
+  fixtureOnly: false
 }
 
 export function MeshPeersResource({ client, route }: MeshPeersResourceProps) {
@@ -311,7 +315,9 @@ export async function buildMeshPeersSnapshot(
         : message,
       warnings: failures,
       error: message,
-      evidenceSource: route.disabled ? route.providerLabel : 'AuroraClient SDK error'
+      evidenceSource: route.disabled ? route.providerLabel : 'AuroraClient SDK error',
+      transportKind: client.transport.kind,
+      fixtureOnly: client.transport.kind === 'mock'
     }
   }
 
@@ -363,7 +369,11 @@ export async function buildMeshPeersSnapshot(
     mutationReason: capabilityReason(mutationCapability, 'Auth mesh peer mutations require AdminAction draft, confirm, and audit.'),
     warnings: failures,
     error: denied ? 'Mesh peer lifecycle access was denied by Auth or Gateway.' : null,
-    evidenceSource: 'AuroraClient mesh/auth/gateway/device/capability responses'
+    evidenceSource: client.transport.kind === 'mock'
+      ? 'SDK mock transport fixture; sample peers are not live truth'
+      : 'AuroraClient mesh/auth/gateway/device/capability responses',
+    transportKind: client.transport.kind,
+    fixtureOnly: client.transport.kind === 'mock'
   }
 }
 
@@ -393,6 +403,9 @@ export function MeshPeersView({
           <p className="aui-kicker">Mesh trust</p>
           <h1 id="mesh-peers-title">Mesh peers</h1>
           <p>Active WebRTC sessions, persisted Auth peer records, and device records are rendered as separate backend-proven surfaces.</p>
+          {snapshot.fixtureOnly ? (
+            <p className="aui-message">Demo fixture peer data: sample peers are not live truth and must not be used as runtime mesh evidence.</p>
+          ) : null}
         </div>
         <div className="aui-mesh-badges" aria-label="Mesh evidence">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.listState} />
@@ -414,6 +427,7 @@ export function MeshPeersView({
         peers={snapshot.peers}
         mutationDisabled={mutationDisabled}
         pendingPeerId={pendingPeerId}
+        fixtureOnly={snapshot.fixtureOnly}
         onApprovePeer={onApprovePeer}
         onDenyPeer={onDenyPeer}
       />
@@ -461,8 +475,8 @@ export function MeshPeersView({
       {snapshot.loadState === 'loading' ? <p className="aui-message" aria-live="polite">Loading mesh peers from AuroraClient.</p> : null}
       {snapshot.loadState === 'empty' ? <p className="aui-message">No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.</p> : null}
 
-      <MeshLiveSessionsPanel sessions={snapshot.liveSessions} />
-      <MeshDevicesPanel devices={snapshot.devices} />
+      <MeshLiveSessionsPanel sessions={snapshot.liveSessions} fixtureOnly={snapshot.fixtureOnly} />
+      <MeshDevicesPanel devices={snapshot.devices} fixtureOnly={snapshot.fixtureOnly} />
 
       <section className="aui-mesh-list" aria-label="Persisted mesh peer lifecycle">
         {snapshot.peers.map((peer) => {
@@ -489,7 +503,7 @@ export function MeshPeersView({
                 <MeshFact label="Latency" value={peer.latencyMs === null ? 'not reported' : `${peer.latencyMs} ms`} />
                 <MeshFact label="Compatibility" value={peer.compatibility} />
                 <MeshFact label="Last seen" value={formatDate(peer.lastSeen)} />
-                <MeshFact label="Evidence" value={peer.lastEvidenceSource} />
+                <MeshFact label="Evidence" value={snapshot.fixtureOnly ? fixtureEvidence(peer.lastEvidenceSource) : peer.lastEvidenceSource} />
               </dl>
               <div className="aui-mesh-scopes" aria-label={`${peer.nodeName} permission scopes`}>
                 <div>
@@ -588,12 +602,14 @@ function MeshTrustQueuePanel({
   peers,
   mutationDisabled,
   pendingPeerId,
+  fixtureOnly,
   onApprovePeer,
   onDenyPeer
 }: {
   peers: MeshPeerRow[]
   mutationDisabled: boolean
   pendingPeerId: string | null
+  fixtureOnly: boolean
   onApprovePeer: ((peer: MeshPeerRow) => void) | undefined
   onDenyPeer: ((peer: MeshPeerRow) => void) | undefined
 }) {
@@ -626,7 +642,7 @@ function MeshTrustQueuePanel({
                   <MeshFact label="Requested scopes" value={peer.permissions.join(', ') || 'none requested'} />
                   <MeshFact label="Pairing" value={peer.pendingPairing?.status ?? 'pending peer record'} />
                   <MeshFact label="Code/QR/deep link" value={peer.pendingPairing?.code ? 'pairing secret is present and redacted; open Admin pairing queue for code, QR, or deep-link handoff' : 'not reported by Auth pairing queue'} />
-                  <MeshFact label="Evidence" value={peer.lastEvidenceSource} />
+                  <MeshFact label="Evidence" value={fixtureOnly ? fixtureEvidence(peer.lastEvidenceSource) : peer.lastEvidenceSource} />
                 </dl>
                 <div className="aui-mesh-actions">
                   <button type="button" disabled={mutationDisabled || !peer.approveAction || pending} onClick={() => onApprovePeer?.(peer)}>
@@ -770,7 +786,7 @@ function MeshCleanupPanel({ peers }: { peers: MeshPeerRow[] }) {
   )
 }
 
-function MeshLiveSessionsPanel({ sessions }: { sessions: MeshLiveSessionRow[] }) {
+function MeshLiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessionRow[]; fixtureOnly: boolean }) {
   return (
     <section className="aui-mesh-panel" aria-labelledby="mesh-live-sessions-title">
       <div className="aui-mesh-panel-title">
@@ -800,7 +816,7 @@ function MeshLiveSessionsPanel({ sessions }: { sessions: MeshLiveSessionRow[] })
                 <MeshFact label="Linked peer" value={session.linkedPeerState} />
                 <MeshFact label="Permissions" value={session.permissions} />
                 <MeshFact label="Identity source" value={session.identitySource} />
-                <MeshFact label="Evidence" value={session.evidenceSource} />
+                <MeshFact label="Evidence" value={fixtureOnly ? fixtureEvidence(session.evidenceSource) : session.evidenceSource} />
               </dl>
             </article>
           ))}
@@ -810,7 +826,7 @@ function MeshLiveSessionsPanel({ sessions }: { sessions: MeshLiveSessionRow[] })
   )
 }
 
-function MeshDevicesPanel({ devices }: { devices: MeshDeviceRow[] }) {
+function MeshDevicesPanel({ devices, fixtureOnly }: { devices: MeshDeviceRow[]; fixtureOnly: boolean }) {
   return (
     <section className="aui-mesh-panel" aria-labelledby="mesh-devices-title">
       <div className="aui-mesh-panel-title">
@@ -837,7 +853,7 @@ function MeshDevicesPanel({ devices }: { devices: MeshDeviceRow[] }) {
                 <MeshFact label="Linked peer" value={device.linkedPeerLabel} />
                 <MeshFact label="Stable peer ID" value={device.linkedPeerId ?? 'not linked by backend evidence'} />
                 <MeshFact label="Last seen" value={formatDate(device.lastSeen)} />
-                <MeshFact label="Evidence" value={device.evidenceSource} />
+                <MeshFact label="Evidence" value={fixtureOnly ? fixtureEvidence(device.evidenceSource) : device.evidenceSource} />
               </dl>
             </article>
           ))}
@@ -1109,6 +1125,10 @@ function MeshFact({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   )
+}
+
+function fixtureEvidence(value: string): string {
+  return `${value} (SDK fixture, not live truth)`
 }
 
 function responseDataOrNull<T>(result: PromiseSettledResult<{ ok: boolean; data?: T }>): T | null {
