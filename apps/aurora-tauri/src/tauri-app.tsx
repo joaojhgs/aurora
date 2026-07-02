@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import {
   AdminAuditResource,
   AdminDevicesResource,
@@ -95,7 +95,7 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   ),
   onboarding: ({ snapshot, client }) => <OnboardingView client={client} snapshot={snapshot} />,
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
-  data: ({ route, client }) => <MemoryView client={client} route={route} />,
+  data: ({ route, client }) => <RoutePolicyResource client={client} route={route} />,
   native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
 }
 
