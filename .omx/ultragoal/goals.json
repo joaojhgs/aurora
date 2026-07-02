@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:13:07.621Z",
+  "updatedAt": "2026-07-02T08:14:01.655Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -419,10 +419,13 @@
       "id": "G035-admin-pages-were-omitted-from-tauri",
       "title": "admin pages were omitted from Tauri mounting;",
       "objective": "admin pages were omitted from Tauri mounting;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:14:01.655Z",
+      "startedAt": "2026-07-02T08:13:20.705Z",
+      "completedAt": "2026-07-02T08:14:01.655Z",
+      "evidence": "Known failure closed: apps/aurora-tauri/src/tauri-app.tsx mounts all 12 admin route ids to concrete admin components/resources (admin, services, access, tokens, devices, config, contracts, plugins, pairing, backups, scheduler, audit). Verified source inventory plus pnpm --filter @aurora/tauri-ui test -- -t 'registers a production Tauri component|e2e:admin|renders every primary route'; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G036-mock-driven-ux-details-were-replaced",
