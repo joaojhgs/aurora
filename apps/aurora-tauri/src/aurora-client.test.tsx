@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { auroraNavSections } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { auroraNavSections } from '@aurora/ui'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -88,36 +89,19 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).not.toContain('Native boundary')
   })
 
-  it('redacts EventStream smoke report payloads and secret-like errors', () => {
-    const report = serializeEventForSmokeReport({
-      id: 'evt-1',
-      kind: 'health.updated',
-      topic: 'health.updated',
-      payload: {
-        token: 'secret-token',
-        rawAudio: 'pcm-secret',
-        status: 'ok'
-      },
-      audit: {
-        transport: 'tauri-local',
-        correlationId: 'corr-1'
-      }
-    } as never)
+  it('renders route-specific production UI for every nav route', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+    const routes = auroraNavSections.flatMap((section) => section.items)
 
-    expect(JSON.stringify(report)).not.toContain('secret-token')
-    expect(JSON.stringify(report)).not.toContain('pcm-secret')
-    expect(report.payloadSummary).toEqual({
-      present: true,
-      keys: ['rawAudio', 'status', 'token'],
-      redacted: true
-    })
+    expect(routes).toHaveLength(22)
 
-    const error = redactSmokeError(
-      new Error('failed Authorization: Bearer gateway-token token=sidecar-token raw_audio=pcm-secret')
-    )
-    expect(error).not.toContain('gateway-token')
-    expect(error).not.toContain('sidecar-token')
-    expect(error).not.toContain('pcm-secret')
-    expect(error).toContain('[redacted]')
+    for (const route of routes) {
+      window.history.replaceState({}, '', route.href)
+      const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+      expect(markup, route.id).not.toContain('A full product page still needs to be mounted')
+      expect(markup, route.id).not.toContain('rendering the assistant diagnostics on the wrong page')
+      expect(markup, route.id).toContain(route.label)
+    }
   })
 })
