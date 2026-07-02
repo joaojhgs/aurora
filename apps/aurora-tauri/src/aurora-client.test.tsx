@@ -743,6 +743,32 @@ describe('Tauri CI/E2E route gates', () => {
   })
 
 
+  it('e2e:routes renders data policy retention and audit evidence instead of the memory search page', async () => {
+    const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
+    window.history.replaceState({}, '', '/memory/policy')
+    const dataPolicy = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(dataPolicy.container.querySelector('#data-policy-title')).not.toBeNull()
+        expect(dataPolicy.container.textContent).toContain('Data policy and retention')
+        expect(dataPolicy.container.textContent).toContain('Retention defaults')
+        expect(dataPolicy.container.textContent).toContain('Namespace visibility')
+        expect(dataPolicy.container.textContent).toContain('Raw audio storage')
+        expect(dataPolicy.container.textContent).toContain('Transcript storage')
+        expect(dataPolicy.container.textContent).toContain('Remote/mesh fallback')
+        expect(dataPolicy.container.textContent).toContain('Export, delete, and import data flows')
+        expect(dataPolicy.container.textContent).toContain('Audit trail for policy changes')
+        expect(dataPolicy.container.textContent).toContain('Policy edits require AdminAction draft/confirm/audit through Config.Set')
+      })
+      expect(dataPolicy.container.querySelector('#memory-query')).toBeNull()
+      writeOutcomeArtifact('data-policy-route-retention-audit', dataPolicy.container.innerHTML)
+    } finally {
+      await act(async () => dataPolicy.root.unmount())
+      dataPolicy.container.remove()
+    }
+  })
+
+
   it('e2e:assistant sends a text prompt to local Gateway and renders response or precise backend error', async () => {
     const successTransport = assistantGatewayTransport()
     const successRuntime: AuroraTauriRuntime = {

@@ -113,6 +113,8 @@ import {
   buildShellSnapshot,
   buildModelsViewModel,
   buildConfigEditorModel,
+  buildDataPolicySnapshot,
+  DataPolicyView,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
   productionSurfaceContracts,
@@ -3059,6 +3061,28 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Config.Set')
     expect(markup).toContain('AdminAction')
     expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('renders data policy retention, namespace visibility, storage toggles, data flows, and audit evidence', async () => {
+    const shell = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildDataPolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route(shell, 'data'))
+    const markup = renderToStaticMarkup(<DataPolicyView snapshot={snapshot} />)
+
+    expect(markup).toContain('Data policy and retention')
+    expect(markup).toContain('Retention defaults')
+    expect(markup).toContain('Namespace visibility')
+    expect(markup).toContain('Raw audio storage')
+    expect(markup).toContain('Transcript storage')
+    expect(markup).toContain('Remote/mesh fallback')
+    expect(markup).toContain('Export, delete, and import data flows')
+    expect(markup).toContain('Audit trail for policy changes')
+    expect(markup).toContain('DB.RAGListNamespaces')
+    expect(markup).toContain('main.rag')
+    expect(markup).toContain('peer-denied.secret')
+    expect(markup).toContain('remote namespace denied by policy')
+    expect(markup).toContain('Auth.StoreAuditEvent')
+    expect(markup).toContain('Policy edits require AdminAction draft/confirm/audit through Config.Set')
+    expect(markup).not.toMatch(/raw[-_ ]audio payload/i)
   })
 
   it('keeps route policy SDK failures visible and disabled', async () => {

@@ -14,6 +14,7 @@ import {
   BackupRestoreView,
   ConfigEditorView,
   MemoryView,
+  DataPolicyResource,
   MeshDiagnosticsResource,
   MeshPeersResource,
   ModelsView,
@@ -138,7 +139,7 @@ export const tauriRouteRegistry = {
   ),
   onboarding: ({ snapshot, client }) => <OnboardingView client={client} snapshot={snapshot} />,
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
-  data: ({ route, client }) => <MemoryView client={client} route={route} />,
+  data: ({ route, client }) => <DataPolicyResource client={client} route={route} />,
   native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
 } satisfies Record<TauriRouteId, TauriRouteRenderer>
 

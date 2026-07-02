@@ -293,11 +293,11 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['memory', 'data'],
     routeOracles: [
       routeOracle('memory', ['History and RAG provenance'], ['Namespace search']),
-      routeOracle('data', ['History and RAG provenance'], ['Data controls'])
+      routeOracle('data', ['Data policy and retention'], ['Audit trail for policy changes'])
     ],
     mockReferenceFiles: ['app/(cockpit)/memory/page.tsx'],
-    mockUxAnchors: ['History and RAG provenance', 'Memory & RAG collections', 'Search results', 'Data controls'],
-    componentFiles: ['memory-view.tsx'],
+    mockUxAnchors: ['History and RAG provenance', 'Memory & RAG collections', 'Search results', 'Data controls', 'Data policy and retention', 'Audit trail for policy changes'],
+    componentFiles: ['memory-view.tsx', 'data-policy-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
       source('sdk-method', 'RAG namespace/search/provenance surfaces', ['DB.RAGListNamespaces', 'DB.RAGSearchRemote', 'DB.RAGGetProvenance']),

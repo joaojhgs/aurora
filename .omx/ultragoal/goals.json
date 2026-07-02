@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:22:15.665Z",
+  "updatedAt": "2026-07-02T12:29:05.506Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1297,10 +1297,12 @@
       "id": "G111-memory-policy",
       "title": "`/memory/policy`:",
       "objective": "`/memory/policy`:\nretention defaults;\nnamespace visibility;\nraw audio/transcript storage toggles;\nremote/mesh fallback rules;\nexport/delete/import data flows;\naudit trail for data policy changes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:29:05.506Z",
+      "completedAt": "2026-07-02T12:29:05.506Z",
+      "evidence": "G111 /memory/policy completed: mounted a dedicated DataPolicyResource for the Data Policy route instead of the generic MemoryView; DataPolicyView renders retention defaults, namespace visibility, raw audio/transcript storage policy states, remote/mesh fallback rules, export/delete/import data flows, and audit trail evidence from AuroraClient DB.RAGListNamespaces, DB.GetMessages, Gateway.GetCapabilityCatalog, and route policy dry-runs. Production surface oracles now require data-policy landmarks and Tauri E2E asserts /memory/policy has #data-policy-title and no #memory-query. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'data policy|memory namespaces|route policy editor|production surface'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/client test -- -t 'memory|RAG|route policy|Gateway.ExplainRoute|DB.RAG'; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G112-backend-sdk",
