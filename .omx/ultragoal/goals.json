@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:11:35.050Z",
+  "updatedAt": "2026-07-02T13:17:18.403Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1429,10 +1429,12 @@
       "id": "G123-page-structure",
       "title": "Page structure:",
       "objective": "Page structure:\ntopology summary cards;\nlocal node identity/status;\ntrust queue/pending pairings;\npair new peer flow with code/QR/deep link when available;\nroute preview for selected peer/capability;\npeer table with status, quality, permissions, last seen, actions;\nWebRTC diagnostics panel;\nstale/dev peer cleanup messaging.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:17:18.403Z",
+      "completedAt": "2026-07-02T13:17:18.403Z",
+      "evidence": "G123 Mesh page structure completed. Mesh peers page now explicitly renders topology summary/local node identity, trust queue/pending pairings, redacted code/QR/deep-link pairing handoff, route preview, peer lifecycle cards/table with status/quality/permissions/last seen/AdminAction actions, WebRTC live sessions/device diagnostics, and stale/dev cleanup messaging. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'mesh peer lifecycle|WebRTC ICE diagnostics|mesh peer AdminAction'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test; git diff --check. Playwright test-results removed."
     },
     {
       "id": "G124-actions",

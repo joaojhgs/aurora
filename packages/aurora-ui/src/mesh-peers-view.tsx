@@ -419,6 +419,7 @@ export function MeshPeersView({
       />
       <MeshPairingEntrypoint route={route} />
       <MeshRoutePreviewPanel route={route} snapshot={snapshot} />
+      <MeshCleanupPanel peers={snapshot.peers} />
 
       <section className="aui-mesh-controls" aria-label="Mesh peer controls">
         <label>
@@ -624,6 +625,7 @@ function MeshTrustQueuePanel({
                   <MeshFact label="Peer" value={peer.peerId} />
                   <MeshFact label="Requested scopes" value={peer.permissions.join(', ') || 'none requested'} />
                   <MeshFact label="Pairing" value={peer.pendingPairing?.status ?? 'pending peer record'} />
+                  <MeshFact label="Code/QR/deep link" value={peer.pendingPairing?.code ? 'pairing secret is present and redacted; open Admin pairing queue for code, QR, or deep-link handoff' : 'not reported by Auth pairing queue'} />
                   <MeshFact label="Evidence" value={peer.lastEvidenceSource} />
                 </dl>
                 <div className="aui-mesh-actions">
@@ -650,6 +652,7 @@ function MeshPairingEntrypoint({ route }: { route: RouteAvailability }) {
         <p className="aui-kicker">pairing handoff</p>
         <h2 id="mesh-pair-new-peer-title">Pair new peer</h2>
         <p>New peer codes, QR/deep links, and approvals live on the Admin pairing route so secrets and AdminAction receipts stay centralized.</p>
+        <p>When backend pairing evidence includes a code, QR token, or deep link, this mesh page shows only redacted availability and links to the controlled Admin pairing flow.</p>
       </div>
       <a className="aui-button" href="/admin/pairing" aria-disabled={route.disabled}>
         <RadioTower size={16} aria-hidden="true" /> Open pairing queue
@@ -703,6 +706,45 @@ function MeshRoutePreviewPanel({ route, snapshot }: { route: RouteAvailability; 
           </article>
         )}
       </div>
+    </section>
+  )
+}
+
+function MeshCleanupPanel({ peers }: { peers: MeshPeerRow[] }) {
+  const candidates = peers.filter((peer) => cleanupReason(peer))
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-cleanup-title">
+      <div className="aui-mesh-panel-title">
+        <span><Trash2 size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-cleanup-title">Stale/dev peer cleanup</h2>
+          <p>Cleanup is advisory until an operator confirms AdminAction remove from the peer table; Aurora never silently drops trust records.</p>
+        </div>
+      </div>
+      {candidates.length === 0 ? (
+        <p className="aui-message">No stale, removed, or dev/test peer cleanup candidates were reported by Auth or Gateway.</p>
+      ) : (
+        <div className="aui-mesh-row-list">
+          {candidates.map((peer) => (
+            <article className="aui-mesh-row" key={`cleanup-${peer.peerId}`}>
+              <header>
+                <div>
+                  <p className="aui-kicker">{cleanupReason(peer)}</p>
+                  <h3>{peer.nodeName}</h3>
+                  <code>{peer.peerId}</code>
+                </div>
+                <StatusBadge state={peer.lifecycleState === 'stale' ? 'stale' : peer.trustState} />
+              </header>
+              <dl className="aui-mesh-meta">
+                <MeshFact label="Last seen" value={formatDate(peer.lastSeen)} />
+                <MeshFact label="Connection" value={peer.connectionStatus} />
+                <MeshFact label="Room" value={peer.roomName || 'not reported'} />
+                <MeshFact label="Operator action" value={peer.removeAction ? 'AdminAction remove available in peer table' : 'No remove contract advertised for this peer'} />
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -927,6 +969,16 @@ function liveSessionState(
 
 function normalizedMatchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function cleanupReason(peer: MeshPeerRow): string | null {
+  const text = `${peer.nodeName} ${peer.roomName} ${peer.peerId}`.toLowerCase()
+  if (peer.outboundStatus === 'removed') return 'Removed peer trust record should be reviewed for cleanup'
+  if (peer.lifecycleState === 'stale' || peer.connectionStatus.includes('disconnected') || peer.routeQuality.toLowerCase().includes('stale')) {
+    return 'Stale peer requires manifest/heartbeat review before cleanup'
+  }
+  if (/\b(dev|test|lab|demo|fixture)\b/.test(text)) return 'Dev/test peer should be retired when no longer needed'
+  return null
 }
 
 function buildMeshPeerRow(
