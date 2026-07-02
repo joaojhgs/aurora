@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:25:49.809Z",
+  "updatedAt": "2026-07-02T09:26:32.353Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -707,10 +707,13 @@
       "id": "G059-define-product-personas-local-deskto",
       "title": "Define product personas: local desktop assistant user, remote web ope...",
       "objective": "Define product personas: local desktop assistant user, remote web operator, mesh admin, mobile thin client user.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:26:32.353Z",
+      "startedAt": "2026-07-02T09:26:10.468Z",
+      "completedAt": "2026-07-02T09:26:32.353Z",
+      "evidence": "Product personas are defined in DESIGN.md under Personas and jobs: local desktop assistant user, remote web operator, mesh/admin operator, and mobile thin user, each with concrete jobs/context and platform constraints. Verified with rg for persona anchors in DESIGN.md and uv run python scripts/check_docs.py (58 markdown files scanned, passed)."
     },
     {
       "id": "G060-lock-ia-assistant-operate-runtime-se",
