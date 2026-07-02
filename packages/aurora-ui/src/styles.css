@@ -244,6 +244,14 @@ button, input, select, textarea { font: inherit; }
 .aui-tool-alert { border: 1px solid color-mix(in srgb, var(--aui-danger) 28%, var(--aui-border)); border-radius: .5rem; background: color-mix(in srgb, var(--aui-danger) 8%, white); color: var(--aui-danger); padding: .8rem; }
 .aui-tool-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 23rem); gap: .85rem; align-items: start; }
 .aui-tool-list { display: grid; gap: .85rem; min-width: 0; }
+.aui-tool-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem .85rem; }
+.aui-tool-section-heading h2 { display: flex; align-items: center; gap: .45rem; margin: .12rem 0 0; font-size: 1rem; }
+.aui-tool-section-heading h2 svg { flex: 0 0 auto; color: var(--aui-primary); }
+.aui-tool-section-heading .aui-kicker { margin: 0; }
+.aui-tool-section-heading .aui-action-chip { flex: 0 0 auto; }
+.aui-tool-scheduler { display: grid; gap: .85rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .6rem; background: var(--aui-surface); padding: .95rem; }
+.aui-tool-jobs-table td strong { font-weight: 800; }
+.aui-tool-jobs-table td code { white-space: normal; }
 .aui-tool-empty, .aui-tool-summary, .aui-tool-card { border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
 .aui-tool-empty { margin: 0; padding: 1rem; color: var(--aui-muted); }
 .aui-tool-summary { position: sticky; top: 1rem; display: grid; gap: .7rem; padding: .95rem; }

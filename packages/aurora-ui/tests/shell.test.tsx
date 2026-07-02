@@ -24,6 +24,7 @@ import {
   meshPeerListFixture,
   meshStatusFixture,
   nativeCapabilityManifestFixture,
+  normalizeSchedulerJob,
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -2501,9 +2502,19 @@ describe('Aurora production shell', () => {
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
-    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+    const schedulerJobs = schedulerJobsFixture.jobs.map(normalizeSchedulerJob)
+    const markup = renderToStaticMarkup(
+      <ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} initialSchedulerJobs={schedulerJobs} />
+    )
 
+    expect(markup).toContain('Tools &amp; Automations')
+    expect(markup).toContain('Tool registry and Approval cards')
     expect(markup).toContain('Approval cards')
+    expect(markup).toContain('Scheduled jobs')
+    expect(markup).toContain('Scheduler.ListJobs')
+    expect(markup).toContain('daily-digest')
+    expect(markup).toContain('remote-knowledge-index')
+    expect(markup).toContain('active automations')
     expect(markup).toContain('Write local config file')
     expect(markup).toContain('Open garage door')
     expect(markup).toContain('Search notes')

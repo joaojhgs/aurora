@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Clock, FileDiff, FlaskConical, Play, ShieldAlert, X } from 'lucide-react'
+import { CalendarClock, Check, Clock, FileDiff, FlaskConical, Play, Plug, ShieldAlert, Wrench, X } from 'lucide-react'
 import type {
   AuroraClient,
   AuroraResponse,
+  AvailabilityState,
+  NormalizedSchedulerJob,
   ToolApprovalCardModel,
   ToolApprovalDecisionResult,
   ToolApprovalScope
@@ -16,12 +18,16 @@ export interface ToolApprovalPanelProps {
   client: AuroraClient
   route: RouteAvailability
   initialTools?: ToolApprovalCardModel[] | undefined
+  initialSchedulerJobs?: NormalizedSchedulerJob[] | undefined
 }
 
 export interface ToolApprovalPanelState {
   tools: ToolApprovalCardModel[]
   loading: boolean
   error: string | null
+  schedulerJobs: NormalizedSchedulerJob[]
+  schedulerLoading: boolean
+  schedulerError: string | null
   selectedProviders: Record<string, string>
   decisionMessages: Record<string, string>
 }
@@ -33,11 +39,14 @@ export interface ToolDenialActionInput {
   reason?: string
 }
 
-export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalPanelProps) {
+export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs }: ToolApprovalPanelProps) {
   const [state, setState] = useState<ToolApprovalPanelState>(() => ({
     tools: initialTools ?? [],
     loading: !initialTools,
     error: null,
+    schedulerJobs: initialSchedulerJobs ?? [],
+    schedulerLoading: !initialSchedulerJobs,
+    schedulerError: null,
     selectedProviders: {},
     decisionMessages: {}
   }))
@@ -60,7 +69,34 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
     }
   }, [client, initialTools])
 
+  useEffect(() => {
+    if (initialSchedulerJobs) return
+    let cancelled = false
+    setState((current) => ({ ...current, schedulerLoading: true, schedulerError: null }))
+    client.scheduler.listNormalizedJobs({ limit: 5 }).then((jobs) => {
+      if (cancelled) return
+      setState((current) => ({
+        ...current,
+        schedulerLoading: false,
+        schedulerJobs: jobs,
+        schedulerError: null
+      }))
+    }).catch((error) => {
+      if (cancelled) return
+      setState((current) => ({
+        ...current,
+        schedulerLoading: false,
+        schedulerJobs: [],
+        schedulerError: errorMessage(error)
+      }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [client, initialSchedulerJobs])
+
   const counts = useMemo(() => toolCounts(state.tools), [state.tools])
+  const jobCounts = useMemo(() => schedulerCounts(state.schedulerJobs), [state.schedulerJobs])
 
   async function approve(tool: ToolApprovalCardModel, scope: ToolApprovalScope, dryRun = false) {
     const selectedProviderId = state.selectedProviders[tool.id]
@@ -140,10 +176,9 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
       <header className="aui-tool-header">
         <div>
           <p className="aui-kicker">Tools</p>
-          <h1 id="tool-approval-title">Approval cards</h1>
+          <h1 id="tool-approval-title">Tools & Automations</h1>
           <p>
-            Tool execution stays disabled until SDK catalog, route policy, approval, selector, and audit evidence
-            all line up.
+            Tool registry, approval cards, MCP/provider status, scheduler jobs, and execution logs stay bound to SDK evidence.
           </p>
         </div>
         <div className="aui-assistant-badges" aria-label="Tooling backend evidence">
@@ -153,6 +188,8 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
           <EvidenceBadge label={client.transport.kind} />
           <EvidenceBadge label={`${counts.total} tools`} />
           <EvidenceBadge label={`${counts.blocked} blocked`} />
+          <EvidenceBadge label={`${jobCounts.total} scheduled jobs`} />
+          <EvidenceBadge label={`${jobCounts.active} active automations`} />
         </div>
       </header>
 
@@ -165,6 +202,13 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
 
       <div className="aui-tool-layout">
         <section className="aui-tool-list" aria-busy={state.loading}>
+          <div className="aui-tool-section-heading">
+            <div>
+              <p className="aui-kicker">Registry</p>
+              <h2><Wrench size={18} aria-hidden />Tool registry and Approval cards</h2>
+            </div>
+            <span className="aui-action-chip"><Plug size={15} aria-hidden />Tooling.GetToolCatalog</span>
+          </div>
           {state.loading ? <p className="aui-tool-empty">Loading Tooling catalog through AuroraClient...</p> : null}
           {!state.loading && state.tools.length === 0 ? (
             <p className="aui-tool-empty">No tools were returned by the SDK Tooling catalog.</p>
@@ -194,6 +238,58 @@ export function ToolApprovalPanel({ client, route, initialTools }: ToolApprovalP
           </dl>
         </aside>
       </div>
+
+      <section className="aui-tool-scheduler" aria-labelledby="tool-scheduler-title">
+        <div className="aui-tool-section-heading">
+          <div>
+            <p className="aui-kicker">Automations</p>
+            <h2 id="tool-scheduler-title"><CalendarClock size={18} aria-hidden />Scheduled jobs</h2>
+          </div>
+          <span className="aui-action-chip">Scheduler.ListJobs</span>
+        </div>
+        {state.schedulerError ? <div className="aui-tool-alert" role="alert">{state.schedulerError}</div> : null}
+        {state.schedulerLoading ? <p className="aui-tool-empty">Loading scheduler jobs through AuroraClient...</p> : null}
+        {!state.schedulerLoading && state.schedulerJobs.length === 0 && !state.schedulerError ? (
+          <p className="aui-tool-empty">No scheduler jobs were returned by Scheduler.ListJobs.</p>
+        ) : null}
+        {state.schedulerJobs.length > 0 ? (
+          <div className="aui-table-scroll">
+            <table className="aui-table aui-tool-jobs-table">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Schedule</th>
+                  <th>Status</th>
+                  <th>Next</th>
+                  <th>Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.schedulerJobs.map((job) => (
+                  <tr key={job.job_id}>
+                    <td>
+                      <strong>{job.name}</strong>
+                      <small>{job.action}</small>
+                    </td>
+                    <td><code>{job.schedule}</code></td>
+                    <td>
+                      <div className="aui-state-line">
+                        <StatusBadge state={schedulerAvailability(job)} />
+                        <span>{schedulerStatusLabel(job)}</span>
+                      </div>
+                    </td>
+                    <td>{job.next_run ?? '—'}</td>
+                    <td>
+                      <strong>{job.target_peer_id ?? job.owner_peer_id}</strong>
+                      <small>{job.target_resource_namespace ?? job.namespace}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
     </section>
   )
 }
@@ -362,6 +458,27 @@ function toolCounts(tools: ToolApprovalCardModel[]) {
     total: tools.length,
     blocked: tools.filter((tool) => ['denied', 'expired', 'replay-rejected', 'unavailable', 'provider-selector-required', 'dry-run-only'].includes(tool.state)).length
   }
+}
+
+function schedulerCounts(jobs: NormalizedSchedulerJob[]) {
+  return {
+    total: jobs.length,
+    active: jobs.filter((job) => job.enabled && !job.blocked_reason).length
+  }
+}
+
+function schedulerAvailability(job: NormalizedSchedulerJob): AvailabilityState {
+  if (job.blocked_reason || job.last_error) return 'denied'
+  if (!job.enabled || job.status === 'paused') return 'degraded'
+  if (job.status === 'delegated' || job.status === 'remote-running') return 'available-remote'
+  return 'available-local'
+}
+
+function schedulerStatusLabel(job: NormalizedSchedulerJob): string {
+  if (job.blocked_reason) return `blocked: ${job.blocked_reason}`
+  if (job.last_error) return `error: ${job.last_error}`
+  if (!job.enabled) return 'paused'
+  return job.status ?? 'active'
 }
 
 function stateCopy(tool: ToolApprovalCardModel): string {

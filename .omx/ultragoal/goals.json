@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:27:06.532Z",
+  "updatedAt": "2026-07-02T07:32:23.042Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -275,10 +275,13 @@
       "id": "G023-app-cockpit-tools-page-tsx-tool-regi",
       "title": "`app/(cockpit)/tools/page.tsx`: tool registry plus scheduler job snap...",
       "objective": "`app/(cockpit)/tools/page.tsx`: tool registry plus scheduler job snapshot.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:32:23.042Z",
+      "startedAt": "2026-07-02T07:27:30.152Z",
+      "completedAt": "2026-07-02T07:32:23.042Z",
+      "evidence": "Tools route now presents mock-parity Tools & Automations surface with SDK-backed Tooling.GetToolCatalog approval cards plus Scheduler.ListJobs job snapshot; preserved Approval cards route marker and added scheduler loading/error/empty/table states. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'tool approval'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck. Team mailbox for aurora-tauri-web-mobi-b7864a3c was unavailable/no team state, so leader completed checkpoint directly."
     },
     {
       "id": "G024-components-aurora-diagnostics-diagno",
