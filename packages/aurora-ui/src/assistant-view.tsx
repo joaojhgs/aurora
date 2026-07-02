@@ -221,6 +221,7 @@ export function AssistantView({
     () => buildAssistantRuntimeStrip(runtimeHealth, modelLabel, route, client.transport.kind),
     [runtimeHealth, modelLabel, route, client.transport.kind]
   )
+  const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
       client,
@@ -723,6 +724,7 @@ export function AssistantView({
             <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
           <p>{route.explanation}</p>
+          {remotePrivacyWarning ? <p className="aui-privacy-route-warning" role="status">{remotePrivacyWarning}</p> : null}
           {route.disabled ? <p role="alert">Assistant send is disabled: {route.blockers.join(', ') || 'capability unavailable'}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
           <RouteSheet
@@ -1277,6 +1279,26 @@ export function routePolicyFromRoute(route: RouteAvailability): AssistantRoutePo
     selectorRequired: route.selectorRequired,
     approvalRequired: route.approvalRequired
   }
+}
+
+export function assistantRemotePrivacyWarning(route: RouteAvailability): string | null {
+  const privacyClass = route.item.privacyClass
+  if (privacyClass === 'public') return null
+  const remoteOrMeshEvidence = [
+    route.providerLabel,
+    route.explanation,
+    ...route.candidateProviders.flatMap((candidate) => [candidate.id, candidate.label, candidate.reason])
+  ].join(' ')
+  const remoteOrMeshFallback =
+    route.state === 'available-remote' ||
+    route.state === 'degraded' ||
+    route.selectorRequired ||
+    /remote|mesh|peer|cloud|http|fallback/i.test(remoteOrMeshEvidence)
+  if (!remoteOrMeshFallback) return null
+  const label = privacyClass === 'raw-audio'
+    ? 'Raw audio'
+    : privacyClass.charAt(0).toUpperCase() + privacyClass.slice(1)
+  return `${label} data requires route/privacy review before remote or mesh fallback; no payload leaves until consent, privacy indicator, and backend route policy allow it.`
 }
 
 export function assistantErrorMessage(error: AuroraError | Error): string {

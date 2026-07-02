@@ -100,6 +100,7 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   assistantControlsForRoute,
+  assistantRemotePrivacyWarning,
   contextIngestOutcomeIndex,
   isAcceptedContextStatus,
   mapContextIngestOutcomesByPendingIndex,
@@ -1251,6 +1252,73 @@ describe('Aurora production shell', () => {
   })
 
 
+
+
+  it('warns before private remote fallback and keeps raw audio plus tool payloads redacted', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const privateRemoteRoute = enabledRoute(route(snapshot, 'assistant'), {
+      state: 'available-remote',
+      providerLabel: `mesh peer / ${ORCHESTRATOR_METHODS.externalUserInput}`,
+      explanation: 'Remote mesh fallback is eligible after route policy review.',
+      selectorRequired: true,
+      item: {
+        ...route(snapshot, 'assistant').item,
+        privacyClass: 'sensitive'
+      }
+    })
+    const warning = assistantRemotePrivacyWarning(privateRemoteRoute)
+
+    expect(warning).toContain('Sensitive data requires route/privacy review before remote or mesh fallback')
+    expect(assistantRemotePrivacyWarning(enabledRoute(route(snapshot, 'assistant'), {
+      item: { ...route(snapshot, 'assistant').item, privacyClass: 'public' }
+    }))).toBeNull()
+
+    const markup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={privateRemoteRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        recentVoiceEvents={voiceEvidenceEvents()}
+        initialSession={{
+          sessionId: 'assistant-privacy-session',
+          messages: [{
+            id: 'assistant-privacy-tool',
+            role: 'assistant',
+            text: 'Tool approval pending with redacted payload preview.',
+            createdAt: '2026-06-21T00:00:00Z',
+            status: 'streaming',
+            toolCalls: [{
+              id: 'tool-call-redacted',
+              name: 'Tooling.RequestApproval',
+              status: 'requested',
+              riskClass: 'requires-approval',
+              target: 'mesh peer',
+              dataLeavesDevice: true,
+              summary: 'Approval card shows only redacted payload preview.',
+              auditId: 'corr-redacted',
+              payloadPreview: { token: '[redacted]', args_hash: 'payload_hash' }
+            }]
+          }]
+        }}
+      />
+    )
+
+    expect(markup).toContain('Sensitive data requires route/privacy review before remote or mesh fallback')
+    expect(markup).toContain('Raw audio leaves the local device only when the selected route, consent, privacy indicator, and target policy allow it.')
+    expect(markup).toContain('Payload preview')
+    expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
+    expect(markup).toContain('payload_hash')
+    expect(markup).not.toContain('super-secret-token')
+    expect(markup).not.toMatch(/raw[-_ ]audio payload/i)
+    expect(markup).not.toMatch(/audio_buffer/i)
+
+    const assistantSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/assistant-view.tsx'), 'utf8')
+    const renderStringifyLines = assistantSource
+      .split('\n')
+      .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
+    expect(renderStringifyLines).toEqual([expect.stringContaining('JSON.stringify(tool.payloadPreview')])
+  })
 
   it('renders the assistant state matrix for empty, no-model, selector, stream, tool, retry, cancel, offline, and auth states', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })

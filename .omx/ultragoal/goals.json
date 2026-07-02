@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:50:05.104Z",
+  "updatedAt": "2026-07-02T11:53:51.752Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1242,10 +1242,12 @@
       "id": "G106-privacy",
       "title": "Privacy:",
       "objective": "Privacy:\npersonal/sensitive route warning before remote/mesh fallback;\nraw audio indicator;\nno secret/tool payload raw dumps outside approved preview components.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:53:51.752Z",
+      "completedAt": "2026-07-02T11:53:51.752Z",
+      "evidence": "Added Assistant route privacy warning before sensitive/personal remote or mesh fallback, preserved raw-audio voice indicator copy, and added source/render regression that tool payload JSON rendering is limited to approved redacted payload preview components. Verified: pnpm --filter @aurora/ui test -- -t 'private remote fallback'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'private remote fallback|assistant state matrix|assistant text chat|assistant backend integration boundaries|assistant voice routes|route privacy|raw audio|payloads redacted'; pnpm --filter @aurora/client test -- -t 'privacy|selector|consent|raw|redact|assistant|context|voice'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G107-user-can-send-a-text-prompt-against",
