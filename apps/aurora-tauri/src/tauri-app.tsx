@@ -321,6 +321,38 @@ function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
   return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
 }
 
+function TauriAdminOverviewPage({
+  client
+}: {
+  client: ReturnType<typeof createAuroraTauriRuntime>['client']
+}) {
+  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
+  const [error, setError] = useState<unknown>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    client.adminOverview.getManifest().then(
+      (next) => {
+        if (!cancelled) {
+          setManifest(next)
+          setError(null)
+        }
+      },
+      (nextError: unknown) => {
+        if (!cancelled) {
+          setManifest(null)
+          setError(nextError)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+}
+
 function TauriDiagnosticsPage({
   route,
   snapshot,
