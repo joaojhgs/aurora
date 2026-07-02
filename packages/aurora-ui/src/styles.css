@@ -669,6 +669,7 @@ button, input, select, textarea { font: inherit; }
 .aui-admin-facts dt { color: var(--aui-muted); font-size: .75rem; }
 .aui-admin-facts dd { margin: 0; overflow-wrap: anywhere; }
 .aui-table-wrap { overflow-x: auto; border: 1px solid var(--aui-border); border-radius: .45rem; }
+.aui-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .aui-admin-table { width: 100%; min-width: 42rem; border-collapse: collapse; font-size: .85rem; }
 .aui-admin-table th, .aui-admin-table td { border-bottom: 1px solid var(--aui-border); padding: .65rem; vertical-align: top; }
 .aui-admin-table tbody tr:last-child th, .aui-admin-table tbody tr:last-child td { border-bottom: 0; }
@@ -736,6 +737,7 @@ button, input, select, textarea { font: inherit; }
 .aui-table td code { font-size: .78rem; color: var(--aui-muted); }
 .aui-service-details summary { display: grid; gap: .2rem; cursor: pointer; list-style: none; }
 .aui-service-details summary::-webkit-details-marker { display: none; }
+.aui-detail-affordance { color: var(--aui-primary); font-size: .76rem; font-weight: 750; }
 .aui-service-drawer { display: grid; gap: .75rem; min-width: min(34rem, 80vw); margin-top: .65rem; padding: .75rem; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface-2); }
 .aui-service-drawer dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; margin: 0; }
 .aui-service-drawer dt { color: var(--aui-muted); font-size: .75rem; }

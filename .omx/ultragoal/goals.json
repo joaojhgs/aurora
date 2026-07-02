@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:58:14.048Z",
+  "updatedAt": "2026-07-02T07:02:29.382Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -191,10 +191,13 @@
       "id": "G016-components-aurora-admin-services-vie",
       "title": "`components/aurora/admin/services-view.tsx`: services table, heartbea...",
       "objective": "`components/aurora/admin/services-view.tsx`: services table, heartbeat, routes, capabilities, restart/stop/detail affordances.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:02:29.382Z",
+      "startedAt": "2026-07-02T06:59:40.058Z",
+      "completedAt": "2026-07-02T07:02:29.382Z",
+      "evidence": "Admin services now matches the mock service-operator table shape with health, route evidence, capabilities, heartbeat, method counts, inline details, and restart/stop AdminAction affordances backed by AuroraClient SDK services/registry/capability responses. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'admin services'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin."
     },
     {
       "id": "G017-components-aurora-admin-rbac-view-ts",

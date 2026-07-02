@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock, Play, RotateCw, Square } from 'lucide-react'
+import { Activity, FileCode2, Lock, RotateCw, Square } from 'lucide-react'
 import {
   AuroraError,
   summarizeCapabilities,
@@ -261,12 +261,17 @@ function ServicesTable({
       ) : (
         <div className="aui-table-scroll">
           <table className="aui-table">
+            <caption className="aui-sr-only">
+              Services table with health, route evidence, capabilities, heartbeat, instance, and AdminAction controls
+            </caption>
             <thead>
               <tr>
                 <th>Module</th>
                 <th>Health</th>
                 <th>Route</th>
                 <th>Capabilities</th>
+                <th>Heartbeat</th>
+                <th>Methods</th>
                 <th>Instance</th>
                 <th>Actions</th>
               </tr>
@@ -301,6 +306,7 @@ function ServiceTableRow({
           <summary>
             <strong>{service.module}</strong>
             <small>{service.summary || `${service.module} service`}</small>
+            <span className="aui-detail-affordance">Details: routes, methods, and backend exposure</span>
           </summary>
           <div className="aui-service-drawer">
             <dl>
@@ -308,6 +314,8 @@ function ServiceTableRow({
               <div><dt>Last seen</dt><dd>{service.lastSeen}</dd></div>
               <div><dt>Provider</dt><dd>{service.providerLabel}</dd></div>
               <div><dt>Route evidence</dt><dd>{service.routeReason}</dd></div>
+              <div><dt>Capabilities</dt><dd>{service.capabilities.length}</dd></div>
+              <div><dt>Control posture</dt><dd>{controlPosture(service.controls)}</dd></div>
             </dl>
             <MethodList methods={service.methods} />
           </div>
@@ -327,6 +335,13 @@ function ServiceTableRow({
           ))}
           {service.capabilities.length === 0 ? <span className="aui-muted">none reported</span> : null}
         </div>
+      </td>
+      <td>
+        <time dateTime={service.lastSeen}>{service.lastSeen}</time>
+      </td>
+      <td>
+        <strong>{service.methodCount}</strong>
+        <small>{service.controls.filter((control) => control.available).length} AdminAction-ready controls</small>
       </td>
       <td><code>{service.instanceId ?? 'not reported'}</code></td>
       <td>
@@ -353,6 +368,12 @@ function ServiceTableRow({
       </td>
     </tr>
   )
+}
+
+function controlPosture(controls: AdminServiceControlPreview[]): string {
+  const ready = controls.filter((control) => control.available).length
+  if (ready === 0) return 'No executable control surfaced to this SDK transport.'
+  return `${ready}/${controls.length} controls require AdminAction draft/confirm/audit before execution.`
 }
 
 function MethodList({ methods }: { methods: MethodDescriptor[] }) {
