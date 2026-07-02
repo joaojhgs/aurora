@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:40:03.286Z",
+  "updatedAt": "2026-07-02T11:46:40.577Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1220,10 +1220,12 @@
       "id": "G104-integration",
       "title": "Integration:",
       "objective": "Integration:\n`Orchestrator.ExternalUserInput` for send;\nevent stream/streaming if available, with fallback to request/response;\ncancellation route if supported;\nTTS synth/stop for spoken reply where available;\nTranscription/WakeWord controls only where backend/native capability exists;\ncontext ingestion for text/url/file if supported.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:46:40.577Z",
+      "completedAt": "2026-07-02T11:46:40.577Z",
+      "evidence": "Added packages/aurora-ui/tests/shell.test.tsx regression for Assistant send via Orchestrator.ExternalUserInput, stream fallback terminal update, Orchestrator.Interrupt cancellation, voice/TTS/WakeWord controls, and context ingestion payload mapping. Verified: pnpm --filter @aurora/ui test -- -t 'assistant backend integration boundaries'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'assistant text chat|assistant backend integration boundaries|assistant voice routes|assistant stop capability|stream deltas|cancelled assistant message|attachment drafts'; pnpm --filter @aurora/client test -- -t 'assistant|context|voice|cancellation|ExternalUserInput|Interrupt'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G105-states",

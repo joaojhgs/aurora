@@ -7,6 +7,7 @@ import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  ORCHESTRATOR_METHODS,
   backendInventoryFixture,
   androidNativeCapabilityManifestFixture,
   backupListFixture,
@@ -1247,6 +1248,149 @@ describe('Aurora production shell', () => {
     expect(disabledMarkup).toContain('Assistant send is disabled')
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
     expect(disabledMarkup).toContain('Start with a prompt')
+  })
+
+
+  it('locks assistant backend integration boundaries for send, stream fallback, cancellation, voice, and context', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'tauri-desktop',
+      permissions: { microphone: true },
+      capabilities: { voiceCapture: true }
+    }))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const assistantRoute = enabledRoute(route(snapshot, 'assistant'), {
+      providerLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`
+    })
+    if (!snapshot.assistantCancellationRoute) throw new Error('missing assistant cancellation route')
+    const cancellationRoute = {
+      ...snapshot.assistantCancellationRoute,
+      state: 'available-local' as const,
+      disabled: false,
+      providerLabel: `local / ${ORCHESTRATOR_METHODS.interrupt}`,
+      blockers: [],
+      routeable: true
+    }
+
+    expect(`${assistantRoute.item.capabilityModule}.${assistantRoute.item.capabilityMethod}`).toBe(ORCHESTRATOR_METHODS.externalUserInput)
+    expect(`${cancellationRoute.item.capabilityModule}.${cancellationRoute.item.capabilityMethod}`).toBe(ORCHESTRATOR_METHODS.interrupt)
+    expect(Object.values(auroraAssistantVoiceItems).map((item) => `${item.capabilityModule}.${item.capabilityMethod}`)).toEqual([
+      'Transcription.Transcribe',
+      'WakeWord.ProcessAudio',
+      'WakeWord.Control',
+      'TTS.Synthesize',
+      'TTS.Stop'
+    ])
+
+    const controls = assistantControlsForRoute(assistantRoute, cancellationRoute, true)
+    expect(controls).toEqual(expect.objectContaining({
+      canSend: false,
+      canCancel: true,
+      cancelReason: expect.stringContaining('Orchestrator.Interrupt')
+    }))
+
+    const pendingMessage = {
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Waiting for Aurora stream...',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }
+    expect(applyAssistantTerminalUpdate(pendingMessage, {
+      ...streamUpdate('Final fallback response'),
+      kind: 'fallback' as const,
+      eventId: 'fallback-event-1',
+      text: 'Final fallback response',
+      textDelta: 'Final fallback response'
+    })).toEqual(expect.objectContaining({
+      id: 'fallback-event-1',
+      text: 'Final fallback response',
+      status: 'sent'
+    }))
+
+    const contextItem = attachmentToContextItem({
+      id: 'context-text-1',
+      kind: 'text',
+      label: 'Shared incident note',
+      detail: 'operator pasted text',
+      contentText: 'Gateway is healthy; summarize recent mesh handoffs.',
+      url: null,
+      filename: null,
+      mimeType: 'text/plain',
+      sizeBytes: 54,
+      sourceChannel: 'chat',
+      sourceDisplayName: 'chat composer',
+      privacyClass: 'personal',
+      status: 'staged',
+      progress: 0,
+      message: 'Staged for backend validation.',
+      reasonCode: null,
+      redacted: false
+    })
+    expect(contextItem).toEqual(expect.objectContaining({
+      kind: 'text',
+      content_text: 'Gateway is healthy; summarize recent mesh handoffs.',
+      source: expect.objectContaining({ channel: 'chat', display_name: 'chat composer' }),
+      metadata: expect.objectContaining({ route_privacy_class: 'personal', ui_status: 'staged' })
+    }))
+
+    const voiceModel = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute,
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      nativeAvailable: snapshot.nativeAvailable,
+      nativePlatform: snapshot.nativePlatform,
+      nativePermissions: snapshot.nativePermissions,
+      nativeCapabilities: snapshot.nativeCapabilities,
+      captureStatus: 'listening',
+      consentGranted: true,
+      voiceEvents: voiceEvidenceEvents()
+    })
+    expect(voiceModel.controls.map((control) => control.label)).toEqual(expect.arrayContaining([
+      'Start transcription',
+      'Wake foreground',
+      'Synthesize speech',
+      'Stop playback'
+    ]))
+    expect(voiceModel.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'tts-started', 'remote-denied']))
+
+    const markup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={assistantRoute}
+        cancellationRoute={cancellationRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        nativeAvailable={snapshot.nativeAvailable}
+        nativePlatform={snapshot.nativePlatform}
+        nativePermissions={snapshot.nativePermissions}
+        nativeCapabilities={snapshot.nativeCapabilities}
+        recentVoiceEvents={voiceEvidenceEvents()}
+        initialSession={{
+          sessionId: 'assistant-integration-session',
+          messages: [{
+            id: 'assistant-integration-streaming',
+            role: 'assistant',
+            text: 'Waiting for Aurora stream...',
+            createdAt: '2026-06-21T00:00:00Z',
+            status: 'streaming'
+          }]
+        }}
+      />
+    )
+
+    expect(markup).toContain(ORCHESTRATOR_METHODS.externalUserInput)
+    expect(markup).toContain('Stop assistant generation')
+    expect(markup).toContain('Start transcription')
+    expect(markup).toContain('Wake foreground')
+    expect(markup).toContain('Synthesize speech')
+    expect(markup).toContain('Stop playback')
+    expect(markup).toContain('Add URL')
+    expect(markup).toContain('Add text')
+    expect(markup).toContain('Add files or images')
+    expect(markup).toContain('Route sheet')
+    expect(markup).toContain('Voice event stream')
   })
 
   it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {
