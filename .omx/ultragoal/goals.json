@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:26:32.353Z",
+  "updatedAt": "2026-07-02T09:27:19.494Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -719,10 +719,13 @@
       "id": "G060-lock-ia-assistant-operate-runtime-se",
       "title": "Lock IA: Assistant, Operate, Runtime sections and route purposes.",
       "objective": "Lock IA: Assistant, Operate, Runtime sections and route purposes.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:27:19.494Z",
+      "startedAt": "2026-07-02T09:26:50.101Z",
+      "completedAt": "2026-07-02T09:27:19.494Z",
+      "evidence": "IA is locked in DESIGN.md and packages/aurora-ui/src/nav.tsx: Assistant contains /, /memory, /tools, /mesh; Operate contains the 12 admin routes; Runtime contains /models, /diagnostics, /onboarding, /settings, /memory/policy, /settings/native; each route has a purpose/truth source in DESIGN.md. Verified with a Python anchor check over DESIGN.md/nav.tsx for all 22 routes and uv run python scripts/check_docs.py (58 markdown files scanned, passed)."
     },
     {
       "id": "G061-map-each-of-the-22-route-ids-to",
