@@ -36,6 +36,13 @@ export interface MobileFirstLaunchNote {
   evidence: string
 }
 
+export interface PlatformBehaviorNote {
+  label: string
+  state: AvailabilityState
+  behavior: string
+  evidence: string
+}
+
 export interface OnboardingViewModel {
   session: AuthSessionSnapshot
   modes: DeploymentModeCard[]
@@ -48,6 +55,7 @@ export interface OnboardingViewModel {
   pairingExplanation: string
   setupSteps: OnboardingSetupStep[]
   mobileNotes: MobileFirstLaunchNote[]
+  platformBehavior: PlatformBehaviorNote[]
   cockpitHref: string
 }
 
@@ -267,6 +275,19 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
           </div>
         </section>
 
+        <section className="aui-onboarding-panel" aria-labelledby="platform-behavior-title">
+          <h2 id="platform-behavior-title">Platform behavior</h2>
+          <div className="aui-mobile-launch-list">
+            {model.platformBehavior.map((note) => (
+              <article key={note.label}>
+                <header><strong>{note.label}</strong><StatusBadge state={note.state} /></header>
+                <p>{note.behavior}</p>
+                <small>{note.evidence}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="aui-onboarding-panel" aria-labelledby="fallback-title">
           <h2 id="fallback-title">Fallbacks</h2>
           <ul className="aui-onboarding-list">
@@ -309,6 +330,7 @@ export function buildOnboardingViewModel({
     pairingExplanation: pairingExplanation(session, routeById(snapshot, 'mesh')),
     setupSteps: setupSteps({ session, snapshot, selectedModeId: selected, authState: authAvailability(session), pairingState: pairingAvailability(session, routeById(snapshot, 'mesh')) }),
     mobileNotes: mobileFirstLaunchNotes(snapshot),
+    platformBehavior: platformBehaviorNotes(snapshot, client.transport.kind),
     cockpitHref: '/'
   }
 }
@@ -406,6 +428,37 @@ function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunc
       state: iosState,
       detail: 'Aurora integrates through Siri/Shortcuts/App Intents, widgets, share sheet, file associations, and deep links in app-owned surfaces only.',
       evidence: iosLocalLightEvidence(snapshot)
+    }
+  ]
+}
+
+function platformBehaviorNotes(snapshot: AuroraShellSnapshot, transportKind: string): PlatformBehaviorNote[] {
+  const meshRoute = routeById(snapshot, 'mesh')
+  const meshState = meshRoute?.state ?? 'unsupported'
+  const meshEvidence = meshRoute
+    ? `${meshRoute.providerLabel}; routeable=${String(meshRoute.routeable)}; blockers=${meshRoute.blockers.join(',') || 'none'}`
+    : 'Mesh route is not present in the capability graph.'
+  const desktopState: AvailabilityState = transportKind === 'tauri-local' && !meshRoute?.disabled ? 'available-local' : transportKind === 'tauri-local' ? 'degraded' : 'unsupported'
+  const webState: AvailabilityState = transportKind === 'http' ? meshState : transportKind === 'mock' ? 'degraded' : 'unsupported'
+  const mobileState = mobileThinState(snapshot, transportKind).state
+  return [
+    {
+      label: 'Desktop Tauri local',
+      state: desktopState,
+      behavior: 'Desktop local can be a full node only when the local Gateway reports mesh enabled and routeable; otherwise it stays a supervised local shell with explicit repair evidence.',
+      evidence: transportKind === 'tauri-local' ? meshEvidence : `Current transport is ${transportKind}; desktop-local full-node behavior requires Tauri local Gateway evidence.`
+    },
+    {
+      label: 'Web thin',
+      state: webState,
+      behavior: 'Web thin can view and manage remote mesh only through Gateway APIs and AdminAction receipts; it never starts a sidecar or claims local node hosting.',
+      evidence: transportKind === 'http' ? meshEvidence : `Current transport is ${transportKind}; use HTTP Gateway transport for web-thin mesh management.`
+    },
+    {
+      label: 'Mobile thin',
+      state: mobileState,
+      behavior: 'Mobile thin can pair and invoke remote or mesh capabilities through Gateway/native manifest evidence, but must not claim a full local service host unless a native backend exists.',
+      evidence: mobileThinState(snapshot, transportKind).evidence
     }
   ]
 }
