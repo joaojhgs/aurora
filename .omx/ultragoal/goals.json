@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:38:42.883Z",
+  "updatedAt": "2026-07-02T14:40:18.422Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1605,10 +1605,12 @@
       "id": "G139-first-launch-route-guides-user-to-a",
       "title": "First-launch route guides user to a working mode without raw backend...",
       "objective": "First-launch route guides user to a working mode without raw backend status dump.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:40:18.422Z",
+      "completedAt": "2026-07-02T14:40:18.422Z",
+      "evidence": "pnpm --dir packages/aurora-ui exec vitest run --environment node tests/shell.test.tsx -t \"onboarding modes|invalid endpoints|auth session matrix\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G140-invalid-endpoint-auth-failure-has-us",

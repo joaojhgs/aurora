@@ -2048,6 +2048,11 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Login or restore')
     expect(markup).toContain('Pairing code')
     expect(markup).toContain('browser token persistence disabled')
+    expect(markup).not.toMatch(/<pre\\b/i)
+    expect(markup).not.toContain('debug-dashboard')
+    expect(markup).not.toContain('raw route dump')
+    expect(markup).not.toContain('backend state dump')
+    expect(markup).not.toContain('service inventory dump')
   })
 
   it('keeps onboarding bearer tokens out of browser storage', () => {
