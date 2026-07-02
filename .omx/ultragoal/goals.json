@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:46:00.977Z",
+  "updatedAt": "2026-07-02T09:47:04.617Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -862,10 +862,13 @@
       "id": "G072-keep-packaged-build-sidecar-staging",
       "title": "Keep packaged build sidecar staging separate from dev runtime.",
       "objective": "Keep packaged build sidecar staging separate from dev runtime.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:47:04.617Z",
+      "startedAt": "2026-07-02T09:46:19.658Z",
+      "completedAt": "2026-07-02T09:47:04.617Z",
+      "evidence": "Packaged sidecar staging remains separate from dev runtime. apps/aurora-tauri/package.json routes pnpm tauri commands through scripts/tauri-cli.mjs, while build:bundle:* and prepare:sidecar:* explicitly invoke scripts/prepare-sidecar.mjs with profiles and release config. apps/aurora-tauri/scripts/tauri-cli.mjs contains no prepare-sidecar or AURORA_TAURI_SIDECAR_SOURCE references and only applies dev autosidecar defaults for tauri dev. apps/aurora-tauri/src/tauri-dev-bootstrap.test.ts and docs/TAURI_DESKTOP_BUILD.md lock the split. Verified pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui typecheck; uv run python scripts/check_docs.py; static packaged/dev sidecar split assertions passed."
     },
     {
       "id": "G073-one-command-starts-a-usable-local-st",
