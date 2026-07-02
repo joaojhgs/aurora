@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:21:16.531Z",
+  "updatedAt": "2026-07-02T09:25:49.809Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -695,10 +695,13 @@
       "id": "G058-create-refresh-repo-root-design-md-u",
       "title": "Create/refresh repo-root `DESIGN.md` using `modules/ui-mock-reference...",
       "objective": "Create/refresh repo-root `DESIGN.md` using `modules/ui-mock-reference` as evidence.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:25:49.809Z",
+      "startedAt": "2026-07-02T09:21:37.306Z",
+      "completedAt": "2026-07-02T09:25:49.809Z",
+      "evidence": "Refreshed repo-root DESIGN.md with the canonical design source-of-truth structure using modules/ui-mock-reference, nav.tsx, production-surface-contracts.ts, Tauri route mounting, and current frontend/Tauri docs as evidence. Preserved the 22-route production inventory, route-specific mock anchors, SDK/Gateway/Tauri truth-source boundaries, accessibility/responsive/platform behavior, interaction states, fixture/demo labeling, AdminAction/privacy/native permission distinctions, and regression gates that prevent placeholder/debug-dashboard UI. Verified with uv run python scripts/check_docs.py (58 markdown files scanned, passed). Team mailbox worker-4 state was unavailable: .omx/state/team/aurora-tauri-web-mobi-b7864a3c/mailbox/leader-fixed.json missing and omx team status reported no team state found, so leader-owned ultragoal execution continued from local ledger/worktree evidence."
     },
     {
       "id": "G059-define-product-personas-local-deskto",
