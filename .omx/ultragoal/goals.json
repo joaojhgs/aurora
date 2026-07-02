@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:05:48.230Z",
+  "updatedAt": "2026-07-02T09:07:25.918Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -587,10 +587,13 @@
       "id": "G049-lane-b-sdk-sidecar-gateway-contracts",
       "title": "**Lane B — SDK, sidecar, Gateway, contracts**",
       "objective": "**Lane B — SDK, sidecar, Gateway, contracts**\nOwner role: architect + executor\nScope: missing backend/SDK methods, route policy semantics, sidecar/dev logging, platform manifests.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:07:25.918Z",
+      "startedAt": "2026-07-02T09:06:08.699Z",
+      "completedAt": "2026-07-02T09:07:25.918Z",
+      "evidence": "Lane B SDK/sidecar/Gateway/contracts evidence: SDK build/test/resilience passed; generated backend inventory plus check_sdk_backend_conformance passed with ok=true, backend_methods=159, gateway_builtins=13, fatal_issues=0, sdk_type_surface_issues=0; Tauri UI service-boundary/dev-bootstrap/native-evidence gates passed, proving UI stays behind AuroraClient/Gateway/Tauri boundaries and sidecar remains process supervisor/Gateway proxy; Python unit contract suite passed for registry, backend inventory, audio session, config admin, context ingestion, model runtime, and scheduler admin contracts. Verified pnpm --filter @aurora/client build; pnpm --filter @aurora/client test; pnpm --filter @aurora/client test:resilience; uv run python scripts/generate_backend_inventory.py --output /tmp/aurora-backend-inventory.json; uv run python scripts/check_sdk_backend_conformance.py --inventory /tmp/aurora-backend-inventory.json --evidence-dir /tmp/aurora-sdk-conformance; pnpm --filter @aurora/tauri-ui test:service-boundary; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; uv run pytest tests/unit/contracts tests/unit/gateway/test_backend_inventory.py tests/unit/gateway/test_audio_session_contracts.py tests/unit/services/test_config_admin_contracts.py tests/unit/orchestrator/test_context_ingestion_contracts.py tests/unit/orchestrator/test_model_runtime_contracts.py tests/unit/app/scheduler/test_scheduler_admin_contracts.py -q."
     },
     {
       "id": "G050-lane-c-assistant-voice-tools-memory",
