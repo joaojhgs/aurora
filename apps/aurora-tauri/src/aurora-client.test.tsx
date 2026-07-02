@@ -6,6 +6,56 @@ import { AuroraTauriApp, tauriRouteRegistryRouteIds } from './tauri-app'
 
 const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 
+const PLACEHOLDER_MARKERS = [
+  'A full product page still needs to be mounted',
+  'rendering the assistant diagnostics on the wrong page',
+  'TauriRoutePlaceholder',
+  'ata-placeholder-panel',
+  'debug-dashboard',
+] as const
+
+const adminRouteIds = new Set([
+  'admin',
+  'services',
+  'access',
+  'tokens',
+  'devices',
+  'config',
+  'contracts',
+  'plugins',
+  'pairing',
+  'backups',
+  'scheduler',
+  'audit',
+])
+
+const runtimeRouteIds = new Set([
+  'models',
+  'diagnostics',
+  'onboarding',
+  'settings',
+  'data',
+  'native',
+])
+
+function renderTauriRoute(href: string) {
+  vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+  window.history.replaceState({}, '', href)
+  return renderToStaticMarkup(<AuroraTauriApp />)
+}
+
+function expectNoPlaceholderOrDebugUi(markup: string, routeId: string) {
+  for (const marker of PLACEHOLDER_MARKERS) {
+    expect(markup, `${routeId} should not render ${marker}`).not.toContain(marker)
+  }
+}
+
+function routesByGroup(routeIds: Set<string>) {
+  return auroraNavSections
+    .flatMap((section) => section.items)
+    .filter((route) => routeIds.has(route.id))
+}
+
 describe('Aurora Tauri runtime wrapper', () => {
   afterEach(() => {
     vi.unstubAllEnvs()

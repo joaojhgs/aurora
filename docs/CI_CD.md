@@ -28,6 +28,7 @@ make check
 make check-docs
 make unit
 make integration
+uv run pytest tests/unit/gateway tests/unit/services tests/unit/app/config -q
 uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py -q
 uv run pytest tests/performance -v
 
@@ -38,6 +39,11 @@ pnpm --filter @aurora/client test:resilience
 pnpm --filter @aurora/ui test && pnpm --filter @aurora/ui test:accessibility && pnpm --filter @aurora/ui build
 pnpm --filter @aurora/web test && pnpm --filter @aurora/web build
 pnpm --filter @aurora/tauri-ui test && pnpm --filter @aurora/tauri-ui typecheck && pnpm --filter @aurora/tauri-ui build
+pnpm --filter @aurora/tauri-ui test:e2e:routes
+pnpm --filter @aurora/tauri-ui test:e2e:assistant
+pnpm --filter @aurora/tauri-ui test:e2e:admin
+pnpm --filter @aurora/tauri-ui test:e2e:runtime
+pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 
 # Tauri desktop profiles
 pnpm --filter @aurora/tauri-ui prepare:sidecar:thin

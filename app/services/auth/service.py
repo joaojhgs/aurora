@@ -244,7 +244,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.Logout",
+        method_id=AuthMethods.LOGOUT,
         summary="Revoke the current session token",
         input_model=LogoutRequest,
         output_model=LogoutResponse,
@@ -368,7 +368,7 @@ class AuthService(BaseService):
         input_model=ListPendingPairingsRequest,
         output_model=ListPendingPairingsResponse,
         exposure="both",
-        method_type="use",
+        method_type="manage",
         required_perms=["Auth.manage"],
     )
     async def handle_list_pending_pairings(

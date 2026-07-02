@@ -792,7 +792,7 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=WebRTCDiagnosticsResponse,
         exposure="external",
-        method_type="use",
+        method_type="manage",
         required_perms=["Gateway.manage"],
     )
     async def get_webrtc_diagnostics(self, data: EmptyInput) -> WebRTCDiagnosticsResponse:

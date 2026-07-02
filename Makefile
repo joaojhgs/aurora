@@ -89,22 +89,22 @@ check-docs:
 # Run all tests
 test:
 	@echo "Running all tests..."
-	pytest
+	uv run pytest
 
 # Run unit tests only
 unit:
 	@echo "Running unit tests..."
-	pytest tests/unit
+	uv run pytest tests/unit
 
 # Run integration tests only
 integration:
 	@echo "Running integration tests..."
-	pytest tests/integration
+	uv run pytest tests/integration
 
 # Run tests with coverage
 coverage:
 	@echo "Running tests with coverage report..."
-	pytest --cov=app --cov-report=term --cov-report=html
+	uv run pytest --cov=app --cov-report=term --cov-report=html
 
 # Clean temporary files
 clean:

@@ -66,6 +66,11 @@ jobs:
       - name: Test, typecheck, and build Tauri frontend
         run: |
           pnpm --filter @aurora/tauri-ui test
+          pnpm --filter @aurora/tauri-ui test:e2e:routes
+          pnpm --filter @aurora/tauri-ui test:e2e:assistant
+          pnpm --filter @aurora/tauri-ui test:e2e:admin
+          pnpm --filter @aurora/tauri-ui test:e2e:runtime
+          pnpm --filter @aurora/tauri-ui tauri:smoke:linux
           pnpm --filter @aurora/tauri-ui typecheck
           pnpm --filter @aurora/tauri-ui build
 
