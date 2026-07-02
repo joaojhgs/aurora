@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:32:15.518Z",
+  "updatedAt": "2026-07-02T09:32:53.708Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -803,10 +803,13 @@
       "id": "G067-never-require-a-prebuilt-packaged-si",
       "title": "Never require a prebuilt packaged sidecar for dev.",
       "objective": "Never require a prebuilt packaged sidecar for dev.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:32:53.708Z",
+      "startedAt": "2026-07-02T09:32:20.079Z",
+      "completedAt": "2026-07-02T09:32:53.708Z",
+      "evidence": "Dev never requires a prebuilt packaged sidecar: pnpm --filter @aurora/tauri-ui test:dev-bootstrap passed (4 tests); static check confirmed apps/aurora-tauri/scripts/tauri-cli.mjs does not reference prepare-sidecar or AURORA_TAURI_SIDECAR_SOURCE, uses main.py direct sidecar args for dev, and docs/tests lock the separation. apps/aurora-tauri/README.md says no prepare:sidecar/PyInstaller/AURORA_TAURI_SIDECAR_SOURCE is needed for day-to-day dev, and docs/TAURI_DESKTOP_BUILD.md says do not run prepare:sidecar or set AURORA_TAURI_SIDECAR_SOURCE just to use tauri dev."
     },
     {
       "id": "G068-auto-detect-venv-bin-python-or-fallb",
