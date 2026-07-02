@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:10:37.685Z",
+  "updatedAt": "2026-07-02T06:11:35.601Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -35,10 +35,13 @@
       "id": "G003-web-thin-mode-works-against-an-exist",
       "title": "Web/thin mode works against an existing Gateway without pretending Ta...",
       "objective": "Web/thin mode works against an existing Gateway without pretending Tauri-native capabilities exist.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:11:35.601Z",
+      "startedAt": "2026-07-02T06:11:03.245Z",
+      "completedAt": "2026-07-02T06:11:35.601Z",
+      "evidence": "Web/thin mode is proven by current source and fresh E2E. apps/aurora-tauri/src/aurora-client.test.tsx has a browser-preview test with VITE_AURORA_GATEWAY_URL that asserts runtime.mode=desktop-thin, transport.kind=http, sidecarStatus=null, and native/mobile Tauri commands unavailable. apps/aurora-tauri/src/tauri-app.tsx labels desktop-thin as remote Gateway/no local sidecar, displays sidecar supervisor as not used in thin mode, and labels mock as degraded development fixture only. packages/aurora-ui/src/onboarding-view.tsx and settings-permissions-view.tsx distinguish Server Web/desktop thin/native-mobile/offline fixture and unsupported native capabilities. docs/FRONTEND_AND_UI_ARCHITECTURE.md and docs/TAURI_DESKTOP_BUILD.md document Web/HTTP Gateway and desktop thin boundaries. Fresh verification: pnpm --filter @aurora/tauri-ui test:e2e:runtime passed."
     },
     {
       "id": "G004-every-nav-route-is-a-real-product-pa",
