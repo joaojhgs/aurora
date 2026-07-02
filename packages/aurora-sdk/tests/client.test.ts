@@ -1281,6 +1281,105 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('keeps local selector preference routeable without privacy-blocking read-only local actions', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const localProvider = cloneFixture(catalog.providers[0]!)
+    localProvider.provider_id = 'local:TTS'
+    localProvider.provider_kind = 'local'
+    localProvider.peer_id = null
+    localProvider.service_instance_id = 'tts-local'
+    localProvider.module = 'TTS'
+    localProvider.eligible = true
+    localProvider.reason_code = 'selector_preference_missing'
+    localProvider.reason = 'Local provider selector is a preference, not a privacy blocker.'
+
+    const localAction = cloneFixture(catalog.actions[0]!)
+    localAction.action_id = 'tts-local-selector-preference'
+    localAction.provider_id = localProvider.provider_id
+    localAction.provider_kind = 'local'
+    localAction.peer_id = null
+    localAction.service_instance_id = localProvider.service_instance_id
+    localAction.topic = 'TTS.Synthesize'
+    localAction.module = 'TTS'
+    localAction.method = 'Synthesize'
+    localAction.bindability = 'available'
+    localAction.route_blockers = []
+    localAction.policy = {
+      ...localAction.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'standard',
+      resource_scope: 'public'
+    }
+
+    catalog.providers = [localProvider]
+    catalog.actions = [localAction]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.selected_target = 'local'
+    route.selected_provider_id = null
+    route.selected_peer_id = null
+    route.selected_service_instance_id = localProvider.service_instance_id
+    route.selector_valid = false
+    route.selector_validation_code = 'explicit_selector_required'
+    route.selector_validation_message = 'Confirm the local provider preference.'
+    route.candidates = []
+    route.blockers = [
+      {
+        code: 'explicit_selector_required',
+        message: 'Confirm the local provider preference.',
+        severity: 'error',
+        provider_id: localProvider.provider_id,
+        peer_id: null,
+        security_privacy: true
+      }
+    ]
+    route.security_privacy_blockers = []
+
+    const graph = buildCapabilityGraph({ catalog, registry: gatewayRegistryFixture, transportKind: 'mock' })
+    const explanation = graph.explain('method:TTS.Synthesize')
+    expect(explanation).toEqual(
+      expect.objectContaining({
+        state: 'available-local',
+        selectorRequired: true,
+        routeable: true,
+        nextRepairAction: 'confirm the local provider selection before execution'
+      })
+    )
+    expect(explanation.providerCandidates[0]).toEqual(
+      expect.objectContaining({
+        selectable: true,
+        requiredAction: 'confirm the local provider selection before execution'
+      })
+    )
+
+    const evaluation = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { text: 'Local read-only synthesis preview.' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        decision: 'allowed',
+        availability: 'available-local',
+        explicitSelectorRequired: true,
+        repairPath: null,
+        privacyClass: 'public'
+      })
+    )
+    expect(evaluation.blockers).toEqual([])
+  })
+
   it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
     const route = {
       topic: 'Tooling.ExecuteTool',
