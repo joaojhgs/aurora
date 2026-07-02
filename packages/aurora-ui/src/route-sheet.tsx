@@ -15,6 +15,14 @@ import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
 export type RouteSheetScope = 'request' | 'session' | 'feature' | 'global'
 export type AdminActionRouteState = 'not-required' | 'required' | 'drafted' | 'confirmed' | 'error'
+export type RouteSheetPolicySignalState = 'not-required' | 'preference' | 'satisfied' | 'blocked'
+
+export interface RouteSheetPolicySignal {
+  id: 'selector' | 'consent' | 'privacy-indicator' | 'native-permission' | 'admin-action'
+  label: string
+  state: RouteSheetPolicySignalState
+  detail: string
+}
 
 export interface RouteSheetProps {
   client: AuroraClient
@@ -225,6 +233,7 @@ export function RouteSheet({
         <>
           <RoutePreviewGrid evaluation={model.evaluation} primaryReason={model.primaryReason} />
           <RouteCandidateList evaluation={model.evaluation} />
+          <RoutePolicySignals evaluation={model.evaluation} adminActionState={model.adminActionState} />
           <RouteScopeChooser selectedScope={selectedScope} canChoose={model.canConfirm} onChoose={chooseScope} />
           <div className="aui-route-policy">
             <div>
@@ -336,6 +345,110 @@ function RouteCandidateList({ evaluation }: { evaluation: RoutePolicyEvaluation 
       ))}
     </ul>
   )
+}
+
+
+function RoutePolicySignals({
+  evaluation,
+  adminActionState
+}: {
+  evaluation: RoutePolicyEvaluation
+  adminActionState: AdminActionRouteState
+}) {
+  const signals = routeSheetPolicySignals(evaluation, adminActionState)
+  return (
+    <dl className="aui-route-policy-signals" aria-label="Distinct route policy states">
+      {signals.map((signal) => (
+        <div key={signal.id} data-signal={signal.id} data-state={signal.state}>
+          <dt>{signal.label}</dt>
+          <dd>
+            <EvidenceBadge label={signal.state} />
+            <span>{signal.detail}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+export function routeSheetPolicySignals(
+  evaluation: RoutePolicyEvaluation,
+  adminActionState: AdminActionRouteState
+): RouteSheetPolicySignal[] {
+  const blockerCodes = new Set(evaluation.blockers.map((blocker) => blocker.code))
+  const nativeBlocker = evaluation.blockers.find((blocker) => isNativePermissionBlocker(blocker.code, blocker.message))
+  const selectorBlocked = [...blockerCodes].some(isSelectorBlockerCode)
+  const selectorState: RouteSheetPolicySignalState = evaluation.explicitSelectorRequired
+    ? evaluation.allowed && !selectorBlocked
+      ? 'preference'
+      : 'blocked'
+    : 'not-required'
+  const consentBlocked = blockerCodes.has('consent_required')
+  const privacyIndicatorBlocked = blockerCodes.has('privacy_indicator_required')
+
+  return [
+    {
+      id: 'selector',
+      label: 'Privacy selector',
+      state: selectorState,
+      detail: selectorState === 'preference'
+        ? 'Local provider selector is a preference; it does not hard-block this route.'
+        : selectorState === 'blocked'
+          ? 'Explicit peer, provider, or resource selector is required before dispatch.'
+          : 'Backend policy does not require an explicit selector for this route.'
+    },
+    {
+      id: 'consent',
+      label: 'Consent',
+      state: consentBlocked ? 'blocked' : 'not-required',
+      detail: consentBlocked
+        ? 'Consent is missing and must be collected before this payload can leave the local node.'
+        : 'No missing consent blocker is present in backend route policy evidence.'
+    },
+    {
+      id: 'privacy-indicator',
+      label: 'Privacy indicator',
+      state: privacyIndicatorBlocked ? 'blocked' : 'not-required',
+      detail: privacyIndicatorBlocked
+        ? 'The required privacy indicator has not been shown yet.'
+        : 'No missing privacy-indicator blocker is present in backend route policy evidence.'
+    },
+    {
+      id: 'native-permission',
+      label: 'Native permission',
+      state: nativeBlocker ? 'blocked' : 'not-required',
+      detail: nativeBlocker?.message ?? 'No missing native platform permission is present in route policy evidence.'
+    },
+    {
+      id: 'admin-action',
+      label: 'AdminAction',
+      state: adminActionSignalState(adminActionState),
+      detail: adminActionSignalDetail(adminActionState)
+    }
+  ]
+}
+
+function adminActionSignalState(state: AdminActionRouteState): RouteSheetPolicySignalState {
+  if (state === 'not-required') return 'not-required'
+  if (state === 'confirmed') return 'satisfied'
+  return 'blocked'
+}
+
+function adminActionSignalDetail(state: AdminActionRouteState): string {
+  if (state === 'not-required') return 'This route does not require AdminAction confirmation.'
+  if (state === 'confirmed') return 'AdminAction confirmation exists for this route.'
+  if (state === 'drafted') return 'AdminAction draft exists but confirmation is still pending.'
+  if (state === 'error') return 'AdminAction failed; retry or choose a different route.'
+  return 'AdminAction confirmation is required before dispatch.'
+}
+
+function isSelectorBlockerCode(code: string): boolean {
+  return code === 'explicit_selector_required' || code === 'selector_required' || code.includes('selector')
+}
+
+function isNativePermissionBlocker(code: string, message: string): boolean {
+  const text = `${code} ${message}`.toLowerCase()
+  return text.includes('native') && text.includes('permission')
 }
 
 function RouteScopeChooser({

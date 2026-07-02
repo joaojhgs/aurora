@@ -118,6 +118,7 @@ import {
   routePolicyFromRoute,
   routePolicyScenarios,
   routeSheetErrorMessage,
+  routeSheetPolicySignals,
   SettingsPermissionsView,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
@@ -2874,6 +2875,73 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('No route candidates were returned')
     expect(markup).toContain('AdminAction confirmation is required')
     expect(markup).toContain('disabled=""')
+  })
+
+  it('distinguishes RouteSheet selector, consent, privacy indicator, native permission, and AdminAction states', () => {
+    const privacyBlocked = blockedRouteEvaluation('privacy-blocked')
+    const evaluation = {
+      ...privacyBlocked,
+      blockers: [
+        ...privacyBlocked.blockers,
+        {
+          code: 'consent_required',
+          message: 'Consent is required before raw audio leaves this node.',
+          severity: 'error' as const,
+          provider_id: 'mesh:orchestrator',
+          peer_id: 'peer-remote',
+          security_privacy: true
+        },
+        {
+          code: 'privacy_indicator_required',
+          message: 'Show the privacy indicator before streaming audio.',
+          severity: 'error' as const,
+          provider_id: 'mesh:orchestrator',
+          peer_id: 'peer-remote',
+          security_privacy: true
+        },
+        {
+          code: 'native_permission_required',
+          message: 'Native microphone permission is missing.',
+          severity: 'error' as const,
+          provider_id: null,
+          peer_id: null,
+          security_privacy: true
+        }
+      ]
+    }
+
+    const signals = routeSheetPolicySignals(evaluation, 'required')
+    expect(signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
+      expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
+      expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
+      expect.objectContaining({ id: 'native-permission', label: 'Native permission', state: 'blocked' }),
+      expect.objectContaining({ id: 'admin-action', label: 'AdminAction', state: 'blocked' })
+    ]))
+
+    const localPreferenceSignals = routeSheetPolicySignals({
+      ...allowedRouteEvaluation(),
+      explicitSelectorRequired: true
+    }, 'not-required')
+    expect(localPreferenceSignals.find((signal) => signal.id === 'selector')).toEqual(expect.objectContaining({
+      state: 'preference',
+      detail: expect.stringContaining('does not hard-block')
+    }))
+
+    const markup = renderToStaticMarkup(
+      <RouteSheet
+        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        initialEvaluation={evaluation}
+        requiresAdminAction
+      />
+    )
+    expect(markup).toContain('Distinct route policy states')
+    expect(markup).toContain('Privacy selector')
+    expect(markup).toContain('Consent')
+    expect(markup).toContain('Privacy indicator')
+    expect(markup).toContain('Native permission')
+    expect(markup).toContain('Native microphone permission is missing')
+    expect(markup).toContain('AdminAction confirmation is required before dispatch')
   })
 
   it('surfaces RouteSheet loading and SDK error states without fixture route candidates', () => {

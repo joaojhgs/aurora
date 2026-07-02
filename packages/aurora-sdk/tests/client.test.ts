@@ -1380,6 +1380,102 @@ describe('AuroraClient', () => {
     expect(evaluation.blockers).toEqual([])
   })
 
+  it('keeps selector, consent, privacy indicator, native permission, and approval as separate SDK policy blockers', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const provider = cloneFixture(catalog.providers[0]!)
+    provider.provider_id = 'mesh:audio'
+    provider.provider_kind = 'remote'
+    provider.peer_id = 'peer-audio'
+    provider.service_instance_id = 'stt-remote'
+    provider.module = 'STT'
+    provider.eligible = false
+    provider.reason_code = 'explicit_selector_required'
+    provider.reason = 'Remote audio route needs selector, consent, and privacy indicator evidence.'
+
+    const action = cloneFixture(catalog.actions[0]!)
+    action.action_id = 'stt-remote-policy-signals'
+    action.provider_id = provider.provider_id
+    action.provider_kind = provider.provider_kind
+    action.peer_id = provider.peer_id
+    action.service_instance_id = provider.service_instance_id
+    action.topic = 'STT.Transcribe'
+    action.module = 'STT'
+    action.method = 'Transcribe'
+    action.bindability = 'unavailable'
+    action.route_blockers = ['explicit_selector_required']
+    action.policy = {
+      ...action.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: true,
+      privacy_indicator_required: true,
+      approval_required: true,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'sensitive',
+      resource_scope: 'raw-audio'
+    }
+    catalog.providers = [provider]
+    catalog.actions = [action]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.topic = 'STT.Transcribe'
+    route.module = 'STT'
+    route.selected_target = 'remote'
+    route.selected_provider_id = provider.provider_id
+    route.selected_peer_id = provider.peer_id
+    route.selected_service_instance_id = provider.service_instance_id
+    route.selector_valid = false
+    route.selector_validation_code = 'explicit_selector_required'
+    route.selector_validation_message = 'Choose the remote audio peer before streaming.'
+    route.fallback_behavior = 'none'
+    route.blockers = [
+      {
+        code: 'explicit_selector_required',
+        message: 'Choose the remote audio peer before streaming.',
+        severity: 'error',
+        provider_id: provider.provider_id,
+        peer_id: provider.peer_id,
+        security_privacy: true
+      },
+      {
+        code: 'native_permission_required',
+        message: 'Native microphone permission is missing.',
+        severity: 'error',
+        provider_id: null,
+        peer_id: null,
+        security_privacy: true
+      }
+    ]
+    route.security_privacy_blockers = [...route.blockers]
+
+    const evaluation = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { sample_format: 'pcm16' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      availability: 'privacy-blocked',
+      explicitSelectorRequired: true,
+      privacyClass: 'raw-audio',
+      reasonCode: 'approval_required',
+      repairPath: 'request user approval'
+    }))
+    expect(evaluation.approval).toEqual(expect.objectContaining({ required: true, status: 'required' }))
+    expect(evaluation.blockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining([
+      'explicit_selector_required',
+      'native_permission_required',
+      'consent_required',
+      'privacy_indicator_required'
+    ]))
+  })
+
   it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
     const route = {
       topic: 'Tooling.ExecuteTool',
