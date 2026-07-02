@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Cpu, Download, Gauge, HardDrive, RefreshCcw, Route, Smartphone } from 'lucide-react'
+import { AlertTriangle, Cpu, Download, Gauge, HardDrive, RefreshCcw, Route, Smartphone } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
@@ -49,6 +49,13 @@ export interface ModelProviderViewModel {
   benchmarkReason: string
 }
 
+export interface ModelBenchmarkSnapshotRow {
+  label: string
+  value: string
+  detail: string
+  state: AvailabilityState
+}
+
 export interface ModelsViewModel {
   loadState: 'loading' | 'ready' | 'empty' | 'error'
   generatedAt: string | null
@@ -61,6 +68,8 @@ export interface ModelsViewModel {
   secretsRedacted: boolean
   error: string | null
   providers: ModelProviderViewModel[]
+  benchmarkRows: ModelBenchmarkSnapshotRow[]
+  warnings: string[]
 }
 
 const emptyModel: ModelsViewModel = {
@@ -74,7 +83,9 @@ const emptyModel: ModelsViewModel = {
   mobileLocalLightReason: 'Native manifest evidence is not loaded.',
   secretsRedacted: true,
   error: null,
-  providers: []
+  providers: [],
+  benchmarkRows: [],
+  warnings: []
 }
 
 export function ModelsView({
@@ -160,6 +171,7 @@ export function ModelsView({
               <ModelProviderCard key={provider.id} provider={provider} />
             ))}
           </div>
+          <ModelRoutePolicyPanel providers={model.providers} />
           <div className="aui-model-layout">
             <ModelProviderTable providers={model.providers} />
             <aside className="aui-model-summary" aria-label="Runtime summary">
@@ -170,6 +182,8 @@ export function ModelsView({
                 <div><dt>Mobile local-light</dt><dd><StatusBadge state={model.mobileLocalLightState} /></dd></div>
                 <div><dt>Native evidence</dt><dd>{model.mobileLocalLightReason}</dd></div>
               </dl>
+              <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
+              <ModelWarnings warnings={model.warnings} />
             </aside>
           </div>
         </>
@@ -204,7 +218,9 @@ export function buildModelsViewModel(input: {
     mobileLocalLightReason: mobile.reason,
     secretsRedacted: input.catalog.secrets_redacted,
     error: null,
-    providers
+    providers,
+    benchmarkRows: benchmarkSnapshotRows(providers),
+    warnings: modelWarnings(providers, mobile)
   }
 }
 
@@ -243,6 +259,78 @@ function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
         </ul>
       ) : null}
     </article>
+  )
+}
+
+function ModelRoutePolicyPanel({ providers }: { providers: ModelProviderViewModel[] }) {
+  return (
+    <section className="aui-model-route-policy" aria-labelledby="model-route-policy-title">
+      <div className="aui-model-panel-title">
+        <span><Route size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="model-route-policy-title">Provider route policy</h2>
+          <p>Route, privacy, and blocker state is read from the capability graph and runtime catalog; selector-only policy is not treated as a hard blocker.</p>
+        </div>
+      </div>
+      <div className="aui-model-route-grid">
+        {providers.map((provider) => (
+          <article className="aui-model-route-card" key={provider.id}>
+            <header>
+              <div>
+                <p className="aui-kicker">{provider.providerType} provider</p>
+                <h3>{provider.name}</h3>
+              </div>
+              <StatusBadge state={provider.availability} />
+            </header>
+            <dl className="aui-model-meta">
+              <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
+              <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
+              <div><dt>Selectable</dt><dd>{provider.canSelect ? 'yes' : provider.selectReason}</dd></div>
+              <div><dt>Blockers</dt><dd>{provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported'}</dd></div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ModelBenchmarkSnapshot({ rows }: { rows: ModelBenchmarkSnapshotRow[] }) {
+  return (
+    <section className="aui-model-benchmark" aria-labelledby="model-benchmark-title">
+      <div className="aui-model-panel-title compact">
+        <span><Gauge size={16} aria-hidden="true" /></span>
+        <div>
+          <h2 id="model-benchmark-title">Benchmark snapshot</h2>
+          <p>Only backend-reported benchmark facts are shown; missing measurements stay explicit.</p>
+        </div>
+      </div>
+      <dl>
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt>{row.label}</dt>
+            <dd><StatusBadge state={row.state} /> {row.value}<small>{row.detail}</small></dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function ModelWarnings({ warnings }: { warnings: string[] }) {
+  return warnings.length === 0 ? null : (
+    <section className="aui-model-warnings" aria-labelledby="model-warning-title">
+      <div className="aui-model-panel-title compact">
+        <span><AlertTriangle size={16} aria-hidden="true" /></span>
+        <div>
+          <h2 id="model-warning-title">Runtime warnings</h2>
+          <p>Capabilities are disabled or degraded until backend/native proof allows them.</p>
+        </div>
+      </div>
+      <ul>
+        {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+      </ul>
+    </section>
   )
 }
 
@@ -409,6 +497,43 @@ function filesLabel(provider: ModelRuntimeProviderInfo): string {
   return provider.model_files
     .map((file) => `${file.display_name}${file.exists === false ? ' missing' : ''}${file.path_redacted ? ' redacted' : ''}`)
     .join(', ')
+}
+
+function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchmarkSnapshotRow[] {
+  const completed = providers.filter((provider) => !provider.benchmark.includes(':') && !provider.benchmark.includes('pending') && provider.benchmark !== 'idle')
+  const running = providers.filter((provider) => provider.benchmark.includes('running'))
+  const unavailable = providers.filter((provider) => provider.benchmark.includes('unsupported') || provider.benchmark.includes('unavailable') || provider.benchmark.includes('idle'))
+  return [
+    {
+      label: 'Measured providers',
+      value: `${completed.length}/${providers.length}`,
+      detail: completed.length > 0 ? completed.map((provider) => provider.name).join(', ') : 'No completed benchmark evidence was returned by the backend catalog.',
+      state: completed.length > 0 ? 'available-local' : 'pending'
+    },
+    {
+      label: 'Running operations',
+      value: `${running.length}`,
+      detail: running.length > 0 ? running.map((provider) => provider.name).join(', ') : 'No benchmark operation is currently active.',
+      state: running.length > 0 ? 'degraded' : 'available-local'
+    },
+    {
+      label: 'Missing measurements',
+      value: `${unavailable.length}`,
+      detail: unavailable.length > 0 ? unavailable.map((provider) => provider.name).join(', ') : 'All providers have benchmark evidence.',
+      state: unavailable.length > 0 ? 'degraded' : 'available-local'
+    }
+  ]
+}
+
+function modelWarnings(
+  providers: ModelProviderViewModel[],
+  mobile: { state: AvailabilityState; reason: string }
+): string[] {
+  return sortedUnique([
+    ...providers.flatMap((provider) => provider.blockers.map((blocker) => `${provider.name}: ${blocker}`)),
+    ...providers.filter((provider) => !provider.canSelect).map((provider) => `${provider.name}: ${provider.selectReason}`),
+    mobile.state === 'available-local' ? null : `Mobile local-light remains capability-gated: ${mobile.reason}`
+  ]).slice(0, 8)
 }
 
 function selectReason(selected: boolean): string {

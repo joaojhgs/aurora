@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:49:13.136Z",
+  "updatedAt": "2026-07-02T06:53:06.651Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -167,10 +167,13 @@
       "id": "G014-components-aurora-models-models-view",
       "title": "`components/aurora/models/models-view.tsx`: provider cards, provider...",
       "objective": "`components/aurora/models/models-view.tsx`: provider cards, provider route policy, benchmark snapshot, runtime table, warnings.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:53:06.651Z",
+      "startedAt": "2026-07-02T06:50:30.560Z",
+      "completedAt": "2026-07-02T06:53:06.651Z",
+      "evidence": "Models route now includes mock-derived provider route policy cards, benchmark snapshot, runtime table evidence, and warnings backed by AuroraClient model catalog, capability graph, and native local-light evidence. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'model runtime'; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G015-components-aurora-admin-overview-tsx",

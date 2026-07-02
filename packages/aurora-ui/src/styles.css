@@ -305,6 +305,19 @@ button, input, select, textarea { font: inherit; }
 .aui-model-meta dd, .aui-model-summary dd { margin: .15rem 0 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .aui-model-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.3rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 30%, var(--aui-border)); border-radius: .45rem; padding: .45rem .65rem; background: var(--aui-surface-2); color: var(--aui-primary); font-size: .84rem; font-weight: 800; }
 .aui-model-actions button:disabled { cursor: not-allowed; border-color: var(--aui-border); color: var(--aui-muted); opacity: .58; }
+.aui-model-route-policy, .aui-model-benchmark, .aui-model-warnings { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-model-panel-title { display: flex; align-items: flex-start; gap: .6rem; }
+.aui-model-panel-title > span { display: grid; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
+.aui-model-panel-title.compact > span { width: 1.9rem; height: 1.9rem; }
+.aui-model-panel-title h2 { margin: 0; font-size: 1rem; }
+.aui-model-panel-title p { margin: .25rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-model-route-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .75rem; }
+.aui-model-route-card { display: grid; gap: .65rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem; }
+.aui-model-route-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.aui-model-route-card h3 { margin: .12rem 0 0; font-size: .98rem; overflow-wrap: anywhere; }
+.aui-model-benchmark dl { display: grid; gap: .55rem; margin: 0; }
+.aui-model-benchmark small { display: block; margin-top: .2rem; color: var(--aui-muted); line-height: 1.35; }
+.aui-model-warnings ul { display: grid; gap: .4rem; margin: 0; padding-left: 1.1rem; color: var(--aui-muted); line-height: 1.4; }
 .aui-model-blockers { display: grid; gap: .3rem; margin: 0; padding-left: 1rem; color: var(--aui-muted); font-size: .84rem; }
 .aui-model-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem); gap: .85rem; align-items: start; }
 .aui-model-table-wrap { min-width: 0; overflow: auto; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
@@ -430,6 +443,7 @@ button, input, select, textarea { font: inherit; }
   .aui-models-header { display: grid; }
   .aui-model-badges { justify-content: flex-start; }
   .aui-model-card header { grid-template-columns: auto minmax(0, 1fr); }
+  .aui-model-route-card > header { display: grid; }
   .aui-model-card header .aui-badge { grid-column: 1 / -1; width: fit-content; }
   .aui-model-meta { grid-template-columns: minmax(0, 1fr); }
   .aui-model-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
