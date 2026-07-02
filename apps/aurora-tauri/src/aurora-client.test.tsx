@@ -19,6 +19,17 @@ const PLACEHOLDER_MARKERS = [
   'debug-dashboard',
 ] as const
 
+const DIAGNOSTICS_PAGE_MARKERS = [
+  'Native boundary',
+  'Denied native defaults',
+  'Shut down shell',
+  'WebRTC and ICE diagnostics',
+  'Diagnostics overview',
+  'Live probes',
+  'Redaction preview',
+  'Support-bundle export',
+] as const
+
 const adminRouteIds = new Set([
   'admin',
   'services',
@@ -331,6 +342,23 @@ describe('Tauri CI/E2E route gates', () => {
       expectNoPlaceholderOrDebugUi(markup, route.id)
       expect(markup, route.id).toContain(route.label)
       expect(markup, route.id).not.toContain(`${route.label} route registry error`)
+    }
+  })
+
+  it('e2e:routes keeps the diagnostics dashboard exclusive to /diagnostics', () => {
+    for (const route of primaryNavItems) {
+      const markup = renderTauriRoute(route.href)
+
+      if (route.id === 'diagnostics') {
+        for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
+          expect(markup, marker).toContain(marker)
+        }
+        continue
+      }
+
+      for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
+        expect(markup, `${route.id} must not render diagnostics dashboard marker ${marker}`).not.toContain(marker)
+      }
     }
   })
 

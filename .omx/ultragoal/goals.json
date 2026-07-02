@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:50:55.248Z",
+  "updatedAt": "2026-07-02T10:52:32.038Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1066,10 +1066,12 @@
       "id": "G090-keep-diagnostics-available-only-on-d",
       "title": "Keep diagnostics available only on `/diagnostics`, not as the default...",
       "objective": "Keep diagnostics available only on `/diagnostics`, not as the default substitute for product routes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:52:32.038Z",
+      "completedAt": "2026-07-02T10:52:32.038Z",
+      "evidence": "Added DIAGNOSTICS_PAGE_MARKERS E2E route crawl in apps/aurora-tauri/src/aurora-client.test.tsx proving /diagnostics renders native/WebRTC/support-bundle diagnostics markers while all 21 non-diagnostics nav routes reject those markers. Verified: pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G091-add-a-temporary-build-time-test-only",
