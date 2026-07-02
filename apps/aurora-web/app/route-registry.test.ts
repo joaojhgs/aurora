@@ -44,4 +44,24 @@ describe('Aurora web route registry', () => {
       expect(existsSync(pageFileForHref(route.href)), `${route.id} ${route.href}`).toBe(true)
     }
   })
+
+  it('mounts production resources for web routes that previously used placeholder contract pages', () => {
+    const productionRoutes = [
+      { href: '/admin/services', expected: 'AdminServicesClientPage' },
+      { href: '/admin/contracts', expected: 'AdminServicesClientPage' },
+      { href: '/admin/tokens', expected: 'AdminTokensClientPage' },
+      { href: '/memory/policy', expected: 'DataPolicyClientPage' }
+    ]
+    const forbidden = /will use|will render|follow-up task|downstream UI task wires|placeholder|debug-dashboard|route dump/i
+
+    for (const route of productionRoutes) {
+      const source = readFileSync(pageFileForHref(route.href), 'utf8')
+      expect(source, route.href).toContain(route.expected)
+      expect(source, route.href).not.toMatch(forbidden)
+    }
+
+    const fallbackSource = readFileSync(join(appDir, 'page-content.tsx'), 'utf8')
+    expect(fallbackSource).not.toMatch(/will use|will render|follow-up task|downstream UI task wires/i)
+    expect(fallbackSource).toContain('unsupported actions stay disabled')
+  })
 })

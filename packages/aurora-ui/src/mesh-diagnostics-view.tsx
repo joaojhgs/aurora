@@ -394,7 +394,12 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
         </dl>
         <p className="aui-mesh-diagnostics-note">{snapshot.supportBundleReason}</p>
-        <button className="aui-primary-action" type="button" disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} onClick={() => void onExportSupportBundle?.()}>
+        <button
+          className="aui-primary-action"
+          type="button"
+          disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'}
+          {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
+        >
           <Download size={15} aria-hidden />
           {supportBundleExportState.status === 'pending' ? 'Exporting through AdminAction...' : 'Export redacted bundle'}
         </button>

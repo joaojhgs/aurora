@@ -9,7 +9,7 @@ import type {
 import { MeshDiagnosticsView, meshDiagnosticsSnapshotFromResults } from '@aurora/ui'
 import { createAuroraWebClient } from '../aurora-client'
 import { getShellSnapshot } from '../shell-state'
-import { DiagnosticsExportControl } from './diagnostics-export-control'
+import { DiagnosticsExportIsland } from './diagnostics-export-island'
 
 interface DiagnosticResult<T> {
   data: T | null
@@ -164,7 +164,7 @@ export default async function Page() {
 
       <MeshDiagnosticsView snapshot={meshDiagnostics} route={diagnosticsRoute} />
 
-      <DiagnosticsExportControl
+      <DiagnosticsExportIsland
         correlationId={correlationId}
         disabled={exportDisabled}
         disabledReason="Required support bundle inputs are unavailable; repair Gateway services, topology, and capability catalog first."

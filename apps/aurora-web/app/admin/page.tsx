@@ -1,6 +1,5 @@
-import { AdminOverviewView } from '@aurora/ui'
-import { createAuroraWebClient } from '../aurora-client'
+import { AdminOverviewClientPage } from './admin-overview-client'
 
 export default function Page() {
-  return <AdminOverviewView client={createAuroraWebClient()} />
+  return <AdminOverviewClientPage />
 }

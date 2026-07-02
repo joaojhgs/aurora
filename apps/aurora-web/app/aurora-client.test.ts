@@ -1,13 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraWebClient } from './aurora-client'
 
 describe('createAuroraWebClient', () => {
-  it('uses the SDK mock transport as an explicit development fallback', () => {
-    const previous = process.env.AURORA_GATEWAY_URL
-    delete process.env.AURORA_GATEWAY_URL
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('uses the SDK mock transport only in explicit test or demo mode', () => {
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
     const client = createAuroraWebClient()
-    if (previous === undefined) delete process.env.AURORA_GATEWAY_URL
-    else process.env.AURORA_GATEWAY_URL = previous
+
+    expect(client.transport.kind).toBe('mock')
+  })
+
+  it('fails closed instead of using fixture data as production truth when Gateway URL is missing', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
+    vi.stubEnv('AURORA_WEB_DEMO_MODE', '')
+
+    const client = createAuroraWebClient()
+
+    expect(client.transport.kind).toBe('http')
+    await expect(client.capabilities.getGraph()).rejects.toThrow(/Gateway URL is not configured/)
+  })
+
+  it('requires explicit demo opt-in for fixture-backed web mode outside tests', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
+    vi.stubEnv('AURORA_WEB_DEMO_MODE', '1')
+
+    const client = createAuroraWebClient()
 
     expect(client.transport.kind).toBe('mock')
   })

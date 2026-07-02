@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   MockAuroraTransport,
@@ -17,6 +18,10 @@ import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
 
 afterEach(() => {
   for (const root of roots.splice(0)) root.unmount()

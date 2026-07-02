@@ -117,8 +117,7 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
           <EvidenceBadge label={`${manageMethods.length} manage methods`} />
         </div>
         <p>
-          Manage/admin-critical operations are visible for audit planning only. They remain disabled here until their
-          downstream task wires the matching AdminAction draft, confirm, submit, rollback, and error flow.
+          Manage/admin-critical operations are visible for audit planning only. They remain disabled here until a dedicated AdminAction flow provides draft, confirm, submit, rollback, and error evidence.
         </p>
         {manageMethods.length > 0 ? (
           <div className="aui-admin-action-list">
