@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:18:04.994Z",
+  "updatedAt": "2026-07-02T11:21:49.342Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1154,10 +1154,12 @@
       "id": "G098-add-shared-components",
       "title": "Add shared components:",
       "objective": "Add shared components:\n`PageHeader`;\n`RouteBadge`;\n`StateSurface` with concise copy;\n`AdminActionButton`;\n`CapabilityDrawer` adapted from mock;\nconsistent skeletons/errors/empty states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:21:49.342Z",
+      "completedAt": "2026-07-02T11:21:49.342Z",
+      "evidence": "Added shared production UI primitives: RouteBadge, AdminActionButton, CapabilityDrawer, SurfaceSkeleton, EmptyState, and reused CapabilityDrawer from shell route cards alongside existing PageHeader/StateSurface/RouteStateNotice. Verified: pnpm --filter @aurora/ui test -- -t 'shared page header|accessible navigation'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G099-remove-debug-dump-styling-from-produ",

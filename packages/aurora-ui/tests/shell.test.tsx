@@ -66,6 +66,7 @@ import {
   MeshPeersView,
   RoutePolicyView,
   RouteSheet,
+  AdminActionButton,
   buildAdminServicesSnapshot,
   buildAdminPluginsSnapshot,
   buildAdminRbacSnapshot,
@@ -86,9 +87,13 @@ import {
   buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
   PageHeader,
+  CapabilityDrawer,
+  EmptyState,
+  RouteBadge,
   RouteMatrix,
   RouteStateNotice,
   StateSurface,
+  SurfaceSkeleton,
   attachmentStatusFromBackend,
   attachmentToContextItem,
   applyAssistantStreamDelta,
@@ -175,7 +180,9 @@ describe('Aurora production shell', () => {
     ]))
   })
 
-  it('preserves shared page header badges and route state notices', () => {
+  it('preserves shared page header badges, route state notices, and action primitives', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const memoryRoute = route(snapshot, 'memory')
     const markup = renderToStaticMarkup(
       <div>
         <PageHeader
@@ -194,6 +201,11 @@ describe('Aurora production shell', () => {
         <RouteStateNotice state="empty" title="No namespaces" message="The backend returned no namespaces." />
         <RouteStateNotice state="error" title="Gateway unavailable" message="AuroraClient returned an SDK error." evidence="Gateway unavailable" />
         <RouteStateNotice state="permission" title="Permission required" message="AdminAction or Auth permission is required." actionLabel="Request permission" />
+        <RouteBadge route={memoryRoute} />
+        <AdminActionButton required label="Apply admin change" disabledReason="Requires Gateway.manage AdminAction." />
+        <CapabilityDrawer route={memoryRoute} />
+        <SurfaceSkeleton title="Loading memory route" />
+        <EmptyState title="No memory namespaces" message="Create or ingest data before searching memory." actionLabel="Open tools" />
       </div>
     )
 
@@ -210,6 +222,14 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('aui-route-notice-permission')
     expect(markup).toContain('Request permission')
     expect(markup).toContain('disabled=""')
+    expect(markup).toContain('Memory route badge')
+    expect(markup).toContain('aui-route-badge')
+    expect(markup).toContain('Apply admin change')
+    expect(markup).toContain('data-admin-action-required="true"')
+    expect(markup).toContain('Capability details')
+    expect(markup).toContain('Repair actions')
+    expect(markup).toContain('aui-surface-skeleton')
+    expect(markup).toContain('No memory namespaces')
   })
 
   it('builds route availability from AuroraClient capability catalog', async () => {
@@ -463,7 +483,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('aria-label="Health"')
     expect(markup).toContain('AdminAction')
     expect(markup).toContain('privacy-blocked')
-    expect(markup).toContain('Feature details')
+    expect(markup).toContain('Capability details')
     expect(markup).toContain('Repair actions')
   })
 

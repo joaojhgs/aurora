@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import type { MouseEventHandler, ReactNode } from 'react'
 import type { AvailabilityState } from '@aurora/client'
-import { StatusBadge } from './status-badges'
+import type { RouteAvailability } from './shell-data'
+import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
 export interface PageHeaderProps {
   title: string
@@ -28,6 +29,34 @@ export interface StateSurfaceProps {
   description: string
   evidence?: string | null
   actionLabel?: string | null
+}
+
+export interface RouteBadgeProps {
+  route: RouteAvailability
+  compact?: boolean
+}
+
+export interface AdminActionButtonProps {
+  label?: string
+  required: boolean
+  disabledReason?: string | null | undefined
+  onClick?: MouseEventHandler<HTMLButtonElement> | undefined
+}
+
+export interface CapabilityDrawerProps {
+  route: RouteAvailability
+  title?: string
+}
+
+export interface SurfaceSkeletonProps {
+  title?: string
+  lines?: number
+}
+
+export interface EmptyStateProps {
+  title: string
+  message: string
+  actionLabel?: string | null | undefined
 }
 
 export function PageHeader({
@@ -72,6 +101,112 @@ export function RouteStateNotice({ title, state, message, evidence, actionLabel 
       {evidence ? <code>{evidence}</code> : null}
       {actionLabel ? <button className="aui-button" type="button" disabled>{actionLabel}</button> : null}
     </div>
+  )
+}
+
+export function RouteBadge({ route, compact = false }: RouteBadgeProps) {
+  return (
+    <span className={compact ? 'aui-route-badge aui-route-badge-compact' : 'aui-route-badge'} aria-label={`${route.item.label} route badge`}>
+      <StatusBadge state={route.state} />
+      <PrivacyBadge privacy={route.item.privacyClass} />
+      {compact ? null : <EvidenceBadge label={route.providerLabel} />}
+    </span>
+  )
+}
+
+export function AdminActionButton({
+  label = 'AdminAction',
+  required,
+  disabledReason,
+  onClick
+}: AdminActionButtonProps) {
+  const disabled = !required || !onClick
+  const reason = disabledReason ?? (required ? 'AdminAction confirmation must be requested through Aurora Auth.' : 'AdminAction is not required for this route.')
+  return (
+    <button
+      type="button"
+      className="aui-admin-action-button"
+      data-admin-action-required={required ? 'true' : 'false'}
+      disabled={disabled}
+      title={reason}
+      onClick={disabled ? undefined : onClick}
+    >
+      <span>{label}</span>
+      <small>{required ? 'confirmation required' : 'read-only'}</small>
+    </button>
+  )
+}
+
+export function CapabilityDrawer({ route, title = 'Capability details' }: CapabilityDrawerProps) {
+  return (
+    <details className="aui-capability-drawer">
+      <summary>{title}</summary>
+      <div className="aui-capability-drawer-body">
+        <section aria-label={`${route.item.label} repair actions`}>
+          <h4>Repair actions</h4>
+          <div className="aui-repair-actions">
+            {route.repairActions.map((action) => (
+              action.disabled ? (
+                <button key={action.id} type="button" className="aui-action-chip" disabled title={action.reason}>
+                  {action.label}
+                </button>
+              ) : (
+                <a key={action.id} className="aui-action-chip" href={action.href} title={action.reason}>
+                  {action.label}
+                </a>
+              )
+            ))}
+          </div>
+        </section>
+        <section aria-label={`${route.item.label} capability blockers`}>
+          <h4>Capability evidence</h4>
+          <dl>
+            <div><dt>Routeable</dt><dd>{route.routeable ? 'yes' : 'no'}</dd></div>
+            <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
+            <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
+            <div><dt>Sources</dt><dd>{route.evidenceSources.join(', ') || 'none'}</dd></div>
+            <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || 'none'}</dd></div>
+          </dl>
+        </section>
+        <section aria-label={`${route.item.label} provider candidates`}>
+          <h4>Providers</h4>
+          {route.candidateProviders.length > 0 ? (
+            <ul className="aui-provider-list">
+              {route.candidateProviders.map((provider) => (
+                <li key={provider.id}>
+                  <span>{provider.label}</span>
+                  <StatusBadge state={provider.state} />
+                  <small>{provider.requiredAction ?? provider.reason}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No candidate provider was reported by the capability graph.</p>
+          )}
+        </section>
+      </div>
+    </details>
+  )
+}
+
+export function SurfaceSkeleton({ title = 'Loading route', lines = 3 }: SurfaceSkeletonProps) {
+  return (
+    <section className="aui-surface-skeleton" aria-label={title} aria-live="polite">
+      <span className="aui-badge aui-badge-loading">loading</span>
+      {Array.from({ length: Math.max(1, lines) }, (_, index) => (
+        <span key={index} className="aui-skeleton-line" />
+      ))}
+    </section>
+  )
+}
+
+export function EmptyState({ title, message, actionLabel }: EmptyStateProps) {
+  return (
+    <section className="aui-empty-state">
+      <h2>{title}</h2>
+      <p>{message}</p>
+      {actionLabel ? <button type="button" className="aui-button" disabled>{actionLabel}</button> : null}
+    </section>
   )
 }
 
