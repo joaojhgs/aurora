@@ -13,7 +13,9 @@ import {
   type CapabilitySummary,
   type DeviceResponse,
   type JsonObject,
+  type ListPendingPairingsResponse,
   type NativeCapabilityManifest,
+  type PendingPairingEntry,
   type TokenResponse
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
@@ -63,15 +65,30 @@ export interface AdminDeviceRow {
   deleteAction: AdminDeviceAction | null
 }
 
+export interface AdminPendingPairingRow {
+  requestId: string
+  deviceName: string
+  remotePeerId: string
+  remoteNodeName: string
+  clientIp: string
+  status: string
+  expiresAt: string
+  permissionCount: number
+  adminRequested: boolean
+}
+
 export interface AdminDevicesSnapshot {
   loadState: AdminDevicesLoadState
   generatedAt: string | null
   secretsRedacted: boolean
   devices: AdminDeviceRow[]
+  pendingPairings: AdminPendingPairingRow[]
   listState: AvailabilityState
   listReason: string
   tokenState: AvailabilityState
   tokenReason: string
+  pairingState: AvailabilityState
+  pairingReason: string
   deleteState: AvailabilityState
   deleteReason: string
   nativePlatform: string | null
@@ -101,10 +118,13 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   generatedAt: null,
   secretsRedacted: true,
   devices: [],
+  pendingPairings: [],
   listState: 'pending',
   listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
   tokenState: 'pending',
   tokenReason: 'Loading token/session evidence through AuroraClient.',
+  pairingState: 'pending',
+  pairingReason: 'Loading Auth.ListPendingPairings through AuroraClient.',
   deleteState: 'pending',
   deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
   nativePlatform: null,
@@ -173,39 +193,45 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
 }
 
 export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<AdminDevicesSnapshot> {
-  const [devicesResult, tokensResult, catalogResult, nativeResult] = await Promise.allSettled([
+  const [devicesResult, tokensResult, pairingsResult, catalogResult, nativeResult] = await Promise.allSettled([
     client.authApi.listDevices(),
     client.authApi.listTokens(),
+    client.authApi.listPendingPairings(),
     client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true }),
     client.native.getManifest()
   ])
 
   const devicesResponse = responseDataOrNull(devicesResult)
   const tokensResponse = responseDataOrNull(tokensResult)
+  const pairingsResponse = responseDataOrNull(pairingsResult)
   const capabilityCatalog = valueOrNull(catalogResult)
   const nativeManifest = valueOrNull(nativeResult)
   const summaries = capabilityCatalog ? summarizeCapabilities(capabilityCatalog) : []
   const listCapability = capabilityFor(AUTH_METHODS.listDevices, summaries)
   const tokenCapability = capabilityFor(AUTH_METHODS.listTokens, summaries)
+  const pairingCapability = capabilityFor(AUTH_METHODS.listPendingPairings, summaries)
   const deleteCapability = capabilityFor(AUTH_METHODS.deleteDevice, summaries)
   const failures = [
     failureMessage('devices', devicesResult),
     failureMessage('tokens', tokensResult),
+    failureMessage('pending pairings', pairingsResult),
     failureMessage('capability catalog', catalogResult),
     failureMessage('native manifest', nativeResult, true)
   ].filter((message): message is string => Boolean(message))
-  const denied = [devicesResult, tokensResult, catalogResult].some(isDeniedFailure)
+  const denied = [devicesResult, tokensResult, pairingsResult, catalogResult].some(isDeniedFailure)
 
-  if (!devicesResponse && !tokensResponse && !capabilityCatalog) {
+  if (!devicesResponse && !tokensResponse && !pairingsResponse && !capabilityCatalog) {
     const message = 'Auth device/session SDK resources are unavailable.'
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
       listState: denied ? 'denied' : 'unsupported',
       tokenState: denied ? 'denied' : 'unsupported',
+      pairingState: denied ? 'denied' : 'unsupported',
       deleteState: denied ? 'denied' : 'unsupported',
       listReason: message,
       tokenReason: message,
+      pairingReason: message,
       deleteReason: message,
       error: message,
       warnings: failures,
@@ -214,6 +240,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   }
 
   const tokenRows = tokensResponse?.tokens ?? []
+  const pendingPairings = buildPendingPairingRows(pairingsResponse)
   const devices = (devicesResponse?.devices ?? []).map((device) =>
     buildDeviceRow(device, tokenRows, deleteCapability, nativeManifest)
   )
@@ -228,12 +255,15 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   return {
     loadState,
     generatedAt: capabilityCatalog?.generated_at ?? null,
-    secretsRedacted: capabilityCatalog?.secrets_redacted ?? true,
+    secretsRedacted: Boolean((capabilityCatalog?.secrets_redacted ?? true) && (pairingsResponse?.secrets_redacted ?? true)),
     devices,
+    pendingPairings,
     listState: listCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
     listReason: listCapability ? capabilityReason(listCapability) : 'Auth.ListDevices is not advertised by the capability catalog.',
     tokenState: tokenCapability?.availability ?? (tokensResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
     tokenReason: tokenCapability ? capabilityReason(tokenCapability) : 'Auth.ListTokens token/session evidence is not advertised by the capability catalog.',
+    pairingState: pairingCapability?.availability ?? (pairingsResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
+    pairingReason: pairingCapability ? capabilityReason(pairingCapability) : 'Auth.ListPendingPairings is not advertised by the capability catalog.',
     deleteState: deleteCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
     deleteReason: deleteCapability ? capabilityReason(deleteCapability) : 'Auth.DeleteDevice is not advertised by the capability catalog.',
     nativePlatform: nativeManifest?.platform ?? null,
@@ -282,10 +312,12 @@ export function AdminDevicesView({
 
       <div className="aui-admin-metrics" aria-label="Device/session summary">
         <Metric label="Devices" value={String(snapshot.devices.length)} detail={`${totals.trusted} trusted`} />
+        <Metric label="Pending" value={String(totals.pending + snapshot.pendingPairings.length)} detail={`${snapshot.pendingPairings.length} pairing requests`} />
         <Metric label="Sessions" value={String(totals.activeSessions)} detail="token-backed evidence" />
         <Metric label="Tokens" value={String(totals.tokens)} detail={`${totals.expiredTokens} expired`} />
-        <Metric label="Native" value={snapshot.nativePlatform ?? 'none'} detail={`${snapshot.nativeCapabilities.length} SDK capabilities`} />
       </div>
+
+      <DevicePlatformSecurityPanel snapshot={snapshot} />
 
       <section className="aui-admin-panel" aria-labelledby="device-controls-title">
         <div className="aui-panel-heading">
@@ -311,6 +343,7 @@ export function AdminDevicesView({
           <div className="aui-device-capability-grid">
             <CapabilityFact label="List devices" state={snapshot.listState} reason={snapshot.listReason} />
             <CapabilityFact label="List tokens" state={snapshot.tokenState} reason={snapshot.tokenReason} />
+            <CapabilityFact label="Pending pairings" state={snapshot.pairingState} reason={snapshot.pairingReason} />
             <CapabilityFact label="Delete device" state={snapshot.deleteState} reason={snapshot.deleteReason} />
           </div>
         </div>
@@ -407,6 +440,49 @@ export function AdminDevicesView({
   )
 }
 
+function DevicePlatformSecurityPanel({ snapshot }: { snapshot: AdminDevicesSnapshot }) {
+  return (
+    <section className="aui-admin-panel" aria-labelledby="device-platform-title">
+      <div className="aui-panel-heading">
+        <div>
+          <p className="aui-kicker">Trust posture</p>
+          <h2 id="device-platform-title">Pending pairings and platform security</h2>
+        </div>
+        <a className="aui-action-chip" href="/admin/pairing">Open pairing queue</a>
+      </div>
+      <div className="aui-device-posture-grid">
+        <article>
+          <h3>Pending pairing requests</h3>
+          {snapshot.pendingPairings.length === 0 ? (
+            <p className="aui-muted">No pending pairings were returned by Auth.ListPendingPairings.</p>
+          ) : (
+            <ul className="aui-device-pairing-list">
+              {snapshot.pendingPairings.map((pairing) => (
+                <li key={pairing.requestId}>
+                  <StatusBadge state={pairing.status === 'pending' ? 'pending' : 'unsupported'} />
+                  <div>
+                    <strong>{pairing.deviceName}</strong>
+                    <span>{pairing.remoteNodeName || pairing.remotePeerId} from {pairing.clientIp}</span>
+                    <small>{pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; expires {formatDate(pairing.expiresAt)}</small>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+        <article>
+          <h3>Platform security status</h3>
+          <dl className="aui-device-facts">
+            <div><dt>Platform</dt><dd>{snapshot.nativePlatform ?? 'native manifest unavailable'}</dd></div>
+            <div><dt>Capabilities</dt><dd>{snapshot.nativeCapabilities.length > 0 ? snapshot.nativeCapabilities.join(', ') : 'no native capabilities advertised'}</dd></div>
+            <div><dt>Boundary</dt><dd>Device trust uses Auth records; native capability claims use the SDK native manifest only.</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
+  )
+}
+
 export function buildDeviceDeleteAdminAction(device: Pick<AdminDeviceRow, 'id' | 'name' | 'principalId'>, reason: string): AdminDeviceAction {
   return {
     methodId: AUTH_METHODS.deleteDevice,
@@ -452,6 +528,26 @@ function buildDeviceRow(
     deleteAction: deleteState === 'available-local' || deleteState === 'available-remote' || deleteState === 'degraded'
       ? buildDeviceDeleteAdminAction({ id: device.id, name: device.name, principalId: device.user_id ?? null }, 'Remove device and revoke its local session access')
       : null
+  }
+}
+
+function buildPendingPairingRows(response: ListPendingPairingsResponse | null): AdminPendingPairingRow[] {
+  return (response?.pairings ?? [])
+    .filter((entry) => entry.status === 'pending')
+    .map((entry) => pendingPairingRow(entry))
+}
+
+function pendingPairingRow(entry: PendingPairingEntry): AdminPendingPairingRow {
+  return {
+    requestId: entry.request_id,
+    deviceName: entry.device_name,
+    remotePeerId: entry.remote_peer_id,
+    remoteNodeName: entry.remote_node_name,
+    clientIp: entry.client_ip,
+    status: entry.status,
+    expiresAt: entry.expires_at,
+    permissionCount: entry.granted_permissions.length,
+    adminRequested: entry.granted_is_admin
   }
 }
 
@@ -542,11 +638,12 @@ function deviceTotals(devices: AdminDeviceRow[]) {
   return devices.reduce(
     (totals, device) => ({
       trusted: totals.trusted + (device.trustState === 'available-local' ? 1 : 0),
+      pending: totals.pending + (device.trustState === 'pending' ? 1 : 0),
       activeSessions: totals.activeSessions + device.activeSessionCount,
       tokens: totals.tokens + device.tokenCount,
       expiredTokens: totals.expiredTokens + device.activeTokens.filter((token) => token.state === 'stale').length
     }),
-    { trusted: 0, activeSessions: 0, tokens: 0, expiredTokens: 0 }
+    { trusted: 0, pending: 0, activeSessions: 0, tokens: 0, expiredTokens: 0 }
   )
 }
 

@@ -1759,11 +1759,17 @@ describe('Aurora production shell', () => {
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.devices.map((device) => device.id)).toContain('device-studio-mac')
     expect(snapshot.devices.some((device) => device.activeSessionCount > 0)).toBe(true)
+    expect(snapshot.pendingPairings.some((pairing) => pairing.requestId === 'mesh-pairing-peer-kitchen')).toBe(true)
     expect(snapshot.devices.some((device) => device.deleteAction?.methodId === 'Auth.DeleteDevice')).toBe(true)
     expect(markup).toContain('Devices and sessions')
     expect(markup).toContain('token-backed active sessions')
+    expect(markup).toContain('Pending pairings and platform security')
+    expect(markup).toContain('Open pairing queue')
+    expect(markup).toContain('Kitchen tablet')
+    expect(markup).toContain('Device trust uses Auth records')
     expect(markup).toContain('AdminAction boundary')
     expect(markup).not.toContain('secret-token')
+    expect(markup).not.toContain('secret-pending-code')
   })
 
   it('builds device delete mutations as AdminAction requests', async () => {
@@ -3774,10 +3780,13 @@ function devicesLoadingSnapshot() {
     generatedAt: null,
     secretsRedacted: true,
     devices: [],
+    pendingPairings: [],
     listState: 'pending' as const,
     listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
     tokenState: 'pending' as const,
     tokenReason: 'Loading token/session evidence through AuroraClient.',
+    pairingState: 'pending' as const,
+    pairingReason: 'Loading Auth.ListPendingPairings through AuroraClient.',
     deleteState: 'pending' as const,
     deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
     nativePlatform: null,

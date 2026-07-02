@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:11:01.506Z",
+  "updatedAt": "2026-07-02T07:15:44.957Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -227,10 +227,13 @@
       "id": "G019-components-aurora-admin-devices-view",
       "title": "`components/aurora/admin/devices-view.tsx`: trusted devices, pending...",
       "objective": "`components/aurora/admin/devices-view.tsx`: trusted devices, pending pairings, platform capabilities.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:15:44.957Z",
+      "startedAt": "2026-07-02T07:12:14.879Z",
+      "completedAt": "2026-07-02T07:15:44.957Z",
+      "evidence": "Admin devices now includes SDK-backed pending pairing evidence from Auth.ListPendingPairings, platform security/native manifest posture, trusted/pending device counts, and AdminAction-gated Auth.DeleteDevice behavior without rendering pairing codes or token secrets. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'device'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G020-components-aurora-admin-config-view",

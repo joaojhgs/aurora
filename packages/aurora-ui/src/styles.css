@@ -800,10 +800,17 @@ button, input, select, textarea { font: inherit; }
 .aui-device-controls label { display: grid; gap: .35rem; min-width: 0; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
 .aui-device-controls textarea { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem .7rem; background: var(--aui-surface); color: var(--aui-ink); resize: vertical; text-transform: none; }
 .aui-device-controls textarea:disabled, .aui-admin-devices button:disabled { cursor: not-allowed; opacity: .58; }
-.aui-device-capability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.aui-device-capability-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
 .aui-device-capability { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; align-items: start; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .65rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
 .aui-device-capability strong, .aui-device-capability span { display: block; min-width: 0; overflow-wrap: anywhere; }
 .aui-device-capability span { margin-top: .15rem; color: var(--aui-muted); font-size: .8rem; line-height: 1.35; }
+.aui-device-posture-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: .85rem; padding: .9rem; }
+.aui-device-posture-grid article { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem; }
+.aui-device-posture-grid h3 { margin: 0 0 .55rem; font-size: .95rem; }
+.aui-device-pairing-list { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.aui-device-pairing-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; align-items: start; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .6rem; }
+.aui-device-pairing-list strong, .aui-device-pairing-list span, .aui-device-pairing-list small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-device-pairing-list span, .aui-device-pairing-list small { color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
 .aui-device-identity { display: flex; align-items: center; gap: .65rem; min-width: 0; }
 .aui-device-identity strong, .aui-device-identity span { display: block; min-width: 0; overflow-wrap: anywhere; }
 .aui-device-identity span { color: var(--aui-muted); font-size: .78rem; }
