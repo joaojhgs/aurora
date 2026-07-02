@@ -4873,6 +4873,11 @@ describe('AuroraClient memory namespace', () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const namespaces = await client.memory.listNamespaces({ include_remote: true, include_unavailable: true })
     const messages = await client.memory.listMessages({ limit: 2 })
+    const messagesForDate = await client.memory.listMessagesForDate({ date: '2026-06-19' })
+    const localSearch = await client.memory.searchLocal({
+      namespace: 'main.memories',
+      query: 'mesh pairing'
+    })
     const search = await client.memory.search({
       namespace: 'peer-studio-gpu.memories',
       query: 'mesh pairing'
@@ -4885,6 +4890,10 @@ describe('AuroraClient memory namespace', () => {
     expect(namespaces.ok).toBe(true)
     expect(namespaces.ok && namespaces.data.namespaces.some((namespace) => namespace.namespace === 'peer-studio-gpu.memories')).toBe(true)
     expect(messages.ok && messages.data.messages[0]?.content).toContain('mesh pairing')
+    expect(messagesForDate.ok && messagesForDate.audit.method).toBe(DB_METHODS.getMessagesForDate)
+    expect(messagesForDate.ok && messagesForDate.data.messages[0]?.source).toBe('DB.GetMessages')
+    expect(localSearch.ok && localSearch.audit.method).toBe(DB_METHODS.ragSearch)
+    expect(localSearch.ok && localSearch.data.items[0]?.namespace).toBe('main.memories')
     expect(search.ok && search.audit.method).toBe(DB_METHODS.ragSearchRemote)
     expect(search.ok && search.data.items[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
     expect(search.ok && search.data.items[0]?.redacted).toBe(true)

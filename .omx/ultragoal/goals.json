@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:29:05.506Z",
+  "updatedAt": "2026-07-02T12:32:59.431Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1308,10 +1308,12 @@
       "id": "G112-backend-sdk",
       "title": "Backend/SDK:",
       "objective": "Backend/SDK:\nuse `DB.GetMessages`, `DB.GetMessagesForDate`, `DB.RAGSearch`;\nadd/list namespace and memory management endpoints if absent or mark disabled with repair task;\nuse Config/AdminAction for policy mutations.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:32:59.431Z",
+      "completedAt": "2026-07-02T12:32:59.431Z",
+      "evidence": "G112 Backend/SDK completed: backend already exposes DB.GetMessages, DB.GetMessagesForDate, internal DB.RAGSearch, policy-aware DB.RAGListNamespaces, remote-safe DB.RAGSearchRemote, DB.RAGGetProvenance, DB.RAGExportNamespace, DB.RAGImportNamespace, and internal DB.RAGDelete with AdminAction/Config policy mutation boundaries documented/covered. SDK now adds typed DB.GetMessagesForDate and internal/local DB.RAGSearch wrappers as MemoryClient.listMessagesForDate and MemoryClient.searchLocal, while preserving MemoryClient.search on DB.RAGSearchRemote for remote-safe UI search. Mock transport and fixtures now cover both methods; production surface contracts list DB.GetMessages, DB.GetMessagesForDate, DB.RAGSearch, namespace, provenance, and AdminAction-governed management methods. Verified: pnpm --filter @aurora/client build; pnpm --filter @aurora/client test -- -t 'memory namespace|RAG|GetMessages|route policy'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'memory namespaces|data policy|production surface'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; uv run pytest tests/unit/db/test_service.py tests/integration/test_mesh_rag_namespace_policy.py -q; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G113-memory-route-shows-real-data-or-real",

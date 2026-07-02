@@ -5,7 +5,9 @@ import type { JsonValue, PrivacyClass } from './types.js'
 
 export const DB_METHODS = {
   getMessages: 'DB.GetMessages',
+  getMessagesForDate: 'DB.GetMessagesForDate',
   ragDelete: 'DB.RAGDelete',
+  ragSearch: 'DB.RAGSearch',
   ragListNamespaces: 'DB.RAGListNamespaces',
   ragSearchRemote: 'DB.RAGSearchRemote',
   ragGetProvenance: 'DB.RAGGetProvenance',
@@ -38,6 +40,10 @@ export interface DBGetMessagesResponse {
   messages: Array<Record<string, JsonValue>>
   total: number
   has_more: boolean
+}
+
+export interface DBGetMessagesForDateRequest {
+  date?: string | null
 }
 
 export interface DBRAGNamespacePolicy {
@@ -95,14 +101,29 @@ export interface DBRAGProvenance {
   delete_reason: string | null
 }
 
-export interface DBRAGProvenanceItem {
+export interface DBRAGItem {
   key: string
   value: JsonValue
   namespace: string
   search_score: number | null
+}
+
+export interface DBRAGListResponse {
+  items: DBRAGItem[]
+}
+
+export interface DBRAGProvenanceItem extends DBRAGItem {
   provenance: DBRAGProvenance
   redacted: boolean
   redaction_reasons: string[]
+}
+
+export interface DBRAGSearchRequest {
+  namespace: string
+  query: string
+  limit?: number
+  offset?: number
+  mesh_selector?: MeshAddressSelectorLike | null
 }
 
 export interface DBRAGSearchRemoteRequest {
@@ -238,6 +259,14 @@ export class MemoryClient {
     )
   }
 
+  listMessagesForDate(request: DBGetMessagesForDateRequest = {}): Promise<AuroraResponse<DBGetMessagesResponse>> {
+    return this.client.requestResult<DBGetMessagesResponse, DBGetMessagesForDateRequest>(
+      DB_METHODS.getMessagesForDate,
+      request,
+      { path: routePath('DB', 'GetMessagesForDate') }
+    )
+  }
+
   listNamespaces(request: DBRAGListNamespacesRequest = {}): Promise<AuroraResponse<DBRAGListNamespacesResponse>> {
     return this.client.requestResult<DBRAGListNamespacesResponse, DBRAGListNamespacesRequest>(
       DB_METHODS.ragListNamespaces,
@@ -251,6 +280,14 @@ export class MemoryClient {
       DB_METHODS.ragSearchRemote,
       request,
       { path: routePath('DB', 'RAGSearchRemote') }
+    )
+  }
+
+  searchLocal(request: DBRAGSearchRequest): Promise<AuroraResponse<DBRAGListResponse>> {
+    return this.client.requestResult<DBRAGListResponse, DBRAGSearchRequest>(
+      DB_METHODS.ragSearch,
+      request,
+      { path: routePath('DB', 'RAGSearch') }
     )
   }
 

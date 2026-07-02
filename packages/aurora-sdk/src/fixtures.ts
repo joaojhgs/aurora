@@ -33,7 +33,9 @@ import type {
   DBRAGListNamespacesResponse,
   DBRAGProvenance,
   DBRAGSearchRemoteResponse,
-  DBRAGSearchRemoteRequest
+  DBRAGSearchRemoteRequest,
+  DBRAGSearchRequest,
+  DBRAGListResponse
 } from './memory.js'
 import type {
   ConfigDiffPreviewResponse,
@@ -4752,6 +4754,26 @@ export const memoryNamespacesFixture: DBRAGListNamespacesResponse = {
       }
     }
   ]
+}
+
+
+export function memoryLocalSearchFixture(request: DBRAGSearchRequest): DBRAGListResponse {
+  const remoteRequest: DBRAGSearchRemoteRequest = {
+    namespace: request.namespace,
+    query: request.query,
+    mesh_selector: request.mesh_selector ?? null
+  }
+  if (request.limit !== undefined) remoteRequest.limit = request.limit
+  if (request.offset !== undefined) remoteRequest.offset = request.offset
+  const remote = memorySearchFixture(remoteRequest)
+  return {
+    items: remote.items.map((item) => ({
+      key: item.key,
+      value: item.value,
+      namespace: item.namespace,
+      search_score: item.search_score
+    }))
+  }
 }
 
 export function memorySearchFixture(request: DBRAGSearchRemoteRequest): DBRAGSearchRemoteResponse {

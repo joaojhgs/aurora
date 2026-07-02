@@ -300,7 +300,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     componentFiles: ['memory-view.tsx', 'data-policy-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
-      source('sdk-method', 'RAG namespace/search/provenance surfaces', ['DB.RAGListNamespaces', 'DB.RAGSearchRemote', 'DB.RAGGetProvenance']),
+      source('sdk-method', 'message history and RAG namespace/search/provenance surfaces', ['DB.GetMessages', 'DB.GetMessagesForDate', 'DB.RAGSearch', 'DB.RAGListNamespaces', 'DB.RAGSearchRemote', 'DB.RAGGetProvenance']),
       source('admin-action', 'RAG export/import/delete governance', ['DB.RAGExportNamespace', 'DB.RAGImportNamespace', 'DB.RAGDelete', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
       source('unsupported-degraded', 'raw SQL and replication are intentionally blocked', [])
     ],
