@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T16:02:51.718Z",
+  "updatedAt": "2026-07-02T16:30:37.091Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -3029,19 +3029,23 @@
       "id": "G269-assistant-admin-mesh-memory-tools-mo",
       "title": "Assistant, admin, mesh, memory, tools, models, settings/native, diagn...",
       "objective": "Assistant, admin, mesh, memory, tools, models, settings/native, diagnostics, and onboarding have E2E coverage.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:35.009Z",
+      "completedAt": "2026-07-02T16:30:35.009Z",
+      "evidence": "Post-web-fix E2E coverage passed: pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; make check-docs; git diff --check; rm -rf apps/aurora-tauri/test-results."
     },
     {
       "id": "G270-admin-security-privacy-invariants-ar",
       "title": "Admin/security/privacy invariants are independently reviewed.",
       "objective": "Admin/security/privacy invariants are independently reviewed.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:35.417Z",
+      "completedAt": "2026-07-02T16:30:35.417Z",
+      "evidence": "Independent code-reviewer approval on HEAD e9f516d: APPROVE, blocking issues 0, G270 checkpoint YES. Reviewer verified production web/thin routes mount SDK-backed resources; mock transport is explicit test/demo only and production without Gateway fails closed; AdminAction for service/token/diagnostics mutations upheld; no fake capabilities; support-bundle/log previews redact secrets/tokens/raw audio; no placeholder/debug route UI. Commands passed: pnpm --filter @aurora/web typecheck; pnpm --filter @aurora/web test; pnpm --filter @aurora/web build; pnpm --filter @aurora/ui typecheck; focused admin/data-policy tests; git diff --check; targeted rg scans."
     },
     {
       "id": "G271-docs-describe-actual-commands-and-pl",
@@ -3131,19 +3135,23 @@
       "id": "G279-complete-every-route-from-the-plan-m",
       "title": "Complete every route from the plan: memory, data policy, tools, mesh,...",
       "objective": "Complete every route from the plan: memory, data policy, tools, mesh, admin overview, services, access/RBAC, tokens, devices, config, contracts, plugins, pairing, backups, scheduler, audit, models, diagnostics, onboarding, settings, native.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:35.872Z",
+      "completedAt": "2026-07-02T16:30:35.872Z",
+      "evidence": "All plan routes complete after route-child checkpoints G215-G264 plus post-web-fix blockers: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; focused admin/tools/mesh/memory/settings/native route tests; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; plus HEAD e9f516d verified pnpm --filter @aurora/web typecheck/test/build and pnpm --filter @aurora/ui typecheck/test."
     },
     {
       "id": "G280-implement-honest-platform-behavior-f",
       "title": "Implement honest platform behavior for desktop local, desktop thin, w...",
       "objective": "Implement honest platform behavior for desktop local, desktop thin, web, Android, iOS, and optional offline demo. Do not claim unsupported native capabilities.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:36.279Z",
+      "completedAt": "2026-07-02T16:30:36.279Z",
+      "evidence": "Honest platform behavior implemented and verified within local scope: web/thin routes mount SDK-backed production resources; mock transport requires AURORA_WEB_DEMO_MODE/NEXT_PUBLIC_AURORA_WEB_DEMO_MODE or test mode; production missing Gateway fails closed/degraded; desktop local dev smoke ok; Android preflight reports 5 passed, 2 expected blockers for generated project/signing; iOS policy passes while strict iOS preflight remains correctly macOS/Xcode-blocked. Commands: pnpm --filter @aurora/web typecheck/test/build; pnpm --filter @aurora/tauri-ui dev:smoke; pnpm --filter @aurora/tauri-ui android:preflight; pnpm --filter @aurora/tauri-ui ios:policy; pnpm --filter @aurora/tauri-ui test:ci-native-evidence."
     },
     {
       "id": "G281-add-gates-that-would-have-failed-the",
@@ -3191,10 +3199,12 @@
       "id": "G285-write-failing-tests-gates-before-or",
       "title": "Write failing tests/gates before or alongside each implementation lane.",
       "objective": "Write failing tests/gates before or alongside each implementation lane.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:36.690Z",
+      "completedAt": "2026-07-02T16:30:36.690Z",
+      "evidence": "Regression gates were written/strengthened alongside implementation: 227fa5d added granular route/admin/tool tests; e9f516d added web route-registry placeholder regression and web transport production no-Gateway/demo tests. Gates that would fail prior broken UI passed after fixes: pnpm --filter @aurora/web typecheck/test/build; pnpm --filter @aurora/ui typecheck/test; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; git diff --check."
     },
     {
       "id": "G286-checkpoint-each-ultragoal-story-only",
@@ -3220,10 +3230,12 @@
       "id": "G288-all-22-routes-are-production-ready-a",
       "title": "All 22 routes are production-ready and integrated E2E.",
       "objective": "All 22 routes are production-ready and integrated E2E.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:30:37.091Z",
+      "completedAt": "2026-07-02T16:30:37.091Z",
+      "evidence": "All 22 routes production-ready and integrated E2E within supported local evidence: Tauri all-route Vitest and Playwright route crawl passed with 22 desktop screenshots, placeholder/debug/console/HTTP/landmark checks; assistant/admin/runtime/outcomes gates passed; web build prerendered /, /memory, /tools, /mesh, /admin and all admin/settings/model/diagnostics/onboarding/data policy routes; web placeholder/follow-up blockers fixed and code-review approved. Commands: pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/web build; pnpm --filter @aurora/web test; pnpm --filter @aurora/ui test."
     },
     {
       "id": "G289-tauri-dev-locally-runs-the-real-stac",
