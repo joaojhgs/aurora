@@ -2084,6 +2084,8 @@ describe('Aurora production shell', () => {
     const expired = buildOnboardingViewModel({ client, snapshot })
     expect(expired.authState).toBe('denied')
     expect(expired.authExplanation).toContain('Token expired')
+    const expiredMarkup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
+    expect(expiredMarkup).toContain('Recovery: clear the session, then log in again, restore a freshly validated token, or exchange a newly approved pairing code.')
 
     client.auth.updateFromTokenValidation({ valid: true, source: 'auth_disabled', permissions: ['*'], effective_perms: ['*'] })
     const system = buildOnboardingViewModel({ client, snapshot })
@@ -2103,6 +2105,7 @@ describe('Aurora production shell', () => {
     const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
     expect(markup).toContain('AuroraClient error')
     expect(markup).toContain('Capability state could not be loaded from AuroraClient')
+    expect(markup).toContain('Recovery: use an http:// or https:// Gateway URL, then retry authentication after the capability snapshot loads.')
   })
 
   it('builds assistant route policy and user-facing SDK error messages from backend evidence', async () => {
