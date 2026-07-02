@@ -53,19 +53,24 @@ export interface AuroraEventStreamTransport extends AuroraTransport {
 }
 
 export class EventStreamClient {
-  constructor(private readonly transport: AuroraTransport) {}
+  constructor(
+    private readonly transport: AuroraTransport,
+    private readonly onStreamError?: ((error: AuroraError) => void) | undefined
+  ) {}
 
   subscribe<TEventPayload = unknown, TPayload = unknown>(
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, TPayload>(this.transport, normalizeStreamRequest('generic', options))
+    return this.withStreamErrorHandling(
+      subscribeWithReconnect<TEventPayload, TPayload>(this.transport, normalizeStreamRequest('generic', options))
+    )
   }
 
   streamAssistant<TEventPayload = unknown, TPayload = unknown>(
     payload?: TPayload,
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, TPayload>(
+    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, TPayload>(
       this.transport,
       normalizeStreamRequest('assistant', {
         topics: ['Orchestrator.Response'],
@@ -73,33 +78,47 @@ export class EventStreamClient {
         ...options,
         payload: payload ?? options.payload
       })
-    )
+    ))
   }
 
   watchHealth<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, unknown>(
+    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
       this.transport,
       normalizeStreamRequest('health', {
         topics: ['Gateway.Health', 'Service.Announcement'],
         kinds: ['health.updated', 'service.announced', 'service.stale'],
         ...options
       })
-    )
+    ))
   }
 
   watchConfig<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, unknown>(
+    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
       this.transport,
       normalizeStreamRequest('config', {
         topics: ['Config.Updated'],
         kinds: ['config.updated', 'config.reload', 'config.validation_failed'],
         ...options
       })
-    )
+    ))
+  }
+
+  private withStreamErrorHandling<TPayload>(subscription: AuroraEventSubscription<TPayload>): AuroraEventSubscription<TPayload> {
+    if (!this.onStreamError) return subscription
+    const onStreamError = this.onStreamError
+    const source = async function* (): AsyncIterable<AuroraEvent<TPayload>> {
+      try {
+        for await (const event of subscription) yield event
+      } catch (error) {
+        onStreamError(normalizeError(error))
+        throw error
+      }
+    }
+    return createEventSubscription(source(), (reason) => subscription.close(reason))
   }
 }
 

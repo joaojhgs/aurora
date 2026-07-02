@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
   AdminAuditResource,
+  AdminContractsResource,
   AdminDevicesResource,
   AdminOverviewContent,
   AdminPluginsView,
@@ -129,7 +130,7 @@ export const tauriRouteRegistry = {
   tokens: ({ client }) => <AdminTokensResource client={client} />,
   devices: ({ client }) => <AdminDevicesResource client={client} />,
   config: ({ route, client }) => <ConfigEditorView client={client} route={route} />,
-  contracts: ({ client }) => <AdminServicesResource client={client} />,
+  contracts: ({ client }) => <AdminContractsResource client={client} />,
   plugins: ({ route, client }) => <AdminPluginsView client={client} route={route} />,
   pairing: ({ route, client }) => <PairingQueueView client={client} route={route} />,
   backups: ({ route, client }) => <BackupRestoreView client={client} route={route} />,
@@ -387,8 +388,7 @@ function TauriNativeSettingsPage({
       <section className="ata-panel" aria-labelledby="tauri-native-command-evidence-title">
         <h2 id="tauri-native-command-evidence-title">Desktop Tauri command evidence</h2>
         <p>
-          Desktop-local native status is shown only from Tauri command probes. Thin/browser runtimes report unavailable
-          evidence instead of pretending native permission state exists.
+          Tauri-local native status is shown only from local Tauri command probes. Desktop-thin runtimes are supported remote Gateway clients and report native command evidence as unavailable instead of pretending local permission state exists.
         </p>
         <dl className="ata-facts">
           {rows.map((row) => (

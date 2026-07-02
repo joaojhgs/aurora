@@ -9,7 +9,7 @@ import {
   type GetRegistryResponse,
   type GetServicesResponse
 } from '@aurora/client'
-import { AdminServicesView, buildAdminServicesSnapshot } from '../src/index'
+import { AdminServicesView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 
 describe('AdminServicesView', () => {
   it('renders service status, routes, detail logs/errors posture, and restart/reload controls from real contract evidence', async () => {
@@ -29,14 +29,15 @@ describe('AdminServicesView', () => {
     })
 
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
-    expect(markup).toContain('Services and contracts')
+    expect(markup).toContain('Services')
     expect(markup).toContain('Heartbeat')
     expect(markup).toContain('Details: routes, methods, and backend exposure')
     expect(markup).toContain('Errors/logs')
     expect(markup).toContain('detailed logs require diagnostics export')
     expect(markup).toContain('Config.ReloadService')
     expect(markup).toContain('Preview requires AdminAction draft/confirm/audit')
-    expect(markup).toContain('/api/Config/ReloadService')
+    expect(markup).toContain('Method contract browsing lives on /admin/contracts')
+    expect(markup).not.toContain('Contract registry browser grouped by service module')
   })
 })
 

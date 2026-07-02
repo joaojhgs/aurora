@@ -703,15 +703,53 @@ export function AssistantView({
           onNewConversation={startNewConversation}
         />
 
-        <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
-          {session.messages.length === 0 ? (
-            <div className="aui-chat-empty">
-              <h2>Start with a prompt</h2>
-              <p>Responses appear only after the SDK returns final Orchestrator output.</p>
+        <div className="aui-chat-workspace" data-first-viewport-task="assistant-chat-composer">
+          <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
+            {session.messages.length === 0 ? (
+              <div className="aui-chat-empty">
+                <h2>Start with a prompt</h2>
+                <p>Responses appear only after the SDK returns final Orchestrator output.</p>
+              </div>
+            ) : (
+              session.messages.map((message) => <ChatBubble key={message.id} message={message} />)
+            )}
+          </div>
+
+          <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer">
+            <div className="aui-composer-toolbar" aria-label="Route/model selector">
+              <span>Prompt composer</span>
+              <span>Route/model selector</span>
+              <EvidenceBadge label={route.providerLabel} />
+              <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
+              <PrivacyBadge privacy={route.item.privacyClass} />
             </div>
-          ) : (
-            session.messages.map((message) => <ChatBubble key={message.id} message={message} />)
-          )}
+            <label htmlFor="assistant-prompt">Prompt</label>
+            <textarea
+              id="assistant-prompt"
+              ref={textAreaRef}
+              value={text}
+              onChange={(event) => setText(event.currentTarget.value)}
+              disabled={!canSend}
+              placeholder={route.disabled ? 'Assistant capability is unavailable' : 'Ask Aurora...'}
+              rows={3}
+            />
+            <button type="button" className="aui-secondary-button" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
+              <StopCircle size={17} aria-hidden />
+              <span>Stop</span>
+            </button>
+            <button type="button" className="aui-secondary-button" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
+              <RotateCcw size={17} aria-hidden />
+              <span>Retry</span>
+            </button>
+            <button type="submit" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
+              <SendHorizontal size={17} aria-hidden />
+              <span>Send</span>
+            </button>
+            <p className="aui-mobile-composer-note">
+              Mobile touch composer uses large send/stop/retry targets; mobile bottom tabs stay in the shell,
+              and native mic permission state is shown in Voice modes.
+            </p>
+          </form>
         </div>
 
         <aside className="aui-route-panel" aria-label="Assistant route and privacy details">
@@ -875,46 +913,6 @@ export function AssistantView({
         )}
         {attachmentsAwaitingValidation.length > 0 ? <p className="aui-attachment-note">{attachmentsAwaitingValidation.length} item(s) will be validated before the prompt is sent.</p> : null}
       </section>
-
-      <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer">
-        <div
-          className="aui-composer-toolbar"
-          aria-label="Route/model selector"
-          style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: '.45rem', alignItems: 'center' }}
-        >
-          <span>Prompt composer</span>
-          <span>Route/model selector</span>
-          <EvidenceBadge label={route.providerLabel} />
-          <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-        </div>
-        <label htmlFor="assistant-prompt">Prompt</label>
-        <textarea
-          id="assistant-prompt"
-          ref={textAreaRef}
-          value={text}
-          onChange={(event) => setText(event.currentTarget.value)}
-          disabled={!canSend}
-          placeholder={route.disabled ? 'Assistant capability is unavailable' : 'Ask Aurora...'}
-          rows={3}
-        />
-        <button type="button" className="aui-secondary-button" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
-          <StopCircle size={17} aria-hidden />
-          <span>Stop</span>
-        </button>
-        <button type="button" className="aui-secondary-button" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
-          <RotateCcw size={17} aria-hidden />
-          <span>Retry</span>
-        </button>
-        <button type="submit" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
-          <SendHorizontal size={17} aria-hidden />
-          <span>Send</span>
-        </button>
-        <p className="aui-mobile-composer-note" style={{ gridColumn: '1 / -1' }}>
-          Mobile touch composer uses large send/stop/retry targets; mobile bottom tabs stay in the shell,
-          and native mic permission state is shown in Voice modes.
-        </p>
-      </form>
     </section>
   )
 }

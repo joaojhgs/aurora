@@ -52,12 +52,13 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(markup).not.toContain('secret-token')
   })
 
-  it('builds approve, deny, create, exchange, and revoke requests as reauthenticated AdminAction payloads', () => {
+  it('builds approve, deny, create, exchange, and revoke requests only after explicit AdminAction unlock', () => {
     const pending = pendingPairing()
     const approve = buildPairingAdminActionRequest(pending, 'approve', {
       reason: 'trust kitchen tablet',
       permissions: 'Gateway.use Auth.use',
-      grantAdmin: true
+      grantAdmin: true,
+      reauthConfirmed: true
     })
     expect(approve).toEqual(
       expect.objectContaining({
@@ -70,7 +71,7 @@ describe('PairingQueueView admin pairing surface', () => {
     )
     expect(approve.affectedResources).toEqual(expect.arrayContaining(['pairing:mesh-pairing-peer-kitchen', 'peer:peer-kitchen', 'device:Kitchen tablet']))
 
-    const deny = buildPairingAdminActionRequest(pending, 'deny', { reason: 'wrong device' })
+    const deny = buildPairingAdminActionRequest(pending, 'deny', { reason: 'wrong device', reauthConfirmed: true })
     expect(deny).toEqual(expect.objectContaining({
       methodId: 'Auth.PairingDeny',
       payload: { code: 'mesh-pairing-secret', reason: 'wrong device' },
@@ -82,7 +83,8 @@ describe('PairingQueueView admin pairing surface', () => {
       deviceName: 'Field iPad',
       remotePeerId: 'peer-field',
       remoteNodeName: 'Field node',
-      reason: 'enroll field device'
+      reason: 'enroll field device',
+      reauthConfirmed: true
     })
     expect(create).toEqual(expect.objectContaining({
       methodId: 'Auth.PairingStart',
@@ -91,7 +93,7 @@ describe('PairingQueueView admin pairing surface', () => {
       path: '/api/Auth/PairingStart'
     }))
 
-    const exchange = buildPairingExchangeAdminActionRequest({ code: 'PAIR-123456', reason: 'exchange on behalf of device' })
+    const exchange = buildPairingExchangeAdminActionRequest({ code: 'PAIR-123456', reason: 'exchange on behalf of device', reauthConfirmed: true })
     expect(exchange).toEqual(expect.objectContaining({
       methodId: 'Auth.PairingExchange',
       payload: { code: 'PAIR-123456' },
@@ -100,13 +102,29 @@ describe('PairingQueueView admin pairing surface', () => {
     }))
     expect(JSON.stringify(exchange.affectedResources)).not.toContain('PAIR-123456')
 
-    const revoke = buildPairingTokenRevokeAdminActionRequest({ tokenId: 'token-from-pairing', reason: 'revoke exchanged token' })
+    const revoke = buildPairingTokenRevokeAdminActionRequest({ tokenId: 'token-from-pairing', reason: 'revoke exchanged token', reauthConfirmed: true })
     expect(revoke).toEqual(expect.objectContaining({
       methodId: 'Auth.RevokeToken',
       payload: { token_id: 'token-from-pairing' },
       reauthConfirmed: true,
       path: '/api/Auth/RevokeToken'
     }))
+  })
+
+
+  it('rejects the prior hardcoded AdminAction submission path without explicit unlock', () => {
+    const pending = pendingPairing()
+    expect(() => buildPairingAdminActionRequest(pending, 'approve', {
+      reason: 'trust kitchen tablet',
+      permissions: 'Gateway.use Auth.use',
+      grantAdmin: true
+    })).toThrow('reauthConfirmed')
+    expect(() => buildPairingCreateAdminActionRequest({
+      deviceName: 'Field iPad',
+      remotePeerId: 'peer-field',
+      remoteNodeName: 'Field node',
+      reason: 'enroll field device'
+    })).toThrow('reauthConfirmed')
   })
 
   it('disables AdminAction mutations when the pairing route is not permission-routeable', () => {

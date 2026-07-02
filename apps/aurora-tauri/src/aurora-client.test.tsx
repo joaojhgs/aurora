@@ -815,6 +815,24 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
+  it('e2e:routes renders /admin/services and /admin/contracts as distinct runtime surfaces', () => {
+    const servicesMarkup = renderTauriRoute('/admin/services')
+    const contractsMarkup = renderTauriRoute('/admin/contracts')
+    const servicesText = mainContentText(servicesMarkup)
+    const contractsText = mainContentText(contractsMarkup)
+
+    expectNoPlaceholderOrDebugUi(servicesMarkup, 'services')
+    expectNoPlaceholderOrDebugUi(contractsMarkup, 'contracts')
+    expect(servicesText).toContain('Services')
+    expect(servicesText).toContain('Service registry health')
+    expect(servicesText).not.toContain('Contracts registry')
+
+    expect(contractsText).toContain('Contracts registry')
+    expect(contractsText).toContain('Service lifecycle controls stay on /admin/services')
+    expect(contractsText).not.toContain('Service registry health')
+    expect(contractsText).not.toBe(servicesText)
+  })
+
   it('e2e:routes renders /settings and /settings/native as distinct runtime surfaces', () => {
     const settingsMarkup = renderTauriRoute('/settings')
     const nativeMarkup = renderTauriRoute('/settings/native')
@@ -1071,10 +1089,9 @@ describe('Tauri CI/E2E route gates', () => {
       const denyButtons = actionButtons.filter((button) => button.textContent?.includes('AdminAction deny') || button.textContent?.includes('Deny peer'))
       expect(approveButtons.length, 'mesh approve action controls').toBeGreaterThan(0)
       expect(denyButtons.length, 'mesh deny action controls').toBeGreaterThan(0)
-      expect(approveButtons.some((button) => !button.disabled), 'at least one live approve control').toBe(true)
-      expect(approveButtons.some((button) => button.disabled), 'at least one disabled approve control').toBe(true)
-      expect(denyButtons.some((button) => !button.disabled), 'at least one live deny control').toBe(true)
-      expect(denyButtons.some((button) => button.disabled), 'at least one disabled deny control').toBe(true)
+      expect(mesh.container.textContent).toContain('In-session admin unlock confirmed for mesh peer AdminAction')
+      expect(approveButtons.every((button) => button.disabled), 'approve controls stay disabled until AdminAction reauth is explicitly confirmed').toBe(true)
+      expect(denyButtons.every((button) => button.disabled), 'deny controls stay disabled until AdminAction reauth is explicitly confirmed').toBe(true)
       writeOutcomeArtifact('mesh-route-status-pair-actions-route-preview', mesh.container.innerHTML)
     } finally {
       await act(async () => mesh.root.unmount())
@@ -1340,6 +1357,13 @@ describe('Tauri CI/E2E route gates', () => {
         expect(container.textContent).toContain('Provider route policy')
         expect(container.textContent).toContain('yes; writes llama_cpp through Config.Set AdminAction')
         expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
+      })
+      const modelReauth = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+        .find((input) => input.closest('label')?.textContent?.includes('model provider changes'))
+      expect(modelReauth, 'model provider AdminAction reauth checkbox').toBeDefined()
+      await act(async () => {
+        modelReauth!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        await flushReactWork()
       })
       await clickButtonByLabel(container, 'Select llama.cpp desktop')
       await waitUntil(() => {

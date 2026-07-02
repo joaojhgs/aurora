@@ -118,6 +118,7 @@ export function ModelsView({
   const [error, setError] = useState<string | null>(initialError)
   const [selectingProviderId, setSelectingProviderId] = useState<string | null>(null)
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
 
   useEffect(() => {
     if (initialCatalog || initialError) return
@@ -154,6 +155,10 @@ export function ModelsView({
 
   async function selectProvider(provider: ModelProviderViewModel) {
     if (!provider.canSelect || !provider.selectConfigValue || selectingProviderId) return
+    if (!reauthConfirmed) {
+      setSelectionMessage('Confirm AdminAction reauthentication before selecting a model provider.')
+      return
+    }
     setSelectingProviderId(provider.id)
     setSelectionMessage(null)
     try {
@@ -163,7 +168,7 @@ export function ModelsView({
           value: provider.selectConfigValue
         },
         reason: `Select model provider ${provider.name} from Aurora Models runtime`,
-        reauthConfirmed: true
+        reauthConfirmed
       })
       if (!result.data.success) throw new Error(result.data.error ?? 'Config.Set did not accept the provider selection')
       const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
@@ -213,6 +218,10 @@ export function ModelsView({
 
       {model.providers.length > 0 ? (
         <>
+          <label className="aui-confirmation-check">
+            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => setReauthConfirmed(event.currentTarget.checked)} />
+            <span>I confirm recent AdminAction reauthentication for model provider changes.</span>
+          </label>
           <ModelRoutePolicyBanner providers={model.providers} selectedProviderId={model.selectedProviderId} />
           <ModelRuntimeCategories rows={model.categoryRows} />
           <div className="aui-model-grid">

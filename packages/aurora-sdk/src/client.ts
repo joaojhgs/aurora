@@ -192,7 +192,7 @@ export class AuroraClient {
     this.adminAction = this.admin
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
-    this.events = new EventStreamClient(this.transport)
+    this.events = new EventStreamClient(this.transport, (error) => this.auth.applyError(error))
   }
 
   async request<TData = unknown, TPayload = unknown>(
@@ -281,7 +281,10 @@ export class AuthApiClient {
       payload,
       { path: routePath('Auth', 'Login') }
     )
-    if (result.ok) this.client.auth.updateFromLogin(result.data)
+    if (result.ok) {
+      this.client.auth.setBearerToken(result.data.token)
+      this.client.auth.updateFromLogin(result.data)
+    }
     return result
   }
 
@@ -291,7 +294,10 @@ export class AuthApiClient {
       payload,
       { path: routePath('Auth', 'ValidateToken') }
     )
-    if (result.ok) this.client.auth.updateFromTokenValidation(result.data)
+    if (result.ok) {
+      this.client.auth.setBearerToken(result.data.valid ? payload.token : null)
+      this.client.auth.updateFromTokenValidation(result.data)
+    }
     return result
   }
 
@@ -327,7 +333,10 @@ export class AuthApiClient {
       payload,
       { path: routePath('Auth', 'PairingExchange') }
     )
-    if (result.ok) this.client.auth.updateFromPairingExchange(result.data)
+    if (result.ok) {
+      this.client.auth.setBearerToken(result.data.token)
+      this.client.auth.updateFromPairingExchange(result.data)
+    }
     return result
   }
 

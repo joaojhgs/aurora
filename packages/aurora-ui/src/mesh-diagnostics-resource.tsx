@@ -13,6 +13,7 @@ import type { MeshDiagnosticsResourceProps } from './mesh-diagnostics-view'
 export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResourceProps) {
   const [snapshot, setSnapshot] = useState<MeshDiagnosticsSnapshot>(loadingMeshDiagnosticsSnapshot)
   const [exportState, setExportState] = useState<SupportBundleExportState>({ status: 'idle', message: null })
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
 
   const loadDiagnostics = useCallback(async () => {
     setSnapshot(loadingMeshDiagnosticsSnapshot)
@@ -31,12 +32,16 @@ export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResour
   }, [client, route])
 
   const exportSupportBundle = useCallback(async () => {
+    if (!reauthConfirmed) {
+      setExportState({ status: 'error', message: 'Confirm AdminAction reauthentication before exporting a support bundle.' })
+      return
+    }
     setExportState({ status: 'pending', message: 'Submitting Gateway.GetSupportBundle through AdminAction...' })
     try {
       const result = await client.diagnostics.exportSupportBundle({
         request: { event_limit: 10, audit_limit: 10, include_capability_catalog: true },
         reason: 'Operator requested a redacted diagnostics support bundle from the Aurora UI.',
-        reauthConfirmed: true,
+        reauthConfirmed,
         affectedResources: ['diagnostics.support_bundle', 'diagnostics.redaction_preview', 'diagnostics.audit_receipt']
       })
       setExportState({
@@ -47,7 +52,7 @@ export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResour
     } catch (error) {
       setExportState({ status: 'error', message: error instanceof Error ? error.message : 'Support-bundle export failed.' })
     }
-  }, [client, route])
+  }, [client, route, reauthConfirmed])
 
   return (
     <MeshDiagnosticsView
@@ -56,6 +61,8 @@ export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResour
       onRefresh={loadDiagnostics}
       onExportSupportBundle={exportSupportBundle}
       supportBundleExportState={exportState}
+      reauthConfirmed={reauthConfirmed}
+      onReauthConfirmedChange={setReauthConfirmed}
     />
   )
 }

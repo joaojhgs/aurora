@@ -27,8 +27,8 @@ describe('AdminDevicesView production device and pairing controls', () => {
         requestId: 'mesh-pairing-peer-kitchen',
         linkedMeshPeerId: 'peer-kitchen',
         linkedMeshPeerState: 'pending',
-        approveAction: expect.objectContaining({ methodId: 'Auth.PairingApprove', reauthConfirmed: true }),
-        denyAction: expect.objectContaining({ methodId: 'Auth.PairingDeny', reauthConfirmed: true })
+        approveAction: expect.objectContaining({ methodId: 'Auth.PairingApprove', reauthConfirmed: false }),
+        denyAction: expect.objectContaining({ methodId: 'Auth.PairingDeny', reauthConfirmed: false })
       })
     )
     expect(markup).toContain('Mesh peer linkage')
@@ -39,7 +39,7 @@ describe('AdminDevicesView production device and pairing controls', () => {
     expect(markup).not.toContain('mesh-pairing-secret')
   })
 
-  it('builds device revoke, pairing approve/deny, and mesh trust actions only as confirmed AdminAction requests', async () => {
+  it('builds device revoke, pairing approve/deny, and mesh trust action drafts locked until explicit confirmation', async () => {
     const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
     expect(device).toBeTruthy()
@@ -50,11 +50,12 @@ describe('AdminDevicesView production device and pairing controls', () => {
         methodId: 'Auth.DeleteDevice',
         payload: { device_id: 'device-studio-mac' },
         reason: 'retire lost laptop',
-        reauthConfirmed: true,
+        reauthConfirmed: false,
         path: '/api/Auth/DeleteDevice'
       })
     )
     expect(revoke.affectedResources).toEqual(expect.arrayContaining(['device:device-studio-mac', 'device_tokens', 'active_sessions']))
+    expect(buildDeviceDeleteAdminAction(device!, 'retire lost laptop', true).reauthConfirmed).toBe(true)
 
     const pairing = defaultMockAuroraFixtures.pendingPairings.pairings[0]
     expect(pairing).toBeTruthy()
@@ -65,7 +66,7 @@ describe('AdminDevicesView production device and pairing controls', () => {
         methodId: 'Auth.PairingApprove',
         payload: { code: 'mesh-pairing-secret', permissions: ['Gateway.use'], is_admin: false },
         reason: 'trust kitchen tablet',
-        reauthConfirmed: true,
+        reauthConfirmed: false,
         path: '/api/Auth/PairingApprove'
       })
     )
@@ -73,11 +74,12 @@ describe('AdminDevicesView production device and pairing controls', () => {
       expect.objectContaining({
         methodId: 'Auth.PairingDeny',
         payload: { code: 'mesh-pairing-secret', reason: 'wrong device' },
-        reauthConfirmed: true,
+        reauthConfirmed: false,
         path: '/api/Auth/PairingDeny'
       })
     )
     expect(approve.affectedResources).toEqual(expect.arrayContaining(['pairing:mesh-pairing-peer-kitchen', 'peer:peer-kitchen', 'device:Kitchen tablet']))
+    expect(buildPendingPairingAdminAction(pairing!, 'approve', 'trust kitchen tablet', true).reauthConfirmed).toBe(true)
 
     const peer = meshPeerListFixture.peers[0]
     expect(peer).toBeTruthy()
@@ -87,10 +89,19 @@ describe('AdminDevicesView production device and pairing controls', () => {
         methodId: 'Auth.MeshApprovePeer',
         payload: { peer_id: 'peer-kitchen', permissions: [] },
         reason: 'approve peer from devices page',
-        reauthConfirmed: true,
+        reauthConfirmed: false,
         path: '/api/Auth/MeshApprovePeer'
       })
     )
+    expect(buildDeviceMeshPeerAdminAction(peer!, 'trust', 'approve peer from devices page', true).reauthConfirmed).toBe(true)
+  })
+
+
+  it('proves prior device AdminAction drafts are not pre-confirmed for submission', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
+    expect(device?.deleteAction).toEqual(expect.objectContaining({ reauthConfirmed: false }))
+    expect(buildDeviceDeleteAdminAction(device!, 'retire lost laptop').reauthConfirmed).toBe(false)
   })
 
   it('disables device trust action evidence when mesh mutation capabilities are unavailable', async () => {

@@ -271,6 +271,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
           disabled={!canSearch || model.loadState === 'loading'}
+          aria-label="Search memory and RAG"
           placeholder={canSearch ? 'Search memory and RAG...' : model.actions.search.reason}
         />
         <button type="submit" disabled={!canSearch || query.trim().length === 0 || model.loadState === 'loading'}>

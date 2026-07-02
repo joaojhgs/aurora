@@ -15,7 +15,7 @@ type HttpMethod = NonNullable<AuroraTransportRequest['httpMethod']>
 export interface HttpTransportOptions {
   baseUrl: string
   apiKey?: string
-  bearerToken?: string
+  bearerToken?: string | (() => string | null | undefined)
   fetchImpl?: typeof fetch
   eventSourceFactory?: EventSourceFactory | undefined
   webSocketFactory?: WebSocketFactory | undefined
@@ -46,7 +46,7 @@ export class HttpGatewayTransport implements AuroraTransport {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
   private readonly apiKey: string | undefined
-  private readonly bearerToken: string | undefined
+  private readonly bearerToken: string | (() => string | null | undefined) | undefined
   private readonly eventSourceFactory: EventSourceFactory | undefined
   private readonly webSocketFactory: WebSocketFactory | undefined
   private readonly eventStreamPath: string
@@ -137,8 +137,15 @@ export class HttpGatewayTransport implements AuroraTransport {
       ...extra
     }
     if (this.apiKey) headers['X-API-Key'] = this.apiKey
-    if (this.bearerToken) headers.Authorization = `Bearer ${this.bearerToken}`
+    const bearerToken = this.resolveBearerToken()
+    if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`
     return headers
+  }
+
+  private resolveBearerToken(): string | undefined {
+    const token = typeof this.bearerToken === 'function' ? this.bearerToken() : this.bearerToken
+    const trimmed = typeof token === 'string' ? token.trim() : ''
+    return trimmed || undefined
   }
 
   subscribe<TEventPayload = unknown, TPayload = unknown>(
@@ -151,6 +158,9 @@ export class HttpGatewayTransport implements AuroraTransport {
   private subscribeSse<TEventPayload, TPayload>(
     request: AuroraStreamRequest<TPayload>
   ): AuroraEventSubscription<TEventPayload> {
+    if (this.hasAuthenticatedStreamHeaders(request)) {
+      return this.subscribeFetchSse<TEventPayload, TPayload>(request)
+    }
     if (!this.eventSourceFactory) {
       throw new AuroraError({
         code: 'unsupported_feature',
@@ -173,6 +183,76 @@ export class HttpGatewayTransport implements AuroraTransport {
       request.signal?.addEventListener('abort', done, { once: true })
     })
     return createEventSubscription(stream, () => source?.close())
+  }
+
+  private subscribeFetchSse<TEventPayload, TPayload>(
+    request: AuroraStreamRequest<TPayload>
+  ): AuroraEventSubscription<TEventPayload> {
+    const controller = new AbortController()
+    const signal = combineSignals(controller.signal, request.signal)
+    const stream = this.fetchSseEvents<TEventPayload, TPayload>(request, signal)
+    return createEventSubscription(stream, () => controller.abort())
+  }
+
+  private async *fetchSseEvents<TEventPayload, TPayload>(
+    request: AuroraStreamRequest<TPayload>,
+    signal: AbortSignal
+  ): AsyncIterable<AuroraEvent<TEventPayload>> {
+    const response = await this.fetchImpl(this.streamUrl(request), {
+      method: 'GET',
+      headers: this.headers(request.headers),
+      signal
+    })
+    if (!response.ok) {
+      const data = await parseJson(response)
+      throw new AuroraError({
+        code: classifyHttpError(response.status, readDetail(data)),
+        message: readErrorMessage(data) ?? `Aurora Gateway SSE stream failed with ${response.status}`,
+        status: response.status,
+        method: request.stream,
+        busTopic: request.topics[0],
+        correlationId: auditFromHeaders(response.headers).correlationId ?? undefined,
+        detail: readDetail(data)
+      })
+    }
+    if (!response.body) {
+      throw new AuroraError({
+        code: 'transport_loss',
+        message: `HTTP SSE stream for ${request.stream} did not return a readable body`,
+        detail: { stream: request.stream, topics: request.topics }
+      })
+    }
+
+    const decoder = new TextDecoder()
+    const reader = response.body.getReader()
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        buffer += decoder.decode(value, { stream: !done })
+        const frames = splitSseFrames(buffer)
+        buffer = frames.remainder
+        for (const frame of frames.frames) {
+          const message = parseSseFrame(frame, request.stream)
+          if (message) yield parseSseEvent<TEventPayload>(message, { kind: message.type === 'message' ? request.stream : message.type, transport: this.kind, audit: request.audit })
+        }
+        if (done) break
+      }
+      const trailing = buffer.trim()
+      if (trailing) {
+        const message = parseSseFrame(trailing, request.stream)
+        if (message) yield parseSseEvent<TEventPayload>(message, { kind: message.type === 'message' ? request.stream : message.type, transport: this.kind, audit: request.audit })
+      }
+    } catch (error) {
+      if (isAbortError(error)) return
+      throw error
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
+  private hasAuthenticatedStreamHeaders(request?: AuroraStreamRequest): boolean {
+    return Boolean(this.apiKey || this.resolveBearerToken() || hasRequestHeaders(request?.headers))
   }
 
   private subscribeWebSocket<TEventPayload, TPayload>(
@@ -221,6 +301,41 @@ export class HttpGatewayTransport implements AuroraTransport {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     return url.toString()
   }
+}
+
+function splitSseFrames(text: string): { frames: string[]; remainder: string } {
+  const normalized = text.replace(/\r\n/g, '\n')
+  const frames: string[] = []
+  let start = 0
+  while (true) {
+    const index = normalized.indexOf('\n\n', start)
+    if (index === -1) break
+    frames.push(normalized.slice(start, index))
+    start = index + 2
+  }
+  return { frames, remainder: normalized.slice(start) }
+}
+
+function hasRequestHeaders(headers: Record<string, string> | undefined): boolean {
+  return Boolean(headers && Object.keys(headers).length > 0)
+}
+
+function parseSseFrame(frame: string, fallbackType: string): MessageEvent<string> | null {
+  let type = 'message'
+  let id = ''
+  const data: string[] = []
+  for (const rawLine of frame.split('\n')) {
+    if (!rawLine || rawLine.startsWith(':')) continue
+    const separator = rawLine.indexOf(':')
+    const field = separator === -1 ? rawLine : rawLine.slice(0, separator)
+    const rawValue = separator === -1 ? '' : rawLine.slice(separator + 1)
+    const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue
+    if (field === 'event') type = value || fallbackType
+    else if (field === 'id') id = value
+    else if (field === 'data') data.push(value)
+  }
+  if (data.length === 0) return null
+  return { data: data.join('\n'), type, lastEventId: id } as MessageEvent<string>
 }
 
 function defaultEventSourceFactory(): EventSourceFactory | undefined {

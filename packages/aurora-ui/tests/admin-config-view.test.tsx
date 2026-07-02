@@ -84,6 +84,18 @@ describe('AdminConfigView', () => {
       form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
       await Promise.resolve()
     })
+    expect(calls).toEqual(['Config.PreviewDiff', 'Config.PreviewReloadImpact'])
+    expect(container.textContent).toContain('Apply requires explicit in-session admin unlock')
+
+    const unlock = container.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+    expect(unlock).not.toBeNull()
+    await act(async () => {
+      unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await act(async () => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
 
     expect(calls).toEqual([
       'Config.PreviewDiff',

@@ -15,14 +15,11 @@ import {
   gatewayRegistryFixture,
   type CapabilityCatalogResponse
 } from '@aurora/client'
-import {
-  AdminOverviewContent,
-  AppShell,
-  AssistantView,
-  SettingsPermissionsView,
-  buildShellSnapshot,
-  type AuroraShellSnapshot
-} from '../src/index'
+import { AdminOverviewContent } from '../src/admin-overview-view'
+import { AppShell } from '../src/shell'
+import { AssistantView } from '../src/assistant-view'
+import { SettingsPermissionsView } from '../src/settings-permissions-view'
+import { buildShellSnapshot, type AuroraShellSnapshot } from '../src/shell-data'
 
 type SurfaceId = 'assistant' | 'admin' | 'mobile-settings'
 type ViewportId = 'desktop' | 'tablet' | 'mobile'
@@ -48,14 +45,14 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: '95143c524214',
-    tablet: 'cce5c9faf23b',
-    mobile: '3ad54ba8171e'
+    desktop: '34f8f2b71fe5',
+    tablet: 'f6ee79538a1f',
+    mobile: '6f0b846468b8'
   },
   admin: {
-    desktop: '3dce5af93bc8',
-    tablet: 'de396bf53562',
-    mobile: '5013eb3ef611'
+    desktop: 'e7501414fff1',
+    tablet: '95adc6ca7f77',
+    mobile: '73abc26bd729'
   },
   'mobile-settings': {
     desktop: '93769eefe5a5',
@@ -115,6 +112,15 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         hasStatusLanguage: true,
         hasBackendEvidence: true
       })
+      if (surface.id === 'assistant') {
+        expect(surface.html, `assistant composer marker/${surface.viewport.id}`).toContain('data-first-viewport-task="assistant-chat-composer"')
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before route evidence/${surface.viewport.id}`)
+          .toBeLessThan(surface.html.indexOf('aria-label="Assistant route and privacy details"'))
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before voice evidence/${surface.viewport.id}`)
+          .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-voice-title"'))
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before attachment evidence/${surface.viewport.id}`)
+          .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-context-title"'))
+      }
       expect(text, `${surface.id}/${surface.viewport.id}`).not.toMatch(/mock transport selected for production/i)
       expect(text, `${surface.id}/${surface.viewport.id}`).not.toMatch(/remote .*success without/i)
       return { surface: surface.id, viewport: surface.viewport, checks: shellChecks }
@@ -126,6 +132,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(css).toContain('.aui-mobile-tabs')
     expect(css).toContain('.aui-mobile-sheet')
     expect(css).toContain('.aui-shell-status')
+    expect(css).toContain('.aui-chat-workspace')
     expect(css).toContain(':focus-visible')
 
     writeJsonReport('responsive.json', {

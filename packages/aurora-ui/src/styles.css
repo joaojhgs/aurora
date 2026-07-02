@@ -68,9 +68,9 @@ button, input, select, textarea { font: inherit; }
 .aui-activity-drawer summary::-webkit-details-marker { display: none; }
 .aui-activity-drawer-panel { position: fixed; top: 3.85rem; right: .75rem; z-index: 25; width: min(22rem, calc(100vw - 1.5rem)); max-height: min(34rem, calc(100dvh - 5rem)); overflow: auto; border: 1px solid var(--aui-border); border-radius: .6rem; background: var(--aui-surface); box-shadow: 0 1rem 3rem rgb(0 0 0 / .16); }
 .aui-activity-drawer-panel .aui-activity { display: block; border-left: 0; }
-.aui-content-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) 20rem; }
+.aui-content-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) 18rem; }
 .aui-content { min-width: 0; overflow: auto; padding: clamp(1rem, 2.5vw, 2rem); }
-.aui-content > * { width: min(100%, 96rem); margin-inline: auto; }
+.aui-content > * { width: min(100%, 112rem); margin-inline: auto; }
 .aui-activity { border-left: 1px solid var(--aui-border); background: var(--aui-surface); padding: 1rem; overflow: auto; }
 .aui-activity h2 { margin: .2rem 0 1rem; font-size: 1rem; }
 .aui-activity dl { display: grid; gap: .75rem; }
@@ -139,11 +139,11 @@ button, input, select, textarea { font: inherit; }
 .aui-provider-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .5rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 55%, white); }
 .aui-provider-list span, .aui-provider-list small { min-width: 0; overflow-wrap: anywhere; }
 .aui-provider-list small { grid-column: 1 / -1; color: var(--aui-muted); }
-.aui-assistant { display: grid; min-height: min(54rem, calc(100dvh - 7.5rem)); gap: 1rem; }
+.aui-assistant { display: grid; min-height: min(54rem, calc(100dvh - 7.5rem)); gap: .85rem; }
 .aui-assistant-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-assistant-header h1 { margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
 .aui-assistant-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 42rem; }
-.aui-assistant-runtime-strip { border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-primary) 5%, var(--aui-surface)); padding: .65rem .75rem; }
+.aui-assistant-runtime-strip { border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-primary) 5%, var(--aui-surface)); padding: .55rem .7rem; }
 .aui-assistant-runtime-strip dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0; }
 .aui-assistant-runtime-strip div { min-width: 0; }
 .aui-assistant-runtime-strip dt { color: var(--aui-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
@@ -152,7 +152,7 @@ button, input, select, textarea { font: inherit; }
 .aui-stream-banner span { min-width: 0; overflow-wrap: anywhere; }
 .aui-stream-banner button { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .45rem .6rem; background: var(--aui-surface); color: var(--aui-ink); font-weight: 750; }
 .aui-stream-banner button:disabled { cursor: not-allowed; opacity: .58; }
-.aui-assistant-grid { display: grid; min-height: 28rem; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr) minmax(16rem, 22rem); gap: .85rem; align-items: start; }
+.aui-assistant-grid { display: grid; min-height: min(34rem, calc(100dvh - 14rem)); grid-template-columns: minmax(11rem, 14rem) minmax(28rem, 1fr) minmax(15rem, 20rem); gap: .75rem; align-items: stretch; }
 .aui-conversation-rail, .aui-chat-panel, .aui-route-panel, .aui-assistant-form { border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
 .aui-conversation-rail { display: grid; gap: .75rem; padding: .75rem; }
 .aui-conversation-rail header { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; }
@@ -184,8 +184,9 @@ button, input, select, textarea { font: inherit; }
 .aui-assistant-tool-payload summary { color: var(--aui-primary); cursor: pointer; font-size: .82rem; font-weight: 800; }
 .aui-assistant-tool-payload code { display: block; max-height: 11rem; margin: 0; overflow: auto; white-space: pre-wrap; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .65rem; font-size: .78rem; }
 .aui-assistant-tool-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
-.aui-chat-panel { display: flex; min-width: 0; flex-direction: column; gap: .65rem; overflow: auto; padding: .9rem; }
-.aui-chat-empty { display: grid; min-height: 16rem; place-content: center; gap: .45rem; color: var(--aui-muted); text-align: center; }
+.aui-chat-workspace { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(12rem, 1fr) auto; gap: .65rem; }
+.aui-chat-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: .65rem; overflow: auto; padding: .85rem; }
+.aui-chat-empty { display: grid; min-height: 11rem; place-content: center; gap: .45rem; color: var(--aui-muted); text-align: center; }
 .aui-chat-empty h2 { margin: 0; color: var(--aui-ink); font-size: 1.05rem; }
 .aui-chat-empty p { margin: 0; }
 .aui-chat-bubble { max-width: min(44rem, 88%); border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: var(--aui-surface-2); }
@@ -196,7 +197,7 @@ button, input, select, textarea { font: inherit; }
 .aui-chat-sending { border-color: color-mix(in srgb, var(--aui-warning) 40%, var(--aui-border)); }
 .aui-chat-bubble header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .4rem; color: var(--aui-muted); font-size: .75rem; text-transform: uppercase; }
 .aui-chat-bubble p { margin: 0; overflow-wrap: anywhere; line-height: 1.48; }
-.aui-route-panel { display: grid; align-content: start; gap: .75rem; padding: .9rem; }
+.aui-route-panel { display: grid; align-content: start; gap: .65rem; overflow: auto; padding: .8rem; }
 .aui-route-panel h2 { margin: 0; font-size: .98rem; }
 .aui-route-panel dl { display: grid; gap: .55rem; margin: 0; }
 .aui-route-panel dt { color: var(--aui-muted); font-size: .75rem; }
@@ -257,12 +258,14 @@ button, input, select, textarea { font: inherit; }
 .aui-attachment-unsupported { border-color: color-mix(in srgb, var(--aui-muted) 50%, var(--aui-border)); opacity: .88; }
 .aui-attachment-uploading { border-color: color-mix(in srgb, var(--aui-warning) 40%, var(--aui-border)); }
 .aui-attachment-item progress { width: 100%; height: .55rem; margin-top: .4rem; accent-color: var(--aui-primary); }
-.aui-assistant-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: .65rem; align-items: end; padding: .75rem; }
+.aui-assistant-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: .55rem; align-items: end; padding: .7rem; box-shadow: 0 .55rem 1.5rem rgb(0 0 0 / .06); }
+.aui-composer-toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; color: var(--aui-muted); font-size: .78rem; font-weight: 800; }
 .aui-assistant-form label { grid-column: 1 / -1; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
-.aui-assistant-form textarea { min-height: 5.2rem; resize: vertical; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .7rem; background: var(--aui-surface); color: var(--aui-ink); }
-.aui-assistant-form button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.65rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); border-radius: .45rem; padding: .65rem .9rem; background: var(--aui-primary); color: white; font-weight: 750; }
+.aui-assistant-form textarea { min-height: 4.55rem; resize: vertical; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .65rem; background: var(--aui-surface); color: var(--aui-ink); }
+.aui-assistant-form button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.55rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); border-radius: .45rem; padding: .55rem .78rem; background: var(--aui-primary); color: white; font-weight: 750; }
 .aui-assistant-form .aui-secondary-button { border-color: var(--aui-border); background: var(--aui-surface-2); color: var(--aui-ink); }
 .aui-assistant-form button:disabled, .aui-assistant-form textarea:disabled { cursor: not-allowed; opacity: .58; }
+.aui-mobile-composer-note { grid-column: 1 / -1; margin: 0; color: var(--aui-muted); font-size: .8rem; line-height: 1.35; }
 
 .aui-voice-panel { display: grid; gap: .85rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .9rem; }
 .aui-voice-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
@@ -504,6 +507,7 @@ button, input, select, textarea { font: inherit; }
   .aui-activity { display: none; }
   .aui-activity-drawer { display: block; }
   .aui-assistant-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-chat-workspace { order: -2; }
   .aui-route-panel { order: -1; }
   .aui-backup-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-voice-body { grid-template-columns: minmax(0, 1fr); }

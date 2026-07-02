@@ -298,6 +298,7 @@ describe('Aurora production shell', () => {
       'assistant-route-sheet',
       'admin-overview',
       'admin-services',
+      'admin-contracts',
       'admin-rbac',
       'admin-audit',
       'admin-plugins',
@@ -534,7 +535,7 @@ describe('Aurora production shell', () => {
   it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/styles.css'), 'utf8')
 
-    expect(css).toContain('.aui-content > * { width: min(100%, 96rem); margin-inline: auto; }')
+    expect(css).toContain('.aui-content > * { width: min(100%, 112rem); margin-inline: auto; }')
     expect(css).toContain('.aui-activity-drawer { display: block; }')
     expect(css).toContain('.aui-activity-drawer-panel')
     expect(css).toContain('.aui-content :where(button, .aui-button, .aui-action-chip, input, select, textarea, summary) { min-height: 2.6rem; }')
@@ -2151,7 +2152,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.services.map((service) => service.module)).toContain('Gateway')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Gateway.GetServices')
-    expect(markup).toContain('Services and contracts')
+    expect(markup).toContain('Services')
     expect(markup).toContain('SDK mock transport fixture')
     expect(markup).toContain('Gateway.GetServices')
     expect(markup).toContain('Services table with health, route evidence, capabilities, heartbeat, instance, and AdminAction controls')
@@ -2727,7 +2728,7 @@ describe('Aurora production shell', () => {
     expect(action.methodId).toBe('Auth.DeleteDevice')
     expect(action.payload).toEqual({ device_id: 'device-studio-mac' })
     expect(action.reason).toBe('retire lost laptop')
-    expect(action.reauthConfirmed).toBe(true)
+    expect(action.reauthConfirmed).toBe(false)
     expect(action.affectedResources).toEqual(expect.arrayContaining(['device:device-studio-mac', 'device_tokens', 'active_sessions']))
   })
 
@@ -2885,10 +2886,12 @@ describe('Aurora production shell', () => {
     const approve = buildPairingAdminActionRequest(entry, 'approve', {
       reason: 'Approve kitchen tablet',
       permissions: 'Gateway.use Auth.use',
-      grantAdmin: false
+      grantAdmin: false,
+      reauthConfirmed: true
     })
     const deny = buildPairingAdminActionRequest(entry, 'deny', {
-      reason: 'Wrong peer'
+      reason: 'Wrong peer',
+      reauthConfirmed: true
     })
 
     expect(approve).toEqual(
@@ -3038,7 +3041,7 @@ describe('Aurora production shell', () => {
     const approve = buildMeshPeerAdminAction(
       { peerId: 'peer-kitchen', nodeName: 'Kitchen node' },
       'approve',
-      { reason: 'Fingerprint verified out of band', permissions: 'Gateway.use, TTS.use' }
+      { reason: 'Fingerprint verified out of band', permissions: 'Gateway.use, TTS.use', reauthConfirmed: true }
     )
     const deny = buildMeshPeerAdminAction(
       { peerId: 'peer-cabin', nodeName: 'Cabin node' },
@@ -3048,7 +3051,7 @@ describe('Aurora production shell', () => {
     const remove = buildMeshPeerAdminAction(
       { peerId: 'peer-lab', nodeName: 'Lab node' },
       'remove',
-      { reason: 'Retire test peer', revokeToken: false }
+      { reason: 'Retire test peer', revokeToken: false, reauthConfirmed: true }
     )
 
     expect(approve).toEqual(expect.objectContaining({
@@ -3314,10 +3317,11 @@ describe('Aurora production shell', () => {
     const peer = { peerId: 'peer-kitchen', nodeName: 'Kitchen node' }
     const approve = buildMeshPeerAdminAction(peer, 'approve', {
       reason: 'Approve expected kitchen peer',
-      permissions: 'Gateway.use, TTS.use\nTooling.use'
+      permissions: 'Gateway.use, TTS.use\nTooling.use',
+      reauthConfirmed: true
     })
-    const deny = buildMeshPeerAdminAction(peer, 'deny', { reason: 'Wrong peer' })
-    const remove = buildMeshPeerAdminAction(peer, 'remove', { reason: 'Retire peer', revokeToken: false })
+    const deny = buildMeshPeerAdminAction(peer, 'deny', { reason: 'Wrong peer', reauthConfirmed: true })
+    const remove = buildMeshPeerAdminAction(peer, 'remove', { reason: 'Retire peer', revokeToken: false, reauthConfirmed: true })
 
     expect(parseMeshPermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
     expect(approve).toEqual(
@@ -3493,7 +3497,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('redis://[redacted]@redis:6379/0 reachable')
     expect(markup).toContain('docker-compose.process.yml')
     expect(markup).toContain('Diagnostics export')
-    expect(markup).toContain('Services and contracts')
+    expect(markup).toContain('Services')
+    expect(markup).toContain('Contracts registry')
     expect(markup).not.toContain('redis://:password')
   })
 

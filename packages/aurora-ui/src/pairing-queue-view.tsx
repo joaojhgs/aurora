@@ -92,16 +92,19 @@ export interface PairingCreateInput {
   remotePeerId?: string
   remoteNodeName?: string
   reason: string
+  reauthConfirmed?: boolean
 }
 
 export interface PairingExchangeInput {
   code: string
   reason: string
+  reauthConfirmed?: boolean
 }
 
 export interface PairingRevokeInput {
   tokenId: string
   reason: string
+  reauthConfirmed?: boolean
 }
 
 export function PairingQueueView({ client, route }: PairingQueueViewProps) {
@@ -112,6 +115,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [adminReason, setAdminReason] = useState('Review pending device or peer pairing request')
   const [permissions, setPermissions] = useState('')
   const [grantAdmin, setGrantAdmin] = useState(false)
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [createDeviceName, setCreateDeviceName] = useState('New Aurora device')
   const [createRemotePeerId, setCreateRemotePeerId] = useState('')
   const [createRemoteNodeName, setCreateRemoteNodeName] = useState('')
@@ -158,7 +162,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       setCopyError(null)
       const reason = adminReason.trim() || `${action} pairing request ${entry.request_id}`
       try {
-        const result = await client.admin.execute(buildPairingAdminActionRequest(entry, action, { reason, permissions, grantAdmin }))
+        const result = await client.admin.execute(buildPairingAdminActionRequest(entry, action, { reason, permissions, grantAdmin, reauthConfirmed }))
         setOperation({
           status: 'success',
           message: `${action} pairing completed through AdminAction; queue refresh requested.`,
@@ -173,7 +177,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
         setPendingAction(null)
       }
     },
-    [adminReason, client.admin, grantAdmin, loadQueue, permissions]
+    [adminReason, client.admin, grantAdmin, loadQueue, permissions, reauthConfirmed]
   )
 
   const createPairingCredential = useCallback(async () => {
@@ -181,7 +185,8 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       deviceName: createDeviceName,
       remotePeerId: createRemotePeerId,
       remoteNodeName: createRemoteNodeName,
-      reason: adminReason
+      reason: adminReason,
+      reauthConfirmed
     })
     setPendingAction('create')
     setMutationError(null)
@@ -203,10 +208,10 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     } finally {
       setPendingAction(null)
     }
-  }, [adminReason, client.admin, createDeviceName, createRemoteNodeName, createRemotePeerId, loadQueue])
+  }, [adminReason, client.admin, createDeviceName, createRemoteNodeName, createRemotePeerId, loadQueue, reauthConfirmed])
 
   const exchangePairingCode = useCallback(async () => {
-    const request = buildPairingExchangeAdminActionRequest({ code: exchangeCode, reason: adminReason })
+    const request = buildPairingExchangeAdminActionRequest({ code: exchangeCode, reason: adminReason, reauthConfirmed })
     setPendingAction('exchange')
     setMutationError(null)
     setExchangeResult(null)
@@ -233,11 +238,11 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     } finally {
       setPendingAction(null)
     }
-  }, [adminReason, client.admin, exchangeCode])
+  }, [adminReason, client.admin, exchangeCode, reauthConfirmed])
 
   const revokeExchangedToken = useCallback(async () => {
     if (!exchangeResult?.tokenId) return
-    const request = buildPairingTokenRevokeAdminActionRequest({ tokenId: exchangeResult.tokenId, reason: adminReason })
+    const request = buildPairingTokenRevokeAdminActionRequest({ tokenId: exchangeResult.tokenId, reason: adminReason, reauthConfirmed })
     setPendingAction('revoke-token')
     setMutationError(null)
     setOperation({ status: 'pending', message: 'Revoking exchanged token through AdminAction.', auditReceipt: null })
@@ -255,7 +260,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     } finally {
       setPendingAction(null)
     }
-  }, [adminReason, client.admin, exchangeResult?.tokenId])
+  }, [adminReason, client.admin, exchangeResult?.tokenId, reauthConfirmed])
 
   const copySecret = useCallback(async (value: string, requestId: string) => {
     setCopyError(null)
@@ -288,6 +293,8 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       onPermissionsChange={setPermissions}
       grantAdmin={grantAdmin}
       onGrantAdminChange={setGrantAdmin}
+      reauthConfirmed={reauthConfirmed}
+      onReauthConfirmedChange={setReauthConfirmed}
       createDeviceName={createDeviceName}
       onCreateDeviceNameChange={setCreateDeviceName}
       createRemotePeerId={createRemotePeerId}
@@ -325,6 +332,8 @@ export interface PairingQueueSurfaceProps {
   onPermissionsChange?: (value: string) => void
   grantAdmin?: boolean
   onGrantAdminChange?: (value: boolean) => void
+  reauthConfirmed?: boolean
+  onReauthConfirmedChange?: (value: boolean) => void
   createDeviceName?: string
   onCreateDeviceNameChange?: (value: string) => void
   createRemotePeerId?: string
@@ -361,6 +370,8 @@ export function PairingQueueSurface({
   onPermissionsChange,
   grantAdmin = false,
   onGrantAdminChange,
+  reauthConfirmed = false,
+  onReauthConfirmedChange,
   createDeviceName = '',
   onCreateDeviceNameChange,
   createRemotePeerId = '',
@@ -387,10 +398,10 @@ export function PairingQueueSurface({
 }: PairingQueueSurfaceProps) {
   const controlsDisabled = route.disabled || model.state === 'loading'
   const adminActionReady = !controlsDisabled
-  const actionDisabled = controlsDisabled || Boolean(pendingAction)
-  const canCreate = adminActionReady && Boolean(createDeviceName.trim()) && !pendingAction && Boolean(onCreate)
-  const canExchange = adminActionReady && Boolean(exchangeCode.trim()) && !pendingAction && Boolean(onExchange)
-  const canRevokeToken = adminActionReady && Boolean(exchangeResult?.tokenId) && !pendingAction && Boolean(onRevokeExchangedToken)
+  const actionDisabled = controlsDisabled || Boolean(pendingAction) || !reauthConfirmed
+  const canCreate = adminActionReady && reauthConfirmed && Boolean(createDeviceName.trim()) && !pendingAction && Boolean(onCreate)
+  const canExchange = adminActionReady && reauthConfirmed && Boolean(exchangeCode.trim()) && !pendingAction && Boolean(onExchange)
+  const canRevokeToken = adminActionReady && reauthConfirmed && Boolean(exchangeResult?.tokenId) && !pendingAction && Boolean(onRevokeExchangedToken)
   return (
     <div className="aui-pairing-queue">
       <StateSurface
@@ -437,6 +448,15 @@ export function PairingQueueSurface({
             onChange={(event) => onGrantAdminChange?.(event.currentTarget.checked)}
           />
           <span>Grant admin role on approval</span>
+        </label>
+        <label className="aui-inline-field">
+          <input
+            type="checkbox"
+            checked={reauthConfirmed}
+            disabled={controlsDisabled}
+            onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)}
+          />
+          <span>In-session admin unlock confirmed for AdminAction submit</span>
         </label>
         <button className="aui-button" type="button" disabled={controlsDisabled} onClick={onRefresh}>Refresh</button>
       </section>
@@ -657,7 +677,7 @@ export function parsePermissionList(value: string): string[] | null {
 export function buildPairingAdminActionRequest(
   entry: PendingPairingEntry,
   action: 'approve' | 'deny',
-  input: { reason: string; permissions?: string; grantAdmin?: boolean }
+  input: { reason: string; permissions?: string; grantAdmin?: boolean; reauthConfirmed?: boolean }
 ): PairingAdminActionRequest {
   const reason = input.reason.trim() || `${action} pairing request ${entry.request_id}`
   const code = requirePairingCode(entry.code, action)
@@ -670,7 +690,7 @@ export function buildPairingAdminActionRequest(
         is_admin: Boolean(input.grantAdmin)
       },
       reason,
-      reauthConfirmed: true,
+      reauthConfirmed: Boolean(input.reauthConfirmed),
       affectedResources: affectedResourcesFor(entry),
       path: routePath('Auth', 'PairingApprove')
     })
@@ -682,7 +702,7 @@ export function buildPairingAdminActionRequest(
       reason
     },
     reason,
-    reauthConfirmed: true,
+    reauthConfirmed: Boolean(input.reauthConfirmed),
     affectedResources: affectedResourcesFor(entry),
     path: routePath('Auth', 'PairingDeny')
   })
@@ -699,7 +719,7 @@ export function buildPairingCreateAdminActionRequest(input: PairingCreateInput):
     methodId: AUTH_METHODS.pairingStart,
     payload,
     reason: input.reason.trim() || `create pairing code for ${deviceName}`,
-    reauthConfirmed: true,
+    reauthConfirmed: Boolean(input.reauthConfirmed),
     affectedResources: [`pairing:new:${deviceName}`, input.remotePeerId?.trim() ? `peer:${input.remotePeerId.trim()}` : null].filter((value): value is string => Boolean(value)),
     path: routePath('Auth', 'PairingStart')
   })
@@ -712,7 +732,7 @@ export function buildPairingExchangeAdminActionRequest(input: PairingExchangeInp
     methodId: AUTH_METHODS.pairingExchange,
     payload: { code },
     reason: input.reason.trim() || 'exchange pairing code from admin pairing surface',
-    reauthConfirmed: true,
+    reauthConfirmed: Boolean(input.reauthConfirmed),
     affectedResources: [`pairing-code:${redactedIdentifier(code)}`, 'auth-session'],
     path: routePath('Auth', 'PairingExchange')
   })
@@ -725,7 +745,7 @@ export function buildPairingTokenRevokeAdminActionRequest(input: PairingRevokeIn
     methodId: AUTH_METHODS.revokeToken,
     payload: { token_id: tokenId },
     reason: input.reason.trim() || `revoke exchanged pairing token ${tokenId}`,
-    reauthConfirmed: true,
+    reauthConfirmed: Boolean(input.reauthConfirmed),
     affectedResources: [`token:${tokenId}`, 'auth-session'],
     path: routePath('Auth', 'RevokeToken')
   })

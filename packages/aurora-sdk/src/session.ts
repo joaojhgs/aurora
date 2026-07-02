@@ -122,6 +122,7 @@ const TERMINAL_STATES = new Set<AuthSessionState>(['expired', 'revoked', 'unauth
 
 export class AuthSession {
   private snapshotValue: AuthSessionSnapshot = EMPTY_SNAPSHOT
+  private bearerTokenValue: string | null = null
   private readonly listeners = new Set<AuthSessionListener>()
 
   snapshot(): AuthSessionSnapshot {
@@ -135,7 +136,17 @@ export class AuthSession {
   }
 
   setAnonymous(reason: string | null = null): void {
+    this.bearerTokenValue = null
     this.commit('anonymous', { reason, credentialKind: 'none' })
+  }
+
+  setBearerToken(token: string | null | undefined): void {
+    const trimmed = typeof token === 'string' ? token.trim() : ''
+    this.bearerTokenValue = trimmed || null
+  }
+
+  bearerToken(): string | null {
+    return this.bearerTokenValue
   }
 
   setPairing(details: AuthSessionIdentity = {}): void {
@@ -194,6 +205,7 @@ export class AuthSession {
   }
 
   expire(reason = 'Authentication expired'): void {
+    this.bearerTokenValue = null
     this.commit('expired', {
       ...this.snapshotValue,
       reason,
@@ -202,6 +214,7 @@ export class AuthSession {
   }
 
   revoke(reason = 'Authentication revoked'): void {
+    this.bearerTokenValue = null
     this.commit('revoked', {
       ...this.snapshotValue,
       reason,
@@ -210,6 +223,7 @@ export class AuthSession {
   }
 
   markUnauthorized(reason = 'Authentication required', status = 401): void {
+    this.bearerTokenValue = null
     this.commit('unauthorized', {
       ...this.snapshotValue,
       reason,
@@ -226,6 +240,7 @@ export class AuthSession {
   }
 
   clear(): void {
+    this.bearerTokenValue = null
     this.snapshotValue = EMPTY_SNAPSHOT
     this.emit()
   }

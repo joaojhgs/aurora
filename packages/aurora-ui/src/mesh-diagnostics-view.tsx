@@ -157,6 +157,8 @@ export interface MeshDiagnosticsViewProps {
   onRefresh?: () => void
   onExportSupportBundle?: () => void | Promise<void>
   supportBundleExportState?: SupportBundleExportState
+  reauthConfirmed?: boolean
+  onReauthConfirmedChange?: (value: boolean) => void
 }
 
 export function redactDiagnosticText(value: string | null | undefined): string {
@@ -322,7 +324,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   }
 }
 
-export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null } }: MeshDiagnosticsViewProps) {
+export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null }, reauthConfirmed = false, onReauthConfirmedChange }: MeshDiagnosticsViewProps) {
   return (
     <section className="aui-mesh-diagnostics" aria-labelledby="mesh-diagnostics-title">
       <header className="aui-mesh-diagnostics-header">
@@ -351,7 +353,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       </div>
 
       <div className="aui-diagnostics-grid">
-        <section className="aui-mesh-panel" aria-labelledby="diagnostics-live-probes-title">
+        <section className="aui-mesh-panel" aria-label="Live probes">
           <PanelTitle icon={<RefreshCw size={18} aria-hidden />} title="Live probes" description="Gateway, mesh, WebRTC, capability, and support-bundle probes stay tied to SDK methods." />
           <div className="aui-diagnostics-probes">
             {snapshot.liveProbes.map((probe) => (
@@ -394,10 +396,18 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
         </dl>
         <p className="aui-mesh-diagnostics-note">{snapshot.supportBundleReason}</p>
+        <label className="aui-confirmation-check">
+          {onReauthConfirmedChange ? (
+            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+          ) : (
+            <input type="checkbox" checked={false} readOnly disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+          )}
+          <span>I confirm recent AdminAction reauthentication before exporting support data.</span>
+        </label>
         <button
           className="aui-primary-action"
           type="button"
-          disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'}
+          disabled={!onExportSupportBundle || !reauthConfirmed || supportBundleExportState.status === 'pending'}
           {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
         >
           <Download size={15} aria-hidden />

@@ -74,6 +74,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   const [impact, setImpact] = useState<ConfigReloadImpactEntry[]>([])
   const [reason, setReason] = useState('Admin config update from Aurora UI')
   const [reviewArmed, setReviewArmed] = useState(false)
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -142,12 +143,16 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       setMessage('Review staged diff and reload/restart impact, then confirm AdminAction apply.')
       return
     }
+    if (!reauthConfirmed) {
+      setMessage('Apply requires explicit in-session admin unlock before AdminAction submit.')
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {
       const receipts: string[] = []
       for (const change of changes) {
-        const result = await client.config.applyChange({ change, reason, reauthConfirmed: true })
+        const result = await client.config.applyChange({ change, reason, reauthConfirmed })
         receipts.push(result.confirmation.audit_receipt)
         if (!result.data.success) throw new Error(result.data.error ?? `Config.Set failed for ${change.key_path}`)
       }
@@ -163,13 +168,17 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   }
 
   async function rollback(version: ConfigVersionEntry) {
+    if (!reauthConfirmed) {
+      setMessage('Rollback requires explicit in-session admin unlock before AdminAction submit.')
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {
       const result = await client.config.rollback({
         versionId: version.version_id,
         reason: `Rollback ${version.key_path} from Aurora UI`,
-        reauthConfirmed: true
+        reauthConfirmed
       })
       if (!result.data.success) throw new Error(result.data.error ?? 'Config rollback failed')
       setMessage(`Rolled back ${version.key_path}. Audit receipt: ${result.confirmation.audit_receipt}`)
@@ -299,7 +308,16 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
             <span>Admin reason</span>
             <textarea value={reason} onChange={(event) => setReason(event.target.value)} disabled={!canMutate || busy} />
           </label>
-          <button className="aui-primary-action" type="submit" disabled={!canMutate || reviewBlocked || busy}>
+          <label className="aui-inline-field">
+            <input
+              type="checkbox"
+              checked={reauthConfirmed}
+              disabled={!canMutate || busy}
+              onChange={(event) => setReauthConfirmed(event.currentTarget.checked)}
+            />
+            <span>In-session admin unlock confirmed for config AdminAction</span>
+          </label>
+          <button className="aui-primary-action" type="submit" disabled={!canMutate || reviewBlocked || !reauthConfirmed || busy}>
             <Save size={16} aria-hidden /> {reviewArmed ? 'Confirm Apply through AdminAction' : 'Review Apply through AdminAction'}
           </button>
         </aside>
@@ -319,7 +337,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                 <code>{version.version_id}</code>
                 <span>{version.timestamp}; {version.secret ? 'secret redacted' : 'value visible'}</span>
               </div>
-              <button type="button" className="aui-action-chip" disabled={!canMutate || busy} onClick={() => rollback(version)}>
+              <button type="button" className="aui-action-chip" disabled={!canMutate || !reauthConfirmed || busy} onClick={() => rollback(version)}>
                 Rollback
               </button>
             </article>
@@ -394,8 +412,8 @@ function ConfigMetric({ label, value, detail }: { label: string; value: string; 
 
 function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
   return (
-    <div className="aui-config-review-block">
-      <h3>Diff preview</h3>
+    <div className="aui-config-review-block" aria-label="Preview diff">
+      <h3 id="config-diff-preview-title">Diff preview</h3>
       {diff.length === 0 ? <p>No staged changes.</p> : null}
       {diff.map((row) => (
         <div key={row.key_path} className="aui-config-diff-row">

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 
 const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
@@ -17,7 +17,7 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   tokens: ['RBAC', 'Scoped token inventory'],
   devices: ['Devices', 'Registered devices'],
   config: ['Configuration', 'Staged review', 'Diff preview'],
-  contracts: ['Services', 'Contracts'],
+  contracts: ['Contracts registry', 'Search contracts'],
   plugins: ['Plugins, MCP, and tools', 'Provider grouping'],
   pairing: ['Pairing queue'],
   backups: ['Backups & Restore', 'Create backup'],
@@ -40,7 +40,7 @@ const cockpitScreenshotViewports = [
 
 
 
-async function expectFocusedWithVisibleOutline(page: import('@playwright/test').Page, label: string): Promise<void> {
+async function expectFocusedWithVisibleOutline(page: Page, label: string): Promise<void> {
   const focusState = await page.evaluate(() => {
     const element = document.activeElement as HTMLElement | null
     if (!element) return null
@@ -71,7 +71,7 @@ function routeScreenshotName(route: { id: string; href: string }): string {
   return `${route.id}-${suffix || 'root'}.png`
 }
 
-async function collectPageFailures(page: import('@playwright/test').Page, run: () => Promise<void>): Promise<string[]> {
+async function collectPageFailures(page: Page, run: () => Promise<void>): Promise<string[]> {
   const failures: string[] = []
   const onConsole = (message: import('@playwright/test').ConsoleMessage) => {
     if (message.type() === 'error') {
@@ -100,6 +100,64 @@ async function collectPageFailures(page: import('@playwright/test').Page, run: (
     page.off('pageerror', onPageError)
   }
   return failures
+}
+
+
+type ControlLocatorFactory = (main: Locator) => Locator
+
+const ROUTE_CONTROL_LOCATORS: Record<string, readonly ControlLocatorFactory[]> = {
+  'Assistant conversation list': [(main) => main.getByLabel('Assistant conversation list', { exact: true })],
+  Send: [(main) => main.getByRole('button', { name: /^Send assistant prompt$/ })],
+  'Search memory and RAG': [(main) => main.getByLabel('Search memory and RAG', { exact: true })],
+  'Tool search': [(main) => main.getByLabel('Tool search', { exact: true })],
+  'Tool detail drawer': [(main) => main.getByRole('region', { name: /^Tool detail drawer$/ })],
+  'Generated parameter form': [(main) => main.getByLabel('Generated parameter form', { exact: true })],
+  'MCP server status': [(main) => main.getByLabel('MCP server status', { exact: true })],
+  'Open scheduler': [(main) => main.getByRole('link', { name: /^Open scheduler$/ })],
+  Filters: [(main) => main.getByLabel('Filters', { exact: true })],
+  'Preview diff': [(main) => main.getByLabel('Preview diff', { exact: true })],
+  'Reload catalog': [(main) => main.getByRole('button', { name: /^Reload catalog$/ })],
+  'Validate endpoint': [(main) => main.getByRole('button', { name: /^Validate endpoint$/ })],
+  'Pairing queue controls': [(main) => main.getByLabel('Pairing queue controls', { exact: true })],
+  'Services table with health': [(main) => main.getByRole('region', { name: /^Services table with health$/ })],
+  Jobs: [(main) => main.getByRole('region', { name: /^Jobs$/ })],
+  'Live probes': [(main) => main.getByRole('region', { name: /^Live probes$/ })],
+}
+
+async function locatorIsVisible(locator: Locator): Promise<boolean> {
+  const count = await locator.count()
+  if (count === 0) return false
+  for (let index = 0; index < count; index += 1) {
+    if (await locator.nth(index).isVisible()) return true
+  }
+  return false
+}
+
+async function routeControlVisible(page: Page, control: string): Promise<boolean> {
+  const main = page.locator('main#content')
+  const locators = ROUTE_CONTROL_LOCATORS[control] ?? [
+    (scope: Locator) => scope.getByLabel(control, { exact: true }),
+    (scope: Locator) => scope.getByPlaceholder(control, { exact: true }),
+    (scope: Locator) => scope.getByRole('button', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('link', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('searchbox', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('textbox', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('combobox', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('group', { name: exactName(control) }),
+    (scope: Locator) => scope.getByRole('region', { name: exactName(control) }),
+  ]
+  for (const factory of locators) {
+    if (await locatorIsVisible(factory(main))) return true
+  }
+  return false
+}
+
+function exactName(value: string): RegExp {
+  return new RegExp(`^${escapeRegExp(value)}$`, 'i')
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 const PLACEHOLDER_COPY_MARKERS = [
@@ -222,6 +280,11 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
           failures.push(`${route.id} (${route.href}) missing route-specific landmark: ${landmark}`)
         }
       }
+      for (const control of oracle?.routeSpecificControls ?? []) {
+        if (!await routeControlVisible(page, control)) {
+          failures.push(`${route.id} (${route.href}) missing route-specific control: ${control}`)
+        }
+      }
       for (const marker of PLACEHOLDER_COPY_MARKERS) {
         if (bodyText.includes(marker)) {
           failures.push(`${route.id} (${route.href}) rendered placeholder marker: ${marker}`)
@@ -235,40 +298,55 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     expect(failures).toEqual([])
   })
 
-  test('captures desktop screenshots for every primary route with stable route evidence', async ({ page }) => {
+  test('captures desktop and mobile screenshots for every primary route with stable route evidence', async ({ page }) => {
     mkdirSync(screenshotDir, { recursive: true })
-    await page.setViewportSize({ width: 1440, height: 1024 })
     const screenshotEvidence: Array<Record<string, unknown>> = []
 
-    for (const route of primaryNavItems) {
-      await page.goto(route.href)
-      await expect(page.locator('.aui-shell')).toBeVisible()
-      await expect(page.locator('main#content')).toBeVisible()
-      const oracle = getProductionRouteOracle(route.id)
-      expect(oracle, `${route.id} should have production oracle screenshot evidence`).toBeDefined()
-      for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
-        await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmark)
-      }
+    for (const viewport of cockpitScreenshotViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
 
-      const screenshotPath = join(screenshotDir, `route-${routeScreenshotName(route)}`)
-      await page.screenshot({ path: screenshotPath, fullPage: true })
-      screenshotEvidence.push({
-        id: route.id,
-        href: route.href,
-        label: route.label,
-        path: screenshotPath,
-        landmarks: ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? [],
-        oracleLandmarks: oracle?.renderedLandmarks ?? [],
-        oracleControls: oracle?.routeSpecificControls ?? [],
-      })
+      for (const route of primaryNavItems) {
+        await page.goto(route.href)
+        await expect(page.locator('.aui-shell')).toBeVisible()
+        await expect(page.locator('main#content')).toBeVisible()
+        if (viewport.expects.mobileTabs) {
+          await expect(page.getByLabel('Mobile navigation', { exact: true })).toBeVisible()
+        }
+        const oracle = getProductionRouteOracle(route.id)
+        expect(oracle, `${route.id} should have production oracle screenshot evidence`).toBeDefined()
+        for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
+          await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmark)
+        }
+        for (const control of oracle?.routeSpecificControls ?? []) {
+          await expect.poll(async () => routeControlVisible(page, control), {
+            message: `${route.id} should render route-specific control ${control}`,
+          }).toBe(true)
+        }
+
+        const screenshotPath = join(screenshotDir, `${viewport.id}-route-${routeScreenshotName(route)}`)
+        await page.screenshot({ path: screenshotPath, fullPage: true })
+        screenshotEvidence.push({
+          viewport: viewport.id,
+          size: { width: viewport.width, height: viewport.height },
+          id: route.id,
+          href: route.href,
+          label: route.label,
+          path: screenshotPath,
+          landmarks: ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? [],
+          oracleLandmarks: oracle?.renderedLandmarks ?? [],
+          oracleControls: oracle?.routeSpecificControls ?? [],
+        })
+      }
     }
 
     writeFileSync(
       join(screenshotDir, 'all-routes-summary.json'),
       `${JSON.stringify({
         command: 'pnpm --filter @aurora/tauri-ui test:e2e:routes:playwright',
-        assertion: 'all 22 primary routes captured at desktop viewport with production route oracle landmarks',
-        routeCount: screenshotEvidence.length,
+        assertion: 'all 22 primary routes captured at desktop and mobile viewports with production route oracle landmarks and controls',
+        routeCount: primaryNavItems.length,
+        viewportCount: cockpitScreenshotViewports.length,
+        screenshotCount: screenshotEvidence.length,
         screenshots: screenshotEvidence,
       }, null, 2)}\n`,
     )

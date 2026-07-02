@@ -164,6 +164,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
   const [snapshot, setSnapshot] = useState<AdminSchedulerSnapshot>(initialSnapshot ?? loadingSchedulerSnapshot)
   const [operation, setOperation] = useState<SchedulerOperationState | null>(null)
   const [reason, setReason] = useState('Scheduler admin change')
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [jobName, setJobName] = useState('new-automation')
   const [cron, setCron] = useState('0 * * * *')
   const [targetPeer, setTargetPeer] = useState('local-peer')
@@ -185,16 +186,20 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
     () => snapshot.createControl.targetOptions.find((option) => option.id === targetPeer) ?? snapshot.createControl.targetOptions[0] ?? null,
     [snapshot.createControl.targetOptions, targetPeer]
   )
-  const canCreate = snapshot.createControl.available && reason.trim().length > 0 && jobName.trim().length > 0 && cron.trim().length > 0 && operation?.status !== 'pending'
+  const canCreate = snapshot.createControl.available && reauthConfirmed && reason.trim().length > 0 && jobName.trim().length > 0 && cron.trim().length > 0 && operation?.status !== 'pending'
 
   async function runAdminAction(label: string, methodId: string, payload: JsonObject) {
+    if (!reauthConfirmed) {
+      setOperation({ status: 'failed', message: `${label} requires explicit in-session admin unlock before AdminAction submit.`, auditReceipt: null })
+      return
+    }
     setOperation({ status: 'pending', message: `${label} pending AdminAction draft, confirmation, and audit.`, auditReceipt: null })
     try {
       const result = await client.admin.execute<SchedulerActionResponse>({
         methodId,
         payload,
         reason: reason.trim(),
-        reauthConfirmed: true,
+        reauthConfirmed,
         affectedResources: ['scheduler.jobs'],
         path: pathForSchedulerMethod(methodId)
       })
@@ -285,6 +290,15 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             </select>
             <label htmlFor="scheduler-reason">AdminAction reason</label>
             <textarea id="scheduler-reason" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            <label className="aui-inline-field">
+              <input
+                type="checkbox"
+                checked={reauthConfirmed}
+                disabled={!snapshot.createControl.available}
+                onChange={(event) => setReauthConfirmed(event.currentTarget.checked)}
+              />
+              <span>I confirm recent AdminAction reauthentication for scheduler mutations</span>
+            </label>
             <button type="submit" disabled={!canCreate} title={snapshot.createControl.reason}><Plus size={16} aria-hidden />Create via AdminAction</button>
           </form>
           <p className="aui-muted">{snapshot.createControl.reason}</p>
@@ -307,7 +321,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
         </section>
       </div>
 
-      <section className="aui-admin-panel" aria-labelledby="scheduler-jobs-title">
+      <section className="aui-admin-panel" aria-label="Jobs">
         <div className="aui-panel-heading">
           <div>
             <p className="aui-kicker">Jobs</p>
@@ -315,7 +329,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
           </div>
           <CalendarClock size={18} aria-hidden />
         </div>
-        <SchedulerJobsTable jobs={snapshot.jobs} onRun={runAdminAction} pending={operation?.status === 'pending'} />
+        <SchedulerJobsTable jobs={snapshot.jobs} onRun={runAdminAction} pending={operation?.status === 'pending'} reauthConfirmed={reauthConfirmed} />
       </section>
     </section>
   )
@@ -349,11 +363,13 @@ function SchedulerStatusPanel({
 function SchedulerJobsTable({
   jobs,
   onRun,
-  pending
+  pending,
+  reauthConfirmed
 }: {
   jobs: SchedulerJobRow[]
   onRun: (label: string, methodId: string, payload: JsonObject) => Promise<void>
   pending: boolean
+  reauthConfirmed: boolean
 }) {
   if (jobs.length === 0) return <p className="aui-muted">No scheduler jobs available.</p>
   return (
@@ -398,7 +414,7 @@ function SchedulerJobsTable({
                       key={control.action}
                       type="button"
                       className="aui-secondary-action"
-                      disabled={pending || !control.available}
+                      disabled={pending || !reauthConfirmed || !control.available}
                       title={control.reason}
                       onClick={() => void onRun(
                         `${control.action} ${job.name}`,

@@ -5,8 +5,15 @@ import {
   MockAuroraTransport,
   type AuroraTransport,
   type AuroraTransportRequest,
-  type AuroraTransportResponse
+  type AuroraTransportResponse,
 } from '@aurora/client'
+
+type BrowserClientCache = {
+  key: string
+  client: AuroraClient
+}
+
+let browserClientCache: BrowserClientCache | null = null
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -45,20 +52,40 @@ export function createAuroraWebClient(): AuroraClient {
 }
 
 export function createAuroraBrowserClient(): AuroraClient {
+  const key = browserClientCacheKey()
+  if (browserClientCache?.key === key) return browserClientCache.client
+
   const gatewayUrl = process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL
+  let client: AuroraClient
   if (gatewayUrl) {
-    return new AuroraClient({
-      transport: new HttpGatewayTransport({ baseUrl: gatewayUrl })
+    client = new AuroraClient({
+      transport: new HttpGatewayTransport({
+        baseUrl: gatewayUrl,
+        bearerToken: () => client.auth.bearerToken()
+      })
     })
+  } else if (isBrowserDemoMode()) {
+    client = new AuroraClient({ transport: new MockAuroraTransport() })
+  } else {
+    client = new AuroraClient({ transport: new MissingGatewayTransport() })
   }
-  if (isBrowserDemoMode()) {
-    return new AuroraClient({ transport: new MockAuroraTransport() })
-  }
-  return new AuroraClient({ transport: new MissingGatewayTransport() })
+  browserClientCache = { key, client }
+  return client
+}
+
+export function resetAuroraBrowserClientForTests(): void {
+  browserClientCache = null
 }
 
 export function isAuroraWebDemoMode(): boolean {
   return isServerDemoMode() || isBrowserDemoMode()
+}
+
+function browserClientCacheKey(): string {
+  return JSON.stringify({
+    gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL ?? '',
+    demoMode: isBrowserDemoMode()
+  })
 }
 
 function isServerDemoMode(): boolean {

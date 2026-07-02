@@ -1,15 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AuroraClient, MockAuroraTransport } from '@aurora/client'
-import {
-  AdminServicesView,
-  ConfigEditorView,
-  buildAdminServicesSnapshot,
-  buildConfigEditorModel,
-  buildShellSnapshot,
-  productionSurfaceContracts,
-  type RouteAvailability
-} from '../src/index'
+import { ConfigEditorView, buildConfigEditorModel } from '../src/config-editor-view'
+import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
+import { buildShellSnapshot, type RouteAvailability } from '../src/shell-data'
+import { productionSurfaceContracts } from '../src/production-surface-contracts'
 
 describe('admin route checkpoint evidence', () => {
   it('keeps sensitive admin read pages routeable while mutation surfaces stay AdminAction-scoped', async () => {
@@ -60,7 +55,7 @@ describe('admin route checkpoint evidence', () => {
 
   it('renders contract detail evidence from the SDK registry and capability catalog', async () => {
     const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
-    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Auth.AuditLog')

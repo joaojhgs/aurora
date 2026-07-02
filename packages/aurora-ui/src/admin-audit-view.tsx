@@ -300,10 +300,12 @@ export function AdminAuditView({
             Export redacted
           </button>
         </div>
-        <AuditFilters
-          filters={effectiveFilters}
-          {...(onFiltersChange ? { onChange: onFiltersChange } : {})}
-        />
+        <div role="group" aria-label="Filters">
+          <AuditFilters
+            filters={effectiveFilters}
+            {...(onFiltersChange ? { onChange: onFiltersChange } : {})}
+          />
+        </div>
         <div className="aui-audit-filter-note" role="status">
           <Filter size={16} aria-hidden />
           <span>{snapshot.exportReason}</span>

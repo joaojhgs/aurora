@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { auroraNavSections } from '@aurora/ui'
+import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { describe, expect, it } from 'vitest'
 import {
   auroraWebHiddenRouteIds,
@@ -13,6 +13,42 @@ import {
 const appDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(appDir, '../../..')
 const navItems = auroraNavSections.flatMap((section) => section.items)
+
+const PLACEHOLDER_COPY_MARKERS = [
+  'A full product page still needs to be mounted',
+  'full product page still needs to be mounted',
+  'This Tauri route is now navigable',
+  'rendering the assistant diagnostics on the wrong page',
+  'TauriRoutePlaceholder',
+  'ata-placeholder-panel',
+  'debug-dashboard',
+  'route is unregistered',
+] as const
+
+const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
+  assistant: ['AssistantClientPage'],
+  memory: ['MemoryClientPage'],
+  tools: ['ToolApprovalClientPage'],
+  mesh: ['MeshPeersClientPage'],
+  admin: ['AdminOverviewClientPage'],
+  services: ['AdminServicesClientPage'],
+  access: ['AdminAccessClientPage'],
+  tokens: ['AdminTokensClientPage'],
+  devices: ['AdminDevicesClientPage'],
+  config: ['ConfigClientPage'],
+  contracts: ['AdminContractsClientPage'],
+  plugins: ['PluginsClientPage'],
+  pairing: ['PairingQueueClientPage'],
+  backups: ['BackupClientPage'],
+  scheduler: ['SchedulerClientPage'],
+  audit: ['AdminAuditClientPage'],
+  models: ['ModelsClientPage'],
+  diagnostics: ['Diagnostics Probes', 'DiagnosticsExportIsland'],
+  onboarding: ['OnboardingClientPage'],
+  settings: ['SettingsPermissionsView'],
+  data: ['DataPolicyClientPage'],
+  native: ['SettingsPermissionsView', 'surface="native"'],
+}
 
 function pageFileForHref(href: string): string {
   if (href === '/') return join(appDir, 'page.tsx')
@@ -45,10 +81,33 @@ describe('Aurora web route registry', () => {
     }
   })
 
+
+  it('source-crawls all 22 web routes with production mounts and route oracle evidence', () => {
+    expect(auroraWebRouteRegistry).toHaveLength(22)
+    expect(new Set(Object.keys(WEB_ROUTE_PRODUCTION_MOUNTS))).toEqual(
+      new Set(auroraWebRouteRegistryRouteIds),
+    )
+
+    for (const route of auroraWebRouteRegistry) {
+      const source = readFileSync(pageFileForHref(route.href), 'utf8')
+      const oracle = getProductionRouteOracle(route.id)
+
+      expect(oracle, `${route.id} should have a production route oracle`).toBeDefined()
+      expect(oracle?.renderedLandmarks.length, `${route.id} rendered landmarks`).toBeGreaterThan(0)
+      expect(oracle?.routeSpecificControls.length, `${route.id} route-specific controls`).toBeGreaterThan(0)
+      for (const expectedMount of WEB_ROUTE_PRODUCTION_MOUNTS[route.id] ?? []) {
+        expect(source, `${route.id} ${route.href} production mount ${expectedMount}`).toContain(expectedMount)
+      }
+      for (const marker of PLACEHOLDER_COPY_MARKERS) {
+        expect(source, `${route.id} ${route.href} placeholder marker ${marker}`).not.toContain(marker)
+      }
+    }
+  })
+
   it('mounts production resources for web routes that previously used placeholder contract pages', () => {
     const productionRoutes = [
       { href: '/admin/services', expected: 'AdminServicesClientPage' },
-      { href: '/admin/contracts', expected: 'AdminServicesClientPage' },
+      { href: '/admin/contracts', expected: 'AdminContractsClientPage' },
       { href: '/admin/tokens', expected: 'AdminTokensClientPage' },
       { href: '/memory/policy', expected: 'DataPolicyClientPage' },
       { href: '/settings/native', expected: 'surface="native"' }

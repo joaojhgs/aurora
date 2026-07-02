@@ -9,7 +9,7 @@ import {
   type GetRegistryResponse,
   type GetServicesResponse
 } from '@aurora/client'
-import { AdminServicesView, buildAdminServicesSnapshot } from '../src/index'
+import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 
 describe('admin contracts view', () => {
   it('renders /admin/contracts browser evidence from live SDK registry and capability catalog data', async () => {
@@ -19,7 +19,7 @@ describe('admin contracts view', () => {
       .register('Gateway.GetCapabilityCatalog', liveCapabilityCatalogFixture())
 
     const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport }))
-    const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.services.map((service) => service.module)).toEqual(['Weather'])
@@ -47,7 +47,7 @@ describe('admin contracts view', () => {
     expect(markup).toContain('WeatherForecastRequest')
     expect(markup).toContain('WeatherForecastResponse')
     expect(markup).toContain('&quot;city&quot;')
-    expect(markup).not.toContain('Gateway.GetServices')
+    expect(markup).not.toContain('Services table with health')
     expect(markup).not.toContain('Auth.AuditLog')
   })
 })

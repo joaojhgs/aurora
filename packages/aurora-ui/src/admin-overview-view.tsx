@@ -334,7 +334,8 @@ function DeploymentTopologyPanel({
 
       <div className="aui-admin-action-list" aria-label="Deployment topology links and controls">
         <a className="aui-action-chip" href="/diagnostics">Diagnostics export</a>
-        <a className="aui-action-chip" href="/admin/services">Services and contracts</a>
+        <a className="aui-action-chip" href="/admin/services">Services</a>
+        <a className="aui-action-chip" href="/admin/contracts">Contracts registry</a>
         <a className="aui-action-chip" href="/admin/config">Config reload impact</a>
         <a className="aui-action-chip" href="https://github.com/joaojhgs/aurora/blob/main/README.process-mode.md">Process runbook</a>
         <button
@@ -482,6 +483,7 @@ function deploymentPosture(manifest: AdminOverviewManifest): AvailabilityState {
   if (manifest.unavailable.some((capability) => capability.availability === 'denied')) return 'denied'
   if (manifest.unavailable.some((capability) => capability.availability === 'stale')) return 'stale'
   if (manifest.unavailable.length > 0 || manifest.internalOnly.length > 0) return 'degraded'
+  if (manifest.deploymentTopology?.runtime_mode.toLowerCase().includes('thin')) return 'available-remote'
   return 'available-local'
 }
 
@@ -503,7 +505,7 @@ function deploymentTopologyState(
   if (topology.runtime_mode.includes('mesh') || topology.architecture_mode.includes('mesh')) {
     return topology.mesh_peer_topology_trusted ? 'available-remote' : 'privacy-blocked'
   }
-  if (topology.runtime_mode.includes('thin')) return 'unsupported'
+  if (topology.runtime_mode.includes('thin')) return 'available-remote'
   return 'available-local'
 }
 
@@ -511,7 +513,7 @@ function deploymentModeLabel(topology: DeploymentTopologyResponse): string {
   const mode = topology.architecture_mode.toLowerCase()
   const runtime = topology.runtime_mode.toLowerCase()
   if (runtime.includes('desktop-local') || runtime.includes('sidecar')) return 'desktop local sidecar'
-  if (runtime.includes('desktop-thin') || runtime.includes('server-thin')) return 'server thin client'
+  if (runtime.includes('desktop-thin') || runtime.includes('server-thin')) return 'remote Gateway thin client'
   if (runtime.includes('mesh') || mode.includes('mesh')) return 'mesh peer-only shell'
   if (mode.includes('process')) return 'server process-mode deployment'
   if (mode.includes('thread')) return 'local thread-mode app'
@@ -521,7 +523,7 @@ function deploymentModeLabel(topology: DeploymentTopologyResponse): string {
 function clientBoundaryLabel(transportKind: string, topology: DeploymentTopologyResponse): string {
   if (transportKind === 'tauri') return `Desktop local through SDK; ${deploymentModeLabel(topology)}`
   if (transportKind === 'mesh') return `Mesh transport through SDK; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'http') return `Server web/thin client through Gateway; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'http') return `Supported remote Gateway client through SDK HTTP transport; ${deploymentModeLabel(topology)}`
   if (transportKind === 'mock') return `Fixture transport; ${deploymentModeLabel(topology)}`
   return `${transportKind} transport; ${deploymentModeLabel(topology)}`
 }
@@ -556,7 +558,7 @@ function degradedReasonCopy(reason: string): string {
   const normalized = reason.toLowerCase()
   if (normalized.includes('redis_unreachable')) return 'Open diagnostics, verify Redis is running, and confirm the redacted REDIS_URL target.'
   if (normalized.includes('bullmq_queue_lag_unknown')) return 'BullMQ queue lag is unavailable; use diagnostics before trusting process-mode throughput.'
-  if (normalized.includes('process_registry_stale')) return 'Service registry heartbeat is stale; inspect services/contracts before taking action.'
+  if (normalized.includes('process_registry_stale')) return 'Service registry heartbeat is stale; inspect /admin/services and /admin/contracts before taking action.'
   if (normalized.includes('thread_mode_no_process_controls')) return 'Thread mode runs in one Python process; process restart controls are intentionally disabled.'
   if (normalized.includes('mesh_peer_topology_untrusted')) return 'Remote peer topology is not trusted; require authenticated peer evidence before displaying details.'
   return 'Inspect diagnostics and the process-mode runbook before taking operator action.'

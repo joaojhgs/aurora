@@ -253,6 +253,15 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
               <p className="aui-kicker">AdminAction</p>
               <h2 id="plugin-actions-title">Reload and install controls</h2>
             </div>
+            <button
+              type="button"
+              className="aui-action-chip"
+              disabled
+              title="Reload catalog is enabled only when Tooling.ReloadPlugins is advertised with Gateway AdminAction draft/confirm routes."
+            >
+              <RefreshCw size={14} aria-hidden />
+              Reload catalog
+            </button>
             <ShieldCheck size={18} aria-hidden />
           </div>
           <div className="aui-config-history">

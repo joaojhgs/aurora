@@ -2667,10 +2667,10 @@ describe('AuroraClient', () => {
       expect(listed.data.secrets_redacted).toBe(true)
     }
 
-    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false })).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore')).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' })).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore', { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
 
     expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(4)
     expect(calls.filter((call) => call.method === 'Gateway.AdminActionConfirm')).toHaveLength(4)
@@ -2976,6 +2976,86 @@ describe('AuroraClient', () => {
         })
       )
     }
+  })
+
+  it('resolves bearer tokens dynamically for in-memory browser sessions without persistence', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    let token: string | null = null
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local/',
+      bearerToken: () => token,
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(
+          JSON.stringify({
+            digest: 'fixture',
+            modules: [],
+            service_count: 0,
+            method_count: 0
+          }),
+          { status: 200 }
+        )
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await client.registry.getRegistry()
+    token = 'session-token-after-login'
+    await client.registry.getRegistry()
+    token = null
+    await client.registry.getRegistry()
+
+    expect(calls[0]?.init.headers).not.toEqual(expect.objectContaining({ Authorization: expect.any(String) }))
+    expect(calls[1]?.init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer session-token-after-login' }))
+    expect(calls[2]?.init.headers).not.toEqual(expect.objectContaining({ Authorization: expect.any(String) }))
+  })
+
+
+  it('clears stale bearer tokens after expired HTTP auth so following requests are anonymous', async () => {
+    const registryAuthHeaders: Array<string | undefined> = []
+    let client!: AuroraClient
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => client.auth.bearerToken(),
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        if (url.endsWith('/api/Auth/Login')) {
+          return new Response(
+            JSON.stringify({
+              token: 'expired-session-token',
+              user_id: 'user-1',
+              username: 'Ada',
+              permissions: ['Gateway.use'],
+              is_admin: false,
+              expires_at: '2030-01-01T00:00:00Z'
+            }),
+            { status: 200 }
+          )
+        }
+        if (url.endsWith('/api/Gateway/GetRegistry')) {
+          registryAuthHeaders.push((init?.headers as Record<string, string> | undefined)?.Authorization)
+          if (registryAuthHeaders.length === 1) {
+            return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+          }
+          return new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), { status: 200 })
+        }
+        return new Response(JSON.stringify({ detail: 'unexpected route' }), { status: 404 })
+      }
+    })
+    client = new AuroraClient({ transport })
+
+    const login = await client.authApi.login({ username: 'ada', password: 'secret' })
+    expect(login.ok).toBe(true)
+    expect(client.auth.bearerToken()).toBe('expired-session-token')
+
+    const expired = await client.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(expired.ok).toBe(false)
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+
+    const retried = await client.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(retried.ok).toBe(true)
+    expect(registryAuthHeaders).toEqual(['Bearer expired-session-token', undefined])
   })
 
   it('uses Gateway built-in GET routes with auth headers and no request body', async () => {
@@ -4395,6 +4475,94 @@ describe('AuroraClient', () => {
       transport: new MockAuroraTransport().failStream('config', 'permission', 'Forbidden stream')
     })
     await expect(collectEvents(failing.events.watchConfig(), 1)).rejects.toMatchObject({ code: 'permission' })
+  })
+
+  it('uses fetch SSE for per-subscription headers and applies auth failures to session state', async () => {
+    let client!: AuroraClient
+    const calls: Array<{ url: string; headers: Record<string, string> | undefined }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), headers: init?.headers as Record<string, string> | undefined })
+        return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+      },
+      eventSourceFactory: () => {
+        throw new Error('subscription headers require fetch SSE')
+      }
+    })
+    client = new AuroraClient({ transport })
+    client.auth.setBearerToken('stale-client-token')
+    client.auth.setAuthenticated('user-1', ['Gateway.use'])
+
+    await expect(collectEvents(client.events.watchHealth({ headers: { Authorization: 'Bearer subscription-token' } }), 1)).rejects.toMatchObject({ status: 401 })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer subscription-token' }))
+    expect(calls[0]?.url).not.toContain('subscription-token')
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+  })
+
+  it('clears stale bearer tokens after authenticated SSE returns expired auth', async () => {
+    let client!: AuroraClient
+    const streamAuthHeaders: Array<string | undefined> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => client.auth.bearerToken(),
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        if (url.includes('/api/events/stream')) {
+          streamAuthHeaders.push((init?.headers as Record<string, string> | undefined)?.Authorization)
+          return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+        }
+        return new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), { status: 200 })
+      }
+    })
+    client = new AuroraClient({ transport })
+    client.auth.setBearerToken('stale-stream-token')
+    client.auth.setAuthenticated('user-1', ['Gateway.use'])
+
+    await expect(collectEvents(client.events.watchHealth(), 1)).rejects.toMatchObject({ status: 401 })
+
+    expect(streamAuthHeaders).toEqual(['Bearer stale-stream-token'])
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+
+    await client.registry.getRegistry()
+    expect(client.auth.bearerToken()).toBeNull()
+  })
+
+  it('authenticates HTTP SSE streams with dynamic bearer headers via fetch', async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> | undefined }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => 'stream-session-token',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), headers: init?.headers as Record<string, string> | undefined })
+        return new Response(
+          'id: health-1\nevent: health.updated\ndata: {"kind":"health.updated","payload":{"status":"healthy"}}\n\n',
+          { status: 200, headers: { 'content-type': 'text/event-stream' } }
+        )
+      },
+      eventSourceFactory: () => {
+        throw new Error('authenticated SSE must use fetch so Authorization headers are attached')
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth(), 1)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toContain('/api/events/stream?stream=health')
+    expect(calls[0]?.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer stream-session-token' }))
+    expect(calls[0]?.url).not.toContain('stream-session-token')
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        id: 'health-1',
+        kind: 'health.updated',
+        payload: { status: 'healthy' }
+      })
+    )
   })
 
   it('adapts HTTP SSE and WebSocket events into AuroraEvent envelopes', async () => {

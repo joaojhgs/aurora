@@ -128,7 +128,9 @@ export interface AdminDevicesViewProps {
   pendingDeviceId?: string | null
   mutationError?: string | null
   optimisticDeviceId?: string | null
+  reauthConfirmed?: boolean
   onAdminReasonChange?: (value: string) => void
+  onReauthConfirmedChange?: (value: boolean) => void
   onRefresh?: () => void
   onDeleteDevice?: (device: AdminDeviceRow) => void
   onRunAdminAction?: (action: AdminDeviceAction, optimisticId: string) => void
@@ -162,6 +164,7 @@ const loadingSnapshot: AdminDevicesSnapshot = {
 export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
   const [snapshot, setSnapshot] = useState<AdminDevicesSnapshot>(loadingSnapshot)
   const [adminReason, setAdminReason] = useState('Remove device and revoke its local session access')
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [optimisticDeviceId, setOptimisticDeviceId] = useState<string | null>(null)
@@ -190,7 +193,7 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
       setMutationError(null)
       const reason = adminReason.trim() || action.reason
       try {
-        await client.admin.execute({ ...action, reason })
+        await client.admin.execute({ ...action, reason, reauthConfirmed })
         await loadDevices()
       } catch (error) {
         setMutationError(deviceMutationErrorMessage(error))
@@ -199,7 +202,7 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
         setOptimisticDeviceId(null)
       }
     },
-    [adminReason, client.admin, loadDevices]
+    [adminReason, client.admin, loadDevices, reauthConfirmed]
   )
 
   const deleteDevice = useCallback(
@@ -214,7 +217,9 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
     <AdminDevicesView
       snapshot={snapshot}
       adminReason={adminReason}
+      reauthConfirmed={reauthConfirmed}
       onAdminReasonChange={setAdminReason}
+      onReauthConfirmedChange={setReauthConfirmed}
       pendingDeviceId={pendingDeviceId}
       mutationError={mutationError}
       optimisticDeviceId={optimisticDeviceId}
@@ -332,9 +337,11 @@ export function AdminDevicesView({
   snapshot,
   adminReason = '',
   pendingDeviceId = null,
+  reauthConfirmed = false,
   mutationError = null,
   optimisticDeviceId = null,
   onAdminReasonChange,
+  onReauthConfirmedChange,
   onRefresh,
   onDeleteDevice,
   onRunAdminAction
@@ -369,7 +376,7 @@ export function AdminDevicesView({
         <Metric label="Tokens" value={String(totals.tokens)} detail={`${totals.expiredTokens} expired`} />
       </div>
 
-      <DevicePlatformSecurityPanel snapshot={snapshot} onRunAdminAction={onRunAdminAction} />
+      <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} onRunAdminAction={onRunAdminAction} />
 
       <section className="aui-admin-panel" aria-labelledby="device-controls-title">
         <div className="aui-panel-heading">
@@ -391,6 +398,10 @@ export function AdminDevicesView({
               rows={2}
               onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
             />
+          </label>
+          <label className="aui-confirmation-check">
+            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)} disabled={snapshot.deleteState === 'pending' || snapshot.deleteState === 'unsupported' || snapshot.deleteState === 'denied'} />
+            <span>I confirm recent AdminAction reauthentication for device, pairing, and mesh trust mutations.</span>
           </label>
           <div className="aui-device-capability-grid">
             <CapabilityFact label="List devices" state={snapshot.listState} reason={snapshot.listReason} />
@@ -483,7 +494,7 @@ export function AdminDevicesView({
                       <button
                         className="aui-button aui-danger-button"
                         type="button"
-                        disabled={!device.deleteAction || Boolean(pendingDeviceId)}
+                        disabled={!reauthConfirmed || !device.deleteAction || Boolean(pendingDeviceId)}
                         onClick={() => onDeleteDevice?.(device)}
                       >
                         <Trash2 size={16} aria-hidden />
@@ -493,7 +504,7 @@ export function AdminDevicesView({
                         <button
                           className="aui-button"
                           type="button"
-                          disabled={Boolean(pendingDeviceId)}
+                          disabled={!reauthConfirmed || Boolean(pendingDeviceId)}
                           onClick={() => device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined}
                         >
                           <CheckCircle2 size={16} aria-hidden />
@@ -512,7 +523,7 @@ export function AdminDevicesView({
   )
 }
 
-function DevicePlatformSecurityPanel({ snapshot, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
+function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; reauthConfirmed: boolean; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
   return (
     <section className="aui-admin-panel" aria-labelledby="device-platform-title">
       <div className="aui-panel-heading">
@@ -539,11 +550,11 @@ function DevicePlatformSecurityPanel({ snapshot, onRunAdminAction }: { snapshot:
                     <small>{pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; mesh={pairing.linkedMeshPeerLabel}; expires {formatDate(pairing.expiresAt)}</small>
                     <small>AdminAction approve={pairing.approveAction?.methodId ?? 'unsupported'} deny={pairing.denyAction?.methodId ?? 'unsupported'}; pairing secret redacted</small>
                     <div className="aui-admin-actions">
-                      <button className="aui-button" type="button" disabled={!pairing.approveAction} onClick={() => pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined}>
+                      <button className="aui-button" type="button" disabled={!reauthConfirmed || !pairing.approveAction} onClick={() => pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined}>
                         <CheckCircle2 size={16} aria-hidden />
                         Approve/trust via AdminAction
                       </button>
-                      <button className="aui-button aui-danger-button" type="button" disabled={!pairing.denyAction} onClick={() => pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined}>
+                      <button className="aui-button aui-danger-button" type="button" disabled={!reauthConfirmed || !pairing.denyAction} onClick={() => pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined}>
                         <XCircle size={16} aria-hidden />
                         Deny via AdminAction
                       </button>
@@ -567,12 +578,12 @@ function DevicePlatformSecurityPanel({ snapshot, onRunAdminAction }: { snapshot:
   )
 }
 
-export function buildDeviceDeleteAdminAction(device: Pick<AdminDeviceRow, 'id' | 'name' | 'principalId'>, reason: string): AdminDeviceAction {
+export function buildDeviceDeleteAdminAction(device: Pick<AdminDeviceRow, 'id' | 'name' | 'principalId'>, reason: string, reauthConfirmed = false): AdminDeviceAction {
   return {
     methodId: AUTH_METHODS.deleteDevice,
     payload: { device_id: device.id },
     reason,
-    reauthConfirmed: true,
+    reauthConfirmed,
     affectedResources: [
       `device:${device.id}`,
       ...(device.principalId ? [`principal:${device.principalId}`] : []),
@@ -586,7 +597,8 @@ export function buildDeviceDeleteAdminAction(device: Pick<AdminDeviceRow, 'id' |
 export function buildPendingPairingAdminAction(
   entry: PendingPairingEntry,
   action: 'approve' | 'deny',
-  reason: string
+  reason: string,
+  reauthConfirmed = false
 ): AdminDeviceAction {
   const affectedResources = [
     `pairing:${entry.request_id}`,
@@ -602,7 +614,7 @@ export function buildPendingPairingAdminAction(
         is_admin: entry.granted_is_admin
       },
       reason,
-      reauthConfirmed: true,
+      reauthConfirmed,
       affectedResources,
       path: routePath('Auth', 'PairingApprove')
     }
@@ -614,7 +626,7 @@ export function buildPendingPairingAdminAction(
       reason
     },
     reason,
-    reauthConfirmed: true,
+    reauthConfirmed,
     affectedResources,
     path: routePath('Auth', 'PairingDeny')
   }
@@ -623,14 +635,15 @@ export function buildPendingPairingAdminAction(
 export function buildDeviceMeshPeerAdminAction(
   peer: Pick<MeshPeerInfo, 'peer_id' | 'node_name' | 'outbound_permissions'>,
   action: 'trust' | 'revoke',
-  reason: string
+  reason: string,
+  reauthConfirmed = false
 ): AdminDeviceAction {
   if (action === 'trust') {
     return {
       methodId: AUTH_METHODS.meshApprovePeer,
       payload: { peer_id: peer.peer_id, permissions: peer.outbound_permissions },
       reason,
-      reauthConfirmed: true,
+      reauthConfirmed,
       affectedResources: [`mesh-peer:${peer.peer_id}`, `peer:${peer.node_name}`],
       path: routePath('Auth', 'MeshApprovePeer')
     }
@@ -639,7 +652,7 @@ export function buildDeviceMeshPeerAdminAction(
     methodId: AUTH_METHODS.meshRemovePeer,
     payload: { peer_id: peer.peer_id, revoke_token: true },
     reason,
-    reauthConfirmed: true,
+    reauthConfirmed,
     affectedResources: [`mesh-peer:${peer.peer_id}`, `peer:${peer.node_name}`],
     path: routePath('Auth', 'MeshRemovePeer')
   }

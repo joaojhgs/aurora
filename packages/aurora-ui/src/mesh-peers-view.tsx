@@ -145,11 +145,13 @@ export interface MeshPeersViewProps {
   adminReason?: string
   permissions?: string
   revokeToken?: boolean
+  reauthConfirmed?: boolean
   pendingPeerId?: string | null
   optimisticPeerId?: string | null
   mutationError?: string | null
   onAdminReasonChange?: (value: string) => void
   onPermissionsChange?: (value: string) => void
+  onReauthConfirmedChange?: (value: boolean) => void
   onRevokeTokenChange?: (value: boolean) => void
   onRefresh?: () => void
   onApprovePeer?: (peer: MeshPeerRow) => void
@@ -196,6 +198,7 @@ export function MeshPeersResource({ client, route }: MeshPeersResourceProps) {
   const [adminReason, setAdminReason] = useState('Review mesh peer trust and persisted credentials')
   const [permissions, setPermissions] = useState('Gateway.use')
   const [revokeToken, setRevokeToken] = useState(true)
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [pendingPeerId, setPendingPeerId] = useState<string | null>(null)
   const [optimisticPeerId, setOptimisticPeerId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -220,9 +223,9 @@ export function MeshPeersResource({ client, route }: MeshPeersResourceProps) {
   const runAction = useCallback(
     async (peer: MeshPeerRow, kind: 'approve' | 'deny' | 'remove') => {
       const action =
-        kind === 'approve' ? buildMeshPeerAdminAction(peer, 'approve', { reason: adminReason, permissions }) :
-        kind === 'deny' ? buildMeshPeerAdminAction(peer, 'deny', { reason: adminReason }) :
-        buildMeshPeerAdminAction(peer, 'remove', { reason: adminReason, revokeToken })
+        kind === 'approve' ? buildMeshPeerAdminAction(peer, 'approve', { reason: adminReason, permissions, reauthConfirmed }) :
+        kind === 'deny' ? buildMeshPeerAdminAction(peer, 'deny', { reason: adminReason, reauthConfirmed }) :
+        buildMeshPeerAdminAction(peer, 'remove', { reason: adminReason, revokeToken, reauthConfirmed })
       if (!action) return
       setPendingPeerId(peer.peerId)
       setOptimisticPeerId(peer.peerId)
@@ -237,7 +240,7 @@ export function MeshPeersResource({ client, route }: MeshPeersResourceProps) {
         setOptimisticPeerId(null)
       }
     },
-    [adminReason, client.admin, loadPeers, permissions, revokeToken]
+    [adminReason, client.admin, loadPeers, permissions, reauthConfirmed, revokeToken]
   )
 
   return (
@@ -247,11 +250,13 @@ export function MeshPeersResource({ client, route }: MeshPeersResourceProps) {
       adminReason={adminReason}
       permissions={permissions}
       revokeToken={revokeToken}
+      reauthConfirmed={reauthConfirmed}
       pendingPeerId={pendingPeerId}
       optimisticPeerId={optimisticPeerId}
       mutationError={mutationError}
       onAdminReasonChange={setAdminReason}
       onPermissionsChange={setPermissions}
+      onReauthConfirmedChange={setReauthConfirmed}
       onRevokeTokenChange={setRevokeToken}
       onRefresh={loadPeers}
       onApprovePeer={(peer) => runAction(peer, 'approve')}
@@ -383,11 +388,13 @@ export function MeshPeersView({
   adminReason = '',
   permissions = '',
   revokeToken = true,
+  reauthConfirmed = false,
   pendingPeerId = null,
   optimisticPeerId = null,
   mutationError = null,
   onAdminReasonChange,
   onPermissionsChange,
+  onReauthConfirmedChange,
   onRevokeTokenChange,
   onRefresh,
   onApprovePeer,
@@ -395,7 +402,7 @@ export function MeshPeersView({
   onRemovePeer
 }: MeshPeersViewProps) {
   const controlsDisabled = route.disabled || snapshot.loadState === 'loading' || snapshot.loadState === 'denied'
-  const mutationDisabled = controlsDisabled || Boolean(pendingPeerId) || !['available-local', 'available-remote', 'degraded'].includes(snapshot.mutationState)
+  const mutationDisabled = controlsDisabled || !reauthConfirmed || Boolean(pendingPeerId) || !['available-local', 'available-remote', 'degraded'].includes(snapshot.mutationState)
   return (
     <section className="aui-mesh" aria-labelledby="mesh-peers-title">
       <header className="aui-mesh-header">
@@ -472,6 +479,15 @@ export function MeshPeersView({
             onChange={(event) => onRevokeTokenChange?.(event.currentTarget.checked)}
           />
           <span>Revoke issued token on remove</span>
+        </label>
+        <label className="aui-inline-field">
+          <input
+            type="checkbox"
+            checked={reauthConfirmed}
+            disabled={controlsDisabled}
+            onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)}
+          />
+          <span>In-session admin unlock confirmed for mesh peer AdminAction</span>
         </label>
         <button className="aui-button" type="button" disabled={controlsDisabled} onClick={onRefresh}>
           <RefreshCw size={16} aria-hidden="true" /> Refresh diagnostics
@@ -1165,7 +1181,7 @@ function buildMeshPeerRow(
 export function buildMeshPeerAdminAction(
   peer: Pick<MeshPeerRow, 'peerId' | 'nodeName'>,
   action: 'approve' | 'deny' | 'remove',
-  input: { reason: string; permissions?: string; revokeToken?: boolean }
+  input: { reason: string; permissions?: string; revokeToken?: boolean; reauthConfirmed?: boolean }
 ): MeshPeerAdminAction | null {
   const reason = input.reason.trim() || `${action} mesh peer ${peer.peerId}`
   if (action === 'approve') {
@@ -1173,7 +1189,7 @@ export function buildMeshPeerAdminAction(
       methodId: AUTH_METHODS.meshApprovePeer,
       payload: { peer_id: peer.peerId, permissions: parseMeshPermissionList(input.permissions ?? '') ?? [] },
       reason,
-      reauthConfirmed: true,
+      reauthConfirmed: Boolean(input.reauthConfirmed),
       affectedResources: [`mesh-peer:${peer.peerId}`, `peer:${peer.nodeName}`],
       path: routePath('Auth', 'MeshApprovePeer')
     }
@@ -1183,7 +1199,7 @@ export function buildMeshPeerAdminAction(
       methodId: AUTH_METHODS.meshDenyPeer,
       payload: { peer_id: peer.peerId },
       reason,
-      reauthConfirmed: true,
+      reauthConfirmed: Boolean(input.reauthConfirmed),
       affectedResources: [`mesh-peer:${peer.peerId}`],
       path: routePath('Auth', 'MeshDenyPeer')
     }
@@ -1192,7 +1208,7 @@ export function buildMeshPeerAdminAction(
     methodId: AUTH_METHODS.meshRemovePeer,
     payload: { peer_id: peer.peerId, revoke_token: input.revokeToken ?? true },
     reason,
-    reauthConfirmed: true,
+    reauthConfirmed: Boolean(input.reauthConfirmed),
     affectedResources: [`mesh-peer:${peer.peerId}`],
     path: routePath('Auth', 'MeshRemovePeer')
   }

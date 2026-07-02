@@ -280,6 +280,14 @@ export function OnboardingView({ client, snapshot, modePreferenceStore }: Onboar
             placeholder="https://aurora.example.test or http://127.0.0.1:8000"
             inputMode="url"
           />
+          <button
+            className="aui-action-chip"
+            type="button"
+            disabled={!endpoint.trim()}
+            onClick={() => setMessage(`Endpoint validation: ${model.endpointEvidence}`)}
+          >
+            Validate endpoint
+          </button>
           <StateLine state={model.endpointState} text={model.endpointEvidence} />
           {model.endpointState === 'denied' ? <p role="alert">Recovery: use an http:// or https:// Gateway URL, then retry authentication after the capability snapshot loads.</p> : null}
           <p>Endpoint checks are local syntax and SDK transport checks only; connection success is shown after Gateway/Auth responses arrive.</p>

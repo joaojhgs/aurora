@@ -187,22 +187,14 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
 
   return (
     <section className="aui-admin-services" aria-labelledby="admin-services-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-services-title">Services and contracts</h1>
-          <p>
-            Service registry, method exposure, route evidence, and control previews are rendered from AuroraClient SDK
-            responses.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Admin services backend evidence">
-          {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
-        </div>
-      </header>
+      <AdminEvidenceHeader
+        title="Services"
+        titleId="admin-services-title"
+        description="Service registry health, route evidence, and AdminAction service controls are rendered from AuroraClient SDK responses. Method contract browsing lives on /admin/contracts."
+        snapshot={snapshot}
+        state={state}
+        badgeLabel="Admin services backend evidence"
+      />
 
       <StatusPanel snapshot={snapshot} />
 
@@ -215,9 +207,86 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
 
       <div className="aui-admin-grid">
         <ServicesTable services={snapshot.services} onPreviewAdminAction={onPreviewAdminAction} />
-        <ContractsPanel contracts={snapshot.contracts} />
       </div>
     </section>
+  )
+}
+
+export function AdminContractsResource({ client }: { client: AuroraClient }) {
+  const [snapshot, setSnapshot] = useState<AdminServicesSnapshot>(loadingSnapshot)
+
+  useEffect(() => {
+    let cancelled = false
+    setSnapshot(loadingSnapshot)
+    void buildAdminServicesSnapshot(client).then((next) => {
+      if (!cancelled) setSnapshot(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminContractsView snapshot={snapshot} />
+}
+
+export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapshot }) {
+  const totals = useMemo(() => serviceTotals(snapshot.services), [snapshot.services])
+  const state = snapshot.loadState
+
+  return (
+    <section className="aui-admin-services" aria-labelledby="admin-contracts-title">
+      <AdminEvidenceHeader
+        title="Contracts registry"
+        titleId="admin-contracts-title"
+        description="Method exposure, generated Gateway routes, schemas, permissions, and conformance evidence are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
+        snapshot={snapshot}
+        state={state}
+        badgeLabel="Admin contracts backend evidence"
+      />
+
+      <StatusPanel snapshot={snapshot} />
+
+      <div className="aui-admin-metrics" aria-label="Contract registry coverage summary">
+        <Metric label="Contracts" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
+        <Metric label="Services" value={String(snapshot.services.length)} detail="registry modules with descriptors" />
+        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
+        <Metric label="Generated" value={snapshot.generatedAt ?? 'pending'} detail="capability catalog timestamp" />
+      </div>
+
+      <ContractsPanel contracts={snapshot.contracts} />
+    </section>
+  )
+}
+
+function AdminEvidenceHeader({
+  title,
+  titleId,
+  description,
+  snapshot,
+  state,
+  badgeLabel
+}: {
+  title: string
+  titleId: string
+  description: string
+  snapshot: AdminServicesSnapshot
+  state: AdminServicesLoadState
+  badgeLabel: string
+}) {
+  return (
+    <header className="aui-admin-header">
+      <div>
+        <p className="aui-kicker">Admin</p>
+        <h1 id={titleId}>{title}</h1>
+        <p>{description}</p>
+      </div>
+      <div className="aui-admin-badges" aria-label={badgeLabel}>
+        {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
+        <EvidenceBadge label={snapshot.evidenceSource} />
+        <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
+        <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+      </div>
+    </header>
   )
 }
 
@@ -255,7 +324,7 @@ function ServicesTable({
   onPreviewAdminAction?: ((action: AdminServiceControlAction) => void) | undefined
 }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="services-table-title">
+    <section className="aui-admin-panel" aria-label="Services table with health">
       <div className="aui-panel-heading">
         <div>
           <p className="aui-kicker">Registry</p>
@@ -393,6 +462,10 @@ function controlPosture(controls: AdminServiceControlPreview[]): string {
   return `${ready}/${controls.length} controls require AdminAction draft/confirm/audit before execution.`
 }
 
+function methodExposureLabel(exposure: ContractExposure): string {
+  return exposure === 'internal' ? 'internal-only' : exposure
+}
+
 function MethodList({ methods }: { methods: MethodDescriptor[] }) {
   if (methods.length === 0) return <p className="aui-muted">No registry methods were reported for this service.</p>
   return (
@@ -400,7 +473,7 @@ function MethodList({ methods }: { methods: MethodDescriptor[] }) {
       {methods.map((method) => (
         <li key={method.busTopic}>
           <code>{method.busTopic}</code>
-          <span>{method.exposure}</span>
+          <span>{methodExposureLabel(method.exposure)}</span>
           <span>{method.methodType}</span>
           <small>{method.summary || 'No summary provided.'}</small>
         </li>

@@ -1,5 +1,5 @@
-import { AdminServicesClientPage } from '../services/services-client'
+import { AdminContractsClientPage } from './contracts-client'
 
 export default function Page() {
-  return <AdminServicesClientPage />
+  return <AdminContractsClientPage />
 }

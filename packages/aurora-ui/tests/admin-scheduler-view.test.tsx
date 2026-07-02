@@ -75,6 +75,13 @@ describe('AdminSchedulerView', () => {
 
     const cancelButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('cancel'))
     expect(cancelButton).toBeDefined()
+    expect(cancelButton?.hasAttribute('disabled')).toBe(true)
+
+    const unlock = container.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+    expect(unlock).not.toBeNull()
+    await act(async () => {
+      unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
     expect(cancelButton?.hasAttribute('disabled')).toBe(false)
 
     await act(async () => {

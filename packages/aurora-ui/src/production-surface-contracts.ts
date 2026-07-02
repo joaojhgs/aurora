@@ -4,6 +4,7 @@ export type ProductionSurfaceId =
   | 'assistant-route-sheet'
   | 'admin-overview'
   | 'admin-services'
+  | 'admin-contracts'
   | 'admin-rbac'
   | 'admin-audit'
   | 'admin-plugins'
@@ -143,18 +144,15 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   },
   {
     id: 'admin-services',
-    label: 'Admin services and contracts',
-    navItemIds: ['services', 'contracts'],
-    routeOracles: [
-      routeOracle('services', ['Services'], ['Services table with health']),
-      routeOracle('contracts', ['Services'], ['Contracts'])
-    ],
+    label: 'Admin services',
+    navItemIds: ['services'],
+    routeOracles: [routeOracle('services', ['Services'], ['Services table with health'])],
     mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
-    mockUxAnchors: ['Services and contracts', 'Services table with health', 'Contracts'],
+    mockUxAnchors: ['Services', 'Services table with health', 'AdminAction service controls'],
     componentFiles: ['admin-services-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
-      source('sdk-method', 'service and registry descriptors', ['Gateway.GetServices', 'Gateway.GetRegistry']),
+      source('sdk-method', 'service registry descriptors', ['Gateway.GetServices']),
       source('admin-action', 'service lifecycle boundary', ['Supervisor.Restart', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
     ],
     highestPrivacyClass: 'admin-critical',
@@ -163,6 +161,26 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     fixturePolicy: 'test-only',
     degradedState: 'Internal-only or unadvertised lifecycle controls render disabled with backend-derived reasons.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
+  },
+  {
+    id: 'admin-contracts',
+    label: 'Admin contracts registry',
+    navItemIds: ['contracts'],
+    routeOracles: [routeOracle('contracts', ['Contracts registry'], ['Search contracts'])],
+    mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
+    mockUxAnchors: ['Contracts registry', 'Contract registry browser', 'Search contracts', 'Method detail'],
+    componentFiles: ['admin-services-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
+    truthSources: [
+      source('sdk-method', 'method registry descriptors', ['Gateway.GetRegistry']),
+      source('capability-graph', 'contract route and permission conformance', ['Gateway.GetCapabilityCatalog'])
+    ],
+    highestPrivacyClass: 'public',
+    mutatingMethodType: 'none',
+    adminActionRequired: false,
+    fixturePolicy: 'test-only',
+    degradedState: 'Registry-only, internal-only, or missing-capability contracts remain visible with backend-derived conformance reasons.',
+    coverage: ['packages/aurora-ui/tests/admin-contracts-view.test.tsx', 'packages/aurora-ui/tests/shell.test.tsx']
   },
   {
     id: 'admin-rbac',
@@ -459,7 +477,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'native-capabilities',
     label: 'Native capability surfaces',
     navItemIds: ['native'],
-    routeOracles: [routeOracle('native', ['Settings and permissions'], ['Native permissions'])],
+    routeOracles: [routeOracle('native', ['Native platform settings'], ['Native permissions and capabilities'])],
     mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
     mockUxAnchors: ['Settings and permissions', 'Native integrations', 'Siri/Shortcuts/App Intents integration', 'iOS policy notes'],
     componentFiles: ['settings-permissions-view.tsx'],

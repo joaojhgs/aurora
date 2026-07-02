@@ -43,6 +43,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
   const [selectedBackupId, setSelectedBackupId] = useState(initialList?.backups[0]?.backup_id ?? '')
   const [reason, setReason] = useState('Routine operator backup review')
   const [includePersonalData, setIncludePersonalData] = useState(false)
+  const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [operation, setOperation] = useState<BackupOperationState | null>(null)
   const [lastVerify, setLastVerify] = useState<BackupVerifyResponse | null>(null)
   const [lastRestore, setLastRestore] = useState<BackupRestoreResponse | null>(null)
@@ -75,7 +76,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
   )
   const operationPending = operation?.status === 'pending'
   const mutationRouteReady = !route.disabled && route.routeable
-  const canMutate = mutationRouteReady && reason.trim().length > 0 && !operationPending
+  const canMutate = mutationRouteReady && reason.trim().length > 0 && reauthConfirmed && !operationPending
   const canUseSelected = canMutate && Boolean(selectedBackup)
   const disabledReason = backupDisabledReason(route, loadError)
   const rollbackBackupId = lastRestore?.rollback_backup_id ?? null
@@ -132,13 +133,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       components: defaultComponents,
       include_personal_data: includePersonalData,
       storage: localStorageTarget()
-    }))
+    }, { reauthConfirmed }))
   }
 
   function submitVerify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedBackup || !canUseSelected) return
-    void runOperation('verify', () => client.backups.verify({ backup_id: selectedBackup.backup_id, storage: selectedBackup.storage }, reason.trim()))
+    void runOperation('verify', () => client.backups.verify({ backup_id: selectedBackup.backup_id, storage: selectedBackup.storage }, reason.trim(), { reauthConfirmed }))
   }
 
   function submitRestoreDryRun(event: FormEvent<HTMLFormElement>) {
@@ -151,13 +152,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       dry_run: true,
       create_rollback: true,
       reason: reason.trim()
-    }))
+    }, { reauthConfirmed }))
   }
 
   function submitRollbackDryRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!rollbackBackupId || !canMutate) return
-    void runOperation('rollback-dry-run', () => client.backups.rollback({ rollback_backup_id: rollbackBackupId, dry_run: true, reason: reason.trim() }))
+    void runOperation('rollback-dry-run', () => client.backups.rollback({ rollback_backup_id: rollbackBackupId, dry_run: true, reason: reason.trim() }, { reauthConfirmed }))
   }
 
   return (
@@ -189,8 +190,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
               <input type="checkbox" checked={includePersonalData} onChange={(event) => setIncludePersonalData(event.currentTarget.checked)} disabled={route.disabled} />
               <span>Include personal RAG metadata when backend policy allows it</span>
             </label>
+            <label className="aui-backup-check">
+              <input type="checkbox" checked={reauthConfirmed} onChange={(event) => setReauthConfirmed(event.currentTarget.checked)} disabled={route.disabled || operationPending} />
+              <span>I confirm recent AdminAction reauthentication before backup mutations.</span>
+            </label>
             <button type="submit" disabled={!canMutate}>Create via AdminAction</button>
             {!canMutate && mutationRouteReady && reason.trim().length === 0 ? <small>Enter an AdminAction reason before creating a backup.</small> : null}
+            {!canMutate && mutationRouteReady && reason.trim().length > 0 && !reauthConfirmed ? <small>Confirm AdminAction reauthentication before creating or restoring backups.</small> : null}
           </form>
         </section>
 
