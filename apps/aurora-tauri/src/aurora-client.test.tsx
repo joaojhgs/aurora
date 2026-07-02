@@ -91,50 +91,46 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).not.toContain('Native boundary')
   })
 
-  it('registers a production Tauri component for every primary nav route', () => {
-    const routeIds = new Set(tauriRouteRegistryRouteIds)
-    const missing = primaryNavItems.filter((item) => !routeIds.has(item.id)).map((item) => `${item.id}:${item.href}`)
+  it('routes admin config to SDK/AdminAction controls instead of a placeholder', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+    window.history.replaceState({}, '', '/admin/config')
 
-    expect(missing).toEqual([])
-    expect(routeIds.size).toBe(primaryNavItems.length)
+    const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+    expect(markup).toContain('Configuration')
+    expect(markup).toContain('Admin configuration')
+    expect(markup).not.toContain('full product page still needs')
   })
 
-  it('renders every primary route without the legacy route placeholder copy', () => {
+  it('routes admin backup and scheduler mutations to AdminAction-capable pages', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
 
-    const routeMarkers: Record<string, string> = {
-      assistant: 'Prompt',
-      memory: 'History and RAG provenance',
-      tools: 'Approval cards',
-      mesh: 'Mesh peers',
-      admin: 'Admin overview',
-      services: 'Services',
-      access: 'RBAC',
-      tokens: 'RBAC',
-      devices: 'Devices',
-      config: 'Configuration',
-      contracts: 'Services',
-      plugins: 'Plugin operations',
-      pairing: 'Pairing queue',
-      backups: 'Backups &amp; Restore',
-      scheduler: 'Scheduler',
-      audit: 'Audit log',
-      models: 'Models and runtime',
-      diagnostics: 'Native boundary',
-      onboarding: 'Connect Aurora',
-      settings: 'Settings and permissions',
-      data: 'History and RAG provenance',
-      native: 'Settings and permissions'
-    }
+    window.history.replaceState({}, '', '/admin/backups')
+    const backups = renderToStaticMarkup(<AuroraTauriApp />)
+    expect(backups).toContain('Backups &amp; Restore')
+    expect(backups).toContain('Create via AdminAction')
+    expect(backups).not.toContain('full product page still needs')
 
-    for (const item of primaryNavItems) {
-      window.history.replaceState({}, '', item.href)
-      const markup = renderToStaticMarkup(<AuroraTauriApp />)
+    window.history.replaceState({}, '', '/admin/scheduler')
+    const scheduler = renderToStaticMarkup(<AuroraTauriApp />)
+    expect(scheduler).toContain('Scheduler jobs')
+    expect(scheduler).toContain('Create via AdminAction')
+    expect(scheduler).not.toContain('full product page still needs')
+  })
 
-      expect(markup, item.href).toContain(routeMarkers[item.id])
-      expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
-      expect(markup, item.href).not.toContain('This Tauri route is now navigable')
-      expect(markup, item.href).not.toContain('route is unregistered')
-    }
+  it('routes admin pairing and device mutations to AdminAction-capable resources', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+
+    window.history.replaceState({}, '', '/admin/pairing')
+    const pairing = renderToStaticMarkup(<AuroraTauriApp />)
+    expect(pairing).toContain('Pairing queue')
+    expect(pairing).toContain('AdminAction')
+    expect(pairing).not.toContain('full product page still needs')
+
+    window.history.replaceState({}, '', '/admin/devices')
+    const devices = renderToStaticMarkup(<AuroraTauriApp />)
+    expect(devices).toContain('Devices')
+    expect(devices).toContain('Loading devices')
+    expect(devices).not.toContain('full product page still needs')
   })
 })
