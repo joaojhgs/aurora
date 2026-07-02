@@ -55,6 +55,7 @@ function applyDevSidecarDefaults(env) {
 
 function printDevBanner(env) {
   console.log('[aurora:tauri] dev bootstrap')
+  console.log('[aurora:tauri] real local stack: enabled (Vite + Tauri + Rust-supervised Python sidecar)')
   console.log(`[aurora:tauri] sidecar program: ${env.AURORA_TAURI_SIDECAR_PROGRAM}`)
   console.log(`[aurora:tauri] sidecar args: ${env.AURORA_TAURI_SIDECAR_ARGS}`)
   console.log(`[aurora:tauri] sidecar cwd: ${env.AURORA_TAURI_SIDECAR_CWD}`)
