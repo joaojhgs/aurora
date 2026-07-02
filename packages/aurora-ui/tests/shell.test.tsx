@@ -1987,16 +1987,45 @@ describe('Aurora production shell', () => {
   it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
+    const model = buildOnboardingViewModel({ client, snapshot })
     const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
+
+    expect(model.modes.map((mode) => mode.id)).toEqual([
+      'server-web',
+      'desktop-local',
+      'desktop-thin',
+      'mesh-shell',
+      'android-mobile-thin',
+      'ios-mobile-thin',
+      'offline-demo'
+    ])
+    expect(model.modes.find((mode) => mode.id === 'desktop-local')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        evidence: expect.stringContaining('no local sidecar status')
+      })
+    )
+    expect(model.modes.find((mode) => mode.id === 'desktop-thin')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        repair: expect.stringContaining('AURORA_GATEWAY_URL')
+      })
+    )
+    expect(model.modes.find((mode) => mode.id === 'android-mobile-thin')?.description).toContain('does not run a local Python sidecar')
+    expect(model.modes.find((mode) => mode.id === 'ios-mobile-thin')?.description).toContain('does not claim system assistant replacement')
+    expect(model.setupSteps.every((step) => step.repair.length > 0)).toBe(true)
 
     expect(markup).toContain('Connect Aurora')
     expect(markup).toContain('Setup modes')
     expect(markup).toContain('Server Web')
     expect(markup).toContain('Desktop Local')
+    expect(markup).toContain('Desktop Thin')
     expect(markup).toContain('Mesh Shell')
-    expect(markup).toContain('Mobile Thin')
+    expect(markup).toContain('Android Mobile Thin')
+    expect(markup).toContain('iOS Mobile Thin')
     expect(markup).toContain('Offline Demo')
     expect(markup).toContain('Guided setup path')
+    expect(markup).toContain('Resume:')
     expect(markup).toContain('Select mode')
     expect(markup).toContain('Authenticate / pair')
     expect(markup).toContain('Load capability graph')
@@ -2008,8 +2037,9 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Desktop local can be a full node only when the local Gateway reports mesh enabled and routeable')
     expect(markup).toContain('Web thin')
     expect(markup).toContain('Web thin can view and manage remote mesh only through Gateway APIs and AdminAction receipts')
-    expect(markup).toContain('Mobile thin can pair and invoke remote or mesh capabilities')
-    expect(markup).toContain('must not claim a full local service host unless a native backend exists')
+    expect(markup).toContain('Android mobile thin can pair and invoke remote or mesh capabilities')
+    expect(markup).toContain('iOS mobile thin can pair and invoke remote or mesh capabilities')
+    expect(markup).toContain('must not claim system assistant replacement')
     expect(markup).toContain('Android')
     expect(markup).toContain('iOS')
     expect(markup).toContain('Siri/Shortcuts/App Intents')
