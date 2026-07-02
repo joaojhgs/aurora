@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:57:21.009Z",
+  "updatedAt": "2026-07-02T15:02:49.400Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1770,19 +1770,23 @@
       "id": "G154-admin-access",
       "title": "`/admin/access`:",
       "objective": "`/admin/access`:\nroles list;\nprincipals/users/peers;\npermission matrix;\nrole assignment and permission patch preview;\naudit receipt.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:02:33.232Z",
+      "completedAt": "2026-07-02T15:02:33.232Z",
+      "evidence": "pnpm --filter @aurora/ui test -- -t \"RBAC|route availability\"; pnpm --filter @aurora/client test -- -t \"Auth|permission catalog|backend inventory\"; uv run pytest tests/unit/auth/test_auth_service_contracts.py tests/unit/gateway/test_backend_inventory.py -q; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G155-backend-gap",
       "title": "Backend gap:",
       "objective": "Backend gap:\n`Auth.ListRoles` is currently advertised but unsupported/missing. Add real contract or derive roles explicitly from existing permission catalog with honest label.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:02:49.400Z",
+      "completedAt": "2026-07-02T15:02:49.400Z",
+      "evidence": "Derived roles explicitly from existing Auth.ListPrincipals plus permission catalog instead of adding/advertising unsupported Auth.ListRoles; nav now binds /admin/access to Auth.ListPrincipals with degraded fallback; RBAC tests assert derived-role copy and Auth.ListPrincipals truth. Verification: pnpm --filter @aurora/ui test -- -t \"RBAC|route availability\"; pnpm --filter @aurora/client test -- -t \"Auth|permission catalog|backend inventory\"; uv run pytest tests/unit/auth/test_auth_service_contracts.py tests/unit/gateway/test_backend_inventory.py -q; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G156-admin-tokens",

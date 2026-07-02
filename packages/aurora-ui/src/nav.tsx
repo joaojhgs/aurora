@@ -58,7 +58,7 @@ export const auroraNavSections: AuroraNavSection[] = [
     items: [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'ADM-001', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'ADM-002', true),
-      item('access', 'Access', '/admin/access', ShieldCheck, 'Auth', 'ListRoles', 'use', 'admin-critical', 'unsupported', 'ADM-003', true),
+      item('access', 'Access', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'ADM-003', true),
       item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'ADM-004', true),
       item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'ADM-005', true),
       item('config', 'Config', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'ADM-006', true),
