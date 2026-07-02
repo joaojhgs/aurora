@@ -16,7 +16,7 @@ From the repository root, the normal dev command is enough to start Vite, the Ta
 pnpm --filter @aurora/tauri-ui tauri dev
 ```
 
-The package wrapper selects `.venv/bin/python` when it exists, runs `main.py` from the repository root, sets `AURORA_ARCHITECTURE_MODE=threads`, enables the managed local sidecar, and points the UI at `http://127.0.0.1:8000`. You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.
+The package wrapper selects `.venv/bin/python` when it exists; otherwise it falls back to `uv run python main.py` from the repository root. It sets `AURORA_ARCHITECTURE_MODE=threads`, enables the managed local sidecar, and points the UI at `http://127.0.0.1:8000`. You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.
 
 Dev logging is intentionally unified in the same terminal:
 

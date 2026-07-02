@@ -44,12 +44,19 @@ function applyDevSidecarDefaults(env) {
   env.AURORA_ARCHITECTURE_MODE ??= 'threads'
   env.AURORA_TAURI_DEV_AUTOSIDECAR ??= '1'
   env.AURORA_TAURI_SIDECAR_CWD ??= repoDir
-  env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'
   env.AURORA_GATEWAY_URL ??= 'http://127.0.0.1:8000'
 
   if (!env.AURORA_TAURI_SIDECAR_PROGRAM) {
     const venvPython = resolve(repoDir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
-    env.AURORA_TAURI_SIDECAR_PROGRAM = existsSync(venvPython) ? venvPython : 'python'
+    if (existsSync(venvPython)) {
+      env.AURORA_TAURI_SIDECAR_PROGRAM = venvPython
+      env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'
+    } else {
+      env.AURORA_TAURI_SIDECAR_PROGRAM = 'uv'
+      env.AURORA_TAURI_SIDECAR_ARGS ??= 'run python main.py'
+    }
+  } else {
+    env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'
   }
 }
 

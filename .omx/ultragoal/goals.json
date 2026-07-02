@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:32:53.708Z",
+  "updatedAt": "2026-07-02T09:34:49.767Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -815,10 +815,12 @@
       "id": "G068-auto-detect-venv-bin-python-or-fallb",
       "title": "Auto-detect `.venv/bin/python` or fallback to `uv run python main.py`.",
       "objective": "Auto-detect `.venv/bin/python` or fallback to `uv run python main.py`.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:34:49.767Z",
+      "completedAt": "2026-07-02T09:34:49.767Z",
+      "evidence": "Implemented tauri dev sidecar fallback: apps/aurora-tauri/scripts/tauri-cli.mjs now selects .venv/bin/python (or Windows Scripts/python.exe) with main.py when present; otherwise it sets AURORA_TAURI_SIDECAR_PROGRAM=uv and AURORA_TAURI_SIDECAR_ARGS='run python main.py'. The main.py arg default is no longer set before the fallback branch, so uv args are not preempted. Updated apps/aurora-tauri/src/tauri-dev-bootstrap.test.ts, apps/aurora-tauri/README.md, and docs/TAURI_DESKTOP_BUILD.md. Verified pnpm --filter @aurora/tauri-ui test:dev-bootstrap (4 passed), pnpm --filter @aurora/tauri-ui typecheck, uv run python scripts/check_docs.py (58 markdown files scanned), and static fallback-order assertion."
     },
     {
       "id": "G069-prefix-logs-consistently",

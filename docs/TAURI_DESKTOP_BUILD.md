@@ -15,7 +15,7 @@ Use the package Tauri command for local desktop development. This command is the
 pnpm --filter @aurora/tauri-ui tauri dev
 ```
 
-The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/bin/python` when available, starts `main.py` from the repository root, sets threads mode, points the UI at the loopback Gateway, and enables the managed local sidecar. The dev path is deliberately different from packaged builds:
+The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/bin/python` when available; otherwise it falls back to `uv run python main.py` from the repository root. It sets threads mode, points the UI at the loopback Gateway, and enables the managed local sidecar. The dev path is deliberately different from packaged builds:
 
 - **Dev** runs Python directly for fast iteration and clear service logs.
 - **Package/build** stages a profiled sidecar executable for Tauri bundling.
