@@ -2646,7 +2646,8 @@ describe('Aurora production shell', () => {
       secretsRedacted: true,
       warnings: [],
       error: null,
-      evidenceSource: 'pending AuroraClient SDK calls'
+      evidenceSource: 'pending AuroraClient SDK calls',
+      oneTimeReveal: null
     }} />)
     expect(loadingMarkup).toContain('Loading token metadata')
 

@@ -73,6 +73,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   const [diff, setDiff] = useState<ConfigDiffEntry[]>([])
   const [impact, setImpact] = useState<ConfigReloadImpactEntry[]>([])
   const [reason, setReason] = useState('Admin config update from Aurora UI')
+  const [reviewArmed, setReviewArmed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -94,12 +95,15 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       return [{ key_path, value: parseFieldValue(raw, field.type) }]
     })
   }, [edits, model.fields])
+  const localValidationErrors = useMemo(() => validateConfigChanges(model.fields, changes), [model.fields, changes])
   const sections = useMemo(() => groupConfigFields(model.fields), [model.fields])
   const restartCount = model.fields.filter((field) => field.restart_required).length
   const secretCount = model.fields.filter((field) => field.secret).length
+  const reviewBlocked = changes.length === 0 || localValidationErrors.length > 0 || reason.trim().length === 0
 
   useEffect(() => {
     let cancelled = false
+    setReviewArmed(false)
     if (changes.length === 0) {
       setDiff([])
       setImpact([])
@@ -122,13 +126,22 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
     }
   }, [client, changes])
 
+  useEffect(() => {
+    setReviewArmed(false)
+  }, [reason])
+
   async function refresh() {
     setModel(await buildConfigEditorModel(client, route))
   }
 
   async function applyChanges(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (changes.length === 0) return
+    if (reviewBlocked) return
+    if (!reviewArmed) {
+      setReviewArmed(true)
+      setMessage('Review staged diff and reload/restart impact, then confirm AdminAction apply.')
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {
@@ -139,6 +152,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         if (!result.data.success) throw new Error(result.data.error ?? `Config.Set failed for ${change.key_path}`)
       }
       setEdits({})
+      setReviewArmed(false)
       setMessage(`Applied ${changes.length} change(s). Audit receipt: ${receipts.join(', ')}`)
       await refresh()
     } catch (error) {
@@ -209,7 +223,10 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         <div className="aui-config-panel">
           <div className="aui-config-panel-header">
             <h2>Schema-backed config accordion</h2>
-            <button type="button" className="aui-action-chip" onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
+            <button type="button" className="aui-action-chip" onClick={() => {
+              setEdits({})
+              setReviewArmed(false)
+            }} disabled={changes.length === 0 || busy}>
               <RotateCcw size={14} aria-hidden /> Discard
             </button>
           </div>
@@ -240,12 +257,13 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                           <code>{field.key_path}</code>
                           <small>{field.description || 'No schema description provided.'}</small>
                         </span>
-                        <input
+                        <ConfigFieldControl
+                          field={field}
                           value={field.secret ? '[REDACTED]' : editedValue}
                           disabled={!canMutate || field.secret || busy}
-                          aria-invalid={model.validationErrors.some((error) => error.includes(field.key_path))}
-                          data-changed={changed ? 'true' : undefined}
-                          onChange={(event) => setEdits((current) => ({ ...current, [field.key_path]: event.target.value }))}
+                          invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors)}
+                          changed={changed}
+                          onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
                         />
                         <em>
                           {field.source_layer}; {fieldModeLabel(field)}
@@ -271,12 +289,18 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           </p>
           <DiffList diff={diff} />
           <ImpactList impact={impact} />
+          {localValidationErrors.length > 0 ? (
+            <div className="aui-config-alert" role="alert">
+              <strong>Staged validation</strong>
+              <ul>{localValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+            </div>
+          ) : null}
           <label className="aui-config-reason">
             <span>Admin reason</span>
             <textarea value={reason} onChange={(event) => setReason(event.target.value)} disabled={!canMutate || busy} />
           </label>
-          <button className="aui-primary-action" type="submit" disabled={!canMutate || changes.length === 0 || busy || reason.trim().length === 0}>
-            <Save size={16} aria-hidden /> Apply through AdminAction
+          <button className="aui-primary-action" type="submit" disabled={!canMutate || reviewBlocked || busy}>
+            <Save size={16} aria-hidden /> {reviewArmed ? 'Confirm Apply through AdminAction' : 'Review Apply through AdminAction'}
           </button>
         </aside>
       </form>
@@ -306,6 +330,58 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   )
 }
 
+function ConfigFieldControl({
+  field,
+  value,
+  disabled,
+  invalid,
+  changed,
+  onChange
+}: {
+  field: ConfigFieldMetadata
+  value: string
+  disabled: boolean
+  invalid: boolean
+  changed: boolean
+  onChange: (value: string) => void
+}) {
+  const common = {
+    disabled,
+    'aria-invalid': invalid,
+    'data-changed': changed ? 'true' : undefined
+  } as const
+  if (field.choices && field.choices.length > 0 && !field.secret) {
+    return (
+      <select value={value} onChange={(event) => onChange(event.target.value)} {...common}>
+        {field.choices.map((choice) => {
+          const option = stringifyValue(choice)
+          return <option key={option} value={option}>{option}</option>
+        })}
+      </select>
+    )
+  }
+  if (field.type === 'boolean' && !field.secret) {
+    return (
+      <select value={value || 'false'} onChange={(event) => onChange(event.target.value)} {...common}>
+        <option value="true">true</option>
+        <option value="false">false</option>
+      </select>
+    )
+  }
+  if ((field.type === 'array' || field.type === 'object') && !field.secret) {
+    return <textarea value={value} onChange={(event) => onChange(event.target.value)} {...common} />
+  }
+  return (
+    <input
+      type={field.type === 'integer' || field.type === 'number' ? 'number' : field.secret ? 'password' : 'text'}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      {...numericBounds(field)}
+      {...common}
+    />
+  )
+}
+
 function ConfigMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <article>
@@ -324,8 +400,8 @@ function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
       {diff.map((row) => (
         <div key={row.key_path} className="aui-config-diff-row">
           <code>{row.key_path}</code>
-          <span>{displayValue(row.old_value)}</span>
-          <span>{displayValue(row.new_value)}</span>
+          <span>{displayDiffValue(row)}</span>
+          <span>{displayDiffValue(row, 'new')}</span>
         </div>
       ))}
     </div>
@@ -397,6 +473,58 @@ function parseFieldValue(value: string, type: string): JsonValue {
 function displayValue(value: JsonValue | undefined): string {
   const text = stringifyValue(value)
   return text.length > 0 ? text : 'empty'
+}
+
+function displayDiffValue(row: ConfigDiffEntry, side: 'old' | 'new' = 'old'): string {
+  if (row.secret) return '[REDACTED]'
+  return displayValue(side === 'old' ? row.old_value : row.new_value)
+}
+
+function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigChange[]): string[] {
+  const fieldByKey = new Map(fields.map((field) => [field.key_path, field]))
+  return changes.flatMap((change) => {
+    const field = fieldByKey.get(change.key_path)
+    if (!field) return [`${change.key_path}: field is not present in schema metadata`]
+    const errors: string[] = []
+    if (field.secret) errors.push(`${field.key_path}: secret fields cannot be edited from the UI`)
+    if ((field.type === 'integer' || field.type === 'number') && (typeof change.value !== 'number' || Number.isNaN(change.value))) {
+      errors.push(`${field.key_path}: must be a valid ${field.type}`)
+    }
+    if (field.type === 'boolean' && typeof change.value !== 'boolean') errors.push(`${field.key_path}: must be true or false`)
+    if ((field.type === 'array' && !Array.isArray(change.value)) || (field.type === 'object' && !isPlainObject(change.value))) {
+      errors.push(`${field.key_path}: must be valid JSON ${field.type}`)
+    }
+    const minimum = numericConstraint(field, 'minimum')
+    const maximum = numericConstraint(field, 'maximum')
+    if (typeof change.value === 'number' && minimum !== null && change.value < minimum) errors.push(`${field.key_path}: must be at least ${minimum}`)
+    if (typeof change.value === 'number' && maximum !== null && change.value > maximum) errors.push(`${field.key_path}: must be at most ${maximum}`)
+    if (field.choices && field.choices.length > 0 && !field.choices.some((choice) => stringifyValue(choice) === stringifyValue(change.value))) {
+      errors.push(`${field.key_path}: must match a schema choice`)
+    }
+    return errors
+  })
+}
+
+function fieldHasValidationError(keyPath: string, backendErrors: string[], localErrors: string[]): boolean {
+  return [...backendErrors, ...localErrors].some((error) => error.includes(keyPath))
+}
+
+function numericBounds(field: ConfigFieldMetadata): { min?: number; max?: number } {
+  const min = numericConstraint(field, 'minimum')
+  const max = numericConstraint(field, 'maximum')
+  return {
+    ...(min === null ? {} : { min }),
+    ...(max === null ? {} : { max })
+  }
+}
+
+function numericConstraint(field: ConfigFieldMetadata, key: 'minimum' | 'maximum'): number | null {
+  const value = field.constraints[key]
+  return typeof value === 'number' ? value : null
+}
+
+function isPlainObject(value: JsonValue): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function groupConfigFields(fields: ConfigFieldMetadata[]): Array<[string, ConfigFieldMetadata[]]> {

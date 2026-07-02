@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:02:49.400Z",
+  "updatedAt": "2026-07-02T15:13:37.953Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1792,64 +1792,78 @@
       "id": "G156-admin-tokens",
       "title": "`/admin/tokens`:",
       "objective": "`/admin/tokens`:\nlist scoped tokens with prefix, owner, scopes, expiry, last used;\ncreate token wizard with one-time reveal/copy;\nrevoke/rotate with AdminAction.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:11:51.915Z",
+      "completedAt": "2026-07-02T15:11:51.915Z",
+      "evidence": "Admin tokens production UI: scoped token list with prefix/owner/scopes/expiry/last-used; create-token preview wizard with explicit one-time reveal/copy/dismiss semantics and honest Auth.CreateToken unsupported state; revoke/rotate AdminAction requests using Auth.RevokeToken without secret payloads. Verification: pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-tokens-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-routes-evidence.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-config-view.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/tauri-ui test:e2e:admin; git diff --check"
     },
     {
       "id": "G157-admin-devices",
       "title": "`/admin/devices`:",
       "objective": "`/admin/devices`:\ntrusted devices;\npending pairings;\nmesh peer linkage;\nrevoke/approve/trust actions;\nplatform native security status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:12:06.886Z",
+      "completedAt": "2026-07-02T15:12:06.886Z",
+      "evidence": "Admin devices production UI: trusted devices, pending pairings, token/session evidence, mesh peer linkage through Auth.MeshListPeers, platform native security status, and AdminAction-gated revoke/approve/deny/trust actions. Verification: pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-tokens-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-routes-evidence.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/tauri-ui test:e2e:admin; git diff --check"
     },
     {
       "id": "G158-access-route-is-no-longer-unsupporte",
       "title": "Access route is no longer unsupported in local mode if backend roles/...",
       "objective": "Access route is no longer unsupported in local mode if backend roles/principals exist.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:12:20.662Z",
+      "completedAt": "2026-07-02T15:12:20.662Z",
+      "evidence": "/admin/access is bound to real Auth.ListPrincipals with degraded fallback instead of unsupported Auth.ListRoles; route availability and RBAC tests assert not unsupported when principals/permissions exist. Verification: pnpm --filter @aurora/ui test -- -t \"RBAC|route availability\"; pnpm --filter @aurora/client test -- -t \"Auth|permission catalog|backend inventory\"; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:admin; git diff --check"
     },
     {
       "id": "G159-token-creation-never-logs-reveals-se",
       "title": "Token creation never logs/reveals secrets after one-time display.",
       "objective": "Token creation never logs/reveals secrets after one-time display.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:12:34.944Z",
+      "completedAt": "2026-07-02T15:12:34.944Z",
+      "evidence": "Token secret safety: create-token preview labels one-time reveal only; dismiss purges reveal secret; revoke/rotate AdminAction payloads exclude secrets; UI tests assert no raw secret rendering after dismissal. Verification: pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-tokens-view.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G160-device-pairing-actions-require-prope",
       "title": "Device/pairing actions require proper confirmation.",
       "objective": "Device/pairing actions require proper confirmation.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:12:50.218Z",
+      "completedAt": "2026-07-02T15:12:50.218Z",
+      "evidence": "Device/pairing actions are explicit AdminAction requests: revoke device, pairing approve/deny, mesh approve/remove peer all build action payloads with reason/affected resources and redacted pairing secret copy. Verification: pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-devices-view.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G161-e2e-covers-read-pages-and-at-least-d",
       "title": "E2E covers read pages and at least draft/disabled mutation flows.",
       "objective": "E2E covers read pages and at least draft/disabled mutation flows.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:13:08.272Z",
+      "completedAt": "2026-07-02T15:13:08.272Z",
+      "evidence": "Admin route evidence covers read pages and draft/disabled mutation flows: sensitive admin read routes remain routeable without AdminAction mutation tokens; mutation surfaces declare AdminAction state/truth; denied config route renders disabled controls; admin E2E passed. Verification: pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G162-admin-config",
       "title": "`/admin/config`:",
       "objective": "`/admin/config`:\nschema-backed section accordion;\ntyped fields and validation;\nsecret redaction;\nstaged diff;\nreload/restart impact;\napply/discard/review AdminAction.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:13:22.402Z",
+      "completedAt": "2026-07-02T15:13:22.402Z",
+      "evidence": "Admin config production UI: schema-backed accordion with typed controls/validation, secret redaction, staged diff, reload/restart impact, discard/review/confirm AdminAction apply flow. Verification: pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-config-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx; pnpm --filter @aurora/ui test -- -t \"token|device|config editor|admin route checkpoint\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G163-admin-contracts",
@@ -1864,10 +1878,12 @@
       "id": "G164-config-cannot-expose-secrets-or-writ",
       "title": "Config cannot expose secrets or write without confirmation.",
       "objective": "Config cannot expose secrets or write without confirmation.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:13:37.953Z",
+      "completedAt": "2026-07-02T15:13:37.953Z",
+      "evidence": "Config safety: secret field values and diff values render as [REDACTED]; secret fields are disabled; local validation blocks invalid staged changes; Config.Set is not called until explicit second-step AdminAction confirmation. Verification: pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-config-view.test.tsx; pnpm --filter @aurora/ui test -- -t \"config editor\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G165-contracts-page-uses-live-registry-no",

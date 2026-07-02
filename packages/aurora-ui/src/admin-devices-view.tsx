@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, Laptop, Lock, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
+import { Activity, CheckCircle2, Laptop, Link2, Lock, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -14,6 +14,7 @@ import {
   type DeviceResponse,
   type JsonObject,
   type ListPendingPairingsResponse,
+  type MeshPeerInfo,
   type NativeCapabilityManifest,
   type PendingPairingEntry,
   type TokenResponse
@@ -30,7 +31,12 @@ export type AdminDevicesLoadState =
   | 'error'
 
 export interface AdminDeviceAction {
-  methodId: typeof AUTH_METHODS.deleteDevice
+  methodId:
+    | typeof AUTH_METHODS.deleteDevice
+    | typeof AUTH_METHODS.pairingApprove
+    | typeof AUTH_METHODS.pairingDeny
+    | typeof AUTH_METHODS.meshApprovePeer
+    | typeof AUTH_METHODS.meshRemovePeer
   payload: JsonObject
   reason: string
   reauthConfirmed: boolean
@@ -63,6 +69,11 @@ export interface AdminDeviceRow {
   deleteState: AvailabilityState
   deleteReason: string
   deleteAction: AdminDeviceAction | null
+  trustAction: AdminDeviceAction | null
+  linkedMeshPeerId: string | null
+  linkedMeshPeerLabel: string
+  meshPeerState: AvailabilityState
+  meshPeerEvidence: string
 }
 
 export interface AdminPendingPairingRow {
@@ -75,6 +86,11 @@ export interface AdminPendingPairingRow {
   expiresAt: string
   permissionCount: number
   adminRequested: boolean
+  linkedMeshPeerId: string | null
+  linkedMeshPeerLabel: string
+  linkedMeshPeerState: AvailabilityState
+  approveAction: AdminDeviceAction | null
+  denyAction: AdminDeviceAction | null
 }
 
 export interface AdminDevicesSnapshot {
@@ -91,6 +107,10 @@ export interface AdminDevicesSnapshot {
   pairingReason: string
   deleteState: AvailabilityState
   deleteReason: string
+  meshPeerState?: AvailabilityState
+  meshPeerReason?: string
+  meshPeerActionState?: AvailabilityState
+  meshPeerActionReason?: string
   nativePlatform: string | null
   nativeCapabilities: string[]
   warnings: string[]
@@ -111,6 +131,7 @@ export interface AdminDevicesViewProps {
   onAdminReasonChange?: (value: string) => void
   onRefresh?: () => void
   onDeleteDevice?: (device: AdminDeviceRow) => void
+  onRunAdminAction?: (action: AdminDeviceAction, optimisticId: string) => void
 }
 
 const loadingSnapshot: AdminDevicesSnapshot = {
@@ -127,6 +148,10 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   pairingReason: 'Loading Auth.ListPendingPairings through AuroraClient.',
   deleteState: 'pending',
   deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
+  meshPeerState: 'pending',
+  meshPeerReason: 'Loading Auth.MeshListPeers for device-to-peer linkage.',
+  meshPeerActionState: 'pending',
+  meshPeerActionReason: 'Loading Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities before enabling trust actions.',
   nativePlatform: null,
   nativeCapabilities: [],
   warnings: [],
@@ -158,15 +183,14 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
     }
   }, [client])
 
-  const deleteDevice = useCallback(
-    async (device: AdminDeviceRow) => {
-      if (!device.deleteAction) return
-      setPendingDeviceId(device.id)
-      setOptimisticDeviceId(device.id)
+  const runAdminAction = useCallback(
+    async (action: AdminDeviceAction, optimisticId: string) => {
+      setPendingDeviceId(optimisticId)
+      setOptimisticDeviceId(optimisticId)
       setMutationError(null)
-      const reason = adminReason.trim() || `Delete device ${device.id}`
+      const reason = adminReason.trim() || action.reason
       try {
-        await client.admin.execute({ ...device.deleteAction, reason })
+        await client.admin.execute({ ...action, reason })
         await loadDevices()
       } catch (error) {
         setMutationError(deviceMutationErrorMessage(error))
@@ -176,6 +200,14 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
       }
     },
     [adminReason, client.admin, loadDevices]
+  )
+
+  const deleteDevice = useCallback(
+    async (device: AdminDeviceRow) => {
+      if (!device.deleteAction) return
+      await runAdminAction(device.deleteAction, device.id)
+    },
+    [runAdminAction]
   )
 
   return (
@@ -188,15 +220,17 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
       optimisticDeviceId={optimisticDeviceId}
       onRefresh={loadDevices}
       onDeleteDevice={deleteDevice}
+      onRunAdminAction={runAdminAction}
     />
   )
 }
 
 export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<AdminDevicesSnapshot> {
-  const [devicesResult, tokensResult, pairingsResult, catalogResult, nativeResult] = await Promise.allSettled([
+  const [devicesResult, tokensResult, pairingsResult, meshPeersResult, catalogResult, nativeResult] = await Promise.allSettled([
     client.authApi.listDevices(),
     client.authApi.listTokens(),
     client.authApi.listPendingPairings(),
+    client.mesh.listPeers({ include_disconnected: true }),
     client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true }),
     client.native.getManifest()
   ])
@@ -204,6 +238,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   const devicesResponse = responseDataOrNull(devicesResult)
   const tokensResponse = responseDataOrNull(tokensResult)
   const pairingsResponse = responseDataOrNull(pairingsResult)
+  const meshPeersResponse = responseDataOrNull(meshPeersResult)
   const capabilityCatalog = valueOrNull(catalogResult)
   const nativeManifest = valueOrNull(nativeResult)
   const summaries = capabilityCatalog ? summarizeCapabilities(capabilityCatalog) : []
@@ -211,10 +246,14 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   const tokenCapability = capabilityFor(AUTH_METHODS.listTokens, summaries)
   const pairingCapability = capabilityFor(AUTH_METHODS.listPendingPairings, summaries)
   const deleteCapability = capabilityFor(AUTH_METHODS.deleteDevice, summaries)
+  const meshListCapability = capabilityFor(AUTH_METHODS.meshListPeers, summaries)
+  const meshApproveCapability = capabilityFor(AUTH_METHODS.meshApprovePeer, summaries)
+  const meshRemoveCapability = capabilityFor(AUTH_METHODS.meshRemovePeer, summaries)
   const failures = [
     failureMessage('devices', devicesResult),
     failureMessage('tokens', tokensResult),
     failureMessage('pending pairings', pairingsResult),
+    failureMessage('mesh peers', meshPeersResult),
     failureMessage('capability catalog', catalogResult),
     failureMessage('native manifest', nativeResult, true)
   ].filter((message): message is string => Boolean(message))
@@ -229,10 +268,14 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
       tokenState: denied ? 'denied' : 'unsupported',
       pairingState: denied ? 'denied' : 'unsupported',
       deleteState: denied ? 'denied' : 'unsupported',
+      meshPeerState: denied ? 'denied' : 'unsupported',
+      meshPeerActionState: denied ? 'denied' : 'unsupported',
       listReason: message,
       tokenReason: message,
       pairingReason: message,
       deleteReason: message,
+      meshPeerReason: message,
+      meshPeerActionReason: message,
       error: message,
       warnings: failures,
       evidenceSource: 'AuroraClient SDK error'
@@ -240,9 +283,13 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   }
 
   const tokenRows = tokensResponse?.tokens ?? []
-  const pendingPairings = buildPendingPairingRows(pairingsResponse)
+  const meshPeers = meshPeersResponse?.peers ?? []
+  const pairingActionAvailable = Boolean(pairingsResponse)
+  const meshPeerActionCapability = meshApproveCapability ?? meshRemoveCapability
+  const meshPeerActionState = meshPeerActionCapability?.availability ?? (meshPeersResponse ? 'available-local' : denied ? 'denied' : 'unsupported')
+  const pendingPairings = buildPendingPairingRows(pairingsResponse, meshPeers, pairingActionAvailable)
   const devices = (devicesResponse?.devices ?? []).map((device) =>
-    buildDeviceRow(device, tokenRows, deleteCapability, nativeManifest)
+    buildDeviceRow(device, tokenRows, deleteCapability, nativeManifest, meshPeers, pairingsResponse?.pairings ?? [], meshPeerActionState)
   )
   const loadState: AdminDevicesLoadState = denied
     ? 'denied'
@@ -266,6 +313,10 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     pairingReason: pairingCapability ? capabilityReason(pairingCapability) : 'Auth.ListPendingPairings is not advertised by the capability catalog.',
     deleteState: deleteCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
     deleteReason: deleteCapability ? capabilityReason(deleteCapability) : 'Auth.DeleteDevice is not advertised by the capability catalog.',
+    meshPeerState: meshPeersResponse ? (meshListCapability?.availability ?? 'available-local') : denied ? 'denied' : 'unsupported',
+    meshPeerReason: meshListCapability ? capabilityReason(meshListCapability) : 'Auth.MeshListPeers is not advertised by the capability catalog; device mesh linkage may be incomplete.',
+    meshPeerActionState,
+    meshPeerActionReason: meshPeerActionCapability ? capabilityReason(meshPeerActionCapability) : 'Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities are not advertised by the capability catalog.',
     nativePlatform: nativeManifest?.platform ?? null,
     nativeCapabilities: Object.entries(nativeManifest?.capabilities ?? {})
       .filter(([, enabled]) => Boolean(enabled))
@@ -285,7 +336,8 @@ export function AdminDevicesView({
   optimisticDeviceId = null,
   onAdminReasonChange,
   onRefresh,
-  onDeleteDevice
+  onDeleteDevice,
+  onRunAdminAction
 }: AdminDevicesViewProps) {
   const totals = useMemo(() => deviceTotals(snapshot.devices), [snapshot.devices])
   const visibleDevices = snapshot.devices.filter((device) => device.id !== optimisticDeviceId)
@@ -317,7 +369,7 @@ export function AdminDevicesView({
         <Metric label="Tokens" value={String(totals.tokens)} detail={`${totals.expiredTokens} expired`} />
       </div>
 
-      <DevicePlatformSecurityPanel snapshot={snapshot} />
+      <DevicePlatformSecurityPanel snapshot={snapshot} onRunAdminAction={onRunAdminAction} />
 
       <section className="aui-admin-panel" aria-labelledby="device-controls-title">
         <div className="aui-panel-heading">
@@ -345,6 +397,8 @@ export function AdminDevicesView({
             <CapabilityFact label="List tokens" state={snapshot.tokenState} reason={snapshot.tokenReason} />
             <CapabilityFact label="Pending pairings" state={snapshot.pairingState} reason={snapshot.pairingReason} />
             <CapabilityFact label="Delete device" state={snapshot.deleteState} reason={snapshot.deleteReason} />
+            <CapabilityFact label="Mesh peer linkage" state={snapshot.meshPeerState ?? 'unsupported'} reason={snapshot.meshPeerReason ?? 'Auth.MeshListPeers is not advertised by the capability catalog; device mesh linkage may be incomplete.'} />
+            <CapabilityFact label="Trust actions" state={snapshot.meshPeerActionState ?? 'unsupported'} reason={snapshot.meshPeerActionReason ?? 'Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities are not advertised by the capability catalog.'} />
           </div>
         </div>
       </section>
@@ -367,6 +421,7 @@ export function AdminDevicesView({
                   <th>Trust</th>
                   <th>Sessions</th>
                   <th>Platform</th>
+                  <th>Mesh peer</th>
                   <th>Evidence</th>
                   <th>Action</th>
                 </tr>
@@ -412,6 +467,12 @@ export function AdminDevicesView({
                       <p className="aui-muted">{device.platformEvidence}</p>
                     </td>
                     <td>
+                      <Link2 size={16} aria-hidden />
+                      <StatusBadge state={device.meshPeerState} />
+                      <p className="aui-muted">{device.linkedMeshPeerLabel}</p>
+                      <small>{device.meshPeerEvidence}</small>
+                    </td>
+                    <td>
                       <dl className="aui-device-facts">
                         <div><dt>Principal</dt><dd>{device.principalId ?? 'not reported'}</dd></div>
                         <div><dt>Created</dt><dd>{formatDate(device.createdAt)}</dd></div>
@@ -426,8 +487,19 @@ export function AdminDevicesView({
                         onClick={() => onDeleteDevice?.(device)}
                       >
                         <Trash2 size={16} aria-hidden />
-                        {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Delete'}
+                        {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Revoke'}
                       </button>
+                      {device.trustAction ? (
+                        <button
+                          className="aui-button"
+                          type="button"
+                          disabled={Boolean(pendingDeviceId)}
+                          onClick={() => device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined}
+                        >
+                          <CheckCircle2 size={16} aria-hidden />
+                          Trust via AdminAction
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -440,7 +512,7 @@ export function AdminDevicesView({
   )
 }
 
-function DevicePlatformSecurityPanel({ snapshot }: { snapshot: AdminDevicesSnapshot }) {
+function DevicePlatformSecurityPanel({ snapshot, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
   return (
     <section className="aui-admin-panel" aria-labelledby="device-platform-title">
       <div className="aui-panel-heading">
@@ -460,10 +532,22 @@ function DevicePlatformSecurityPanel({ snapshot }: { snapshot: AdminDevicesSnaps
               {snapshot.pendingPairings.map((pairing) => (
                 <li key={pairing.requestId}>
                   <StatusBadge state={pairing.status === 'pending' ? 'pending' : 'unsupported'} />
+                  <Link2 size={16} aria-hidden />
                   <div>
                     <strong>{pairing.deviceName}</strong>
                     <span>{pairing.remoteNodeName || pairing.remotePeerId} from {pairing.clientIp}</span>
-                    <small>{pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; expires {formatDate(pairing.expiresAt)}</small>
+                    <small>{pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; mesh={pairing.linkedMeshPeerLabel}; expires {formatDate(pairing.expiresAt)}</small>
+                    <small>AdminAction approve={pairing.approveAction?.methodId ?? 'unsupported'} deny={pairing.denyAction?.methodId ?? 'unsupported'}; pairing secret redacted</small>
+                    <div className="aui-admin-actions">
+                      <button className="aui-button" type="button" disabled={!pairing.approveAction} onClick={() => pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined}>
+                        <CheckCircle2 size={16} aria-hidden />
+                        Approve/trust via AdminAction
+                      </button>
+                      <button className="aui-button aui-danger-button" type="button" disabled={!pairing.denyAction} onClick={() => pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined}>
+                        <XCircle size={16} aria-hidden />
+                        Deny via AdminAction
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -499,17 +583,90 @@ export function buildDeviceDeleteAdminAction(device: Pick<AdminDeviceRow, 'id' |
   }
 }
 
+export function buildPendingPairingAdminAction(
+  entry: PendingPairingEntry,
+  action: 'approve' | 'deny',
+  reason: string
+): AdminDeviceAction {
+  const affectedResources = [
+    `pairing:${entry.request_id}`,
+    ...(entry.remote_peer_id ? [`peer:${entry.remote_peer_id}`] : []),
+    `device:${entry.device_name}`
+  ]
+  if (action === 'approve') {
+    return {
+      methodId: AUTH_METHODS.pairingApprove,
+      payload: {
+        code: entry.code,
+        permissions: entry.granted_permissions,
+        is_admin: entry.granted_is_admin
+      },
+      reason,
+      reauthConfirmed: true,
+      affectedResources,
+      path: routePath('Auth', 'PairingApprove')
+    }
+  }
+  return {
+    methodId: AUTH_METHODS.pairingDeny,
+    payload: {
+      code: entry.code,
+      reason
+    },
+    reason,
+    reauthConfirmed: true,
+    affectedResources,
+    path: routePath('Auth', 'PairingDeny')
+  }
+}
+
+export function buildDeviceMeshPeerAdminAction(
+  peer: Pick<MeshPeerInfo, 'peer_id' | 'node_name' | 'outbound_permissions'>,
+  action: 'trust' | 'revoke',
+  reason: string
+): AdminDeviceAction {
+  if (action === 'trust') {
+    return {
+      methodId: AUTH_METHODS.meshApprovePeer,
+      payload: { peer_id: peer.peer_id, permissions: peer.outbound_permissions },
+      reason,
+      reauthConfirmed: true,
+      affectedResources: [`mesh-peer:${peer.peer_id}`, `peer:${peer.node_name}`],
+      path: routePath('Auth', 'MeshApprovePeer')
+    }
+  }
+  return {
+    methodId: AUTH_METHODS.meshRemovePeer,
+    payload: { peer_id: peer.peer_id, revoke_token: true },
+    reason,
+    reauthConfirmed: true,
+    affectedResources: [`mesh-peer:${peer.peer_id}`, `peer:${peer.node_name}`],
+    path: routePath('Auth', 'MeshRemovePeer')
+  }
+}
+
 function buildDeviceRow(
   device: DeviceResponse,
   tokens: TokenResponse[],
   deleteCapability: CapabilitySummary | undefined,
-  nativeManifest: NativeCapabilityManifest | null
+  nativeManifest: NativeCapabilityManifest | null,
+  meshPeers: MeshPeerInfo[],
+  pendingPairings: PendingPairingEntry[],
+  meshPeerActionState: AvailabilityState
 ): AdminDeviceRow {
   const deviceTokens = tokens.filter((token) => token.device_id === device.id)
   const activeTokens = deviceTokens.map(tokenRow)
   const activeSessionCount = activeTokens.filter((token) => token.state !== 'stale' && token.state !== 'denied').length
   const deleteState = deleteCapability?.availability ?? 'unsupported'
   const deleteReason = deleteCapability ? capabilityReason(deleteCapability) : 'Auth.DeleteDevice is not advertised by the capability catalog.'
+  const linkedMeshPeer = findLinkedMeshPeer(device.name, meshPeers)
+  const pendingPairing = findLinkedPairing(device.name, pendingPairings)
+  const linkedState = linkedMeshPeer
+    ? meshPeerAvailability(linkedMeshPeer)
+    : pendingPairing
+      ? 'pending'
+      : 'unsupported'
+  const trustAction = buildTrustActionForDevice(device, linkedMeshPeer, pendingPairing, meshPeerActionState)
   return {
     id: device.id,
     name: device.name,
@@ -527,17 +684,35 @@ function buildDeviceRow(
     deleteReason,
     deleteAction: deleteState === 'available-local' || deleteState === 'available-remote' || deleteState === 'degraded'
       ? buildDeviceDeleteAdminAction({ id: device.id, name: device.name, principalId: device.user_id ?? null }, 'Remove device and revoke its local session access')
-      : null
+      : null,
+    trustAction,
+    linkedMeshPeerId: linkedMeshPeer?.peer_id ?? pendingPairing?.remote_peer_id ?? null,
+    linkedMeshPeerLabel: linkedMeshPeer
+      ? `${linkedMeshPeer.node_name} (${linkedMeshPeer.outbound_status}/${linkedMeshPeer.connection_status})`
+      : pendingPairing
+        ? `${pendingPairing.remote_node_name || pendingPairing.remote_peer_id} pending pairing`
+        : 'no linked mesh peer reported',
+    meshPeerState: linkedState,
+    meshPeerEvidence: linkedMeshPeer
+      ? `Auth.MeshListPeers peer ${linkedMeshPeer.peer_id}; inbound=${linkedMeshPeer.inbound_status}; outbound=${linkedMeshPeer.outbound_status}`
+      : pendingPairing
+        ? `Auth.ListPendingPairings links ${pendingPairing.remote_peer_id}; approval still requires AdminAction`
+        : 'No Auth.MeshListPeers or pending pairing record matched this device label.'
   }
 }
 
-function buildPendingPairingRows(response: ListPendingPairingsResponse | null): AdminPendingPairingRow[] {
+function buildPendingPairingRows(
+  response: ListPendingPairingsResponse | null,
+  meshPeers: MeshPeerInfo[],
+  actionsAvailable: boolean
+): AdminPendingPairingRow[] {
   return (response?.pairings ?? [])
     .filter((entry) => entry.status === 'pending')
-    .map((entry) => pendingPairingRow(entry))
+    .map((entry) => pendingPairingRow(entry, meshPeers, actionsAvailable))
 }
 
-function pendingPairingRow(entry: PendingPairingEntry): AdminPendingPairingRow {
+function pendingPairingRow(entry: PendingPairingEntry, meshPeers: MeshPeerInfo[], actionsAvailable: boolean): AdminPendingPairingRow {
+  const linkedPeer = meshPeers.find((peer) => peer.peer_id === entry.remote_peer_id)
   return {
     requestId: entry.request_id,
     deviceName: entry.device_name,
@@ -547,8 +722,60 @@ function pendingPairingRow(entry: PendingPairingEntry): AdminPendingPairingRow {
     status: entry.status,
     expiresAt: entry.expires_at,
     permissionCount: entry.granted_permissions.length,
-    adminRequested: entry.granted_is_admin
+    adminRequested: entry.granted_is_admin,
+    linkedMeshPeerId: linkedPeer?.peer_id ?? entry.remote_peer_id ?? null,
+    linkedMeshPeerLabel: linkedPeer
+      ? `${linkedPeer.node_name} (${linkedPeer.outbound_status}/${linkedPeer.connection_status})`
+      : entry.remote_peer_id
+        ? `${entry.remote_node_name || entry.remote_peer_id} pending peer`
+        : 'no mesh peer id reported',
+    linkedMeshPeerState: linkedPeer ? meshPeerAvailability(linkedPeer) : 'pending',
+    approveAction: actionsAvailable ? buildPendingPairingAdminAction(entry, 'approve', 'Approve pending device pairing from /admin/devices') : null,
+    denyAction: actionsAvailable ? buildPendingPairingAdminAction(entry, 'deny', 'Deny pending device pairing from /admin/devices') : null
   }
+}
+
+function buildTrustActionForDevice(
+  device: DeviceResponse,
+  linkedMeshPeer: MeshPeerInfo | undefined,
+  pendingPairing: PendingPairingEntry | undefined,
+  meshPeerActionState: AvailabilityState
+): AdminDeviceAction | null {
+  if (pendingPairing) {
+    return buildPendingPairingAdminAction(pendingPairing, 'approve', `Trust pending device ${device.name}`)
+  }
+  if (!linkedMeshPeer || device.is_trusted || meshPeerActionState === 'unsupported' || meshPeerActionState === 'denied' || meshPeerActionState === 'pending') {
+    return null
+  }
+  return buildDeviceMeshPeerAdminAction(linkedMeshPeer, 'trust', `Trust mesh peer for device ${device.name}`)
+}
+
+function findLinkedMeshPeer(deviceName: string, meshPeers: MeshPeerInfo[]): MeshPeerInfo | undefined {
+  const normalizedDevice = normalizeLinkLabel(deviceName)
+  return meshPeers.find((peer) => {
+    const peerLabels = [peer.node_name, peer.peer_id, peer.id].map(normalizeLinkLabel)
+    return peerLabels.some((label) => label.length > 0 && (label.includes(normalizedDevice) || normalizedDevice.includes(label)))
+  })
+}
+
+function findLinkedPairing(deviceName: string, pairings: PendingPairingEntry[]): PendingPairingEntry | undefined {
+  const normalizedDevice = normalizeLinkLabel(deviceName)
+  return pairings.find((entry) => {
+    const labels = [entry.device_name, entry.remote_node_name, entry.remote_peer_id].map(normalizeLinkLabel)
+    return labels.some((label) => label.length > 0 && (label.includes(normalizedDevice) || normalizedDevice.includes(label)))
+  })
+}
+
+function normalizeLinkLabel(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function meshPeerAvailability(peer: MeshPeerInfo): AvailabilityState {
+  if (peer.outbound_status === 'approved' || peer.inbound_status === 'approved') return 'available-local'
+  if (peer.outbound_status === 'pending' || peer.inbound_status === 'pending') return 'pending'
+  if (peer.outbound_status === 'denied' || peer.inbound_status === 'denied') return 'denied'
+  if (peer.connection_status === 'disconnected') return 'offline'
+  return 'degraded'
 }
 
 function tokenRow(token: TokenResponse): AdminDeviceTokenRow {
