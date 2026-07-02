@@ -70,6 +70,8 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
         secretsRedacted={manifest.privacy.secretsRedacted}
       />
 
+      <AdminOverviewMetrics manifest={manifest} gaps={gaps} posture={posture} />
+
       <div className="aui-admin-grid">
         <PosturePanel manifest={manifest} posture={posture} />
         <DeploymentTopologyPanel manifest={manifest} transportKind={transportKind} />
@@ -108,6 +110,52 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
           <p>No manage methods were reported by the registry.</p>
         )}
       </section>
+    </section>
+  )
+}
+
+function AdminOverviewMetrics({
+  manifest,
+  gaps,
+  posture
+}: {
+  manifest: AdminOverviewManifest
+  gaps: CapabilitySummary[]
+  posture: AvailabilityState
+}) {
+  const healthyServices = manifest.services.filter((service) => service.status.toLowerCase() === 'healthy').length
+  return (
+    <section className="aui-admin-metrics" aria-label="Deployment metrics">
+      <div className="aui-admin-metric">
+        <span>Services</span>
+        <strong>{manifest.totals.services}</strong>
+        <small>
+          {healthyServices}/{manifest.totals.services} healthy from Gateway.GetServices and registry summaries
+        </small>
+      </div>
+      <div className="aui-admin-metric">
+        <span>Capability gaps</span>
+        <strong>{gaps.length}</strong>
+        <small>
+          {manifest.totals.capabilityActions} catalog actions; denied/stale/privacy-blocked/unsupported stay visible
+        </small>
+      </div>
+      <div className="aui-admin-metric">
+        <span>Mesh peers</span>
+        <strong>{manifest.totals.peers}</strong>
+        <small>Peer summaries reported by SDK; peer state invented={String(manifest.privacy.peerStateInvented)}</small>
+      </div>
+      <div className="aui-admin-metric">
+        <span>Deployment posture</span>
+        <strong>
+          <StatusBadge state={posture} />
+        </strong>
+        <small>
+          {manifest.deploymentTopology
+            ? deploymentModeLabel(manifest.deploymentTopology)
+            : 'topology evidence unavailable'}
+        </small>
+      </div>
     </section>
   )
 }

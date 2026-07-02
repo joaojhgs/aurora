@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:53:06.651Z",
+  "updatedAt": "2026-07-02T06:58:14.048Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -179,10 +179,13 @@
       "id": "G015-components-aurora-admin-overview-tsx",
       "title": "`components/aurora/admin/overview.tsx`: deployment posture, service h...",
       "objective": "`components/aurora/admin/overview.tsx`: deployment posture, service health, capability gaps.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:58:14.048Z",
+      "startedAt": "2026-07-02T06:53:29.547Z",
+      "completedAt": "2026-07-02T06:58:14.048Z",
+      "evidence": "Admin overview now includes a mock-derived deployment metrics strip for service health, capability gaps, mesh peer evidence, and deployment posture while retaining SDK manifest truth and read-only AdminAction boundaries. Verified: pnpm --filter @aurora/ui test -- -t 'admin overview'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin."
     },
     {
       "id": "G016-components-aurora-admin-services-vie",

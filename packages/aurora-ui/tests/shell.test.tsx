@@ -2218,6 +2218,9 @@ describe('Aurora production shell', () => {
 
     expect(markup).toContain('Admin overview')
     expect(markup).toContain('Deployment')
+    expect(markup).toContain('Deployment metrics')
+    expect(markup).toContain('Capability gaps')
+    expect(markup).toContain('Mesh peers')
     expect(markup).toContain('Service mode')
     expect(markup).toContain('Health')
     expect(markup).toContain('Gateway')
