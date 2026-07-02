@@ -699,6 +699,45 @@ describe('Aurora production shell', () => {
     expect(markup).not.toMatch(/replace Siri|Siri replacement/i)
   })
 
+  it('does not count routeable local selector preferences as hard-blocked settings routes', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    for (const candidate of snapshot.routes) {
+      Object.assign(candidate, {
+        state: 'available-local' as const,
+        disabled: false,
+        routeable: true,
+        selectorRequired: false,
+        blockers: [],
+        evidenceSources: ['controlled local route evidence']
+      })
+    }
+    Object.assign(route(snapshot, 'tools'), {
+      selectorRequired: true,
+      explanation: 'Local provider selector is a preference, not a hard privacy blocker.',
+      blockers: ['selector_preference_missing'],
+      repairActions: []
+    })
+
+    const model = buildSettingsPermissionsModel(snapshot)
+    const explicitSelector = model.privacyControls.find((control) => control.id === 'explicit-selector')
+    const hardFallback = model.privacyControls.find((control) => control.id === 'block-explicit-fallback')
+    const deniedRoutes = model.routeDefaults.find((item) => item.id === 'denied-routes')
+
+    expect(explicitSelector).toEqual(expect.objectContaining({
+      state: 'degraded',
+      providerLabel: '1 selector-gated routes',
+      enabled: true
+    }))
+    expect(hardFallback).toEqual(expect.objectContaining({
+      state: 'available-local',
+      providerLabel: '0 hard-blocked routes'
+    }))
+    expect(deniedRoutes).toEqual(expect.objectContaining({
+      state: 'available-local',
+      value: '0'
+    }))
+  })
+
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
     const model = buildSettingsPermissionsModel(snapshot)

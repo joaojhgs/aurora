@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:09:33.319Z",
+  "updatedAt": "2026-07-02T08:13:07.621Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -407,10 +407,13 @@
       "id": "G034-routes-were-counted-as-blocked-becau",
       "title": "routes were counted as blocked because local selector/privacy policy...",
       "objective": "routes were counted as blocked because local selector/privacy policy states were treated as hard blockers;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:13:07.621Z",
+      "startedAt": "2026-07-02T08:10:26.805Z",
+      "completedAt": "2026-07-02T08:13:07.621Z",
+      "evidence": "Fixed settings route-blocker aggregation so selector-required but routeable local preferences render as degraded selector policy state, while denied/privacy-blocked routes alone count as hard-blocked. Added regression test 'does not count routeable local selector preferences as hard-blocked settings routes'. Verified: pnpm --filter @aurora/client test -- -t 'keeps local selector preference routeable|evaluates route policy denials'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'does not count routeable local selector preferences|settings, privacy defaults|route availability|production surface'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G035-admin-pages-were-omitted-from-tauri",

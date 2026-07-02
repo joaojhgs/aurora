@@ -279,6 +279,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
   const availableRemote = snapshot.routes.filter((route) => route.state === 'available-remote')
   const degraded = snapshot.routes.filter((route) => route.state === 'degraded')
   const selectorRequired = snapshot.routes.filter((route) => route.selectorRequired)
+  const selectorHardBlocked = selectorRequired.filter((route) => route.disabled || route.state === 'denied' || route.state === 'privacy-blocked')
   const denied = snapshot.routes.filter((route) => route.state === 'denied')
   const privacyBlocked = snapshot.routes.filter((route) => route.state === 'privacy-blocked')
   const errorText = snapshot.loadState === 'error' ? snapshot.error ?? 'AuroraClient settings evidence failed to load.' : null
@@ -307,7 +308,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         id: 'explicit-selector',
         label: 'Require explicit remote selectors',
         description: 'Remote peer, provider, hardware, audio, and data actions must expose target identity before execution.',
-        state: selectorRequired.length > 0 ? 'privacy-blocked' : settingsRoute?.state ?? 'unsupported',
+        state: selectorHardBlocked.length > 0 ? 'privacy-blocked' : selectorRequired.length > 0 ? 'degraded' : settingsRoute?.state ?? 'unsupported',
         privacyClass: 'admin-critical',
         providerLabel: `${selectorRequired.length} selector-gated routes`,
         enabled: selectorRequired.length > 0,
