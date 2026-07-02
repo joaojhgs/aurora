@@ -12,10 +12,12 @@ import {
   BackupRestoreView,
   ConfigEditorView,
   MemoryView,
+  MeshDiagnosticsResource,
   MeshPeersResource,
   ModelsView,
   OnboardingView,
   PairingQueueView,
+  RoutePolicyResource,
   RouteMatrix,
   RoutePolicyResource,
   SettingsPermissionsView,
@@ -269,31 +271,82 @@ function TauriRouteContent({
     () => snapshot.nativeCapabilities.map((capability) => ({ name: capability.name, enabled: capability.enabled })),
     [snapshot.nativeCapabilities]
   )
-  if (!renderRoute) return <MissingTauriRoute route={route} />
-  return renderRoute({
-    route,
-    snapshot,
-    nativeContext,
-    client,
-    shutdown,
-    assistantNativePermissions,
-    assistantNativeCapabilities
-  })
+  switch (route.item.id) {
+    case 'assistant':
+      return (
+        <AssistantView
+          client={client}
+          route={route}
+          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+          voiceRoutes={snapshot.assistantVoiceRoutes}
+          nativePlatform={snapshot.nativePlatform}
+          nativeAvailable={snapshot.nativeAvailable}
+          nativePermissions={assistantNativePermissions}
+          nativeCapabilities={assistantNativeCapabilities}
+        />
+      )
+    case 'memory':
+    case 'data':
+      return <MemoryView client={client} route={route} />
+    case 'tools':
+      return <ToolApprovalPanel client={client} route={route} />
+    case 'mesh':
+      return <MeshPeersResource client={client} route={route} />
+    case 'admin':
+      return <TauriAdminOverviewPage client={client} />
+    case 'services':
+    case 'contracts':
+      return <AdminServicesResource client={client} />
+    case 'access':
+    case 'tokens':
+      return <AdminRbacResource client={client} />
+    case 'devices':
+      return <AdminDevicesResource client={client} />
+    case 'config':
+      return <ConfigEditorView client={client} route={route} />
+    case 'plugins':
+      return <AdminPluginsView client={client} route={route} />
+    case 'pairing':
+      return <PairingQueueView client={client} route={route} />
+    case 'backups':
+      return <BackupRestoreView client={client} route={route} />
+    case 'scheduler':
+      return <AdminSchedulerView client={client} route={route} />
+    case 'audit':
+      return <AdminAuditResource client={client} />
+    case 'models':
+      return <ModelsView client={client} />
+    case 'settings':
+    case 'native':
+      return <SettingsPermissionsView snapshot={snapshot} />
+    case 'onboarding':
+      return <OnboardingView client={client} snapshot={snapshot} />
+    case 'diagnostics':
+      return <TauriDiagnosticsPage snapshot={snapshot} nativeContext={nativeContext} shutdown={shutdown} />
+    case 'route-policy':
+      return <RoutePolicyResource client={client} route={route} />
+    case 'mesh-diagnostics':
+      return <MeshDiagnosticsResource client={client} route={route} />
+    default:
+      return <TauriRoutePlaceholder route={route} snapshot={snapshot} />
+  }
 }
 
-function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
+function TauriAdminOverviewPage({
+  client
+}: {
+  client: ReturnType<typeof createAuroraTauriRuntime>['client']
+}) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
-  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from AuroraClient.'))
+  const [error, setError] = useState<unknown>(null)
 
   useEffect(() => {
     let cancelled = false
-    setManifest(null)
-    setError(new Error('Loading admin overview manifest from AuroraClient.'))
-    void client.adminOverview.getManifest().then(
+    client.adminOverview.getManifest().then(
       (next) => {
         if (!cancelled) {
           setManifest(next)
-          setError(undefined)
+          setError(null)
         }
       },
       (nextError: unknown) => {
