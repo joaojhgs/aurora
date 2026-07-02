@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:30:30.196Z",
+  "updatedAt": "2026-07-02T09:31:37.690Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -779,10 +779,13 @@
       "id": "G065-test-oracle-enumerates-all-22-routes",
       "title": "Test oracle enumerates all 22 routes and expected page landmarks.",
       "objective": "Test oracle enumerates all 22 routes and expected page landmarks.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:31:37.690Z",
+      "startedAt": "2026-07-02T09:30:34.673Z",
+      "completedAt": "2026-07-02T09:31:37.690Z",
+      "evidence": "Test oracle enumerates all 22 routes and expected page landmarks: packages/aurora-ui/src/production-surface-contracts.ts has routeOracle entries for all 22 primary nav ids; packages/aurora-ui/tests/shell.test.tsx asserts productionRouteOracles are unique, cover primary nav ids exactly, and every renderedLandmark is meaningful; apps/aurora-tauri/src/aurora-client.test.tsx asserts routes length 22 and checks each route markup contains oracle.renderedLandmarks. Verified corrected static oracle check plus pnpm --filter @aurora/ui test -- -t 'documents every production surface' (1 passed; @aurora/client build passed) and pnpm --filter @aurora/tauri-ui test:e2e:routes (1 passed). An initial static helper used stale variable names and was corrected against actual productionRouteOracle/renderedLandmarks assertions."
     },
     {
       "id": "G066-ensure-pnpm-filter-aurora-tauri-ui-t",
