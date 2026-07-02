@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T05:02:22.330Z",
+  "updatedAt": "2026-07-02T06:06:09.844Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -11,11 +11,13 @@
       "id": "G001-pnpm-filter-aurora-tauri-ui-tauri-de",
       "title": "`pnpm --filter @aurora/tauri-ui tauri dev` starts a real local develo...",
       "objective": "`pnpm --filter @aurora/tauri-ui tauri dev` starts a real local development stack without manual sidecar build or environment spelunking.",
-      "status": "in_progress",
+      "status": "complete",
       "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:22.330Z",
-      "startedAt": "2026-07-02T05:02:22.330Z"
+      "updatedAt": "2026-07-02T06:06:09.844Z",
+      "startedAt": "2026-07-02T05:02:22.330Z",
+      "completedAt": "2026-07-02T06:06:09.844Z",
+      "evidence": "Team aurora-tauri-web-mobi-b7864a3c completed 16/16 tasks and final reconciliation commit 45d74f2 preserved production Tauri UI route gates. Worker-4 evidence plus leader verification show bounded pnpm --filter @aurora/tauri-ui tauri dev real stack health HTTP 200 with 10/10 services and 99 routes; frontend, Python, Rust, Android, docs, anti-slop, code-reviewer approval, and architect clearance recorded under .omx/reports/tauri-ui-production-verify. iOS strict preflight is environment-blocked on Linux by macOS/Xcode requirement."
     },
     {
       "id": "G002-desktop-tauri-local-mode-starts-stop",
@@ -2637,6 +2639,5 @@
       "updatedAt": "2026-07-02T05:02:21.577Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G001-pnpm-filter-aurora-tauri-ui-tauri-de"
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
 }
