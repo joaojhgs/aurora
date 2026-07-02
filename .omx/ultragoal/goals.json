@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:06:09.844Z",
+  "updatedAt": "2026-07-02T06:10:37.685Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -23,10 +23,13 @@
       "id": "G002-desktop-tauri-local-mode-starts-stop",
       "title": "Desktop Tauri local mode starts/stops/monitors the Python Aurora node...",
       "objective": "Desktop Tauri local mode starts/stops/monitors the Python Aurora node and surfaces Python, Rust/Tauri, and Vite/frontend logs in one developer-readable stream.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:10:37.685Z",
+      "startedAt": "2026-07-02T06:10:14.442Z",
+      "completedAt": "2026-07-02T06:10:37.685Z",
+      "evidence": "Current source proves desktop-local dev supervision/logging: apps/aurora-tauri/scripts/tauri-cli.mjs sets dev defaults for threads mode, loopback Gateway, .venv/python fallback, AURORA_TAURI_DEV_AUTOSIDECAR=1, and prints [aurora:tauri] bootstrap lines; apps/aurora-tauri/src-tauri/src/lib.rs starts the Python sidecar, forwards stdout/stderr as [aurora:python:*], exposes sidecar start/status/stop/shutdown commands, and kills/drains the child. docs/TAURI_DESKTOP_BUILD.md documents pnpm --filter @aurora/tauri-ui tauri dev as the real local stack with Vite/Rust/Python logs. Existing leader evidence in .omx/reports/tauri-ui-production-verify/quality-gate.json and docs/TAURI_DEV_AND_UI_GAP_REPORT.md records bounded tauri dev health HTTP 200, 10 healthy services, 99 routes, and clean stack behavior; cargo check and tauri smoke logs are present under .omx/reports/tauri-ui-production-verify."
     },
     {
       "id": "G003-web-thin-mode-works-against-an-exist",
