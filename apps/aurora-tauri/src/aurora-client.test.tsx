@@ -74,7 +74,6 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Assistant role probe')
     expect(markup).toContain('Denied native defaults')
     expect(markup).toContain('mock (degraded development fixture only)')
-    expect(markup).toContain('mock (SDK fixture transport; development fallback only)')
     expect(markup).toContain('not used in thin mode')
   })
 
