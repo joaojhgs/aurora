@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Bug, Download, FileArchive, Gauge, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
   CapabilityActionInfo,
   CapabilityCatalogResponse,
+  GatewaySupportBundleResponse,
   MeshPeerDiagnostic,
   MeshRouteDiagnostic,
   MeshStatusResponse,
@@ -64,6 +65,33 @@ export interface MeshRouteDiagnosticRow {
   reason: string
 }
 
+export interface DiagnosticsProbeRow {
+  name: string
+  state: AvailabilityState
+  latency: string
+  detail: string
+}
+
+export interface RedactionPreviewRow {
+  label: string
+  value: number
+  detail: string
+}
+
+export interface DiagnosticsTimelineRow {
+  id: string
+  kind: string
+  title: string
+  detail: string
+  time: string
+  state: AvailabilityState
+}
+
+export interface SupportBundleExportState {
+  status: 'idle' | 'pending' | 'success' | 'error'
+  message: string | null
+}
+
 export interface MeshDiagnosticsSnapshot {
   loadState: MeshDiagnosticsLoadState
   generatedAt: string | null
@@ -85,6 +113,18 @@ export interface MeshDiagnosticsSnapshot {
   authenticatedPeerCount: number
   pairingPeerCount: number
   pendingRpcCount: number
+  supportBundleState: AvailabilityState
+  supportBundleReason: string
+  supportBundleGeneratedAt: string | null
+  supportBundleCorrelationId: string | null
+  supportBundleAuditReceipt: string | null
+  supportBundleServiceCount: number
+  supportBundleRouteCount: number
+  supportBundleRecentEventCount: number
+  supportBundleNativeCapabilityCount: number
+  liveProbes: DiagnosticsProbeRow[]
+  redactionRows: RedactionPreviewRow[]
+  timelineRows: DiagnosticsTimelineRow[]
   transportRows: MeshTransportRow[]
   routeRows: MeshRouteDiagnosticRow[]
   recentErrors: WebRTCDiagnosticError[]
@@ -102,6 +142,8 @@ export interface MeshDiagnosticsViewProps {
   snapshot: MeshDiagnosticsSnapshot
   route: RouteAvailability
   onRefresh?: () => void
+  onExportSupportBundle?: () => void | Promise<void>
+  supportBundleExportState?: SupportBundleExportState
 }
 
 export function redactDiagnosticText(value: string | null | undefined): string {
@@ -136,6 +178,26 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   authenticatedPeerCount: 0,
   pairingPeerCount: 0,
   pendingRpcCount: 0,
+  supportBundleState: 'pending',
+  supportBundleReason: 'Loading Gateway.GetSupportBundle redaction preview through AuroraClient.',
+  supportBundleGeneratedAt: null,
+  supportBundleCorrelationId: null,
+  supportBundleAuditReceipt: null,
+  supportBundleServiceCount: 0,
+  supportBundleRouteCount: 0,
+  supportBundleRecentEventCount: 0,
+  supportBundleNativeCapabilityCount: 0,
+  liveProbes: [
+    { name: 'Gateway route registry', state: 'pending', latency: 'loading', detail: 'Gateway.GetCapabilityCatalog pending.' },
+    { name: 'WebRTC diagnostics', state: 'pending', latency: 'loading', detail: 'Gateway.GetWebRTCDiagnostics pending.' },
+    { name: 'Support bundle contract', state: 'pending', latency: 'loading', detail: 'Gateway.GetSupportBundle pending.' }
+  ],
+  redactionRows: [
+    { label: 'Credential values', value: 0, detail: 'Waiting for support bundle redaction metadata.' },
+    { label: 'Audio capture data', value: 0, detail: 'Waiting for omitted media metadata.' },
+    { label: 'Personal memory snippets', value: 0, detail: 'Waiting for RAG omission metadata.' }
+  ],
+  timelineRows: [],
   transportRows: [],
   routeRows: [],
   recentErrors: [],
@@ -148,12 +210,13 @@ export async function buildMeshDiagnosticsSnapshot(
   client: AuroraClient,
   route: RouteAvailability
 ): Promise<MeshDiagnosticsSnapshot> {
-  const [webrtc, mesh, catalog] = await Promise.all([
+  const [webrtc, mesh, catalog, supportBundle] = await Promise.all([
     captureDiagnostic(() => client.registry.getWebRTCDiagnostics()),
     captureDiagnostic(() => client.mesh.getStatus().then((response) => response.ok ? response.data : Promise.reject(response.error))),
-    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }))
+    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })),
+    captureDiagnostic(() => client.diagnostics.getSupportBundle({ event_limit: 6, audit_limit: 6, include_capability_catalog: true }).then((response) => response.ok ? response.data : Promise.reject(response.error)))
   ])
-  return meshDiagnosticsSnapshotFromResults({ route, webrtc, mesh, catalog })
+  return meshDiagnosticsSnapshotFromResults({ route, webrtc, mesh, catalog, supportBundle })
 }
 
 export function meshDiagnosticsSnapshotFromResults(input: {
@@ -161,9 +224,12 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   webrtc: SettledDiagnostic<WebRTCDiagnosticsResponse>
   mesh: SettledDiagnostic<MeshStatusResponse>
   catalog: SettledDiagnostic<CapabilityCatalogResponse>
+  supportBundle?: SettledDiagnostic<GatewaySupportBundleResponse>
 }): MeshDiagnosticsSnapshot {
   const diagnosticsCapability = input.catalog.data?.actions.find((action) => action.topic === 'Gateway.GetWebRTCDiagnostics' || action.action_id.includes('Gateway.GetWebRTCDiagnostics')) ?? null
-  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error]
+  const supportBundle = input.supportBundle?.data ?? null
+  const supportBundleError = input.supportBundle?.error ?? null
+  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error, supportBundleError]
     .filter((error): error is string => Boolean(error))
     .map(redactDiagnosticText)
   const denied = Boolean(input.webrtc.denied || input.mesh.denied || input.catalog.denied || input.route.state === 'denied')
@@ -210,6 +276,18 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     authenticatedPeerCount: webRtc?.authenticated_peer_count ?? 0,
     pairingPeerCount: webRtc?.pairing_peer_count ?? 0,
     pendingRpcCount: webRtc?.pending_rpc_count ?? 0,
+    supportBundleState: supportBundleState(supportBundle, supportBundleError),
+    supportBundleReason: supportBundleReason(supportBundle, supportBundleError),
+    supportBundleGeneratedAt: supportBundle?.generated_at ?? null,
+    supportBundleCorrelationId: redactDiagnosticText(supportBundle?.correlation_id ?? null) || null,
+    supportBundleAuditReceipt: redactDiagnosticText(supportBundle?.audit_receipt ?? supportBundle?.audit_error ?? null) || null,
+    supportBundleServiceCount: supportBundle?.services.length ?? 0,
+    supportBundleRouteCount: supportBundle?.route_diagnostics.length ?? 0,
+    supportBundleRecentEventCount: supportBundle?.recent_events.length ?? 0,
+    supportBundleNativeCapabilityCount: supportBundle?.native_capabilities.length ?? 0,
+    liveProbes: buildLiveProbes({ supportBundle, supportBundleError, webRtc, mesh, catalog: input.catalog.data, diagnosticsCapability }),
+    redactionRows: buildRedactionRows(supportBundle, Boolean(webRtc?.secrets_redacted ?? mesh?.secrets_redacted ?? input.catalog.data?.secrets_redacted ?? true)),
+    timelineRows: buildTimelineRows(supportBundle),
     transportRows,
     routeRows,
     recentErrors: (webRtc?.recent_errors ?? []).map((error) => ({
@@ -223,24 +301,100 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   }
 }
 
-export function MeshDiagnosticsView({ snapshot, route, onRefresh }: MeshDiagnosticsViewProps) {
+export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null } }: MeshDiagnosticsViewProps) {
   return (
     <section className="aui-mesh-diagnostics" aria-labelledby="mesh-diagnostics-title">
       <header className="aui-mesh-diagnostics-header">
         <div>
-          <p className="aui-kicker">MESH-004</p>
-          <h1 id="mesh-diagnostics-title">WebRTC and ICE diagnostics</h1>
+          <p className="aui-kicker">DIAG-004</p>
+          <h1 id="mesh-diagnostics-title">Diagnostics</h1>
           <p>
-            Signaling, ICE, auth, DataChannel, RTT, peer identity, compatibility, and route failures are rendered from AuroraClient diagnostics.
+            WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from AuroraClient diagnostics.
           </p>
         </div>
         <div className="aui-mesh-badges" aria-label="Mesh diagnostics state">
           <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
           <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.supportBundleState === 'available-local' ? 'support bundle ready' : 'support bundle gated'} />
           <EvidenceBadge label={snapshot.evidenceSource} />
           {onRefresh ? <button className="aui-action-chip" type="button" onClick={onRefresh}><RefreshCw size={14} aria-hidden />Refresh</button> : null}
         </div>
       </header>
+
+      <div className="aui-diagnostics-overview" aria-label="Diagnostics overview">
+        <MetricCard icon={<Activity size={20} aria-hidden />} label="services observed" value={String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount)} detail="Gateway.GetSupportBundle service list" />
+        <MetricCard icon={<Gauge size={20} aria-hidden />} label="route diagnostics" value={String(snapshot.supportBundleRouteCount || snapshot.routeRows.length)} detail="mesh and Gateway route evidence" />
+        <MetricCard icon={<RadioTower size={20} aria-hidden />} label="live probes" value={String(snapshot.liveProbes.length)} detail="registry, WebRTC, mesh, support bundle" />
+        <MetricCard icon={<Bug size={20} aria-hidden />} label="reported errors" value={String(snapshot.recentErrors.length + snapshot.errors.length)} detail="redacted before render" />
+      </div>
+
+      <div className="aui-diagnostics-grid">
+        <section className="aui-mesh-panel" aria-labelledby="diagnostics-live-probes-title">
+          <PanelTitle icon={<RefreshCw size={18} aria-hidden />} title="Live probes" description="Gateway, mesh, WebRTC, capability, and support-bundle probes stay tied to SDK methods." />
+          <div className="aui-diagnostics-probes">
+            {snapshot.liveProbes.map((probe) => (
+              <div className="aui-diagnostics-probe" key={probe.name}>
+                <div><strong>{probe.name}</strong><small>{probe.latency}</small></div>
+                <StatusBadge state={probe.state} />
+                <p>{probe.detail}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="aui-mesh-panel" aria-labelledby="diagnostics-redaction-title">
+          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Redaction preview" description="Secrets, credential material, audio capture data, and personal memory contents are omitted or redacted before export." />
+          <div className="aui-diagnostics-redaction">
+            {snapshot.redactionRows.map((row) => (
+              <div key={row.label}>
+                <div className="aui-diagnostics-redaction-label"><span>{row.label}</span><strong>{row.value}%</strong></div>
+                <div className="aui-diagnostics-progress" aria-label={`${row.label} redaction ${row.value}%`}><span style={{ width: `${row.value}%` }} /></div>
+                <small>{row.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="aui-mesh-badges" aria-label="Redaction classes">
+            <EvidenceBadge label="credentials excluded" />
+            <EvidenceBadge label="audio capture excluded" />
+            <EvidenceBadge label="AdminAction audit" />
+          </div>
+        </section>
+      </div>
+
+      <section className="aui-mesh-panel" aria-labelledby="diagnostics-export-title">
+        <PanelTitle icon={<Download size={18} aria-hidden />} title="Support-bundle export" description="Export stays behind Gateway.GetSupportBundle and AdminAction confirmation; secrets and media payloads are excluded." />
+        <dl className="aui-mesh-meta">
+          <Metric label="method" value="Gateway.GetSupportBundle" />
+          <Metric label="AdminAction" value="Gateway.AdminActionDraft / Gateway.AdminActionConfirm" />
+          <Metric label="state" value={snapshot.supportBundleState} />
+          <Metric label="generated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
+          <Metric label="correlation" value={snapshot.supportBundleCorrelationId ?? 'pending'} />
+          <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
+        </dl>
+        <p className="aui-mesh-diagnostics-note">{snapshot.supportBundleReason}</p>
+        <button className="aui-primary-action" type="button" disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} onClick={() => void onExportSupportBundle?.()}>
+          <Download size={15} aria-hidden />
+          {supportBundleExportState.status === 'pending' ? 'Exporting through AdminAction...' : 'Export redacted bundle'}
+        </button>
+        {supportBundleExportState.message ? <p className={`aui-diagnostics-export-message ${supportBundleExportState.status}`} role="status">{supportBundleExportState.message}</p> : null}
+      </section>
+
+      <section className="aui-mesh-panel" aria-labelledby="diagnostics-timeline-title">
+        <PanelTitle icon={<FileArchive size={18} aria-hidden />} title="Timeline" description="Recent event and audit metadata from the redacted support bundle." />
+        {snapshot.timelineRows.length > 0 ? (
+          <ul className="aui-diagnostics-timeline">
+            {snapshot.timelineRows.map((row) => (
+              <li key={row.id}>
+                <StatusBadge state={row.state} />
+                <div><strong>{row.title}</strong><span>{row.detail}</span></div>
+                <time>{row.time}</time>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="aui-mesh-diagnostics-empty" role="status">No support-bundle timeline entries were returned.</p>
+        )}
+      </section>
 
       <dl className="aui-mesh-diagnostics-summary">
         <Metric label="connected" value={String(snapshot.connectedPeerCount)} />
@@ -366,6 +520,128 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh }: MeshDiagnost
         )}
       </section>
     </section>
+  )
+}
+
+
+function supportBundleState(bundle: GatewaySupportBundleResponse | null, error: string | null): AvailabilityState {
+  if (error) return errorState(error)
+  if (!bundle) return 'pending'
+  if (!bundle.secrets_redacted || !bundle.redaction.secrets_redacted) return 'degraded'
+  return 'available-local'
+}
+
+function supportBundleReason(bundle: GatewaySupportBundleResponse | null, error: string | null): string {
+  if (error) return redactDiagnosticText(`Gateway.GetSupportBundle unavailable: ${error}`)
+  if (!bundle) return 'Waiting for Gateway.GetSupportBundle support-bundle preview.'
+  const omitted = bundle.redaction.omitted_payloads.map(safeDiagnosticCategoryLabel).join(', ') || 'none reported'
+  return redactDiagnosticText(`Redacted support bundle ${bundle.correlation_id ?? 'without correlation'} omits ${omitted}.`)
+}
+
+function safeDiagnosticCategoryLabel(value: string): string {
+  return value
+    .replace(/raw[-_ ]?audio/gi, 'audio capture data')
+    .replace(/audio_buffer/gi, 'audio capture data')
+    .replace(/tokens? and credentials?/gi, 'credential material')
+    .replace(/tokens?/gi, 'credential material')
+    .replace(/credentials?/gi, 'credential material')
+}
+
+function buildLiveProbes(input: {
+  supportBundle: GatewaySupportBundleResponse | null
+  supportBundleError: string | null
+  webRtc: WebRTCDiagnosticsResponse | null
+  mesh: MeshStatusResponse | null
+  catalog: CapabilityCatalogResponse | null
+  diagnosticsCapability: CapabilityActionInfo | null
+}): DiagnosticsProbeRow[] {
+  const bundle = input.supportBundle
+  const rows: DiagnosticsProbeRow[] = [
+    {
+      name: 'Gateway route registry',
+      state: input.catalog ? 'available-local' : 'degraded',
+      latency: input.catalog?.generated_at ? `generated ${input.catalog.generated_at}` : 'not reported',
+      detail: input.catalog ? `${input.catalog.actions.length} actions / ${input.catalog.providers.length} providers advertised.` : 'Gateway.GetCapabilityCatalog did not return route metadata.'
+    },
+    {
+      name: 'OpenAPI and contract surface',
+      state: capabilityState(input.diagnosticsCapability, null),
+      latency: bundle ? `${bundle.registry.modules.length} modules` : 'contract gap',
+      detail: bundle ? 'Registry snapshot included in redacted support bundle.' : 'Support bundle registry snapshot unavailable.'
+    },
+    {
+      name: 'Mesh peer metrics',
+      state: input.webRtc?.connected_peer_count ? 'available-remote' : input.mesh?.local.mesh_enabled ? 'degraded' : 'unsupported',
+      latency: input.webRtc ? `${input.webRtc.connected_peer_count} connected / ${input.webRtc.pending_rpc_count} pending RPC` : 'not reported',
+      detail: input.webRtc ? 'Gateway.GetWebRTCDiagnostics returned peer and route telemetry.' : 'WebRTC diagnostics unavailable or disabled.'
+    },
+    {
+      name: 'Diagnostics bundle contract',
+      state: supportBundleState(bundle, input.supportBundleError),
+      latency: bundle?.generated_at ?? 'not exported',
+      detail: supportBundleReason(bundle, input.supportBundleError)
+    }
+  ]
+  return rows.map((probe) => ({ ...probe, detail: redactDiagnosticText(probe.detail), latency: redactDiagnosticText(probe.latency) }))
+}
+
+function buildRedactionRows(bundle: GatewaySupportBundleResponse | null, fallbackRedacted: boolean): RedactionPreviewRow[] {
+  const redactedFields = bundle?.redaction.redacted_fields.join(' ').toLowerCase() ?? ''
+  const omittedPayloads = bundle?.redaction.omitted_payloads.join(' ').toLowerCase() ?? ''
+  const credentials = Boolean(bundle?.redaction.secrets_redacted ?? fallbackRedacted)
+  const rawAudio = omittedPayloads.includes('audio') || redactedFields.includes('audio')
+  const memory = omittedPayloads.includes('rag') || omittedPayloads.includes('memory') || redactedFields.includes('rag')
+  return [
+    {
+      label: 'Credential values',
+      value: credentials ? 100 : 0,
+      detail: credentials ? 'Credential, secret, password, key, and URL fields are redacted.' : 'Credential redaction was not confirmed by backend metadata.'
+    },
+    {
+      label: 'Audio capture data',
+      value: rawAudio ? 100 : 0,
+      detail: rawAudio ? 'Audio capture payloads are omitted from support bundles.' : 'Audio capture omission was not listed by the backend.'
+    },
+    {
+      label: 'Personal memory snippets',
+      value: memory ? 100 : 76,
+      detail: memory ? 'RAG and personal memory contents are omitted; only metadata/correlation remains.' : 'Backend reported generic redaction, but no RAG-specific omission entry.'
+    }
+  ]
+}
+
+function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): DiagnosticsTimelineRow[] {
+  if (!bundle) return []
+  const eventRows = bundle.recent_events.map((event, index) => ({
+    id: event.id || `event-${index}`,
+    kind: redactDiagnosticText(event.kind || event.topic || 'event'),
+    title: redactDiagnosticText(event.topic || event.kind || 'Gateway event'),
+    detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; correlation ${event.correlation_id ?? bundle.correlation_id ?? 'none'}; peer ${event.peer_id ?? 'local'}`),
+    time: redactDiagnosticText(event.timestamp),
+    state: event.status === 'denied' || event.status === 'failed' ? 'denied' as AvailabilityState : 'available-local' as AvailabilityState
+  }))
+  const auditRows = bundle.recent_audit_events.map((event, index) => {
+    const eventObject = event as Record<string, unknown>
+    return {
+      id: `audit-${String(eventObject.audit_receipt ?? eventObject.correlation_id ?? index)}`,
+      kind: 'audit',
+      title: redactDiagnosticText(String(eventObject.event ?? 'audit event')),
+      detail: redactDiagnosticText(`receipt ${String(eventObject.audit_receipt ?? bundle.audit_receipt ?? 'pending')}; correlation ${String(eventObject.correlation_id ?? bundle.correlation_id ?? 'none')}`),
+      time: redactDiagnosticText(String(eventObject.timestamp ?? bundle.generated_at)),
+      state: 'available-local' as AvailabilityState
+    }
+  })
+  return [...eventRows, ...auditRows].slice(0, 8)
+}
+
+function MetricCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
+  return (
+    <div className="aui-diagnostics-metric-card">
+      <span>{icon}</span>
+      <strong>{value}</strong>
+      <p>{label}</p>
+      <small>{detail}</small>
+    </div>
   )
 }
 

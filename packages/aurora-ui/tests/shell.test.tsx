@@ -28,6 +28,7 @@ import {
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
+  supportBundleFixture,
   toolCatalogFixture,
   webrtcDiagnosticsFixture,
   type AdminOverviewManifest,
@@ -2109,6 +2110,46 @@ describe('Aurora production shell', () => {
     expect(snapshot.routeRows.map((row) => row.module)).toEqual(expect.arrayContaining(['TTS', 'Scheduler']))
     expect(snapshot.routeRows.find((row) => row.module === 'TTS')?.blockers.join(' ')).toContain('stale_provider')
     expect(snapshot.recentErrors[0]?.code).toBe('rpc_timeout')
+    expect(snapshot.supportBundleState).toBe('available-local')
+    expect(snapshot.supportBundleCorrelationId).toBe(supportBundleFixture.correlation_id)
+    expect(snapshot.supportBundleAuditReceipt).toBe(supportBundleFixture.audit_receipt)
+    expect(snapshot.supportBundleServiceCount).toBe(supportBundleFixture.services.length)
+    expect(snapshot.liveProbes.map((probe) => probe.name)).toEqual(
+      expect.arrayContaining(['Gateway route registry', 'Mesh peer metrics', 'Diagnostics bundle contract'])
+    )
+    expect(snapshot.redactionRows.find((row) => row.label === 'Credential values')?.value).toBe(100)
+    expect(snapshot.redactionRows.find((row) => row.label === 'Audio capture data')?.value).toBe(100)
+    expect(snapshot.timelineRows.map((row) => row.title)).toEqual(expect.arrayContaining(['Tooling.ExecuteTool', 'diagnostics.support_bundle.exported']))
+  })
+
+  it('renders diagnostics live probes, redaction preview, timeline, and support-bundle export workflow', async () => {
+    const route = meshRoute()
+    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const markup = renderToStaticMarkup(
+      <MeshDiagnosticsView
+        snapshot={snapshot}
+        route={route}
+        supportBundleExportState={{ status: 'success', message: 'Exported redacted support bundle corr-diagnostics-fixture with audit receipt support_bundle:fixture.' }}
+      />
+    )
+
+    expect(markup).toContain('Diagnostics')
+    expect(markup).toContain('WebRTC and ICE diagnostics')
+    expect(markup).toContain('Live probes')
+    expect(markup).toContain('Redaction preview')
+    expect(markup).toContain('Support-bundle export')
+    expect(markup).toContain('Gateway.GetSupportBundle')
+    expect(markup).toContain('Gateway.AdminActionDraft / Gateway.AdminActionConfirm')
+    expect(markup).toContain('Export redacted bundle')
+    expect(markup).toContain('credentials excluded')
+    expect(markup).toContain('audio capture excluded')
+    expect(markup).toContain('Timeline')
+    expect(markup).toContain('diagnostics.support_bundle.exported')
+    expect(markup).toContain('support_bundle:fixture')
+    expect(markup).not.toContain('redis_url')
+    expect(markup).not.toContain('token_secret')
+    expect(markup).not.toMatch(/raw[-_ ]audio payload/i)
+    expect(markup).not.toMatch(/audio_buffer/i)
   })
 
   it('renders WebRTC ICE diagnostics without leaking secret transport state', async () => {

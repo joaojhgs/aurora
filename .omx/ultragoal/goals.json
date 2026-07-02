@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:32:23.042Z",
+  "updatedAt": "2026-07-02T07:42:20.049Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -287,10 +287,13 @@
       "id": "G024-components-aurora-diagnostics-diagno",
       "title": "`components/aurora/diagnostics/diagnostics-view.tsx`: live probes, re...",
       "objective": "`components/aurora/diagnostics/diagnostics-view.tsx`: live probes, redaction preview, support-bundle export.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:42:20.049Z",
+      "startedAt": "2026-07-02T07:32:44.947Z",
+      "completedAt": "2026-07-02T07:42:20.049Z",
+      "evidence": "Diagnostics route extends the existing AuroraClient-backed diagnostics snapshot with Gateway.GetSupportBundle preview, live probes, redaction rows, event/audit timeline, and AdminAction-backed export callback while preserving WebRTC/mesh/native diagnostics. Rendered support-bundle labels map sensitive fixture categories to safe wording (credential material/audio capture data) and avoid secret/raw-audio payload fields. Also restored the /admin/tokens RBAC route marker exposed by the full Tauri gate. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui test -- -t 'diagnostics'; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G025-components-aurora-onboarding-onboard",

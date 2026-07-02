@@ -921,3 +921,28 @@ button, input, select, textarea { font: inherit; }
   .aui-scheduler-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-scheduler-form button { width: 100%; }
 }
+
+.aui-diagnostics-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .75rem; }
+.aui-diagnostics-metric-card { display: grid; gap: .3rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .55rem; background: var(--aui-surface); padding: .85rem; }
+.aui-diagnostics-metric-card > span { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
+.aui-diagnostics-metric-card strong { font-size: 1.55rem; line-height: 1; }
+.aui-diagnostics-metric-card p, .aui-diagnostics-metric-card small { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.aui-diagnostics-metric-card p { color: var(--aui-ink); font-weight: 800; }
+.aui-diagnostics-metric-card small { color: var(--aui-muted); line-height: 1.35; }
+.aui-diagnostics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .85rem; }
+.aui-diagnostics-probes, .aui-diagnostics-redaction { display: grid; gap: .7rem; }
+.aui-diagnostics-probe { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .6rem; align-items: start; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface-2); padding: .7rem; }
+.aui-diagnostics-probe strong, .aui-diagnostics-probe small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-diagnostics-probe small, .aui-diagnostics-probe p, .aui-diagnostics-redaction small { color: var(--aui-muted); line-height: 1.35; }
+.aui-diagnostics-probe p { grid-column: 1 / -1; margin: 0; }
+.aui-diagnostics-redaction > div { display: grid; gap: .35rem; }
+.aui-diagnostics-redaction-label { display: flex; align-items: center; justify-content: space-between; gap: .75rem; font-size: .9rem; }
+.aui-diagnostics-progress { height: .55rem; overflow: hidden; border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface-2); }
+.aui-diagnostics-progress span { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--aui-primary) 80%, white); }
+.aui-diagnostics-export-message { margin: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .65rem .75rem; color: var(--aui-muted); }
+.aui-diagnostics-export-message.success { border-color: color-mix(in srgb, var(--aui-success) 35%, var(--aui-border)); color: var(--aui-success); }
+.aui-diagnostics-export-message.error { border-color: color-mix(in srgb, var(--aui-danger) 35%, var(--aui-border)); color: var(--aui-danger); }
+.aui-diagnostics-timeline { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.aui-diagnostics-timeline li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .55rem; align-items: start; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface-2); padding: .65rem; }
+.aui-diagnostics-timeline strong, .aui-diagnostics-timeline span { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-diagnostics-timeline span, .aui-diagnostics-timeline time { color: var(--aui-muted); font-size: .82rem; line-height: 1.35; }

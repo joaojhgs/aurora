@@ -176,8 +176,8 @@ export function AdminTokensView({ snapshot, onPreviewAdminAction }: AdminTokensV
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-tokens-title">Tokens</h1>
           <p>
-            Scoped API tokens are shown as redacted prefixes only. Creation is disabled until a real Auth.CreateToken
-            contract exists; revocation is previewed through the AdminAction boundary.
+            Scoped API tokens are RBAC credentials shown as redacted prefixes only. Creation is disabled until a real
+            Auth.CreateToken contract exists; revocation is previewed through the AdminAction boundary.
           </p>
         </div>
         <div className="aui-admin-badges" aria-label="Token backend evidence">
