@@ -349,6 +349,70 @@ function assistantGatewayAuthFailureTransport(): RecordingMockAuroraTransport {
   return transport
 }
 
+function memoryCapabilityCatalog() {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const provider = {
+    ...baseProvider,
+    provider_id: 'local:DB',
+    provider_kind: 'local',
+    peer_id: 'local-peer',
+    node_name: 'local Aurora node',
+    service_instance_id: 'db-local',
+    module: 'DB',
+    eligible: true,
+    reason_code: 'available',
+    reason: 'Local Gateway advertises DB.RAGSearch for the production memory route.',
+    policy: {
+      ...baseProvider.policy,
+      required_permissions: ['DB.use'],
+      explicit_selector_required: false,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      selector_required: false,
+      denial_reasons: []
+    }
+  }
+  const action = {
+    ...baseAction,
+    action_id: 'db-rag-search-local',
+    module: 'DB',
+    method: 'RAGSearch',
+    topic: 'DB.RAGSearch',
+    provider_id: provider.provider_id,
+    provider_kind: provider.provider_kind,
+    peer_id: provider.peer_id,
+    service_instance_id: provider.service_instance_id,
+    selector: { peer_id: 'local-peer', module: 'DB', provider_id: provider.provider_id },
+    bindability: 'available',
+    route_blockers: [],
+    summary: 'Search local memory and RAG namespaces through the DB service.',
+    policy: provider.policy,
+    freshness: provider.freshness
+  }
+  catalog.providers = [...catalog.providers, provider]
+  catalog.actions = [...catalog.actions, action]
+  catalog.provider_index = {
+    ...catalog.provider_index,
+    DB: [provider.provider_id]
+  }
+  catalog.action_index = {
+    ...catalog.action_index,
+    DB: [action.action_id],
+    'DB.RAGSearch': [action.action_id]
+  }
+  return catalog
+}
+
+function memoryGatewayTransport(): RecordingMockAuroraTransport {
+  const transport = new RecordingMockAuroraTransport()
+  transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+  transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => memoryCapabilityCatalog())
+  return transport
+}
+
 async function submitAssistantPrompt(container: HTMLElement, prompt: string) {
   await waitUntil(() => {
     const textarea = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
@@ -625,6 +689,56 @@ describe('Tauri CI/E2E route gates', () => {
       for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
         expect(markup, `${route.id} must not render diagnostics dashboard marker ${marker}`).not.toContain(marker)
       }
+    }
+  })
+
+  it('e2e:routes renders the memory cockpit with summaries, search, provenance, and gated actions', async () => {
+    const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
+    window.history.replaceState({}, '', '/memory')
+    const memory = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(memory.container.textContent).toContain('History and RAG provenance')
+        expect(memory.container.querySelector('[aria-label="Memory summary cards"]')).not.toBeNull()
+        expect(memory.container.textContent).toContain('Namespaces')
+        expect(memory.container.textContent).toContain('Records')
+        expect(memory.container.textContent).toContain('Retention')
+        expect(memory.container.textContent).toContain('Embedding health')
+        expect(memory.container.textContent).toContain('Memory & RAG collections')
+        expect(memory.container.querySelector<HTMLInputElement>('#memory-query')?.placeholder).toContain('Search memory and RAG')
+        expect(memory.container.textContent).toContain('Conversation history')
+        expect(memory.container.textContent).toContain('Embedding setup required')
+        expect(memory.container.textContent).toContain('DB.RAGListNamespaces')
+        expect(memory.container.textContent).toContain('Export snapshot')
+        expect(memory.container.textContent).toContain('Delete record')
+      })
+      const queryInput = memory.container.querySelector<HTMLInputElement>('#memory-query')
+      const searchForm = memory.container.querySelector<HTMLFormElement>('form.aui-memory-search')
+      expect(queryInput).not.toBeNull()
+      expect(searchForm).not.toBeNull()
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      await act(async () => {
+        valueSetter?.call(queryInput, 'mesh pairing')
+        queryInput!.dispatchEvent(new Event('input', { bubbles: true }))
+        queryInput!.dispatchEvent(new Event('change', { bubbles: true }))
+        await flushReactWork()
+      })
+      await act(async () => {
+        searchForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+        await flushReactWork()
+        await flushReactWork()
+      })
+      await waitUntil(() => {
+        expect(memory.container.textContent).toContain('Search hit for "mesh pairing"')
+        expect(memory.container.textContent).toContain('Route path')
+        expect(memory.container.textContent).toContain('Privacy class')
+        expect(memory.container.textContent).toContain('Policy decision')
+        expect(memory.container.textContent).toContain('Correlation')
+      })
+      writeOutcomeArtifact('memory-route-summary-provenance', memory.container.innerHTML)
+    } finally {
+      await act(async () => memory.root.unmount())
+      memory.container.remove()
     }
   })
 

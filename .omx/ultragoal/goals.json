@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:10:52.098Z",
+  "updatedAt": "2026-07-02T12:22:15.665Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1286,10 +1286,12 @@
       "id": "G110-memory",
       "title": "`/memory`:",
       "objective": "`/memory`:\nsummary cards for namespaces/records/retention/embedding health;\nsearchable conversation history;\nRAG collections/namespace table;\nprovenance drawer showing source, route, privacy class, last used;\ndelete/export actions gated appropriately;\nembedding dependency status with setup instructions when local embeddings are unavailable.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:22:15.665Z",
+      "completedAt": "2026-07-02T12:22:15.665Z",
+      "evidence": "G110 /memory production route completed: MemoryView now renders namespace/record/retention/embedding-health summary cards, RAG collections, conversation history, provenance route/privacy fields, and policy-gated export/delete/import controls; route refresh now follows shell route evidence instead of freezing loading blockers. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'memory namespaces|local export/import/delete|denied and stale memory|memory SDK errors'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/client test -- -t 'memory|RAG|provenance|DB.RAG'; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G111-memory-policy",

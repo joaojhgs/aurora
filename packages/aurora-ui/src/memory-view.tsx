@@ -169,7 +169,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
   useEffect(() => {
     if (initialModel) return
     void refresh({ namespace: null, query: initialQuery })
-  }, [initialModel, initialQuery])
+  }, [initialModel, initialQuery, route])
 
   async function refresh(options: BuildMemoryViewModelOptions = {}) {
     setIsRefreshing(true)
@@ -211,6 +211,8 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
           {model.correlationId ? <EvidenceBadge label={`audit ${model.correlationId}`} /> : null}
         </div>
       </header>
+
+      <MemorySummaryGrid model={model} />
 
       <section className="aui-memory-collections" aria-labelledby="memory-collections-title">
         <div className="aui-memory-section-heading">
@@ -315,7 +317,13 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
             </div>
           ) : (
             <div className="aui-memory-results">
-              {model.searchItems.map((item) => <MemoryResultCard key={`${item.namespace}:${item.key}`} item={item} />)}
+              {model.searchItems.map((item) => (
+                <MemoryResultCard
+                  key={`${item.namespace}:${item.key}`}
+                  item={item}
+                  namespace={model.namespaces.find((candidate) => candidate.info.namespace === item.namespace) ?? null}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -361,7 +369,57 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
   )
 }
 
-function MemoryResultCard({ item }: { item: DBRAGProvenanceItem }) {
+function MemorySummaryGrid({ model }: { model: MemoryViewModel }) {
+  const knownRecords = model.namespaces.reduce((total, namespace) => total + (namespace.info.record_count ?? 0), 0)
+  const unknownRecords = model.namespaces.filter((namespace) => namespace.info.record_count === null).length
+  const sharingModes = [...new Set(model.namespaces.map((namespace) => namespace.info.policy.sharing_mode))]
+  const embeddingModels = [...new Set(model.namespaces.map((namespace) => namespace.info.embedding_model).filter((value): value is string => Boolean(value)))]
+  const missingEmbeddings = model.namespaces.filter((namespace) => !namespace.info.embedding_model)
+  const legacyEmbeddings = model.namespaces.filter((namespace) => namespace.info.embedding_model?.includes('legacy'))
+  const embeddingState = missingEmbeddings.length > 0
+    ? 'Embedding setup required'
+    : legacyEmbeddings.length > 0
+      ? 'Embedding compatibility check required'
+      : embeddingModels.length > 0
+        ? 'Embedding health reported'
+        : model.loadState === 'loading'
+          ? 'Embedding health loading'
+          : 'No embedding evidence reported'
+  const embeddingCopy = missingEmbeddings.length > 0
+    ? `Configure or reconnect the embedding provider for ${missingEmbeddings.map((namespace) => namespace.info.namespace).join(', ')} and rerun DB.RAGListNamespaces before enabling semantic search.`
+    : legacyEmbeddings.length > 0
+      ? `Refresh or migrate legacy embeddings for ${legacyEmbeddings.map((namespace) => namespace.info.namespace).join(', ')} before trusting similarity search.`
+      : embeddingModels.length > 0
+        ? embeddingModels.join(', ')
+        : 'Waiting for backend namespace metadata.'
+
+  return (
+    <section className="aui-memory-summary" aria-label="Memory summary cards">
+      <article>
+        <span>Namespaces</span>
+        <strong>{model.namespaces.length}</strong>
+        <small>{model.selectedNamespace?.info.namespace ?? 'No namespace selected'}</small>
+      </article>
+      <article>
+        <span>Records</span>
+        <strong>{knownRecords.toLocaleString()}</strong>
+        <small>{unknownRecords > 0 ? `${unknownRecords} namespace(s) did not report counts` : 'All selected namespaces report counts'}</small>
+      </article>
+      <article>
+        <span>Retention</span>
+        <strong>{sharingModes.length > 0 ? sharingModes.join(', ') : 'policy pending'}</strong>
+        <small>Actions remain governed by namespace policy and AdminAction.</small>
+      </article>
+      <article>
+        <span>Embedding health</span>
+        <strong>{embeddingState}</strong>
+        <small>{embeddingCopy}</small>
+      </article>
+    </section>
+  )
+}
+
+function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; namespace: MemoryNamespaceView | null }) {
   const text = typeof item.value === 'string' ? item.value : JSON.stringify(item.value)
   return (
     <article className="aui-memory-result">
@@ -374,6 +432,7 @@ function MemoryResultCard({ item }: { item: DBRAGProvenanceItem }) {
         <div><dt>Namespace</dt><dd>{item.namespace}</dd></div>
         <div><dt>Peer/provider</dt><dd>{item.provenance.source_peer_id}</dd></div>
         <div><dt>Route path</dt><dd>{item.provenance.owner_peer_id === item.provenance.source_peer_id ? 'owner peer' : `${item.provenance.source_peer_id} -> ${item.provenance.owner_peer_id}`}</dd></div>
+        <div><dt>Privacy class</dt><dd>{namespace?.info.policy.privacy_class ?? 'not reported by namespace metadata'}</dd></div>
         <div><dt>Citation</dt><dd>{item.provenance.record_id}</dd></div>
         <div><dt>Policy</dt><dd>{item.provenance.policy_decision_id}</dd></div>
         <div><dt>Audit</dt><dd>{item.provenance.correlation_id}</dd></div>
