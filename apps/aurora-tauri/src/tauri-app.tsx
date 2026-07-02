@@ -77,7 +77,7 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
       <RoutePolicyResource client={client} route={route} />
     </div>
   ),
-  admin: ({ client }) => <AdminOverviewResource client={client} />,
+  admin: ({ client }) => <TauriAdminOverviewPage client={client} />,
   services: ({ client }) => <AdminServicesResource client={client} />,
   access: ({ client }) => <AdminRbacResource client={client} />,
   tokens: ({ client }) => <AdminRbacResource client={client} />,
@@ -517,18 +517,6 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   );
 }
 
-function TauriAdminActionPage({ children, status }: { children: ReactNode; status: string | null }) {
-  return (
-    <div className="ata-page-stack">
-      {status ? <p className="aui-message" role="status">{status}</p> : null}
-      {children}
-    </div>
-  )
-}
-
-function isRbacAction(action: AdminRbacAction | AdminServiceControlAction): action is AdminRbacAction {
-  return 'payload' in action
-}
 
 function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailability {
   const normalized = normalizePath(path)

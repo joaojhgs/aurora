@@ -1083,6 +1083,17 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Login or restore')
     expect(markup).toContain('Pairing code')
     expect(markup).toContain('development fixture only')
+    expect(markup).toContain('browser token persistence disabled')
+  })
+
+  it('keeps onboarding bearer tokens out of browser storage', () => {
+    const source = readFileSync(
+      join(resolve(dirname(fileURLToPath(import.meta.url)), '../../..'), 'packages/aurora-ui/src/onboarding-view.tsx'),
+      'utf8'
+    )
+
+    expect(source).not.toMatch(/\b(localStorage|sessionStorage)\b/)
+    expect(source).toContain('token remains in memory for this session')
   })
 
   it('maps auth session matrix into onboarding availability without inventing success', async () => {

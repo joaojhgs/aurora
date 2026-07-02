@@ -9,7 +9,6 @@ import { EvidenceBadge, StatusBadge } from './status-badges'
 export interface OnboardingViewProps {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
-  storageKey?: string
 }
 
 export interface DeploymentModeCard {
@@ -35,9 +34,9 @@ export interface OnboardingViewModel {
   cockpitHref: string
 }
 
-const defaultStorageKey = 'aurora.auth.token.v1'
+const credentialStorageEvidence = 'browser token persistence disabled'
 
-export function OnboardingView({ client, snapshot, storageKey = defaultStorageKey }: OnboardingViewProps) {
+export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
   const [session, setSession] = useState(() => client.auth.refreshClock())
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind))
   const [endpoint, setEndpoint] = useState('')
@@ -48,7 +47,6 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
   const [pairingDevice, setPairingDevice] = useState('Aurora device')
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const [tokenRestoreStatus, setTokenRestoreStatus] = useState('not checked')
 
   const model = useMemo(
     () => buildOnboardingViewModel({ client, snapshot, selectedModeId, endpoint }),
@@ -59,23 +57,6 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
     return client.auth.subscribe(setSession)
   }, [client])
 
-  useEffect(() => {
-    const restored = readStoredToken(storageKey)
-    if (!restored) {
-      setTokenRestoreStatus('no stored token')
-      return
-    }
-    setTokenRestoreStatus('validating stored token')
-    setToken(restored)
-    client.authApi.validateToken({ token: restored }).then((result) => {
-      if (result.ok) {
-        setTokenRestoreStatus(result.data.valid ? 'stored token accepted by Auth.ValidateToken' : 'stored token rejected')
-        return
-      }
-      setTokenRestoreStatus(`stored token validation failed: ${onboardingErrorMessage(result.error)}`)
-    })
-  }, [client, storageKey])
-
   async function onLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!username.trim() || !password || busy) return
@@ -84,10 +65,9 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
     const result = await client.authApi.login({ username: username.trim(), password })
     setBusy(null)
     if (result.ok) {
-      storeToken(storageKey, result.data.token)
       setToken(result.data.token)
       setPassword('')
-      setMessage('Login accepted by Auth.Login; capability manifest can now refresh before entering cockpit.')
+      setMessage('Login accepted by Auth.Login; token remains in memory for this session and is not persisted in browser storage.')
       return
     }
     setMessage(onboardingErrorMessage(result.error))
@@ -101,8 +81,7 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
     const result = await client.authApi.validateToken({ token: token.trim() })
     setBusy(null)
     if (result.ok) {
-      if (result.data.valid) storeToken(storageKey, token.trim())
-      setMessage(result.data.valid ? 'Token restored through Auth.ValidateToken.' : 'Token was rejected by Auth.ValidateToken.')
+      setMessage(result.data.valid ? 'Token restored through Auth.ValidateToken for this session only.' : 'Token was rejected by Auth.ValidateToken.')
       return
     }
     setMessage(onboardingErrorMessage(result.error))
@@ -131,9 +110,8 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
     const result = await client.authApi.pairingExchange({ code: pairingCode.trim() })
     setBusy(null)
     if (result.ok) {
-      storeToken(storageKey, result.data.token)
       setToken(result.data.token)
-      setMessage('Pairing exchange completed by Auth.PairingExchange; peer/session identity is backend-proven.')
+      setMessage('Pairing exchange completed by Auth.PairingExchange; token remains in memory for this session and is not persisted in browser storage.')
       return
     }
     setMessage(onboardingErrorMessage(result.error))
@@ -151,7 +129,7 @@ export function OnboardingView({ client, snapshot, storageKey = defaultStorageKe
           <StatusBadge state={model.authState} />
           <EvidenceBadge label={client.transport.kind} />
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={tokenRestoreStatus} />
+          <EvidenceBadge label={credentialStorageEvidence} />
         </div>
       </header>
 
@@ -388,16 +366,6 @@ function defaultModeId(transportKind: string): string {
 
 function clientTransportEvidence(transportKind: string): string {
   return transportKind || 'transport not reported'
-}
-
-function readStoredToken(storageKey: string): string | null {
-  if (typeof window === 'undefined') return null
-  return window.localStorage.getItem(storageKey)
-}
-
-function storeToken(storageKey: string, value: string): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(storageKey, value)
 }
 
 function onboardingErrorMessage(error: AuroraError): string {
