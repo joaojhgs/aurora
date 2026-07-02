@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:06:19.793Z",
+  "updatedAt": "2026-07-02T08:07:37.184Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -371,10 +371,13 @@
       "id": "G031-existing-ui-package-already-contains",
       "title": "Existing UI package already contains useful resource components (`Adm...",
       "objective": "Existing UI package already contains useful resource components (`AdminServicesResource`, `AdminDevicesResource`, `AdminAuditResource`, `AdminRbacResource`, `ConfigEditorView`, `BackupRestoreView`, `PairingQueueView`, `MeshPeersResource`, `MeshDiagnosticsResource`, `ModelsView`, `MemoryView`, `ToolApprovalPanel`, `OnboardingView`, `SettingsPermissionsView`), but many are incomplete, debug-shaped, fixture-shaped, or not mounted in Tauri.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:07:37.184Z",
+      "startedAt": "2026-07-02T08:06:29.687Z",
+      "completedAt": "2026-07-02T08:07:37.184Z",
+      "evidence": "Evidence-only reconciliation: verified the 14 named UI resource/view components are defined in packages/aurora-ui/src, exported via packages/aurora-ui/src/index.ts file exports, and imported/mounted by apps/aurora-tauri/src/tauri-app.tsx. Verified route mounting and contract coverage with: pnpm --filter @aurora/tauri-ui test -- -t 'registers a production Tauri component|renders every primary route'; pnpm --filter @aurora/ui test -- -t 'documents every production surface'."
     },
     {
       "id": "G032-a-route-was-technically-navigable-bu",
