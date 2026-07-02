@@ -5,8 +5,8 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 ## Modes
 
 - Desktop local: uses the Tauri IPC bridge to start, monitor, and stop a Rust-supervised Python thread-mode sidecar while UI data still flows through `AuroraClient`.
-- Desktop thin: set `AURORA_TAURI_REMOTE_GATEWAY_URL` and `AURORA_TAURI_ALLOW_REMOTE_GATEWAY=1` for the Rust bridge to proxy SDK requests to a remote Gateway without a sidecar.
-- Browser development fallback: `VITE_AURORA_GATEWAY_URL` selects HTTP transport; in a plain browser preview without Tauri or a reachable loopback Gateway, the SDK mock transport is a **degraded development fixture only**, not live Aurora state.
+- Desktop thin: set `VITE_AURORA_GATEWAY_URL` (and optionally `VITE_AURORA_GATEWAY_TOKEN`) so the Tauri shell uses the HTTP Gateway SDK transport without starting or probing a local sidecar. Native shell probes remain local capability evidence only.
+- Browser development fallback: `VITE_AURORA_GATEWAY_URL` also selects HTTP transport in browser previews; in a plain browser preview without Tauri or a reachable loopback Gateway, the SDK mock transport is a **degraded development fixture only**, not live Aurora state.
 
 ## One-command desktop development
 

@@ -34,6 +34,27 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(wrapper).toContain('architecture mode')
   })
 
+  it('keeps package build profiles explicit while normal dev stays one command', () => {
+    const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+    const prepare = repoText('apps/aurora-tauri/scripts/prepare-sidecar.mjs')
+    const readme = repoText('apps/aurora-tauri/README.md')
+    const buildDocs = repoText('docs/TAURI_DESKTOP_BUILD.md')
+
+    expect(packageJson.scripts['build:bundle']).toBe('pnpm build:bundle:thin')
+    for (const profile of ['thin', 'local-cpu', 'local-cuda', 'local-rocm', 'local-metal', 'local-vulkan', 'local-sycl', 'local-rpc', 'full']) {
+      expect(packageJson.scripts[`build:bundle:${profile}`]).toContain(`node ./scripts/prepare-sidecar.mjs --profile ${profile}`)
+      expect(packageJson.scripts[`build:bundle:${profile}`]).toContain('pnpm tauri build --config src-tauri/tauri.release.conf.json --no-sign')
+      expect(packageJson.scripts[`prepare:sidecar:${profile}`]).toBe(`node ./scripts/prepare-sidecar.mjs --profile ${profile}`)
+    }
+    expect(prepare).toContain("sidecarProfile = cliProfile ?? process.env.AURORA_TAURI_SIDECAR_PROFILE ?? 'thin'")
+    expect(prepare).toContain("'thin'")
+    expect(readme).toContain('pnpm --filter @aurora/tauri-ui tauri dev')
+    expect(readme).toContain('You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.')
+    expect(readme).toContain('Desktop thin: set `VITE_AURORA_GATEWAY_URL`')
+    expect(buildDocs).toContain('Desktop thin')
+    expect(buildDocs).toContain('`VITE_AURORA_GATEWAY_URL`/HTTP transport')
+  })
+
   it('keeps development sidecar startup separate from package/release sidecar staging', () => {
     const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
     const docs = repoText('docs/TAURI_DESKTOP_BUILD.md')

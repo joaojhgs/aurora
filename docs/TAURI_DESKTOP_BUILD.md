@@ -2,8 +2,8 @@
 
 Aurora desktop has two runtime modes:
 
-- **Desktop thin** connects to an already-running/operator-managed Gateway and does not need a local Python sidecar.
-- **Desktop local** bundles and launches a Rust-supervised Aurora Python sidecar. The UI still talks through `AuroraClient` and the loopback Gateway.
+- **Desktop thin** connects to an already-running/operator-managed Gateway via `VITE_AURORA_GATEWAY_URL`/HTTP transport and does not start or require a local Python sidecar.
+- **Desktop local** launches a Rust-supervised Aurora Python sidecar for development or packaged local mode. The UI still talks through `AuroraClient` and the loopback Gateway.
 
 The packaged sidecar is now **profiled**. The default profile is intentionally small and does not install or bundle every local AI dependency.
 
