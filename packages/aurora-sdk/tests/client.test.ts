@@ -32,6 +32,7 @@ import {
   gatewayRegistryFixture,
   hasPermission,
   modelRuntimeCatalogFixture,
+  normalizeAuroraErrorForUi,
   nativeCapabilityManifestFixture,
   androidNativeCapabilityManifestFixture,
   iosNativeCapabilityManifestFixture,
@@ -2104,6 +2105,71 @@ describe('AuroraClient', () => {
           'X-Aurora-AdminAction-Token': 'token-config-set',
           'X-Aurora-AdminAction-Digest': 'digest-config-set'
         }
+      })
+    )
+  })
+
+  it('provides UI-lane helpers for route explanation, AdminAction aliasing, local cancel, and stable error states', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.ExplainRoute', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return routeExplainFixture
+      })
+      .register('Gateway.AdminActionDraft', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return adminDraftFixture('Config.Set')
+      })
+    const client = new AuroraClient({ transport })
+
+    const route = await client.capabilities.explainRoute('TTS.Synthesize')
+    const draft = await client.adminAction.draft({ method_id: 'Config.Set', payload: { key: 'ui.enabled', value: true } })
+    const cancelled = client.adminAction.cancel(draft, { reason: 'operator closed dialog', now: '2026-07-02T00:00:00.000Z' })
+
+    expect(route.topic).toBe(routeExplainFixture.topic)
+    expect(calls[0]).toEqual({
+      method: 'Gateway.ExplainRoute',
+      payload: { topic: 'TTS.Synthesize', include_candidates: true, module: 'TTS', method: 'Synthesize' }
+    })
+    expect(client.adminAction).toBe(client.admin)
+    expect(cancelled).toEqual({
+      action_id: draft.action_id,
+      method_id: 'Config.Set',
+      cancelled: true,
+      backend_persisted: false,
+      reason: 'operator closed dialog',
+      cancelled_at: '2026-07-02T00:00:00.000Z',
+      secrets_redacted: true
+    })
+    expect(calls.map((call) => call.method)).toEqual(['Gateway.ExplainRoute', 'Gateway.AdminActionDraft'])
+
+    const permission = normalizeAuroraErrorForUi(new AuroraError({
+      code: 'permission',
+      message: 'AdminAction confirmation is required',
+      method: 'Config.Set',
+      busTopic: 'Config.Set',
+      detail: { code: 'admin_action_required' }
+    }))
+    const loss = normalizeAuroraErrorForUi(new TypeError('Failed to fetch'))
+
+    expect(permission).toEqual(
+      expect.objectContaining({
+        state: 'permission-required',
+        code: 'permission',
+        method: 'Config.Set',
+        busTopic: 'Config.Set',
+        requiresAdminAction: true,
+        retryable: false,
+        secretsRedacted: true
+      })
+    )
+    expect(loss).toEqual(
+      expect.objectContaining({
+        state: 'offline',
+        code: 'transport_loss',
+        retryable: true,
+        repairAction: 'Reconnect to Gateway or switch to clearly labeled offline demo mode.',
+        secretsRedacted: true
       })
     )
   })

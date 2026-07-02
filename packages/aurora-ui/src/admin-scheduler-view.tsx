@@ -478,18 +478,21 @@ function operationControl(
 function createControl(
   methods: MethodDescriptor[],
   localPeerId: string,
-  providers: Array<{ peer_id: string; node_name: string; eligible: boolean; reason: string; module: string }>
+  providers: Array<{ peer_id: string | null; node_name: string; eligible: boolean; reason: string; module: string }>
 ): SchedulerCreateControl {
   const method = methods.find((candidate) => candidate.busTopic === SCHEDULER_METHODS.schedule)
   const available = Boolean(method?.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical'))
   const schedulerProviders = providers.filter((provider) => provider.module === 'Scheduler')
   const targetOptions = schedulerProviders.length > 0
-    ? schedulerProviders.map((provider) => ({
-      id: provider.peer_id,
-      label: provider.peer_id === localPeerId ? 'Local scheduler' : `${provider.node_name} (${provider.peer_id})`,
-      disabled: !provider.eligible,
-      reason: provider.reason
-    }))
+    ? schedulerProviders.map((provider) => {
+      const peerId = provider.peer_id ?? localPeerId
+      return {
+        id: peerId,
+        label: peerId === localPeerId ? 'Local scheduler' : `${provider.node_name} (${peerId})`,
+        disabled: !provider.eligible,
+        reason: provider.reason
+      }
+    })
     : [{ id: localPeerId, label: 'Local scheduler', disabled: !available, reason: 'No Scheduler provider was returned by capability catalog.' }]
   return {
     available,

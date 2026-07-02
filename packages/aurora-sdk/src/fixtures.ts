@@ -2887,7 +2887,7 @@ export const routeExplainFixture: RouteExplainResponse = {
   candidates: [
     {
       provider_id: remoteTtsProvider.provider_id,
-      peer_id: remoteTtsProvider.peer_id,
+      peer_id: remoteTtsProvider.peer_id ?? 'peer-studio-gpu',
       provider_kind: remoteTtsProvider.provider_kind,
       service_instance_id: remoteTtsProvider.service_instance_id,
       module: remoteTtsProvider.module,

@@ -1054,7 +1054,7 @@ export interface CapabilityFreshnessInfo {
 
 export interface CapabilityProviderInfo {
   provider_id: string
-  peer_id: string
+  peer_id: string | null
   provider_kind: string
   node_name: string
   status: string
@@ -1080,7 +1080,7 @@ export interface CapabilityActionInfo {
   tool_id: string | null
   resource_id: string | null
   provider_id: string
-  peer_id: string
+  peer_id: string | null
   provider_kind: string
   service_instance_id: string
   selector: unknown
@@ -1133,7 +1133,7 @@ export interface CapabilitySummary {
   method: string
   busTopic: string | null
   providerId: string
-  peerId: string
+  peerId: string | null
   serviceInstanceId: string
   availability: AvailabilityState
   privacyClass: PrivacyClass

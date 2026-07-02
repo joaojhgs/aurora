@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:12:48.725Z",
+  "updatedAt": "2026-07-02T10:21:49.713Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -967,10 +967,12 @@
       "id": "G081-provide-sdk-helpers-for-ui-lanes",
       "title": "Provide SDK helpers for UI lanes:",
       "objective": "Provide SDK helpers for UI lanes:\n`client.capabilities.listCatalog()`;\n`client.capabilities.explainRoute(routeId/method)`;\n`client.adminAction.draft/confirm/cancel`;\nstable error shape mapping HTTP/Gateway failures to UI states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:21:49.713Z",
+      "completedAt": "2026-07-02T10:21:49.713Z",
+      "evidence": "Implemented UI-lane SDK helpers: client.capabilities.explainRoute(routeId/request), client.adminAction draft/confirm alias plus local cancel response, normalizeAuroraErrorForUi stable error-to-UI state mapping, nullable local capability peer IDs, and scheduler UI local-peer normalization. Verified with pnpm --filter @aurora/client typecheck; pnpm --filter @aurora/client build; pnpm --filter @aurora/client test; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test; pnpm --filter @aurora/client test -- -t 'UI-lane helpers'."
     },
     {
       "id": "G082-fix-missing-incorrect-route-metadata",

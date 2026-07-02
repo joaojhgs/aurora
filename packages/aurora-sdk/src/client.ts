@@ -163,6 +163,7 @@ export class AuroraClient {
   readonly config: ConfigClient
   readonly diagnostics: DiagnosticsClient
   readonly admin: AdminActionClient
+  readonly adminAction: AdminActionClient
   readonly approvals: ApprovalClient
   readonly native: NativeClient
   readonly events: EventStreamClient
@@ -188,6 +189,7 @@ export class AuroraClient {
     this.config = new ConfigClient(this)
     this.diagnostics = new DiagnosticsClient(this)
     this.admin = new AdminActionClient(this)
+    this.adminAction = this.admin
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
     this.events = new EventStreamClient(this.transport)
@@ -580,6 +582,23 @@ export class CapabilityClient {
   async explain(featureId: string): Promise<CapabilityExplanation> {
     return (await this.getGraph()).explain(featureId)
   }
+
+  explainRoute(route: string | RouteExplainRequest): Promise<RouteExplainResponse> {
+    return this.client.routes.explain(routeExplainRequest(route))
+  }
+}
+
+function routeExplainRequest(route: string | RouteExplainRequest): RouteExplainRequest {
+  if (typeof route !== 'string') {
+    return { include_candidates: true, ...route }
+  }
+  const request: RouteExplainRequest = { topic: route, include_candidates: true }
+  const separator = route.indexOf('.')
+  if (separator > 0 && separator < route.length - 1) {
+    request.module = route.slice(0, separator)
+    request.method = route.slice(separator + 1)
+  }
+  return request
 }
 
 export interface PermissionCatalogOptions {

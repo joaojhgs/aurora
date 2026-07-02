@@ -48,6 +48,16 @@ export interface AdminActionConfirmResponse {
   confirmation_headers: AdminActionHeaderNames
 }
 
+export interface AdminActionCancelResponse {
+  action_id: string
+  method_id: string
+  cancelled: true
+  backend_persisted: false
+  reason: string | null
+  cancelled_at: string
+  secrets_redacted: true
+}
+
 export interface AdminActionSubmitOptions {
   methodId: string
   payload?: JsonObject
@@ -178,6 +188,21 @@ export class AdminActionClient {
       request,
       { path: routePath('Gateway', 'AdminActionConfirm') }
     )
+  }
+
+  cancel(
+    draft: AdminActionDraftResponse,
+    input: { reason?: string; now?: string } = {}
+  ): AdminActionCancelResponse {
+    return {
+      action_id: draft.action_id,
+      method_id: draft.method_id,
+      cancelled: true,
+      backend_persisted: false,
+      reason: input.reason ?? null,
+      cancelled_at: input.now ?? new Date().toISOString(),
+      secrets_redacted: true
+    }
   }
 
   headers(confirmation: AdminActionConfirmResponse): Record<string, string> {
