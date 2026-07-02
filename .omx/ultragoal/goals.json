@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:45:49.388Z",
+  "updatedAt": "2026-07-02T10:50:55.248Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1055,10 +1055,12 @@
       "id": "G089-preserve-common-pageheader-route-bad",
       "title": "Preserve common `PageHeader`, route badges, permission notices, and s...",
       "objective": "Preserve common `PageHeader`, route badges, permission notices, and shared loading/error/empty states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:50:55.248Z",
+      "completedAt": "2026-07-02T10:50:55.248Z",
+      "evidence": "Added exported PageHeader and RouteStateNotice shared primitives, wired StateSurface through PageHeader and shared loading/error/offline/permission notice mapping, and locked badges/notices with shell regression plus updated intentional admin visual baselines. Verified: pnpm --filter @aurora/ui test -- -t 'shared page header|SDK errors visible as disabled shell state'; pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G090-keep-diagnostics-available-only-on-d",

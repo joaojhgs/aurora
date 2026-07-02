@@ -85,7 +85,9 @@ import {
   buildMeshPeersSnapshot,
   buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
+  PageHeader,
   RouteMatrix,
+  RouteStateNotice,
   StateSurface,
   attachmentStatusFromBackend,
   attachmentToContextItem,
@@ -124,6 +126,8 @@ import {
   routeSheetPolicySignals,
   SettingsPermissionsView,
   StatusBadge,
+  PrivacyBadge,
+  EvidenceBadge,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
   auroraNavSections
@@ -168,6 +172,43 @@ describe('Aurora production shell', () => {
       expect.objectContaining({ id: 'native-permission', label: 'Native permission', state: 'blocked' }),
       expect.objectContaining({ id: 'admin-action', label: 'AdminAction', state: 'blocked' })
     ]))
+  })
+
+  it('preserves shared page header badges and route state notices', () => {
+    const markup = renderToStaticMarkup(
+      <div>
+        <PageHeader
+          id="memory-route-title"
+          eyebrow="Operator route"
+          title="Memory"
+          description="Route-specific controls keep common status, privacy, evidence, and permission signals visible."
+          badgesLabel="Memory route badges"
+          badges={<>
+            <StatusBadge state="pending" />
+            <PrivacyBadge privacy="credential" />
+            <EvidenceBadge label="Gateway.GetRegistry" />
+          </>}
+        />
+        <RouteStateNotice state="loading" title="Loading memory" message="Loading namespace evidence from AuroraClient." evidence="DB.ListNamespaces" />
+        <RouteStateNotice state="empty" title="No namespaces" message="The backend returned no namespaces." />
+        <RouteStateNotice state="error" title="Gateway unavailable" message="AuroraClient returned an SDK error." evidence="Gateway unavailable" />
+        <RouteStateNotice state="permission" title="Permission required" message="AdminAction or Auth permission is required." actionLabel="Request permission" />
+      </div>
+    )
+
+    expect(markup).toContain('aria-labelledby="memory-route-title"')
+    expect(markup).toContain('Memory route badges')
+    expect(markup).toContain('aui-badge-pending')
+    expect(markup).toContain('aui-privacy-credential')
+    expect(markup).toContain('Gateway.GetRegistry')
+    expect(markup).toContain('aui-route-notice-loading')
+    expect(markup).toContain('aria-live="polite"')
+    expect(markup).toContain('aui-route-notice-empty')
+    expect(markup).toContain('aui-route-notice-error')
+    expect(markup).toContain('role="alert"')
+    expect(markup).toContain('aui-route-notice-permission')
+    expect(markup).toContain('Request permission')
+    expect(markup).toContain('disabled=""')
   })
 
   it('builds route availability from AuroraClient capability catalog', async () => {

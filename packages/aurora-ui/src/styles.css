@@ -69,10 +69,18 @@ button, input, select, textarea { font: inherit; }
 .aui-badge-evidence { color: var(--aui-info); }
 .aui-privacy-admin-critical, .aui-privacy-secret, .aui-privacy-credential, .aui-privacy-raw-audio { color: var(--aui-danger); }
 .aui-kicker { margin: 0; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; }
+.aui-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.aui-page-header h1 { margin: .2rem 0 0; font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.05; }
+.aui-page-header p { max-width: 48rem; margin: .4rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-page-header-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 38rem; }
 .aui-state-surface { display: grid; gap: 1rem; max-width: 56rem; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); }
 .aui-state-surface h1 { margin: .2rem 0 0; font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.05; }
 .aui-state-surface p { max-width: 48rem; margin: 0; color: var(--aui-muted); line-height: 1.55; }
 .aui-state-surface code { width: fit-content; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--aui-border); border-radius: .35rem; padding: .35rem .45rem; background: var(--aui-surface-2); color: var(--aui-muted); }
+.aui-route-notice-empty { border-style: dashed; }
+.aui-route-notice-loading { border-color: color-mix(in srgb, var(--aui-warning) 30%, var(--aui-border)); color: var(--aui-warning); background: color-mix(in srgb, var(--aui-warning) 7%, white); }
+.aui-route-notice-error, .aui-route-notice-permission { border-color: color-mix(in srgb, var(--aui-danger) 35%, var(--aui-border)); color: var(--aui-danger); background: color-mix(in srgb, var(--aui-danger) 7%, white); }
+.aui-route-notice-offline { border-color: color-mix(in srgb, var(--aui-warning) 35%, var(--aui-border)); color: var(--aui-warning); background: color-mix(in srgb, var(--aui-warning) 7%, white); }
 .aui-button, .aui-action-chip { width: fit-content; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .6rem .8rem; background: var(--aui-surface-2); color: var(--aui-muted); }
 .aui-action-chip { display: inline-flex; align-items: center; min-height: 2rem; padding: .4rem .55rem; font-size: .78rem; font-weight: 700; }
 .aui-action-chip:not(:disabled):hover { border-color: color-mix(in srgb, var(--aui-primary) 35%, var(--aui-border)); color: var(--aui-primary); }
