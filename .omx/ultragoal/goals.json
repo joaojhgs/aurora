@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:13:37.953Z",
+  "updatedAt": "2026-07-02T15:20:52.525Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1869,10 +1869,12 @@
       "id": "G163-admin-contracts",
       "title": "`/admin/contracts`:",
       "objective": "`/admin/contracts`:\nregistry browser by service/module;\nmethod detail with input/output schema, exposure, permissions, generated route path;\nOpenAPI link/export;\ncontract conformance status;\nroute explain link.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:20:17.611Z",
+      "completedAt": "2026-07-02T15:20:17.611Z",
+      "evidence": "Admin contracts browser: service/module grouping, search/filter/detail selector, method detail with input/output schema previews, exposure, permissions, generated route path, route explain, OpenAPI/export evidence, and conformance/live-registry status. Verification: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t \"contracts|config validation|admin route checkpoint\"; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-contracts-view.test.tsx tests/admin-routes-evidence.test.tsx; pnpm --filter @aurora/tauri-ui test:e2e:admin; git diff --check"
     },
     {
       "id": "G164-config-cannot-expose-secrets-or-writ",
@@ -1889,19 +1891,23 @@
       "id": "G165-contracts-page-uses-live-registry-no",
       "title": "Contracts page uses live registry, not static mock lists.",
       "objective": "Contracts page uses live registry, not static mock lists.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:20:33.545Z",
+      "completedAt": "2026-07-02T15:20:33.545Z",
+      "evidence": "Contracts page uses live SDK registry/capability responses: test overrides Gateway.GetRegistry/Gateway.GetCapabilityCatalog with a custom Zed.Probe contract and verifies only that live method renders, with no static Auth.AuditLog leakage. Verification: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t \"contracts|config validation|admin route checkpoint\"; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-contracts-view.test.tsx; git diff --check"
     },
     {
       "id": "G166-e2e-covers-search-filter-detail-and",
       "title": "E2E covers search/filter/detail and config validation error path.",
       "objective": "E2E covers search/filter/detail and config validation error path.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:20:52.525Z",
+      "completedAt": "2026-07-02T15:20:52.525Z",
+      "evidence": "E2E/focused coverage includes contracts search/filter/detail controls plus config validation error path: admin-contracts tests assert search/filter/detail UI and schema/OpenAPI/conformance detail; admin-routes evidence test asserts Config.Validate degraded editor state with validation alert/aria-invalid. Verification: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t \"contracts|config validation|admin route checkpoint\"; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-contracts-view.test.tsx tests/admin-routes-evidence.test.tsx; pnpm --filter @aurora/tauri-ui test:e2e:admin; git diff --check"
     },
     {
       "id": "G167-admin-plugins",

@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock, RotateCw, Square } from 'lucide-react'
+import { Activity, FileCode2, Lock, RotateCw, Search, Square } from 'lucide-react'
 import {
   AuroraError,
   summarizeCapabilities,
   type AuroraClient,
   type AvailabilityState,
-  type CapabilityCatalogResponse,
   type CapabilitySummary,
   type ContractExposure,
   type ContractMethodType,
@@ -71,6 +70,13 @@ export interface AdminContractRow extends MethodDescriptor {
   backendCoverage: 'http' | 'internal-only' | 'missing-capability' | 'gateway-builtin'
   privacyClass: PrivacyClass
   routeReason: string
+  liveRegistryStatus: 'live-registry' | 'registry-only' | 'capability-only'
+  conformanceStatus: 'conformant' | 'internal-only' | 'missing-capability' | 'gateway-builtin'
+  generatedRoutePath: string | null
+  openApiEvidence: string
+  exportEvidence: string
+  schemaEvidence: string
+  capabilityPermissions: string[]
 }
 
 export interface AdminServicesSnapshot {
@@ -393,6 +399,33 @@ function MethodList({ methods }: { methods: MethodDescriptor[] }) {
 }
 
 function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
+  const modules = useMemo(() => Array.from(new Set(contracts.map((contract) => contract.module))).sort(), [contracts])
+  const [query, setQuery] = useState('')
+  const [moduleFilter, setModuleFilter] = useState('all')
+  const [exposureFilter, setExposureFilter] = useState<ContractExposure | 'all'>('all')
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(contracts[0]?.busTopic ?? null)
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredContracts = useMemo(
+    () => contracts.filter((contract) => {
+      const matchesQuery = normalizedQuery.length === 0 || [
+        contract.busTopic,
+        contract.summary,
+        contract.module,
+        contract.name,
+        contract.routePath ?? '',
+        contract.inputModel ?? '',
+        contract.outputModel ?? '',
+        contract.requiredPermissions.join(' ')
+      ].some((value) => value.toLowerCase().includes(normalizedQuery))
+      const matchesModule = moduleFilter === 'all' || contract.module === moduleFilter
+      const matchesExposure = exposureFilter === 'all' || contract.exposure === exposureFilter
+      return matchesQuery && matchesModule && matchesExposure
+    }),
+    [contracts, exposureFilter, moduleFilter, normalizedQuery]
+  )
+  const selectedContract = contracts.find((contract) => contract.busTopic === selectedTopic) ?? filteredContracts[0] ?? contracts[0]
+  const groupedContracts = groupContractsByModule(filteredContracts)
+
   return (
     <section className="aui-admin-panel" aria-labelledby="contracts-table-title">
       <div className="aui-panel-heading">
@@ -404,51 +437,148 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
       {contracts.length === 0 ? (
         <p className="aui-muted">No method descriptors were returned by Gateway.GetRegistry.</p>
       ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Method</th>
-                <th>Type</th>
-                <th>Exposure</th>
-                <th>Backend</th>
-                <th>Route</th>
-                <th>Privacy</th>
-                <th>Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.map((contract) => (
-                <tr key={contract.busTopic}>
-                  <td>
-                    <strong>{contract.busTopic}</strong>
-                    <small>{contract.summary || 'No summary provided.'}</small>
-                  </td>
-                  <td><MethodTypeBadge type={contract.methodType} /></td>
-                  <td><ExposureBadge exposure={contract.exposure} /></td>
-                  <td><BackendCoverageBadge coverage={contract.backendCoverage} /></td>
-                  <td>
-                    <div className="aui-state-line">
-                      <StatusBadge state={contract.availability} />
-                      <span>{contract.routePath ?? 'not HTTP-exposed'}</span>
-                    </div>
-                  </td>
-                  <td><PrivacyBadge privacy={contract.privacyClass} /></td>
-                  <td>
-                    <div className="aui-chip-list">
-                      {contract.requiredPermissions.map((permission) => (
-                        <code className="aui-chip" key={permission}>{permission}</code>
-                      ))}
-                      {contract.requiredPermissions.length === 0 ? <span className="aui-muted">none</span> : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="aui-contract-browser">
+          <div className="aui-admin-toolbar" aria-label="Contract search and filters">
+            <label>
+              <span>Search contracts</span>
+              <span className="aui-input-with-icon">
+                <Search size={14} aria-hidden />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                  placeholder="Method, route, schema, permission"
+                  aria-label="Search contracts"
+                />
+              </span>
+            </label>
+            <label>
+              <span>Service/module</span>
+              <select value={moduleFilter} onChange={(event) => setModuleFilter(event.currentTarget.value)}>
+                <option value="all">All modules</option>
+                {modules.map((module) => <option key={module} value={module}>{module}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Exposure</span>
+              <select
+                value={exposureFilter}
+                onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
+              >
+                <option value="all">All exposures</option>
+                <option value="external">external</option>
+                <option value="internal">internal</option>
+                <option value="both">both</option>
+                <option value="gateway_builtin">gateway_builtin</option>
+              </select>
+            </label>
+            <label>
+              <span>Method detail</span>
+              <select
+                value={selectedContract?.busTopic ?? ''}
+                onChange={(event) => setSelectedTopic(event.currentTarget.value)}
+                aria-label="Select contract detail"
+              >
+                {filteredContracts.map((contract) => (
+                  <option key={contract.busTopic} value={contract.busTopic}>{contract.busTopic}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="aui-admin-metrics" aria-label="Contract explorer summary">
+            <Metric label="Filtered methods" value={String(filteredContracts.length)} detail={`${modules.length} service modules`} />
+            <Metric label="HTTP routes" value={String(filteredContracts.filter((contract) => contract.availableOverHttp).length)} detail="generated SDK route paths" />
+            <Metric label="Live registry" value={String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length)} detail="registry + capability catalog" />
+            <Metric label="Schemas" value={String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length)} detail="input or output JSON Schema" />
+          </div>
+
+          {filteredContracts.length === 0 ? (
+            <p className="aui-muted">No contracts match the current search and filters.</p>
+          ) : (
+            <div className="aui-table-scroll">
+              <table className="aui-table">
+                <caption className="aui-sr-only">
+                  Contract registry browser grouped by service module with method detail controls
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Service/module</th>
+                    <th>Method</th>
+                    <th>Type</th>
+                    <th>Exposure</th>
+                    <th>Backend</th>
+                    <th>Generated route</th>
+                    <th>Conformance</th>
+                    <th>Permissions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedContracts.map((group) => (
+                    <ContractModuleGroup
+                      key={group.module}
+                      module={group.module}
+                      contracts={group.contracts}
+                      selectedTopic={selectedContract?.busTopic ?? null}
+                      onSelect={setSelectedTopic}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedContract ? <ContractDetail contract={selectedContract} /> : null}
         </div>
       )}
     </section>
+  )
+}
+
+function ContractModuleGroup({
+  module,
+  contracts,
+  selectedTopic,
+  onSelect
+}: {
+  module: string
+  contracts: AdminContractRow[]
+  selectedTopic: string | null
+  onSelect: (topic: string) => void
+}) {
+  return (
+    <>
+      <tr className="aui-table-group-row">
+        <th colSpan={8} scope="rowgroup">{module} module / {contracts.length} contracts</th>
+      </tr>
+      {contracts.map((contract) => (
+        <tr key={contract.busTopic} aria-selected={contract.busTopic === selectedTopic}>
+          <td><strong>{contract.module}</strong></td>
+          <td>
+            <button type="button" className="aui-link-button" onClick={() => onSelect(contract.busTopic)}>
+              {contract.busTopic}
+            </button>
+            <small>{contract.summary || 'No summary provided.'}</small>
+          </td>
+          <td><MethodTypeBadge type={contract.methodType} /></td>
+          <td><ExposureBadge exposure={contract.exposure} /></td>
+          <td><BackendCoverageBadge coverage={contract.backendCoverage} /></td>
+          <td>
+            <div className="aui-state-line">
+              <StatusBadge state={contract.availability} />
+              <span>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</span>
+            </div>
+          </td>
+          <td>
+            <div className="aui-chip-list">
+              <span className="aui-chip">{contract.liveRegistryStatus}</span>
+              <span className="aui-chip">{contract.conformanceStatus}</span>
+            </div>
+          </td>
+          <td><PermissionChips permissions={contract.requiredPermissions} /></td>
+        </tr>
+      ))}
+    </>
   )
 }
 
@@ -472,6 +602,60 @@ function ExposureBadge({ exposure }: { exposure: ContractExposure }) {
 
 function BackendCoverageBadge({ coverage }: { coverage: AdminContractRow['backendCoverage'] }) {
   return <span className={`aui-badge aui-backend-${coverage}`}>{coverage}</span>
+}
+
+function ContractDetail({ contract }: { contract: AdminContractRow }) {
+  return (
+    <aside className="aui-admin-detail" aria-labelledby="contract-detail-title">
+      <div className="aui-panel-heading">
+        <div>
+          <p className="aui-kicker">Method detail</p>
+          <h3 id="contract-detail-title">{contract.busTopic}</h3>
+          <p>{contract.summary || 'No summary provided by the live registry descriptor.'}</p>
+        </div>
+      </div>
+      <dl className="aui-detail-grid">
+        <div><dt>Service/module</dt><dd>{contract.module}</dd></div>
+        <div><dt>Method</dt><dd>{contract.name}</dd></div>
+        <div><dt>Input model</dt><dd>{contract.inputModel ?? 'none'}</dd></div>
+        <div><dt>Output model</dt><dd>{contract.outputModel ?? 'none'}</dd></div>
+        <div><dt>Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
+        <div><dt>Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
+        <div><dt>Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
+        <div><dt>Generated route path</dt><dd><code>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</code></dd></div>
+        <div><dt>OpenAPI/export evidence</dt><dd>{contract.openApiEvidence}</dd></div>
+        <div><dt>Export evidence</dt><dd>{contract.exportEvidence}</dd></div>
+        <div><dt>Live-registry status</dt><dd>{contract.liveRegistryStatus}</dd></div>
+        <div><dt>Contract conformance</dt><dd>{contract.conformanceStatus}</dd></div>
+        <div><dt>Capability route status</dt><dd>{contract.routeReason}</dd></div>
+        <div><dt>Schema evidence</dt><dd>{contract.schemaEvidence}</dd></div>
+      </dl>
+      <div className="aui-schema-grid" aria-label="Input and output schema detail">
+        <SchemaBlock title="Input schema" schema={contract.inputSchema} />
+        <SchemaBlock title="Output schema" schema={contract.outputSchema} />
+      </div>
+    </aside>
+  )
+}
+
+function PermissionChips({ permissions }: { permissions: string[] }) {
+  return (
+    <div className="aui-chip-list">
+      {permissions.map((permission) => (
+        <code className="aui-chip" key={permission}>{permission}</code>
+      ))}
+      {permissions.length === 0 ? <span className="aui-muted">none</span> : null}
+    </div>
+  )
+}
+
+function SchemaBlock({ title, schema }: { title: string; schema: MethodDescriptor['inputSchema'] }) {
+  return (
+    <section>
+      <h4>{title}</h4>
+      {schema ? <code className="aui-schema-code">{JSON.stringify(schema, null, 2)}</code> : <p className="aui-muted">No JSON Schema exported by this registry descriptor.</p>}
+    </section>
+  )
 }
 
 function buildServiceRows(
@@ -517,10 +701,57 @@ function buildContractRows(
         providerLabel: capability ? providerLabel(capability) : `${method.module} provider pending`,
         backendCoverage: backendCoverage(method, capability),
         privacyClass: capability?.privacyClass ?? privacyForMethod(method),
-        routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.'
+        routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.',
+        liveRegistryStatus: (capability ? 'live-registry' : 'registry-only') as AdminContractRow['liveRegistryStatus'],
+        conformanceStatus: contractConformance(method, capability),
+        generatedRoutePath: method.routePath,
+        openApiEvidence: openApiEvidence(method),
+        exportEvidence: exportEvidence(method, capability),
+        schemaEvidence: schemaEvidence(method, capability),
+        capabilityPermissions: capability?.requiredPermissions ?? []
       }
     })
     .sort((a, b) => a.busTopic.localeCompare(b.busTopic))
+}
+
+function groupContractsByModule(contracts: AdminContractRow[]): Array<{ module: string; contracts: AdminContractRow[] }> {
+  const groups = new Map<string, AdminContractRow[]>()
+  for (const contract of contracts) {
+    const group = groups.get(contract.module) ?? []
+    group.push(contract)
+    groups.set(contract.module, group)
+  }
+  return [...groups.entries()]
+    .map(([module, grouped]) => ({ module, contracts: grouped }))
+    .sort((a, b) => a.module.localeCompare(b.module))
+}
+
+function contractConformance(method: MethodDescriptor, capability: CapabilitySummary | undefined): AdminContractRow['conformanceStatus'] {
+  if (method.exposure === 'gateway_builtin') return 'gateway-builtin'
+  if (!method.availableOverHttp) return 'internal-only'
+  return capability ? 'conformant' : 'missing-capability'
+}
+
+function openApiEvidence(method: MethodDescriptor): string {
+  if (!method.availableOverHttp || !method.routePath) return 'Internal-only contract is intentionally absent from generated OpenAPI HTTP paths.'
+  return `Generated Gateway/OpenAPI path ${method.routePath} from live registry descriptor ${method.module}.${method.name}.`
+}
+
+function exportEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
+  const registryEvidence = `Gateway.GetRegistry exported ${method.busTopic}`
+  const capabilityEvidence = capability ? `; Gateway.GetCapabilityCatalog action ${capability.id}` : '; no capability-catalog action matched this bus topic'
+  return `${registryEvidence}${capabilityEvidence}.`
+}
+
+function schemaEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
+  const registrySchemas = [method.inputSchema ? 'input schema' : null, method.outputSchema ? 'output schema' : null]
+    .filter((value): value is string => Boolean(value))
+  const capabilitySchemas = capability
+    ? [capability.raw.input_schema ? 'capability input schema' : null, capability.raw.output_schema ? 'capability output schema' : null]
+      .filter((value): value is string => Boolean(value))
+    : []
+  const evidence = [...registrySchemas, ...capabilitySchemas]
+  return evidence.length > 0 ? evidence.join(', ') : 'No JSON Schema exported by registry or capability catalog.'
 }
 
 function serviceControl(
@@ -599,7 +830,6 @@ function methodAvailability(method: MethodDescriptor): AvailabilityState {
   if (!method.availableOverHttp) return 'unsupported'
   return method.methodType === 'manage' ? 'privacy-blocked' : 'degraded'
 }
-
 function backendCoverage(method: MethodDescriptor, capability: CapabilitySummary | undefined): AdminContractRow['backendCoverage'] {
   if (method.exposure === 'gateway_builtin') return 'gateway-builtin'
   if (!method.availableOverHttp) return 'internal-only'
