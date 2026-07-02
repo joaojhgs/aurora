@@ -213,7 +213,7 @@ class ConfigAPI:
         """
         from app.shared.config.models import Model as AppConfig
 
-        config_dict = self.get("", default={})
+        config_dict = self.get("", {})
 
         try:
             return AppConfig.model_validate(config_dict)

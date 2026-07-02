@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { ChevronRight, Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -8,15 +8,16 @@ export interface AppShellProps {
   snapshot: AuroraShellSnapshot
   currentPath?: string
   children: ReactNode
+  onNavigate?: (href: string) => void
 }
 
-export function AppShell({ snapshot, currentPath = '/', children }: AppShellProps) {
+export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: AppShellProps) {
   const activePath = normalizePath(currentPath)
   return (
     <div className="aui-shell">
       <aside className="aui-sidebar" aria-label="Primary navigation">
         <BrandHeader snapshot={snapshot} />
-        <ShellNavigation activePath={activePath} routes={snapshot.routes} />
+        <ShellNavigation activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate } : {})} />
         <div className="aui-sidebar-card">
           <span className="aui-avatar">AD</span>
           <div>
@@ -29,7 +30,7 @@ export function AppShell({ snapshot, currentPath = '/', children }: AppShellProp
         <header className="aui-topbar">
           <details className="aui-mobile-menu">
             <summary aria-label="Open menu"><Menu size={20} /></summary>
-            <ShellNavigation activePath={activePath} routes={snapshot.routes} compact />
+            <ShellNavigation activePath={activePath} routes={snapshot.routes} compact {...(onNavigate ? { onNavigate } : {})} />
           </details>
           <div className="aui-status-row" aria-label="Aurora shell status">
             <EvidenceBadge label={snapshot.transportKind} />
@@ -46,7 +47,12 @@ export function AppShell({ snapshot, currentPath = '/', children }: AppShellProp
       </div>
       <nav className="aui-mobile-tabs" aria-label="Mobile navigation">
         {auroraMobileTabs.map((tab) => (
-          <a key={tab.id} href={tab.href} aria-current={activePath === tab.href ? 'page' : undefined}>
+          <a
+            key={tab.id}
+            href={tab.href}
+            aria-current={activePath === tab.href ? 'page' : undefined}
+            onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
+          >
             <tab.icon size={18} aria-hidden />
             <span>{tab.label}</span>
           </a>
@@ -59,11 +65,13 @@ export function AppShell({ snapshot, currentPath = '/', children }: AppShellProp
 export function ShellNavigation({
   activePath,
   routes,
-  compact = false
+  compact = false,
+  onNavigate
 }: {
   activePath: string
   routes: RouteAvailability[]
   compact?: boolean
+  onNavigate?: (href: string) => void
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]))
   return (
@@ -82,6 +90,7 @@ export function ShellNavigation({
                 aria-current={active ? 'page' : undefined}
                 aria-disabled={route?.disabled ? 'true' : undefined}
                 title={route?.explanation}
+                onClick={(event) => handleShellNavigation(event, item.href, onNavigate)}
               >
                 <item.icon size={17} aria-hidden />
                 <span>{item.label}</span>
@@ -181,6 +190,21 @@ function FeatureDrawer({ route }: { route: RouteAvailability }) {
       </div>
     </details>
   )
+}
+
+
+function handleShellNavigation(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  onNavigate: ((href: string) => void) | undefined
+) {
+  if (!onNavigate) return
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return
+  }
+  if (!href.startsWith('/')) return
+  event.preventDefault()
+  onNavigate(href)
 }
 
 function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {

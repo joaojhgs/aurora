@@ -617,7 +617,7 @@ export class TauriLocalTransport implements AuroraTransport {
   private async getSidecarSession(): Promise<TauriSidecarSession | null> {
     this.sidecarSession ??= withTimeout(
       this.invokeImpl(this.commands.sidecarSession).then((value) => value as TauriSidecarSession),
-      { command: this.commands.sidecarSession, timeoutMs: 250 }
+      { command: this.commands.sidecarSession, timeoutMs: 3_000 }
     ).catch(() => null)
     return this.sidecarSession
   }

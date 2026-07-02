@@ -1213,7 +1213,7 @@ function supportBundlePayload(request: GatewaySupportBundleRequest | undefined):
 export class NativeClient {
   constructor(private readonly client: AuroraClient) {}
 
-  getManifest(): Promise<NativeCapabilityManifest> {
+  async getManifest(): Promise<NativeCapabilityManifest> {
     if (!['tauri-local', 'native-mobile', 'mock'].includes(this.client.transport.kind)) {
       throw unsupportedTransport(this.client.transport.kind, 'Native capability manifest', 'unsupported_feature')
     }

@@ -8,6 +8,7 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "typescript": "5.7.3",
     "vitest": "^4.0.16"
   }

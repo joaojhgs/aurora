@@ -59,7 +59,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     }
   }
 
-  const gatewayUrl = import.meta.env.VITE_AURORA_GATEWAY_URL
+  const gatewayUrl = import.meta.env.VITE_AURORA_GATEWAY_URL ?? devLoopbackGatewayUrl()
   if (gatewayUrl) {
     return {
       client: new AuroraClient({
@@ -113,4 +113,10 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
 function isTauriRuntime(): boolean {
   if (typeof window === 'undefined') return false
   return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
+}
+
+function devLoopbackGatewayUrl(): string | undefined {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return undefined
+  if (!['127.0.0.1', 'localhost'].includes(window.location.hostname)) return undefined
+  return 'http://127.0.0.1:8000'
 }

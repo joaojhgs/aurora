@@ -104,12 +104,7 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
 export function availabilityForAction(action: CapabilityActionInfo): AvailabilityState {
   if (action.freshness.stale) return 'stale'
   if (action.bindability === 'pending') return 'pending'
-  if (
-    action.policy.consent_required ||
-    action.policy.privacy_indicator_required ||
-    action.policy.explicit_selector_required ||
-    action.policy.selector_required
-  ) {
+  if (hardPrivacyBlockForAction(action)) {
     return 'privacy-blocked'
   }
   if (action.policy.denial_reasons.length > 0 || action.bindability === 'denied') return 'denied'
@@ -248,8 +243,7 @@ function candidateFromAction(
     ...(provider && !provider.eligible ? [provider.reason_code || provider.reason].filter(Boolean) : [])
   ])
   const selectorRequired = action.policy.explicit_selector_required || action.policy.selector_required
-  const privacyBlocked =
-    selectorRequired || action.policy.consent_required || action.policy.privacy_indicator_required
+  const privacyBlocked = hardPrivacyBlockForAction(action)
   return {
     id: `${featureId}@${action.provider_id}`,
     featureId,
@@ -662,14 +656,35 @@ function requiredActionForAction(
   disabledReasons: string[]
 ): string | null {
   if (action.freshness.stale) return 'refresh peer manifest or reconnect provider'
-  if (action.policy.explicit_selector_required || action.policy.selector_required) return 'choose a peer/provider'
-  if (action.policy.approval_required) return 'request approval before execution'
+  if (
+    action.provider_kind !== 'local' &&
+    (action.policy.explicit_selector_required || action.policy.selector_required)
+  ) {
+    return 'choose a peer/provider'
+  }
   if (action.policy.consent_required) return 'collect user consent'
   if (action.policy.privacy_indicator_required) return 'show required privacy indicator'
+  if (action.policy.approval_required || action.bindability === 'approval-required') {
+    return 'request approval before execution'
+  }
+  if (action.policy.explicit_selector_required || action.policy.selector_required) {
+    return action.provider_kind === 'local'
+      ? 'confirm the local provider selection before execution'
+      : 'choose a peer/provider'
+  }
   if (action.policy.denial_reasons.length > 0) return 'change policy, permission, or selected provider'
   if (provider && !provider.eligible) return 'select an eligible provider'
   if (disabledReasons.length > 0) return 'inspect capability blockers'
   return null
+}
+
+function hardPrivacyBlockForAction(action: CapabilityActionInfo): boolean {
+  return (
+    action.policy.consent_required ||
+    action.policy.privacy_indicator_required ||
+    (action.provider_kind !== 'local' &&
+      (action.policy.explicit_selector_required || action.policy.selector_required))
+  )
 }
 
 function availabilityForNode(

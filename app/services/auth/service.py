@@ -7,6 +7,7 @@ FastAPI routes.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
@@ -103,6 +104,35 @@ from app.shared.contracts.models.mesh import (
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
+
+
+def _api_permission_list(value: Any) -> list[str]:
+    """Return permission/scopes values in the public contract format.
+
+    Older local databases may contain JSON-encoded permission lists or the
+    legacy token scope ``"all"``. Public contract models validate against the
+    current Permission type, so normalize those stored forms at the service
+    boundary instead of letting one stale row break local admin pages.
+    """
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            decoded = [value]
+        value = decoded
+    if not isinstance(value, list):
+        value = list(value) if isinstance(value, tuple | set) else [value]
+
+    normalized: list[str] = []
+    for item in value:
+        if item is None:
+            continue
+        permission = str(item)
+        normalized.append("*" if permission == "all" else permission)
+    return normalized
 
 
 class AuthService(BaseService):
@@ -338,7 +368,7 @@ class AuthService(BaseService):
         input_model=ListPendingPairingsRequest,
         output_model=ListPendingPairingsResponse,
         exposure="both",
-        method_type="manage",
+        method_type="use",
         required_perms=["Auth.manage"],
     )
     async def handle_list_pending_pairings(
@@ -651,7 +681,7 @@ class AuthService(BaseService):
                     prefix=t.prefix or "",
                     device_id=t.device_id,
                     user_id=t.user_id,
-                    scopes=t.scopes or [],
+                    scopes=_api_permission_list(t.scopes),
                     created_at=t.created_at.isoformat() if t.created_at else None,
                     expires_at=t.expires_at.isoformat() if t.expires_at else None,
                 )
@@ -939,7 +969,16 @@ class AuthService(BaseService):
             outbound_status=data.outbound_status,
             include_disconnected=data.include_disconnected,
         )
-        peers = [MeshPeerInfo(**row) for row in rows]
+        peers = [
+            MeshPeerInfo(
+                **{
+                    **row,
+                    "outbound_permissions": _api_permission_list(row.get("outbound_permissions")),
+                    "inbound_permissions": _api_permission_list(row.get("inbound_permissions")),
+                }
+            )
+            for row in rows
+        ]
         return MeshPeerListResponse(peers=peers, total=len(peers))
 
     @method_contract(

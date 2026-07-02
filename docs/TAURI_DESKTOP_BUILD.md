@@ -7,6 +7,21 @@ Aurora desktop has two runtime modes:
 
 The packaged sidecar is now **profiled**. The default profile is intentionally small and does not install or bundle every local AI dependency.
 
+## Development bootstrap
+
+Use the package Tauri command for local desktop development:
+
+```bash
+pnpm --filter @aurora/tauri-ui tauri dev
+```
+
+The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/bin/python` when available, starts `main.py` from the repository root, sets threads mode, points the UI at the loopback Gateway, and enables the managed local sidecar. The dev path is deliberately different from packaged builds:
+
+- **Dev** runs Python directly for fast iteration and clear service logs.
+- **Package/build** stages a profiled sidecar executable for Tauri bundling.
+
+Do not run `prepare:sidecar` or set `AURORA_TAURI_SIDECAR_SOURCE` just to use `tauri dev`. Those are package/release inputs. During development, Vite, Rust/Tauri, and Python service logs should appear in the same terminal; Python sidecar lines are prefixed with `[aurora:python:stdout]` or `[aurora:python:stderr]`.
+
 ## Sidecar profiles
 
 | Profile | Purpose | Dependency shape | CI behavior |

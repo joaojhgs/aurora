@@ -792,7 +792,7 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=WebRTCDiagnosticsResponse,
         exposure="external",
-        method_type="manage",
+        method_type="use",
         required_perms=["Gateway.manage"],
     )
     async def get_webrtc_diagnostics(self, data: EmptyInput) -> WebRTCDiagnosticsResponse:
@@ -1477,6 +1477,11 @@ class GatewayService(BaseService):
             gateway_for_api = {k: v for k, v in gw_d.items() if k != "api"}
             gateway_for_api.update(api_d)
             gateway_for_api["auth"] = dict(auth_d)
+            if (
+                os.environ.get("AURORA_TAURI_MANAGED_SIDECAR") == "1"
+                and os.environ.get("AURORA_TAURI_DISABLE_GATEWAY_AUTH", "1") == "1"
+            ):
+                gateway_for_api["auth"]["enabled"] = False
             raw_keys = gateway_for_api["auth"].get("api_keys")
             if raw_keys:
                 gateway_for_api["auth"]["api_keys"] = [_config_secret_plain(x) for x in raw_keys]

@@ -8,6 +8,24 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 - Desktop thin: set `AURORA_TAURI_REMOTE_GATEWAY_URL` and `AURORA_TAURI_ALLOW_REMOTE_GATEWAY=1` for the Rust bridge to proxy SDK requests to a remote Gateway without a sidecar.
 - Browser development fallback: `VITE_AURORA_GATEWAY_URL` selects HTTP transport; no Gateway URL uses SDK mock fixtures.
 
+## One-command desktop development
+
+From the repository root, the normal dev command is enough to start Vite, the Tauri Rust shell, and the local Aurora Python services in threads mode:
+
+```bash
+pnpm --filter @aurora/tauri-ui tauri dev
+```
+
+The package wrapper selects `.venv/bin/python` when it exists, runs `main.py` from the repository root, sets `AURORA_ARCHITECTURE_MODE=threads`, enables the managed local sidecar, and points the UI at `http://127.0.0.1:8000`. You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.
+
+Dev logging is intentionally unified in the same terminal:
+
+- Vite logs appear from the Tauri CLI dev server.
+- Rust/Tauri logs appear from the desktop shell process.
+- Python Aurora service logs are piped by the Rust sidecar supervisor with `[aurora:python:stdout]` and `[aurora:python:stderr]` prefixes.
+
+Packaged desktop builds still use the profiled sidecar staging flow described below; the direct Python sidecar path is for local development and diagnostics.
+
 Desktop local sidecar defaults:
 
 - program: `python`

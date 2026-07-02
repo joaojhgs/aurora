@@ -140,6 +140,9 @@ export interface AssistantVoiceModel {
 }
 
 const defaultStorageKey = 'aurora.assistant.session.v1'
+const emptyNativePermissionList: Array<{ name: string; granted: boolean }> = []
+const emptyNativeCapabilityList: Array<{ name: string; enabled: boolean }> = []
+const emptyVoiceEventList: VoiceRuntimeEvent[] = []
 const defaultContextLimits = {
   max_items: 8,
   max_item_bytes: 262_144,
@@ -154,9 +157,9 @@ export function AssistantView({
   voiceRoutes,
   nativePlatform = 'not available',
   nativeAvailable = false,
-  nativePermissions = [],
-  nativeCapabilities = [],
-  recentVoiceEvents = [],
+  nativePermissions = emptyNativePermissionList,
+  nativeCapabilities = emptyNativeCapabilityList,
+  recentVoiceEvents = emptyVoiceEventList,
   storageKey = defaultStorageKey
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => emptyAssistantSession())

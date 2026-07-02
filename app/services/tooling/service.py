@@ -526,6 +526,8 @@ class ToolingService(BaseService):
         principal_id = getattr(envelope, "principal_id", None)
         if not principal_id:
             return None
+        if principal_id in {"system", "open_peer"}:
+            return ["*"]
 
         try:
             result = await self.bus.request(

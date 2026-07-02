@@ -80,7 +80,7 @@ describe('Performance, offline, and resilience suite', () => {
       })
     })
 
-    expect(() => httpClient.native.getManifest()).toThrowError(/Native capability manifest/)
+    await expect(httpClient.native.getManifest()).rejects.toThrowError(/Native capability manifest/)
     await expect(collectEvents(httpClient.events.watchHealth())).rejects.toMatchObject({ code: 'unsupported_feature' })
 
     const tauriTransport = new TauriLocalTransport({

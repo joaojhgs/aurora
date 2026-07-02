@@ -16,6 +16,7 @@ from app.services.supervisor import Supervisor
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.contracts.models.tts import TTSMethods, TTSRequest
+from app.shared.contracts.registry import get_contract
 
 config_api = ConfigAPI()
 
@@ -76,15 +77,19 @@ async def main_async():
             open_recall_thread.start()
             log_info("OpenRecall started in background thread")
 
-        # Initial greeting via bus
-        from app.messaging.priority_helpers import get_interactive_priority
-        await supervisor.bus.publish(
-            TTSMethods.REQUEST,
-            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
-            event=False,
-            priority=get_interactive_priority(),
-            origin="internal",
-        )
+        # Initial greeting via bus only when optional TTS is active.
+        if get_contract(TTSMethods.REQUEST) is not None:
+            from app.messaging.priority_helpers import get_interactive_priority
+
+            await supervisor.bus.publish(
+                TTSMethods.REQUEST,
+                TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+            )
+        else:
+            log_info("TTS startup greeting skipped because TTS.Request is not registered")
 
         # Run supervisor (blocks until shutdown signal)
         await supervisor.run()
@@ -249,7 +254,7 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        ui_active = config_api.get(ConfigKeys.ui.activate, default=False)
+        ui_active = config_api.get(ConfigKeys.ui.activate, False)
         if ui_active:
             # UI mode - run supervisor in background thread
             main_with_ui()

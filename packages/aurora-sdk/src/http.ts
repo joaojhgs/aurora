@@ -54,7 +54,7 @@ export class HttpGatewayTransport implements AuroraTransport {
 
   constructor(options: HttpTransportOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '')
-    this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchImpl = options.fetchImpl ?? defaultFetch()
     this.apiKey = options.apiKey
     this.bearerToken = options.bearerToken
     this.eventSourceFactory = options.eventSourceFactory ?? defaultEventSourceFactory()
@@ -229,6 +229,10 @@ function defaultEventSourceFactory(): EventSourceFactory | undefined {
 
 function defaultWebSocketFactory(): WebSocketFactory | undefined {
   return typeof WebSocket === 'undefined' ? undefined : (url) => new WebSocket(url)
+}
+
+function defaultFetch(): typeof fetch {
+  return ((input, init) => globalThis.fetch(input, init)) as typeof fetch
 }
 
 function streamHandshake(request: AuroraStreamRequest): Record<string, unknown> {

@@ -42,7 +42,7 @@
     "eventstream:smoke": "node ./scripts/eventstream-smoke.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment jsdom",
-    "tauri": "tauri",
+    "tauri": "node ./scripts/tauri-cli.mjs",
     "build:bundle:linux-rpm:thin": "node ./scripts/prepare-sidecar.mjs --profile thin && pnpm tauri build --config src-tauri/tauri.release.conf.json --no-sign --bundles rpm",
     "ios:preflight": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project",
     "ios:preflight:signing": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project --require-signing-env"

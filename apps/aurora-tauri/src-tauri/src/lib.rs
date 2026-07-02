@@ -4,10 +4,12 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 #[cfg(desktop)]
 use tauri::{
@@ -2443,6 +2445,7 @@ fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, A
     command.current_dir(&launch.working_dir);
     command.env("AURORA_ARCHITECTURE_MODE", "threads");
     command.env("AURORA_TAURI_MANAGED_SIDECAR", "1");
+    command.env("AURORA_TAURI_DISABLE_GATEWAY_AUTH", "1");
     command.env("AURORA_GATEWAY_URL", gateway.to_string());
     command.env("AURORA_TAURI_SIDECAR_TOKEN", token);
     command.env("AURORA_CONFIG_FILE", sidecar_config_file(app, gateway)?);
@@ -2456,9 +2459,42 @@ fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, A
     command.stdin(Stdio::null());
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    command
+    let mut child = command
         .spawn()
-        .map_err(|error| AuroraCommandError::SidecarProcess(error.to_string()))
+        .map_err(|error| AuroraCommandError::SidecarProcess(error.to_string()))?;
+    if let Some(stdout) = child.stdout.take() {
+        spawn_sidecar_log_forwarder("stdout", stdout, false);
+    }
+    if let Some(stderr) = child.stderr.take() {
+        spawn_sidecar_log_forwarder("stderr", stderr, true);
+    }
+    Ok(child)
+}
+
+fn spawn_sidecar_log_forwarder<R>(stream: &'static str, reader: R, stderr: bool)
+where
+    R: Read + Send + 'static,
+{
+    let _ = thread::Builder::new()
+        .name(format!("aurora-sidecar-{stream}"))
+        .spawn(move || {
+            let reader = BufReader::new(reader);
+            for line in reader.lines() {
+                match line {
+                    Ok(line) => {
+                        if stderr {
+                            eprintln!("[aurora:python:{stream}] {line}");
+                        } else {
+                            println!("[aurora:python:{stream}] {line}");
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("[aurora:python:{stream}] log reader failed: {error}");
+                        break;
+                    }
+                }
+            }
+        });
 }
 
 fn stop_sidecar(sidecar: &mut SidecarState) -> Result<(), AuroraCommandError> {
@@ -2792,7 +2828,10 @@ fn sidecar_config_file(app: &AppHandle, gateway: &Url) -> Result<PathBuf, Aurora
     sidecar_config_file_from_defaults(&defaults_path, gateway)
 }
 
-fn sidecar_config_file_from_defaults(defaults_path: &Path, gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
+fn sidecar_config_file_from_defaults(
+    defaults_path: &Path,
+    gateway: &Url,
+) -> Result<PathBuf, AuroraCommandError> {
     let defaults = fs::read_to_string(defaults_path).map_err(|error| {
         AuroraCommandError::SidecarProcess(format!(
             "failed to read config defaults at {}: {error}",
@@ -2806,6 +2845,12 @@ fn sidecar_config_file_from_defaults(defaults_path: &Path, gateway: &Url) -> Res
         ))
     })?;
 
+    if let Some(auth_config) = config
+        .pointer_mut("/services/auth")
+        .and_then(Value::as_object_mut)
+    {
+        auth_config.insert("enabled".to_string(), json!(true));
+    }
     let gateway_config = config
         .pointer_mut("/services/gateway")
         .and_then(Value::as_object_mut)
@@ -3370,6 +3415,7 @@ mod tests {
             value.pointer("/services/gateway/enabled"),
             Some(&json!(true))
         );
+        assert_eq!(value.pointer("/services/auth/enabled"), Some(&json!(true)));
         assert_eq!(
             value.pointer("/services/gateway/api/host"),
             Some(&json!("127.0.0.1"))

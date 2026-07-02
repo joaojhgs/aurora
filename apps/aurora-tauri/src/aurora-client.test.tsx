@@ -6,6 +6,7 @@ import { AuroraTauriApp } from './tauri-app'
 describe('Aurora Tauri runtime wrapper', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    window.history.replaceState({}, '', '/')
   })
 
   it('uses the SDK mock transport when no Tauri shell or Gateway URL is present', async () => {
@@ -39,8 +40,21 @@ describe('Aurora Tauri runtime wrapper', () => {
     await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
   })
 
-  it('renders the shell without inventing sidecar state in non-Tauri test hosts', () => {
+  it('renders the assistant page at the root instead of the diagnostics dashboard', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+
+    const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+    expect(markup).toContain('Assistant')
+    expect(markup).toContain('Prompt')
+    expect(markup).toContain('Assistant capability is unavailable')
+    expect(markup).not.toContain('Native boundary')
+    expect(markup).not.toContain('Denied native defaults')
+  })
+
+  it('routes the diagnostics dashboard away from the assistant landing page', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+    window.history.replaceState({}, '', '/diagnostics')
 
     const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
@@ -59,5 +73,16 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Denied native defaults')
     expect(markup).toContain('mock')
     expect(markup).toContain('not used in thin mode')
+  })
+
+  it('renders the models page for the models route', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+    window.history.replaceState({}, '', '/models')
+
+    const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+    expect(markup).toContain('Models and runtime')
+    expect(markup).toContain('Loading model runtime catalog from AuroraClient')
+    expect(markup).not.toContain('Native boundary')
   })
 })

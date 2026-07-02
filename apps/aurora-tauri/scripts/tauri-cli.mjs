@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+const appDir = resolve(scriptDir, '..')
+const repoDir = resolve(appDir, '..', '..')
+const tauriCli = resolve(appDir, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
+const args = process.argv.slice(2)
+
+if (!existsSync(tauriCli)) {
+  console.error(`[aurora:tauri] Tauri CLI not found at ${tauriCli}. Run pnpm install from the repo root.`)
+  process.exit(1)
+}
+
+const env = { ...process.env }
+if (args[0] === 'dev') {
+  applyDevSidecarDefaults(env)
+  printDevBanner(env)
+}
+
+const child = spawn(process.execPath, [tauriCli, ...args], {
+  cwd: appDir,
+  env,
+  stdio: 'inherit'
+})
+
+child.on('exit', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal)
+    return
+  }
+  process.exit(code ?? 1)
+})
+
+child.on('error', (error) => {
+  console.error(`[aurora:tauri] Failed to launch Tauri CLI: ${error.message}`)
+  process.exit(1)
+})
+
+function applyDevSidecarDefaults(env) {
+  env.AURORA_ARCHITECTURE_MODE ??= 'threads'
+  env.AURORA_TAURI_DEV_AUTOSIDECAR ??= '1'
+  env.AURORA_TAURI_SIDECAR_CWD ??= repoDir
+  env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'
+  env.AURORA_GATEWAY_URL ??= 'http://127.0.0.1:8000'
+
+  if (!env.AURORA_TAURI_SIDECAR_PROGRAM) {
+    const venvPython = resolve(repoDir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
+    env.AURORA_TAURI_SIDECAR_PROGRAM = existsSync(venvPython) ? venvPython : 'python'
+  }
+}
+
+function printDevBanner(env) {
+  console.log('[aurora:tauri] dev bootstrap')
+  console.log(`[aurora:tauri] sidecar program: ${env.AURORA_TAURI_SIDECAR_PROGRAM}`)
+  console.log(`[aurora:tauri] sidecar args: ${env.AURORA_TAURI_SIDECAR_ARGS}`)
+  console.log(`[aurora:tauri] sidecar cwd: ${env.AURORA_TAURI_SIDECAR_CWD}`)
+  console.log(`[aurora:tauri] architecture mode: ${env.AURORA_ARCHITECTURE_MODE}`)
+  console.log(`[aurora:tauri] gateway: ${env.AURORA_GATEWAY_URL}`)
+}
