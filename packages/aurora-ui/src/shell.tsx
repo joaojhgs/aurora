@@ -13,6 +13,8 @@ export interface AppShellProps {
 
 export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: AppShellProps) {
   const activePath = normalizePath(currentPath)
+  const activeRoute = snapshot.routes.find((route) => route.item.href === activePath)
+  const modeLabel = shellModeLabel(snapshot.transportKind)
   return (
     <div className="aui-shell">
       <aside className="aui-sidebar" aria-label="Primary navigation">
@@ -30,13 +32,26 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
         <header className="aui-topbar">
           <details className="aui-mobile-menu">
             <summary aria-label="Open menu"><Menu size={20} /></summary>
-            <ShellNavigation activePath={activePath} routes={snapshot.routes} compact {...(onNavigate ? { onNavigate } : {})} />
+            <div className="aui-mobile-sheet" role="dialog" aria-label="Mobile navigation sheet">
+              <BrandHeader snapshot={snapshot} />
+              <ShellNavigation activePath={activePath} routes={snapshot.routes} compact {...(onNavigate ? { onNavigate } : {})} />
+              <div className="aui-mobile-sheet-footer" aria-label="Mobile identity">
+                <span className="aui-avatar">AD</span>
+                <div><strong>admin</strong><span>Capability gated</span></div>
+              </div>
+            </div>
           </details>
           <div className="aui-status-row" aria-label="Aurora shell status">
-            <EvidenceBadge label={snapshot.transportKind} />
+            <ShellStatus label="Mode"><EvidenceBadge label={modeLabel} /></ShellStatus>
+            <ShellStatus label="Route">
+              {activeRoute ? <StatusBadge state={activeRoute.state} /> : <EvidenceBadge label="route pending" />}
+            </ShellStatus>
+            <ShellStatus label="Privacy">
+              {activeRoute ? <PrivacyBadge privacy={activeRoute.item.privacyClass} /> : <EvidenceBadge label="privacy pending" />}
+            </ShellStatus>
+            <ShellStatus label="Health"><EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} selectable`} /></ShellStatus>
             <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
             <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native deferred'} />
-            <span className="aui-badge">{snapshot.availableCount}/{snapshot.routeCount} selectable</span>
           </div>
           <PanelRight className="aui-topbar-icon" aria-hidden />
         </header>
@@ -207,6 +222,15 @@ function handleShellNavigation(
   onNavigate(href)
 }
 
+function ShellStatus({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="aui-shell-status" aria-label={label}>
+      <strong>{label}</strong>
+      {children}
+    </span>
+  )
+}
+
 function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
   return (
     <div className="aui-brand">
@@ -237,6 +261,15 @@ function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
 
 function StatusDot({ state }: { state: string }) {
   return <span className={`aui-status-dot aui-dot-${state}`} aria-hidden />
+}
+
+function shellModeLabel(transportKind: string): string {
+  if (transportKind === 'tauri-local') return 'Desktop local'
+  if (transportKind === 'tauri-thin') return 'Desktop thin'
+  if (transportKind === 'native-mobile') return 'Mobile thin'
+  if (transportKind === 'mock') return 'Demo fixture'
+  if (transportKind === 'http') return 'Web thin'
+  return transportKind
 }
 
 function normalizePath(path: string): string {

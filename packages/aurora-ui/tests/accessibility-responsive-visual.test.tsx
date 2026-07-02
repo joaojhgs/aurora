@@ -48,19 +48,19 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: 'd54ebaad3756',
-    tablet: 'ccae17883a01',
-    mobile: 'd026fac719c8'
+    desktop: '3b97e1ca498f',
+    tablet: 'a6d63f5ed93e',
+    mobile: 'a6e1c420f74d'
   },
   admin: {
-    desktop: 'c2cd9f61a020',
-    tablet: '2c84c35781ac',
-    mobile: '047630b7a59a'
+    desktop: '1dced0ab2b85',
+    tablet: '8056e32f91cb',
+    mobile: 'b638263a0c6d'
   },
   'mobile-settings': {
-    desktop: '451ab9ebcf87',
-    tablet: '25c04aa56752',
-    mobile: '9032cab56dad'
+    desktop: '03aa3fe31a98',
+    tablet: '1223cc8754ad',
+    mobile: '86d3e76fd5ad'
   }
 }
 
@@ -124,6 +124,8 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(css).toContain('@media (max-width: 860px)')
     expect(css).toContain('@media (max-width: 680px)')
     expect(css).toContain('.aui-mobile-tabs')
+    expect(css).toContain('.aui-mobile-sheet')
+    expect(css).toContain('.aui-shell-status')
     expect(css).toContain(':focus-visible')
 
     writeJsonReport('responsive.json', {

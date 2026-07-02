@@ -238,7 +238,13 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Primary navigation')
+    expect(markup).toContain('Mobile navigation sheet')
+    expect(markup).toContain('Mobile navigation')
     expect(markup).toContain('aria-current="page"')
+    expect(markup).toContain('aria-label="Mode"')
+    expect(markup).toContain('aria-label="Route"')
+    expect(markup).toContain('aria-label="Privacy"')
+    expect(markup).toContain('aria-label="Health"')
     expect(markup).toContain('AdminAction')
     expect(markup).toContain('privacy-blocked')
     expect(markup).toContain('Feature details')
