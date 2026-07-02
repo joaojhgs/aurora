@@ -1,201 +1,172 @@
 # Tauri Dev Bootstrap and UI Production Gap Report
 
-Date: 2026-07-02  
-Scope: Tauri desktop dev bootstrap, local Gateway route availability, and every current Tauri UI route captured through Playwright against the running local dev stack.
+**Status:** Current bounded check  
+**Date:** 2026-07-02  
+**Scope:** Tauri desktop dev bootstrap, shared 22-route UI inventory, route mounting, and current production-readiness gaps for the Aurora Tauri/web/mobile cockpit.
 
 ## Executive status
 
-The original failure was real: the Tauri UI could be launched, but the developer path was not self-contained, Python service logs were hidden from the Rust/Vite terminal, local permissions were interpreted as if the user had to select or approve almost every local route, and most admin routes rendered backend-evidence placeholders instead of product pages.
+Aurora's UI is no longer in the earlier broken state where primary routes were navigable but rendered `TauriRoutePlaceholder` or diagnostics/debug-dashboard content. The shared nav contract defines 22 primary routes, `apps/aurora-tauri/src/tauri-app.tsx` registers every route to a real component, and the Tauri route crawl now fails if any registered route renders placeholder/debug-dashboard copy.
 
-This pass fixed the minimal dev bootstrap and the false local-route blocking. It did **not** make the UI production complete. The current evidence shows a working local Tauri/Vite + Python threads-mode Gateway dev stack, but the UI still has major product gaps: admin routes are placeholders, Assistant is closer to a debug cockpit than a chat surface, Models shows contradictory selectable state, and several route pages are duplicated or incomplete.
+This report is still a bounded gap report, not a final production-readiness claim. Recent evidence proves route mounting, mock-aligned route-specific UI, and no broad false local privacy blocking in the component/test harness. Remaining work is concentrated in live `tauri dev` desktop stack proof, backend-backed mutation paths, full assistant/admin/runtime E2E flows against the real local Gateway, desktop-native evidence capture, Android/iOS preflight evidence, and final documentation/CI consolidation.
 
-## Evidence collected
+## Current authoritative route inventory
 
-Artifacts:
+`packages/aurora-ui/src/nav.tsx` defines the 22 primary routes required by the controlling plan:
+
+| Section | Routes |
+| --- | --- |
+| Assistant | `/`, `/memory`, `/tools`, `/mesh` |
+| Operate | `/admin`, `/admin/services`, `/admin/access`, `/admin/tokens`, `/admin/devices`, `/admin/config`, `/admin/contracts`, `/admin/plugins`, `/admin/pairing`, `/admin/backups`, `/admin/scheduler`, `/admin/audit` |
+| Runtime | `/models`, `/diagnostics`, `/onboarding`, `/settings`, `/memory/policy`, `/settings/native` |
+
+Current route gates assert this inventory with:
+
+```sh
+pnpm --filter @aurora/tauri-ui test:e2e:routes
+```
+
+The gate checks that:
+
+- `auroraNavSections` contains 22 routes.
+- `tauriRouteRegistryRouteIds` equals the nav route id set.
+- Every route renders without placeholder/debug-dashboard UI.
+- Assistant, admin, and runtime route groups have route-specific assertions.
+- Runtime routes do not inherit diagnostics/native-boundary content except `/diagnostics`.
+- Runtime routes do not show broad false `aui-badge-privacy-blocked` except the separate `/memory/policy` data-policy surface.
+
+## Evidence collected in the current tree
+
+Recent local verification for this report and adjacent route stories:
+
+```sh
+pnpm --filter @aurora/ui typecheck
+pnpm --filter @aurora/ui test
+pnpm --filter @aurora/ui test -- -t 'route availability|production surface'
+pnpm --filter @aurora/tauri-ui test:e2e:routes
+pnpm --filter @aurora/tauri-ui test -- -t 'registers a production Tauri component|renders every primary route|e2e:admin|e2e:runtime'
+pnpm --filter @aurora/tauri-ui test
+pnpm --filter @aurora/tauri-ui typecheck
+```
+
+Historical local-stack artifacts from the original audit remain useful as provenance, but they are not the final production evidence:
 
 - Playwright route screenshots: `.omx/artifacts/ui-audit/screenshots/*.png`
 - Playwright route summary: `.omx/artifacts/ui-audit/screenshots/summary.json`
-- Dev command exercised: `pnpm --filter @aurora/tauri-ui tauri dev`
-- Gateway health: `GET http://127.0.0.1:8000/api/health` returned healthy with 10 healthy services and 99 routes.
-- Endpoint probes after fixes:
-  - `Auth/ListPendingPairings`: HTTP 200, count 0
-  - `Gateway/GetWebRTCDiagnostics`: HTTP 200
-  - `Tooling/GetToolCatalog`: HTTP 200, count 9, blocked 0
-  - `Auth/ListTokens`: HTTP 200, count 6
-  - `Auth/MeshListPeers`: HTTP 200, count 8
-  - `Gateway/GetCapabilityCatalog`: HTTP 200, count 99
-  - `Orchestrator/GetModelCatalog`: HTTP 200, count 4
+- Dev command exercised in the earlier audit: `pnpm --filter @aurora/tauri-ui tauri dev`
+- Gateway health in that audit: `GET http://127.0.0.1:8000/api/health` returned healthy with 10 healthy services and 99 routes.
 
-Playwright summary after fixes:
+The final ultragoal still needs a fresh real-stack `tauri dev` smoke with screenshot/log artifacts after all UI and CI work is complete.
 
-- All 22 routes loaded without navigation failure.
-- The shell now reports `19/22 selectable` instead of the earlier `2/22`/`20 routes blocked` state.
-- No route still reports broad false `privacy-blocked` except settings pages that intentionally display policy-control rows containing that word.
-- Remaining route-level unsupported/unselectable items are real gaps: Access/RBAC backend contract, native-only shell evidence in browser fallback, and onboarding/native capability evidence.
+## What is fixed now
 
-## What was fixed in this pass
+### 1. Route placeholders are no longer the final route behavior
 
-### 1. `tauri dev` now bootstraps the local Python services
+Changed/current files:
 
-Changed code:
+- `packages/aurora-ui/src/nav.tsx`
+- `apps/aurora-tauri/src/tauri-app.tsx`
+- `apps/aurora-tauri/src/aurora-client.test.tsx`
 
-- `apps/aurora-tauri/package.json`
-- `apps/aurora-tauri/scripts/tauri-cli.mjs`
-- `apps/aurora-tauri/src-tauri/src/lib.rs`
+`tauri-app.tsx` now maps all 22 primary route ids to route-specific components/resource loaders. Admin routes no longer fall through to `TauriRoutePlaceholder`; the only remaining unregistered-route copy is a defensive fallback for future mistakes and is not reachable from the primary route registry.
 
-`pnpm --filter @aurora/tauri-ui tauri dev` now sets sane dev defaults automatically:
+### 2. Route-specific production surfaces exist for all 22 routes
 
-- `AURORA_ARCHITECTURE_MODE=threads`
-- `AURORA_TAURI_DEV_AUTOSIDECAR=1`
-- `AURORA_TAURI_SIDECAR_PROGRAM=<repo>/.venv/bin/python` when present
-- `AURORA_TAURI_SIDECAR_ARGS=main.py`
-- `AURORA_TAURI_SIDECAR_CWD=<repo root>`
-- `AURORA_GATEWAY_URL=http://127.0.0.1:8000`
+The current UI package contains route-specific surfaces for assistant chat, memory/data policy, tools, mesh, admin overview/services/RBAC/tokens/devices/config/contracts/plugins/pairing/backups/scheduler/audit, models, diagnostics, onboarding, settings, and native/mobile capability evidence.
 
-The Rust shell also pipes the Python sidecar stdout/stderr into the same terminal with `[aurora:python:stdout]` / `[aurora:python:stderr]` prefixes, so Vite, Rust, and Python service logs are visible together.
+These surfaces are bound to `@aurora/client`, Gateway contracts, Tauri/native capability manifests, and route policy evidence instead of direct Python service calls.
 
-### 2. Managed dev sidecar exposes loopback Gateway without requiring manual auth setup
+### 3. False global privacy blocking is guarded
 
-Changed code:
+Local selector/privacy preference is no longer treated as a broad hard blocker in route tests. The route gates distinguish routeable product pages from real consent/native-permission/AdminAction blocking states, and the settings/data-policy pages may intentionally display privacy-blocked policy rows as route-specific content.
 
-- `apps/aurora-tauri/src-tauri/src/lib.rs`
-- `app/services/gateway/service.py`
+### 4. Mock UX references have been translated into production-shaped pages
 
-The generated dev sidecar config now enables both Gateway and Auth services. For the managed local Tauri sidecar only, Gateway auth is disabled on loopback by `AURORA_TAURI_DISABLE_GATEWAY_AUTH=1` while the Auth service stays available for token/device/pairing/admin read models. This prevents a local anonymous dev shell from being mistaken for a remote untrusted client.
+The current implementation preserves key mock concepts while binding them to real evidence:
 
-### 3. Route blocking was caused by policy/evidence mismatches, not actual missing local services
-
-Changed code:
-
-- `packages/aurora-sdk/src/capabilities.ts`
-- `app/services/tooling/service.py`
-- `app/services/auth/service.py`
-- `app/services/gateway/service.py`
-
-Root causes fixed:
-
-- Local `explicit_selector_required` was treated as a hard privacy blocker. The SDK now treats local selector prompts as route preferences, not a reason to block the route.
-- `Tooling.GetToolCatalog` saw local dev requests as missing permissions because the forwarded principal was `system`/`open_peer`; the local system/open peer envelope now gets system-equivalent permissions in the catalog path.
-- Legacy token scopes using `all` violated the public token scope contract; they are normalized to `*` at the Auth API boundary.
-- Mesh peer permissions stored as JSON strings caused Auth list APIs to 500; they are parsed before shaping `MeshPeerInfo`.
-- Read-only diagnostics/list endpoints (`Gateway.GetWebRTCDiagnostics`, `Auth.ListPendingPairings`) were modeled as `manage` routes and generated HTTP 428 AdminAction requirements. They are now `use` routes while preserving their required manage permissions.
-
-### 4. Browser Playwright can hit the real local Gateway
-
-Changed code:
-
-- `apps/aurora-tauri/src/aurora-client.ts`
-- `packages/aurora-sdk/src/http.ts`
-- `packages/aurora-sdk/src/client.ts`
-
-The Vite/browser fallback now chooses `http://127.0.0.1:8000` during localhost dev instead of silently using fixtures. The SDK fetch binding was fixed for browsers, and unsupported native calls now reject asynchronously instead of throwing before `.catch()` can handle them.
+- Assistant: conversation rail, message thread, composer, route sheet, tool-call cards, voice modes, attachment/context handling.
+- Mesh: topology/trust/peer diagnostics rather than stale sample-only peers.
+- Models: provider/runtime cards and native local-light/mobile evidence.
+- Admin suite: route-specific resources and disabled/AdminAction-gated mutation paths.
+- Diagnostics: live probes, redacted support bundle posture, native boundary evidence.
+- Onboarding: Server Web, Desktop Local, Mesh Shell, Mobile Thin, Offline Demo setup modes.
+- Settings/native: privacy defaults, voice behavior, native permissions, Android/iOS integration states.
 
 ## Current route-by-route audit
 
-| Route | Current state from Playwright | Production gap |
+| Route | Current state | Remaining production gap |
 | --- | --- | --- |
-| `/` Assistant | Loads and can see `Orchestrator.ExternalUserInput`; no false privacy block. | Page is still a debug/evidence cockpit, not a production chat UI. It exposes route guards, JSON payloads, raw policy state, and unfinished voice controls. It needs thread history, streaming response UX, clean composer, model/tool context controls, attachments, and clear error/empty states modeled on `modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx`. |
-| `/memory` | Loads without privacy block. | RAG namespaces can be unavailable because optional embedding deps are missing. UI does not clearly separate memory search, namespace management, privacy policy, import/export, and deletion flows. |
-| `/tools` | Loads `9 tools`, `0 blocked`. | Raw backend tools/docstrings are exposed as approval cards. Production needs categories, search, clear safe execution flow, per-tool parameter forms, audit trail, and AdminAction/consent UX instead of a catalog dump. |
-| `/mesh` | Loads without 428s after endpoint fixes. | Page shows stale persisted peers/device records and low-level trust data. Needs real peer lifecycle UX: empty state, pair/connect/disconnect, trust queue, route-quality summary, WebRTC diagnostics, and dangerous actions behind AdminAction confirmation. Mock reference: `modules/ui-mock-reference/components/aurora/mesh/mesh-view.tsx`. |
-| `/admin` | Available route but renders `TauriRoutePlaceholder`. | There is an existing `AdminOverviewView` in `packages/aurora-ui/src/admin-overview-view.tsx`; Tauri shell does not mount it. |
-| `/admin/services` | Available route but placeholder. | Existing `AdminServicesView` is not mounted. Needs service health, lifecycle affordances, logs/diagnostics links, and safe disabled mutation states. |
-| `/admin/access` | Unsupported. | Backend capability/contract for RBAC roles (`ADM-003`, e.g. `Auth.ListRoles`) is missing or not advertised. Existing `AdminRbacView` cannot become real until backend contract exists. |
-| `/admin/tokens` | Available route but placeholder. | No mounted token management page. Needs token list, revoke/rotate flows, scope display, redaction, and AdminAction confirmation. |
-| `/admin/devices` | Available route but placeholder. | Existing `AdminDevicesView` is not mounted. Needs trusted devices, mesh identity linkage, revoke flow, stale-device state. |
-| `/admin/config` | Available route but placeholder. | Existing `ConfigEditorView` is not mounted. Needs schema-aware config editing, diff, validation, rollback, secret redaction, and AdminAction confirmation. |
-| `/admin/contracts` | Available route but placeholder. | Needs registry/method browser mounted from `Gateway.GetRegistry`/contract inventory. Current shell only shows capability evidence. |
-| `/admin/plugins` | Available route but placeholder. | Existing `AdminPluginsView` is not mounted. Needs installed/enabled plugin state, tool exposure, reload/error states. |
-| `/admin/pairing` | Available route but placeholder. | Existing `PairingQueueView` is not mounted. Needs pending pairing queue, approve/deny, QR/code display, expiry, audit. |
-| `/admin/backups` | Available route but placeholder. | Existing `BackupRestoreView` is not mounted. Needs backup list/create/restore, encryption state, restore confirmation, and rollback warnings. |
-| `/admin/scheduler` | Available route but placeholder. | Existing `AdminSchedulerView` is not mounted. Needs job list, run history, pause/resume, errors, and safe mutation boundary. |
-| `/admin/audit` | Available route but placeholder. | Existing `AdminAuditView` is not mounted. Needs searchable/filterable audit log, correlation IDs, export/redaction. |
-| `/models` | Loads 4 providers, 2 local, but reports `0 selectable` while a provider button says selected. | State is contradictory. Provider availability/selection logic must distinguish configured, selectable, selected, downloadable/importable, and benchmarkable. Local providers without configured model files need clear setup actions. Mock reference: `modules/ui-mock-reference/components/aurora/models/models-view.tsx`. |
-| `/diagnostics` | Loads full route matrix and native boundary. | In browser Playwright it correctly shows `desktop-thin`/native unavailable, but production needs a separate real Tauri WebView smoke so desktop-local sidecar/native evidence is captured automatically. |
-| `/onboarding` | Loads but has unsupported desktop-local/native paths in browser fallback. | Needs real first-run flow mounted from Tauri native evidence: choose local/thin/mesh, start/verify sidecar, token/pairing, and persist chosen endpoint. |
-| `/settings` | Loads settings/policy state. | Good diagnostic content, but it is not yet a complete settings product: no writable forms, no confirmation flow, no local/remote route selector UI, no native permission request paths. |
-| `/memory/policy` | Renders the same Memory page as `/memory`. | This should be a separate Data Policy page with retention, consent, namespace visibility, export/delete, and provenance controls. |
-| `/settings/native` | Renders the same Settings page as `/settings`. | This should be a native capability/permission page with Tauri desktop, Android, and iOS-specific evidence and request buttons where supported. |
+| `/` Assistant | Route-specific assistant chat UI with prompt composer, conversation rail, route sheet, tool-call cards, voice states, and no diagnostics-dashboard landing. | Needs full real-stack send/stream/cancel/retry/no-model E2E against local Gateway and event-stream evidence. |
+| `/memory` | Memory/RAG cockpit with history/provenance/namespace states. | Needs broader live DB/RAG namespace coverage, import/export/delete flows, and missing embedding-dependency repair evidence. |
+| `/tools` | Tool browser/approval cockpit with catalog, approval, scheduler/automation context, and safe disabled states. | Needs real execution/dry-run coverage for safe local tools and sensitive approval/AdminAction flows. |
+| `/mesh` | Mesh peers/topology/trust/route-policy UI mounted in Tauri. | Needs live pair/connect/disconnect evidence and WebRTC quality scenarios beyond fixture/test harness data. |
+| `/admin` | Admin overview page mounted. | Needs live deployment posture and mutation coverage where backend supports it. |
+| `/admin/services` | Services resource page mounted. | Needs real service lifecycle/log action coverage or explicit AdminAction-disabled evidence for unsupported mutations. |
+| `/admin/access` | RBAC/access page mounted with backend gap/disabled-state handling. | Backend role/principal mutation contracts still need real support or explicit unavailable-route evidence. |
+| `/admin/tokens` | Token management page mounted with scoped token/redaction posture. | Needs one-time reveal/revoke/rotate E2E with no secret leakage. |
+| `/admin/devices` | Trusted devices and pending device state mounted. | Needs live revoke/approve/mesh identity linkage evidence. |
+| `/admin/config` | Config editor page mounted with schema/diff/redaction/AdminAction posture. | Needs live validation/save/rollback/AdminAction coverage. |
+| `/admin/contracts` | Contracts route is mounted through the admin services/registry resource path. | Needs richer registry browser/detail assertions and live schema coverage. |
+| `/admin/plugins` | Plugins/MCP/tool exposure page mounted. | Needs live enable/disable/reload disabled-or-AdminAction evidence. |
+| `/admin/pairing` | Pairing queue page mounted. | Needs create/approve/deny/expiry E2E and QR/deep-link evidence where supported. |
+| `/admin/backups` | Backup/restore route mounted. | Needs live backup list/create/verify/restore dry-run support or explicit backend-gap handling. |
+| `/admin/scheduler` | Scheduler route mounted. | Needs live schedule/pause/resume/cancel/run-history coverage. |
+| `/admin/audit` | Searchable/filterable audit route mounted. | Needs export/redaction evidence and live correlation-id coverage. |
+| `/models` | Models/runtime provider cockpit mounted with provider/native/mobile states. | Needs live provider selection/import/download/benchmark support or explicit disabled backend-gap paths. |
+| `/diagnostics` | Diagnostics page is the only route centered on native boundary/runtime diagnostics. | Needs fresh desktop-local Tauri WebView evidence, support bundle artifacts, and platform matrix screenshots/logs. |
+| `/onboarding` | Setup modes and Auth/pairing/endpoint flow mounted. | Needs real first-run desktop local sidecar start/verify and mobile-thin onboarding evidence. |
+| `/settings` | Privacy defaults, route/fallback policy, voice behavior, and native permission summary mounted. | Writes remain disabled/AdminAction-gated until Config/AdminAction mutation paths are fully proven. |
+| `/memory/policy` | Data policy route is separated from memory browse in tests and route assertions. | Needs full retention/raw-audio/transcript/export/delete live coverage. |
+| `/settings/native` | Native capability/settings route is mounted with desktop, Android, and iOS evidence states. | Needs real Tauri desktop commands plus Android/iOS preflight artifacts and supported request-button behavior where native APIs exist. |
 
-## Why the gates missed this
+## Dev bootstrap status
 
-The existing gates proved buildability and endpoint contract shape, not product usability:
+The desired one-command desktop development experience remains:
 
-1. Tauri desktop CI proved the shell could build/check/smoke launch, not that every route mounted a real page.
-2. SDK/UI tests accepted evidence placeholders as valid routeable UI.
-3. Route gates checked capability metadata but did not fail on `TauriRoutePlaceholder` content.
-4. Playwright coverage was not asserting production page landmarks, console/network cleanliness, or route-specific controls.
-5. Browser fallback tests used fixtures or partial local evidence before this pass, so the real Gateway/sidecar path was under-tested.
+```sh
+pnpm --filter @aurora/tauri-ui tauri dev
+```
 
-## Required production remediation sequence
+The earlier bootstrap work configured Tauri dev defaults so the command can start Vite, Tauri/Rust, and Python Aurora services in threads mode with visible logs. The final ultragoal must rerun this from the current tree and preserve evidence that:
 
-### Goal A — Lock the dev harness as a gate
+- Python service logs, Tauri/Rust logs, and Vite logs are visible together.
+- Gateway readiness is checked before local-ready UI claims.
+- Closing Tauri or interrupting the command shuts down the Python child cleanly.
+- No manual sidecar build or extra environment ritual is needed for normal local dev.
 
-- Add a CI/dev smoke that starts the same `tauri dev` bootstrap path in a bounded mode or verifies the wrapper/env contract plus Gateway endpoint readiness.
-- Assert Python logs, Tauri/Rust logs, and Vite logs are all surfaced with stable prefixes.
-- Assert `GET /api/health` and core read-only endpoints return 200 from the spawned sidecar.
+## Why the old gates missed the broken UI
 
-### Goal B — Remove Tauri route placeholders
+The original gates proved buildability and route metadata, not product usability. The current route gates now close several of those holes:
 
-- Replace `TauriRoutePlaceholder` routing in `apps/aurora-tauri/src/tauri-app.tsx` with client-safe resource wrappers for the existing admin UI package components.
-- If an existing view is async/server-shaped, wrap it in a client resource loader instead of rendering an async component directly.
-- Add tests that fail if any primary nav route renders the placeholder copy.
+| Old miss | Current/required gate |
+| --- | --- |
+| Tauri built while admin pages rendered placeholders. | `test:e2e:routes` asserts every primary route renders without placeholder/debug-dashboard copy. |
+| Route registries could drift. | `tauriRouteRegistryRouteIds` must match all ids from `auroraNavSections`. |
+| Assistant could regress into diagnostics content. | `e2e:assistant` asserts assistant-specific chat landmarks and no native-boundary dashboard copy. |
+| Admin routes could be omitted from Tauri mounting. | `e2e:admin` enumerates all admin route ids and asserts admin-specific components. |
+| Runtime routes could inherit false global privacy blocking. | `e2e:runtime` rejects broad diagnostics/privacy-blocked leakage outside intended policy surfaces. |
 
-### Goal C — Rebuild Assistant as a real chat UI
+Remaining CI work should expand these into real browser/desktop Playwright jobs with screenshots/log artifacts, console/network cleanliness checks, assistant/admin/runtime journey coverage, and desktop/native/mobile preflight gates.
 
-- Use the mock assistant structure: conversation rail, message thread, composer, route sheet, tool call cards, attachment/context sheet.
-- Keep route/policy evidence accessible behind details panels, not as the primary page.
-- Add streaming/event-state tests for pending, partial, final, error, cancellation, retry, and no-model states.
+## Remaining production remediation sequence
 
-### Goal D — Complete local route policy semantics
-
-- Keep the local selector fix, then add tests covering local selector-required, remote selector-required, consent-required, privacy-indicator-required, and AdminAction-required cases.
-- Route matrix should count only real hard blockers as blocked.
-
-### Goal E — Models production flow
-
-- Fix `0 selectable` contradiction for local available providers.
-- Separate selected/current provider, configured provider, downloadable/importable provider, and benchmarkable provider.
-- Wire import/download/benchmark actions to real backend methods or disable them with explicit repair tasks.
-
-### Goal F — Tools production flow
-
-- Convert raw tool catalog cards into a tool browser with categories, search, parameter forms, execution preview, confirmation, result/error states, and audit visibility.
-- Keep sensitive tools behind consent/AdminAction where required.
-
-### Goal G — Memory and Data Policy split
-
-- Make `/memory` a memory/RAG product page and `/memory/policy` a separate data policy page.
-- Handle missing local embedding dependencies with actionable setup/status instead of silent unavailable namespaces.
-
-### Goal H — Mesh product page
-
-- Clear stale sample/dev peer confusion.
-- Build pair/connect/trust/diagnostics flows with explicit empty/loading/error states.
-- Keep WebRTC diagnostics and route-quality evidence visible but not as the whole product.
-
-### Goal I — Settings and Native split
-
-- Make `/settings` writable only through schema/diff/AdminAction flows.
-- Make `/settings/native` a native capability page with desktop/Tauri, Android, and iOS-specific evidence/request affordances.
-- Add a real Tauri WebView smoke for desktop-local native evidence, not only browser fallback Playwright.
-
-### Goal J — CI gates that would have failed this UI
-
-Add route-level Playwright assertions:
-
-- Every nav route loads with no console errors and no 4xx/5xx except allowed static assets.
-- No route renders `TauriRoutePlaceholder` copy.
-- Each route has route-specific production landmarks/controls.
-- Route matrix does not report local routes as privacy-blocked without a real consent or native permission action.
-- Screenshot artifacts are uploaded for failures.
+1. **Fresh `tauri dev` smoke:** rerun the one-command local desktop stack from the current tree and capture Vite/Rust/Python logs, Gateway readiness, shutdown, and screenshots.
+2. **Assistant E2E:** prove send/stream/fallback/cancel/retry/no-model, route sheet, tool-call cards, voice/TTS/transcription states, and attachment/context handling.
+3. **Admin E2E:** prove read paths plus draft/disabled mutation paths for services, RBAC, tokens, devices, config, contracts, plugins, pairing, backups, scheduler, and audit.
+4. **Runtime E2E:** prove models, diagnostics/support bundle, onboarding, settings/native, data policy, and platform behavior matrix.
+5. **Native/mobile evidence:** run desktop-native smoke plus Android and iOS preflights; UI must not claim unsupported platform capabilities.
+6. **Docs/CI consolidation:** update CI names and docs to the exact commands that are actually run; upload screenshots/logs for failing route gates.
+7. **Final quality gate:** run cleanup, verification, independent code review, architect clearance, and architecture-invariant audit before marking the aggregate ultragoal complete.
 
 ## Stop condition for production readiness
 
-The UI should not be considered production-ready until:
+The UI should not be considered production-ready until all of these are proven in current artifacts:
 
-1. `pnpm --filter @aurora/tauri-ui tauri dev` starts a clean local desktop dev stack from a fresh checkout with only normal install/setup steps.
-2. All 22 primary nav routes mount real product pages or intentionally hidden/disabled navigation entries.
-3. Playwright route gates fail on placeholders, route slop, console errors, false local privacy blocks, and missing route-specific controls.
-4. Real Tauri desktop-local smoke captures sidecar/native evidence, not just browser fallback evidence.
-5. Admin mutations have AdminAction draft/confirm/submit/audit/rollback/error UX before they are enabled.
+1. `pnpm --filter @aurora/tauri-ui tauri dev` starts and stops a clean local desktop stack from a normal checkout after standard install/setup.
+2. All 22 primary nav routes mount route-specific production UI in web/Tauri route gates.
+3. No production route renders placeholder text, raw route dumps, generic backend-state dashboards, or fixture-only product data without explicit demo labeling.
+4. Desktop local, web thin, Android preflight, and iOS preflight have platform evidence.
+5. Assistant, admin, mesh, memory, tools, models, settings/native, diagnostics, onboarding, and data policy have E2E coverage.
+6. Admin/security/privacy invariants are independently reviewed.
+7. Docs describe actual commands, supported modes, and platform limits.
+8. Final quality gate contains verification evidence, screenshots/logs, cleanup/no-op evidence, code-reviewer approval, and architect clearance.
