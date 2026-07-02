@@ -60,6 +60,8 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [grantAdmin, setGrantAdmin] = useState(false)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [copiedRequestId, setCopiedRequestId] = useState<string | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
 
   const loadQueue = useCallback(async () => {
     if (route.disabled) {
@@ -91,6 +93,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     async (entry: PendingPairingEntry, action: 'approve' | 'deny') => {
       setPendingAction(`${entry.request_id}:${action}`)
       setMutationError(null)
+      setCopyError(null)
       const reason = adminReason.trim() || `${action} pairing request ${entry.request_id}`
       try {
         await client.admin.execute(buildPairingAdminActionRequest(entry, action, { reason, permissions, grantAdmin }))
@@ -103,6 +106,25 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     },
     [adminReason, client.admin, grantAdmin, loadQueue, permissions]
   )
+
+  const copyPairingCode = useCallback(async (entry: PendingPairingEntry) => {
+    setCopyError(null)
+    setCopiedRequestId(null)
+    if (!entry.code) {
+      setCopyError('No pairing code was reported for this request.')
+      return
+    }
+    try {
+      const clipboard = globalThis.navigator?.clipboard
+      if (!clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable; open the controlled pairing details on a secure desktop session.')
+      }
+      await clipboard.writeText(entry.code)
+      setCopiedRequestId(entry.request_id)
+    } catch (error) {
+      setCopyError(error instanceof Error ? error.message : 'Unable to copy pairing code.')
+    }
+  }, [])
 
   return (
     <PairingQueueSurface
@@ -118,7 +140,10 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       onGrantAdminChange={setGrantAdmin}
       pendingAction={pendingAction}
       mutationError={mutationError}
+      copiedRequestId={copiedRequestId}
+      copyError={copyError}
       onRefresh={loadQueue}
+      onCopyCode={copyPairingCode}
       onApprove={(entry) => submitPairingAction(entry, 'approve')}
       onDeny={(entry) => submitPairingAction(entry, 'deny')}
     />
@@ -138,7 +163,10 @@ export interface PairingQueueSurfaceProps {
   onGrantAdminChange?: (value: boolean) => void
   pendingAction?: string | null
   mutationError?: string | null
+  copiedRequestId?: string | null
+  copyError?: string | null
   onRefresh?: () => void
+  onCopyCode?: (entry: PendingPairingEntry) => void
   onApprove?: (entry: PendingPairingEntry) => void
   onDeny?: (entry: PendingPairingEntry) => void
 }
@@ -156,7 +184,10 @@ export function PairingQueueSurface({
   onGrantAdminChange,
   pendingAction = null,
   mutationError = null,
+  copiedRequestId = null,
+  copyError = null,
   onRefresh,
+  onCopyCode,
   onApprove,
   onDeny
 }: PairingQueueSurfaceProps) {
@@ -213,6 +244,7 @@ export function PairingQueueSurface({
       </section>
 
       {mutationError ? <p className="aui-message aui-message-danger" role="alert">{mutationError}</p> : null}
+      {copyError ? <p className="aui-message aui-message-danger" role="alert">{copyError}</p> : null}
       {model.disabledReason ? <p className="aui-message">{model.disabledReason}</p> : null}
       {model.error ? <p className="aui-message aui-message-danger" role="alert">{model.error}</p> : null}
       {model.state === 'loading' ? <p className="aui-message" aria-live="polite">Loading pairing queue from AuroraClient.</p> : null}
@@ -243,6 +275,14 @@ export function PairingQueueSurface({
             </dl>
             <div className="aui-pairing-actions">
               <button
+                className="aui-button"
+                type="button"
+                disabled={actionDisabled || entry.status !== 'pending' || !entry.code || !onCopyCode}
+                onClick={() => onCopyCode?.(entry)}
+              >
+                Copy pairing code
+              </button>
+              <button
                 className="aui-primary-action"
                 type="button"
                 disabled={actionDisabled || entry.status !== 'pending'}
@@ -259,6 +299,9 @@ export function PairingQueueSurface({
                 {pendingAction === `${entry.request_id}:deny` ? 'Submitting AdminAction' : 'AdminAction deny'}
               </button>
             </div>
+            {copiedRequestId === entry.request_id ? (
+              <p className="aui-message" role="status">Pairing code copied from controlled Admin pairing surface; value remains redacted in UI and logs.</p>
+            ) : null}
           </article>
         ))}
       </section>

@@ -450,7 +450,7 @@ export function MeshPeersView({
           <span>Revoke issued token on remove</span>
         </label>
         <button className="aui-button" type="button" disabled={controlsDisabled} onClick={onRefresh}>
-          <RefreshCw size={16} aria-hidden="true" /> Refresh
+          <RefreshCw size={16} aria-hidden="true" /> Refresh diagnostics
         </button>
       </section>
 
@@ -662,9 +662,11 @@ function MeshPairingEntrypoint({ route }: { route: RouteAvailability }) {
 }
 
 function MeshRoutePreviewPanel({ route, snapshot }: { route: RouteAvailability; snapshot: MeshPeersSnapshot }) {
+  const [explainedCandidateId, setExplainedCandidateId] = useState<string | null>(null)
   const candidates = route.candidateProviders.length > 0
     ? route.candidateProviders
     : [{ id: route.providerLabel, label: route.providerLabel, state: route.state, selectable: !route.disabled, reason: route.explanation, requiredAction: route.requiresAdminAction ? 'AdminAction required' : null }]
+  const explainedCandidate = candidates.find((candidate) => candidate.id === explainedCandidateId) ?? null
   return (
     <section className="aui-mesh-panel" aria-labelledby="mesh-route-preview-title">
       <div className="aui-mesh-panel-title">
@@ -688,7 +690,21 @@ function MeshRoutePreviewPanel({ route, snapshot }: { route: RouteAvailability; 
             <dl className="aui-mesh-topology-facts">
               <MeshFact label="Required action" value={candidate.requiredAction ?? 'none'} />
               <MeshFact label="Route feature" value={route.item.label} />
+              <MeshFact label="Explain source" value="Gateway.GetMeshStatus route decision / capability graph" />
             </dl>
+            <button
+              className="aui-button"
+              type="button"
+              disabled={!candidate.selectable}
+              onClick={() => setExplainedCandidateId(candidate.id)}
+            >
+              Explain route through peer
+            </button>
+            {explainedCandidateId === candidate.id ? (
+              <p className="aui-message" role="status">
+                Route explanation for {candidate.label}: {candidate.reason} Source: Gateway.GetMeshStatus route decision and capability graph; no route is forced from the UI.
+              </p>
+            ) : null}
           </article>
         ))}
         {snapshot.routeCount === 0 ? (
@@ -706,6 +722,11 @@ function MeshRoutePreviewPanel({ route, snapshot }: { route: RouteAvailability; 
           </article>
         )}
       </div>
+      {explainedCandidate ? (
+        <p className="aui-message">
+          Selected route explanation stays local to this preview and does not mutate peer trust: {explainedCandidate.label}.
+        </p>
+      ) : null}
     </section>
   )
 }

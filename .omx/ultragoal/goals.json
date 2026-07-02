@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:17:18.403Z",
+  "updatedAt": "2026-07-02T13:22:25.319Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1440,10 +1440,12 @@
       "id": "G124-actions",
       "title": "Actions:",
       "objective": "Actions:\napprove/deny pending pairings;\nremove/revoke peer;\ncopy pairing code;\nrefresh diagnostics;\nexplain route through peer.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:22:25.319Z",
+      "completedAt": "2026-07-02T13:22:25.319Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'pairing queue|pairing approve|mesh peer lifecycle|mesh peer AdminAction'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G125-platform-behavior",

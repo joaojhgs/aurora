@@ -2649,6 +2649,8 @@ describe('Aurora production shell', () => {
         route={route}
         adminReason="Approve expected kitchen tablet"
         permissions="Gateway.use"
+        copiedRequestId="pending-1"
+        onCopyCode={() => undefined}
       />
     )
 
@@ -2658,6 +2660,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Kitchen node / peer-kitchen')
     expect(markup).toContain('AdminAction approve')
     expect(markup).toContain('AdminAction deny')
+    expect(markup).toContain('Copy pairing code')
+    expect(markup).toContain('Pairing code copied from controlled Admin pairing surface')
     expect(markup).toContain('redacted by UI')
     expect(markup).not.toContain('secret-pending-code')
   })
@@ -2787,6 +2791,9 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('pairing secret is present and redacted')
     expect(markup).toContain('controlled Admin pairing flow')
     expect(markup).toContain('Route preview')
+    expect(markup).toContain('Explain route through peer')
+    expect(markup).toContain('Gateway.GetMeshStatus route decision / capability graph')
+    expect(markup).toContain('Refresh diagnostics')
     expect(markup).toContain('Stale/dev peer cleanup')
     expect(markup).toContain('Stale peer requires manifest/heartbeat review before cleanup')
     expect(markup).toContain('Removed peer trust record should be reviewed for cleanup')
