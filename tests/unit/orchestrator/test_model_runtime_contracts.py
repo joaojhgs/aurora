@@ -100,6 +100,10 @@ async def test_model_catalog_reports_configured_providers_and_redacts_secrets(tm
 
     llama = next(provider for provider in catalog.providers if provider.provider_id == "llama_cpp")
     assert llama.selected is True
+    assert llama.provider_type == "local"
+    assert llama.enabled is True
+    assert llama.health == "available"
+    assert set(catalog.provider_index["local"]) == {"llama_cpp", "huggingface_pipeline"}
     assert llama.backend_kind == "llama_cpp"
     assert llama.context_window == 4096
     assert llama.model_files[0].display_name == "private-model.gguf"

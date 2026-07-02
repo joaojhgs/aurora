@@ -701,6 +701,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-local',
         canSelect: false,
+        selectReason: expect.stringContaining('Selected provider is reported by backend catalog evidence'),
         privacyClass: 'public',
         routeQuality: expect.stringContaining('local; available-local; routeable from catalog evidence'),
         latencyContext: expect.stringContaining('1200 ms latency; 8192 token context; 2048 token generation limit'),
@@ -711,7 +712,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-remote',
         canSelect: false,
-        selectReason: expect.stringContaining('Backend model selection contract is not active'),
+        selectReason: expect.stringContaining('Only local executable providers can be selected'),
         providerType: 'mesh',
         routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog'),
         routeQuality: expect.stringContaining('mesh remote; available-remote')
@@ -750,6 +751,50 @@ describe('Aurora production shell', () => {
     expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
+  it('marks an unselected executable local model provider selectable through Config.Set AdminAction evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      transportKind: 'mock'
+    })
+    const catalog = cloneFixture(modelRuntimeCatalogFixture)
+    catalog.selected_provider_id = 'cloud:openai:Orchestrator'
+    catalog.providers = catalog.providers.map((provider) => ({
+      ...provider,
+      selected: provider.provider_id === 'cloud:openai:Orchestrator'
+    }))
+
+    const model = buildModelsViewModel({
+      catalog,
+      graph,
+      nativeManifest: null,
+      loadState: 'ready'
+    })
+
+    expect(model.providers.find((provider) => provider.id === 'local:Orchestrator:llama-cpp')).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerType: 'local',
+        selected: false,
+        canSelect: true,
+        selectConfigValue: 'llama_cpp',
+        selectReason: expect.stringContaining('Config.Set AdminAction')
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
+      expect.objectContaining({
+        canSelect: false,
+        selectReason: expect.stringContaining('Only local executable providers can be selected')
+      })
+    )
+    expect(model.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        canSelect: false,
+        selectReason: expect.stringContaining('Only local executable providers can be selected')
+      })
+    )
+  })
+
   it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
@@ -776,7 +821,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('2 remote')
     expect(markup).toContain('Current route policy banner')
     expect(markup).toContain('Current route policy')
-    expect(markup).toContain('selection changes remain disabled until a backend/AdminAction selection contract is available')
+    expect(markup).toContain('local executable provider changes use Config.Set through AdminAction')
     expect(markup).toContain('No model configured assistant repair link')
     expect(markup).toContain('Model runtime categories')
     expect(markup).toContain('Currently selected provider')
@@ -813,8 +858,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('secrets redacted')
     expect(markup).toContain('AdminAction model import contract is not active')
     expect(markup).toContain('Benchmark action stays disabled')
-    expect(markup).toContain('Select: Backend model selection contract is not active')
-    expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
+    expect(markup).toContain('Select: Only local executable providers can be selected from this cockpit')
+    expect(markup).toContain('local executable provider changes use Config.Set through AdminAction')
     expect(markup).toContain('backend_model_catalog_and_device_model_proof_required')
     expect(markup).toContain('android-native-local-light-adapter')
     expect(markup).toContain('Mobile local-light')

@@ -44,6 +44,7 @@ export interface ModelProviderViewModel {
   operationStatus: string
   canSelect: boolean
   selectReason: string
+  selectConfigValue: string | null
   canImport: boolean
   importReason: string
   canDownload: boolean
@@ -306,7 +307,7 @@ function ModelRoutePolicyBanner({
         <h2 id="model-current-route-policy-title">Current route policy</h2>
         <p>
           {selected
-            ? `${selected.name} is the selected provider; selection changes remain disabled until a backend/AdminAction selection contract is available.`
+            ? `${selected.name} is the selected provider; local executable provider changes use Config.Set through AdminAction.`
             : selectedProviderId
               ? `Backend selected provider ${selectedProviderId}, but it was not returned in the current catalog.`
               : 'No provider is currently selected; Assistant will keep model repair guidance visible.'}
@@ -370,7 +371,7 @@ function ModelRoutePolicyPanel({ providers }: { providers: ModelProviderViewMode
             <dl className="aui-model-meta">
               <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
               <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
-              <div><dt>Selectable</dt><dd>{provider.canSelect ? 'yes' : provider.selectReason}</dd></div>
+              <div><dt>Selectable</dt><dd>{provider.canSelect ? `yes; writes ${provider.selectConfigValue ?? 'unknown'} through Config.Set AdminAction` : provider.selectReason}</dd></div>
               <div><dt>Blockers</dt><dd>{provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported'}</dd></div>
             </dl>
           </article>
@@ -567,8 +568,9 @@ function providerModel(
       .filter((progress) => progress.status !== 'idle')
       .map((progress) => `${progress.operation_type}:${progress.status} ${progress.progress_percent}%`)
       .join(', ') || 'no operation active',
-    canSelect: false,
-    selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected),
+    canSelect: canSelectProvider(provider, candidate, availability, provider.provider_id === selectedProviderId || provider.selected, blockers),
+    selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected, provider, candidate, availability),
+    selectConfigValue: modelProviderConfigValue(provider),
     canImport: importActive,
     importReason: importActive ? provider.import_progress.message : 'AdminAction model import contract is not active.',
     canDownload: downloadActive,
@@ -578,6 +580,34 @@ function providerModel(
       ? provider.benchmark.reason ?? 'Benchmark is running through backend operation state.'
       : 'Benchmark action stays disabled until backend operation evidence exists.'
   }
+}
+
+function canSelectProvider(
+  provider: ModelRuntimeProviderInfo,
+  candidate: CapabilityProviderCandidate | undefined,
+  availability: AvailabilityState,
+  selected: boolean,
+  blockers: string[]
+): boolean {
+  if (selected) return false
+  if (provider.provider_type !== 'local') return false
+  if (!modelProviderConfigValue(provider)) return false
+  if (!provider.enabled) return false
+  if (blockers.length > 0) return false
+  if (!['available-local', 'degraded'].includes(availability)) return false
+  if (candidate && (!candidate.selectable || candidate.providerKind !== 'local')) return false
+  return true
+}
+
+function modelProviderConfigValue(provider: Pick<ModelRuntimeProviderInfo, 'provider_id' | 'backend_kind'>): string | null {
+  const id = provider.provider_id
+  const backend = provider.backend_kind
+  if (id === 'llama_cpp' || id === 'huggingface_pipeline' || id === 'huggingface_endpoint' || id === 'openai') return id
+  if (id.includes('llama-cpp') || backend === 'llama_cpp' || backend === 'desktop-local') return 'llama_cpp'
+  if (id.includes('huggingface-pipeline') || backend === 'transformers_pipeline') return 'huggingface_pipeline'
+  if (id.includes('huggingface-endpoint') || backend === 'huggingface_endpoint') return 'huggingface_endpoint'
+  if (id.includes('openai') || backend === 'openai_chat') return 'openai'
+  return null
 }
 
 function availabilityForProvider(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): AvailabilityState {
@@ -787,9 +817,21 @@ function modelWarnings(
   ]).slice(0, 8)
 }
 
-function selectReason(selected: boolean): string {
+function selectReason(
+  selected: boolean,
+  provider: ModelRuntimeProviderInfo,
+  candidate: CapabilityProviderCandidate | undefined,
+  availability: AvailabilityState
+): string {
   if (selected) return 'Selected provider is reported by backend catalog evidence.'
-  return 'Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.'
+  if (provider.provider_type !== 'local') return 'Only local executable providers can be selected from this cockpit; remote/cloud/native providers require their own policy flow.'
+  const configValue = modelProviderConfigValue(provider)
+  if (!configValue) return 'Backend provider is not mapped to services.orchestrator.llm.provider; selection stays disabled with repair required.'
+  if (!provider.enabled) return provider.health_reason ?? 'Backend catalog reports this provider disabled.'
+  if (!['available-local', 'degraded'].includes(availability)) return `Local provider is ${availability}; capability catalog must report executable local evidence before selection.`
+  if (candidate && !candidate.selectable) return 'Capability catalog marks this local provider as not selectable.'
+  if (candidate && candidate.providerKind !== 'local') return 'Capability catalog did not report this provider as a local executable provider.'
+  return `Selectable local provider; choosing it writes ${configValue} to services.orchestrator.llm.provider through Config.Set AdminAction.`
 }
 
 function mobileLocalLight(
