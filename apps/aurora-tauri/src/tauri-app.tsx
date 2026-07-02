@@ -277,11 +277,15 @@ function TauriRouteContent({
     [snapshot.nativePermissions],
   );
   const assistantNativeCapabilities = useMemo(
-    () => snapshot.nativeCapabilities.map((capability) => ({ name: capability.name, enabled: capability.enabled })),
-    [snapshot.nativeCapabilities]
-  )
+    () =>
+      snapshot.nativeCapabilities.map((capability) => ({
+        name: capability.name,
+        enabled: capability.enabled,
+      })),
+    [snapshot.nativeCapabilities],
+  );
   switch (route.item.id) {
-    case 'assistant':
+    case "assistant":
       return (
         <AssistantView
           client={client}
@@ -333,7 +337,7 @@ function TauriRouteContent({
     case 'diagnostics':
       return <TauriDiagnosticsPage snapshot={snapshot} nativeContext={nativeContext} shutdown={shutdown} />
     default:
-      return <TauriRoutePlaceholder route={route} snapshot={snapshot} />
+      return <TauriUnknownRoute route={route} />;
   }
 
   return renderRoute({
