@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:04:20.540Z",
+  "updatedAt": "2026-07-02T09:05:48.230Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -575,10 +575,13 @@
       "id": "G048-lane-a-shell-design-system-route-mou",
       "title": "**Lane A — Shell, design system, route mounting**",
       "objective": "**Lane A — Shell, design system, route mounting**\nOwner role: designer + executor\nScope: app shell fidelity, route map, placeholder removal, responsive layout, shared states, accessibility foundations.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:05:48.230Z",
+      "startedAt": "2026-07-02T09:04:38.058Z",
+      "completedAt": "2026-07-02T09:05:48.230Z",
+      "evidence": "Lane A shell/design/route mounting evidence: AppShell/tauriRouteRegistry currently mount all 22 nav routes to production components; shell tests lock mock reference corpus, route-specific landmarks, responsive/mobile navigation, state language, and placeholder/dashboard regressions; Tauri route crawl proves every registered route renders without placeholder/debug dashboard UI. Verified pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/ui test -- -t 'route|shell|mock reference|placeholder|landmark'; pnpm --filter @aurora/tauri-ui test:e2e:routes. Static rg found only the defensive unreachable MissingTauriRoute fallback copy in apps/aurora-tauri/src/tauri-app.tsx, while the route crawl verifies no primary route reaches it."
     },
     {
       "id": "G049-lane-b-sdk-sidecar-gateway-contracts",
