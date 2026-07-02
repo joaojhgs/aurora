@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:49:50.826Z",
+  "updatedAt": "2026-07-02T07:55:17.464Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -311,10 +311,13 @@
       "id": "G026-components-aurora-settings-settings",
       "title": "`components/aurora/settings/settings-permissions-view.tsx`: privacy d...",
       "objective": "`components/aurora/settings/settings-permissions-view.tsx`: privacy defaults, voice behavior, native permissions, mobile integration states.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:55:17.464Z",
+      "startedAt": "2026-07-02T07:50:12.407Z",
+      "completedAt": "2026-07-02T07:55:17.464Z",
+      "evidence": "Settings/permissions now includes mock-aligned privacy defaults, voice behavior, native permissions, and mobile integration states. Voice behavior cards are derived from assistant voice routes and native microphone evidence, use raw-audio/personal privacy badges, keep toggles disabled behind Config/AdminAction support, and preserve iOS no system-assistant-ownership claims. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'settings'; pnpm --filter @aurora/ui test -- -t 'visual baselines'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G027-packages-aurora-ui-src-nav-tsx-defin",

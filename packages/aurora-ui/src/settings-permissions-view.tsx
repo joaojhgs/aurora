@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, ToggleLeft } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Mic, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
 import type {
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
@@ -43,6 +43,19 @@ export interface SettingsNativePermissionCard {
   evidence: string[]
 }
 
+export interface SettingsVoiceBehaviorCard {
+  id: string
+  label: string
+  state: AvailabilityState
+  enabled: boolean
+  defaultLabel: string
+  privacyClass: PrivacyClass
+  providerLabel: string
+  detail: string
+  blockers: string[]
+  evidence: string[]
+}
+
 export interface SettingsNativeIntegrationCard {
   id: string
   label: string
@@ -65,6 +78,7 @@ export interface SettingsPermissionsModel {
   settingsRoute: RouteAvailability | null
   nativeRoute: RouteAvailability | null
   privacyControls: SettingsPrivacyControl[]
+  voiceBehavior: SettingsVoiceBehaviorCard[]
   nativePermissions: SettingsNativePermissionCard[]
   nativeIntegrations: SettingsNativeIntegrationCard[]
   nativeLimitations: Array<{ id: string; label: string; detail: string; evidence: string }>
@@ -120,6 +134,20 @@ export function SettingsPermissionsView({ snapshot }: SettingsPermissionsViewPro
           <div className="aui-settings-controls">
             {model.privacyControls.map((control) => (
               <PrivacyControlRow key={control.id} control={control} />
+            ))}
+          </div>
+        </section>
+
+        <section className="aui-settings-panel" aria-labelledby="voice-behavior-title">
+          <PanelTitle
+            icon={<Volume2 size={18} aria-hidden />}
+            title="Voice behavior"
+            description="Push-to-talk, wake behavior, and spoken replies are shown from Assistant voice route evidence plus native microphone constraints; switches are disabled until Config/AdminAction support exists."
+            id="voice-behavior-title"
+          />
+          <div className="aui-settings-controls">
+            {model.voiceBehavior.map((item) => (
+              <VoiceBehaviorRow key={item.id} item={item} />
             ))}
           </div>
         </section>
@@ -302,6 +330,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         evidence: [...denied, ...privacyBlocked].flatMap((route) => route.evidenceSources)
       })
     ],
+    voiceBehavior: voiceBehaviorCards(snapshot),
     nativePermissions: nativePermissionCards(snapshot, nativeRoute),
     nativeIntegrations: nativeIntegrationCards(snapshot),
     nativeLimitations: (snapshot.nativePlatformLimitations ?? []).map((limitation) => ({
@@ -345,6 +374,29 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       : 'No fallback route is currently reported by the capability graph.',
     error: errorText
   }
+}
+
+function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
+  const icon = item.enabled ? <CheckCircle2 size={18} aria-hidden /> : <Mic size={18} aria-hidden />
+  return (
+    <article className="aui-settings-control" data-state={item.enabled ? 'optimistic' : 'disabled'}>
+      <div className="aui-settings-control-icon">{icon}</div>
+      <div>
+        <h3>{item.label}</h3>
+        <p>{item.detail}</p>
+        <div className="aui-settings-inline">
+          <StatusBadge state={item.state} />
+          <PrivacyBadge privacy={item.privacyClass} />
+          <EvidenceBadge label={item.defaultLabel} />
+          <EvidenceBadge label={item.providerLabel} />
+        </div>
+        <small>{item.blockers.length > 0 ? item.blockers.join(', ') : 'No blocker reported.'}</small>
+      </div>
+      <button type="button" disabled>
+        {item.enabled ? 'Config/AdminAction required' : 'Unavailable'}
+      </button>
+    </article>
+  )
 }
 
 function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
@@ -455,6 +507,104 @@ function privacyControl(input: Omit<SettingsPrivacyControl, 'mutationState'>): S
     blockers: unique(input.blockers),
     evidence: unique(input.evidence)
   }
+}
+
+function voiceBehaviorCards(snapshot: AuroraShellSnapshot): SettingsVoiceBehaviorCard[] {
+  const voice = snapshot.assistantVoiceRoutes
+  const microphone = snapshot.nativePermissions.find((permission) => permission.name.toLowerCase().includes('microphone'))
+  const microphoneState: AvailabilityState = microphone
+    ? microphone.granted
+      ? 'available-local'
+      : 'privacy-blocked'
+    : snapshot.nativeAvailable
+      ? 'privacy-blocked'
+      : 'unsupported'
+  const microphoneEvidence = microphone
+    ? [`native microphone granted=${String(microphone.granted)}`, microphone.nativeState ?? 'native manifest']
+    : [snapshot.nativeAvailable ? 'native microphone grant not reported' : 'browser/native microphone permission required']
+  const wakeState = worstVoiceState([voice.wakeProcess.state, voice.wakeControl.state, microphoneState])
+  const ttsState = worstVoiceState([voice.ttsSynthesize.state, voice.ttsStop.state])
+  return [
+    voiceBehaviorCard({
+      id: 'push-to-talk',
+      label: 'Push-to-talk',
+      route: voice.transcription,
+      state: worstVoiceState([voice.transcription.state, microphoneState]),
+      enabled: routeEnabled(voice.transcription) && microphoneState !== 'unsupported',
+      defaultLabel: 'foreground explicit consent',
+      privacyClass: 'raw-audio',
+      detail: 'Foreground capture requires user action, raw-audio consent, and a selectable Transcription route; no background listening is implied.',
+      extraEvidence: microphoneEvidence,
+      extraBlockers: microphoneState === 'privacy-blocked' ? ['microphone permission required'] : []
+    }),
+    voiceBehaviorCard({
+      id: 'wake-mode',
+      label: 'Wake mode',
+      route: voice.wakeProcess,
+      state: wakeState,
+      enabled: routeEnabled(voice.wakeProcess) && routeEnabled(voice.wakeControl) && microphoneState === 'available-local',
+      defaultLabel: snapshot.nativePlatform === 'ios' ? 'foreground/app-owned only' : 'desktop local only until policy passes',
+      privacyClass: 'raw-audio',
+      detail: snapshot.nativePlatform === 'ios'
+        ? 'iOS wake behavior stays in app-owned foreground surfaces; Aurora does not claim always-on background wake or system assistant ownership.'
+        : 'Wake processing and wake control require native microphone evidence plus WakeWord route availability before they can be enabled.',
+      extraEvidence: [...microphoneEvidence, ...voice.wakeControl.evidenceSources],
+      extraBlockers: [...voice.wakeControl.blockers, microphoneState === 'available-local' ? '' : 'native microphone gate not satisfied'].filter(Boolean)
+    }),
+    voiceBehaviorCard({
+      id: 'spoken-replies',
+      label: 'Spoken replies',
+      route: voice.ttsSynthesize,
+      state: ttsState,
+      enabled: routeEnabled(voice.ttsSynthesize) && routeEnabled(voice.ttsStop),
+      defaultLabel: 'speaker output with stop control',
+      privacyClass: 'personal',
+      detail: 'TTS is available only when synthesis and stop routes are both selectable, so users can interrupt playback.',
+      extraEvidence: voice.ttsStop.evidenceSources,
+      extraBlockers: voice.ttsStop.blockers
+    })
+  ]
+}
+
+function voiceBehaviorCard(input: {
+  id: string
+  label: string
+  route: RouteAvailability
+  state: AvailabilityState
+  enabled: boolean
+  defaultLabel: string
+  privacyClass: PrivacyClass
+  detail: string
+  extraEvidence: string[]
+  extraBlockers: string[]
+}): SettingsVoiceBehaviorCard {
+  return {
+    id: input.id,
+    label: input.label,
+    state: input.state,
+    enabled: input.enabled,
+    defaultLabel: input.defaultLabel,
+    privacyClass: input.privacyClass,
+    providerLabel: input.route.providerLabel,
+    detail: input.detail,
+    blockers: unique([...input.route.blockers, ...input.extraBlockers]),
+    evidence: unique([...input.route.evidenceSources, ...input.extraEvidence])
+  }
+}
+
+function routeEnabled(route: RouteAvailability): boolean {
+  return route.routeable && !route.disabled && (route.state === 'available-local' || route.state === 'available-remote' || route.state === 'degraded')
+}
+
+function worstVoiceState(states: AvailabilityState[]): AvailabilityState {
+  if (states.includes('denied')) return 'denied'
+  if (states.includes('privacy-blocked')) return 'privacy-blocked'
+  if (states.includes('unsupported')) return 'unsupported'
+  if (states.includes('pending')) return 'pending'
+  if (states.includes('degraded')) return 'degraded'
+  if (states.includes('available-local')) return 'available-local'
+  if (states.includes('available-remote')) return 'available-remote'
+  return states[0] ?? 'unsupported'
 }
 
 function nativePermissionCards(

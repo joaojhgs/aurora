@@ -420,12 +420,18 @@ describe('Aurora production shell', () => {
       'block-explicit-fallback'
     ])
     expect(model.privacyControls.some((control) => control.requiresAdminAction)).toBe(true)
+    expect(model.voiceBehavior.map((item) => item.id)).toEqual(['push-to-talk', 'wake-mode', 'spoken-replies'])
     expect(model.nativePermissions.length).toBeGreaterThan(0)
     expect(model.nativePermissions.some((permission) => permission.state === 'privacy-blocked')).toBe(true)
     expect(model.routeDefaults.map((item) => item.id)).toContain('denied-routes')
 
     expect(markup).toContain('Settings and permissions')
     expect(markup).toContain('Privacy defaults')
+    expect(markup).toContain('Voice behavior')
+    expect(markup).toContain('Push-to-talk')
+    expect(markup).toContain('Wake mode')
+    expect(markup).toContain('Spoken replies')
+    expect(markup).toContain('raw-audio')
     expect(markup).toContain('Native permissions')
     expect(markup).toContain('Route and fallback policy')
     expect(markup).toContain('AdminAction required')
