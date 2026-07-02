@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:35:30.021Z",
+  "updatedAt": "2026-07-02T12:37:56.238Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1341,10 +1341,12 @@
       "id": "G115-e2e-covers-search-empty-results-erro",
       "title": "E2E covers search empty/results/error, namespace unavailable, retenti...",
       "objective": "E2E covers search empty/results/error, namespace unavailable, retention toggle draft, export/delete disabled or confirmed flow.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:37:56.238Z",
+      "completedAt": "2026-07-02T12:37:56.238Z",
+      "evidence": "G115 memory E2E coverage completed: added mounted Tauri route coverage for empty DB.GetMessages/DB.RAGListNamespaces responses, DB.RAGListNamespaces permission error, and stale/unavailable peer namespace search with policy/correlation evidence. Existing mounted Tauri memory E2E covers populated search results/provenance and disabled export/delete controls; Data Policy route E2E covers retention policy draft/audit surface separation. Existing shared UI tests cover local export/import/delete AdminAction-disabled state, denied/stale namespaces, SDK errors, real empty state, and populated results. Verified: pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'memory namespaces|real empty memory state|memory SDK errors|denied and stale memory|local export/import/delete'; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G116-replace-raw-catalog-cards-with",

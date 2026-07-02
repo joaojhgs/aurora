@@ -743,6 +743,76 @@ describe('Tauri CI/E2E route gates', () => {
   })
 
 
+  it('e2e:routes covers memory empty, error, and unavailable namespace states', async () => {
+    const emptyTransport = memoryGatewayTransport()
+    emptyTransport.register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
+    emptyTransport.register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
+    window.history.replaceState({}, '', '/memory')
+    const emptyMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: emptyTransport })))
+    try {
+      await waitUntil(() => {
+        expect(emptyMemory.container.textContent).toContain('No collections reported')
+        expect(emptyMemory.container.textContent).toContain('DB.RAGListNamespaces returned no memory or RAG namespaces')
+        expect(emptyMemory.container.textContent).toContain('No conversations reported')
+        expect(emptyMemory.container.textContent).toContain('History remains empty until DB.GetMessages returns backend rows')
+      })
+    } finally {
+      await act(async () => emptyMemory.root.unmount())
+      emptyMemory.container.remove()
+    }
+
+    const errorTransport = memoryGatewayTransport().fail('DB.RAGListNamespaces', 'permission', 'DB permission denied')
+    window.history.replaceState({}, '', '/memory')
+    const errorMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: errorTransport })))
+    try {
+      await waitUntil(() => {
+        expect(errorMemory.container.textContent).toContain('Memory request denied by authentication or permissions')
+        expect(errorMemory.container.textContent).toContain('No namespace reported')
+      })
+    } finally {
+      await act(async () => errorMemory.root.unmount())
+      errorMemory.container.remove()
+    }
+
+    const staleMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: memoryGatewayTransport() })))
+    try {
+      await waitUntil(() => {
+        expect(staleMemory.container.textContent).toContain('stale: peer-cabin-node.archive')
+      })
+      const queryInput = staleMemory.container.querySelector<HTMLInputElement>('#memory-query')
+      const namespaceSelect = staleMemory.container.querySelector<HTMLSelectElement>('#memory-namespace')
+      const searchForm = staleMemory.container.querySelector<HTMLFormElement>('form.aui-memory-search')
+      expect(queryInput).not.toBeNull()
+      expect(namespaceSelect).not.toBeNull()
+      expect(searchForm).not.toBeNull()
+      const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      const selectSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+      await act(async () => {
+        selectSetter?.call(namespaceSelect, 'peer-cabin-node.archive')
+        namespaceSelect!.dispatchEvent(new Event('change', { bubbles: true }))
+        inputSetter?.call(queryInput, 'archive')
+        queryInput!.dispatchEvent(new Event('input', { bubbles: true }))
+        queryInput!.dispatchEvent(new Event('change', { bubbles: true }))
+        await flushReactWork()
+      })
+      await act(async () => {
+        searchForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+        await flushReactWork()
+        await flushReactWork()
+      })
+      await waitUntil(() => {
+        expect(staleMemory.container.textContent).toContain('stale peer')
+        expect(staleMemory.container.textContent).toContain('policy-stale-memory')
+        expect(staleMemory.container.textContent).toContain('corr-memory-stale')
+      })
+      writeOutcomeArtifact('memory-route-empty-error-unavailable', staleMemory.container.innerHTML)
+    } finally {
+      await act(async () => staleMemory.root.unmount())
+      staleMemory.container.remove()
+    }
+  })
+
+
   it('e2e:routes renders data policy retention and audit evidence instead of the memory search page', async () => {
     const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
     window.history.replaceState({}, '', '/memory/policy')
