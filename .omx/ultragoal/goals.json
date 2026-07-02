@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:01:27.088Z",
+  "updatedAt": "2026-07-02T08:06:19.793Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -359,10 +359,13 @@
       "id": "G030-packages-aurora-ui-src-production-su",
       "title": "`packages/aurora-ui/src/production-surface-contracts.ts` already desc...",
       "objective": "`packages/aurora-ui/src/production-surface-contracts.ts` already describes intended truth sources and should become the test oracle, not decorative metadata.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:06:19.793Z",
+      "startedAt": "2026-07-02T08:01:46.043Z",
+      "completedAt": "2026-07-02T08:06:19.793Z",
+      "evidence": "packages/aurora-ui/src/production-surface-contracts.ts now exports per-route productionRouteOracles/getProductionRouteOracle; UI tests assert every primary nav route has exactly one contract-derived oracle; Tauri route tests consume the shared oracle instead of hardcoded route markers. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'documents every production surface|route availability|production surface'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test."
     },
     {
       "id": "G031-existing-ui-package-already-contains",

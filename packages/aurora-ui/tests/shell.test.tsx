@@ -106,6 +106,7 @@ import {
   buildSettingsPermissionsModel,
   errorShellSnapshot,
   productionSurfaceContracts,
+  productionRouteOracles,
   snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
@@ -173,6 +174,11 @@ describe('Aurora production shell', () => {
     const coveredNavIds = new Set(productionSurfaceContracts.flatMap((surface) => surface.navItemIds))
     expect(primaryNavIds.filter((id) => !coveredNavIds.has(id))).toEqual([])
 
+    const oracleNavIds = productionRouteOracles.map((oracle) => oracle.navItemId)
+    expect([...new Set(oracleNavIds)]).toHaveLength(oracleNavIds.length)
+    expect(primaryNavIds.filter((id) => !oracleNavIds.includes(id))).toEqual([])
+    expect(oracleNavIds.filter((id) => !primaryNavIds.includes(id))).toEqual([])
+
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
     const mockRoot = join(repoRoot, 'modules/ui-mock-reference')
@@ -185,6 +191,14 @@ describe('Aurora production shell', () => {
       expect(surface.stateCoverage.length, `${surface.id} state coverage`).toBeGreaterThan(0)
       expect(surface.truthSources.length, `${surface.id} truth sources`).toBeGreaterThan(0)
       expect(surface.coverage.length, `${surface.id} coverage`).toBeGreaterThan(0)
+      for (const oracle of surface.routeOracles ?? []) {
+        expect(surface.navItemIds, `${surface.id} oracle nav binding`).toContain(oracle.navItemId)
+        expect(oracle.renderedLandmarks.length, `${surface.id}/${oracle.navItemId} rendered landmarks`).toBeGreaterThan(0)
+        expect(
+          oracle.renderedLandmarks.every((landmark) => landmark.trim().length > 2),
+          `${surface.id}/${oracle.navItemId} meaningful landmarks`
+        ).toBe(true)
+      }
       expect(surface.fixturePolicy, `${surface.id} fixture policy`).toBe('test-only')
       expect(surface.truthSources.some((source) => source.kind !== 'unsupported-degraded'), `${surface.id} live source`).toBe(true)
       expect(surface.navItemIds.every((id) => navIds.has(id)), `${surface.id} nav ids`).toBe(true)

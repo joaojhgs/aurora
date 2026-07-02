@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { auroraNavSections } from '@aurora/ui'
+import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
 import { AuroraTauriApp, tauriRouteRegistryRouteIds } from './tauri-app'
@@ -150,36 +150,15 @@ describe('Aurora Tauri runtime wrapper', () => {
   it('renders every primary route without the legacy route placeholder copy', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
 
-    const routeMarkers: Record<string, string> = {
-      assistant: 'Prompt',
-      memory: 'History and RAG provenance',
-      tools: 'Approval cards',
-      mesh: 'Mesh peers',
-      admin: 'Admin overview',
-      services: 'Services',
-      access: 'RBAC',
-      tokens: 'RBAC',
-      devices: 'Devices',
-      config: 'Configuration',
-      contracts: 'Services',
-      plugins: 'Plugins, MCP, and tools',
-      pairing: 'Pairing queue',
-      backups: 'Backups &amp; Restore',
-      scheduler: 'Scheduler',
-      audit: 'Audit log',
-      models: 'Models and runtime',
-      diagnostics: 'Native boundary',
-      onboarding: 'Connect Aurora',
-      settings: 'Settings and permissions',
-      data: 'History and RAG provenance',
-      native: 'Settings and permissions'
-    }
-
     for (const item of primaryNavItems) {
       window.history.replaceState({}, '', item.href)
       const markup = renderToStaticMarkup(<AuroraTauriApp />)
+      const oracle = getProductionRouteOracle(item.id)
 
-      expect(markup, item.href).toContain(routeMarkers[item.id])
+      expect(oracle, `${item.href} must have a production surface oracle`).toBeDefined()
+      for (const landmark of oracle?.renderedLandmarks ?? []) {
+        expectMarkupToContainText(markup, landmark, item.href)
+      }
       expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
       expect(markup, item.href).not.toContain('This Tauri route is now navigable')
       expect(markup, item.href).not.toContain('route is unregistered')
@@ -202,6 +181,19 @@ describe('Aurora Tauri runtime wrapper', () => {
     }
   })
 })
+
+
+function expectMarkupToContainText(markup: string, text: string, context: string) {
+  const htmlEscaped = text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+
+  expect(
+    markup.includes(text) || markup.includes(htmlEscaped),
+    `${context} should render production landmark ${text}`,
+  ).toBe(true)
+}
 
 function resetTauriRouteGateState() {
   vi.unstubAllEnvs()
