@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:39:33.309Z",
+  "updatedAt": "2026-07-02T10:41:57.945Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1033,10 +1033,12 @@
       "id": "G087-create-a-typed-route-component-regis",
       "title": "Create a typed route component registry for the 22 nav items.",
       "objective": "Create a typed route component registry for the 22 nav items.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:41:57.945Z",
+      "completedAt": "2026-07-02T10:41:57.945Z",
+      "evidence": "Converted tauriRouteRegistry from Record<string, ...> to a typed 22-route literal registry with TauriRouteId union, compile-time satisfies Record<TauriRouteId, TauriRouteRenderer>, stable exported route IDs, and a safe string-to-route renderer guard. Verified: pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test -- -t 'production Tauri component|registered route|legacy TauriRoutePlaceholder'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; git diff --check."
     },
     {
       "id": "G088-wrap-async-server-shaped-admin-views",

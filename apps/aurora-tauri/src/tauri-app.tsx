@@ -60,7 +60,34 @@ type TauriRouteRenderer = (input: {
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
 }) => ReactElement
 
-export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
+const tauriRouteIds = [
+  'assistant',
+  'memory',
+  'tools',
+  'mesh',
+  'admin',
+  'services',
+  'access',
+  'tokens',
+  'devices',
+  'config',
+  'contracts',
+  'plugins',
+  'pairing',
+  'backups',
+  'scheduler',
+  'audit',
+  'models',
+  'diagnostics',
+  'onboarding',
+  'settings',
+  'data',
+  'native',
+] as const
+
+type TauriRouteId = typeof tauriRouteIds[number]
+
+export const tauriRouteRegistry = {
   assistant: ({ route, snapshot, client, assistantNativePermissions, assistantNativeCapabilities }) => (
     <AssistantView
       client={client}
@@ -101,9 +128,11 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
   data: ({ route, client }) => <MemoryView client={client} route={route} />,
   native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />
-}
+} satisfies Record<TauriRouteId, TauriRouteRenderer>
 
-export const tauriRouteRegistryRouteIds = Object.freeze(Object.keys(tauriRouteRegistry))
+const tauriRouteIdSet = new Set<string>(tauriRouteIds)
+
+export const tauriRouteRegistryRouteIds = Object.freeze([...tauriRouteIds])
 
 export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTauriRuntime } = {}) {
   const runtime = useMemo(() => runtimeOverride ?? createAuroraTauriRuntime(), [runtimeOverride]);
@@ -300,7 +329,7 @@ function TauriRouteContent({
   shutdown: () => Promise<void>;
 }) {
   const route = routeForPath(snapshot, path)
-  const renderRoute = tauriRouteRegistry[route.item.id]
+  const renderRoute = routeRendererFor(route.item.id)
   const assistantNativePermissions = useMemo(
     () =>
       snapshot.nativePermissions.map((permission) => ({
@@ -323,6 +352,14 @@ function TauriRouteContent({
     assistantNativePermissions,
     assistantNativeCapabilities
   })
+}
+
+function routeRendererFor(routeId: string): TauriRouteRenderer | undefined {
+  return isTauriRouteId(routeId) ? tauriRouteRegistry[routeId] : undefined
+}
+
+function isTauriRouteId(routeId: string): routeId is TauriRouteId {
+  return tauriRouteIdSet.has(routeId)
 }
 
 function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {

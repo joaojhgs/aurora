@@ -246,7 +246,7 @@ describe('Aurora Tauri runtime wrapper', () => {
   })
 
   it('registers a production Tauri component for every primary nav route', () => {
-    const routeIds = new Set(tauriRouteRegistryRouteIds)
+    const routeIds = new Set<string>(tauriRouteRegistryRouteIds)
     const missing = primaryNavItems.filter((item) => !routeIds.has(item.id)).map((item) => `${item.id}:${item.href}`)
 
     expect(missing).toEqual([])
