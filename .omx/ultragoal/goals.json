@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:32:23.087Z",
+  "updatedAt": "2026-07-02T10:33:58.958Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1000,10 +1000,12 @@
       "id": "G084-tests-cover-selector-required-vs-con",
       "title": "Tests cover selector-required vs consent-required vs privacy-indicato...",
       "objective": "Tests cover selector-required vs consent-required vs privacy-indicator-required vs AdminAction-required vs native-permission-required.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:33:58.958Z",
+      "completedAt": "2026-07-02T10:33:58.958Z",
+      "evidence": "Strengthened RouteSheet policy-signal regression so selector-required, consent-required, privacy-indicator-required, native-permission-required, and AdminAction-required are asserted as five distinct signal IDs with blocked states; existing SDK policy regression covers the matching backend evaluation blockers and local selector preference non-blocking behavior. Verified: pnpm --filter @aurora/ui test -- -t 'distinguishes RouteSheet selector|policy blocker states'; pnpm --filter @aurora/client test -- -t 'selector, consent, privacy indicator, native permission, and approval|local selector preference'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G085-each-route-has-a-deterministic-route",

@@ -3047,6 +3047,20 @@ describe('Aurora production shell', () => {
     }
 
     const signals = routeSheetPolicySignals(evaluation, 'required')
+    expect(signals.map((signal) => signal.id)).toEqual([
+      'selector',
+      'consent',
+      'privacy-indicator',
+      'native-permission',
+      'admin-action'
+    ])
+    expect(Object.fromEntries(signals.map((signal) => [signal.id, signal.state]))).toEqual({
+      selector: 'blocked',
+      consent: 'blocked',
+      'privacy-indicator': 'blocked',
+      'native-permission': 'blocked',
+      'admin-action': 'blocked'
+    })
     expect(signals).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
       expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
