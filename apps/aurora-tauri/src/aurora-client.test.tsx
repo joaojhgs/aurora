@@ -136,4 +136,20 @@ describe('Aurora Tauri runtime wrapper', () => {
       expect(markup, item.href).not.toContain('route is unregistered')
     }
   })
+
+  it('keeps credentials and raw-audio payloads out of rendered diagnostics and route output', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', 'http://127.0.0.1:8000')
+    vi.stubEnv('VITE_AURORA_GATEWAY_TOKEN', 'test-token')
+
+    for (const href of ['/', '/diagnostics', '/admin/tokens', '/settings/native']) {
+      window.history.replaceState({}, '', href)
+      const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+      expect(markup, href).not.toContain('test-token')
+      expect(markup, href).not.toMatch(/authorization/i)
+      expect(markup, href).not.toMatch(/api[_-]?key/i)
+      expect(markup, href).not.toMatch(/raw[-_ ]audio payload/i)
+      expect(markup, href).not.toMatch(/audio_buffer/i)
+    }
+  })
 })
