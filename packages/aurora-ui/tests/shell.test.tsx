@@ -734,6 +734,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('studio-gpu peer')
     expect(markup).toContain('OpenAI-compatible gateway')
     expect(markup).toContain('Mobile local-light runtime')
+    expect(markup).toContain('3 routeable')
+    expect(markup).not.toContain('0 selectable')
     expect(markup).toContain('Provider route policy')
     expect(markup).toContain('Benchmark snapshot')
     expect(markup).toContain('Runtime warnings')

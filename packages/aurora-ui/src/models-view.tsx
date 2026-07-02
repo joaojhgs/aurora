@@ -148,7 +148,7 @@ export function ModelsView({
         </div>
         <div className="aui-model-badges" aria-label="Model catalog summary">
           <EvidenceBadge label={`${model.providerCount} providers`} />
-          <EvidenceBadge label={`${model.availableCount} selectable`} />
+          <EvidenceBadge label={`${model.availableCount} routeable`} />
           <EvidenceBadge label={`${model.remoteCount} remote`} />
           <EvidenceBadge label={model.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
         </div>
@@ -212,7 +212,7 @@ export function buildModelsViewModel(input: {
     generatedAt: input.catalog.generated_at,
     selectedProviderId: input.catalog.selected_provider_id,
     providerCount: providers.length,
-    availableCount: providers.filter((provider) => provider.canSelect).length,
+    availableCount: providers.filter(providerRouteable).length,
     remoteCount: providers.filter((provider) => provider.providerType !== 'local').length,
     mobileLocalLightState: mobile.state,
     mobileLocalLightReason: mobile.reason,
@@ -222,6 +222,10 @@ export function buildModelsViewModel(input: {
     benchmarkRows: benchmarkSnapshotRows(providers),
     warnings: modelWarnings(providers, mobile)
   }
+}
+
+function providerRouteable(provider: ModelProviderViewModel): boolean {
+  return ['available-local', 'available-remote', 'degraded'].includes(provider.availability)
 }
 
 function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {

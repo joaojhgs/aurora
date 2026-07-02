@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T13:37:04.657Z",
+  "updatedAt": "2026-07-02T13:40:34.452Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1495,10 +1495,12 @@
       "id": "G129-fix-contradiction-where-page-says-lo",
       "title": "Fix contradiction where page says local provider exists but `0 select...",
       "objective": "Fix contradiction where page says local provider exists but `0 selectable`.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:40:34.452Z",
+      "completedAt": "2026-07-02T13:40:34.452Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'model runtime'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; rm -rf apps/aurora-tauri/test-results; pnpm --filter @aurora/ui test; git diff --check"
     },
     {
       "id": "G130-distinguish",
