@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -251,6 +251,15 @@ describe('Aurora Tauri runtime wrapper', () => {
 
     expect(missing).toEqual([])
     expect(routeIds.size).toBe(primaryNavItems.length)
+  })
+
+  it('keeps the legacy TauriRoutePlaceholder out of production route source', () => {
+    const source = readFileSync(join(process.cwd(), 'src/tauri-app.tsx'), 'utf8')
+
+    expect(source).not.toContain('TauriRoutePlaceholder')
+    expect(source).not.toContain('ata-placeholder-panel')
+    expect(source).not.toContain('debug-dashboard')
+    expect(source).not.toContain('A full product page still needs to be mounted')
   })
 
   it('renders every primary route without the legacy route placeholder copy', () => {

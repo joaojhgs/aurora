@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:37:24.343Z",
+  "updatedAt": "2026-07-02T10:39:33.309Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1022,10 +1022,12 @@
       "id": "G086-replace-taurirouteplaceholder-final",
       "title": "Replace `TauriRoutePlaceholder` final route behavior.",
       "objective": "Replace `TauriRoutePlaceholder` final route behavior.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:39:33.309Z",
+      "completedAt": "2026-07-02T10:39:33.309Z",
+      "evidence": "Added Tauri route source regression ensuring legacy TauriRoutePlaceholder, ata-placeholder-panel, debug-dashboard, and old placeholder copy stay out of production tauri-app source; existing registered-route crawl proves all 22 final routes render production components. Verified: pnpm --filter @aurora/tauri-ui test -- -t 'legacy TauriRoutePlaceholder|production Tauri component'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui typecheck; git diff --check."
     },
     {
       "id": "G087-create-a-typed-route-component-regis",
