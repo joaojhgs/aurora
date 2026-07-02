@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -164,17 +164,32 @@ describe('Aurora production shell', () => {
     )
 
     expect(surfaceIds).toEqual(requiredSurfaceIds)
+    const primaryNavIds = auroraNavSections.flatMap((section) => section.items.map((item) => item.id))
+    const coveredNavIds = new Set(productionSurfaceContracts.flatMap((surface) => surface.navItemIds))
+    expect(primaryNavIds.filter((id) => !coveredNavIds.has(id))).toEqual([])
+
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
+    const mockRoot = join(repoRoot, 'modules/ui-mock-reference')
+    const requiredStates = ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'] as const
+
     for (const surface of productionSurfaceContracts) {
       expect(surface.navItemIds.length, `${surface.id} nav bindings`).toBeGreaterThan(0)
+      expect(surface.mockReferenceFiles.length, `${surface.id} mock references`).toBeGreaterThan(0)
       expect(surface.componentFiles.length, `${surface.id} components`).toBeGreaterThan(0)
+      expect(surface.stateCoverage.length, `${surface.id} state coverage`).toBeGreaterThan(0)
       expect(surface.truthSources.length, `${surface.id} truth sources`).toBeGreaterThan(0)
       expect(surface.coverage.length, `${surface.id} coverage`).toBeGreaterThan(0)
       expect(surface.fixturePolicy, `${surface.id} fixture policy`).toBe('test-only')
       expect(surface.truthSources.some((source) => source.kind !== 'unsupported-degraded'), `${surface.id} live source`).toBe(true)
       expect(surface.navItemIds.every((id) => navIds.has(id)), `${surface.id} nav ids`).toBe(true)
+      expect(requiredStates.filter((state) => !surface.stateCoverage.includes(state)), `${surface.id} required route states`).toEqual([])
+      expect(surface.mockReferenceFiles.every((file) => existsSync(join(mockRoot, file))), `${surface.id} mock files exist`).toBe(true)
+      expect(surface.componentFiles.every((file) => existsSync(join(uiSrcRoot, file))), `${surface.id} component files exist`).toBe(true)
 
       if (surface.mutatingMethodType === 'manage') {
         expect(surface.adminActionRequired, `${surface.id} AdminAction`).toBe(true)
+        expect(surface.stateCoverage.includes('admin-action'), `${surface.id} AdminAction state`).toBe(true)
         expect(
           surface.truthSources.some((source) => source.kind === 'admin-action'),
           `${surface.id} AdminAction truth source`

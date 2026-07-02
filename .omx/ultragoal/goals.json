@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:12:11.937Z",
+  "updatedAt": "2026-07-02T06:16:53.589Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -59,10 +59,13 @@
       "id": "G005-every-production-page-has-route-spec",
       "title": "Every production page has route-specific UI/UX from the mock referenc...",
       "objective": "Every production page has route-specific UI/UX from the mock reference, adapted to real data contracts and real empty/loading/error/permission states.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:16:53.589Z",
+      "startedAt": "2026-07-02T06:13:14.047Z",
+      "completedAt": "2026-07-02T06:16:53.589Z",
+      "evidence": "G005 is proven by strengthened machine-readable production surface contracts and fresh tests. packages/aurora-ui/src/production-surface-contracts.ts now requires mockReferenceFiles and stateCoverage for every production surface, mapping each route to modules/ui-mock-reference sources, real @aurora/client/Gateway/AdminAction/native truth sources, and route states: loading, empty, error, offline, permission, unsupported, plus admin-action/privacy/native-permission where applicable. packages/aurora-ui/tests/shell.test.tsx now enforces every primary nav id is covered, mock reference files exist, component files exist, fixture policy is test-only, required state coverage exists, manage surfaces declare AdminAction state/truth, and surfaces have backend or explicit gated/degraded evidence. Fresh verification passed: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test (95 tests); pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G006-every-action-that-changes-service-st",

@@ -28,6 +28,17 @@ export type ProductionTruthSourceKind =
   | 'admin-action'
   | 'unsupported-degraded'
 
+export type ProductionRouteState =
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'permission'
+  | 'admin-action'
+  | 'unsupported'
+  | 'privacy'
+  | 'native-permission'
+
 export interface ProductionTruthSource {
   kind: ProductionTruthSourceKind
   label: string
@@ -39,7 +50,9 @@ export interface ProductionSurfaceContract {
   id: ProductionSurfaceId
   label: string
   navItemIds: string[]
+  mockReferenceFiles: string[]
   componentFiles: string[]
+  stateCoverage: ProductionRouteState[]
   truthSources: ProductionTruthSource[]
   highestPrivacyClass: PrivacyClass
   mutatingMethodType: ContractMethodType | 'none'
@@ -54,7 +67,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'assistant-route-sheet',
     label: 'Assistant and RouteSheet',
     navItemIds: ['assistant', 'assistant-cancel', 'voice-transcription', 'voice-wake-process', 'voice-wake-control', 'voice-tts-synthesize', 'voice-tts-stop'],
+    mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/route-sheet.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
     componentFiles: ['assistant-view.tsx', 'route-sheet.tsx', 'tool-approval-panel.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
       source('sdk-method', 'assistant request/interrupt/event SDK methods', ['Orchestrator.ExternalUserInput', 'Orchestrator.Interrupt', 'Aurora.EventStream']),
       source('capability-graph', 'route and privacy policy evaluation', ['Gateway.GetCapabilityCatalog', 'Gateway.ExplainRoute']),
@@ -71,7 +86,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-overview',
     label: 'Admin overview',
     navItemIds: ['admin'],
+    mockReferenceFiles: ['components/aurora/admin/overview.tsx'],
     componentFiles: ['admin-overview-view.tsx', 'shell-data.ts'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
       source('capability-graph', 'admin posture and capability summary', ['Gateway.GetCapabilityCatalog']),
       source('sdk-method', 'registry and deployment evidence', ['Gateway.GetRegistry', 'Gateway.GetDeploymentTopology'])
@@ -87,7 +104,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-services',
     label: 'Admin services and contracts',
     navItemIds: ['services', 'contracts'],
+    mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
     componentFiles: ['admin-services-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'service and registry descriptors', ['Gateway.GetServices', 'Gateway.GetRegistry']),
       source('admin-action', 'service lifecycle boundary', ['Supervisor.Restart', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -103,7 +122,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-rbac',
     label: 'Admin RBAC',
     navItemIds: ['access', 'tokens'],
+    mockReferenceFiles: ['components/aurora/admin/rbac-view.tsx', 'components/aurora/admin/tokens-view.tsx'],
     componentFiles: ['admin-rbac-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'principal, permission, and token lists', ['Auth.ListPrincipals', 'Auth.ListTokens', 'Auth.AuditLog']),
       source('admin-action', 'permission and token mutations', ['Auth.PatchPermissions', 'Auth.SetPermissions', 'Auth.RevokeToken', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -119,7 +140,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-audit',
     label: 'Admin audit log',
     navItemIds: ['audit'],
+    mockReferenceFiles: ['components/aurora/admin/audit-view.tsx'],
     componentFiles: ['admin-audit-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [source('sdk-method', 'redacted audit records', ['Auth.AuditLog'])],
     highestPrivacyClass: 'sensitive',
     mutatingMethodType: 'none',
@@ -132,7 +155,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-plugins',
     label: 'Admin plugins and tools',
     navItemIds: ['plugins', 'tools'],
+    mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     componentFiles: ['admin-plugins-view.tsx', 'tool-approval-panel.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'aggregate tool catalog', ['Tooling.GetToolCatalog']),
       source('admin-action', 'tool/plugin mutations and approval flow', ['Tooling.PrepareExecution', 'Tooling.RequestApproval', 'Tooling.ConfirmExecution', 'Tooling.ExecuteTool', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -148,7 +173,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-devices',
     label: 'Admin devices',
     navItemIds: ['devices'],
+    mockReferenceFiles: ['components/aurora/admin/devices-view.tsx'],
     componentFiles: ['admin-devices-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'device/session list', ['Auth.ListDevices']),
       source('admin-action', 'device deletion and session revocation', ['Auth.DeleteDevice', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -164,7 +191,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-scheduler',
     label: 'Admin scheduler',
     navItemIds: ['scheduler'],
+    mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     componentFiles: ['admin-scheduler-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'scheduler job inventory', ['Scheduler.ListJobs']),
       source('admin-action', 'scheduler create/cancel/pause/resume controls', ['Scheduler.Schedule', 'Scheduler.Cancel', 'Scheduler.Pause', 'Scheduler.Resume', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -180,7 +209,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'config-editor',
     label: 'Config editor',
     navItemIds: ['config'],
+    mockReferenceFiles: ['components/aurora/admin/config-view.tsx'],
     componentFiles: ['config-editor-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'config schema, diff, history, and reload impact', ['Config.GetSchemaMetadata', 'Config.PreviewDiff', 'Config.GetVersionHistory', 'Config.PreviewReloadImpact']),
       source('admin-action', 'config set and rollback', ['Config.Set', 'Config.Rollback', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -196,7 +227,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'memory-rag',
     label: 'Memory, RAG, and data policy',
     navItemIds: ['memory', 'data'],
+    mockReferenceFiles: ['app/(cockpit)/memory/page.tsx'],
     componentFiles: ['memory-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
       source('sdk-method', 'RAG namespace/search/provenance surfaces', ['DB.RAGListNamespaces', 'DB.RAGSearchRemote', 'DB.RAGGetProvenance']),
       source('admin-action', 'RAG export/import/delete governance', ['DB.RAGExportNamespace', 'DB.RAGImportNamespace', 'DB.RAGDelete', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
@@ -213,7 +246,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'backup-restore',
     label: 'Backup and restore',
     navItemIds: ['backups'],
+    mockReferenceFiles: ['components/aurora/admin/secondary-surface.tsx'],
     componentFiles: ['backup-restore-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'backup manifest list and verification', ['Backup.List', 'Backup.Create', 'Backup.Verify', 'Backup.RestoreDryRun', 'Backup.RollbackPlan']),
       source('admin-action', 'backup create, restore preview, and rollback', ['Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -229,7 +264,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'models-runtime',
     label: 'Models and runtime catalog',
     navItemIds: ['models'],
+    mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
     componentFiles: ['models-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
       source('sdk-method', 'model runtime catalog and operation status', ['Orchestrator.GetModelCatalog', 'Orchestrator.GetModelRuntime', 'Orchestrator.GetModelOperation']),
       source('admin-action', 'model import, download, benchmark, and selection mutations', ['Orchestrator.ImportModel', 'Orchestrator.DownloadModel', 'Orchestrator.BenchmarkModel', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
@@ -246,7 +283,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'mesh-peers',
     label: 'Mesh peers and pairing lifecycle',
     navItemIds: ['mesh', 'pairing'],
+    mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
     componentFiles: ['mesh-peers-view.tsx', 'pairing-queue-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'mesh status, persisted peers, and pairing queue', ['Gateway.GetMeshStatus', 'Auth.MeshListPeers', 'Auth.MeshGetPeer', 'Auth.ListPendingPairings']),
       source('admin-action', 'peer approve/deny/remove and pairing approve/deny', ['Auth.MeshApprovePeer', 'Auth.MeshDenyPeer', 'Auth.MeshRemovePeer', 'Auth.PairingApprove', 'Auth.PairingDeny', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -262,7 +301,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'mesh-diagnostics',
     label: 'Mesh diagnostics',
     navItemIds: ['diagnostics', 'mesh'],
+    mockReferenceFiles: ['components/aurora/diagnostics/diagnostics-view.tsx'],
     componentFiles: ['mesh-diagnostics-view.tsx', 'mesh-diagnostics-resource.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
       source('sdk-method', 'mesh, WebRTC, topology, and redacted support evidence', ['Gateway.GetMeshStatus', 'Gateway.GetWebRTCDiagnostics', 'Gateway.GetDeploymentTopology', 'Gateway.GetSupportBundle']),
       source('capability-graph', 'provider candidates and route blockers', ['Gateway.GetCapabilityCatalog'])
@@ -278,7 +319,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'route-policy',
     label: 'Route policy',
     navItemIds: ['mesh', 'settings'],
+    mockReferenceFiles: ['components/aurora/assistant/route-sheet.tsx', 'components/aurora/settings/settings-permissions-view.tsx'],
     componentFiles: ['route-policy-view.tsx', 'route-sheet.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
       source('sdk-method', 'route explain and config policy state', ['Gateway.ExplainRoute', 'Config.Get']),
       source('admin-action', 'route policy mutation', ['Config.Set', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
@@ -294,7 +337,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'resource-diagnostics',
     label: 'Resource diagnostics',
     navItemIds: ['diagnostics'],
+    mockReferenceFiles: ['components/aurora/diagnostics/diagnostics-view.tsx'],
     componentFiles: ['mesh-diagnostics-resource.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
       source('capability-graph', 'capability resources and provider candidates', ['Gateway.GetCapabilityCatalog']),
       source('sdk-method', 'route and WebRTC diagnostics', ['Gateway.ExplainRoute', 'Gateway.GetWebRTCDiagnostics'])
@@ -310,7 +355,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'settings-permissions-privacy',
     label: 'Settings, permissions, and privacy',
     navItemIds: ['settings'],
+    mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
     componentFiles: ['settings-permissions-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
       source('sdk-method', 'config and permission state', ['Config.Get', 'Auth.WhoAmI']),
       source('capability-graph', 'route privacy and selector requirements', ['Gateway.GetCapabilityCatalog']),
@@ -327,7 +374,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'native-capabilities',
     label: 'Native capability surfaces',
     navItemIds: ['native'],
+    mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
     componentFiles: ['settings-permissions-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'native-permission'],
     truthSources: [
       source('native-manifest', 'Tauri/mobile native capability manifest', ['Native.GetCapabilityManifest']),
       source('unsupported-degraded', 'platform-limited iOS and desktop/browser surfaces', [])
@@ -343,7 +392,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'onboarding-auth-pairing',
     label: 'Onboarding, auth, and pairing',
     navItemIds: ['onboarding', 'pairing'],
+    mockReferenceFiles: ['components/aurora/onboarding/onboarding-view.tsx', 'components/aurora/admin/devices-view.tsx'],
     componentFiles: ['onboarding-view.tsx', 'pairing-queue-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'native-permission'],
     truthSources: [
       source('sdk-method', 'session and pairing state', ['Auth.WhoAmI', 'Auth.PairingStart', 'Auth.PairingConnect', 'Auth.PairingExchange', 'Auth.ListPendingPairings']),
       source('admin-action', 'pairing approve and deny review', ['Auth.PairingApprove', 'Auth.PairingDeny', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
