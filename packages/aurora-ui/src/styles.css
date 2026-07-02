@@ -383,7 +383,12 @@ button, input, select, textarea { font: inherit; }
 .aui-model-meta dd, .aui-model-summary dd { margin: .15rem 0 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .aui-model-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.3rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 30%, var(--aui-border)); border-radius: .45rem; padding: .45rem .65rem; background: var(--aui-surface-2); color: var(--aui-primary); font-size: .84rem; font-weight: 800; }
 .aui-model-actions button:disabled { cursor: not-allowed; border-color: var(--aui-border); color: var(--aui-muted); opacity: .58; }
-.aui-model-route-policy, .aui-model-categories, .aui-model-benchmark, .aui-model-warnings { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-model-route-policy, .aui-model-categories, .aui-model-benchmark, .aui-model-setup, .aui-model-warnings { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
+.aui-model-policy-banner { display: flex; align-items: flex-start; justify-content: space-between; gap: .85rem; min-width: 0; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .6rem; background: color-mix(in srgb, var(--aui-primary) 7%, var(--aui-surface)); padding: .95rem; }
+.aui-model-policy-banner h2 { margin: .1rem 0 0; font-size: 1.05rem; }
+.aui-model-policy-banner p { margin: .25rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-model-policy-banner-actions, .aui-model-setup-actions { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; justify-content: flex-end; }
+.aui-model-repair-link { display: inline-flex; align-items: center; justify-content: center; min-height: 2.1rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .35rem .6rem; background: var(--aui-surface); color: var(--aui-primary); font-size: .8rem; font-weight: 800; text-decoration: none; }
 .aui-model-panel-title { display: flex; align-items: flex-start; gap: .6rem; }
 .aui-model-panel-title > span { display: grid; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
 .aui-model-panel-title.compact > span { width: 1.9rem; height: 1.9rem; }
@@ -399,8 +404,12 @@ button, input, select, textarea { font: inherit; }
 .aui-model-categories dd { display: grid; gap: .35rem; margin: .25rem 0 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .aui-model-categories strong { font-size: .95rem; }
 .aui-model-categories small { color: var(--aui-muted); line-height: 1.35; }
-.aui-model-benchmark dl { display: grid; gap: .55rem; margin: 0; }
-.aui-model-benchmark small { display: block; margin-top: .2rem; color: var(--aui-muted); line-height: 1.35; }
+.aui-model-benchmark-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.aui-model-benchmark-table caption { margin-bottom: .45rem; color: var(--aui-muted); font-size: .75rem; font-weight: 800; text-align: left; text-transform: uppercase; }
+.aui-model-benchmark-table th, .aui-model-benchmark-table td { padding: .45rem; border-top: 1px solid var(--aui-border); text-align: left; vertical-align: top; }
+.aui-model-benchmark-table th { color: var(--aui-muted); font-size: .72rem; text-transform: uppercase; }
+.aui-model-setup-actions { justify-content: flex-start; }
+.aui-model-selection-confirmation { margin: 0; color: var(--aui-muted); line-height: 1.4; }
 .aui-model-warnings ul { display: grid; gap: .4rem; margin: 0; padding-left: 1.1rem; color: var(--aui-muted); line-height: 1.4; }
 .aui-model-blockers { display: grid; gap: .3rem; margin: 0; padding-left: 1rem; color: var(--aui-muted); font-size: .84rem; }
 .aui-model-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem); gap: .85rem; align-items: start; }

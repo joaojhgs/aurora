@@ -701,7 +701,10 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-local',
         canSelect: false,
-        privacyClass: 'public'
+        privacyClass: 'public',
+        routeQuality: expect.stringContaining('local; available-local; routeable from catalog evidence'),
+        latencyContext: expect.stringContaining('1200 ms latency; 8192 token context; 2048 token generation limit'),
+        modelIdentity: expect.stringContaining('llama-3-8b-instruct; local-filesystem; user-provided')
       })
     )
     expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
@@ -710,7 +713,8 @@ describe('Aurora production shell', () => {
         canSelect: false,
         selectReason: expect.stringContaining('Backend model selection contract is not active'),
         providerType: 'mesh',
-        routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog')
+        routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog'),
+        routeQuality: expect.stringContaining('mesh remote; available-remote')
       })
     )
     expect(model.providers.find((provider) => provider.id === 'cloud:openai:Orchestrator')).toEqual(
@@ -770,6 +774,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('3 routeable')
     expect(markup).not.toContain('0 selectable')
     expect(markup).toContain('2 remote')
+    expect(markup).toContain('Current route policy banner')
+    expect(markup).toContain('Current route policy')
+    expect(markup).toContain('selection changes remain disabled until a backend/AdminAction selection contract is available')
+    expect(markup).toContain('No model configured assistant repair link')
     expect(markup).toContain('Model runtime categories')
     expect(markup).toContain('Currently selected provider')
     expect(markup).toContain('Configured providers')
@@ -785,7 +793,20 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('2 remote-capable')
     expect(markup).toContain('Mobile local-light availability')
     expect(markup).toContain('Provider route policy')
+    expect(markup).toContain('Route quality')
+    expect(markup).toContain('Latency/context')
+    expect(markup).toContain('1200 ms latency')
+    expect(markup).toContain('8192 token context')
+    expect(markup).toContain('llama-3-8b-instruct; local-filesystem; user-provided')
     expect(markup).toContain('Benchmark snapshot')
+    expect(markup).toContain('Benchmark snapshot table')
+    expect(markup).toContain('Backend detail')
+    expect(markup).toContain('Model path/import/download setup CTA')
+    expect(markup).toContain('Set model path')
+    expect(markup).toContain('Import model')
+    expect(markup).toContain('Download model')
+    expect(markup).toContain('Provider selection confirmation')
+    expect(markup).toContain('Open Assistant model repair')
     expect(markup).toContain('Runtime warnings')
     expect(markup).toContain('Measured providers')
     expect(markup).toContain('Missing measurements')

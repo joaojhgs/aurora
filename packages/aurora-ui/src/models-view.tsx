@@ -31,11 +31,14 @@ export interface ModelProviderViewModel {
   providerType: string
   backendKind: string
   routeLabel: string
+  routeQuality: string
   health: string
   healthReason: string
+  latencyContext: string
   hardware: string
   benchmark: string
   files: string
+  modelIdentity: string
   capabilities: string[]
   blockers: string[]
   operationStatus: string
@@ -176,6 +179,7 @@ export function ModelsView({
 
       {model.providers.length > 0 ? (
         <>
+          <ModelRoutePolicyBanner providers={model.providers} selectedProviderId={model.selectedProviderId} />
           <ModelRuntimeCategories rows={model.categoryRows} />
           <div className="aui-model-grid">
             {model.providers.map((provider) => (
@@ -194,6 +198,7 @@ export function ModelsView({
                 <div><dt>Native evidence</dt><dd>{model.mobileLocalLightReason}</dd></div>
               </dl>
               <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
+              <ModelSetupActions providers={model.providers} />
               <ModelWarnings warnings={model.warnings} />
             </aside>
           </div>
@@ -258,10 +263,13 @@ function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
       </header>
       <dl className="aui-model-meta">
         <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
+        <div><dt>Route quality</dt><dd>{provider.routeQuality}</dd></div>
         <div><dt>Health</dt><dd>{provider.health} · {provider.healthReason}</dd></div>
+        <div><dt>Latency/context</dt><dd>{provider.latencyContext}</dd></div>
         <div><dt>Hardware</dt><dd>{provider.hardware}</dd></div>
         <div><dt>Benchmark</dt><dd>{provider.benchmark}</dd></div>
         <div><dt>Files</dt><dd>{provider.files}</dd></div>
+        <div><dt>Model</dt><dd>{provider.modelIdentity}</dd></div>
         <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
       </dl>
       <div className="aui-model-capabilities" aria-label={`${provider.name} capabilities`}>
@@ -279,6 +287,37 @@ function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
         </ul>
       ) : null}
     </article>
+  )
+}
+
+function ModelRoutePolicyBanner({
+  providers,
+  selectedProviderId
+}: {
+  providers: ModelProviderViewModel[]
+  selectedProviderId: string | null
+}) {
+  const selected = providers.find((provider) => provider.selected)
+  const routeable = providers.filter(providerRouteable)
+  return (
+    <section className="aui-model-policy-banner" aria-labelledby="model-current-route-policy-title">
+      <div>
+        <p className="aui-kicker">Current route policy banner</p>
+        <h2 id="model-current-route-policy-title">Current route policy</h2>
+        <p>
+          {selected
+            ? `${selected.name} is the selected provider; selection changes remain disabled until a backend/AdminAction selection contract is available.`
+            : selectedProviderId
+              ? `Backend selected provider ${selectedProviderId}, but it was not returned in the current catalog.`
+              : 'No provider is currently selected; Assistant will keep model repair guidance visible.'}
+        </p>
+      </div>
+      <div className="aui-model-policy-banner-actions">
+        <EvidenceBadge label={`${routeable.length} routeable providers`} />
+        <EvidenceBadge label={`${providers.filter((provider) => provider.canBenchmark).length} benchmark operations`} />
+        <a href="/" className="aui-model-repair-link">No model configured assistant repair link</a>
+      </div>
+    </section>
   )
 }
 
@@ -351,14 +390,53 @@ function ModelBenchmarkSnapshot({ rows }: { rows: ModelBenchmarkSnapshotRow[] })
           <p>Only backend-reported benchmark facts are shown; missing measurements stay explicit.</p>
         </div>
       </div>
-      <dl>
-        {rows.map((row) => (
-          <div key={row.label}>
-            <dt>{row.label}</dt>
-            <dd><StatusBadge state={row.state} /> {row.value}<small>{row.detail}</small></dd>
-          </div>
-        ))}
-      </dl>
+      <table className="aui-model-benchmark-table">
+        <caption>Benchmark snapshot table</caption>
+        <thead>
+          <tr>
+            <th scope="col">Metric</th>
+            <th scope="col">State</th>
+            <th scope="col">Value</th>
+            <th scope="col">Backend detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <th scope="row">{row.label}</th>
+              <td><StatusBadge state={row.state} /></td>
+              <td>{row.value}</td>
+              <td>{row.detail}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+function ModelSetupActions({ providers }: { providers: ModelProviderViewModel[] }) {
+  const selected = providers.find((provider) => provider.selected)
+  const importProvider = providers.find((provider) => provider.canImport) ?? selected ?? providers[0]
+  const downloadProvider = providers.find((provider) => provider.canDownload) ?? selected ?? providers[0]
+  return (
+    <section className="aui-model-setup" aria-labelledby="model-setup-title">
+      <div className="aui-model-panel-title compact">
+        <span><Download size={16} aria-hidden="true" /></span>
+        <div>
+          <h2 id="model-setup-title">Model path/import/download setup CTA</h2>
+          <p>Setup actions are visible, but mutating operations stay disabled without backend AdminAction contracts.</p>
+        </div>
+      </div>
+      <div className="aui-model-setup-actions">
+        <ModelAction icon="download" label="Set model path" enabled={false} reason={selected ? `Provider selection confirmation: ${selected.name} is selected; configure paths through backend AdminAction when exposed.` : 'No model configured; open Assistant repair link first.'} />
+        <ModelAction icon="download" label="Import model" enabled={Boolean(importProvider?.canImport)} reason={importProvider?.importReason ?? 'No provider available for model import.'} />
+        <ModelAction icon="download" label="Download model" enabled={Boolean(downloadProvider?.canDownload)} reason={downloadProvider?.downloadReason ?? 'No provider available for model download.'} />
+      </div>
+      <p className="aui-model-selection-confirmation">
+        Provider selection confirmation: {selected ? `${selected.name} is selected by backend catalog evidence.` : 'no provider selected by backend catalog evidence.'}
+      </p>
+      <a href="/" className="aui-model-repair-link">Open Assistant model repair</a>
     </section>
   )
 }
@@ -391,6 +469,7 @@ function ModelProviderTable({ providers }: { providers: ModelProviderViewModel[]
             <th scope="col">Route/privacy</th>
             <th scope="col">Hardware</th>
             <th scope="col">Benchmark</th>
+            <th scope="col">Latency/context</th>
             <th scope="col">Operation</th>
           </tr>
         </thead>
@@ -402,6 +481,7 @@ function ModelProviderTable({ providers }: { providers: ModelProviderViewModel[]
               <td>{provider.routeLabel}<br /><PrivacyBadge privacy={provider.privacyClass} /></td>
               <td>{provider.hardware}</td>
               <td>{provider.benchmark}</td>
+              <td>{provider.latencyContext}</td>
               <td>{provider.operationStatus}</td>
             </tr>
           ))}
@@ -473,11 +553,14 @@ function providerModel(
     providerType: provider.provider_type,
     backendKind: provider.backend_kind,
     routeLabel: nativeLocalLight?.routeLabel ?? routeLabel(provider, candidate),
+    routeQuality: routeQualityLabel(provider, availability, candidate),
     health: provider.health,
     healthReason: provider.health_reason ?? 'backend catalog did not provide a health reason',
+    latencyContext: latencyContextLabel(provider),
     hardware: hardwareLabel(provider.hardware),
     benchmark: benchmarkLabel(provider),
     files: filesLabel(provider),
+    modelIdentity: modelIdentityLabel(provider),
     capabilities: provider.capabilities.length > 0 ? provider.capabilities : ['catalog-only'],
     blockers,
     operationStatus: [provider.import_progress, provider.download_progress]
@@ -521,6 +604,28 @@ function routeLabel(provider: ModelRuntimeProviderInfo, candidate: CapabilityPro
   return `${provider.provider_type} / backend catalog`
 }
 
+function routeQualityLabel(
+  provider: ModelRuntimeProviderInfo,
+  availability: AvailabilityState,
+  candidate: CapabilityProviderCandidate | undefined
+): string {
+  const routeKind = provider.provider_type === 'local'
+    ? 'local'
+    : provider.provider_type === 'mesh'
+      ? 'mesh remote'
+      : provider.provider_type === 'cloud'
+        ? 'cloud egress'
+        : provider.provider_type.includes('mobile')
+          ? 'mobile native'
+          : provider.provider_type
+  const policy = candidate?.disabledReasons?.length
+    ? `blocked by ${candidate.disabledReasons.join(', ')}`
+    : provider.enabled
+      ? 'routeable from catalog evidence'
+      : 'disabled by backend catalog'
+  return `${routeKind}; ${availability}; ${policy}`
+}
+
 function hardwareLabel(hardware: ModelRuntimeProviderInfo['hardware']): string {
   const entries = Object.entries(hardware)
     .filter(([, value]) => value !== null && value !== undefined)
@@ -538,11 +643,25 @@ function benchmarkLabel(provider: ModelRuntimeProviderInfo): string {
   return benchmark.reason ? `${benchmark.status}: ${benchmark.reason}` : benchmark.status
 }
 
+function latencyContextLabel(provider: ModelRuntimeProviderInfo): string {
+  const latency = provider.benchmark.latency_ms === null ? 'latency not measured' : `${provider.benchmark.latency_ms} ms latency`
+  const context = provider.context_window === null ? 'context unknown' : `${provider.context_window} token context`
+  const limit = provider.generation_limit === null ? 'generation limit unknown' : `${provider.generation_limit} token generation limit`
+  return `${latency}; ${context}; ${limit}`
+}
+
 function filesLabel(provider: ModelRuntimeProviderInfo): string {
   if (provider.model_files.length === 0) return 'no local files reported'
   return provider.model_files
     .map((file) => `${file.display_name}${file.exists === false ? ' missing' : ''}${file.path_redacted ? ' redacted' : ''}`)
     .join(', ')
+}
+
+function modelIdentityLabel(provider: ModelRuntimeProviderInfo): string {
+  const model = provider.model_id ?? 'model id not reported'
+  const source = provider.source ?? 'source not reported'
+  const license = provider.license ?? 'license not reported'
+  return `${model}; ${source}; ${license}`
 }
 
 function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchmarkSnapshotRow[] {
