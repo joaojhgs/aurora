@@ -25,6 +25,11 @@ export type AdminAuditLoadState =
 export interface AdminAuditFilters {
   query: string
   event: string
+  actor?: string
+  action?: string
+  resource?: string
+  createdAfter?: string
+  createdBefore?: string
   principalId: string
   peerOrProvider: string
   routePath: string
@@ -93,6 +98,11 @@ export interface AdminAuditViewProps {
 const emptyFilters: AdminAuditFilters = {
   query: '',
   event: 'all',
+  actor: '',
+  action: '',
+  resource: '',
+  createdAfter: '',
+  createdBefore: '',
   principalId: '',
   peerOrProvider: '',
   routePath: '',
@@ -133,6 +143,8 @@ const approvalLifecycleEvents = [
 ]
 
 const secretKeyPattern = /(token|secret|password|credential|api[_-]?key|authorization|raw_audio|audio_buffer)/i
+const sensitivePayloadKeyPattern = /(payload|raw)/i
+const safeHashKeyPattern = /(hash|digest|checksum|receipt|redacted)/i
 
 export function AdminAuditResource({ client }: AdminAuditResourceProps) {
   const [filters, setFilters] = useState<AdminAuditFilters>(emptyFilters)
@@ -230,7 +242,19 @@ export function AdminAuditView({
     () => snapshot.rows.filter((row) => rowMatchesFilters(row, effectiveFilters)),
     [snapshot.rows, effectiveFilters]
   )
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(visibleRows[0]?.id ?? null)
+  const selectedRow = visibleRows.find((row) => row.id === selectedRowId) ?? visibleRows[0] ?? null
   const totals = auditTotals(visibleRows)
+
+  useEffect(() => {
+    if (visibleRows.length === 0) {
+      setSelectedRowId(null)
+      return
+    }
+    if (!selectedRowId || !visibleRows.some((row) => row.id === selectedRowId)) {
+      setSelectedRowId(visibleRows[0]?.id ?? null)
+    }
+  }, [selectedRowId, visibleRows])
 
   return (
     <section className="aui-admin-audit" aria-labelledby="admin-audit-title">
@@ -263,7 +287,7 @@ export function AdminAuditView({
         <div className="aui-panel-heading">
           <div>
             <p className="aui-kicker">Filters</p>
-            <h2 id="audit-controls-title">Search and trace fields</h2>
+            <h2 id="audit-controls-title">Search actor, action, resource, and time</h2>
           </div>
           <button
             className="aui-action-chip"
@@ -310,13 +334,19 @@ export function AdminAuditView({
               </thead>
               <tbody>
                 {visibleRows.map((row) => (
-                  <AuditRow key={row.id} row={row} />
+                  <AuditRow
+                    key={row.id}
+                    row={row}
+                    selected={selectedRow?.id === row.id}
+                    onSelect={() => setSelectedRowId(row.id)}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </section>
+      {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
     </section>
   )
 }
@@ -373,6 +403,11 @@ function AuditFilters({
           <input value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
         </div>
       </label>
+      <FilterInput label="Actor" value={filters.actor ?? ''} onChange={(value) => update('actor', value)} />
+      <FilterInput label="Action" value={filters.action ?? ''} onChange={(value) => update('action', value)} />
+      <FilterInput label="Resource" value={filters.resource ?? ''} onChange={(value) => update('resource', value)} />
+      <FilterInput label="Created after" type="datetime-local" value={filters.createdAfter ?? ''} onChange={(value) => update('createdAfter', value)} />
+      <FilterInput label="Created before" type="datetime-local" value={filters.createdBefore ?? ''} onChange={(value) => update('createdBefore', value)} />
       <label>
         <span>Event</span>
         <select value={filters.event} onChange={(event) => update('event', event.currentTarget.value)}>
@@ -426,18 +461,18 @@ function AuditFilters({
   )
 }
 
-function FilterInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function FilterInput({ label, type = 'text', value, onChange }: { label: string; type?: string; value: string; onChange: (value: string) => void }) {
   return (
     <label>
       <span>{label}</span>
-      <input value={value} onChange={(event) => onChange(event.currentTarget.value)} />
+      <input type={type} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
     </label>
   )
 }
 
-function AuditRow({ row }: { row: AdminAuditRow }) {
+function AuditRow({ row, selected, onSelect }: { row: AdminAuditRow; selected: boolean; onSelect: () => void }) {
   return (
-    <tr>
+    <tr aria-selected={selected}>
       <td>
         <strong>{row.createdAt}</strong>
         <small>{row.lifecycleLabel}</small>
@@ -481,10 +516,40 @@ function AuditRow({ row }: { row: AdminAuditRow }) {
         </div>
       </td>
       <td>
+        <button className="aui-action-chip" type="button" onClick={onSelect} aria-pressed={selected}>
+          {selected ? 'Selected detail' : 'View detail'}
+        </button>
         <code>{row.correlationId}</code>
         <small>{row.supportBundleCorrelationIds.join(', ')}</small>
       </td>
     </tr>
+  )
+}
+
+function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
+  return (
+    <aside className="aui-admin-panel aui-service-drawer" aria-labelledby="audit-selected-detail-title">
+      <div className="aui-panel-heading">
+        <div>
+          <p className="aui-kicker">Selected detail</p>
+          <h2 id="audit-selected-detail-title">{row.event}</h2>
+        </div>
+        <EvidenceBadge label={`correlation ${row.correlationId}`} />
+      </div>
+      <dl>
+        <div><dt>Actor</dt><dd>{row.principalId}</dd></div>
+        <div><dt>Action</dt><dd>{row.action}</dd></div>
+        <div><dt>Resource</dt><dd>{resourceSummary(row)}</dd></div>
+        <div><dt>Created at</dt><dd>{row.createdAt}</dd></div>
+        <div><dt>Correlation ID</dt><dd><code>{row.correlationId}</code></dd></div>
+        <div><dt>Audit receipt</dt><dd>{row.receipt}</dd></div>
+        <div><dt>Payload hash</dt><dd>{row.payloadHash}</dd></div>
+      </dl>
+      <div className="aui-redacted-preview">
+        <h3>Redacted detail payload</h3>
+        <code>{row.redactedPreview}</code>
+      </div>
+    </aside>
   )
 }
 
@@ -582,9 +647,10 @@ function backendAuditFilter(filters: AdminAuditFilters): AuditLogRequest {
     limit: 250,
     offset: 0,
     event: filters.event !== 'all' ? filters.event : null,
-    principal_id: blankToNull(filters.principalId),
+    principal_id: blankToNull(filters.actor) ?? blankToNull(filters.principalId),
     correlation_id: blankToNull(filters.correlationId),
     tool_id: blankToNull(filters.toolId),
+    action: blankToNull(filters.action),
     route: blankToNull(filters.routePath)
   }
 }
@@ -602,6 +668,9 @@ function rowMatchesFilters(row: AdminAuditRow, filters: AdminAuditFilters): bool
       row.receipt,
       row.redactedPreview
     ].join(' ')],
+    [filters.actor ?? '', row.principalId],
+    [filters.action ?? '', row.action],
+    [filters.resource ?? '', resourceSummary(row)],
     [filters.principalId, row.principalId],
     [filters.peerOrProvider, `${row.peerId} ${row.providerId}`],
     [filters.routePath, row.routePath],
@@ -615,11 +684,14 @@ function rowMatchesFilters(row: AdminAuditRow, filters: AdminAuditFilters): bool
   if (filters.event !== 'all' && !contains(row.event, filters.event)) return false
   if (filters.approvalMode !== 'all' && !contains(row.approvalMode, filters.approvalMode)) return false
   if (filters.status !== 'all' && row.status !== filters.status) return false
+  if (!matchesTimeRange(row.createdAt, filters.createdAfter ?? '', filters.createdBefore ?? '')) return false
   return checks.every(([needle, haystack]) => !needle.trim() || contains(haystack, needle))
 }
 
 function unsupportedFilterWarnings(filters: AdminAuditFilters, backendFilter: AuditLogRequest): string[] {
   const warnings: string[] = []
+  if ((filters.resource ?? '').trim()) warnings.push('Resource is filtered from normalized route, peer, provider, tool, namespace, audio, and scheduler fields after Auth.AuditLog returns.')
+  if ((filters.createdAfter ?? '').trim() || (filters.createdBefore ?? '').trim()) warnings.push('Time range is filtered from returned audit rows after Auth.AuditLog returns.')
   if (filters.approvalMode !== 'all') warnings.push('Approval mode is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.dataNamespace.trim()) warnings.push('Data namespace is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.audioSessionId.trim()) warnings.push('Audio session is filtered from redacted audit detail fields after Auth.AuditLog returns.')
@@ -646,7 +718,7 @@ function sanitizeDetails(details: JsonObject): JsonObject {
   return Object.fromEntries(
     Object.entries(details).map(([key, value]) => [
       key,
-      secretKeyPattern.test(key) ? redactedToken(key, value) : sanitizeValue(value)
+      isSensitiveDetailKey(key) ? redactedToken(key, value) : sanitizeValue(value)
     ])
   ) as JsonObject
 }
@@ -661,6 +733,10 @@ function sanitizeValue(value: JsonValue | undefined): JsonValue {
 function redactedToken(key: string, value: JsonValue | undefined): JsonValue {
   if (typeof value === 'string' && value.startsWith('hash:')) return value
   return `${key}:redacted`
+}
+
+function isSensitiveDetailKey(key: string): boolean {
+  return secretKeyPattern.test(key) || (sensitivePayloadKeyPattern.test(key) && !safeHashKeyPattern.test(key))
 }
 
 function redactString(value: string): string {
@@ -727,6 +803,28 @@ function newestTimestamp(rows: AdminAuditRow[]): string | null {
   return rows.map((row) => row.createdAt).filter(Boolean).sort().at(-1) ?? null
 }
 
+function resourceSummary(row: AdminAuditRow): string {
+  return [
+    row.routePath,
+    row.toolId,
+    row.dataNamespace,
+    row.audioSessionId,
+    row.schedulerJobId,
+    row.peerId,
+    row.providerId
+  ].join(' ')
+}
+
+function matchesTimeRange(createdAt: string, createdAfter: string, createdBefore: string): boolean {
+  const createdTime = Date.parse(createdAt)
+  if (Number.isNaN(createdTime)) return !createdAfter.trim() && !createdBefore.trim()
+  const afterTime = createdAfter.trim() ? Date.parse(createdAfter) : Number.NaN
+  const beforeTime = createdBefore.trim() ? Date.parse(createdBefore) : Number.NaN
+  if (!Number.isNaN(afterTime) && createdTime < afterTime) return false
+  if (!Number.isNaN(beforeTime) && createdTime > beforeTime) return false
+  return true
+}
+
 function hashPreview(details: JsonObject): string {
   const preview = JSON.stringify(details)
   let hash = 0
@@ -736,8 +834,8 @@ function hashPreview(details: JsonObject): string {
   return `sha256-preview:${hash.toString(16).padStart(8, '0')}`
 }
 
-function blankToNull(value: string): string | null {
-  return value.trim() || null
+function blankToNull(value: string | null | undefined): string | null {
+  return value?.trim() || null
 }
 
 function contains(value: string, query: string): boolean {

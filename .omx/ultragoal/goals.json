@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:20:52.525Z",
+  "updatedAt": "2026-07-02T15:37:09.305Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1913,46 +1913,56 @@
       "id": "G167-admin-plugins",
       "title": "`/admin/plugins`:",
       "objective": "`/admin/plugins`:\nplugin/MCP catalog;\nenabled/disabled/health;\nreload only if backend route exists and gated;\nplugin errors/logs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:35:38.277Z",
+      "completedAt": "2026-07-02T15:35:38.277Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G168-admin-pairing",
       "title": "`/admin/pairing`:",
       "objective": "`/admin/pairing`:\npending pairing queue;\ncreate pairing code/QR/deep link;\napprove/deny/exchange/revoke;\nexpiry and audit.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:35:51.497Z",
+      "completedAt": "2026-07-02T15:35:51.497Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G169-admin-backups",
       "title": "`/admin/backups`:",
       "objective": "`/admin/backups`:\nlist backups;\ncreate backup;\nverify;\nrestore dry-run;\nrollback warning;\nencryption/manifest status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:36:05.647Z",
+      "completedAt": "2026-07-02T15:36:05.647Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G170-admin-scheduler",
       "title": "`/admin/scheduler`:",
       "objective": "`/admin/scheduler`:\njobs table;\ncreate/edit/pause/resume/cancel;\nrecurrence display;\nrun history;\ntool integration.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:36:19.575Z",
+      "completedAt": "2026-07-02T15:36:19.575Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G171-admin-audit",
       "title": "`/admin/audit`:",
       "objective": "`/admin/audit`:\nsearch/filter by actor/action/resource/time;\ndetails drawer;\ncorrelation id;\nredacted export.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:36:36.415Z",
+      "completedAt": "2026-07-02T15:36:36.415Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G172-every-route-has-real-live-read-path",
@@ -1976,19 +1986,23 @@
       "id": "G174-mutations-use-adminaction-or-are-dis",
       "title": "Mutations use AdminAction or are disabled with exact missing contract.",
       "objective": "Mutations use AdminAction or are disabled with exact missing contract.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:36:53.018Z",
+      "completedAt": "2026-07-02T15:36:53.018Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G175-audit-export-redacts-secrets-payload",
       "title": "Audit export redacts secrets/payloads.",
       "objective": "Audit export redacts secrets/payloads.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:37:09.305Z",
+      "completedAt": "2026-07-02T15:37:09.305Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-plugins-view.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx; pnpm --filter @aurora/ui test -- -t 'plugins|pairing|backup|scheduler|audit'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/admin-routes-evidence.test.tsx tests/shell.test.tsx -t 'plugins|pairing|backup|scheduler|audit'; git diff --check"
     },
     {
       "id": "G176-diagnostics-page-should-be-the-only",

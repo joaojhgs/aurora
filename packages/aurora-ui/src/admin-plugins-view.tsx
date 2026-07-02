@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Boxes, Download, FlaskConical, Plug, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Boxes, Download, FlaskConical, Plug, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
@@ -47,6 +47,8 @@ export interface AdminPluginActionPreview {
   state: AvailabilityState
   reason: string
   affectedResources: string[]
+  repairState: 'admin-action-ready' | 'missing-contract' | 'missing-route' | 'missing-admin-action' | 'invalid-method-type'
+  routePath: string | null
 }
 
 export interface AdminToolPolicyControl {
@@ -68,6 +70,11 @@ export interface AdminToolInventoryRow {
   providerPeerId: string
   serviceInstanceId: string
   installedState: 'installed-local' | 'discoverable-peer' | 'shared-to-peers' | 'unavailable'
+  enabledState: 'enabled' | 'disabled' | 'pending-approval' | 'read-only-remote'
+  healthState: AvailabilityState
+  providerStatus: string
+  providerErrors: string[]
+  providerLogs: string[]
   routeState: AvailabilityState
   routeReason: string
   riskClass: string
@@ -255,6 +262,7 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
                   <strong>{action.label}</strong>
                   <code>{action.methodId}</code>
                   <span>{action.reason}</span>
+                  {action.repairState !== 'admin-action-ready' ? <small>Repair state: {action.repairState}</small> : <small>Route: {action.routePath}</small>}
                 </div>
                 <button type="button" className="aui-action-chip" disabled={!action.available} onClick={() => void previewAction(action)}>
                   {action.id.includes('install') ? <Download size={14} aria-hidden /> : <RefreshCw size={14} aria-hidden />}
@@ -281,9 +289,10 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
               <tr>
                 <th>Tool</th>
                 <th>Provider</th>
+                <th>Health</th>
                 <th>Risk</th>
                 <th>Policy</th>
-                <th>Audit</th>
+                <th>Audit and logs</th>
               </tr>
             </thead>
             <tbody>
@@ -351,6 +360,14 @@ function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
         <small>{tool.providerLabel}; peer {tool.providerPeerId}; service {tool.serviceInstanceId}</small>
       </td>
       <td>
+        <div className="aui-state-line">
+          <StatusBadge state={tool.healthState} />
+          <span>{tool.enabledState}</span>
+        </div>
+        <small>{tool.providerStatus}</small>
+        {tool.providerErrors.length > 0 ? <small>Errors: {tool.providerErrors.join('; ')}</small> : null}
+      </td>
+      <td>
         <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
         <small>{tool.approvalMode}</small>
       </td>
@@ -366,6 +383,12 @@ function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
       <td>
         <code>{tool.lastAuditOutcome}</code>
         <small>{tool.routeReason}</small>
+        <details className="aui-service-details">
+          <summary><Stethoscope size={14} aria-hidden /> Provider logs</summary>
+          <ul>
+            {tool.providerLogs.map((log) => <li key={log}>{log}</li>)}
+          </ul>
+        </details>
       </td>
     </tr>
   )
@@ -390,6 +413,11 @@ function buildToolInventoryRow(tool: ToolApprovalCardModel, methods: MethodDescr
         : tool.approvalRequired || tool.requiresAdminAction
           ? 'shared-to-peers'
           : 'installed-local',
+    enabledState: enabledStateForTool(tool, remote, unavailable),
+    healthState: stateForTool(tool),
+    providerStatus: providerStatus(tool),
+    providerErrors: providerErrors(tool),
+    providerLogs: providerLogs(tool),
     routeState: stateForTool(tool),
     routeReason: tool.disabledReason ?? tool.denialReason ?? (tool.providers.map((provider) => provider.reason).join('; ') || 'catalog provider'),
     riskClass: tool.riskClass,
@@ -440,23 +468,44 @@ function actionPreview(input: {
 }): AdminPluginActionPreview {
   const method = input.methods.find((candidate) => candidate.busTopic === input.methodId)
   const external = method?.availableOverHttp === true
+  const hasRoute = Boolean(method?.routePath)
   const manage = method?.methodType === 'manage' || method?.methodType === 'admin-critical'
+  const adminActionReady = hasAdminActionGateway(input.methods)
+  const repairState: AdminPluginActionPreview['repairState'] = !method
+    ? 'missing-contract'
+    : !hasRoute || !external
+      ? 'missing-route'
+      : !manage
+        ? 'invalid-method-type'
+        : !adminActionReady
+          ? 'missing-admin-action'
+          : 'admin-action-ready'
   return {
     id: input.id,
     label: input.label,
     methodId: input.methodId,
-    available: Boolean(method && external && manage),
+    available: repairState === 'admin-action-ready',
     requiresAdminAction: manage,
-    state: !method ? 'unsupported' : external && manage ? 'available-local' : 'privacy-blocked',
-    reason: !method
-      ? `${input.methodId} is not advertised by Gateway registry.`
-      : !external
-        ? `${input.methodId} is internal-only and cannot be invoked from this UI.`
-        : manage
-          ? 'Available through AdminAction draft/confirm/audit.'
-          : `${input.methodId} is not marked manage/admin-critical.`,
-    affectedResources: input.affectedResources
+    state: repairState === 'admin-action-ready' ? 'available-local' : repairState === 'missing-contract' ? 'unsupported' : 'privacy-blocked',
+    reason: pluginActionReason(input.methodId, repairState),
+    affectedResources: input.affectedResources,
+    repairState,
+    routePath: method?.routePath ?? null
   }
+}
+
+function hasAdminActionGateway(methods: MethodDescriptor[]): boolean {
+  const draft = methods.some((method) => method.busTopic === 'Gateway.AdminActionDraft' && method.availableOverHttp && Boolean(method.routePath))
+  const confirm = methods.some((method) => method.busTopic === 'Gateway.AdminActionConfirm' && method.availableOverHttp && Boolean(method.routePath))
+  return draft && confirm
+}
+
+function pluginActionReason(methodId: string, repairState: AdminPluginActionPreview['repairState']): string {
+  if (repairState === 'admin-action-ready') return 'Available through a real Gateway route after AdminAction draft/confirm/audit.'
+  if (repairState === 'missing-contract') return `${methodId} is not advertised by Gateway registry; repair the backend contract before enabling this control.`
+  if (repairState === 'missing-route') return `${methodId} has no routeable Gateway HTTP path; add/export the route before UI reload is enabled.`
+  if (repairState === 'missing-admin-action') return 'Gateway.AdminActionDraft and Gateway.AdminActionConfirm must be routeable before plugin mutations are enabled.'
+  return `${methodId} is not marked manage/admin-critical; backend must classify this mutation as AdminAction-gated.`
 }
 
 function buildPolicyControls(tool: ToolApprovalCardModel, methods: MethodDescriptor[], remote: boolean, unavailable: boolean): AdminToolPolicyControl[] {
@@ -506,6 +555,48 @@ function policyControl(
     requiresAdminAction: true,
     reason: readOnly ? 'Remote peer tool policy is read-only unless this node owns the policy.' : reason
   }
+}
+
+
+function enabledStateForTool(tool: ToolApprovalCardModel, remote: boolean, unavailable: boolean): AdminToolInventoryRow['enabledState'] {
+  if (unavailable || tool.state === 'denied') return 'disabled'
+  if (remote) return 'read-only-remote'
+  if (tool.approvalRequired || tool.requiresAdminAction || tool.providerSelectorRequired || tool.selectorRequired) return 'pending-approval'
+  return 'enabled'
+}
+
+function providerStatus(tool: ToolApprovalCardModel): string {
+  if (tool.state === 'unavailable') return `disabled: ${tool.disabledReason ?? 'provider unavailable'}`
+  if (tool.state === 'denied') return `disabled: ${tool.denialReason ?? 'policy denied'}`
+  if (tool.providerSelectorRequired || tool.selectorRequired) return 'selector required before execution'
+  if (tool.dryRunRequired) return 'dry-run-only provider policy'
+  if (tool.providers.length > 0) return tool.providers.map((provider) => `${provider.label}: ${provider.reason}`).join('; ')
+  return 'provider reports available'
+}
+
+function providerErrors(tool: ToolApprovalCardModel): string[] {
+  return [
+    tool.disabledReason,
+    tool.denialReason,
+    tool.result?.error ?? null,
+    ...tool.providers.filter((provider) => !provider.selectable).map((provider) => provider.reason)
+  ].filter((value): value is string => Boolean(value))
+}
+
+function providerLogs(tool: ToolApprovalCardModel): string[] {
+  const logs = [
+    `state=${tool.state}`,
+    `provider=${tool.providerLabel}`,
+    `transport=${tool.transport ?? 'not reported'}`,
+    `route=${tool.routePath.join(' -> ') || 'not reported'}`,
+    tool.correlationId ? `correlation=${tool.correlationId}` : null,
+    tool.policyDecisionId ? `policy=${tool.policyDecisionId}` : null,
+    tool.approvalRequestId ? `approval=${tool.approvalRequestId}` : null,
+    tool.result?.auditReceipt ? `audit=${tool.result.auditReceipt}` : null,
+    tool.result?.status ? `last-result=${tool.result.status}` : null,
+    tool.result?.redactionStatus ? `redaction=${tool.result.redactionStatus}` : null
+  ].filter((value): value is string => Boolean(value))
+  return logs.length > 0 ? logs : ['No provider log metadata reported by backend.']
 }
 
 function classifyProvider(tool: ToolApprovalCardModel): ToolProviderGroup {

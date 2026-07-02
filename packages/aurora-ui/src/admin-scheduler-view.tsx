@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { AlertTriangle, CalendarClock, Pause, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Edit3, Pause, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
@@ -32,7 +32,7 @@ export type SchedulerOwnershipState =
   | 'foreign-denied'
 
 export interface SchedulerOperationControl {
-  action: 'cancel' | 'pause' | 'resume'
+  action: 'edit' | 'cancel' | 'pause' | 'resume'
   methodId: string
   available: boolean
   state: AvailabilityState
@@ -57,6 +57,8 @@ export interface SchedulerJobRow {
   privacyClass: string
   nextRun: string
   lastRun: string
+  runHistory: string
+  toolIntegration: string
   blockedReason: string | null
   operationControls: SchedulerOperationControl[]
 }
@@ -137,9 +139,10 @@ export async function buildAdminSchedulerSnapshot(
   }
 
   const rows = jobs.map((job) => jobRow(job, methods))
+  const permissionWarnings = schedulerPermissionWarnings(methods)
   const loadState: SchedulerLoadState = denied
     ? 'denied'
-    : warnings.length > 0
+    : warnings.length + permissionWarnings.length > 0
       ? 'degraded'
       : rows.length === 0
         ? 'empty'
@@ -150,8 +153,8 @@ export async function buildAdminSchedulerSnapshot(
     jobs: rows,
     createControl: createControl(methods, catalog?.local_peer_id ?? 'local-peer', catalog?.providers ?? []),
     totals: schedulerTotals(rows),
-    warnings,
-    error: warnings[0] ?? null,
+    warnings: [...warnings, ...permissionWarnings],
+    error: warnings[0] ?? permissionWarnings[0] ?? null,
     evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response',
     secretsRedacted: catalog?.secrets_redacted ?? true
   }
@@ -282,7 +285,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             </select>
             <label htmlFor="scheduler-reason">AdminAction reason</label>
             <textarea id="scheduler-reason" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
-            <button type="submit" disabled={!canCreate}><Plus size={16} aria-hidden />Create via AdminAction</button>
+            <button type="submit" disabled={!canCreate} title={snapshot.createControl.reason}><Plus size={16} aria-hidden />Create via AdminAction</button>
           </form>
           <p className="aui-muted">{snapshot.createControl.reason}</p>
         </section>
@@ -377,6 +380,8 @@ function SchedulerJobsTable({
                       <div><dt>Namespace</dt><dd>{job.namespace}</dd></div>
                       <div><dt>Policy decision</dt><dd>{job.policyDecisionId}</dd></div>
                       <div><dt>Audit</dt><dd>{job.auditReceipt}</dd></div>
+                      <div><dt>Tool integration</dt><dd>{job.toolIntegration}</dd></div>
+                      <div><dt>Run history</dt><dd>{job.runHistory}</dd></div>
                       <div><dt>Blocker</dt><dd>{job.blockedReason ?? 'none'}</dd></div>
                     </dl>
                   </div>
@@ -385,7 +390,7 @@ function SchedulerJobsTable({
               </td>
               <td><strong>{ownershipLabel(job.ownership)}</strong><small>{job.ownerLabel}</small></td>
               <td><span>{job.targetLabel}</span><small>{job.approvalLabel}</small></td>
-              <td><code>{job.schedule}</code><small>next {job.nextRun}; last {job.lastRun}</small></td>
+              <td><code>{job.schedule}</code><small>next {job.nextRun}; {job.runHistory}</small></td>
               <td>
                 <div className="aui-tool-actions">
                   {job.operationControls.map((control) => (
@@ -401,7 +406,7 @@ function SchedulerJobsTable({
                         { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
                       )}
                     >
-                      {control.action === 'cancel' ? <Trash2 size={15} aria-hidden /> : control.action === 'pause' ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
+                      {control.action === 'edit' ? <Edit3 size={15} aria-hidden /> : control.action === 'cancel' ? <Trash2 size={15} aria-hidden /> : control.action === 'pause' ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
                       {control.action}
                     </button>
                   ))}
@@ -434,6 +439,8 @@ function jobRow(job: NormalizedSchedulerJob, methods: MethodDescriptor[]): Sched
     privacyClass: job.privacy_class,
     nextRun: job.next_run ?? 'not scheduled',
     lastRun: job.last_run ?? 'never',
+    runHistory: runHistoryLabel(job),
+    toolIntegration: toolIntegrationLabel(job),
     blockedReason: job.blocked_reason ?? job.last_error,
     operationControls: operationControls(job, methods)
   }
@@ -441,10 +448,29 @@ function jobRow(job: NormalizedSchedulerJob, methods: MethodDescriptor[]): Sched
 
 function operationControls(job: NormalizedSchedulerJob, methods: MethodDescriptor[]): SchedulerOperationControl[] {
   return [
+    editOperationControl(methods),
     operationControl('cancel', SCHEDULER_METHODS.cancel, job, methods),
     operationControl('pause', SCHEDULER_METHODS.pause, job, methods),
     operationControl('resume', SCHEDULER_METHODS.resume, job, methods)
   ]
+}
+
+const SCHEDULER_EDIT_METHOD_CANDIDATES = ['Scheduler.Update', 'Scheduler.Edit'] as const
+
+function editOperationControl(methods: MethodDescriptor[]): SchedulerOperationControl {
+  const method = methods.find((candidate) => SCHEDULER_EDIT_METHOD_CANDIDATES.includes(candidate.busTopic as typeof SCHEDULER_EDIT_METHOD_CANDIDATES[number]))
+  const methodId = method?.busTopic ?? SCHEDULER_EDIT_METHOD_CANDIDATES[0]
+  const baseSupport = methodSupport(method)
+  return {
+    action: 'edit',
+    methodId,
+    available: false,
+    state: baseSupport.state,
+    requiresAdminAction: true,
+    reason: method
+      ? `${methodId} is advertised, but the UI disables edit until the Scheduler edit payload contract is exported by @aurora/client.`
+      : `${SCHEDULER_EDIT_METHOD_CANDIDATES.join(' or ')} is not advertised by Gateway registry; edit is intentionally disabled.`
+  }
 }
 
 function operationControl(
@@ -455,21 +481,24 @@ function operationControl(
 ): SchedulerOperationControl {
   const method = methods.find((candidate) => candidate.busTopic === methodId)
   const support = job.actions[action]
-  const methodSupported = Boolean(method?.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical'))
+  const methodSupportState = methodSupport(method)
+  const methodSupported = methodSupportState.ok
   const supportAvailable = Boolean(support && !support.disabled)
   const available = methodSupported && supportAvailable
   const reason = !method
     ? `${methodId} is not advertised by Gateway registry.`
     : !method.availableOverHttp
       ? `${methodId} is internal-only and disabled for the UI.`
-      : !methodSupported
+      : !hasSchedulerManagePermission(method)
+        ? `${methodId} does not advertise Scheduler.manage; mutation is permission-gated.`
+        : !methodSupported
         ? `${methodId} is not marked manage/admin-critical.`
         : support?.reason ?? (available ? 'Available through AdminAction draft/confirm/audit.' : `${action} is unsupported for this job.`)
   return {
     action,
     methodId,
     available,
-    state: available ? stateForRawJob(job) : support?.status === 'denied' ? 'denied' : 'unsupported',
+    state: available ? stateForRawJob(job) : support?.status === 'denied' ? 'denied' : methodSupportState.state,
     requiresAdminAction: true,
     reason
   }
@@ -481,7 +510,8 @@ function createControl(
   providers: Array<{ peer_id: string | null; node_name: string; eligible: boolean; reason: string; module: string }>
 ): SchedulerCreateControl {
   const method = methods.find((candidate) => candidate.busTopic === SCHEDULER_METHODS.schedule)
-  const available = Boolean(method?.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical'))
+  const support = methodSupport(method)
+  const available = support.ok
   const schedulerProviders = providers.filter((provider) => provider.module === 'Scheduler')
   const targetOptions = schedulerProviders.length > 0
     ? schedulerProviders.map((provider) => {
@@ -496,13 +526,37 @@ function createControl(
     : [{ id: localPeerId, label: 'Local scheduler', disabled: !available, reason: 'No Scheduler provider was returned by capability catalog.' }]
   return {
     available,
-    state: available ? 'available-local' : 'unsupported',
+    state: available ? 'available-local' : support.state,
     requiresAdminAction: true,
     reason: available
       ? 'Create/edit uses AdminAction; remote execution requires target selector, delegated permissions, policy decision, and audit correlation.'
-      : `${SCHEDULER_METHODS.schedule} is not advertised as an external manage/admin-critical method.`,
+      : support.reason ?? `${SCHEDULER_METHODS.schedule} is not advertised as an external manage/admin-critical method.`,
     targetOptions
   }
+}
+
+function methodSupport(method: MethodDescriptor | undefined): { ok: boolean; state: AvailabilityState; reason: string | null } {
+  if (!method) return { ok: false, state: 'unsupported', reason: null }
+  if (!method.availableOverHttp) return { ok: false, state: 'unsupported', reason: `${method.busTopic} is internal-only and disabled for the UI.` }
+  if (!hasSchedulerManagePermission(method)) {
+    return { ok: false, state: 'denied', reason: `${method.busTopic} does not advertise Scheduler.manage; mutation is permission-gated.` }
+  }
+  if (method.methodType !== 'manage' && method.methodType !== 'admin-critical') {
+    return { ok: false, state: 'unsupported', reason: `${method.busTopic} is not marked manage/admin-critical.` }
+  }
+  return { ok: true, state: 'available-local', reason: null }
+}
+
+function hasSchedulerManagePermission(method: MethodDescriptor): boolean {
+  return method.requiredPermissions.includes('Scheduler.manage')
+}
+
+function schedulerPermissionWarnings(methods: MethodDescriptor[]): string[] {
+  return [SCHEDULER_METHODS.schedule, SCHEDULER_METHODS.cancel, SCHEDULER_METHODS.pause, SCHEDULER_METHODS.resume]
+    .map((methodId) => methods.find((candidate) => candidate.busTopic === methodId))
+    .filter((method): method is MethodDescriptor => Boolean(method))
+    .filter((method) => method.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical') && !hasSchedulerManagePermission(method))
+    .map((method) => `${method.busTopic} is advertised without Scheduler.manage; UI mutations are disabled for that contract.`)
 }
 
 function ownershipForJob(job: NormalizedSchedulerJob): SchedulerOwnershipState {
@@ -523,6 +577,22 @@ function approvalLabel(job: NormalizedSchedulerJob): string {
   const token = job.delegated_approval_token_present ? 'approval token present' : 'next approval required'
   const permissions = job.delegated_permissions.length > 0 ? job.delegated_permissions.join(', ') : 'no delegated permissions'
   return `${token}; ${permissions}; policy ${job.policy_decision_id ?? 'not reported'}`
+}
+
+function runHistoryLabel(job: NormalizedSchedulerJob): string {
+  const last = job.last_run ?? 'never run'
+  const failures = job.failure_count > 0 ? `${job.failure_count} failure${job.failure_count === 1 ? '' : 's'}` : '0 failures'
+  const error = job.last_error ? `; last error ${job.last_error}` : ''
+  return `last ${last}; ${failures}; source ${job.source}; timezone ${job.timezone ?? 'UTC'}${error}`
+}
+
+function toolIntegrationLabel(job: NormalizedSchedulerJob): string {
+  if (job.action.startsWith('Tooling.')) {
+    const namespace = job.target_resource_namespace ?? 'tool target selected at run time'
+    const permissions = job.delegated_permissions.length > 0 ? job.delegated_permissions.join(', ') : 'Tooling permission not reported'
+    return `${job.action} -> ${namespace}; delegated ${permissions}`
+  }
+  return `${job.action}; delegated ${job.delegated_permissions.join(', ') || 'no delegated permissions'}`
 }
 
 function schedulerTotals(rows: SchedulerJobRow[]) {

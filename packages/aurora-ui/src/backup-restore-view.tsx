@@ -73,8 +73,11 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
     () => list?.backups.find((backup) => backup.backup_id === selectedBackupId) ?? list?.backups[0] ?? null,
     [list, selectedBackupId]
   )
-  const canMutate = !route.disabled && reason.trim().length > 0 && operation?.status !== 'pending'
+  const operationPending = operation?.status === 'pending'
+  const mutationRouteReady = !route.disabled && route.routeable
+  const canMutate = mutationRouteReady && reason.trim().length > 0 && !operationPending
   const canUseSelected = canMutate && Boolean(selectedBackup)
+  const disabledReason = backupDisabledReason(route, loadError)
   const rollbackBackupId = lastRestore?.rollback_backup_id ?? null
 
   async function runOperation(kind: BackupOperationKind, call: () => Promise<AuroraResponse<BackupCreateResponse | BackupVerifyResponse | BackupRestoreResponse | BackupRollbackResponse>>) {
@@ -178,6 +181,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         <section className="aui-backup-panel aui-backup-control" aria-labelledby="backup-create-title">
           <PanelTitle icon="create" title="Create backup" id="backup-create-title" />
           <p>AdminAction captures reason, confirmation, affected resources, and audit receipt before creating a manifest.</p>
+          {!mutationRouteReady ? <p role="alert">Create is disabled: {disabledReason}</p> : null}
           <form className="aui-backup-form" onSubmit={submitCreate}>
             <label htmlFor="backup-reason">Reason</label>
             <textarea id="backup-reason" value={reason} onChange={(event) => setReason(event.currentTarget.value)} rows={3} disabled={route.disabled} />
@@ -186,6 +190,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
               <span>Include personal RAG metadata when backend policy allows it</span>
             </label>
             <button type="submit" disabled={!canMutate}>Create via AdminAction</button>
+            {!canMutate && mutationRouteReady && reason.trim().length === 0 ? <small>Enter an AdminAction reason before creating a backup.</small> : null}
           </form>
         </section>
 
@@ -194,11 +199,19 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           <dl className="aui-backup-facts">
             <div><dt>State</dt><dd>{loadState}</dd></div>
             <div><dt>Route</dt><dd>{route.explanation}</dd></div>
-            <div><dt>AdminAction</dt><dd>{route.requiresAdminAction ? 'required for create, verify, restore and rollback' : 'not required'}</dd></div>
+            <div><dt>AdminAction</dt><dd>required for create, verify, restore dry-run and rollback dry-run</dd></div>
+            <div><dt>Mutation gate</dt><dd>{mutationRouteReady ? 'enabled through AuroraClient AdminAction draft/confirm/audit' : disabledReason}</dd></div>
             <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || loadError || 'none'}</dd></div>
           </dl>
-          {route.disabled ? <p role="alert">Backup operations are disabled until backend capability evidence is available.</p> : null}
+          {route.disabled ? <p role="alert">Backup operations are disabled until backend Backup.List capability evidence and Backup.* AdminAction contracts are available.</p> : null}
           {loadError ? <p role="alert">{loadError}</p> : null}
+          {route.repairActions.length > 0 ? (
+            <ul className="aui-backup-list" aria-label="Backup repair actions">
+              {route.repairActions.map((action) => (
+                <li key={action.id}><strong>{action.label}</strong><span>{action.disabled ? 'disabled' : 'available'}</span><small>{action.reason}</small></li>
+              ))}
+            </ul>
+          ) : null}
         </section>
 
         <section className="aui-backup-panel aui-backup-wide" aria-labelledby="backup-list-title">
@@ -210,10 +223,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
 
         <section className="aui-backup-panel" aria-labelledby="backup-ops-title">
           <PanelTitle icon="restore" title="Verify & restore" id="backup-ops-title" />
+          <p>These controls never call Backup.* directly; AuroraClient creates and confirms an AdminAction before submitting.</p>
           <form className="aui-backup-form" onSubmit={submitVerify}><button type="submit" disabled={!canUseSelected}>Verify via AdminAction</button></form>
           <form className="aui-backup-form" onSubmit={submitRestoreDryRun}><button type="submit" disabled={!canUseSelected}>Preview restore impact</button></form>
+          <p role="alert">Destructive restore is intentionally unavailable here; only dry-run impact preview is enabled until the backend exposes a confirmed destructive restore contract.</p>
           <button type="button" disabled>Full restore disabled until backend returns destructive restore support</button>
-          <form className="aui-backup-form" onSubmit={submitRollbackDryRun}><button type="submit" disabled={!rollbackBackupId || !canMutate}>Preview rollback</button></form>
+          <p>Rollback is warning-only until a restore dry-run returns a rollback backup id; this view previews rollback impact and does not roll back data.</p>
+          <form className="aui-backup-form" onSubmit={submitRollbackDryRun}><button type="submit" disabled={!rollbackBackupId || !canMutate}>Preview rollback dry-run</button></form>
           {selectedBackup ? <ManifestDownload backup={selectedBackup} /> : null}
         </section>
 
@@ -245,7 +261,7 @@ function BackupManifestTable({ backups, selectedBackupId, onSelect }: { backups:
   return (
     <div className="aui-backup-table-wrap">
       <table className="aui-backup-table">
-        <thead><tr><th scope="col">Select</th><th scope="col">Backup</th><th scope="col">Status</th><th scope="col">Components</th><th scope="col">Storage</th><th scope="col">Digest</th></tr></thead>
+        <thead><tr><th scope="col">Select</th><th scope="col">Backup</th><th scope="col">Status</th><th scope="col">Components</th><th scope="col">Storage</th><th scope="col">Manifest integrity</th></tr></thead>
         <tbody>
           {backups.map((backup) => (
             <tr key={backup.backup_id}>
@@ -253,8 +269,8 @@ function BackupManifestTable({ backups, selectedBackupId, onSelect }: { backups:
               <td><strong>{backup.backup_id}</strong><small>{backup.created_at}</small></td>
               <td>{backup.status}</td>
               <td>{backup.components.map((component) => `${component.component}:${component.status}`).join(', ')}</td>
-              <td>{backup.storage.kind}{backup.encrypted ? ' encrypted' : ''}</td>
-              <td><code>{backup.manifest_digest}</code></td>
+              <td>{backup.storage.kind} · {backup.encrypted ? 'encrypted' : 'not encrypted'} · {backup.storage.encryption}</td>
+              <td><code>{backup.manifest_digest}</code><small>Schema {backup.schema_version}; {backup.secrets_redacted ? 'secrets redacted' : 'redaction unknown'}; {backup.audit_receipt ?? 'no audit receipt'}</small></td>
             </tr>
           ))}
         </tbody>
@@ -319,6 +335,14 @@ function loadStateFromError(error: AuroraError): BackupLoadState {
   if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'unavailable'
   if (error.code === 'transport_loss' || error.code === 'timeout') return 'degraded'
   return 'error'
+}
+
+function backupDisabledReason(route: RouteAvailability, loadError: string | null): string {
+  if (loadError) return loadError
+  if (route.blockers.length > 0) return route.blockers.join(', ')
+  if (!route.routeable) return 'Backup route is not routeable from current capability evidence.'
+  if (route.disabled) return 'Backup backend contract is not advertised by the current SDK/capability graph.'
+  return 'Backup AdminAction mutation contract is not ready.'
 }
 
 export function backupErrorMessage(error: AuroraError): string {

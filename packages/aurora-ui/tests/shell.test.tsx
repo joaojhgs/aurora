@@ -5060,6 +5060,11 @@ function auditLoadingSnapshot() {
     filters: {
       query: '',
       event: 'all',
+      actor: '',
+      action: '',
+      resource: '',
+      createdAfter: '',
+      createdBefore: '',
       principalId: '',
       peerOrProvider: '',
       routePath: '',
