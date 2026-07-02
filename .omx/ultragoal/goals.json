@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:08:25.015Z",
+  "updatedAt": "2026-07-02T08:09:33.319Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -395,10 +395,13 @@
       "id": "G033-the-assistant-route-rendered-a-backe",
       "title": "the assistant route rendered a backend-state/capability dashboard ins...",
       "objective": "the assistant route rendered a backend-state/capability dashboard instead of chat;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:09:33.319Z",
+      "startedAt": "2026-07-02T08:08:34.606Z",
+      "completedAt": "2026-07-02T08:09:33.319Z",
+      "evidence": "Known failure closed: apps/aurora-tauri/src/tauri-app.tsx assistant registry entry renders AssistantView with route, cancellation, voice, and native evidence props; it does not render TauriDiagnosticsPage or MeshDiagnosticsResource. Verified: pnpm --filter @aurora/tauri-ui test -- -t 'e2e:assistant|renders the assistant page at the root|routes the diagnostics dashboard away from the assistant landing page'; pnpm --filter @aurora/ui test -- -t 'assistant|route sheet|tool approval'."
     },
     {
       "id": "G034-routes-were-counted-as-blocked-becau",
