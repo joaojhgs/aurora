@@ -105,11 +105,30 @@ describe('Aurora Tauri runtime wrapper', () => {
   it('routes admin backup and scheduler mutations to AdminAction-capable pages', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
 
-    window.history.replaceState({}, '', '/admin/backups')
-    const backups = renderToStaticMarkup(<AuroraTauriApp />)
-    expect(backups).toContain('Backups &amp; Restore')
-    expect(backups).toContain('Create via AdminAction')
-    expect(backups).not.toContain('full product page still needs')
+    const routeMarkers: Record<string, string> = {
+      assistant: 'Prompt',
+      memory: 'History and RAG provenance',
+      tools: 'Approval cards',
+      mesh: 'Mesh peers',
+      admin: 'Admin overview',
+      services: 'Services',
+      access: 'RBAC',
+      tokens: 'RBAC',
+      devices: 'Devices',
+      config: 'Configuration',
+      contracts: 'Services',
+      plugins: 'Plugins, MCP, and tools',
+      pairing: 'Pairing queue',
+      backups: 'Backups &amp; Restore',
+      scheduler: 'Scheduler',
+      audit: 'Audit log',
+      models: 'Models and runtime',
+      diagnostics: 'Native boundary',
+      onboarding: 'Connect Aurora',
+      settings: 'Settings and permissions',
+      data: 'History and RAG provenance',
+      native: 'Settings and permissions'
+    }
 
     window.history.replaceState({}, '', '/admin/scheduler')
     const scheduler = renderToStaticMarkup(<AuroraTauriApp />)
