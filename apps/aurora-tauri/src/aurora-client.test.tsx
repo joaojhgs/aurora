@@ -1714,6 +1714,53 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
+  it('e2e:runtime waits through transient Gateway health misses before blocking routes', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    let healthAttempts = 0
+    transport.register(GATEWAY_METHODS.health, () => {
+      healthAttempts += 1
+      if (healthAttempts === 1) {
+        throw new AuroraError({
+          code: 'transport_loss',
+          message: 'Gateway request failed: error sending request for url (http://127.0.0.1:8000/api/health)',
+          method: GATEWAY_METHODS.health,
+        })
+      }
+      return { status: 'healthy' }
+    })
+    const readySidecar = {
+      running: true,
+      mode: 'threads',
+      pid: 4242,
+      gatewayUrl: 'http://127.0.0.1:8000',
+      lastError: null,
+      details: { healthPath: '/api/health' },
+    }
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport })),
+      mode: 'desktop-local',
+      startSidecar: async () => readySidecar,
+      sidecarStatus: async () => readySidecar,
+    }
+    window.history.replaceState({}, '', '/')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 650))
+      })
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Prompt')
+      })
+      expect(healthAttempts).toBeGreaterThanOrEqual(2)
+      expect(container.textContent).not.toContain('Aurora unavailable')
+      expect(container.textContent).not.toContain('Gateway request failed: error sending request for url (http://127.0.0.1:8000/api/health)')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('e2e:runtime renders desktop-local sidecar status from Tauri command evidence', async () => {
     const transport = new RecordingMockAuroraTransport()
     transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))

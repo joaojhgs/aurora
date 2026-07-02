@@ -150,6 +150,10 @@ const tauriRouteIdSet = new Set<string>(tauriRouteIds)
 
 export const tauriRouteRegistryRouteIds = Object.freeze([...tauriRouteIds])
 
+const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000
+const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500
+const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000
+
 export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTauriRuntime } = {}) {
   const runtime = useMemo(() => runtimeOverride ?? createAuroraTauriRuntime(), [runtimeOverride]);
   const [snapshot, setSnapshot] =
@@ -190,7 +194,7 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
           iosBiometrics,
           android,
         ] = await Promise.all([
-          buildShellSnapshot(runtime.client),
+          buildRuntimeShellSnapshot(runtime.client, runtime.mode === "desktop-local"),
           readySidecar ? Promise.resolve(readySidecar) : runtime.sidecarStatus().catch(() => null),
           runtime.nativePermissionStatus().catch(() => null),
           runtime.trayStatus().catch(() => null),
@@ -299,8 +303,7 @@ async function runRuntimeReadinessProbes(runtime: AuroraTauriRuntime): Promise<T
   }
   assertReadySidecar(readySidecar);
 
-  await probeGatewayReadiness(runtime.client);
-  return readySidecar;
+  return waitForGatewayReadiness(runtime, readySidecar);
 }
 
 function assertReadySidecar(sidecar: TauriSidecarStatus): void {
@@ -318,6 +321,59 @@ async function probeGatewayReadiness(client: AuroraClient): Promise<void> {
   });
   await client.registry.getRegistry();
   await client.registry.listServices();
+}
+
+async function waitForGatewayReadiness(
+  runtime: AuroraTauriRuntime,
+  initialSidecar: TauriSidecarStatus,
+): Promise<TauriSidecarStatus> {
+  let latestSidecar = initialSidecar
+  let lastError: unknown = null
+  const deadline = Date.now() + DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS
+
+  while (Date.now() <= deadline) {
+    try {
+      await probeGatewayReadiness(runtime.client)
+      return latestSidecar
+    } catch (error) {
+      lastError = error
+      latestSidecar = (await runtime.sidecarStatus().catch(() => latestSidecar)) ?? latestSidecar
+      assertReadySidecar(latestSidecar)
+      await delay(DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS)
+    }
+  }
+
+  throw new Error(
+    `Tauri local Gateway did not become ready within ${DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS}ms. Last probe error: ${readinessErrorMessage(lastError)}`,
+  )
+}
+
+async function buildRuntimeShellSnapshot(
+  client: AuroraClient,
+  retryTransientError: boolean,
+): Promise<AuroraShellSnapshot> {
+  if (!retryTransientError) return buildShellSnapshot(client)
+
+  let snapshot = await buildShellSnapshot(client)
+  if (snapshot.loadState !== "error") return snapshot
+
+  const deadline = Date.now() + DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS
+  while (Date.now() <= deadline) {
+    await delay(DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS)
+    snapshot = await buildShellSnapshot(client)
+    if (snapshot.loadState !== "error") return snapshot
+  }
+  return snapshot
+}
+
+function readinessErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  return "unknown Gateway readiness error"
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 interface NativeContext {
