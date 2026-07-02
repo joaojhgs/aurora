@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
     paths:
       - "apps/aurora-web/**"
+      - "apps/aurora-tauri/**"
       - "packages/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "apps/aurora-web/**"
+      - "apps/aurora-tauri/**"
       - "packages/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -60,6 +62,12 @@ jobs:
           pnpm --filter @aurora/web test
           pnpm --filter @aurora/web typecheck
           pnpm --filter @aurora/web build
+
+      - name: Test, typecheck, and build Tauri frontend
+        run: |
+          pnpm --filter @aurora/tauri-ui test
+          pnpm --filter @aurora/tauri-ui typecheck
+          pnpm --filter @aurora/tauri-ui build
 
       - name: Upload UI and SDK test reports
         if: always()

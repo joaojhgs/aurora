@@ -9,7 +9,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `quality.yml` | Fast static feedback. | Generated config check, docs hygiene, Ruff lint/format, TypeScript typechecks. |
 | `python-tests.yml` | Backend unit/integration coverage. | Unit tests, non-process integration tests, Redis-backed process-mode integration tests. |
 | `e2e.yml` | Executable cross-surface E2E evidence. | Mesh transport harness and redacted support-bundle artifacts. |
-| `frontend-sdk.yml` | TypeScript SDK, shared UI, and web app. | SDK tests/build, UI tests/build, accessibility/responsive/visual suite, web app tests/build. |
+| `frontend-sdk.yml` | TypeScript SDK, shared UI, web app, and Tauri frontend. | SDK tests/build, UI tests/build, accessibility/responsive/visual suite, web app tests/build, Tauri frontend tests/typecheck/build. |
 | `sdk-backend-contract-conformance.yml` | Backend/SDK contract drift protection. | Generated backend inventory, SDK fixture/type conformance, SDK package checks. |
 | `tauri-desktop.yml` | Desktop Tauri shell and sidecar packaging smoke. | Thin sidecar preparation, Rust check, Linux bundle, EventStream smoke, sidecar profile matrix. |
 | `tauri-android.yml` | Android build and emulator smoke. | Android init, unsigned CI preflight, x86_64 debug APK, emulator native payload smoke. |
@@ -37,6 +37,7 @@ pnpm --filter @aurora/client test && pnpm --filter @aurora/client build
 pnpm --filter @aurora/client test:resilience
 pnpm --filter @aurora/ui test && pnpm --filter @aurora/ui test:accessibility && pnpm --filter @aurora/ui build
 pnpm --filter @aurora/web test && pnpm --filter @aurora/web build
+pnpm --filter @aurora/tauri-ui test && pnpm --filter @aurora/tauri-ui typecheck && pnpm --filter @aurora/tauri-ui build
 
 # Tauri desktop profiles
 pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
