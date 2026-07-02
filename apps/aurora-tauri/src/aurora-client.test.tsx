@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { auroraNavSections } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
 import { AuroraTauriApp } from './tauri-app'
@@ -85,5 +86,21 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Models and runtime')
     expect(markup).toContain('Loading model runtime catalog from AuroraClient')
     expect(markup).not.toContain('Native boundary')
+  })
+
+  it('renders route-specific production UI for every nav route', () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
+    const routes = auroraNavSections.flatMap((section) => section.items)
+
+    expect(routes).toHaveLength(22)
+
+    for (const route of routes) {
+      window.history.replaceState({}, '', route.href)
+      const markup = renderToStaticMarkup(<AuroraTauriApp />)
+
+      expect(markup, route.id).not.toContain('A full product page still needs to be mounted')
+      expect(markup, route.id).not.toContain('rendering the assistant diagnostics on the wrong page')
+      expect(markup, route.id).toContain(route.label)
+    }
   })
 })
