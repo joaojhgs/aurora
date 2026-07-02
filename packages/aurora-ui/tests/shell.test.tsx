@@ -128,6 +128,7 @@ import {
   StatusBadge,
   PrivacyBadge,
   EvidenceBadge,
+  auroraMobileTabs,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
   auroraNavSections
@@ -377,6 +378,8 @@ describe('Aurora production shell', () => {
     expect(shellSource).toContain('Primary navigation')
     expect(shellSource).toContain('Mobile navigation sheet')
     expect(shellSource).toContain('Mobile navigation')
+    expect(shellSource).toContain('MobileBottomTabs')
+    expect(shellSource).toContain('MobileSheetRouteSummary')
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
     expect(shellSource).toContain('Health')
@@ -440,6 +443,12 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Primary navigation')
     expect(markup).toContain('Mobile navigation sheet')
     expect(markup).toContain('Mobile navigation')
+    expect(markup).toContain('Current mobile route')
+    expect(markup).toContain('data-mobile-tab="assistant"')
+    expect(markup).toContain('data-mobile-tab="mesh"')
+    expect(markup).toContain('data-mobile-tab="admin"')
+    expect(markup).toContain('data-mobile-tab="diagnostics"')
+    expect(markup).toContain('data-mobile-tab="settings"')
     expect(markup).toContain('aria-current="page"')
     expect(markup).toContain('aria-label="Quick diagnostics"')
     expect(markup).toContain('aui-quick-diagnostics')
@@ -453,6 +462,25 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('privacy-blocked')
     expect(markup).toContain('Feature details')
     expect(markup).toContain('Repair actions')
+  })
+
+  it('keeps mock-derived mobile tabs bound to truthful route state evidence', async () => {
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(
+      <AppShell snapshot={snapshot} currentPath="/mesh">
+        <RouteMatrix routes={snapshot.routes} />
+      </AppShell>
+    )
+
+    expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'mesh', 'admin', 'diagnostics', 'settings'])
+    for (const tab of auroraMobileTabs) {
+      const mobileRoute = route(snapshot, tab.id)
+      expect(markup).toContain(`data-mobile-tab="${tab.id}"`)
+      expect(markup).toContain(`aria-label="${tab.label} mobile tab: ${mobileRoute.state}"`)
+    }
+    expect(markup).toContain('Current mobile route')
+    expect(markup).toContain('Mesh')
+    expect(markup).toContain('Capability gated · Demo fixture')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {

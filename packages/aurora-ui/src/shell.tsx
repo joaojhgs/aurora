@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { ChevronRight, Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
+import type { AuroraNavItem } from './nav'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 
@@ -33,14 +34,12 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
         <header className="aui-topbar">
           <details className="aui-mobile-menu">
             <summary aria-label="Open menu"><Menu size={20} /></summary>
-            <div className="aui-mobile-sheet" role="dialog" aria-label="Mobile navigation sheet">
-              <BrandHeader snapshot={snapshot} />
-              <ShellNavigation activePath={activePath} routes={snapshot.routes} compact {...(onNavigate ? { onNavigate } : {})} />
-              <div className="aui-mobile-sheet-footer" aria-label="Mobile identity">
-                <span className="aui-avatar">AD</span>
-                <div><strong>admin</strong><span>Capability gated</span></div>
-              </div>
-            </div>
+            <MobileNavigationSheet
+              snapshot={snapshot}
+              activePath={activePath}
+              routes={snapshot.routes}
+              {...(onNavigate ? { onNavigate } : {})}
+            />
           </details>
           <div className="aui-status-row" aria-label="Aurora shell status">
             <ShellStatus label="Mode"><EvidenceBadge label={modeLabel} /></ShellStatus>
@@ -61,20 +60,115 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
           <ActivityRail snapshot={snapshot} />
         </div>
       </div>
-      <nav className="aui-mobile-tabs" aria-label="Mobile navigation">
-        {auroraMobileTabs.map((tab) => (
-          <a
-            key={tab.id}
-            href={tab.href}
-            aria-current={activePath === tab.href ? 'page' : undefined}
-            onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
-          >
-            <tab.icon size={18} aria-hidden />
-            <span>{tab.label}</span>
-          </a>
-        ))}
-      </nav>
+      <MobileBottomTabs activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate } : {})} />
     </div>
+  )
+}
+
+function MobileNavigationSheet({
+  snapshot,
+  activePath,
+  routes,
+  onNavigate
+}: {
+  snapshot: AuroraShellSnapshot
+  activePath: string
+  routes: RouteAvailability[]
+  onNavigate?: (href: string) => void
+}) {
+  const activeRoute = routes.find((route) => route.item.href === activePath)
+  return (
+    <div className="aui-mobile-sheet" role="dialog" aria-labelledby="aui-mobile-sheet-title">
+      <BrandHeader snapshot={snapshot} />
+      <div className="aui-mobile-sheet-body">
+        <p className="aui-mobile-sheet-title" id="aui-mobile-sheet-title">Mobile navigation sheet</p>
+        <MobileSheetRouteSummary route={activeRoute} snapshot={snapshot} />
+        <ShellNavigation activePath={activePath} routes={routes} compact {...(onNavigate ? { onNavigate } : {})} />
+      </div>
+      <div className="aui-mobile-sheet-footer" aria-label="Mobile identity">
+        <span className="aui-avatar">AD</span>
+        <div><strong>admin</strong><span>Capability gated · {shellModeLabel(snapshot.transportKind)}</span></div>
+      </div>
+    </div>
+  )
+}
+
+function MobileSheetRouteSummary({
+  route,
+  snapshot
+}: {
+  route: RouteAvailability | undefined
+  snapshot: AuroraShellSnapshot
+}) {
+  return (
+    <section className="aui-mobile-sheet-summary" aria-label="Current mobile route">
+      <div>
+        <span className="aui-kicker">Current route</span>
+        <strong>{route?.item.label ?? 'Route pending'}</strong>
+        <small>{route?.explanation ?? 'Waiting for route evidence from AuroraClient.'}</small>
+      </div>
+      <div className="aui-mobile-sheet-summary-badges" aria-label="Current mobile route state">
+        {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
+        {route ? <PrivacyBadge privacy={route.item.privacyClass} /> : null}
+        <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} selectable`} />
+      </div>
+    </section>
+  )
+}
+
+function MobileBottomTabs({
+  activePath,
+  routes,
+  onNavigate
+}: {
+  activePath: string
+  routes: RouteAvailability[]
+  onNavigate?: (href: string) => void
+}) {
+  const routeById = new Map(routes.map((route) => [route.item.id, route]))
+  return (
+    <nav className="aui-mobile-tabs" aria-label="Mobile navigation">
+      {auroraMobileTabs.map((tab) => (
+        <MobileBottomTab
+          key={tab.id}
+          tab={tab}
+          route={routeById.get(tab.id)}
+          active={activePath === tab.href}
+          {...(onNavigate ? { onNavigate } : {})}
+        />
+      ))}
+    </nav>
+  )
+}
+
+function MobileBottomTab({
+  tab,
+  route,
+  active,
+  onNavigate
+}: {
+  tab: AuroraNavItem
+  route: RouteAvailability | undefined
+  active: boolean
+  onNavigate?: (href: string) => void
+}) {
+  const routeState = route?.state ?? 'pending'
+  return (
+    <a
+      href={tab.href}
+      aria-current={active ? 'page' : undefined}
+      aria-disabled={route?.disabled ? 'true' : undefined}
+      aria-label={`${tab.label} mobile tab: ${routeState}`}
+      title={route?.explanation}
+      data-mobile-tab={tab.id}
+      onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
+    >
+      <tab.icon size={18} aria-hidden />
+      <span>{tab.label}</span>
+      <span className="aui-mobile-tab-state">
+        {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
+      </span>
+    </a>
   )
 }
 

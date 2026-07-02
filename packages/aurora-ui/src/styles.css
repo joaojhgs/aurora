@@ -50,6 +50,13 @@ button, input, select, textarea { font: inherit; }
 .aui-mobile-menu summary { display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border: 1px solid var(--aui-border); border-radius: .45rem; cursor: pointer; list-style: none; }
 .aui-mobile-menu summary::-webkit-details-marker { display: none; }
 .aui-mobile-sheet { position: fixed; inset: 3.6rem auto 0 0; z-index: 20; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(19rem, 90vw); max-height: calc(100dvh - 3.6rem); border-right: 1px solid var(--aui-border); background: var(--aui-surface); box-shadow: 0 1rem 3rem rgb(0 0 0 / .16); overflow: auto; }
+.aui-mobile-sheet-body { min-width: 0; overflow: auto; }
+.aui-mobile-sheet-title { margin: .75rem .75rem .45rem; color: var(--aui-muted); font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.aui-mobile-sheet-summary { display: grid; gap: .65rem; margin: 0 .75rem .65rem; padding: .75rem; border: 1px solid var(--aui-border); border-radius: .55rem; background: color-mix(in srgb, var(--aui-primary) 6%, var(--aui-surface)); }
+.aui-mobile-sheet-summary strong, .aui-mobile-sheet-summary small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-mobile-sheet-summary strong { margin-top: .15rem; }
+.aui-mobile-sheet-summary small { margin-top: .2rem; color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
+.aui-mobile-sheet-summary-badges { display: flex; flex-wrap: wrap; gap: .35rem; }
 .aui-mobile-sheet-footer { display: flex; gap: .65rem; align-items: center; padding: .7rem; border-top: 1px solid var(--aui-border); color: var(--aui-muted); font-size: .82rem; }
 .aui-mobile-sheet-footer strong, .aui-mobile-sheet-footer span { display: block; }
 .aui-status-row { display: flex; min-width: 0; flex: 1; gap: .45rem; overflow-x: auto; }
@@ -64,6 +71,7 @@ button, input, select, textarea { font: inherit; }
 .aui-activity dt, .aui-route-card dt { color: var(--aui-muted); font-size: .75rem; }
 .aui-activity dd, .aui-route-card dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .aui-mobile-tabs { display: none; }
+.aui-mobile-tab-state { display: none; }
 .aui-quick-diagnostics { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: center; margin: .25rem .75rem .75rem; padding: .7rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-info) 7%, var(--aui-surface)); color: var(--aui-ink); }
 .aui-quick-diagnostics:hover { border-color: color-mix(in srgb, var(--aui-info) 35%, var(--aui-border)); }
 .aui-quick-diagnostics strong, .aui-quick-diagnostics small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -449,8 +457,13 @@ button, input, select, textarea { font: inherit; }
   .aui-sidebar { display: none; }
   .aui-mobile-menu { display: block; }
   .aui-mobile-tabs { position: fixed; inset: auto 0 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--aui-border); background: color-mix(in srgb, var(--aui-surface) 94%, transparent); backdrop-filter: blur(12px); }
-  .aui-mobile-tabs a { display: grid; justify-items: center; gap: .18rem; padding: .5rem .2rem; color: var(--aui-muted); font-size: .72rem; }
+  .aui-mobile-tabs a { position: relative; display: grid; justify-items: center; gap: .18rem; min-width: 0; padding: .48rem .2rem .42rem; color: var(--aui-muted); font-size: .72rem; }
   .aui-mobile-tabs a[aria-current="page"] { color: var(--aui-primary); }
+  .aui-mobile-tabs a[aria-current="page"]::before { content: ""; position: absolute; top: .22rem; width: 1.5rem; height: .16rem; border-radius: 999px; background: var(--aui-primary); }
+  .aui-mobile-tabs a[aria-disabled="true"] { opacity: .7; }
+  .aui-mobile-tabs a > span:not(.aui-mobile-tab-state) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aui-mobile-tab-state { display: block; min-height: .85rem; max-width: min(5.4rem, 100%); overflow: hidden; }
+  .aui-mobile-tab-state .aui-badge { min-height: .8rem; max-width: 100%; padding: 0 .28rem; font-size: .56rem; line-height: .9rem; overflow: hidden; text-overflow: ellipsis; }
   .aui-topbar { padding-inline: .75rem; }
   .aui-assistant-header { display: grid; }
   .aui-assistant-badges { justify-content: flex-start; }
