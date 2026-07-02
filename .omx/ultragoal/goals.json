@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:20:09.674Z",
+  "updatedAt": "2026-07-02T09:21:16.531Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -683,10 +683,13 @@
       "id": "G057-admin-mutations-cannot-be-faked-as-s",
       "title": "Admin mutations cannot be faked as successful. If backend support is...",
       "objective": "Admin mutations cannot be faked as successful. If backend support is missing, add the backend contract or keep action disabled with an explicit repair task and test.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:21:16.531Z",
+      "startedAt": "2026-07-02T09:20:25.940Z",
+      "completedAt": "2026-07-02T09:21:16.531Z",
+      "evidence": "Admin mutations cannot be faked as successful: focused UI tests passed for AdminAction, disabled/repair states, token/config/scheduler/backup/pairing flows, redaction, and secrets. SDK tests passed for AdminAction/admin/mutation/permission/denied/disabled/token/config/scheduler/backup/pairing/redaction/secret paths. Backend tests passed for route-generator AdminAction enforcement, ACL permissions, auth service, audit, token routes, config admin contracts, and scheduler admin contracts. Source evidence shows token creation remains disabled until Auth.CreateToken exists, revoke/mesh/manage actions are AdminAction previews/submissions, config diff/history redact secrets and do not persist previews, scheduler unsupported actions normalize disabled, and AdminAction confirmations require backend-issued tokens/audit receipts. Verified pnpm --filter @aurora/ui test -- -t 'AdminAction|admin mutation|disabled|repair|fake|success|tokens|config|scheduler|backup|pairing|redact|secret'; pnpm --filter @aurora/client test -- -t 'AdminAction|admin|mutation|permission|denied|disabled|token|config|scheduler|backup|pairing|redact|secret'; uv run pytest tests/unit/gateway/test_route_generator_adminaction.py tests/unit/gateway/test_acl_permissions.py tests/unit/gateway/test_auth_service.py tests/unit/gateway/test_audit.py tests/unit/gateway/test_token_routes.py tests/unit/services/test_config_admin_contracts.py tests/unit/app/scheduler/test_scheduler_admin_contracts.py -q; rg AdminAction/disabled/repair/redact/secret/audit evidence across UI/SDK/backend/tests."
     },
     {
       "id": "G058-create-refresh-repo-root-design-md-u",
