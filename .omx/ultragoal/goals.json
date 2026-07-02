@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:56:18.341Z",
+  "updatedAt": "2026-07-02T14:56:36.738Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1737,10 +1737,12 @@
       "id": "G151-both-pages-mount-in-tauri-and-web",
       "title": "Both pages mount in Tauri and web.",
       "objective": "Both pages mount in Tauri and web.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:56:36.738Z",
+      "completedAt": "2026-07-02T14:56:36.738Z",
+      "evidence": "pnpm --dir packages/aurora-ui exec vitest run --environment node tests/shell.test.tsx -t \"admin overview|admin services|service control actions\"; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; git diff --check"
     },
     {
       "id": "G152-health-is-live-gateway-service-truth",
