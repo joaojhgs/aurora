@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:07:37.184Z",
+  "updatedAt": "2026-07-02T08:08:25.015Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -383,10 +383,13 @@
       "id": "G032-a-route-was-technically-navigable-bu",
       "title": "a route was technically navigable but rendered placeholder copy;",
       "objective": "a route was technically navigable but rendered placeholder copy;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:08:25.015Z",
+      "startedAt": "2026-07-02T08:07:45.915Z",
+      "completedAt": "2026-07-02T08:08:25.015Z",
+      "evidence": "Known failure closed: source scan found no legacy placeholder markers (TauriRoutePlaceholder, placeholder panel/copy, debug-dashboard) in apps/aurora-tauri/src/tauri-app.tsx or packages/aurora-ui/src production files, and Tauri route gates render every primary route without placeholder/debug UI. Verified: pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui test -- -t 'renders every primary route without the legacy route placeholder copy|e2e:routes'."
     },
     {
       "id": "G033-the-assistant-route-rendered-a-backe",
