@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:23:26.818Z",
+  "updatedAt": "2026-07-02T07:27:06.532Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -263,10 +263,13 @@
       "id": "G022-app-cockpit-memory-page-tsx-memory-r",
       "title": "`app/(cockpit)/memory/page.tsx`: memory/RAG collections plus conversa...",
       "objective": "`app/(cockpit)/memory/page.tsx`: memory/RAG collections plus conversation history.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:27:06.532Z",
+      "startedAt": "2026-07-02T07:24:16.611Z",
+      "completedAt": "2026-07-02T07:27:06.532Z",
+      "evidence": "Memory route now presents mock-parity Memory & RAG collection cards, record counts, store/source labels, privacy badges, and a retention-policy handoff while retaining SDK-backed DB.GetMessages, DB.RAGListNamespaces, DB.RAGSearchRemote provenance, conversation history, selector policy, and AdminAction-gated data controls. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'memory'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G023-app-cockpit-tools-page-tsx-tool-regi",

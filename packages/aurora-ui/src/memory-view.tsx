@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Download, RefreshCw, Search, Trash2, Upload } from 'lucide-react'
+import { Database, Download, HardDrive, RefreshCw, Search, Trash2, Upload } from 'lucide-react'
 import type {
   AuroraClient,
   AuroraError,
@@ -212,6 +212,41 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
         </div>
       </header>
 
+      <section className="aui-memory-collections" aria-labelledby="memory-collections-title">
+        <div className="aui-memory-section-heading">
+          <div>
+            <p className="aui-kicker">Collections</p>
+            <h2 id="memory-collections-title">Memory & RAG collections</h2>
+          </div>
+          <a className="aui-action-chip" href="/memory/policy">
+            <HardDrive size={15} aria-hidden />
+            Retention policy
+          </a>
+        </div>
+        {model.namespaces.length === 0 ? (
+          <div className="aui-memory-empty">
+            <strong>No collections reported</strong>
+            <span>DB.RAGListNamespaces returned no memory or RAG namespaces for this route.</span>
+          </div>
+        ) : (
+          <div className="aui-memory-collection-grid">
+            {model.namespaces.map((namespace) => (
+              <article key={namespace.info.namespace} className="aui-memory-collection-card">
+                <header>
+                  <div>
+                    <Database size={16} aria-hidden />
+                    <strong>{namespaceCollectionTitle(namespace)}</strong>
+                  </div>
+                  <PrivacyBadge privacy={normalizeRagPrivacyClass(namespace.info.policy.privacy_class)} />
+                </header>
+                <p>{recordCountLabel(namespace.info.record_count)}</p>
+                <span>{namespaceStoreLabel(namespace)} · {namespace.info.availability}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
       <form className="aui-memory-search" onSubmit={onSubmit}>
         <label htmlFor="memory-namespace">Namespace</label>
         <select
@@ -357,6 +392,30 @@ function MemoryActionButton({ action, icon }: { action: MemoryActionState; icon:
       <span>{action.label}</span>
     </button>
   )
+}
+
+function namespaceCollectionTitle(namespace: MemoryNamespaceView): string {
+  const name = namespace.info.namespace
+    .split(/[.:]/)
+    .filter(Boolean)
+    .at(-1) ?? namespace.info.namespace
+  return name
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function recordCountLabel(count: number | null): string {
+  return count === null ? 'Unknown records' : `${count.toLocaleString()} records`
+}
+
+function namespaceStoreLabel(namespace: MemoryNamespaceView): string {
+  if (namespace.kind === 'local-memory') return 'Local DB'
+  if (namespace.kind === 'local-rag') return 'Local RAG store'
+  if (namespace.kind === 'imported-snapshot') return 'Imported snapshot'
+  if (namespace.kind === 'remote-peer') return namespace.info.provider_peer_id ? `Remote peer ${namespace.info.provider_peer_id}` : 'Remote peer'
+  if (namespace.kind === 'stale') return 'Stale remote peer'
+  if (namespace.kind === 'denied') return 'Policy denied remote peer'
+  return 'Unavailable store'
 }
 
 function namespaceView(info: DBRAGNamespaceInfo): MemoryNamespaceView {

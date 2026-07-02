@@ -370,6 +370,16 @@ button, input, select, textarea { font: inherit; }
 .aui-memory-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-memory-header h1 { margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
 .aui-memory-header p { max-width: 48rem; margin: .5rem 0 0; color: var(--aui-muted); line-height: 1.5; }
+.aui-memory-collections { display: grid; gap: .8rem; border: 1px solid var(--aui-border); border-radius: .6rem; background: var(--aui-surface); padding: .9rem; }
+.aui-memory-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.aui-memory-section-heading h2 { margin: .15rem 0 0; font-size: 1.05rem; }
+.aui-memory-collection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.aui-memory-collection-card { display: grid; gap: .55rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem; }
+.aui-memory-collection-card header, .aui-memory-collection-card header div { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-width: 0; }
+.aui-memory-collection-card header div { justify-content: flex-start; }
+.aui-memory-collection-card strong, .aui-memory-collection-card p, .aui-memory-collection-card span { min-width: 0; overflow-wrap: anywhere; }
+.aui-memory-collection-card p { margin: 0; font-size: 1.35rem; font-weight: 800; }
+.aui-memory-collection-card span { color: var(--aui-muted); font-size: .78rem; }
 .aui-memory-search { display: grid; grid-template-columns: minmax(12rem, .8fr) minmax(14rem, 1fr) auto auto; gap: .55rem; align-items: end; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .8rem; }
 .aui-memory-search label { grid-row: 1; color: var(--aui-muted); font-size: .75rem; font-weight: 750; text-transform: uppercase; }
 .aui-memory-search select, .aui-memory-search input { min-height: 2.55rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); }
@@ -408,6 +418,7 @@ button, input, select, textarea { font: inherit; }
   .aui-model-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-model-summary { position: static; order: -1; }
   .aui-settings-grid, .aui-route-defaults, .aui-settings-facts, .aui-memory-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-memory-collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 860px) {
@@ -454,6 +465,8 @@ button, input, select, textarea { font: inherit; }
   .aui-settings-control-icon { width: 2rem; height: 2rem; }
   .aui-settings-control button, .aui-native-card button { width: 100%; max-width: none; }
   .aui-memory-header { display: grid; }
+  .aui-memory-section-heading { align-items: flex-start; display: grid; }
+  .aui-memory-collection-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-memory-search { grid-template-columns: minmax(0, 1fr); }
   .aui-memory-search label { grid-row: auto; }
   .aui-memory-search button { width: 100%; }
