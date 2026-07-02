@@ -60,7 +60,7 @@ uv sync --extra service-db
 uv sync --extra service-db --extra service-scheduler --extra mode-threads
 
 # Sync with development dependencies
-uv sync --extra dev --extra test-all
+uv sync --extra dev --extra test-unit --extra test-integration --extra test-e2e
 ```
 
 ### Running with UV Native
@@ -197,7 +197,7 @@ uv sync --extra dev
 uv sync --extra test-all
 
 # Sync everything for development
-uv sync --extra dev --extra test-all --extra all-services
+uv sync --extra dev --extra test-unit --extra test-integration --extra test-e2e --extra all-services
 ```
 
 ### Development Dependencies (Pip-Compatible)
@@ -570,7 +570,7 @@ uv venv --python 3.11
 uv sync
 
 # Sync with optional dependencies (extras)
-uv sync --extra dev --extra test-all
+uv sync --extra dev --extra test-unit --extra test-integration --extra test-e2e
 
 # Sync without installing the project itself
 uv sync --no-install-project

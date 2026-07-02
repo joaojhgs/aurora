@@ -94,10 +94,12 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "swift-rs",
  "tauri",
  "tauri-build",
  "tauri-plugin-updater",
  "thiserror 2.0.18",
+ "tokio",
  "url",
 ]
 

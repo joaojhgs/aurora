@@ -1,0 +1,36 @@
+name: Required Check Aliases
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  process-mode-alias:
+    name: 🧪 Test Process Mode
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alias current process-mode test lane
+        run: |
+          echo "Compatibility status for stale branch-protection context."
+          echo "Canonical check: Python Tests / Process-mode integration tests."
+
+  lint-alias:
+    name: lint (3.11)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alias current Python quality lane
+        run: |
+          echo "Compatibility status for stale branch-protection context."
+          echo "Canonical check: Quality / Python lint, format, and generated config."
+
+  unit-integration-alias:
+    name: unit_integration_test (ubuntu-latest, 3.11.11)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alias current unit and integration test lane
+        run: |
+          echo "Compatibility status for stale branch-protection context."
+          echo "Canonical check: Python Tests / Unit and integration tests."

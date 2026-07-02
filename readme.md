@@ -1,263 +1,112 @@
-# Aurora: Intelligent Voice Assistant for Local Automation and Productivity
+# Aurora: privacy-first local assistant platform
 
 ![Aurora System Architecture](assets/aurora.jpg)
 
-[![Unit and Integration Tests](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/test-core.yml)
-[![Code Coverage](https://codecov.io/gh/joaojhgs/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/joaojhgs/aurora)
+[![Python Tests](https://github.com/joaojhgs/aurora/actions/workflows/python-tests.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/python-tests.yml)
+[![Quality](https://github.com/joaojhgs/aurora/actions/workflows/quality.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/quality.yml)
+[![E2E](https://github.com/joaojhgs/aurora/actions/workflows/e2e.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/e2e.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11-blue)](https://github.com/aurora-ai/aurora)
+[![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11-blue)](docs/INSTALL.md)
 
-Aurora is an intelligent voice assistant designed to enhance productivity through local, privacy-focused automation. It leverages real-time speech-to-text, a large language model (LLM), and open-source tools to provide a seamless and intuitive user experience.
+Aurora is a modular assistant runtime for local automation, voice interaction, mesh-connected devices, and privacy-first productivity workflows. It combines Python microservices, a typed message bus, Gateway/Auth/mesh boundaries, and SDK-first frontend surfaces for web and Tauri desktop/mobile shells.
 
-**It's objective is to be the privacy-first swiss knife of assistants, allowing unprecedentedly easy extension and addition of tools for productivity, every day life and work life.**
+## Current capabilities
 
----
+- **Voice pipeline:** wakeword, STT coordinator/transcription services, TTS service, and assistant orchestration.
+- **LLM orchestration:** LangGraph/LangChain service with OpenAI, HuggingFace endpoint/local, and llama.cpp-oriented profiles.
+- **Tooling and MCP:** built-in tools, plugin-style integrations, and MCP server support.
+- **Persistence:** SQLite/RAG storage, message history, scheduler persistence, and policy-gated mesh data sharing.
+- **Gateway and API:** FastAPI Gateway dynamically exposes service contracts with typed request/response schemas.
+- **Auth and permissions:** principals, pairing, tokens, topic permissions, audit, and Gateway ACL boundaries.
+- **Mesh:** peer pairing, capability graph, explicit routing/share policy, and transport E2E harnesses.
+- **Frontend:** TypeScript SDK, shared React UI package, web shell, Tauri desktop/mobile shell, and PyQt fallback/reference.
+- **Tauri desktop packaging:** profile-specific Python sidecar builds, thin default packages, and explicit heavy local-model profiles.
+- **Process mode:** Redis-backed service containers for production-style development and deployment.
+- **Backup contracts:** admin backup manifests, list/verify, and dry-run restore/rollback impact plans.
 
-## 📋 Table of Contents
+See [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md) for readiness boundaries.
 
-- [Features](#features)
-- [Installation and Usage](#installation-and-usage)
-  - [🚀 Quick Start](#-quick-start)
-  - [📚 Need More Details?](#-need-more-details)
-  - [📦 Model Management](#-model-management)
-- [Libraries and Tools](#libraries-and-tools)
-- [Architecture](#architecture)
-- [Long Term Vision](#long-term-vision)
-- [Why Aurora?](#why-aurora)
+## Quick start
 
----
-
-## Features
-
-1. **Wakeword Detection**:
-   - Activate the assistant with a custom wakeword (e.g., "Jarvis").
-   - Offline and low-latency detection using **OpenWakeWord**.
-
-2. **Real-Time Speech-to-Text (STT)**:
-   - Convert user speech into text using **Whisper** (OpenAI's lightweight model for local processing).
-   - **Ambient Transcription**: Continuous background audio transcription for day summaries with priority queue system.
-
-3. **Large Language Model (LLM) Integration**:
-   - **Multi-Provider Support**: Choose from OpenAI, HuggingFace Pipeline (local), HuggingFace Endpoint (remote), or Llama.cpp
-   - **Local Models**: Use **Llama 3**, **Mistral 7B**, **Gemma 2 and 3** (quantized for efficiency) or any HuggingFace model locally
-   - **Remote Models**: Access HuggingFace Inference Endpoints for cloud-based inference
-   - **Structured Configuration**: Organized LLM settings with provider-specific parameter control
-   - Orchestrate tool calls (e.g., OpenRecall, browser-use) using **LangChain** and **Langgraph**.
-
-4. **Semantic Search with OpenRecall**:
-   - Index and retrieve information from periodic screenshots and activities using **OpenRecall**.
-   - Enable queries like, "What did I research about interfaces at 2 PM?"
-   - Enrich the assistant context by adding past activities when necessary
-
-5. **Text-to-Speech (TTS)**:
-   - Generate natural-sounding audio responses using **Piper** (offline TTS).
-
-6. **Modern User Interface**:
-   - Graphical user interface with both text and voice input options
-   - Dark mode and light mode support
-   - Real-time status indicators for listening, processing, and speaking states
-   - Message history with timestamps
-
-7. **Local and Privacy-Focused**:
-   - All processing happens locally, ensuring data privacy and security.
-   - No cloud dependencies or data sharing.
-
-8. **Modular Tooling and Integrations**:
-   - All integrations and tools are available through *plugins* which you can activate through the envs
-   - Only install dependencies for the plugins you'll want to use, keeping the sizes low
-   - Easy setup, just need to activate it and fill the correct env credentials if necessary
-
-9. **MCP (Model Context Protocol) Support**:
-   - Connect to external MCP servers to extend Aurora's capabilities
-   - Support for both local (stdio) and remote (HTTP) MCP servers
-   - Dynamic tool loading from MCP servers with authentication support
-   - Full integration with Aurora's semantic tool selection system
-
----
-
-## Installation and Usage
-
-### 🚀 Quick Start
-
-#### Option 1: Docker Hub (Fastest - Pre-built Images)
-
-**Best for:** Quick setup with Docker, no local build required
+Aurora uses Python 3.10-3.11 and `uv`.
 
 ```bash
-# Pull pre-built images
-docker pull aurora-ai/aurora-config:latest
-docker pull aurora-ai/aurora-db:openai-latest
-docker pull aurora-ai/aurora-orchestrator:openai-latest
-docker pull aurora-ai/aurora-tts:cpu-latest
-
-# Use with docker-compose (see docker-compose.process.yml)
-docker-compose -f docker-compose.process.yml up -d
-```
-
-**See [Docker Hub Usage Guide](docs/docker/DOCKER-HUB-USAGE.md) for complete instructions.**
-
-#### Option 2: UV Installation (Fastest - Recommended)
-
-**Best for:** Developers who want fastest dependency resolution
-
-```bash
-# Install UV (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and setup
-git clone https://github.com/joaojhgs/aurora.git
-cd aurora
-
-# Install all dependencies (development setup)
-uv sync --extra dev-local-gpu
-
-# Or for third-party API setup (easiest)
-uv sync --extra third-party
-
-# Run Aurora
+uv sync --extra dev-third-party
 uv run python main.py
 ```
 
-**See [UV Usage Guide](docs/UV_USAGE.md) for complete instructions.**
+Useful profiles:
 
-#### Option 3: Source Installation (Guided Setup)
+```bash
+# CPU local assistant development
+uv sync --extra dev-local-cpu
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/joaojhgs/aurora.git
-   cd aurora
-   ```
+# GPU local assistant development
+uv sync --extra dev-local-gpu
 
-2. **Run the guided setup:**
-   ```bash
-   # Linux/macOS
-   ./setup.sh
-   
-   # Windows  
-   setup.bat
-   ```
-   
-   The setup script will:
-   - ✅ Check Python version compatibility (requires Python 3.9-3.11)
-   - ✅ Detect your hardware and install optimal packages
-   - ✅ Install all dependencies automatically
-   - ✅ Guide you through configuration
+# Test dependencies
+uv sync --extra test-all
+```
 
-3. **Configure your environment:**
-   - Copy `.env.example` to `.env` and add any API keys you want to use
-   - Modify `config.json` if needed (defaults work for most users)
+More setup detail: [`docs/INSTALL.md`](docs/INSTALL.md), [`docs/UV_USAGE.md`](docs/UV_USAGE.md), [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
 
-4. **Run Aurora:**
-   ```bash
-   python main.py
-   ```
+## Process mode and Docker
 
-### 📚 Need More Details?
+Process mode runs each service separately with Redis-backed messaging:
 
-- **Complete Installation Guide**: See [docs/INSTALL.md](docs/INSTALL.md) for:
-  - Manual installation options
-  - Advanced hardware acceleration setup
-  - Troubleshooting and configuration details
-  - Platform-specific instructions
-  
-- **Python Version Requirements**: Aurora requires Python 3.10-3.11 (Python 3.12+ causes dependency conflicts)
+```bash
+docker compose -f docker-compose.process.yml up -d
+```
 
-- **Model Management**: Aurora includes models for offline operation - see Model Management below
+See [`README.process-mode.md`](README.process-mode.md) and [`docs/TILT.md`](docs/TILT.md).
 
-### 📦 Model Management
+## Frontend and Tauri
 
-Aurora stores model files in dedicated directories at the project root:
+The production UI direction is SDK-first:
 
-**Chat Models** (`chat_models/`):
-- Large language models in GGUF format (2-4GB each)
-- Configure in `config.json`: `"llama_cpp_model_path": "chat_models/model-name.gguf"`
-- Download more from [Hugging Face GGUF models](https://huggingface.co/models?library=gguf)
+- `packages/aurora-sdk` — transport-independent `AuroraClient`.
+- `packages/aurora-ui` — shared React UI primitives.
+- `apps/aurora-web` — web shell.
+- `apps/aurora-tauri` — Tauri desktop/mobile shell with local sidecar support.
+- `app/ui` — PyQt fallback/reference.
 
-**Voice Models** (`voice_models/`):
-- Text-to-speech (Piper) and wake word models
-- Configure in `config.json`: `"model_file_path": "/voice_models/voice-name.onnx"`
-- Download more from [Piper Voices](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+See [`docs/FRONTEND_AND_UI_ARCHITECTURE.md`](docs/FRONTEND_AND_UI_ARCHITECTURE.md) and [`docs/TAURI_DESKTOP_BUILD.md`](docs/TAURI_DESKTOP_BUILD.md).
 
-*See `chat_models/README.md` and `voice_models/README.md` for detailed model information.*
+## Development checks
 
----
+```bash
+make format
+make lint
+make check
+make unit
+make integration
+uv run python scripts/check_docs.py
+```
 
-## Architecture
+TypeScript packages:
 
-Aurora is built with a modular, plugin-based architecture that prioritizes privacy, extensibility, and local processing. The system follows a clear data flow from voice input to intelligent response generation, with each component designed to be independently configurable and replaceable.
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @aurora/client test
+pnpm --filter @aurora/ui test
+pnpm --filter @aurora/tauri-ui test
+```
 
-### System Overview
+CI lanes are documented in [`docs/CI_CD.md`](docs/CI_CD.md).
 
-![Aurora System Architecture](assets/architecture.png)
+## Documentation map
 
-### Key Architectural Components
+Start with [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md). Key docs:
 
-#### 1. **Configuration Management**
-- **Centralized Configuration**: The `config_manager.py` handles all system settings through JSON schema validation
-- **Hybrid Configuration**: Combines `config.json` for structured settings and `.env` for sensitive credentials
-- **Plugin Activation**: Configuration-driven plugin system that loads only required dependencies
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/MESSAGING_ARCHITECTURE.md`](docs/MESSAGING_ARCHITECTURE.md)
+- [`docs/API_AND_CONTRACTS.md`](docs/API_AND_CONTRACTS.md)
+- [`docs/GATEWAY.md`](docs/GATEWAY.md)
+- [`docs/AUTH_AND_PERMISSIONS.md`](docs/AUTH_AND_PERMISSIONS.md)
+- [`docs/PEER_PAIRING_FLOW.md`](docs/PEER_PAIRING_FLOW.md)
+- [`docs/CONFIG_SERVICE_PATTERN.md`](docs/CONFIG_SERVICE_PATTERN.md)
+- [`docs/BACKUP_SERVICE.md`](docs/BACKUP_SERVICE.md)
+- [`docs/MCP_INTEGRATION.md`](docs/MCP_INTEGRATION.md)
 
-#### 2. **Audio Processing Pipeline**
-- **Wake Word Detection**: Always-listening background service using OpenWakeWord
-- **Speech-to-Text**: Real-time transcription with Whisper through RealtimeTTS
-- **Threaded Architecture**: Non-blocking audio processing to maintain UI responsiveness
-
-#### 3. **LangGraph Orchestration**
-- **Intelligent Routing**: LangGraph coordinates between LLM reasoning and tool execution
-- **Dynamic Tool Selection**: RAG-based tool matching using vector embeddings of tool descriptions
-- **Context Management**: Maintains conversation context and integrates historical data
-
-![Aurora Graph](assets/graph.png)
-
-#### 4. **Plugin System**
-- **Modular Design**: Each integration is a separate plugin with independent dependencies
-- **Conditional Loading**: Plugins are loaded only when enabled in configuration
-- **Extensible Architecture**: New tools can be added without modifying core system
-
-#### 5. **Memory & Storage**
-- **Vector Storage**: Embeddings-based memory for semantic search and context retrieval
-- **Message Persistence**: SQLite database for conversation history and system state
-- **Efficient Retrieval**: Optimized queries for both recent context and long-term memory
-
-#### 6. **User Interface**
-- **Dual Mode Operation**: Supports both GUI (PyQt6) and headless command-line operation
-- **Real-time Feedback**: Visual indicators for system state (listening, processing, speaking)
-- **Flexible Input**: Both voice and text input methods supported
-
-### Data Flow
-
-1. **Input Processing**: Voice input → Wake word detection → Speech-to-text transcription
-2. **Intent Understanding**: Text → LangGraph → LLM analysis → Tool selection
-3. **Action Execution**: Selected tools execute with context from memory and database
-4. **Response Generation**: Tool results → LLM synthesis → Natural language response
-5. **Output Delivery**: Response → Text-to-speech → Audio output + UI display
-6. **Persistence**: Conversation and context saved to database and vector store
-
-This architecture ensures Aurora remains privacy-focused (all processing local), extensible (plugin system), and efficient (threaded processing with intelligent caching).
-
----
-
-# Long term vision and Roadmap:
-
-- [ ] Turn Aurora into a server-client architecture
-   - [ ] Allow server to receive and process audio using the RealtimeSTT and stream back the TTS audio to the client
-   - [ ] Allow clients to have it's own local tools that can be called by the server (either custom framework or using MCP)
-   - [ ] Create code for low-cost physical clients such as ESP32
-   - [ ] Allow clients to connect to each other using WebRTC, allowing for peer-to-peer architecture as well as server/client.
-
-The Idea here is to allow for low-cost and easily built interfaces that you can interact with your Jarvis across your home and private network.
-
-Also by allowing client side tools aside from the ones we can use on the Desktop, we allow the assistant to potentially control real world appliances, or even multiple devices/desktops.
-
-- [ ] Integrations with Home Assistant
-   - [ ] Allow for tool calling with smart home appliances
-
-
-![Aurora Proposed Architecture](assets/aurora-proposed-architecture.png)
-
-### Need Help?
-
-If you have questions or need help, feel free to:
-- Open an issue with your question
-- Join our community discussions
-- Check the existing documentation in the `/docs` directory
+Historical handoffs, investigation outputs, and task-specific plans are not current guidance; see [`docs/DOC_MAINTENANCE.md`](docs/DOC_MAINTENANCE.md).

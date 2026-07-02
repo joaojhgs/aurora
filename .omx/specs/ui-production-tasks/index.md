@@ -300,7 +300,7 @@ Important cross-cutting change:
 <!-- UI-MULTICA-CREATED-ISSUES -->
 ## UI Multica issue IDs
 
-These UI tasks are intentionally `blocked` until the mesh production sequence is complete through `PER-163` / `MESH-GAP-011` and `PER-164` / `MESH-GAP-012` refreshes specs. Target branch after unblock: `feat/ui-multi-platform-integration`.
+This table is a historical issue-creation snapshot from the original UI task import. Live Multica issue status is authoritative and may differ; for example, BE-003 / PER-190 is now `done` and merged in PR 69, and SDK-001 / PER-230 and SDK-003 / PER-232 are also `done` on the UI integration branch. Target branch after unblock remains `feat/ui-multi-platform-integration`. The original import intentionally blocked these UI tasks until the mesh production sequence completed through `PER-163` / `MESH-GAP-011` and `PER-164` / `MESH-GAP-012` refreshed specs.
 
 | Task | Issue | Status | Parent |
 | --- | --- | --- | --- |

@@ -59,7 +59,7 @@ export class HttpGatewayTransport implements AuroraTransport {
     this.bearerToken = options.bearerToken
     this.eventSourceFactory = options.eventSourceFactory ?? defaultEventSourceFactory()
     this.webSocketFactory = options.webSocketFactory ?? defaultWebSocketFactory()
-    this.eventStreamPath = options.eventStreamPath ?? '/api/events'
+    this.eventStreamPath = options.eventStreamPath ?? '/api/events/stream'
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
   }
 
@@ -211,6 +211,7 @@ export class HttpGatewayTransport implements AuroraTransport {
     for (const kind of request.kinds) url.searchParams.append('kind', kind)
     if (request.lastEventId) url.searchParams.set('last_event_id', request.lastEventId)
     if (request.replayFrom) url.searchParams.set('replay_from', request.replayFrom)
+    if (request.correlationId) url.searchParams.set('correlation_id', request.correlationId)
     if (request.backfill) url.searchParams.set('backfill', 'true')
     return url.toString()
   }

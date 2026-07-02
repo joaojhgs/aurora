@@ -1,0 +1,57 @@
+name: End-to-End Tests
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/mesh_gap_e2e_harness.py"
+      - "tests/e2e/**"
+      - "docs/MESH_GAP_E2E_HARNESS.md"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  mesh-transport-e2e:
+    name: Mesh transport E2E harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python E2E dependencies
+        run: uv sync --extra dev --extra test-e2e --extra gateway --extra mode-processes
+
+      - name: Generate mesh transport E2E artifacts
+        run: |
+          uv run python scripts/mesh_gap_e2e_harness.py \
+            --mode thread_localbus \
+            --mode http_gateway_thin_client \
+            --mode tauri_local_native \
+            --mode mesh_webrtc
+
+      - name: Run mesh E2E tests
+        run: uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py -q
+
+      - name: Upload mesh E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-mesh-transport-e2e
+          path: .artifacts/e2e/mesh-transport/latest/
+          if-no-files-found: warn

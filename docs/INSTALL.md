@@ -401,7 +401,7 @@ Aurora stores model files in dedicated directories at the project root:
 - ✅ **User controlled**: Choose models based on your hardware
 - ✅ **Privacy focused**: All models run locally
 
-*See `chat_models/README.md` and `voice_models/README.md` for detailed model information.*
+*See [`DEPENDENCIES.md`](DEPENDENCIES.md) and [`../voice_models/README.md`](../voice_models/README.md) for model/dependency information.*
 
 ---
 
@@ -649,9 +649,9 @@ nano .env  # or your preferred editor
 ## 📚 Additional Resources
 
 - **Main Documentation**: [README.md](../readme.md)
-- **Python Version Compatibility**: [PYTHON_VERSION_CHECK_IMPLEMENTATION.md](../PYTHON_VERSION_CHECK_IMPLEMENTATION.md)
+- **Python Version Compatibility**: Python 3.10-3.11 is required; see this install guide and [`DEPENDENCIES.md`](DEPENDENCIES.md).
 - **Model Information**: 
-  - [Chat Models README](../chat_models/README.md)
+  - [Dependency Guide](DEPENDENCIES.md)
   - [Voice Models README](../voice_models/README.md)
 - **Issues & Support**: [GitHub Issues](https://github.com/joaojhgs/aurora/issues)
 

@@ -4,5 +4,8 @@ description = "Allow Aurora credential helpers to persist auth/session, mesh, ga
 commands.allow = [
   "aurora_secure_storage_get",
   "aurora_secure_storage_set",
-  "aurora_secure_storage_delete"
+  "aurora_secure_storage_delete",
+  "aurora_ios_secure_storage_status",
+  "aurora_ios_biometric_status",
+  "aurora_ios_admin_unlock"
 ]

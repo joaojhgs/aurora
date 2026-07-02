@@ -113,11 +113,13 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  iosNativeCapabilityManifestFixture,
   meshPeerListFixture,
   meshStatusFixture,
   modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
+  androidNativeCapabilityManifestFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -125,6 +127,11 @@ export {
   toolCatalogFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
+export {
+  normalizeVoiceRuntimeEvent,
+  VOICE_EVENT_KINDS,
+  VOICE_EVENT_TOPICS
+} from './voice.js'
 export type * from './types.js'
 export type * from './admin.js'
 export type * from './backup.js'
@@ -132,6 +139,7 @@ export type * from './memory.js'
 export type * from './scheduler.js'
 export type * from './tools.js'
 export type * from './transport.js'
+export type * from './voice.js'
 export type {
   AuroraEventStreamKind,
   AuroraEventStreamTransport,
@@ -177,10 +185,17 @@ export type {
   LocalFileReadResult,
   LocalFileWriteOptions,
   LocalFileWriteResult,
+  IosAdminUnlockRequest,
   SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,
+  TauriAndroidAssistantRoleStatus,
+  TauriAndroidBaselineStatus,
   TauriCommandNames,
+  IosAuroraActionId,
+  TauriIosInvocationStatus,
+  TauriIosInvokeActionRequest,
+  TauriIosInvokeActionResult,
   TauriInvoke,
   TauriLogTailRequest,
   TauriLogTailResult,

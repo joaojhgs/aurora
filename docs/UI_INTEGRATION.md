@@ -1,331 +1,74 @@
-# Aurora UI Integration Guide
-
-## Overview
-
-Aurora provides an optional PyQt6-based graphical user interface that integrates with the message bus architecture. The UI runs in the main thread while Aurora services run in background threads, communicating via thread-safe Qt signals.
-
-## Future all-platform UI direction
-
-This document describes the current optional PyQt6 UI bridge. The accepted planning baseline for the next all-platform UI is documented under `.omx/specs/ui-refinement/` and keeps the current bus-first architecture while introducing a transport-independent web/Tauri client.
-
-Key decisions for future UI work:
-
-- Keep the UI behind an `AuroraClient` SDK/capability graph instead of binding screens directly to Python service classes.
-- Use the HTTP Gateway for hosted/server and thin clients.
-- Use official Tauri 2 with Rust core for desktop/mobile native shells.
-- Use desktop Tauri sidecar/loopback/IPC to reach the local Aurora Python node in standalone/offline desktop mode.
-- Use Kotlin Tauri plugins plus native Android manifest/service declarations for Android-only capabilities such as permission checks, foreground/background hooks, notification actions, and assistant-role integration.
-- Android assistant-role support is viable only when the package qualifies through Android-native components (for example a `VoiceInteractionService` declared with `android.permission.BIND_VOICE_INTERACTION`) and the user/OEM grants the role; the UI must retain fallback entrypoints such as app, notification, widget, shortcut, tile, share sheet, or mesh/server routing.
-- Use Swift plugins/App Intents/Shortcuts/widgets/share/deep links on iOS; do not claim Siri replacement.
-
-The PyQt `UIBridge` remains useful as current behavior/reference, but future web/Tauri UI planning should cite `DESIGN.md` and `.omx/specs/ui-refinement/index.md` as the product/design source of truth.
-
-## Enabling the UI
-
-Configure in `config.json`:
-
-```json
-{
-  "ui": {
-    "activate": true,
-    "dark_mode": true,
-    "debug": false
-  }
-}
-```
-
-## Architecture
-
-### Threading Model
-
-```
-┌─────────────────────────────────────────────┐
-│ Main Thread (Qt Event Loop)                │
-│  ├─ QApplication                            │
-│  ├─ AuroraUI (Window)                       │
-│  └─ UIBridge receives Qt signals           │
-└─────────────────────────────────────────────┘
-                      ↕ (thread-safe signals)
-┌─────────────────────────────────────────────┐
-│ Background Thread (asyncio event loop)     │
-│  ├─ Supervisor                              │
-│  ├─ All Services (STT, TTS, Orchestrator)  │
-│  ├─ LocalBus (message bus)                 │
-│  └─ UIBridge publishes to bus              │
-└─────────────────────────────────────────────┘
-```
-
-### UIBridge Service
-
-The `UIBridge` service (`app/ui/bridge_service.py`) acts as a bidirectional adapter:
-
-**Message Bus → UI**:
-- Subscribes to events (transcriptions, LLM responses, TTS status)
-- Emits Qt signals to update UI (thread-safe)
-
-**UI → Message Bus**:
-- Receives user input from UI
-- Publishes commands to message bus
-
-## Message Flow
-
-### User Speech (Voice Input)
-
-```
-1. User says "Jarvis, hello"
-2. Wake word detected → STT session starts
-3. Speech transcribed → USER_SPEECH_CAPTURED event
-4. UIBridge receives event:
-   - Emits signals.status_changed.emit("processing")
-   - Emits signals.message_received.emit(text, is_user=True, source="STT")
-5. UI updates:
-   - Status indicator changes to "processing"
-   - User message appears in chat
-6. Orchestrator processes → LLM_RESPONSE event
-7. UIBridge receives event:
-   - Emits signals.status_changed.emit("idle")
-   - Emits signals.message_received.emit(text, is_user=False, source=None)
-8. UI updates:
-   - Status changes to "idle"
-   - Assistant message appears in chat
-9. TTS starts → STARTED event
-10. UIBridge receives event:
-    - Emits signals.status_changed.emit("speaking")
-11. TTS completes → STOPPED event
-12. UIBridge receives event:
-    - Emits signals.status_changed.emit("idle")
-```
-
-### Text Input (UI Input)
-
-```
-1. User types message in UI
-2. UI emits user_message_signal
-3. UIBridge callback receives signal
-4. UIBridge publishes UI.UserInput command to bus
-5. Orchestrator receives and processes
-6. Flow continues same as voice input (steps 6-12)
-```
+# PyQt UIBridge integration reference
 
-## Status Indicator States
+**Status:** Legacy/current bridge reference
 
-The UI status indicator shows the current system state:
+This document describes the optional PyQt UIBridge fallback. It is not the primary architecture for new production UI work. For the current SDK-first React/web/Tauri architecture, start with [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md).
 
-| Status | Color | Meaning |
-|--------|-------|---------|
-| **idle** | Gray | Waiting for input |
-| **listening** | Blue | Recording user speech |
-| **processing** | Yellow | Analyzing input with LLM |
-| **speaking** | Green | Playing TTS response |
+## Scope
 
-### State Transitions
+The PyQt bridge remains useful as:
 
-```
-idle → listening (wake word detected)
-listening → processing (speech captured)
-processing → idle (LLM responds, no TTS)
-processing → speaking (TTS starts)
-speaking → idle (TTS completes)
-```
+- a local fallback UI when enabled in configuration;
+- a behavior reference for bus topics and UI status transitions;
+- a migration aid when adding SDK/Tauri parity for older desktop workflows.
 
-## UI Bridge Subscriptions
+New production screens should use `@aurora/client` and shared React UI primitives instead of direct Qt callbacks or Python service objects.
 
-The UIBridge subscribes to the following message bus topics:
+## Runtime model
 
-```python
-# STT Events
-STTCoordinatorTopics.SESSION_STARTED     → status: "listening"
-STTCoordinatorTopics.USER_SPEECH_CAPTURED → status: "processing", add user message
+- PyQt runs in the main thread.
+- Aurora services run under the supervisor and communicate through the message bus.
+- UI events are bridged into bus requests/events with typed contract models.
+- Backend events are bridged back into Qt signals for display.
 
-# Orchestrator Events  
-OrchestratorTopics.LLM_RESPONSE          → status: "idle", add assistant message
+## Migration boundary
 
-# TTS Events
-TTSTopics.STARTED                         → status: "speaking"
-TTSTopics.STOPPED                         → status: "idle"
+When replacing PyQt behavior in React/Tauri:
 
-# Database Responses
-DBTopics.MESSAGES_RESPONSE                → load historical messages
-```
+1. Identify the bus topic or contract method used by PyQt.
+2. Add or confirm SDK method/event coverage.
+3. Add UI tests that use SDK fixtures or transports.
+4. Add Tauri-local evidence only through the narrow command bridge when native/local behavior is required.
+5. Keep screen components free of raw `fetch`, Tauri `invoke`, direct WebRTC, or Python-service imports.
 
-## UI Controls
+See [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) for enforceable source rules.
 
-### Stop Speaking Button
+## Related docs
 
-Immediately stops TTS playback:
+- [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md)
+- [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md)
+- [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md)
+- [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md)
 
-```python
-# User clicks stop button
-→ UI calls _stop_tts_callback()
-→ UIBridge publishes TTSTopics.STOP command
-→ TTS service receives and stops playback
-→ TTS emits STOPPED event
-→ UIBridge updates status to "idle"
-```
+## Legacy UIBridge contract inventory
 
-### Message History
+The PyQt bridge remains a compatibility and regression surface while the SDK-first UI is the primary path. The unit contract test intentionally checks that this document still names every legacy surface that a replacement must preserve or intentionally retire.
 
-On startup, the UI loads today's messages from the database:
+### Qt signals
 
-```python
-# UIBridge.start()
-→ Publishes DBTopics.GET_MESSAGES_FOR_DATE query
-→ DBService responds with MessagesResponse
-→ UIBridge emits signals.message_received for each message
-→ UI populates chat history
-```
+- `message_received`
+- `transcription_received`
+- `tts_started`
+- `tts_stopped`
+- `status_changed`
 
-## Thread Safety
+### Bus subscriptions
 
-### Qt Signals (Thread-Safe)
+- `STTMethods.USER_SPEECH_CAPTURED`
+- `STTMethods.SESSION_STARTED`
+- `OrchestratorMethods.RESPONSE`
+- `TTSMethods.STARTED`
+- `TTSMethods.STOPPED`
 
-All UI updates use Qt's built-in signal/slot mechanism, which is thread-safe:
+### Bus publications and requests
 
-```python
-# In UIBridge (runs in background thread)
-async def _on_transcription(self, env: Envelope):
-    # This is thread-safe!
-    self.ui_window.signals.message_received.emit(text, True, "STT")
-    self.ui_window.signals.status_changed.emit("processing")
-```
+- `OrchestratorMethods.USER_INPUT`
+- `TTSMethods.STOP`
+- `DBMethods.GET_MESSAGES_FOR_DATE`
 
-### asyncio.run_coroutine_threadsafe()
+### UI callbacks
 
-For UI → Bus communication, use this to bridge threads:
+- `ui_window.user_message_signal`
+- `ui_window._stop_tts_callback`
 
-```python
-# In UI thread
-def _on_stop_tts_request(self):
-    asyncio.run_coroutine_threadsafe(
-        self.bus.publish(TTSTopics.STOP, TTSStop()),
-        self._loop  # Background thread's event loop
-    )
-```
-
-## Concurrent Message Delivery
-
-As of October 2025, the message bus delivers events **concurrently** to all subscribers:
-
-### Before (Sequential)
-
-```
-03:00:00 - Transcription published
-03:00:00 - Orchestrator receives (8 seconds processing)
-03:00:08 - Orchestrator completes
-03:00:08 - UIBridge receives (8 seconds late!)
-```
-
-**Problem**: User message appeared 8 seconds after speaking.
-
-### After (Concurrent)
-
-```
-03:00:00 - Transcription published
-03:00:00 - Orchestrator receives (8 seconds processing) ← Running
-03:00:00 - UIBridge receives (immediate!)               ← Running
-```
-
-**Solution**: Both handlers run in parallel. UI updates immediately.
-
-## Common Issues
-
-### UI Not Updating
-
-**Symptoms**: Status stays "idle", messages don't appear
-
-**Causes**:
-1. UIBridge not started
-2. Qt signals not connected
-3. Service not publishing events with typed topics
-4. Handler exceptions (check logs)
-
-**Debug**:
-```python
-# Check if signals are connected
-print(f"Signals connected: {hasattr(self.ui_window, 'signals')}")
-
-# Enable UI debug mode in config
-"ui": { "debug": true }
-```
-
-### Messages Appear Late
-
-**Fixed**: As of October 2025, concurrent delivery ensures immediate updates.
-
-**If still occurring**:
-1. Check if handler is blocking (should be async)
-2. Verify event loop is running
-3. Check system resources (CPU/memory)
-
-### Stop Button Not Working
-
-**Symptoms**: Button click doesn't stop TTS
-
-**Causes**:
-1. `TTSStop` not exported from `app/services/tts/__init__.py`
-2. Callback not registered
-3. TTS service not subscribed to STOP topic
-
-**Fix**:
-```python
-# Verify exports
-from app.services.tts import TTSStop, TTSPause, TTSResume
-
-# Verify callback
-self.ui_window._stop_tts_callback = self._on_stop_tts_request
-```
-
-## Development Tips
-
-### Testing UI Integration
-
-```python
-# Run with UI enabled
-python main.py
-
-# Watch logs in real-time
-tail -f ui_concurrent_test.log
-```
-
-### Adding New UI Features
-
-1. **Add signal** to `AuroraSignals` class:
-   ```python
-   class AuroraSignals(QObject):
-       new_feature = pyqtSignal(str)
-   ```
-
-2. **Emit from UIBridge**:
-   ```python
-   async def _on_new_event(self, env: Envelope):
-       self.ui_window.signals.new_feature.emit(data)
-   ```
-
-3. **Connect in UI**:
-   ```python
-   self.signals.new_feature.connect(self.handle_new_feature)
-   ```
-
-### Message Source Types
-
-Messages are tagged with their source:
-
-- `"STT"` - Voice input (blue badge)
-- `"UI"` - Text input (green badge)
-- `None` - Assistant response (no badge)
-
-## Best Practices
-
-1. **Always use Qt signals** for UI updates from background threads
-2. **Keep handlers async** to avoid blocking the event loop
-3. **Use typed topics** from `service_topics.py` for consistency
-4. **Handle errors gracefully** in signal callbacks
-5. **Log UI state changes** when debug mode enabled
-6. **Test with concurrent events** to ensure thread safety
-
-## See Also
-
-- [Message Bus Architecture](MESSAGING_ARCHITECTURE.md)
-- [Service Topics Reference](../app/messaging/service_topics.py)
-- [UI Bridge Implementation](../app/ui/bridge_service.py)
-- [Aurora UI Implementation](../modules/ui/aurora_ui.py)
+A React/Tauri replacement must map these surfaces through the typed SDK transport and event stream rather than calling service methods directly.

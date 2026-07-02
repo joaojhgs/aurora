@@ -1,28 +1,19 @@
-# PER-160 Audio Session Consent And Event Streaming Plan
+Establish documentation taxonomy and maintenance rules by adding docs/DOCS_INDEX.md and docs/DOC_MAINTENANCE.md, with current, partial, historical, and archive status conventions and ownership rules.
 
-## Requirements Summary
+Move docs/plans into .omx/plans with clear provenance labeling, and remove docs/plans from the user-facing docs tree without deleting the plan content.
 
-- Source of truth: Multica PER-160 / MESH-GAP-008.
-- Preserve batch remote candidates: `TTS.Synthesize`, `Transcription.Transcribe`, and `WakeWord.Detect`.
-- Require explicit target selector plus consent token for streaming methods: `Transcription.ProcessAudio`, `WakeWord.ProcessAudio`, and future live mic stream paths.
-- Keep `STTCoordinator.Listen`, `STTCoordinator.Audio`, `STTCoordinator.Control`, and playback controls local-only/internal by default.
-- Expose typed session lifecycle methods and status/events for UI/SDK consumption without raw microphone stream exposure.
+Consolidate dependency-analysis sprawl into docs/DEPENDENCIES.md, extracting durable dependency, uv, service-extra, sidecar-profile, and docker-image guidance, and removing generated or task-journal artifacts from docs.
 
-## Implementation Steps
+Update readme.md, docs/ARCHITECTURE.md, docs/TECHSTACK.md, docs/INSTALL.md, docs/CONTRIBUTE.md, docs/TESTING_PROCESS_MODE.md, README.process-mode.md, docs/CI_CD.md, and tests/README.md to reflect the current repo architecture, CI lanes, process-mode topology, and Tauri/SDK/frontend state.
 
-1. Add typed audio session contract models and topic constants in `app/shared/contracts/models/stt.py`.
-2. Register `AudioSession.Prepare`, `RequestConsent`, `Start`, `Stop`, `Status`, and `Events` on `GatewayService`, backed by an in-memory session registry suitable for process-local Gateway runtime.
-3. Add consent/session fields to streaming audio payloads, validate selector/session/token/sample format in STT transcription and wakeword streaming handlers, and publish typed `AudioSession.Events` updates for accepted/denied/result events.
-4. Keep batch TTS/transcription/wakeword request behavior unchanged and update capability catalog/graph policy metadata where needed so UI sees session/privacy/TTL requirements.
-5. Add focused unit tests for contract classification, session lifecycle, streaming denial without selector/token, approved event publication, and route/catalog policy visibility.
+Create docs/FRONTEND_AND_UI_ARCHITECTURE.md and consolidate UI_INTEGRATION, UIBRIDGE_TAURI_MIGRATION, PRODUCTION_UI_CONTRACTS, package-local UI/Tauri READMEs, and Tauri desktop build references around the SDK-first UI model.
 
-## Verification
+Create docs/AUTH_AND_PERMISSIONS.md and docs/API_AND_CONTRACTS.md, consolidating current auth, RBAC, principal, topic-permission, contract-registry, Gateway, and API explanations and updating related links from Gateway, Messaging, and service reference docs.
 
-- `uv run pytest tests/unit/gateway/test_routing_table.py tests/unit/gateway/test_capability_graph.py tests/unit/gateway/test_capability_catalog.py -q`
-- `uv run pytest tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py -q`
-- `uv run ruff check app/shared/contracts/models/stt.py app/services/gateway/service.py app/services/stt_transcription/service.py app/services/stt_wakeword/service.py tests/unit/gateway/test_audio_session_contracts.py tests/unit/stt_transcription/test_audio_session_policy.py tests/unit/stt_wakeword/test_audio_session_policy.py`
+Create docs/BACKUP_SERVICE.md and docs/FEATURE_MATRIX.md, documenting backup and restore limitations, current feature status, partial features like ambient transcription, and production readiness boundaries.
 
-## Risks
+Clean or archive stale docs and broken references, including handoff and task-report-style docs and outdated monolith or PyQt-only references, while preserving useful historical content in docs/archive or .omx/plans as appropriate.
 
-- Consent tokens in this slice are process-local and intentionally not durable across Gateway restarts.
-- The event stream is a bus-level unified contract; full HTTP SSE/WebSocket transport can build on it without changing STT/TTS service internals.
+Add lightweight docs validation tooling and wire it into a practical local or CI check: relative markdown link validation, stale workflow/gate reference scan, no generated reports in docs, and no task-specific PER/QA docs outside archive/provenance locations.
+
+Run final docs validation, stale reference scans, formatting/static checks relevant to changed scripts/config, ai-slop-cleaner, post-cleaner verification, architecture invariant audit, and independent code-reviewer plus architect review before final Codex goal completion.

@@ -13,6 +13,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -23,12 +24,170 @@ DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
 
 
+@dataclass(frozen=True)
+class SidecarProfile:
+    """Dependency/build policy for a Tauri desktop sidecar variant."""
+
+    name: str
+    extras: tuple[str, ...]
+    description: str
+    hardware: str | None = None
+    wheel_package: str = "both"
+    include_modules_data: bool = False
+    max_artifact_mb: int | None = None
+    excludes: tuple[str, ...] = ()
+
+
+HEAVY_LOCAL_AI_EXCLUDES = (
+    "app.services.tts",
+    "app.services.stt_transcription",
+    "app.services.stt_wakeword",
+    "app.services.stt_coordinator",
+    "faster_whisper",
+    "RealtimeSTT",
+    "openwakeword",
+    "piper",
+    "piper_phonemize",
+    "realtimetts",
+    "sentence_transformers",
+    "transformers",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "nvidia",
+    "triton",
+    "tensorflow",
+    "tflite_runtime",
+)
+
+SIDE_CAR_CORE_EXTRAS = (
+    "build",
+    "sidecar-thin",
+)
+
+LOCAL_AUDIO_EXTRAS = (
+    "build",
+    "sidecar-local-audio",
+)
+
+SIDECAR_PROFILES: dict[str, SidecarProfile] = {
+    "thin": SidecarProfile(
+        name="thin",
+        extras=SIDE_CAR_CORE_EXTRAS,
+        description="Lean Desktop Local shell sidecar: gateway/config/auth/db/tooling/orchestrator only; no STT/TTS/local model runtime.",
+        hardware=None,
+        include_modules_data=False,
+        max_artifact_mb=350,
+        excludes=HEAVY_LOCAL_AI_EXCLUDES,
+    ),
+    "local-cpu": SidecarProfile(
+        name="local-cpu",
+        extras=(*LOCAL_AUDIO_EXTRAS, "torch-cpu"),
+        description="Local assistant CPU sidecar with STT/TTS/audio and CPU ML wheels.",
+        hardware="cpu",
+        include_modules_data=False,
+        max_artifact_mb=1800,
+    ),
+    "local-cuda": SidecarProfile(
+        name="local-cuda",
+        extras=(*LOCAL_AUDIO_EXTRAS, "cuda"),
+        description="Local assistant NVIDIA CUDA sidecar; GPU wheels are installed by the wheel installer.",
+        hardware="cuda",
+        include_modules_data=False,
+        max_artifact_mb=6500,
+    ),
+    "local-rocm": SidecarProfile(
+        name="local-rocm",
+        extras=(*LOCAL_AUDIO_EXTRAS, "rocm"),
+        description="Local assistant AMD ROCm sidecar; GPU wheels are installed by the wheel installer.",
+        hardware="rocm",
+        include_modules_data=False,
+        max_artifact_mb=6500,
+    ),
+    "local-metal": SidecarProfile(
+        name="local-metal",
+        extras=(*LOCAL_AUDIO_EXTRAS, "metal"),
+        description="Local assistant macOS Metal sidecar.",
+        hardware="metal",
+        include_modules_data=False,
+        max_artifact_mb=2500,
+    ),
+    "local-vulkan": SidecarProfile(
+        name="local-vulkan",
+        extras=(*LOCAL_AUDIO_EXTRAS, "vulkan"),
+        description="Local assistant Vulkan sidecar.",
+        hardware="vulkan",
+        include_modules_data=False,
+        max_artifact_mb=2500,
+    ),
+    "local-sycl": SidecarProfile(
+        name="local-sycl",
+        extras=(*LOCAL_AUDIO_EXTRAS, "sycl"),
+        description="Local assistant Intel SYCL sidecar.",
+        hardware="sycl",
+        include_modules_data=False,
+        max_artifact_mb=2500,
+    ),
+    "local-rpc": SidecarProfile(
+        name="local-rpc",
+        extras=(*LOCAL_AUDIO_EXTRAS, "rpc"),
+        description="Local assistant RPC/distributed acceleration sidecar.",
+        hardware="rpc",
+        include_modules_data=False,
+        max_artifact_mb=2500,
+    ),
+    "full": SidecarProfile(
+        name="full",
+        extras=("build", "runtime", "torch-cpu"),
+        description="Legacy all-in-one sidecar profile; intentionally large and only for explicit diagnostics.",
+        hardware="cpu",
+        include_modules_data=False,
+        max_artifact_mb=6500,
+    ),
+}
+
+DEFAULT_SIDECAR_PROFILE = "thin"
+
+
+def sidecar_profile_names() -> list[str]:
+    """Return supported Tauri sidecar profile names."""
+
+    return list(SIDECAR_PROFILES)
+
+
+def get_sidecar_profile(name: str | None) -> SidecarProfile:
+    """Resolve a sidecar profile from CLI/env input."""
+
+    profile_name = (
+        name or os.getenv("AURORA_TAURI_SIDECAR_PROFILE") or DEFAULT_SIDECAR_PROFILE
+    ).strip()
+    try:
+        return SIDECAR_PROFILES[profile_name]
+    except KeyError as err:
+        valid = ", ".join(sidecar_profile_names())
+        raise click.ClickException(
+            f"Unknown sidecar profile '{profile_name}'. Valid profiles: {valid}"
+        ) from err
+
+
+def format_extras(extras: tuple[str, ...]) -> str:
+    """Format pyproject extras for editable install."""
+
+    return f".[{','.join(extras)}]"
+
+
+def sidecar_dist_dir(profile: SidecarProfile) -> Path:
+    """Return profile-specific sidecar output directory."""
+
+    return DIST_DIR / "sidecars" / profile.name
+
+
 def check_python_version():
     """Check Python version compatibility"""
     version = sys.version_info
-    if version < (3, 9) or version >= (3, 12):
+    if version < (3, 10) or version >= (3, 12):
         click.echo(f"❌ Python {version.major}.{version.minor}.{version.micro} is not supported")
-        click.echo("🐍 Aurora requires Python 3.9, 3.10, or 3.11")
+        click.echo("🐍 Aurora requires Python 3.10 or 3.11")
         click.echo("📋 Please install a compatible Python version:")
 
         system = platform.system().lower()
@@ -47,8 +206,34 @@ def check_python_version():
     click.echo(f"✅ Python {version.major}.{version.minor}.{version.micro} is compatible")
 
 
-def ensure_dependencies():
-    """Ensure all build dependencies are installed"""
+def install_python_packages(args: list[str]) -> None:
+    """Install Python packages using uv when available, falling back to pip."""
+    uv = shutil.which("uv")
+    if uv:
+        subprocess.run([uv, "pip", "install", *args], check=True, cwd=PROJECT_ROOT)
+        return
+    subprocess.run([sys.executable, "-m", "pip", "install", *args], check=True, cwd=PROJECT_ROOT)
+
+
+def remove_enum34_backport() -> None:
+    """Remove enum34 in modern Python envs because PyInstaller refuses it."""
+    uv = shutil.which("uv")
+    command = (
+        [uv, "pip", "uninstall", "enum34"]
+        if uv
+        else [sys.executable, "-m", "pip", "uninstall", "-y", "enum34"]
+    )
+    result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True)
+    if result.returncode == 0:
+        click.echo("✅ Removed obsolete enum34 backport for PyInstaller compatibility")
+    elif "not installed" not in (result.stdout + result.stderr).lower():
+        click.echo("⚠️  Could not uninstall enum34 automatically; PyInstaller may fail")
+        if result.stderr:
+            click.echo(result.stderr.strip())
+
+
+def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
+    """Ensure build dependencies are installed for the selected package profile."""
     click.echo("🔍 Checking build dependencies...")
 
     # Check if wheel installer exists
@@ -57,32 +242,21 @@ def ensure_dependencies():
         click.echo("❌ Wheel installer not found")
         sys.exit(1)
 
-    # Install build dependencies using pyproject.toml optional groups
-    click.echo("📦 Installing build dependencies...")
+    extras = sidecar_profile.extras if sidecar_profile else ("build", "runtime", "torch-cpu")
+    click.echo(f"📦 Installing build dependencies: {format_extras(extras)}")
     try:
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", ".[build,runtime,torch-cpu]"],
-            check=True,
-            cwd=PROJECT_ROOT,
-        )
+        install_python_packages(["-e", format_extras(extras)])
+        remove_enum34_backport()
         click.echo("✅ Build dependencies installed")
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Failed to install build dependencies: {e}")
         click.echo("📦 Trying fallback installation...")
 
-        # Fallback: Install core build tools
+        # Fallback: Install core build tools only. Runtime imports may still fail if
+        # the selected sidecar profile was not installed by the caller.
         try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "pyinstaller>=6.0.0",
-                    "auto-py-to-exe>=2.4.0",
-                ],
-                check=True,
-            )
+            install_python_packages(["pyinstaller>=6.0.0", "auto-py-to-exe>=2.4.0"])
+            remove_enum34_backport()
             click.echo("✅ Core build tools installed")
         except subprocess.CalledProcessError as fallback_error:
             click.echo(f"❌ Fallback installation failed: {fallback_error}")
@@ -97,19 +271,32 @@ def ensure_dependencies():
         click.echo("❌ PyInstaller not available after installation")
         sys.exit(1)
 
-    # Run wheel installer to ensure optimal packages (torch, llama-cpp-python)
-    click.echo("🎡 Running wheel installer for optimal packages...")
+    if not sidecar_profile or not sidecar_profile.hardware:
+        click.echo("🎡 Wheel installer skipped for thin/no-hardware build profile")
+        return
+
+    # Run wheel installer only for profiles that actually need local ML wheels.
+    click.echo(
+        "🎡 Running wheel installer for "
+        f"{sidecar_profile.hardware} packages ({sidecar_profile.wheel_package})..."
+    )
     try:
         subprocess.run(
-            [sys.executable, str(wheel_installer), "--hardware", "cpu", "--package", "both"],
+            [
+                sys.executable,
+                str(wheel_installer),
+                "--hardware",
+                sidecar_profile.hardware,
+                "--package",
+                sidecar_profile.wheel_package,
+            ],
             check=True,
             cwd=PROJECT_ROOT,
         )
         click.echo("✅ Dependencies optimized")
     except subprocess.CalledProcessError as e:
         click.echo(f"⚠️  Wheel installer warning: {e}")
-        click.echo("📦 Continuing with CPU-only torch...")
-        # Don't use requirements.txt fallback - rely on pyproject.toml
+        click.echo("📦 Continuing with installed pyproject dependencies...")
 
 
 def clean_build_dirs():
@@ -135,24 +322,38 @@ def prepare_bundle_config_json() -> Path:
     return dest
 
 
-def get_platform_args():
+def get_platform_args(
+    executable_name="Aurora",
+    onefile=False,
+    sidecar_profile: SidecarProfile | None = None,
+    dist_dir: Path | None = None,
+):
     """Get platform-specific PyInstaller arguments"""
     system = platform.system().lower()
 
     common_args = [
         str(PROJECT_ROOT / "main.py"),
-        "--name=Aurora",
-        f"--distpath={DIST_DIR}",
+        f"--name={executable_name}",
+        f"--distpath={dist_dir or DIST_DIR}",
         f"--workpath={BUILD_DIR}",
         f"--specpath={BUILD_DIR}",
         # Add data files
         f"--add-data={PROJECT_ROOT / 'app'}:app",
-        f"--add-data={PROJECT_ROOT / 'modules'}:modules",
         f"--add-data={prepare_bundle_config_json()}:.",
         # Optimize
         "--optimize=2",
         "--strip",
     ]
+
+    if sidecar_profile and sidecar_profile.include_modules_data:
+        common_args.append(f"--add-data={PROJECT_ROOT / 'modules'}:modules")
+
+    if sidecar_profile:
+        for module in sidecar_profile.excludes:
+            common_args.append(f"--exclude-module={module}")
+
+    if onefile:
+        common_args.append("--onefile")
 
     if system == "windows":
         return common_args + [
@@ -373,7 +574,7 @@ def restore_webrtcvad_hook(backup_path):
     """Restore webrtcvad hook after build"""
     if backup_path and backup_path.exists():
         try:
-            original_path = backup_path.with_suffix(".py")
+            original_path = backup_path.with_suffix("")
             click.echo(f"🔄 Restoring webrtcvad hook: {backup_path} -> {original_path}")
             shutil.move(str(backup_path), str(original_path))
             click.echo("✅ webrtcvad hook restored")
@@ -381,9 +582,14 @@ def restore_webrtcvad_hook(backup_path):
             click.echo(f"⚠️  Could not restore webrtcvad hook: {e}")
 
 
-def build_executable():
+def build_executable(
+    executable_name="Aurora",
+    onefile=False,
+    sidecar_profile: SidecarProfile | None = None,
+):
     """Build the executable using PyInstaller"""
-    click.echo("🏗️  Building Aurora executable...")
+    profile_label = f" ({sidecar_profile.name})" if sidecar_profile else ""
+    click.echo(f"🏗️  Building {executable_name}{profile_label} executable...")
 
     # Import PyInstaller (should be installed by ensure_dependencies)
     try:
@@ -404,20 +610,45 @@ def build_executable():
         create_version_file()
 
         # Get platform-specific arguments
-        args = get_platform_args()
+        dist_dir = sidecar_dist_dir(sidecar_profile) if sidecar_profile else DIST_DIR
+        args = get_platform_args(
+            executable_name=executable_name,
+            onefile=onefile,
+            sidecar_profile=sidecar_profile,
+            dist_dir=dist_dir,
+        )
 
         # Run PyInstaller
         PyInstaller.__main__.run(args)
 
         # Success message
-        executable_name = "Aurora.exe" if platform.system() == "Windows" else "Aurora"
-        executable_path = DIST_DIR / executable_name
+        binary_name = (
+            f"{executable_name}.exe" if platform.system() == "Windows" else executable_name
+        )
+        output_dist_dir = sidecar_dist_dir(sidecar_profile) if sidecar_profile else DIST_DIR
+        executable_path = output_dist_dir / binary_name
+        if not executable_path.is_file():
+            nested_path = output_dist_dir / executable_name / binary_name
+            if nested_path.is_file():
+                executable_path = nested_path
 
-        if executable_path.exists():
+        if executable_path.is_file():
+            size_mb = executable_path.stat().st_size / (1024 * 1024)
             click.echo("✅ Build successful!")
-            click.echo("📦 Executable: {executable_path}")
-            click.echo(f"📊 Size: {executable_path.stat().st_size / (1024 * 1024):.1f} MB")
-            success = True
+            click.echo(f"📦 Executable: {executable_path}")
+            click.echo(f"📊 Size: {size_mb:.1f} MB")
+            if (
+                sidecar_profile
+                and sidecar_profile.max_artifact_mb
+                and size_mb > sidecar_profile.max_artifact_mb
+            ):
+                click.echo(
+                    "❌ Sidecar artifact exceeds profile guardrail: "
+                    f"{size_mb:.1f} MB > {sidecar_profile.max_artifact_mb} MB for {sidecar_profile.name}"
+                )
+                success = False
+            else:
+                success = True
         else:
             click.echo("❌ Build failed - executable not found")
             success = False
@@ -513,17 +744,47 @@ CMD ["python", "main.py"]
 )
 @click.option("--clean", "-c", is_flag=True, help="Clean build directories first")
 @click.option("--skip-deps", is_flag=True, help="Skip dependency installation check")
-def main(target, clean, skip_deps):
+@click.option(
+    "--sidecar",
+    is_flag=True,
+    help="Build the Tauri desktop local sidecar executable as a one-file aurora-sidecar binary",
+)
+@click.option("--onefile", is_flag=True, help="Build a single-file PyInstaller executable")
+@click.option(
+    "--sidecar-profile",
+    type=click.Choice(sidecar_profile_names()),
+    default=None,
+    help="Tauri sidecar dependency/build profile (defaults to AURORA_TAURI_SIDECAR_PROFILE or thin).",
+)
+@click.option(
+    "--list-sidecar-profiles",
+    is_flag=True,
+    help="List supported Tauri sidecar profiles and exit",
+)
+def main(target, clean, skip_deps, sidecar, onefile, sidecar_profile, list_sidecar_profiles):
     """Build Aurora for distribution"""
     click.echo("🌟 Aurora Build System")
     click.echo("=" * 50)
+
+    if list_sidecar_profiles:
+        for profile in SIDECAR_PROFILES.values():
+            click.echo(
+                f"{profile.name}: extras={','.join(profile.extras)} "
+                f"hardware={profile.hardware or 'none'} max={profile.max_artifact_mb or 'none'}MB - {profile.description}"
+            )
+        return
+
+    resolved_sidecar_profile = get_sidecar_profile(sidecar_profile) if sidecar else None
+    if resolved_sidecar_profile:
+        click.echo(f"🧩 Sidecar profile: {resolved_sidecar_profile.name}")
+        click.echo(f"   {resolved_sidecar_profile.description}")
 
     # Check Python version compatibility
     check_python_version()
 
     if not skip_deps:
         # Ensure dependencies are properly installed
-        ensure_dependencies()
+        ensure_dependencies(resolved_sidecar_profile)
 
     if clean:
         clean_build_dirs()
@@ -531,7 +792,12 @@ def main(target, clean, skip_deps):
     success = True
 
     if target in ["exe", "all"]:
-        success &= build_executable()
+        build_name = "aurora-sidecar" if sidecar else "Aurora"
+        success &= build_executable(
+            executable_name=build_name,
+            onefile=onefile or sidecar,
+            sidecar_profile=resolved_sidecar_profile,
+        )
 
     if target in ["container", "all"]:
         success &= build_container()
@@ -540,8 +806,16 @@ def main(target, clean, skip_deps):
         click.echo("\n🎉 Build completed successfully!")
         if target == "exe":
             click.echo("📱 Distribute the executable to end users")
-            executable_name = "Aurora.exe" if platform.system() == "Windows" else "Aurora"
-            executable_path = DIST_DIR / executable_name
+            build_name = "aurora-sidecar" if sidecar else "Aurora"
+            binary_name = f"{build_name}.exe" if platform.system() == "Windows" else build_name
+            output_dist_dir = (
+                sidecar_dist_dir(resolved_sidecar_profile) if resolved_sidecar_profile else DIST_DIR
+            )
+            executable_path = output_dist_dir / binary_name
+            if not executable_path.is_file():
+                nested_path = output_dist_dir / build_name / binary_name
+                if nested_path.is_file():
+                    executable_path = nested_path
             if executable_path.exists():
                 click.echo(f"📁 Location: {executable_path}")
         elif target == "container":

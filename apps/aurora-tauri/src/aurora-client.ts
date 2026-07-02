@@ -3,11 +3,15 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type TauriAndroidBaselineStatus,
+  type AndroidLocalLightInferenceStatus,
+  type TauriIosInvocationStatus,
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
   type TauriSidecarStatus
 } from '@aurora/client'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 export interface AuroraTauriRuntime {
   client: AuroraClient
@@ -18,14 +22,21 @@ export interface AuroraTauriRuntime {
   nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>
   trayStatus: () => Promise<TauriNativeFeatureStatus | null>
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosInvocationStatus: () => Promise<TauriIosInvocationStatus | null>
+  iosLocalLightInferenceStatus: () => Promise<AndroidLocalLightInferenceStatus | null>
+  iosBackgroundStatus: () => Promise<TauriNativeFeatureStatus | null>
   dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
   audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosSecureStorageStatus: () => Promise<TauriNativeFeatureStatus | null>
+  iosBiometricStatus: () => Promise<TauriNativeFeatureStatus | null>
+  androidBaselineStatus: () => Promise<TauriAndroidBaselineStatus | null>
   shutdown: () => Promise<void>
 }
 
 export function createAuroraTauriRuntime(): AuroraTauriRuntime {
   if (isTauriRuntime()) {
-    const transport = new TauriLocalTransport({ invoke })
+    const transport = new TauriLocalTransport({ invoke, listen })
     return {
       client: new AuroraClient({ transport }),
       mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
@@ -35,8 +46,15 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       nativePermissionStatus: () => transport.getNativePermissionStatus(),
       trayStatus: () => transport.getTrayStatus(),
       notificationStatus: () => transport.getNotificationStatus(),
+      iosVoiceStatus: () => transport.getIosVoiceStatus(),
+      iosInvocationStatus: () => transport.getIosInvocationStatus(),
+      iosLocalLightInferenceStatus: () => transport.getIosLocalLightInferenceStatus(),
+      iosBackgroundStatus: () => transport.getIosBackgroundStatus(),
       dialogStatus: () => transport.getDialogStatus(),
       audioBridgeStatus: () => transport.getAudioBridgeStatus(),
+      iosSecureStorageStatus: () => transport.getIosSecureStorageStatus(),
+      iosBiometricStatus: () => transport.getIosBiometricStatus(),
+      androidBaselineStatus: () => transport.getAndroidBaselineStatus(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
@@ -57,8 +75,15 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       nativePermissionStatus: async () => null,
       trayStatus: async () => null,
       notificationStatus: async () => null,
+      iosVoiceStatus: async () => null,
+      iosInvocationStatus: async () => null,
+      iosLocalLightInferenceStatus: async () => null,
+      iosBackgroundStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
+      iosSecureStorageStatus: async () => null,
+      iosBiometricStatus: async () => null,
+      androidBaselineStatus: async () => null,
       shutdown: async () => undefined
     }
   }
@@ -72,8 +97,15 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     nativePermissionStatus: async () => null,
     trayStatus: async () => null,
     notificationStatus: async () => null,
+    iosVoiceStatus: async () => null,
+    iosInvocationStatus: async () => null,
+    iosLocalLightInferenceStatus: async () => null,
+    iosBackgroundStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,
+    iosSecureStorageStatus: async () => null,
+    iosBiometricStatus: async () => null,
+    androidBaselineStatus: async () => null,
     shutdown: async () => undefined
   }
 }

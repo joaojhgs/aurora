@@ -53,4 +53,4 @@ Start with SDK adapters, mesh diagnostics, peer trust state, and capability expl
 
 ## Verification Notes
 
-This review was produced from the PER-128 through PER-146 plan files, current Gateway/Auth/Tooling/Scheduler/DB/audio contract models, and current docs. The checkout does not contain `modules/ui-mock-reference/`, so no visual/component inventory was performed.
+This review was produced from the PER-128 through PER-146 plan files, current Gateway/Auth/Tooling/Scheduler/DB/audio contract models, and current docs. On `feat/ui-multi-platform-integration`, `modules/ui-mock-reference/` exists as a visual/component reference only; production mesh UI truth must still come from `AuroraClient`, capability catalog/route diagnostics, native manifests, or explicit unsupported/degraded states.

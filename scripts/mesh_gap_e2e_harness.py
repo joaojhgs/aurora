@@ -1,11 +1,11 @@
-"""PER-163 executable two-peer mesh E2E harness.
+"""Executable two-peer mesh transport E2E harness.
 
-The default CI profile creates two isolated in-memory Aurora peers.  It uses
+The default CI profile creates two isolated in-memory Aurora peers. It uses
 real LocalBus request/reply delivery and the production WebRTC JSON-RPC handler
 for the final mesh row, while deterministic provider handlers supply fake
-Tooling/RAG/Audio/Scheduler data.  Rows that need external Redis, HTTP Gateway,
-or Tauri runtimes are reported as explicit dependency gaps unless their live
-endpoints are provided by a wrapper.
+Tooling/RAG/Audio/Scheduler data. Rows that need external Redis, HTTP Gateway,
+or Tauri runtimes report explicit dependency gaps unless their live endpoints
+are provided by a wrapper.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from app.shared.contracts.models.stt import AudioSessionMethods, TranscriptionMe
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 
-REPORT_ROOT = Path(".omx/reports/mesh-gap-e2e")
+REPORT_ROOT = Path(".artifacts/e2e/mesh-transport")
 
 CONSUMER_PEER_ID = "consumer-peer"
 PROVIDER_PEER_ID = "provider-peer"
@@ -77,7 +77,7 @@ class HarnessMode:
 
 @dataclass(frozen=True)
 class HarnessScenario:
-    """One required PER-163 scenario assertion."""
+    """One required mesh transport scenario assertion."""
 
     scenario_id: str
     title: str
@@ -1573,7 +1573,7 @@ async def _run_harness_async(
         )
 
         report = HarnessReport(
-            harness_id="MESH-GAP-011",
+            harness_id="mesh-transport-e2e",
             generated_at=_now(),
             consumer_peer_id=CONSUMER_PEER_ID,
             provider_peer_id=PROVIDER_PEER_ID,

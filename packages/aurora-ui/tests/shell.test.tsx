@@ -1,9 +1,14 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   AuroraError,
   MockAuroraTransport,
+  backendInventoryFixture,
+  androidNativeCapabilityManifestFixture,
   backupListFixture,
   buildAdminOverviewManifest,
   buildCapabilityGraph,
@@ -11,11 +16,14 @@ import {
   capabilityGraphCatalogFixture,
   cloneFixture,
   deploymentTopologyFixture,
+  describeBackendInventory,
   evaluateRoutePolicy,
   gatewayRegistryFixture,
+  iosNativeCapabilityManifestFixture,
   modelRuntimeCatalogFixture,
   meshPeerListFixture,
   meshStatusFixture,
+  nativeCapabilityManifestFixture,
   normalizeToolCatalog,
   routeExplainFixture,
   schedulerJobsFixture,
@@ -28,7 +36,8 @@ import {
   type DeploymentTopologyResponse,
   type GetRegistryResponse,
   type GetServicesResponse,
-  type PendingPairingEntry
+  type PendingPairingEntry,
+  type VoiceRuntimeEvent
 } from '@aurora/client'
 import {
   AdminOverviewContent,
@@ -91,6 +100,8 @@ import {
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
+  productionSurfaceContracts,
+  snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
   meshPeerErrorMessage,
@@ -100,7 +111,10 @@ import {
   routePolicyFromRoute,
   routePolicyScenarios,
   routeSheetErrorMessage,
-  SettingsPermissionsView
+  SettingsPermissionsView,
+  auroraAssistantCancellationItem,
+  auroraAssistantVoiceItems,
+  auroraNavSections
 } from '../src/index'
 
 describe('Aurora production shell', () => {
@@ -114,6 +128,89 @@ describe('Aurora production shell', () => {
     expect(snapshot.routes.some((route) => route.requiresAdminAction)).toBe(true)
     expect(snapshot.routes.every((route) => route.repairActions.length > 0)).toBe(true)
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
+  })
+
+  it('documents every production surface with backend or explicit degraded evidence', () => {
+    const requiredSurfaceIds = [
+      'assistant-route-sheet',
+      'admin-overview',
+      'admin-services',
+      'admin-rbac',
+      'admin-audit',
+      'admin-plugins',
+      'admin-devices',
+      'admin-scheduler',
+      'config-editor',
+      'memory-rag',
+      'backup-restore',
+      'models-runtime',
+      'mesh-peers',
+      'mesh-diagnostics',
+      'route-policy',
+      'resource-diagnostics',
+      'settings-permissions-privacy',
+      'native-capabilities',
+      'onboarding-auth-pairing'
+    ]
+    const surfaceIds = productionSurfaceContracts.map((surface) => surface.id)
+    const navIds = new Set([
+      ...auroraNavSections.flatMap((section) => section.items.map((item) => item.id)),
+      auroraAssistantCancellationItem.id,
+      ...Object.values(auroraAssistantVoiceItems).map((item) => item.id)
+    ])
+    const descriptorMethods = new Set(
+      describeBackendInventory(backendInventoryFixture).methods.map((method) => method.busTopic)
+    )
+
+    expect(surfaceIds).toEqual(requiredSurfaceIds)
+    for (const surface of productionSurfaceContracts) {
+      expect(surface.navItemIds.length, `${surface.id} nav bindings`).toBeGreaterThan(0)
+      expect(surface.componentFiles.length, `${surface.id} components`).toBeGreaterThan(0)
+      expect(surface.truthSources.length, `${surface.id} truth sources`).toBeGreaterThan(0)
+      expect(surface.coverage.length, `${surface.id} coverage`).toBeGreaterThan(0)
+      expect(surface.fixturePolicy, `${surface.id} fixture policy`).toBe('test-only')
+      expect(surface.truthSources.some((source) => source.kind !== 'unsupported-degraded'), `${surface.id} live source`).toBe(true)
+      expect(surface.navItemIds.every((id) => navIds.has(id)), `${surface.id} nav ids`).toBe(true)
+
+      if (surface.mutatingMethodType === 'manage') {
+        expect(surface.adminActionRequired, `${surface.id} AdminAction`).toBe(true)
+        expect(
+          surface.truthSources.some((source) => source.kind === 'admin-action'),
+          `${surface.id} AdminAction truth source`
+        ).toBe(true)
+      }
+
+      const descriptorBackedMethods = surface.truthSources
+        .flatMap((source) => source.methods)
+        .filter((method) => descriptorMethods.has(method))
+      expect(
+        descriptorBackedMethods.length > 0 ||
+          surface.truthSources.some((source) =>
+            ['admin-action', 'capability-graph', 'native-manifest', 'unsupported-degraded'].includes(source.kind)
+          ),
+        `${surface.id} descriptor or explicit gated/degraded evidence`
+      ).toBe(true)
+    }
+  })
+
+  it('keeps production UI screens behind AuroraClient and away from mock fixtures as live truth', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const scannedFiles = [
+      ...filesUnder(join(repoRoot, 'packages/aurora-ui/src'), /\.(ts|tsx)$/),
+      ...filesUnder(join(repoRoot, 'apps/aurora-web/app'), /\.(ts|tsx)$/),
+      ...filesUnder(join(repoRoot, 'apps/aurora-tauri/src'), /\.(ts|tsx)$/)
+    ].filter((file) => !isAllowedAdapterFile(repoRoot, file))
+
+    expect(scannedFiles.length).toBeGreaterThan(0)
+    for (const file of scannedFiles) {
+      const rel = relative(repoRoot, file)
+      const text = readFileSync(file, 'utf8')
+      expect(text, `${rel} must not call fetch directly`).not.toMatch(/\bfetch\s*\(/)
+      expect(text, `${rel} must not call Tauri invoke directly`).not.toMatch(/\binvoke\s*\(/)
+      expect(text, `${rel} must not import SDK fixtures`).not.toMatch(/@aurora\/client.*Fixture|packages\/aurora-sdk\/src\/fixtures/)
+      expect(text, `${rel} must not import mock reference fixtures`).not.toMatch(/modules\/ui-mock-reference|ui-mock-reference\/lib\/aurora\/data/)
+      expect(text, `${rel} must not call raw service objects`).not.toMatch(/\b(LocalBus|BullMQBus|MeshBus|ConfigManager)\b/)
+    }
   })
 
   it('renders accessible navigation and route state without direct backend calls', async () => {
@@ -224,6 +321,22 @@ describe('Aurora production shell', () => {
       })
     )
     expect(model.mobileLocalLightState).toBe('unsupported')
+
+    const nativeModel = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      loadState: 'ready'
+    })
+    expect(nativeModel.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        routeLabel: 'native:android / native:mobile-local-light',
+        blockers: expect.arrayContaining(['backend_model_catalog_and_device_model_proof_required'])
+      })
+    )
+    expect(nativeModel.mobileLocalLightState).toBe('degraded')
+    expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
   it('renders model runtime UI with disabled AdminAction operations and SDK error states', () => {
@@ -234,7 +347,12 @@ describe('Aurora production shell', () => {
     })
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const markup = renderToStaticMarkup(
-      <ModelsView client={client} initialCatalog={modelRuntimeCatalogFixture} initialGraph={graph} />
+      <ModelsView
+        client={client}
+        initialCatalog={modelRuntimeCatalogFixture}
+        initialGraph={graph}
+        initialNativeManifest={androidNativeCapabilityManifestFixture}
+      />
     )
 
     expect(markup).toContain('Models and runtime')
@@ -247,7 +365,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Benchmark action stays disabled')
     expect(markup).toContain('Select: Backend model selection contract is not active')
     expect(markup).toContain('Backend model selection contract is not active; selection stays disabled until an SDK/AdminAction operation exists.')
-    expect(markup).toContain('native_provider_missing')
+    expect(markup).toContain('backend_model_catalog_and_device_model_proof_required')
+    expect(markup).toContain('android-native-local-light-adapter')
     expect(markup).toContain('Mobile local-light')
 
     const errorMarkup = renderToStaticMarkup(
@@ -280,6 +399,67 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required')
     expect(markup).toContain('Request unavailable')
     expect(markup).toContain('secrets redacted')
+  })
+
+  it('renders iOS App Intents as app-owned Shortcuts integration without claiming system assistant ownership', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativeIntegrations.map((integration) => integration.id)).toEqual([
+      'askAuroraAppIntent',
+      'askAuroraShortcut',
+      'summarizeSharedContentShortcut',
+      'stopAuroraSpeechAppIntent',
+      'shareExtension',
+      'deepLinks',
+      'widgets',
+      'fileAssociations',
+      'iosLocalLightInference',
+      'siriReplacement'
+    ])
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'askAuroraAppIntent')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        invocation: 'app-intent',
+        siriReplacement: false
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'fileAssociations')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        privacyClass: 'sensitive',
+        requiresConfirmation: true
+      })
+    )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'siriReplacement')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        siriReplacement: false
+      })
+    )
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('system assistant ownership is unavailable')
+    expect(markup).toContain('Orchestrator.ExternalUserInput')
+    expect(markup).toContain('confirmation required')
   })
 
   it('maps settings state matrix for denied, degraded, native-unavailable, optimistic and rollback/error states', async () => {
@@ -324,6 +504,149 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Fallback is visible as degraded capability evidence.')
   })
 
+  it('renders Android local-light inference as a degraded native provider in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const localLight = model.nativePermissions.find((permission) => permission.id === 'aurora.android.localLightInference')
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(localLight).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        granted: false,
+        requestEnabled: false
+      })
+    )
+    expect(markup).toContain('Android Local Light Inference')
+    expect(markup).toContain('Native manifest reports a degraded or partial platform path for this feature.')
+  })
+
+  it('renders Android assistant role qualification and fallback entrypoints from native manifest evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+
+    const assistantRole = model.nativePermissions.find((permission) => permission.id === 'android.assistantRole')
+    const notificationFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.notification')
+    const foregroundVoiceFallback = model.nativePermissions.find((permission) => permission.id === 'android.fallback.foreground_voice_controls')
+
+    expect(snapshot.nativePlatform).toBe('android')
+    expect(assistantRole).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      requestEnabled: true,
+      capabilityEnabled: true,
+      blockers: expect.arrayContaining(['assistant_role_user_grant_required'])
+    }))
+    expect(notificationFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+    expect(foregroundVoiceFallback).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      granted: false
+    }))
+
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    expect(markup).toContain('Android assistant role')
+    expect(markup).toContain('RoleManager.isRoleAvailable(android.app.role.ASSISTANT)=true')
+    expect(markup).toContain('Share sheet')
+    expect(markup).toContain('Android Notification')
+    expect(markup).toContain('assistant_role_user_grant_required')
+  })
+
+  it('renders iOS native integration states and no-Siri-replacement limits in settings', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: iosNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+    const snapshot = snapshotFromGraph('native-mobile', graph, iosNativeCapabilityManifestFixture)
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(model.nativeIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'shareExtension', state: 'degraded' }),
+        expect.objectContaining({ id: 'fileAssociations', state: 'degraded' }),
+        expect.objectContaining({ id: 'iosLocalLightInference', state: 'degraded' }),
+        expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
+      ])
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosLocalLightInference')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        label: 'iOS Local Light Inference',
+        detail: expect.stringContaining('backend model catalog and device/model proof')
+      })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosMicrophoneCapture')).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        label: 'iOS microphone capture',
+        detail: expect.stringContaining('raw-audio consent')
+      })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.backgroundVoice')).toEqual(
+      expect.objectContaining({
+        state: 'unsupported',
+        blockers: ['ios_background_voice_limited']
+      })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.appOwnedInvocation')).toEqual(
+      expect.objectContaining({
+        state: 'privacy-blocked',
+        detail: expect.stringContaining('system assistant ownership is unavailable')
+      })
+    )
+    expect(model.nativeLimitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'noSiriReplacement',
+          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.'
+        })
+      ])
+    )
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('iOS microphone capture')
+    expect(markup).toContain('Always-on background listening is unavailable on iOS')
+    expect(markup).toContain('ios_background_voice_limited')
+    expect(markup).toContain('iOS share extension intake')
+    expect(markup).toContain('iOS file associations')
+    expect(markup).toContain('iOS local-light inference provider')
+    expect(markup).toContain('Core ML/MLC/ExecuTorch-style local-light inference')
+    expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.')
+  })
+
+  it('renders iOS Siri/Shortcuts/App Intents integration and preflight evidence from the native manifest', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativePlatformIntegrations.map((integration) => integration.id)).toContain('ios-app-intents')
+    expect(model.nativeReleaseGates.map((gate) => gate.id)).toContain('app-store-connect-signing')
+    expect(model.nativeDeviceMatrix.map((row) => row.id)).toContain('ios-device-current')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
+    expect(markup).toContain('TestFlight/App Store signing dry run')
+    expect(markup).toContain('Credentials stay in CI secret storage')
+    expect(markup).toContain('Physical iPhone or iPad')
+    expect(markup).not.toMatch(/replace Siri|Siri replacement/i)
+  })
+
   it('keeps settings screen honest for SDK errors and empty native manifests', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
     const model = buildSettingsPermissionsModel(snapshot)
@@ -335,6 +658,42 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Gateway unavailable')
     expect(markup).toContain('No native permission manifest is available')
     expect(markup).toContain('AdminAction required')
+  })
+
+  it('renders iOS Keychain, biometric admin unlock, and Siri limitation copy from native manifest evidence', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: {
+        'aurora.iosKeychain': true,
+        'aurora.iosBiometricUnlock': true
+      },
+      capabilities: {
+        'ios.keychain.secureCredentialStorage': true,
+        'ios.biometric.adminUnlock': true,
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.shareExtension': true,
+        'ios.widgets': true,
+        'ios.deepLinks': true,
+        'ios.siriReplacement': false
+      }
+    }))
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const model = buildSettingsPermissionsModel(snapshot)
+    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+
+    expect(snapshot.nativePlatform).toBe('ios')
+    expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosKeychain')).toEqual(
+      expect.objectContaining({ state: 'available-local', label: 'iOS Keychain' })
+    )
+    expect(model.nativePermissions.find((permission) => permission.id === 'ios.siriReplacement')).toEqual(
+      expect.objectContaining({ state: 'unsupported', label: 'System assistant role' })
+    )
+    expect(markup).toContain('Tokens, mesh credentials, and admin unlock secrets use iOS Keychain')
+    expect(markup).toContain('Face ID/Touch ID can confirm admin unlocks')
+    expect(markup).toContain('Siri/Shortcuts/App Intents integration is app-owned')
+    expect(markup).toContain('iOS does not allow third-party default assistant ownership')
   })
 
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
@@ -476,6 +835,33 @@ describe('Aurora production shell', () => {
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
     expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('typed audio session')
     expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
+
+    const eventDrivenModel = buildAssistantVoiceModel({
+      client,
+      route: enabledRoute(route(snapshot, 'assistant')),
+      voiceRoutes: snapshot.assistantVoiceRoutes,
+      nativeAvailable: snapshot.nativeAvailable,
+      nativePlatform: snapshot.nativePlatform,
+      nativePermissions: snapshot.nativePermissions,
+      nativeCapabilities: snapshot.nativeCapabilities,
+      captureStatus: 'listening',
+      consentGranted: true,
+      voiceEvents: voiceEvidenceEvents()
+    })
+
+    expect(eventDrivenModel.events.find((event) => event.id === 'partial')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      detail: expect.stringContaining('STTCoordinator.Partial evidence')
+    }))
+    expect(eventDrivenModel.events.find((event) => event.id === 'final')?.detail).toContain('session voice-session-1')
+    expect(eventDrivenModel.events.find((event) => event.id === 'tts-started')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      detail: expect.stringContaining('TTS.Started evidence')
+    }))
+    expect(eventDrivenModel.events.find((event) => event.id === 'remote-denied')).toEqual(expect.objectContaining({
+      state: 'denied',
+      detail: expect.stringContaining('policy_denied')
+    }))
   })
 
   it('keeps remote STT consent-gated, denial visible, and revoked consent blocking dispatch', async () => {
@@ -559,6 +945,33 @@ describe('Aurora production shell', () => {
 
     expect(mobileModel.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('privacy-blocked')
     expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
+  })
+
+  it('renders iOS permission copy as Siri Shortcuts App Intents integration without replacement claims', async () => {
+    const mobileTransport = new MockAuroraTransport()
+    mobileTransport.register('Native.GetCapabilityManifest', () => ({
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.siriReplacement': false
+      }
+    }))
+    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const snapshot = await buildShellSnapshot(mobileClient)
+    const settings = buildSettingsPermissionsModel(snapshot)
+    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-thin' })
+
+    expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
+      expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS System Assistant Role Unsupported'])
+    )
+    expect(settings.nativePermissions.find((permission) => permission.label === 'iOS System Assistant Role Unsupported')?.state).toBe('unsupported')
+    expect(onboarding.modes.find((mode) => mode.id === 'ios-thin')?.repair).toContain('Siri/Shortcuts/App Intents integration')
   })
 
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
@@ -662,6 +1075,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Mesh Peer')
     expect(markup).toContain('Android Thin')
     expect(markup).toContain('iOS Thin')
+    expect(markup).toContain('iOS Local-Light')
+    expect(markup).toContain('system assistant ownership is unavailable on iOS')
     expect(markup).toContain('Offline Local')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')
@@ -2544,6 +2959,48 @@ function streamUpdate(textDelta: string) {
   }
 }
 
+function voiceEvidenceEvents(): VoiceRuntimeEvent[] {
+  const audit = {
+    correlationId: 'corr-voice-1',
+    eventKind: 'voice.event',
+    peerId: 'peer-local',
+    principalId: null,
+    targetPeerId: 'peer-kitchen',
+    method: null,
+    busTopic: null,
+    toolId: null,
+    resourceId: null,
+    status: null,
+    transport: 'mock',
+    redaction: {
+      secretsRedacted: true,
+      redactedFields: [],
+      source: 'backend' as const,
+      warnings: []
+    }
+  }
+  const base = {
+    sessionId: 'voice-session-1',
+    correlationId: 'corr-voice-1',
+    sourcePeerId: 'peer-local',
+    targetPeerId: 'peer-kitchen',
+    targetDeviceId: 'mic-kitchen',
+    consentDecision: 'approved',
+    policyDecisionId: 'policy-voice-1',
+    privacyClass: 'raw-audio',
+    redacted: true,
+    occurredAt: '2026-06-27T16:00:00Z',
+    audit,
+    raw: {}
+  }
+  return [
+    { ...base, id: 'voice-partial', kind: 'transcription_partial', topic: 'STTCoordinator.Partial', state: 'processing', text: 'turn', reason: null },
+    { ...base, id: 'voice-final', kind: 'transcription_final', topic: 'STTCoordinator.Final', state: 'processing', text: 'turn on lights', reason: null },
+    { ...base, id: 'voice-tts', kind: 'tts_started', topic: 'TTS.Started', state: 'speaking', text: 'Turning on lights.', reason: null, privacyClass: 'personal' },
+    { ...base, id: 'voice-denied', kind: 'audio_denied', topic: 'AudioSession.Events', state: 'denied', text: null, reason: 'policy_denied' }
+  ]
+}
+
 function enabledRoute(match: ReturnType<typeof route>, overrides: Partial<ReturnType<typeof route>> = {}) {
   return {
     ...match,
@@ -3025,6 +3482,23 @@ function blockedRouteEvaluation(availability: 'privacy-blocked' | 'unsupported')
     privacyClass: availability === 'privacy-blocked' ? 'sensitive' : 'personal',
     transportKind: 'mock'
   })
+}
+
+function filesUnder(dir: string, pattern: RegExp): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return filesUnder(path, pattern)
+    return pattern.test(entry.name) ? [path] : []
+  })
+}
+
+function isAllowedAdapterFile(repoRoot: string, file: string): boolean {
+  const rel = relative(repoRoot, file)
+  return [
+    'apps/aurora-web/app/aurora-client.ts',
+    'apps/aurora-tauri/src/aurora-client.ts',
+    'apps/aurora-tauri/src/eventstream-smoke.tsx'
+  ].includes(rel)
 }
 
 function rbacLoadingSnapshot() {

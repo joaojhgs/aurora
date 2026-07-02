@@ -320,6 +320,24 @@ exe-runtime = [
     "aurora[runtime]",  # Include all runtime dependencies
 ]
 
+# Tauri desktop sidecar profiles. These are intentionally narrower than
+# ``runtime`` so desktop packaging can choose the local capability tier instead
+# of always bundling every STT/TTS/local-model dependency.
+sidecar-thin = [
+    "aurora[service-config,service-auth,service-db,service-scheduler,service-tooling,service-orchestrator,gateway,mode-threads]",
+]
+
+sidecar-local-audio = [
+    "aurora[sidecar-thin,service-stt-wakeword,service-stt-transcription,service-stt-coordinator]",
+    # TTS runtime without pinning a hardware backend; the selected sidecar
+    # profile adds torch-cpu/cuda/metal/etc. separately.
+    "realtimetts==0.4.47",
+    "piper-tts==1.2.0",
+    "piper-phonemize==1.1.0",
+    "PyAudio==0.2.14",
+    "onnxruntime==1.20.1",
+]
+
 # ============================================================================
 # APPROACH 3: Container Support
 # ============================================================================

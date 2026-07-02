@@ -307,6 +307,42 @@ async def test_gateway_capture_republishes_normalized_aurora_event_stream():
     assert service.bus.publish.await_args.kwargs["mesh"] is False
 
 
+@pytest.mark.asyncio
+async def test_gateway_list_events_filters_topic_kind_and_last_event_id():
+    service = GatewayService()
+    old_event = _event_from_envelope(
+        Envelope(
+            type="Orchestrator.Response",
+            payload={"text": "old", "correlation_id": "corr-stream"},
+            correlation_id="corr-stream",
+        )
+    )
+    old_event.event_id = "old-event"
+    new_event = _event_from_envelope(
+        Envelope(
+            type="Orchestrator.Response",
+            payload={"text": "new", "correlation_id": "corr-stream"},
+            correlation_id="corr-stream",
+        )
+    )
+    new_event.event_id = "new-event"
+    service._event_stream.appendleft(old_event)
+    service._event_stream.appendleft(new_event)
+
+    response = await service.list_events(
+        GatewayListEventsRequest(
+            topics=["Orchestrator.Response"],
+            kinds=["assistant.completed"],
+            correlation_id="corr-stream",
+            last_event_id="old-event",
+        )
+    )
+
+    assert response.total == 1
+    assert response.events[0].event_id == "new-event"
+    assert response.events[0].kind == "assistant.completed"
+
+
 def test_gateway_event_categories_cover_config_and_pairing():
     config_event = _event_from_envelope(
         Envelope(

@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "platform": "ios",
+  "policyCopy": "Siri/Shortcuts/App Intents integration",
+  "unsupportedClaims": [
+    "default system assistant",
+    "background wakeword without explicit Apple-permitted mode",
+    "raw audio stream without foreground consent"
+  ],
+  "integrations": [
+    {
+      "id": "ios-app-intents",
+      "label": "App Intents",
+      "status": "supported",
+      "privacyClass": "personal",
+      "actions": [
+        {
+          "id": "ask-aurora",
+          "label": "Ask Aurora",
+          "backendMethod": "Orchestrator.ExternalUserInput",
+          "privacyClass": "personal",
+          "policy": "Foreground or user-invoked action only; route through AuroraClient/backend evidence."
+        },
+        {
+          "id": "open-aurora",
+          "label": "Open Aurora",
+          "backendMethod": "Native.OpenApp",
+          "privacyClass": "public",
+          "policy": "Open an app-owned Aurora surface."
+        }
+      ]
+    },
+    {
+      "id": "ios-share-extension",
+      "label": "Share extension and deep links",
+      "status": "supported",
+      "privacyClass": "sensitive",
+      "actions": [
+        {
+          "id": "ingest-shared-context",
+          "label": "Ingest shared context",
+          "backendMethod": "DB.IngestAttachmentContext",
+          "privacyClass": "sensitive",
+          "policy": "Preserve source channel, privacy class, user action, and backend validation result."
+        }
+      ]
+    },
+    {
+      "id": "ios-widget-status",
+      "label": "Widget status",
+      "status": "partial",
+      "privacyClass": "personal",
+      "actions": [
+        {
+          "id": "open-status",
+          "label": "Open status",
+          "backendMethod": "Gateway.GetCapabilityCatalog",
+          "privacyClass": "personal",
+          "policy": "Widget opens or refreshes app-owned status only; it does not execute sensitive actions directly."
+        }
+      ]
+    },
+    {
+      "id": "ios-system-assistant-role",
+      "label": "System assistant role",
+      "status": "unsupported",
+      "privacyClass": "public",
+      "actions": []
+    }
+  ],
+  "releaseGates": [
+    {
+      "id": "macos-xcode-tauri-build",
+      "label": "macOS Xcode Tauri build",
+      "status": "requires-macos",
+      "requiredEvidence": "pnpm --filter @aurora/tauri-ui ios:preflight on macOS with Xcode command line tools"
+    },
+    {
+      "id": "simulator-plugin-app-intent",
+      "label": "Simulator native plugin and App Intent",
+      "status": "pending",
+      "requiredEvidence": "Simulator invocation of native manifest plugin and one App Intent/Shortcut flow"
+    },
+    {
+      "id": "share-extension-flow",
+      "label": "Share extension flow",
+      "status": "pending",
+      "requiredEvidence": "Simulator or device share/deep-link invocation with backend attachment validation result"
+    },
+    {
+      "id": "app-store-connect-signing",
+      "label": "TestFlight/App Store signing dry run",
+      "status": "requires-credentials",
+      "requiredEvidence": "App Store Connect export/upload dry run with API-key auth in CI or external runner"
+    }
+  ],
+  "deviceMatrix": [
+    {
+      "id": "ios-simulator-current",
+      "target": "iPhone simulator, current stable Xcode runtime",
+      "minimumOs": "17.0",
+      "requiredEvidence": "Native plugin, App Intent, and share/deep-link smoke evidence"
+    },
+    {
+      "id": "ios-device-current",
+      "target": "Physical iPhone or iPad on a supported iOS release",
+      "minimumOs": "17.0",
+      "requiredEvidence": "Signing/provisioning plus TestFlight or App Store Connect dry-run evidence"
+    }
+  ]
+}

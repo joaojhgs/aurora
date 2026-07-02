@@ -346,7 +346,7 @@ docker pull aurora-ai/aurora-orchestrator:openai-latest
 ## Related Documentation
 
 - [Installation Guide](../INSTALL.md) - Full installation instructions
-- [Docker Process Mode](../README.process-mode.md) - Running Aurora in process mode
+- [Docker Process Mode](../../README.process-mode.md) - Running Aurora in process mode
 - [DB Service Embeddings](DB-SERVICE-EMBEDDINGS.md) - DB service configuration
 - [Orchestrator LLM Modes](ORCHESTRATOR-SERVICE-LLM-MODES.md) - Orchestrator configuration
 

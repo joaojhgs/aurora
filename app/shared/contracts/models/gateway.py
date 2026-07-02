@@ -474,10 +474,14 @@ GatewayEventStreamEvent = AuroraEventStreamEvent
 class GatewayListEventsRequest(IOModel):
     """Query the bounded Gateway event buffer."""
 
+    topics: list[str] | None = None
     categories: list[AuroraEventCategory] | None = None
+    kinds: list[str] | None = None
     action: str | None = None
     status: str | None = None
     correlation_id: str | None = None
+    last_event_id: str | None = None
+    replay_from: str | None = None
     peer_id: str | None = None
     provider_id: str | None = None
     tool_id: str | None = None

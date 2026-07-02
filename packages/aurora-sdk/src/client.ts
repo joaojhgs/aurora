@@ -38,6 +38,7 @@ import {
   type ToolApprovalDecisionResult,
   type ToolCatalogResponse
 } from './tools.js'
+import { normalizeVoiceRuntimeEvent, VOICE_EVENT_KINDS, VOICE_EVENT_TOPICS } from './voice.js'
 import type {
   AdminOverviewManifest,
   AdminOverviewManifestInput,
@@ -130,6 +131,7 @@ import type {
   TokenRevokeResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
+import type { VoiceRuntimeEvent } from './voice.js'
 import type {
   EffectivePermissionInput,
   PermissionAccessDecision,
@@ -725,15 +727,38 @@ export class AssistantClient {
       source: 'external'
     }
     if (input.sessionId !== undefined) payload.session_id = input.sessionId
+    const requestId = input.requestId ?? `assistant-${cryptoRandomId()}`
+    payload.request_id = requestId
+    payload.correlation_id = requestId
+    payload.stream = true
 
     let sawEvent = false
+    let requestResponse: AuroraResponse<OrchestratorResponse> | null = null
     try {
+      const requestOptions: { path: string; timeoutMs?: number } = {
+        path: routePath('Orchestrator', 'ExternalUserInput')
+      }
+      if (input.timeoutMs !== undefined) requestOptions.timeoutMs = input.timeoutMs
+      const request = await this.client.requestResult<OrchestratorResponse, OrchestratorProcessRequest>(
+        ORCHESTRATOR_METHODS.externalUserInput,
+        payload,
+        requestOptions
+      )
+      requestResponse = request
+      if (!request.ok) {
+        yield streamFailure(request.error, this.client.transport.kind)
+        return
+      }
+      const correlationId = request.data.correlation_id ?? requestId
       const stream = this.client.events.streamAssistant<Record<string, unknown>, OrchestratorProcessRequest>(payload, {
         signal: input.signal,
         lastEventId: input.lastEventId ?? null,
         replayFrom: input.replayFrom ?? input.lastEventId ?? null,
+        correlationId,
+        backfill: true,
         reconnect: { maxAttempts: 1, initialDelayMs: 250, maxDelayMs: 1_000 },
         audit: {
+          correlationId,
           method: ORCHESTRATOR_METHODS.externalUserInput,
           busTopic: ORCHESTRATOR_METHODS.externalUserInput,
           transport: this.client.transport.kind
@@ -741,7 +766,7 @@ export class AssistantClient {
       })
       for await (const event of stream) {
         sawEvent = true
-        yield assistantStreamUpdateFromEvent(event)
+        yield assistantStreamUpdateFromEvent(event, request.data)
       }
     } catch (error) {
       const normalized = normalizeError(error)
@@ -749,6 +774,24 @@ export class AssistantClient {
       if (input.signal?.aborted) return
       if (sawEvent) {
         yield streamFailure(normalized, this.client.transport.kind, 'transport_lost')
+        return
+      }
+
+      if (requestResponse?.ok) {
+        const sessionId = requestResponse.data.session_id ?? input.sessionId ?? stableSessionId()
+        const metadata = requestResponse.data.metadata ?? {}
+        yield {
+          kind: 'fallback',
+          eventId: requestResponse.audit.correlationId ?? requestId,
+          sessionId,
+          text: requestResponse.data.text,
+          textDelta: requestResponse.data.text,
+          modelLabel: metadataString(metadata, 'model') ?? metadataString(metadata, 'provider'),
+          requestId,
+          error: null,
+          audit: requestResponse.audit,
+          metadata
+        }
         return
       }
 
@@ -761,6 +804,7 @@ export class AssistantClient {
           text: fallback.data.response.text,
           textDelta: fallback.data.response.text,
           modelLabel: fallback.data.modelLabel,
+          requestId,
           error: null,
           audit: fallback.audit,
           metadata: fallback.data.metadata
@@ -768,6 +812,26 @@ export class AssistantClient {
         return
       }
       yield streamFailure(fallback.error, this.client.transport.kind, 'fallback')
+    }
+  }
+
+  async *streamVoiceEvents(
+    options: AuroraSubscribeOptions = {}
+  ): AsyncIterable<VoiceRuntimeEvent> {
+    const stream = this.client.events.subscribe<unknown>({
+      stream: 'voice',
+      topics: [...VOICE_EVENT_TOPICS],
+      kinds: [...VOICE_EVENT_KINDS],
+      reconnect: { maxAttempts: 1, initialDelayMs: 250, maxDelayMs: 1_000 },
+      ...options,
+      audit: {
+        ...options.audit,
+        transport: this.client.transport.kind
+      }
+    })
+    for await (const event of stream) {
+      const normalized = normalizeVoiceRuntimeEvent(event)
+      if (normalized) yield normalized
     }
   }
 
@@ -799,12 +863,17 @@ function metadataString(metadata: OrchestratorResponse['metadata'] | undefined, 
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<Record<string, unknown>>): AssistantStreamUpdate {
+function assistantStreamUpdateFromEvent(
+  event: import('./types.js').AuroraEvent<Record<string, unknown>>,
+  requestResponse?: OrchestratorResponse
+): AssistantStreamUpdate {
   const payload = event.payload ?? {}
-  const text = streamText(payload)
-  const metadata = streamMetadata(payload)
-  const sessionId = streamString(payload, 'session_id', 'sessionId') ?? null
+  const eventText = streamText(payload)
+  const metadata = { ...(requestResponse?.metadata ?? {}), ...streamMetadata(payload) }
+  const sessionId = streamString(payload, 'session_id', 'sessionId') ?? requestResponse?.session_id ?? null
+  const requestId = streamString(payload, 'request_id', 'requestId') ?? event.audit.correlationId
   const modelLabel = metadataString(metadata, 'model') ?? metadataString(metadata, 'provider')
+  const text = event.kind === 'assistant.completed' && !eventText ? requestResponse?.text ?? '' : eventText
   if (event.kind === 'assistant.completed') {
     return {
       kind: 'completed',
@@ -813,6 +882,7 @@ function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<
       text,
       textDelta: text,
       modelLabel,
+      requestId,
       error: null,
       audit: event.audit,
       metadata
@@ -826,6 +896,7 @@ function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<
       text,
       textDelta: '',
       modelLabel,
+      requestId,
       error: new AuroraError({
         code: 'unavailable_service',
         message: text || 'Assistant stream failed.',
@@ -846,6 +917,7 @@ function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<
       text,
       textDelta: '',
       modelLabel,
+      requestId,
       error: null,
       audit: event.audit,
       metadata
@@ -858,6 +930,7 @@ function assistantStreamUpdateFromEvent(event: import('./types.js').AuroraEvent<
     text,
     textDelta: streamString(payload, 'delta', 'text_delta', 'textDelta') ?? text,
     modelLabel,
+    requestId,
     error: null,
     audit: event.audit,
     metadata
@@ -876,6 +949,7 @@ function streamFailure(
     text: error.message,
     textDelta: '',
     modelLabel: null,
+    requestId: null,
     error,
     audit: createAuditReceipt(error.detail, {
       correlationId: error.correlationId ?? null,
@@ -909,6 +983,12 @@ function streamString(payload: Record<string, unknown>, ...keys: string[]): stri
 
 function stableSessionId(): string {
   return `assistant-session-${Date.now().toString(36)}`
+}
+
+function cryptoRandomId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID
+  if (randomUUID) return randomUUID.call(globalThis.crypto)
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 export class AdminOverviewClient {

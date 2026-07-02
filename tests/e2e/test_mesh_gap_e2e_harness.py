@@ -1,4 +1,4 @@
-"""E2E gate for the PER-163 mesh production harness."""
+"""E2E tests for the mesh transport harness."""
 
 import json
 

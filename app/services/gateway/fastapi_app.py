@@ -17,7 +17,7 @@ import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -25,6 +25,8 @@ from app.helpers.aurora_logger import log_error, log_info
 from app.services.gateway.auth import check_auth_enabled, create_scoped_auth_check
 from app.services.gateway.dependencies import get_rtc_client
 from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
+from app.shared.contracts.models.gateway import GatewayListEventsRequest, GatewayMethods
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
@@ -235,10 +237,7 @@ def create_gateway_app(
 
         return GetServicesResponse(services=services, mode=mode)
 
-    stream_events_auth = Security(
-        create_scoped_auth_check(method_type="manage"),
-        scopes=["Gateway.manage"],
-    )
+    stream_events_auth = Security(create_scoped_auth_check(method_type="use"), scopes=[])
 
     @app.get(
         "/api/events/stream",
@@ -253,15 +252,38 @@ def create_gateway_app(
         },
     )
     async def stream_events(
+        topic: Annotated[list[str] | None, Query()] = None,
+        kind: Annotated[list[str] | None, Query()] = None,
+        last_event_id: str | None = None,
+        replay_from: str | None = None,
+        backfill: bool = False,
+        correlation_id: str | None = None,
         _auth: Any = stream_events_auth,
     ) -> StreamingResponse:
         """Stream normalized event envelopes as Server-Sent Events."""
+        topics = topic or []
+        categories, kinds = _event_stream_filters(kind or [])
+        _authorize_event_stream_request(
+            _auth,
+            topics=topics,
+            categories=categories,
+            kinds=kinds,
+            correlation_id=correlation_id,
+        )
         queue: asyncio.Queue[AuroraEventStreamEvent] = asyncio.Queue(maxsize=100)
 
         async def on_event(envelope: Any) -> None:
             payload = envelope.payload
             if not isinstance(payload, AuroraEventStreamEvent):
                 payload = AuroraEventStreamEvent.model_validate(payload)
+            if not _event_matches_stream_request(
+                payload,
+                topics=topics,
+                categories=categories,
+                kinds=kinds,
+                correlation_id=correlation_id,
+            ):
+                return
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
@@ -272,11 +294,20 @@ def create_gateway_app(
         async def event_generator():
             bus.subscribe(AuroraMethods.EVENT_STREAM, on_event)
             try:
+                if backfill or last_event_id or replay_from:
+                    async for event in _stream_backfill_events(
+                        bus,
+                        topics=topics,
+                        categories=categories,
+                        kinds=kinds,
+                        correlation_id=correlation_id,
+                        last_event_id=last_event_id,
+                        replay_from=replay_from,
+                    ):
+                        yield _sse_payload(event)
                 while True:
                     event = await queue.get()
-                    payload = event.model_dump(mode="json")
-                    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-                    yield f"event: {event.category}\ndata: {data}\n\n"
+                    yield _sse_payload(event)
                     queue.task_done()
             finally:
                 bus.unsubscribe(AuroraMethods.EVENT_STREAM, on_event)
@@ -444,3 +475,137 @@ def create_gateway_app(
         return {"success": True}
 
     return app
+
+
+_SAFE_ASSISTANT_KINDS = {
+    "assistant",
+    "assistant.delta",
+    "assistant.completed",
+    "assistant.failed",
+    "tool.requested",
+    "tool.completed",
+}
+
+
+def _event_stream_filters(kind: list[str]) -> tuple[set[str], set[str]]:
+    categories: set[str] = set()
+    kinds: set[str] = set()
+    for item in kind:
+        normalized = item.strip()
+        if not normalized:
+            continue
+        if "." in normalized:
+            kinds.add(normalized)
+        else:
+            categories.add(normalized)
+    return categories, kinds
+
+
+def _authorize_event_stream_request(
+    identity: Any,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+) -> None:
+    if identity.can("Gateway.manage", method_type="manage"):
+        return
+    topic_set = set(topics)
+    assistant_scoped = (
+        correlation_id is not None
+        and (not topic_set or topic_set == {OrchestratorMethods.RESPONSE})
+        and (not categories or categories <= {"assistant"})
+        and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
+    )
+    if assistant_scoped and identity.can("Orchestrator.use", method_type="use"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "Gateway.manage is required for broad event streams; "
+            "Orchestrator.use may only subscribe to correlated assistant events"
+        ),
+    )
+
+
+def _event_matches_stream_request(
+    event: AuroraEventStreamEvent,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+) -> bool:
+    if topics and event.topic not in set(topics):
+        return False
+    if categories and event.category not in categories:
+        return False
+    if kinds and event.kind not in kinds and event.category not in kinds:
+        return False
+    return not (correlation_id and event.correlation_id != correlation_id)
+
+
+async def _stream_backfill_events(
+    bus: Any,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+    last_event_id: str | None,
+    replay_from: str | None,
+):
+    request = GatewayListEventsRequest(
+        topics=topics or None,
+        categories=list(categories) or None,
+        kinds=list(kinds) or None,
+        correlation_id=correlation_id,
+        last_event_id=last_event_id,
+        replay_from=replay_from,
+        limit=500,
+    )
+    try:
+        result = await bus.request(
+            GatewayMethods.LIST_EVENTS,
+            request,
+            timeout=2.0,
+            origin="internal",
+        )
+    except Exception as exc:
+        yield _degraded_event(f"bounded backfill unavailable: {exc}")
+        return
+    if not getattr(result, "ok", False):
+        yield _degraded_event(str(getattr(result, "error", None) or "bounded backfill unavailable"))
+        return
+    events = list(getattr(result.data, "events", []) or [])
+    for event in reversed(events):
+        yield event
+    if (last_event_id or replay_from) and not events:
+        yield _degraded_event(
+            "requested replay cursor is not present in the bounded Gateway event buffer"
+        )
+
+
+def _degraded_event(message: str) -> AuroraEventStreamEvent:
+    return AuroraEventStreamEvent(
+        event_id="stream-degraded",
+        topic=AuroraMethods.EVENT_STREAM,
+        kind="stream.degraded",
+        category="unknown",
+        action="backfill",
+        status="degraded",
+        severity="warning",
+        redacted_payload={
+            "code": "bounded_replay_unavailable",
+            "message": message,
+            "durable_replay": False,
+        },
+    )
+
+
+def _sse_payload(event: AuroraEventStreamEvent) -> str:
+    payload = event.model_dump(mode="json")
+    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    event_name = event.kind or event.category
+    return f"id: {event.event_id}\nevent: {event_name}\ndata: {data}\n\n"

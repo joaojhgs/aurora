@@ -1,600 +1,139 @@
-# Aurora Architecture
+# Aurora architecture
 
-This document provides an overview of Aurora's architecture, service structure, and design patterns.
+**Status:** Current source of truth
 
-## Overview
+Aurora is a privacy-first assistant runtime built from independently owned services connected by a typed message bus. It can run as one local process for development or as service containers/processes for production-style deployments. Frontends do not call Python service objects directly; they use the TypeScript SDK, Gateway, or Tauri-native transport boundaries.
 
-Aurora is a modular voice assistant built with a microservices architecture that can run in two modes:
-- **Threads Mode**: All services run in the same process (default, for development)
-- **Processes Mode**: Each service runs as a separate OS process (for production)
+## Runtime modes
 
-## Service Structure
+| Mode | Bus | Process model | Typical use |
+| --- | --- | --- | --- |
+| Threads mode | `LocalBus` | Supervisor starts services in one Python process. | Local development, tests, Tauri desktop sidecar, simple single-machine installs. |
+| Process mode | `BullMQBus` over Redis | Each service has a standalone entrypoint/container. | Docker/Tilt, production-style process isolation, distributed service development. |
 
-### Core Services
+The bus is the only inter-service communication mechanism. Services publish/request typed contract topics from `app/shared/contracts/models/` and exchange Pydantic models.
 
-Aurora consists of the following services:
+## High-level system map
 
-1. **ConfigService** (`app/services/config/`)
-   - Manages application configuration
-   - Provides config API for other services
-   - Handles config reload events
-
-2. **DBService** (`app/services/db/`)
-   - Database persistence and retrieval
-   - Message history management
-   - RAG (Retrieval-Augmented Generation) storage
-   - Cron job storage
-   - Mesh data sharing is policy-gated; see [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md)
-
-3. **OrchestratorService** (`app/services/orchestrator/`)
-   - LangGraph agent coordination
-   - LLM integration (OpenAI, HuggingFace, llama.cpp)
-   - Conversation management
-
-4. **TTSService** (`app/services/tts/`)
-   - Text-to-speech synthesis
-   - Audio output management
-
-5. **STT Services** (`app/services/stt_*/`)
-   - **STTCoordinatorService**: Coordinates STT operations
-   - **STTTranscriptionService**: Handles transcription
-   - **STTWakewordService**: Detects wake words
-
-6. **SchedulerService** (`app/services/scheduler/`)
-   - Scheduled task management
-   - Cron job execution
-
-7. **ToolingService** (`app/services/tooling/`)
-   - Tool management (core, plugin, MCP)
-   - Tool execution
-   - MCP (Model Context Protocol) integration
-
-8. **GatewayService** (`app/services/gateway/`)
-   - HTTP REST API gateway for all services
-   - Dynamic service discovery via message bus
-   - Automatic route generation from service contracts
-   - OpenAPI/Swagger documentation
-   - WebRTC peer authentication with DataChannel auth gate
-   - Pairing and login RPC methods (accessible by anonymous peers)
-   - Room auto-generation and encrypted MQTT presence
-   - P2P mesh networking for cross-instance service sharing
-   - See [Gateway Documentation](./GATEWAY.md) for details
-
-9. **Supervisor** (`app/services/supervisor.py`)
-   - Service lifecycle management
-   - Architecture mode selection
-   - Service startup/shutdown coordination
-   - Gateway lifecycle management
-
-### Service Directory Structure
-
-```
-app/
-├── shared/              # Shared code used by all services
-│   ├── config/          # Configuration interface
-│   ├── contracts/       # API contracts and models
-│   ├── messaging/       # Message bus initialization
-│   └── services/        # Base service abstraction
-├── services/            # Individual service implementations
-│   ├── config/
-│   ├── db/
-│   ├── orchestrator/
-│   ├── scheduler/
-│   ├── tts/
-│   ├── tooling/
-│   └── stt_*/
-└── helpers/             # Utility functions
+```text
+Frontend surfaces
+  ├─ React UI package (@aurora/ui)
+  ├─ Web app (apps/aurora-web)
+  ├─ Tauri desktop/mobile shell (apps/aurora-tauri)
+  └─ PyQt UIBridge fallback (app/ui)
+        │
+        ▼
+TypeScript SDK (@aurora/client)
+  ├─ HTTP Gateway transport
+  ├─ Tauri local/native transport
+  ├─ mock/test transports
+  └─ mesh bridge abstractions
+        │
+        ▼
+Gateway / Tauri bridge / local bus boundary
+        │
+        ▼
+Aurora service bus
+  ├─ ConfigService
+  ├─ AuthService
+  ├─ DBService
+  ├─ BackupService
+  ├─ ToolingService
+  ├─ SchedulerService
+  ├─ STT coordinator / wakeword / transcription services
+  ├─ TTSService
+  ├─ OrchestratorService
+  └─ GatewayService
 ```
 
-## Message Bus Architecture
+## Core services
 
-Aurora uses a message bus abstraction for inter-service communication:
+| Service | Path | Responsibility |
+| --- | --- | --- |
+| ConfigService | `app/services/config/` | Schema-backed configuration, defaults, hot reload, generated config models/keys. |
+| AuthService | `app/services/auth/` | Pairing, token/principal records, audit storage, auth/RBAC contract surfaces. |
+| DBService | `app/services/db/` | SQLite persistence, conversation/message data, RAG/vector storage, cron-job storage. |
+| BackupService | `app/services/backup/` | Admin backup manifests, verify/list, dry-run restore/rollback impact plans. |
+| ToolingService | `app/services/tooling/` | Built-in tools, plugin/MCP tool registration and execution. |
+| SchedulerService | `app/services/scheduler/` | Cron and one-shot scheduled jobs. |
+| STTCoordinatorService | `app/services/stt_coordinator/` | Speech session coordination, wakeword/transcription orchestration, ambient-mode coordination. |
+| STTWakewordService | `app/services/stt_wakeword/` | Wakeword detection. |
+| STTTranscriptionService | `app/services/stt_transcription/` | Speech-to-text transcription. |
+| TTSService | `app/services/tts/` | Text-to-speech generation and playback lifecycle events. |
+| OrchestratorService | `app/services/orchestrator/` | LangGraph/LangChain assistant orchestration, LLM provider coordination, tool calls. |
+| GatewayService | `app/services/gateway/` | FastAPI routes generated from contracts, SSE event stream, WebRTC/mesh, ACL and peer bridge. |
+| Supervisor | `app/services/supervisor.py` | Threads-mode service startup/shutdown and lifecycle ordering. |
 
-### Bus Implementations
+## Shared layers
 
-1. **LocalBus** (Threads Mode)
-   - In-process message passing
-   - Low latency
-   - Shared memory
+| Layer | Path | Purpose |
+| --- | --- | --- |
+| Contracts | `app/shared/contracts/` | Method decorators, contract registry, typed topic constants, IO models. |
+| Messaging | `app/messaging/`, `app/shared/messaging/` | LocalBus/BullMQBus runtime, envelopes, priorities, serialization. |
+| Config models | `app/shared/config/` | Generated Pydantic config models and `ConfigKeys`. |
+| Auth helpers | `app/shared/auth/` | Shared auth models/utilities. |
+| Mesh helpers | `app/shared/mesh/` | Shared mesh models and utilities. |
+| Base service | `app/shared/services/base_service.py` | Contract registration, bus subscription, service announce/depart, lifecycle hooks. |
 
-2. **BullMQBus** (Processes Mode)
-   - Redis-backed message queue
-   - Distributed communication
-   - Horizontal scalability
+## Contract-first communication
 
-### Message Types
+Services expose callable behavior with `@method_contract` and typed method constants. The Gateway discovers exposed contracts and generates HTTP routes. The TypeScript SDK and conformance checks prevent drift between backend contracts and frontend fixtures.
 
-- **Commands**: Point-to-point messages with guaranteed delivery
-- **Events**: Broadcast messages for pub/sub patterns
-- **Queries**: Request/response pattern with timeouts
+See:
 
-### Message Priority
+- [`MESSAGING_ARCHITECTURE.md`](MESSAGING_ARCHITECTURE.md)
+- [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md)
+- [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md)
 
-- **Interactive** (10): User interactions, highest priority
-- **System** (50): Background tasks, medium priority
-- **External** (80): External API requests, lowest priority
+## Gateway, Auth, and mesh
 
-### Service Communication Flow
+The Gateway owns external HTTP/SSE/WebRTC boundaries. Auth owns principals, token/pairing/audit contract state. Mesh features are policy-gated and require explicit sharing/routing rules instead of transparent data access.
 
-```mermaid
-graph TB
-    subgraph "Service A"
-        A[Service A Handler]
-    end
-    
-    subgraph "Message Bus"
-        MB[LocalBus / BullMQBus]
-        Q[Command Queue]
-        E[Event Queue]
-    end
-    
-    subgraph "Service B"
-        B[Service B Handler]
-    end
-    
-    A -->|Publish Command| MB
-    MB -->|Route| Q
-    Q -->|Deliver| B
-    B -->|Response| MB
-    MB -->|Reply| A
-    
-    A -.->|Publish Event| E
-    E -.->|Broadcast| B
-    E -.->|Broadcast| C[Service C]
-    
-    style MB fill:#e1f5ff
-    style Q fill:#fff4e1
-    style E fill:#ffe1f5
-```
+See:
 
-### Inter-Service Communication Patterns
+- [`GATEWAY.md`](GATEWAY.md)
+- [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md)
+- [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md)
+- [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md)
 
-```mermaid
-sequenceDiagram
-    participant A as Service A
-    participant Bus as Message Bus
-    participant B as Service B
-    
-    Note over A,B: Command Pattern (Request/Response)
-    A->>Bus: Publish Command (with reply_to)
-    Bus->>B: Deliver Command
-    B->>Bus: Publish Response (to reply_to)
-    Bus->>A: Deliver Response
-    
-    Note over A,B: Event Pattern (Pub/Sub)
-    A->>Bus: Publish Event
-    Bus->>B: Broadcast Event
-    Bus->>C: Broadcast Event (Service C)
-    
-    Note over A,B: Query Pattern (with Timeout)
-    A->>Bus: Request Query
-    Bus->>B: Deliver Query
-    B->>Bus: Response (within timeout)
-    Bus->>A: Return Result
-    alt Timeout
-        Bus->>A: Return Timeout Error
-    end
-```
+## Frontend and platform architecture
 
-## Contract Registry System
+The production UI model is SDK-first:
 
-Aurora uses a contract registry to define and expose service APIs:
+- React components in `packages/aurora-ui` consume normalized SDK state.
+- `apps/aurora-web` hosts the web shell.
+- `apps/aurora-tauri` hosts the Tauri 2 desktop/mobile shell and native command bridge.
+- Tauri desktop can run a supervised Python sidecar for local/offline mode, or use a remote Gateway in thin mode.
+- `app/ui/bridge_service.py` remains a PyQt fallback/reference, not the desired direction for new production screens.
 
-### Contract Definition
+See [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md) and [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md).
 
-Services define contracts using the `@method_contract` decorator:
+## Configuration source of truth
 
-```python
-@method_contract(
-    method_id="TTS.Request",
-    summary="Request TTS synthesis",
-    input_model=TTSRequest,
-    output_model=TTSResponse,
-    exposure="both"
-)
-async def synthesize(self, request: TTSRequest) -> TTSResponse:
-    # Implementation
-    pass
-```
+`app/services/config/config_schema.json` is the source of truth for structured configuration. Generated artifacts must stay in sync:
 
-### Contract Registration
+- `app/shared/config/models.py`
+- `app/shared/config/keys.py`
+- `app/services/config/config_defaults.json`
 
-Contracts are automatically registered when services inherit from `BaseService`:
-
-1. Service inherits from `BaseService`
-2. `BaseService.__init__` scans for `@method_contract` decorators
-3. Contracts are registered in the global registry
-4. Methods are auto-subscribed to message bus topics
-
-## Process vs Threads Mode
-
-### Threads Mode (Default)
-
-- **Architecture**: All services in one process
-- **Communication**: LocalBus (in-memory)
-- **Use Case**: Development, testing, single-machine deployments
-- **Benefits**: Low latency, simple setup, shared memory
-- **Limitations**: No horizontal scaling, single point of failure
-
-### Processes Mode
-
-- **Architecture**: Each service in separate OS process
-- **Communication**: BullMQBus (Redis)
-- **Use Case**: Production, distributed deployments
-- **Benefits**: Horizontal scaling, process isolation, fault tolerance
-- **Requirements**: Redis server
-
-### Mode Selection
-
-Set via environment variable or config:
+Run:
 
 ```bash
-export AURORA_ARCHITECTURE_MODE=processes
-export REDIS_URL=redis://localhost:6379
+make generate-config
+make check-config-generated
 ```
 
-Or in `config.json`:
+See [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md).
 
-```json
-{
-  "general": {
-    "architecture": {
-      "mode": "processes"
-    }
-  },
-  "messaging": {
-    "redis": {
-      "url": "redis://localhost:6379"
-    }
-  }
-}
-```
+## Deployment shape
 
-## Configuration Management
+| Deployment | Description | Docs |
+| --- | --- | --- |
+| Local threads | `uv run python main.py` starts the supervisor and in-process bus. | [`INSTALL.md`](INSTALL.md), [`UV_USAGE.md`](UV_USAGE.md) |
+| Docker process mode | Compose starts Redis and service containers; no supervisor container. | [`../README.process-mode.md`](../README.process-mode.md) |
+| Tilt process mode | Compose + Tilt development loop with optional hot reload and log controls. | [`TILT.md`](TILT.md) |
+| Tauri desktop | React/Tauri shell plus profile-specific sidecar. | [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) |
 
-### Config Service
+## Documentation boundaries
 
-The ConfigService provides a centralized configuration API:
-
-```python
-from app.shared.config.interface import ConfigAPI
-
-config_api = ConfigAPI()
-config = config_api.get_config()
-```
-
-### Config Reload
-
-Services subscribe to config change events and reload automatically:
-
-1. ConfigService publishes `Config.Changed` event
-2. Services receive event via message bus
-3. Services call `reload()` method with affected section
-4. Services update internal state
-
-### Config Structure
-
-Configuration is stored in `config.json`:
-
-```json
-{
-  "app": {
-    "name": "Aurora",
-    "version": "1.0.0"
-  },
-  "llm": {
-    "provider": "openai",
-    "model": "gpt-4"
-  },
-  "tts": {
-    "voice_model": "path/to/model"
-  }
-}
-```
-
-## Base Service Abstraction
-
-All services inherit from `BaseService`:
-
-### Features
-
-- **Bus Access**: Automatic bus initialization via singleton
-- **Lifecycle Management**: `start()`, `stop()`, `on_start()`, `on_stop()`
-- **Config Reload**: `reload()` method for config changes
-- **Contract Registration**: Automatic contract registration
-- **Auto-Subscription**: Methods auto-subscribe to message bus
-
-### Service Implementation Pattern
-
-```python
-from app.shared.services.base_service import BaseService
-
-class MyService(BaseService):
-    def __init__(self):
-        super().__init__(
-            module="MyService",
-            summary="My service description",
-            capabilities=["capability1", "capability2"]
-        )
-    
-    async def on_start(self):
-        # Service-specific startup
-        pass
-    
-    async def on_stop(self):
-        # Service-specific shutdown
-        pass
-    
-    async def reload(self, config_section: str | None = None):
-        # Handle config reload
-        pass
-```
-
-## Process Launcher
-
-The ProcessLauncher manages service processes in processes mode:
-
-### Features
-
-- Start/stop services as subprocesses
-- Process monitoring
-- Log collection
-- Statistics collection
-
-### Usage
-
-```python
-from app.shared.services.process_launcher import ProcessLauncher
-
-launcher = ProcessLauncher()
-launcher.start_service("ConfigService", "app.services.config")
-# ... later
-launcher.stop_all()
-```
-
-## Health Checks
-
-Services implement health check endpoints:
-
-### Health Check Response
-
-```python
-{
-    "status": "healthy" | "degraded" | "unhealthy",
-    "checks": {
-        "bus": "ok" | "error",
-        "config": "ok" | "error",
-        ...
-    },
-    "timestamp": "2025-01-XX...",
-    "service": "ServiceName"
-}
-```
-
-### Health Check Utility
-
-```python
-from app.shared.services.health import check_service_health
-
-health = await check_service_health("ConfigService")
-```
-
-## Docker Architecture
-
-Aurora services can be containerized:
-
-### Service Images
-
-Each service has its own Dockerfile:
-- `docker/services/Dockerfile.config`
-- `docker/services/Dockerfile.db`
-- `docker/services/Dockerfile.orchestrator`
-- etc.
-
-### Docker Compose
-
-Process mode can be run via Docker Compose:
-
-```bash
-docker-compose -f docker-compose.process.yml up
-```
-
-## Gateway Architecture
-
-The Gateway provides HTTP REST API access to all Aurora services. It dynamically discovers services and generates routes from service contracts.
-
-### Gateway Components
-
-```mermaid
-graph TB
-    subgraph "External Clients"
-        Client[HTTP Client]
-    end
-    
-    subgraph "Gateway Service"
-        FastAPI[FastAPI App]
-        Router[Route Generator]
-        Registry[Registry Aggregator]
-        Auth[Auth Middleware]
-    end
-    
-    subgraph "Message Bus"
-        Bus[LocalBus / BullMQBus]
-    end
-    
-    subgraph "Aurora Services"
-        Config[ConfigService]
-        Orchestrator[OrchestratorService]
-        TTS[TTSService]
-        Other[Other Services...]
-    end
-    
-    Client -->|HTTP Request| FastAPI
-    FastAPI -->|Validate| Auth
-    Auth -->|Route| Router
-    Router -->|Check Registry| Registry
-    Registry -->|Query| Bus
-    Router -->|Forward Request| Bus
-    Bus -->|Deliver| Config
-    Bus -->|Deliver| Orchestrator
-    Bus -->|Deliver| TTS
-    Bus -->|Deliver| Other
-    Config -->|Response| Bus
-    Orchestrator -->|Response| Bus
-    TTS -->|Response| Bus
-    Other -->|Response| Bus
-    Bus -->|Return| Router
-    Router -->|Format| FastAPI
-    FastAPI -->|HTTP Response| Client
-    
-    Config -.->|Announce| Bus
-    Orchestrator -.->|Announce| Bus
-    TTS -.->|Announce| Bus
-    Other -.->|Announce| Bus
-    Bus -.->|Service Discovery| Registry
-    
-    style FastAPI fill:#4a90e2
-    style Router fill:#50c878
-    style Registry fill:#ff6b6b
-    style Bus fill:#e1f5ff
-```
-
-### Gateway Request Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Gateway as Gateway API
-    participant Router as Route Generator
-    participant Registry as Registry Aggregator
-    participant Bus as Message Bus
-    participant Service as Target Service
-    
-    Client->>Gateway: POST /api/Service/Method
-    Gateway->>Router: Route Request
-    Router->>Registry: Check Service Available
-    Registry-->>Router: Service Status
-    
-    alt Service Available
-        Router->>Router: Validate Input Schema
-        Router->>Bus: Request(topic, payload)
-        Bus->>Service: Deliver Message
-        Service->>Service: Process Request
-        Service->>Bus: Publish Response
-        Bus->>Router: Return Result
-        
-        alt Success
-            Router->>Gateway: Return Data
-            Gateway->>Client: 200 OK + Response
-        else Error
-            Router->>Gateway: Return Error
-            Gateway->>Client: 500 Error + Message
-        end
-    else Service Unavailable
-        Router->>Gateway: Service Unavailable
-        Gateway->>Client: 503 Service Unavailable
-    end
-```
-
-### Supervisor and Gateway Lifecycle
-
-```mermaid
-graph TB
-    subgraph "Supervisor"
-        Sup[Supervisor]
-        Init[Initialize Bus]
-        Start[Start Services]
-        Gateway[Start Gateway]
-        Monitor[Monitor Services]
-    end
-    
-    subgraph "Service Startup"
-        S1[ConfigService]
-        S2[DBService]
-        S3[Other Services...]
-    end
-    
-    subgraph "Gateway Startup"
-        Reg[Registry Aggregator]
-        Gen[Route Generator]
-        API[FastAPI Server]
-    end
-    
-    subgraph "Message Bus"
-        Bus[LocalBus / BullMQBus]
-    end
-    
-    Sup -->|1. Initialize| Init
-    Init -->|2. Create| Bus
-    Sup -->|3. Start| Start
-    Start -->|4. Launch| S1
-    Start -->|4. Launch| S2
-    Start -->|4. Launch| S3
-    
-    S1 -->|5. Announce| Bus
-    S2 -->|5. Announce| Bus
-    S3 -->|5. Announce| Bus
-    
-    Sup -->|6. Start| Gateway
-    Gateway -->|7. Create| Reg
-    Gateway -->|8. Create| Gen
-    Gateway -->|9. Start| API
-    
-    Reg -->|10. Subscribe| Bus
-    Bus -->|11. Receive| Reg
-    Reg -->|12. Update| Gen
-    Gen -->|13. Generate| API
-    
-    Sup -->|14. Monitor| Monitor
-    Monitor -->|15. Health Checks| S1
-    Monitor -->|15. Health Checks| S2
-    Monitor -->|15. Health Checks| S3
-    
-    style Sup fill:#4a90e2
-    style Bus fill:#e1f5ff
-    style Reg fill:#ff6b6b
-    style Gen fill:#50c878
-    style API fill:#f39c12
-```
-
-### Service Discovery Protocol
-
-```mermaid
-sequenceDiagram
-    participant Service as New Service
-    participant Bus as Message Bus
-    participant Registry as Registry Aggregator
-    participant Router as Route Generator
-    participant Gateway as Gateway API
-    
-    Service->>Service: on_start()
-    Service->>Bus: Publish ServiceAnnouncement
-    Note over Service,Bus: Includes: module, version, methods, schemas
-    
-    Bus->>Registry: Deliver Announcement
-    Registry->>Registry: Update Registry
-    Registry->>Router: Notify Registry Changed
-    Router->>Router: Regenerate Routes
-    Router->>Gateway: Update FastAPI Routes
-    
-    Note over Service,Gateway: Service is now available via HTTP
-    
-    Service->>Service: on_stop()
-    Service->>Bus: Publish ServiceDeparture
-    Bus->>Registry: Deliver Departure
-    Registry->>Registry: Remove from Registry
-    Registry->>Router: Notify Registry Changed
-    Router->>Router: Mark Routes as Unavailable
-    Router->>Gateway: Update FastAPI Routes
-    
-    Note over Service,Gateway: Service no longer available
-```
-
-## Related Documentation
-
-- [GATEWAY.md](./GATEWAY.md): Complete gateway documentation
-- [MESSAGING_ARCHITECTURE.md](./MESSAGING_ARCHITECTURE.md): Detailed message bus documentation
-- [DATA_SHARING_POLICY.md](./DATA_SHARING_POLICY.md): Mesh DB/data sharing modes and per-domain ownership policy
-- [TESTING_PROCESS_MODE.md](./TESTING_PROCESS_MODE.md): Process mode testing guide
-- [README.process-mode.md](../README.process-mode.md): Process mode overview
-- [TECHSTACK.md](./TECHSTACK.md): Technology stack details
+Current docs are indexed in [`DOCS_INDEX.md`](DOCS_INDEX.md). Historical plans and generated investigation artifacts are archived under `docs/archive/` or `.omx/plans/` and are not current architecture guidance.
