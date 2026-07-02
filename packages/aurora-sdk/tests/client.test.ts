@@ -322,12 +322,49 @@ describe('AuroraClient', () => {
   })
 
   it('loads model runtime catalog and normalizes unsupported operations through AuroraClient', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const unsupportedOperation = (operation_type: 'import' | 'download' | 'benchmark') => (request: { method: string; path?: string | undefined; payload?: unknown }) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return {
+        operation_id: `model-${operation_type}-unsupported`,
+        operation_type,
+        status: 'unsupported',
+        provider_id: (request.payload as { provider_id?: string } | undefined)?.provider_id ?? null,
+        model_id: (request.payload as { model_id?: string } | undefined)?.model_id ?? null,
+        progress_percent: 0,
+        message: `Model ${operation_type} is not implemented by this backend contract slice; UI/SDK must keep the action disabled or degraded until a provider implements it.`,
+        reason_code: 'operation_not_supported',
+        started_at: '2026-06-19T00:00:00Z',
+        updated_at: '2026-06-19T00:00:00Z',
+        completed_at: '2026-06-19T00:00:00Z',
+        audit_event: `model_runtime.${operation_type}.unsupported`,
+        secrets_redacted: true
+      }
+    }
     const transport = new MockAuroraTransport()
-      .fail(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, 'unsupported_feature', 'benchmark backend is not enabled')
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return cloneFixture(modelRuntimeCatalogFixture)
+      })
+      .register(ORCHESTRATOR_MODEL_METHODS.getRuntime, (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          generated_at: modelRuntimeCatalogFixture.generated_at,
+          selected_provider_id: modelRuntimeCatalogFixture.selected_provider_id,
+          provider: cloneFixture(modelRuntimeCatalogFixture.providers[0]),
+          providers: cloneFixture(modelRuntimeCatalogFixture.providers),
+          secrets_redacted: true
+        }
+      })
+      .register(ORCHESTRATOR_MODEL_METHODS.importModel, unsupportedOperation('import'))
+      .register(ORCHESTRATOR_MODEL_METHODS.downloadModel, unsupportedOperation('download'))
+      .register(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, unsupportedOperation('benchmark'))
     const client = new AuroraClient({ transport })
 
     const catalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
     const runtime = await client.models.getRuntime()
+    const imported = await client.models.importModel({ provider_id: 'local:Orchestrator:llama-cpp', model_id: 'private.gguf', dry_run: true })
+    const downloaded = await client.models.downloadModel({ provider_id: 'local:Orchestrator:llama-cpp', model_id: 'private.gguf', dry_run: true })
     const benchmark = await client.models.benchmarkModel({ provider_id: 'native:mobile-local-light', dry_run: true })
 
     expect(catalog).toEqual(modelRuntimeCatalogFixture)
@@ -340,11 +377,20 @@ describe('AuroraClient', () => {
       ])
     )
     expect(runtime.provider?.provider_id).toBe(catalog.selected_provider_id)
-    expect(benchmark.ok).toBe(false)
-    if (!benchmark.ok) {
-      expect(benchmark.error.code).toBe('unsupported_feature')
-      expect(benchmark.audit.busTopic).toBe(ORCHESTRATOR_MODEL_METHODS.benchmarkModel)
+    for (const result of [imported, downloaded, benchmark]) {
+      expect(result.ok).toBe(true)
+      expect(result.ok && result.data.status).toBe('unsupported')
+      expect(result.ok && result.data.reason_code).toBe('operation_not_supported')
+      expect(result.ok && result.data.message).toContain('UI/SDK must keep the action disabled or degraded')
+      expect(result.ok && result.data.secrets_redacted).toBe(true)
     }
+    expect(calls.map((call) => [call.method, call.path])).toEqual([
+      [ORCHESTRATOR_MODEL_METHODS.getCatalog, '/api/Orchestrator/GetModelCatalog'],
+      [ORCHESTRATOR_MODEL_METHODS.getRuntime, '/api/Orchestrator/GetModelRuntime'],
+      [ORCHESTRATOR_MODEL_METHODS.importModel, '/api/Orchestrator/ImportModel'],
+      [ORCHESTRATOR_MODEL_METHODS.downloadModel, '/api/Orchestrator/DownloadModel'],
+      [ORCHESTRATOR_MODEL_METHODS.benchmarkModel, '/api/Orchestrator/BenchmarkModel']
+    ])
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -2292,7 +2338,17 @@ describe('AuroraClient', () => {
   })
 
   it('loads config metadata, diff, reload impact, and history through the config namespace', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const record = <T,>(data: T) => (request: { method: string; path?: string | undefined; payload?: unknown }) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return cloneFixture(data)
+    }
+    const transport = new MockAuroraTransport()
+      .register('Config.GetSchemaMetadata', record(defaultMockAuroraFixtures.configSchemaMetadata))
+      .register('Config.PreviewDiff', record(defaultMockAuroraFixtures.configDiffPreview))
+      .register('Config.PreviewReloadImpact', record(defaultMockAuroraFixtures.configReloadImpact))
+      .register('Config.GetVersionHistory', record(defaultMockAuroraFixtures.configVersionHistory))
+    const client = new AuroraClient({ transport })
 
     const schema = await client.config.getSchemaMetadata({ include_values: true })
     const diff = await client.config.previewDiff({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
@@ -2304,6 +2360,12 @@ describe('AuroraClient', () => {
     expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
     expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
     expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+    expect(calls.map((call) => [call.method, call.path])).toEqual([
+      ['Config.GetSchemaMetadata', '/api/Config/GetSchemaMetadata'],
+      ['Config.PreviewDiff', '/api/Config/PreviewDiff'],
+      ['Config.PreviewReloadImpact', '/api/Config/PreviewReloadImpact'],
+      ['Config.GetVersionHistory', '/api/Config/GetVersionHistory']
+    ])
   })
 
   it('applies config changes and rollback through AdminAction headers', async () => {

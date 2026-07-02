@@ -119,23 +119,33 @@ async def test_model_catalog_reports_configured_providers_and_redacts_secrets(tm
 async def test_model_runtime_operations_are_explicitly_unsupported_and_queryable():
     service = OrchestratorService()
 
-    response = await service.import_model(
-        ModelRuntimeOperationRequest(
-            provider_id="llama_cpp",
-            model_id="private-model.gguf",
-            source_uri="https://example.invalid/private-model.gguf",
+    operations = [
+        ("import", service.import_model),
+        ("download", service.download_model),
+        ("benchmark", service.benchmark_model),
+    ]
+
+    for operation_type, handler in operations:
+        response = await handler(
+            ModelRuntimeOperationRequest(
+                provider_id="llama_cpp",
+                model_id="private-model.gguf",
+                source_uri="https://example.invalid/private-model.gguf",
+                dry_run=True,
+            )
         )
-    )
 
-    assert response.status == "unsupported"
-    assert response.reason_code == "operation_not_supported"
-    assert response.audit_event == "model_runtime.import.unsupported"
-    assert response.secrets_redacted is True
+        assert response.operation_type == operation_type
+        assert response.status == "unsupported"
+        assert response.reason_code == "operation_not_supported"
+        assert response.audit_event == f"model_runtime.{operation_type}.unsupported"
+        assert "UI/SDK must keep the action disabled or degraded" in response.message
+        assert response.secrets_redacted is True
 
-    lookup = await service.get_model_operation(
-        ModelRuntimeOperationStatusRequest(operation_id=response.operation_id)
-    )
-    assert lookup == response
+        lookup = await service.get_model_operation(
+            ModelRuntimeOperationStatusRequest(operation_id=response.operation_id)
+        )
+        assert lookup == response
 
     missing = await service.get_model_operation(
         ModelRuntimeOperationStatusRequest(operation_id="missing")
