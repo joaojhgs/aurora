@@ -69,6 +69,35 @@ export interface ProductionSurfaceContract {
   coverage: string[]
 }
 
+
+export const productionGlobalMockReferences = [
+  'components/aurora/app-shell.tsx',
+  'components/aurora/page-header.tsx',
+  'components/aurora/status-badges.tsx'
+] as const
+
+export const requiredProductionMockReferenceFiles = [
+  ...productionGlobalMockReferences,
+  'components/aurora/assistant/assistant-view.tsx',
+  'components/aurora/assistant/route-sheet.tsx',
+  'components/aurora/assistant/tool-call-card.tsx',
+  'components/aurora/mesh/mesh-view.tsx',
+  'components/aurora/models/models-view.tsx',
+  'components/aurora/admin/overview.tsx',
+  'components/aurora/admin/services-view.tsx',
+  'components/aurora/admin/rbac-view.tsx',
+  'components/aurora/admin/tokens-view.tsx',
+  'components/aurora/admin/devices-view.tsx',
+  'components/aurora/admin/config-view.tsx',
+  'components/aurora/admin/audit-view.tsx',
+  'components/aurora/admin/secondary-surface.tsx',
+  'app/(cockpit)/memory/page.tsx',
+  'app/(cockpit)/tools/page.tsx',
+  'components/aurora/diagnostics/diagnostics-view.tsx',
+  'components/aurora/onboarding/onboarding-view.tsx',
+  'components/aurora/settings/settings-permissions-view.tsx'
+] as const
+
 export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   {
     id: 'assistant-route-sheet',

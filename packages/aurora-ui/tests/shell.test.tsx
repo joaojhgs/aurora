@@ -107,6 +107,8 @@ import {
   errorShellSnapshot,
   productionSurfaceContracts,
   productionRouteOracles,
+  productionGlobalMockReferences,
+  requiredProductionMockReferenceFiles,
   snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
@@ -265,6 +267,31 @@ describe('Aurora production shell', () => {
         `${surface.id} descriptor or explicit gated/degraded evidence`
       ).toBe(true)
     }
+  })
+
+  it('locks the original mock reference corpus and shell structure as production UX evidence', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const mockRoot = join(repoRoot, 'modules/ui-mock-reference')
+    const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
+    const surfaceMockReferences = new Set(productionSurfaceContracts.flatMap((surface) => surface.mockReferenceFiles))
+
+    for (const file of requiredProductionMockReferenceFiles) {
+      expect(existsSync(join(mockRoot, file)), `${file} exists in modules/ui-mock-reference`).toBe(true)
+    }
+    for (const file of requiredProductionMockReferenceFiles) {
+      expect(
+        surfaceMockReferences.has(file) || productionGlobalMockReferences.includes(file as typeof productionGlobalMockReferences[number]),
+        `${file} is bound to a production surface or global shell reference`
+      ).toBe(true)
+    }
+
+    const shellSource = readFileSync(join(uiSrcRoot, 'shell.tsx'), 'utf8')
+    expect(shellSource).toContain('Primary navigation')
+    expect(shellSource).toContain('Mobile navigation sheet')
+    expect(shellSource).toContain('Mobile navigation')
+    expect(shellSource).toContain('Route')
+    expect(shellSource).toContain('Privacy')
+    expect(shellSource).toContain('Health')
   })
 
   it('keeps mock-driven interaction anchors in production component source', () => {

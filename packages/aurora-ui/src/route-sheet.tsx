@@ -315,7 +315,7 @@ function RoutePreviewGrid({ evaluation, primaryReason }: { evaluation: RoutePoli
       <div><dt>Privacy class</dt><dd>{preview.privacyClass}</dd></div>
       <div><dt>Payload</dt><dd><code>{stringifyPreview(preview.payloadPreview)}</code></dd></div>
       <div><dt>Policy reason</dt><dd>{primaryReason}</dd></div>
-      <div><dt>Audit</dt><dd>{preview.auditReceiptTarget ?? 'audit placeholder pending backend receipt'}</dd></div>
+      <div><dt>Audit</dt><dd>{preview.auditReceiptTarget ?? 'audit receipt pending backend evidence'}</dd></div>
       <div><dt>Secrets</dt><dd>{preview.secretsRedacted ? 'redacted by backend/SDK evidence' : 'redaction not reported'}</dd></div>
     </dl>
   )
