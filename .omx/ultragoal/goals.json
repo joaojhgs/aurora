@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:28:34.017Z",
+  "updatedAt": "2026-07-02T09:29:20.265Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -743,10 +743,13 @@
       "id": "G062-add-a-machine-readable-route-product",
       "title": "Add a machine-readable route production checklist fixture if useful,...",
       "objective": "Add a machine-readable route production checklist fixture if useful, derived from `production-surface-contracts.ts`.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:29:20.265Z",
+      "startedAt": "2026-07-02T09:28:38.577Z",
+      "completedAt": "2026-07-02T09:29:20.265Z",
+      "evidence": "No separate fixture was useful because packages/aurora-ui/src/production-surface-contracts.ts already provides the machine-readable production route/surface checklist via productionSurfaceContracts, productionRouteOracles, mockReferenceFiles, stateCoverage, truthSources, fixturePolicy, degradedState, and coverage fields. Focused tests consume this contract directly and verify surface docs, mock references, route oracles, component files, required states, fixture policy, AdminAction truth sources, and backend/degraded evidence. Verified Python field presence check and pnpm --filter @aurora/ui test -- -t 'documents every production surface|mock reference|route oracles' (2 passed; @aurora/client build passed as test prebuild)."
     },
     {
       "id": "G063-design-md-exists-and-cites-reviewed",
