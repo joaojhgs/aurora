@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:40:46.440Z",
+  "updatedAt": "2026-07-02T14:41:21.415Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1627,10 +1627,12 @@
       "id": "G141-desktop-local-path-can-start-via-tau",
       "title": "Desktop local path can start via `tauri dev` or packaged sidecar.",
       "objective": "Desktop local path can start via `tauri dev` or packaged sidecar.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:41:21.415Z",
+      "completedAt": "2026-07-02T14:41:21.415Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui exec vitest run --environment node src/tauri-dev-bootstrap.test.ts src/ui-service-boundary.test.ts src/ci-native-evidence.test.ts"
     },
     {
       "id": "G142-mobile-paths-do-not-claim-unavailabl",
