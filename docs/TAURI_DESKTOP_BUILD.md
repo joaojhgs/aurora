@@ -9,7 +9,7 @@ The packaged sidecar is now **profiled**. The default profile is intentionally s
 
 ## Development bootstrap
 
-Use the package Tauri command for local desktop development:
+Use the package Tauri command for local desktop development. This command is the real local stack path; browser-only mock/demo fixtures are degraded development fallbacks and must not be used as proof that desktop-local sidecar behavior works:
 
 ```bash
 pnpm --filter @aurora/tauri-ui tauri dev
