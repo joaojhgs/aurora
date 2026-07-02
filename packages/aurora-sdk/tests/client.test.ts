@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CONFIG_METHODS } from '../src/descriptors.js'
 
 import {
   AuroraClient,
@@ -2270,6 +2271,68 @@ describe('AuroraClient', () => {
         }
       })
     )
+  })
+
+  it('selects a model provider by writing orchestrator provider config through Config.Set AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> | undefined }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string> | undefined) => {
+      calls.push({ method, payload, headers })
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual({
+          method_id: CONFIG_METHODS.set,
+          payload: {
+            key_path: 'services.orchestrator.llm.provider',
+            value: 'llama_cpp'
+          },
+          affected_resources: ['services.orchestrator.llm.provider']
+        })
+        return adminDraftFixture(CONFIG_METHODS.set)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(expect.objectContaining({
+          action_id: `aa-${CONFIG_METHODS.set.replace('.', '-')}`,
+          reason: 'Select local executable provider',
+          reauth_confirmed: true
+        }))
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register(CONFIG_METHODS.set, (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, previous_value: 'openai' }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.config.applyChange({
+      change: {
+        key_path: 'services.orchestrator.llm.provider',
+        value: 'llama_cpp'
+      },
+      reason: 'Select local executable provider',
+      reauthConfirmed: true
+    })
+
+    expect(result.data.success).toBe(true)
+    expect(calls.map((call) => call.method)).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      CONFIG_METHODS.set
+    ])
+    expect(calls.at(-1)).toEqual(expect.objectContaining({
+      method: CONFIG_METHODS.set,
+      payload: {
+        key_path: 'services.orchestrator.llm.provider',
+        value: 'llama_cpp'
+      },
+      headers: {
+        'X-Aurora-AdminAction-Id': 'aa-Config-Set',
+        'X-Aurora-AdminAction-Token': 'token-Config-Set',
+        'X-Aurora-AdminAction-Digest': 'digest-Config-Set'
+      }
+    }))
   })
 
   it('provides UI-lane helpers for route explanation, AdminAction aliasing, local cancel, and stable error states', async () => {

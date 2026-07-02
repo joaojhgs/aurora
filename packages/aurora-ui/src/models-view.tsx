@@ -116,6 +116,8 @@ export function ModelsView({
     initialError ? 'error' : initialCatalog ? 'ready' : 'loading'
   )
   const [error, setError] = useState<string | null>(initialError)
+  const [selectingProviderId, setSelectingProviderId] = useState<string | null>(null)
+  const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (initialCatalog || initialError) return
@@ -150,6 +152,31 @@ export function ModelsView({
     [catalog, graph, nativeManifest, loadState, error]
   )
 
+  async function selectProvider(provider: ModelProviderViewModel) {
+    if (!provider.canSelect || !provider.selectConfigValue || selectingProviderId) return
+    setSelectingProviderId(provider.id)
+    setSelectionMessage(null)
+    try {
+      const result = await client.config.applyChange({
+        change: {
+          key_path: 'services.orchestrator.llm.provider',
+          value: provider.selectConfigValue
+        },
+        reason: `Select model provider ${provider.name} from Aurora Models runtime`,
+        reauthConfirmed: true
+      })
+      if (!result.data.success) throw new Error(result.data.error ?? 'Config.Set did not accept the provider selection')
+      const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
+      setCatalog(nextCatalog)
+      setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
+      setSelectionMessage(`Provider selection applied through Config.Set AdminAction. Audit receipt: ${result.confirmation.audit_receipt}`)
+    } catch (nextError) {
+      setSelectionMessage(`Provider selection failed: ${modelErrorMessage(nextError)}`)
+    } finally {
+      setSelectingProviderId(null)
+    }
+  }
+
   return (
     <section className="aui-models" aria-labelledby="aui-models-title" data-state={model.loadState}>
       <header className="aui-models-header">
@@ -177,6 +204,12 @@ export function ModelsView({
       {model.loadState === 'empty' ? (
         <ModelNotice icon="empty" message="No model runtime providers were returned by the backend catalog." />
       ) : null}
+      {selectionMessage ? (
+        <p className="aui-model-notice" role={selectionMessage.startsWith('Provider selection failed') ? 'alert' : 'status'}>
+          <Route size={16} aria-hidden="true" />
+          <span>{selectionMessage}</span>
+        </p>
+      ) : null}
 
       {model.providers.length > 0 ? (
         <>
@@ -184,7 +217,12 @@ export function ModelsView({
           <ModelRuntimeCategories rows={model.categoryRows} />
           <div className="aui-model-grid">
             {model.providers.map((provider) => (
-              <ModelProviderCard key={provider.id} provider={provider} />
+              <ModelProviderCard
+                key={provider.id}
+                provider={provider}
+                selecting={selectingProviderId === provider.id}
+                onSelect={selectProvider}
+              />
             ))}
           </div>
           <ModelRoutePolicyPanel providers={model.providers} />
@@ -250,8 +288,17 @@ function isMeshOrRemoteProvider(provider: ModelProviderViewModel): boolean {
   return provider.providerType === 'mesh' || provider.providerType === 'cloud' || provider.providerType === 'remote'
 }
 
-function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
+function ModelProviderCard({
+  provider,
+  selecting = false,
+  onSelect
+}: {
+  provider: ModelProviderViewModel
+  selecting?: boolean
+  onSelect?: (provider: ModelProviderViewModel) => void
+}) {
   const Icon = provider.providerType.includes('mobile') ? Smartphone : Cpu
+  const selectLabel = provider.selected ? 'Selected' : selecting ? `Selecting ${provider.name}` : `Select ${provider.name}`
   return (
     <article className={`aui-model-card aui-model-card-${provider.availability}`}>
       <header>
@@ -277,7 +324,13 @@ function ModelProviderCard({ provider }: { provider: ModelProviderViewModel }) {
         {provider.capabilities.map((capability) => <EvidenceBadge key={capability} label={capability} />)}
       </div>
       <div className="aui-model-actions">
-        <ModelAction icon="route" label={provider.selected ? 'Selected' : 'Select'} enabled={provider.canSelect && !provider.selected} reason={provider.selectReason} />
+        <ModelAction
+          icon="route"
+          label={selectLabel}
+          enabled={provider.canSelect && !provider.selected && !selecting}
+          reason={provider.selectReason}
+          onClick={provider.canSelect && onSelect ? () => { onSelect(provider) } : undefined}
+        />
         <ModelAction icon="download" label="Import" enabled={provider.canImport} reason={provider.importReason} />
         <ModelAction icon="download" label="Download" enabled={provider.canDownload} reason={provider.downloadReason} />
         <ModelAction icon="benchmark" label="Benchmark" enabled={provider.canBenchmark} reason={provider.benchmarkReason} />
@@ -492,10 +545,22 @@ function ModelProviderTable({ providers }: { providers: ModelProviderViewModel[]
   )
 }
 
-function ModelAction({ icon, label, enabled, reason }: { icon: 'route' | 'download' | 'benchmark'; label: string; enabled: boolean; reason: string }) {
+function ModelAction({
+  icon,
+  label,
+  enabled,
+  reason,
+  onClick
+}: {
+  icon: 'route' | 'download' | 'benchmark'
+  label: string
+  enabled: boolean
+  reason: string
+  onClick?: (() => void) | undefined
+}) {
   const Icon = icon === 'route' ? Route : icon === 'benchmark' ? Gauge : Download
   return (
-    <button type="button" disabled={!enabled} title={reason} aria-label={`${label}: ${reason}`}>
+    <button type="button" disabled={!enabled} title={reason} aria-label={`${label}: ${reason}`} onClick={onClick}>
       <Icon size={15} aria-hidden="true" />
       <span>{label}</span>
     </button>

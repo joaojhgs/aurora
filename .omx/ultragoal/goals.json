@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:08:38.326Z",
+  "updatedAt": "2026-07-02T14:12:17.645Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1550,10 +1550,12 @@
       "id": "G134-selection-writes-through-a-real-conf",
       "title": "Selection writes through a real config/admin flow or remains disabled...",
       "objective": "Selection writes through a real config/admin flow or remains disabled with precise repair task.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:12:17.645Z",
+      "completedAt": "2026-07-02T14:12:17.645Z",
+      "evidence": "pnpm --filter @aurora/client typecheck; pnpm --filter @aurora/client exec vitest run --environment node tests/client.test.ts -t \"selects a model provider\"; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t \"model runtime\"; git diff --check"
     },
     {
       "id": "G135-e2e-covers-catalog-load-provider-sel",

@@ -858,7 +858,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('secrets redacted')
     expect(markup).toContain('AdminAction model import contract is not active')
     expect(markup).toContain('Benchmark action stays disabled')
-    expect(markup).toContain('Select: Only local executable providers can be selected from this cockpit')
+    expect(markup).toContain('Select studio-gpu peer: Only local executable providers can be selected from this cockpit')
     expect(markup).toContain('local executable provider changes use Config.Set through AdminAction')
     expect(markup).toContain('backend_model_catalog_and_device_model_proof_required')
     expect(markup).toContain('android-native-local-light-adapter')
