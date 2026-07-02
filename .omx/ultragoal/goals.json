@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:27:19.494Z",
+  "updatedAt": "2026-07-02T09:28:34.017Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -731,10 +731,13 @@
       "id": "G061-map-each-of-the-22-route-ids-to",
       "title": "Map each of the 22 route IDs to:",
       "objective": "Map each of the 22 route IDs to:\nproduct purpose;\nmock reference source;\nreal backend truth source;\ndesktop/web/mobile behavior;\nkey controls/landmarks;\nempty/loading/error/offline states;\npermission/AdminAction behavior;\nrequired E2E checks.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:28:34.017Z",
+      "startedAt": "2026-07-02T09:27:24.260Z",
+      "completedAt": "2026-07-02T09:28:34.017Z",
+      "evidence": "DESIGN.md now includes a Detailed route design map with all 22 route IDs mapped to product purpose, mock reference source, real backend truth source, desktop/web/mobile behavior, key controls/landmarks, empty/loading/error/offline states, permission/AdminAction behavior, and required E2E checks. Verified with a Python route-row/required-column coverage check and uv run python scripts/check_docs.py (58 markdown files scanned, passed)."
     },
     {
       "id": "G062-add-a-machine-readable-route-product",
