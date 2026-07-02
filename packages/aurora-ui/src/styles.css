@@ -37,6 +37,8 @@ button, input, select, textarea { font: inherit; }
 .aui-nav a { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto auto; gap: .55rem; align-items: center; min-height: 2.25rem; padding: .45rem .55rem; border-radius: .45rem; color: var(--aui-muted); font-size: .9rem; }
 .aui-nav a:hover, .aui-nav a.active { background: var(--aui-surface-2); color: var(--aui-ink); }
 .aui-nav a[aria-disabled="true"] { opacity: .72; }
+.aui-nav-status-chip { justify-self: end; min-width: 0; }
+.aui-nav-status-chip .aui-badge { max-width: 6.8rem; overflow: hidden; text-overflow: ellipsis; }
 .aui-status-dot { width: .5rem; height: .5rem; border-radius: 999px; background: var(--aui-muted); }
 .aui-dot-available-local, .aui-dot-available-remote { background: var(--aui-success); }
 .aui-dot-pending, .aui-dot-degraded, .aui-dot-offline { background: var(--aui-warning); }
@@ -62,6 +64,11 @@ button, input, select, textarea { font: inherit; }
 .aui-activity dt, .aui-route-card dt { color: var(--aui-muted); font-size: .75rem; }
 .aui-activity dd, .aui-route-card dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .aui-mobile-tabs { display: none; }
+.aui-quick-diagnostics { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: center; margin: .25rem .75rem .75rem; padding: .7rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-info) 7%, var(--aui-surface)); color: var(--aui-ink); }
+.aui-quick-diagnostics:hover { border-color: color-mix(in srgb, var(--aui-info) 35%, var(--aui-border)); }
+.aui-quick-diagnostics strong, .aui-quick-diagnostics small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.aui-quick-diagnostics small { margin-top: .15rem; color: var(--aui-muted); font-size: .76rem; }
+.aui-quick-diagnostics-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; max-width: 8.5rem; }
 .aui-badge { display: inline-flex; align-items: center; min-height: 1.55rem; max-width: 100%; padding: .18rem .5rem; border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface); color: var(--aui-muted); font-size: .75rem; font-weight: 650; white-space: nowrap; }
 .aui-badge-available-local, .aui-badge-available-remote { border-color: color-mix(in srgb, var(--aui-success) 30%, white); color: var(--aui-success); }
 .aui-badge-pending, .aui-badge-degraded, .aui-badge-loading, .aui-badge-offline { border-color: color-mix(in srgb, var(--aui-warning) 35%, white); color: var(--aui-warning); }

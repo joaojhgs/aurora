@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:04:35.176Z",
+  "updatedAt": "2026-07-02T11:08:54.055Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1121,10 +1121,12 @@
       "id": "G095-implement-mock-inspired-desktop-side",
       "title": "Implement mock-inspired desktop sidebar with grouped nav, active rout...",
       "objective": "Implement mock-inspired desktop sidebar with grouped nav, active route state, route status chips, local/thin mode badge, quick diagnostics indicator.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:08:54.055Z",
+      "completedAt": "2026-07-02T11:08:54.055Z",
+      "evidence": "Upgraded AppShell desktop sidebar to render grouped nav route status chips via StatusBadge instead of dot-only state, added a quick diagnostics sidebar indicator linking to /diagnostics with blocked-route count plus local/thin/demo mode badge, and locked shell source/rendered markup plus deterministic visual baselines. Verified: pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/ui test -- -t 'shell structure|accessible navigation'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G096-implement-mobile-sheet-navigation-an",

@@ -20,6 +20,7 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
       <aside className="aui-sidebar" aria-label="Primary navigation">
         <BrandHeader snapshot={snapshot} />
         <ShellNavigation activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate } : {})} />
+        <QuickDiagnosticsIndicator snapshot={snapshot} {...(onNavigate ? { onNavigate } : {})} />
         <div className="aui-sidebar-card">
           <span className="aui-avatar">AD</span>
           <div>
@@ -110,7 +111,11 @@ export function ShellNavigation({
                 <item.icon size={17} aria-hidden />
                 <span>{item.label}</span>
                 {item.adminGated ? <Lock size={13} aria-label="Admin gated" /> : null}
-                {route ? <StatusDot state={route.state} /> : null}
+                {route ? (
+                  <span className="aui-nav-status-chip" aria-label={`${item.label} route state`}>
+                    <StatusBadge state={route.state} />
+                  </span>
+                ) : null}
               </a>
             )
           })}
@@ -259,8 +264,35 @@ function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
   )
 }
 
-function StatusDot({ state }: { state: string }) {
-  return <span className={`aui-status-dot aui-dot-${state}`} aria-hidden />
+function QuickDiagnosticsIndicator({
+  snapshot,
+  onNavigate
+}: {
+  snapshot: AuroraShellSnapshot
+  onNavigate?: (href: string) => void
+}) {
+  const state = snapshot.loadState === 'error'
+    ? 'denied'
+    : snapshot.blockedCount > 0
+      ? 'degraded'
+      : 'available-local'
+  return (
+    <a
+      className="aui-quick-diagnostics"
+      href="/diagnostics"
+      aria-label="Quick diagnostics"
+      onClick={(event) => handleShellNavigation(event, '/diagnostics', onNavigate)}
+    >
+      <span>
+        <strong>Diagnostics</strong>
+        <small>{snapshot.blockedCount} blocked / {snapshot.routeCount} routes</small>
+      </span>
+      <span className="aui-quick-diagnostics-badges">
+        <StatusBadge state={state} />
+        <EvidenceBadge label={shellModeLabel(snapshot.transportKind)} />
+      </span>
+    </a>
+  )
 }
 
 function shellModeLabel(transportKind: string): string {

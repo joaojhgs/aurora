@@ -380,6 +380,8 @@ describe('Aurora production shell', () => {
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
     expect(shellSource).toContain('Health')
+    expect(shellSource).toContain('aui-nav-status-chip')
+    expect(shellSource).toContain('Quick diagnostics')
   })
 
   it('keeps mock-driven interaction anchors in production component source', () => {
@@ -439,6 +441,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Mobile navigation sheet')
     expect(markup).toContain('Mobile navigation')
     expect(markup).toContain('aria-current="page"')
+    expect(markup).toContain('aria-label="Quick diagnostics"')
+    expect(markup).toContain('aui-quick-diagnostics')
+    expect(markup).toContain('blocked /')
+    expect(markup).toContain('aui-nav-status-chip')
     expect(markup).toContain('aria-label="Mode"')
     expect(markup).toContain('aria-label="Route"')
     expect(markup).toContain('aria-label="Privacy"')
