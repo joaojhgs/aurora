@@ -49,6 +49,19 @@ The SDK preserves method IDs, bus topics, selector/audit metadata, redaction inf
 
 Default bundles are unsigned and thin unless an explicit profile/signing configuration is provided. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) and `apps/aurora-tauri/README.md`.
 
+## Platform capability truth matrix
+
+UI copy and controls must report capabilities from SDK/native evidence, not from the presence of a route or shell alone.
+
+| Platform mode | Supported evidence path | Native/local claims allowed | Required limit copy |
+| --- | --- | --- | --- |
+| Web thin | HTTP/Gateway SDK transport selected with `VITE_AURORA_GATEWAY_URL`. | Gateway-backed assistant/admin/runtime state, browser-supported permissions only. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims. |
+| Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev` or packaged local build starts/probes the Rust-supervised Python sidecar and loopback Gateway. | Local sidecar status, secure storage, Gateway health, and native desktop command evidence. | Dev uses direct Python sidecar defaults; packaged builds stage profiled sidecar executables separately. |
+| Desktop thin | Tauri shell uses Gateway HTTP transport against an operator-managed endpoint. | Tauri shell capability evidence plus remote Gateway data. | No local Python sidecar readiness claim unless local mode is explicitly enabled. |
+| Linux CI | Vitest/Playwright route gates, `tauri:smoke:linux`, `cargo check`, `dev:smoke` under Xvfb. | Linux desktop smoke and policy baseline evidence. | Linux cannot satisfy iOS build/preflight evidence and does not replace Android emulator/device evidence. |
+| Android | Tauri generated Android project, Android native plugin payloads, emulator/device smoke, Android preflight reports. | Assistant role, fallback entrypoints, Android Keystore, biometric/admin-unlock states only from native manifest payloads. | PR preflight can be unsigned; release readiness requires signing inputs and signed AAB/Play evidence. |
+| iOS | iOS manifest policy on any platform; Tauri iOS init/build, simulator/device, and `ios:preflight` on macOS/Xcode. | Siri/Shortcuts/App Intents, share/deep-link/widget/file-association evidence after native targets exist. | Aurora must not claim default iOS system-assistant ownership. Full build/preflight requires macOS/Xcode. |
+
 ## Tauri security posture
 
 The Tauri shell grants only Aurora-owned command/capability surfaces needed by the SDK. Broad shell, filesystem, process-spawn, notification, dialog, clipboard, and updater capabilities remain denied unless explicitly documented and tested.
@@ -79,4 +92,8 @@ pnpm --filter @aurora/ui test
 pnpm --filter @aurora/ui test:accessibility
 pnpm --filter @aurora/tauri-ui test
 pnpm --filter @aurora/tauri-ui typecheck
+pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+pnpm --filter @aurora/tauri-ui ios:policy
 ```
+
+Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run iOS build/preflight commands only on macOS with Xcode.

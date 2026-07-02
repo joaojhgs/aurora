@@ -200,7 +200,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
       <header className="aui-memory-header">
         <div>
           <p className="aui-kicker">Memory</p>
-          <h1 id="memory-title">History and RAG provenance</h1>
+          <h1 id="memory-title">{'Memory & Knowledge'}</h1>
           <p>{statusCopy}</p>
         </div>
         <div className="aui-assistant-badges" aria-label="Memory backend evidence">
@@ -228,7 +228,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
         {model.namespaces.length === 0 ? (
           <div className="aui-memory-empty">
             <strong>No collections reported</strong>
-            <span>DB.RAGListNamespaces returned no memory or RAG namespaces for this route.</span>
+            <span>DB.RAGListNamespaces returned no memory or RAG namespaces for this route. Aurora stores memory only after conversation history, approved tool/context ingestion, or imported knowledge snapshots are enabled by policy.</span>
           </div>
         ) : (
           <div className="aui-memory-collection-grid">
@@ -333,7 +333,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
           {model.conversations.length === 0 ? (
             <div className="aui-memory-empty">
               <strong>No conversations reported</strong>
-              <span>History remains empty until DB.GetMessages returns backend rows.</span>
+              <span>History remains empty until DB.GetMessages returns backend rows from a retained assistant conversation; transient prompts are not stored as memory.</span>
             </div>
           ) : (
             <div className="aui-conversation-list">

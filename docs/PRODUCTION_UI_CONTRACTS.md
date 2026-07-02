@@ -31,3 +31,19 @@ This document audits production UI surfaces that render service, mesh, admin, pr
 - `packages/aurora-ui/tests/shell.test.tsx` verifies the production surface matrix, nav bindings, evidence sources, AdminAction declarations, and test-only fixture policy.
 - The same test scans production UI files under `packages/aurora-ui/src`, `apps/aurora-web/app`, and `apps/aurora-tauri/src` so screen code cannot directly call `fetch`, Tauri `invoke`, SDK fixtures, mock-reference data, raw service objects, or raw bus implementations outside adapter internals.
 - SDK conformance remains covered by `packages/aurora-sdk/tests/conformance.test.ts` and `scripts/check_sdk_backend_conformance.py`.
+
+## Operator verification contract
+
+The production UI contract is not complete until the operator evidence below exists for the current tree.
+
+| Evidence class | Required command or artifact | Acceptance boundary |
+| --- | --- | --- |
+| Route production contract | `pnpm --filter @aurora/tauri-ui test:e2e:routes` | All 22 primary routes are registered, route-specific, and free of placeholder/debug-dashboard fallback copy. |
+| Route outcome contract | `pnpm --filter @aurora/tauri-ui test:e2e:outcomes` and `apps/aurora-tauri/reports/e2e-outcomes/` | Navigation, SDK-backed state, visible errors, and invoked backend method names are recorded as static review artifacts. |
+| Desktop local dev contract | `pnpm --filter @aurora/tauri-ui tauri dev`; CI wrapper `pnpm --filter @aurora/tauri-ui dev:smoke` | Vite, Rust/Tauri, and Python Aurora services run in one local stack with Gateway readiness and `[tauri]`/`[aurora][...]` log evidence. |
+| Linux-safe aggregate smoke | `pnpm --filter @aurora/tauri-ui tauri:smoke:linux` | Delegates to `test:ci-regression-gates`; route, assistant, admin, runtime, outcome, dev-bootstrap, native-evidence, and service-boundary gates pass without requiring a desktop WebView. |
+| Packaged desktop sidecar contract | `pnpm --filter @aurora/tauri-ui prepare:sidecar:<profile>` and `pnpm --filter @aurora/tauri-ui build:bundle:<profile>` | Dev sidecar behavior remains separate from packaged sidecar staging; default packaging is unsigned `thin` unless a release profile/signing path is explicit. |
+| Android capability contract | `pnpm --filter @aurora/tauri-ui android:preflight:ci` for PRs; `android:preflight:strict` for release readiness | PR CI can validate generated Android project/native payload shape without keystore secrets; strict release readiness requires signing inputs. |
+| iOS capability contract | `pnpm --filter @aurora/tauri-ui ios:policy` on Linux; `tauri ios init`/`tauri ios build`/`ios:preflight` on macOS/Xcode | Linux can only enforce policy copy and manifest baseline. Full iOS build/preflight evidence requires macOS/Xcode. |
+
+The final quality gate must link to the actual logs/screenshots/reports and separate `passed`, `failed`, `blocked`, and `pending external platform` states. Do not mark code-reviewer approval, architect clearance, or ai-slop-cleaner result as complete unless those checks have actually run on the current diff.

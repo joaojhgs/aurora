@@ -812,7 +812,7 @@ function nativePermissionCards(
   const permissionNames = new Set([
     ...snapshot.nativePermissions.map((permission) => permission.name),
     ...snapshot.nativeCapabilities.map((capability) => capability.name)
-  ])
+  ].filter((name) => nativeNameAppliesToPlatform(name, snapshot.nativePlatform)))
   const genericRows = [...permissionNames].sort().map((name) => {
     const permission = snapshot.nativePermissions.find((candidate) => candidate.name === name)
     const capability = snapshot.nativeCapabilities.find((candidate) => candidate.name === name)
@@ -840,6 +840,21 @@ function nativePermissionCards(
   return [...genericRows.filter((row) => !androidIds.has(row.id)), ...androidRows]
 }
 
+function nativeNameAppliesToPlatform(name: string, platform: string): boolean {
+  const normalized = name.toLowerCase()
+  const platformName = platform.toLowerCase()
+  if (normalized.startsWith('aurora.android') || normalized.startsWith('android.')) {
+    return platformName.includes('android')
+  }
+  if (normalized.startsWith('aurora.ios') || normalized.startsWith('ios.')) {
+    return platformName.includes('ios')
+  }
+  if (normalized.startsWith('desktop.')) {
+    return platformName.includes('tauri-desktop') || platformName.includes('desktop')
+  }
+  return true
+}
+
 function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
   if (support === 'supported') return 'available-local'
   if (support === 'supported-path') return 'degraded'
@@ -851,10 +866,7 @@ function availabilityFromNativeIntegration(support: NativeMobileIntegration['sup
 function nativeIntegrationCards(snapshot: AuroraShellSnapshot): SettingsNativeIntegrationCard[] {
   return snapshot.nativeMobileIntegrations
     .filter((integration) => {
-      if (integration.platform === snapshot.nativePlatform) {
-        return true
-      }
-      return snapshot.nativePlatform === 'tauri-desktop' && integration.platform === 'ios'
+      return integration.platform === snapshot.nativePlatform
     })
     .map((integration) => {
       const state = availabilityFromNativeIntegration(integration.support)
@@ -1199,6 +1211,8 @@ function nativePermissionDetail(
   if (name === 'aurora.iosLocalLightInference' || name.startsWith('ios.localLightInference')) {
     return 'iOS Core ML/MLC/ExecuTorch-style local-light inference is a capability-gated provider; backend model catalog and device/model proof are required before selection.'
   }
+  if (nativeState === 'degraded') return 'Native manifest reports a degraded or partial platform path for this feature.'
+  if (nativeState === 'fallback') return 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
   if (name.startsWith('aurora.android.') || name.startsWith('android.')) {
     return requestEnabled
       ? 'Android native manifest advertises a supported request command for this permission or role.'
@@ -1209,8 +1223,6 @@ function nativePermissionDetail(
   }
   if (granted) return 'Native manifest reports this permission as granted.'
   if (requestEnabled) return 'Native manifest advertises an Android permission request command for this state.'
-  if (nativeState === 'degraded') return 'Native manifest reports a degraded or partial platform path for this feature.'
-  if (nativeState === 'fallback') return 'Native manifest reports this as a fallback entrypoint instead of primary capability.'
   return 'Permission request is disabled until a native request command is advertised by the SDK/native manifest.'
 }
 

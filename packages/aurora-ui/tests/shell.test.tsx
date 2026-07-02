@@ -136,6 +136,7 @@ import {
   routeSheetErrorMessage,
   routeSheetPolicySignals,
   SettingsPermissionsView,
+  SettingsNativeView,
   StatusBadge,
   PrivacyBadge,
   EvidenceBadge,
@@ -899,11 +900,15 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Wake mode')
     expect(markup).toContain('Spoken replies')
     expect(markup).toContain('raw-audio')
-    expect(markup).toContain('Native permissions')
+    expect(markup).toContain('Native permission details live on /settings/native')
     expect(markup).toContain('Route and fallback policy')
     expect(markup).toContain('AdminAction required')
-    expect(markup).toContain('Request unavailable')
     expect(markup).toContain('secrets redacted')
+    expect(markup).not.toContain('Native permissions and capabilities')
+
+    const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
+    expect(nativeMarkup).toContain('Native permissions and capabilities')
+    expect(nativeMarkup).toContain('Request unavailable')
   })
 
   it('renders iOS App Intents as app-owned Shortcuts integration without claiming system assistant ownership', async () => {
@@ -911,7 +916,7 @@ describe('Aurora production shell', () => {
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(snapshot.nativePlatform).toBe('ios')
     expect(model.nativeIntegrations.map((integration) => integration.id)).toEqual([
@@ -1004,8 +1009,9 @@ describe('Aurora production shell', () => {
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.notifications')?.state).toBe('available-local')
 
     const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
-    expect(markup).toContain('Request unavailable')
-    expect(markup).toContain('Granted')
+    const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
+    expect(nativeMarkup).toContain('Request unavailable')
+    expect(nativeMarkup).toContain('Granted')
     expect(markup).toContain('Fallback is visible as degraded capability evidence.')
   })
 
@@ -1019,7 +1025,7 @@ describe('Aurora production shell', () => {
     const snapshot = snapshotFromGraph('native-mobile', graph, androidNativeCapabilityManifestFixture)
     const model = buildSettingsPermissionsModel(snapshot)
     const localLight = model.nativePermissions.find((permission) => permission.id === 'aurora.android.localLightInference')
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(localLight).toEqual(
       expect.objectContaining({
@@ -1062,7 +1068,7 @@ describe('Aurora production shell', () => {
       granted: false
     }))
 
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
     expect(markup).toContain('Android assistant role')
     expect(markup).toContain('RoleManager.isRoleAvailable(android.app.role.ASSISTANT)=true')
     expect(markup).toContain('Share sheet')
@@ -1079,7 +1085,7 @@ describe('Aurora production shell', () => {
     })
     const snapshot = snapshotFromGraph('native-mobile', graph, iosNativeCapabilityManifestFixture)
     const model = buildSettingsPermissionsModel(snapshot)
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(model.nativeIntegrations).toEqual(
       expect.arrayContaining([
@@ -1139,7 +1145,7 @@ describe('Aurora production shell', () => {
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(snapshot.nativePlatform).toBe('ios')
     expect(model.nativePlatformIntegrations.map((integration) => integration.id)).toContain('ios-app-intents')
@@ -1195,13 +1201,15 @@ describe('Aurora production shell', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(model.error).toBe('Gateway unavailable')
     expect(model.nativePermissions).toEqual([])
     expect(model.privacyControls.every((control) => control.disabled)).toBe(true)
     expect(markup).toContain('Gateway unavailable')
-    expect(markup).toContain('No native permission manifest is available')
     expect(markup).toContain('AdminAction required')
+    expect(nativeMarkup).toContain('Gateway unavailable')
+    expect(nativeMarkup).toContain('No native permission manifest is available')
   })
 
   it('renders iOS Keychain, biometric admin unlock, and Siri limitation copy from native manifest evidence', async () => {
@@ -1225,7 +1233,7 @@ describe('Aurora production shell', () => {
     }))
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
-    const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
+    const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(snapshot.nativePlatform).toBe('ios')
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosKeychain')).toEqual(
@@ -1315,9 +1323,11 @@ describe('Aurora production shell', () => {
       />
     )
 
-    expect(markup).toContain('Text chat')
+    expect(markup).toContain('Text chat with Aurora')
+    expect(markup).toContain('Primary chat workspace')
     expect(markup).toContain('Recent chats')
     expect(markup).toContain('Conversation rail')
+    expect(markup).toContain('Assistant conversation thread')
     expect(markup).toContain('New conversation')
     expect(markup).toContain('Search recent conversations')
     expect(markup).toContain('Assistant local remote mesh route chips')
@@ -1335,6 +1345,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Selected model')
     expect(markup).toContain('local-qwen2.5')
     expect(markup).toContain('Sidecar')
+    expect(markup).toContain('Local sidecar status is visible for desktop troubleshooting')
     expect(markup).toContain('running')
     expect(markup).toContain('Gateway http://127.0.0.1:8000 healthy')
     expect(markup).toContain('Assistant tool call cards')
@@ -1349,17 +1360,22 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Browser capture')
     expect(markup).toContain('Native capture')
     expect(markup).toContain('Audio route and consent')
+    expect(markup).toContain('Web voice uses browser mic only')
     expect(markup).toContain('Voice event stream')
     expect(markup).toContain('local / Orchestrator.ExternalUserInput')
     expect(markup).toContain('model pending')
     expect(markup).toContain('personal')
     expect(markup).toContain('Ask Aurora...')
+    expect(markup).toContain('Prompt composer')
+    expect(markup).toContain('Route/model selector')
     expect(markup).toContain('Attachments and shared content')
     expect(markup).toContain('Privacy label')
     expect(markup).toContain('Share source')
     expect(markup).toContain('Add URL')
     expect(markup).toContain('Add files or images')
     expect(markup).toContain('Native mobile share payloads remain disabled')
+    expect(markup).toContain('Web voice uses browser mic only; no Tauri native voice claim is made in this runtime.')
+    expect(markup).toContain('Mobile touch composer uses large send/stop/retry targets')
     expect(markup).toContain('0 context ready')
     expect(markup).toContain('Route sheet')
 
@@ -1476,6 +1492,7 @@ describe('Aurora production shell', () => {
     expect(emptyMarkup).toContain('no model configured / awaiting backend model evidence')
     expect(emptyMarkup).toContain('<dt>Selector</dt><dd>required</dd>')
     expect(emptyMarkup).toContain('offline sidecar: Python Aurora node not running')
+    expect(emptyMarkup).toContain('assistant conversation remains the primary page')
     expect(emptyMarkup).toContain('remote Gateway auth failure: 401 Unauthorized')
 
     const activeMarkup = renderToStaticMarkup(
@@ -3083,6 +3100,10 @@ describe('Aurora production shell', () => {
     expect(snapshot.supportBundleCorrelationId).toBe(supportBundleFixture.correlation_id)
     expect(snapshot.supportBundleAuditReceipt).toBe(supportBundleFixture.audit_receipt)
     expect(snapshot.supportBundleServiceCount).toBe(supportBundleFixture.services.length)
+    expect(snapshot.serviceProbeRows.map((row) => row.name)).toEqual(expect.arrayContaining(['Gateway service probe']))
+    expect(snapshot.nativeCapabilityRows.map((row) => row.name)).toContain('native_capability_manifest')
+    expect(snapshot.sidecarLogRows.map((row) => row.name)).toContain('gateway_sidecar_logs')
+    expect(snapshot.frontendLogRows.map((row) => row.name)).toContain('Frontend errors/logs')
     expect(snapshot.liveProbes.map((probe) => probe.name)).toEqual(
       expect.arrayContaining(['Gateway route registry', 'Mesh peer metrics', 'Diagnostics bundle contract'])
     )
@@ -3107,6 +3128,13 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Live probes')
     expect(markup).toContain('Redaction preview')
     expect(markup).toContain('Support-bundle export')
+    expect(markup).toContain('Service probes')
+    expect(markup).toContain('Gateway service probe')
+    expect(markup).toContain('Native manifest and permissions')
+    expect(markup).toContain('native_capability_manifest')
+    expect(markup).toContain('Sidecar and frontend logs')
+    expect(markup).toContain('gateway_sidecar_logs')
+    expect(markup).toContain('Frontend errors/logs')
     expect(markup).toContain('Gateway.GetSupportBundle')
     expect(markup).toContain('Gateway.AdminActionDraft / Gateway.AdminActionConfirm')
     expect(markup).toContain('Export redacted bundle')
@@ -3216,6 +3244,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Degraded diagnostics inputs')
     expect(markup).toContain('diagnostics down')
     expect(markup).toContain('No live WebRTC peer sessions')
+    expect(markup).toContain('Gateway.GetSupportBundle did not return service probe rows')
+    expect(markup).toContain('Repair Gateway.GetSupportBundle redacted log collection')
   })
 
   it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {
@@ -4009,8 +4039,9 @@ describe('Aurora production shell', () => {
     expect(model.conversations).toEqual([])
     expect(markup).toContain('No collections reported')
     expect(markup).toContain('DB.RAGListNamespaces returned no memory or RAG namespaces for this route.')
+    expect(markup).toContain('Aurora stores memory only after conversation history, approved tool/context ingestion, or imported knowledge snapshots are enabled by policy.')
     expect(markup).toContain('No conversations reported')
-    expect(markup).toContain('History remains empty until DB.GetMessages returns backend rows.')
+    expect(markup).toContain('History remains empty until DB.GetMessages returns backend rows from a retained assistant conversation')
     expect(markup).toContain('Search has not run')
     expect(markup).not.toContain('Runtime snapshot')
     expect(markup).not.toContain('Backend capability report')

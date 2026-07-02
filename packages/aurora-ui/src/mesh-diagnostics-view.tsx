@@ -6,6 +6,7 @@ import type {
   CapabilityActionInfo,
   CapabilityCatalogResponse,
   GatewaySupportBundleResponse,
+  SupportBundleDiagnosticItem,
   MeshPeerDiagnostic,
   MeshRouteDiagnostic,
   MeshStatusResponse,
@@ -87,6 +88,14 @@ export interface DiagnosticsTimelineRow {
   state: AvailabilityState
 }
 
+export interface DiagnosticsDetailRow {
+  id: string
+  name: string
+  state: AvailabilityState
+  source: string
+  detail: string
+}
+
 export interface SupportBundleExportState {
   status: 'idle' | 'pending' | 'success' | 'error'
   message: string | null
@@ -125,6 +134,10 @@ export interface MeshDiagnosticsSnapshot {
   liveProbes: DiagnosticsProbeRow[]
   redactionRows: RedactionPreviewRow[]
   timelineRows: DiagnosticsTimelineRow[]
+  serviceProbeRows: DiagnosticsDetailRow[]
+  nativeCapabilityRows: DiagnosticsDetailRow[]
+  sidecarLogRows: DiagnosticsDetailRow[]
+  frontendLogRows: DiagnosticsDetailRow[]
   transportRows: MeshTransportRow[]
   routeRows: MeshRouteDiagnosticRow[]
   recentErrors: WebRTCDiagnosticError[]
@@ -198,6 +211,10 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
     { label: 'Personal memory snippets', value: 0, detail: 'Waiting for RAG omission metadata.' }
   ],
   timelineRows: [],
+  serviceProbeRows: [],
+  nativeCapabilityRows: [],
+  sidecarLogRows: [],
+  frontendLogRows: [],
   transportRows: [],
   routeRows: [],
   recentErrors: [],
@@ -288,6 +305,10 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     liveProbes: buildLiveProbes({ supportBundle, supportBundleError, webRtc, mesh, catalog: input.catalog.data, diagnosticsCapability }),
     redactionRows: buildRedactionRows(supportBundle, Boolean(webRtc?.secrets_redacted ?? mesh?.secrets_redacted ?? input.catalog.data?.secrets_redacted ?? true)),
     timelineRows: buildTimelineRows(supportBundle),
+    serviceProbeRows: buildServiceProbeRows(supportBundle),
+    nativeCapabilityRows: buildSupportBundleDiagnosticRows(supportBundle?.native_capabilities ?? [], 'native'),
+    sidecarLogRows: buildSupportBundleDiagnosticRows(supportBundle?.sidecar_logs ?? [], 'sidecar'),
+    frontendLogRows: buildFrontendLogRows(supportBundle, webRtc),
     transportRows,
     routeRows,
     recentErrors: (webRtc?.recent_errors ?? []).map((error) => ({
@@ -323,6 +344,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
 
       <div className="aui-diagnostics-overview" aria-label="Diagnostics overview">
         <MetricCard icon={<Activity size={20} aria-hidden />} label="services observed" value={String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount)} detail="Gateway.GetSupportBundle service list" />
+        <MetricCard icon={<FileArchive size={20} aria-hidden />} label="event stream" value={String(snapshot.supportBundleRecentEventCount)} detail="redacted EventStream metadata" />
         <MetricCard icon={<Gauge size={20} aria-hidden />} label="route diagnostics" value={String(snapshot.supportBundleRouteCount || snapshot.routeRows.length)} detail="mesh and Gateway route evidence" />
         <MetricCard icon={<RadioTower size={20} aria-hidden />} label="live probes" value={String(snapshot.liveProbes.length)} detail="registry, WebRTC, mesh, support bundle" />
         <MetricCard icon={<Bug size={20} aria-hidden />} label="reported errors" value={String(snapshot.recentErrors.length + snapshot.errors.length)} detail="redacted before render" />
@@ -378,6 +400,26 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         </button>
         {supportBundleExportState.message ? <p className={`aui-diagnostics-export-message ${supportBundleExportState.status}`} role="status">{supportBundleExportState.message}</p> : null}
       </section>
+
+      <section className="aui-mesh-panel" aria-labelledby="diagnostics-service-probes-title">
+        <PanelTitle icon={<Activity size={18} aria-hidden />} title="Service probes" description="Service health checks, Gateway route registry, event-stream metadata, WebRTC, native capabilities, sidecar logs, and frontend log status are surfaced only here for troubleshooting." />
+        {snapshot.serviceProbeRows.length > 0 ? (
+          <DetailGrid rows={snapshot.serviceProbeRows} label="Service health probes" />
+        ) : (
+          <p className="aui-mesh-diagnostics-empty" role="status">Gateway.GetSupportBundle did not return service probe rows.</p>
+        )}
+      </section>
+
+      <div className="aui-diagnostics-grid">
+        <section className="aui-mesh-panel" aria-labelledby="diagnostics-native-title">
+          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Native manifest and permissions" description="Desktop, Android, and iOS native capabilities are shown as redacted support-bundle metadata." />
+          <DetailGrid rows={snapshot.nativeCapabilityRows} label="Native capability diagnostics" empty="No native manifest or permission diagnostics were returned by Gateway.GetSupportBundle." />
+        </section>
+        <section className="aui-mesh-panel" aria-labelledby="diagnostics-logs-title">
+          <PanelTitle icon={<Bug size={18} aria-hidden />} title="Sidecar and frontend logs" description="Only redacted log metadata is previewed; raw logs, tokens, and media payloads never enter the support bundle." />
+          <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="Sidecar process and frontend log diagnostics" empty="No sidecar or frontend log metadata was returned. Repair Gateway.GetSupportBundle redacted log collection before exporting logs." />
+        </section>
+      </div>
 
       <section className="aui-mesh-panel" aria-labelledby="diagnostics-timeline-title">
         <PanelTitle icon={<FileArchive size={18} aria-hidden />} title="Timeline" description="Recent event and audit metadata from the redacted support bundle." />
@@ -539,12 +581,10 @@ function supportBundleReason(bundle: GatewaySupportBundleResponse | null, error:
 }
 
 function safeDiagnosticCategoryLabel(value: string): string {
-  return value
-    .replace(/raw[-_ ]?audio/gi, 'audio capture data')
-    .replace(/audio_buffer/gi, 'audio capture data')
-    .replace(/tokens? and credentials?/gi, 'credential material')
-    .replace(/tokens?/gi, 'credential material')
-    .replace(/credentials?/gi, 'credential material')
+  const normalized = value.toLowerCase()
+  if (/raw[-_ ]?audio|audio_buffer/.test(normalized)) return 'audio capture data'
+  if (/tokens?|credentials?|secrets?|passwords?|api[_-]?keys?/.test(normalized)) return 'credential material'
+  return redactDiagnosticText(value)
 }
 
 function buildLiveProbes(input: {
@@ -610,6 +650,86 @@ function buildRedactionRows(bundle: GatewaySupportBundleResponse | null, fallbac
   ]
 }
 
+function buildServiceProbeRows(bundle: GatewaySupportBundleResponse | null): DiagnosticsDetailRow[] {
+  if (!bundle) return []
+  const healthRows = bundle.service_health.map((health, index) => ({
+    id: `service-health-${health.module}-${index}`,
+    name: `${health.module} service probe`,
+    state: serviceHealthState(health.status),
+    source: `Gateway.GetSupportBundle service_health @ ${redactDiagnosticText(health.timestamp)}`,
+    detail: redactDiagnosticText(`${health.status}; checks ${safeDiagnosticDetails(health.checks)}`)
+  }))
+  const serviceRows = bundle.services
+    .filter((service) => !bundle.service_health.some((health) => health.module === service.module))
+    .map((service) => ({
+      id: `service-${service.module}-${service.instance_id ?? 'default'}`,
+      name: `${service.module} service probe`,
+      state: serviceHealthState(service.status),
+      source: 'Gateway.GetSupportBundle services',
+      detail: redactDiagnosticText(`${service.status}; ${service.method_count} methods; ${service.capabilities.join(', ') || 'no capabilities reported'}`)
+    }))
+  return [...healthRows, ...serviceRows]
+}
+
+function buildSupportBundleDiagnosticRows(items: SupportBundleDiagnosticItem[], prefix: string): DiagnosticsDetailRow[] {
+  return items.map((item, index) => ({
+    id: `${prefix}-${item.name}-${index}`,
+    name: redactDiagnosticText(item.name),
+    state: diagnosticItemState(item),
+    source: redactDiagnosticText(item.source),
+    detail: redactDiagnosticText(`${item.status}; ${safeDiagnosticDetails(item.details)}; ${item.redacted ? 'redacted metadata only' : 'redaction not confirmed'}`)
+  }))
+}
+
+function buildFrontendLogRows(bundle: GatewaySupportBundleResponse | null, webRtc: WebRTCDiagnosticsResponse | null): DiagnosticsDetailRow[] {
+  if (!bundle) return []
+  const frontendEvents = bundle.recent_events.filter((event) => /front[-_ ]?end|ui|browser|vite/i.test(`${event.kind} ${event.topic ?? ''} ${event.bus_topic ?? ''}`))
+  if (frontendEvents.length > 0) {
+    return frontendEvents.map((event, index) => ({
+      id: `frontend-event-${event.id || index}`,
+      name: 'Frontend errors/logs',
+      state: event.status === 'failed' || event.status === 'error' ? 'degraded' : 'available-local',
+      source: redactDiagnosticText(event.topic ?? event.kind ?? 'Gateway event stream'),
+      detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; ${safeDiagnosticDetails(event.payload_summary)}; ${event.secrets_redacted ? 'secrets redacted' : 'redaction not confirmed'}`)
+    }))
+  }
+  return [{
+    id: 'frontend-logs-unavailable',
+    name: 'Frontend errors/logs',
+    state: webRtc?.recent_errors.length ? 'degraded' : 'unsupported',
+    source: 'Gateway.GetSupportBundle recent_events',
+    detail: 'No redacted frontend log stream is exposed yet; use this repair state instead of embedding raw frontend dumps on product pages.'
+  }]
+}
+
+function serviceHealthState(status: string): AvailabilityState {
+  const value = status.toLowerCase()
+  if (value.includes('healthy') || value === 'ok' || value === 'running') return 'available-local'
+  if (value.includes('degraded') || value.includes('warning') || value.includes('partial')) return 'degraded'
+  if (value.includes('denied') || value.includes('forbidden')) return 'denied'
+  if (value.includes('stale')) return 'stale'
+  if (value.includes('down') || value.includes('error') || value.includes('failed')) return 'unsupported'
+  return 'pending'
+}
+
+function diagnosticItemState(item: SupportBundleDiagnosticItem): AvailabilityState {
+  const status = item.status.toLowerCase()
+  if (!item.redacted) return 'degraded'
+  if (status.includes('available') || status.includes('ready') || status.includes('ok') || status.includes('metadata')) return 'available-local'
+  if (status.includes('degraded') || status.includes('partial')) return 'degraded'
+  if (status.includes('denied') || status.includes('forbidden')) return 'denied'
+  if (status.includes('unavailable') || status.includes('unsupported')) return 'unsupported'
+  return 'pending'
+}
+
+function safeDiagnosticDetails(value: unknown): string {
+  try {
+    return redactDiagnosticText(JSON.stringify(value).replace(/raw[-_ ]?audio/gi, 'audio capture data'))
+  } catch {
+    return '[redacted metadata]'
+  }
+}
+
 function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): DiagnosticsTimelineRow[] {
   if (!bundle) return []
   const eventRows = bundle.recent_events.map((event, index) => ({
@@ -632,6 +752,21 @@ function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): Diagnos
     }
   })
   return [...eventRows, ...auditRows].slice(0, 8)
+}
+
+function DetailGrid({ rows, label, empty }: { rows: DiagnosticsDetailRow[]; label: string; empty?: string }) {
+  if (rows.length === 0) return <p className="aui-mesh-diagnostics-empty" role="status">{empty ?? 'No diagnostics metadata was returned.'}</p>
+  return (
+    <div className="aui-diagnostics-probes" aria-label={label}>
+      {rows.map((row) => (
+        <div className="aui-diagnostics-probe" key={row.id}>
+          <div><strong>{row.name}</strong><small>{row.source}</small></div>
+          <StatusBadge state={row.state} />
+          <p>{row.detail}</p>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function MetricCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {

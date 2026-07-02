@@ -50,14 +50,15 @@
     "test:e2e:assistant": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:assistant\"",
     "test:e2e:admin": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:admin\"",
     "test:e2e:runtime": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:runtime\"",
-    "tauri:smoke:linux": "pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime && pnpm test:e2e:outcomes && pnpm test:dev-bootstrap && pnpm test:ci-native-evidence && pnpm test:service-boundary",
+    "tauri:smoke:linux": "pnpm test:ci-regression-gates",
     "test:ci-native-evidence": "vitest run --environment node src/ci-native-evidence.test.ts",
     "test:dev-bootstrap": "vitest run --environment node src/tauri-dev-bootstrap.test.ts",
     "test:service-boundary": "vitest run --environment node src/ui-service-boundary.test.ts",
     "test:e2e:outcomes": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:outcomes\"",
     "dev:smoke": "node ./scripts/tauri-dev-smoke.mjs",
     "test:e2e:routes:vitest": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:routes\"",
-    "test:e2e:routes:playwright": "playwright test --config playwright.config.ts tests/playwright/route-crawl.spec.ts"
+    "test:e2e:routes:playwright": "playwright test --config playwright.config.ts tests/playwright/route-crawl.spec.ts",
+    "test:ci-regression-gates": "pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime && pnpm test:e2e:outcomes && pnpm test:dev-bootstrap && pnpm test:ci-native-evidence && pnpm test:service-boundary"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",

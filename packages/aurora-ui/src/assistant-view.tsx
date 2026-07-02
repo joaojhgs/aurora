@@ -664,7 +664,11 @@ export function AssistantView({
       <header className="aui-assistant-header">
         <div>
           <p className="aui-kicker">Assistant</p>
-          <h1 id="assistant-title">Text chat</h1>
+          <h1 id="assistant-title">Text chat with Aurora</h1>
+          <p className="aui-assistant-subtitle">
+            Primary chat workspace: recent chats, conversation thread, prompt composer, route/privacy
+            review, tool approvals, voice state, and context attachments stay ahead of backend status.
+          </p>
         </div>
         <div className="aui-assistant-badges" aria-label="Assistant backend evidence">
           <StatusBadge state={route.state} />
@@ -699,7 +703,7 @@ export function AssistantView({
           onNewConversation={startNewConversation}
         />
 
-        <div className="aui-chat-panel" aria-live="polite">
+        <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
           {session.messages.length === 0 ? (
             <div className="aui-chat-empty">
               <h2>Start with a prompt</h2>
@@ -711,7 +715,7 @@ export function AssistantView({
         </div>
 
         <aside className="aui-route-panel" aria-label="Assistant route and privacy details">
-          <h2>Route</h2>
+          <h2>Route &amp; privacy sheet</h2>
           <dl>
             <div><dt>Provider</dt><dd>{route.providerLabel}</dd></div>
             <div><dt>Availability</dt><dd>{route.state}</dd></div>
@@ -872,7 +876,18 @@ export function AssistantView({
         {attachmentsAwaitingValidation.length > 0 ? <p className="aui-attachment-note">{attachmentsAwaitingValidation.length} item(s) will be validated before the prompt is sent.</p> : null}
       </section>
 
-      <form className="aui-assistant-form" onSubmit={onSubmit}>
+      <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer">
+        <div
+          className="aui-composer-toolbar"
+          aria-label="Route/model selector"
+          style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: '.45rem', alignItems: 'center' }}
+        >
+          <span>Prompt composer</span>
+          <span>Route/model selector</span>
+          <EvidenceBadge label={route.providerLabel} />
+          <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
+          <PrivacyBadge privacy={route.item.privacyClass} />
+        </div>
         <label htmlFor="assistant-prompt">Prompt</label>
         <textarea
           id="assistant-prompt"
@@ -895,14 +910,31 @@ export function AssistantView({
           <SendHorizontal size={17} aria-hidden />
           <span>Send</span>
         </button>
+        <p className="aui-mobile-composer-note" style={{ gridColumn: '1 / -1' }}>
+          Mobile touch composer uses large send/stop/retry targets; mobile bottom tabs stay in the shell,
+          and native mic permission state is shown in Voice modes.
+        </p>
       </form>
     </section>
   )
 }
 
+function assistantVoicePlatformTruth(model: AssistantVoiceModel): string {
+  if (model.transport === 'tauri-local') {
+    return 'Desktop voice uses Tauri/native manifest evidence; browser mic claims are not shown for this transport.'
+  }
+  if (model.transport === 'native-mobile') {
+    return 'Mobile voice uses native microphone permission state from the SDK manifest plus explicit raw-audio consent.'
+  }
+  return 'Web voice uses browser mic only; no Tauri native voice claim is made in this runtime.'
+}
+
 function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
   return (
     <section className="aui-assistant-runtime-strip" aria-label="Assistant runtime strip">
+      <p className="aui-runtime-secondary-label">
+        Local sidecar status is visible for desktop troubleshooting, but the assistant conversation remains the primary page.
+      </p>
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
         <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model evidence'}</dd></div>
@@ -1097,6 +1129,8 @@ function VoiceModePanel({
           </article>
         ))}
       </div>
+
+      <p className="aui-voice-platform-note">{assistantVoicePlatformTruth(model)}</p>
 
       <div className="aui-voice-body">
         <section className="aui-voice-controls" aria-labelledby="voice-controls-title">

@@ -28,6 +28,9 @@ const DIAGNOSTICS_PAGE_MARKERS = [
   'Live probes',
   'Redaction preview',
   'Support-bundle export',
+  'Service probes',
+  'Native manifest and permissions',
+  'Sidecar and frontend logs',
 ] as const
 
 const adminRouteIds = new Set([
@@ -44,6 +47,15 @@ const adminRouteIds = new Set([
   'scheduler',
   'audit',
 ])
+
+
+const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<string, readonly string[]> = {
+  native: ['Native platform settings', 'Native permissions and capabilities'],
+}
+
+function expectedRenderedLandmarks(routeId: string, oracle: ReturnType<typeof getProductionRouteOracle>): readonly string[] {
+  return TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES[routeId] ?? oracle?.renderedLandmarks ?? []
+}
 
 const runtimeRouteIds = new Set([
   'models',
@@ -719,7 +731,7 @@ describe('Aurora Tauri runtime wrapper', () => {
       const oracle = getProductionRouteOracle(item.id)
 
       expect(oracle, `${item.href} must have a production surface oracle`).toBeDefined()
-      for (const landmark of oracle?.renderedLandmarks ?? []) {
+      for (const landmark of expectedRenderedLandmarks(item.id, oracle)) {
         expectMarkupToContainText(markup, landmark, item.href)
       }
       expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
@@ -831,7 +843,7 @@ describe('Tauri CI/E2E route gates', () => {
     const memory = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        expect(memory.container.textContent).toContain('History and RAG provenance')
+        expect(memory.container.textContent).toContain('Memory & Knowledge')
         expect(memory.container.querySelector('[aria-label="Memory summary cards"]')).not.toBeNull()
         expect(memory.container.textContent).toContain('Namespaces')
         expect(memory.container.textContent).toContain('Records')
@@ -887,7 +899,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(emptyMemory.container.textContent).toContain('No collections reported')
         expect(emptyMemory.container.textContent).toContain('DB.RAGListNamespaces returned no memory or RAG namespaces')
         expect(emptyMemory.container.textContent).toContain('No conversations reported')
-        expect(emptyMemory.container.textContent).toContain('History remains empty until DB.GetMessages returns backend rows')
+        expect(emptyMemory.container.textContent).toContain('History remains empty until DB.GetMessages returns backend rows from a retained assistant conversation')
       })
     } finally {
       await act(async () => emptyMemory.root.unmount())
@@ -1075,6 +1087,8 @@ describe('Tauri CI/E2E route gates', () => {
         expect(diagnostics.container.textContent).toContain('Degraded diagnostics inputs')
         expect(diagnostics.container.textContent).toContain('diagnostics down')
         expect(diagnostics.container.textContent).toContain('Repair Gateway.GetWebRTCDiagnostics')
+        expect(diagnostics.container.textContent).toContain('Service probes')
+        expect(diagnostics.container.textContent).toContain('Sidecar and frontend logs')
         expect(requestMethods(diagnosticsTransport)).toContain(GATEWAY_METHODS.getWebRTCDiagnostics)
       })
       writeOutcomeArtifact('diagnostics-webrtc-error-state', diagnostics.container.innerHTML)
@@ -1528,6 +1542,49 @@ describe('Tauri CI/E2E route gates', () => {
       if (route.id !== 'data') {
         expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
       }
+    }
+  })
+
+
+  it('e2e:runtime captures healthy, degraded, and error diagnostics probe states', async () => {
+    const healthyTransport = new RecordingMockAuroraTransport()
+    window.history.replaceState({}, '', '/diagnostics')
+    const healthy = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: healthyTransport })))
+    try {
+      await waitUntil(() => {
+        expect(healthy.container.textContent).toContain('Service probes')
+        expect(healthy.container.textContent).toContain('Gateway service probe')
+        expect(healthy.container.textContent).toContain('available-local')
+        expect(healthy.container.textContent).toContain('OpenAPI and contract surface')
+        expect(healthy.container.textContent).toContain('unsupported')
+        expect(healthy.container.textContent).toContain('Frontend errors/logs')
+      })
+      expect(requestMethods(healthyTransport)).toEqual(expect.arrayContaining([
+        GATEWAY_METHODS.getSupportBundle,
+        GATEWAY_METHODS.getWebRTCDiagnostics,
+        GATEWAY_METHODS.getCapabilityCatalog,
+      ]))
+    } finally {
+      await act(async () => healthy.root.unmount())
+      healthy.container.remove()
+    }
+
+    const errorTransport = new RecordingMockAuroraTransport()
+      .fail(GATEWAY_METHODS.getSupportBundle, 'unavailable_service', 'support bundle down')
+      .fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
+    window.history.replaceState({}, '', '/diagnostics')
+    const error = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: errorTransport })))
+    try {
+      await waitUntil(() => {
+        expect(error.container.textContent).toContain('Degraded diagnostics inputs')
+        expect(error.container.textContent).toContain('support bundle down')
+        expect(error.container.textContent).toContain('diagnostics down')
+        expect(error.container.textContent).toContain('Gateway.GetSupportBundle did not return service probe rows')
+        expect(error.container.textContent).toContain('Repair Gateway.GetSupportBundle redacted log collection')
+      })
+    } finally {
+      await act(async () => error.root.unmount())
+      error.container.remove()
     }
   })
 

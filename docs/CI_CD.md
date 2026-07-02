@@ -52,6 +52,22 @@ pnpm --filter @aurora/tauri-ui build:bundle:thin
 pnpm --filter @aurora/tauri-ui prepare:sidecar:local-cpu
 ```
 
+### Tauri operator smoke commands
+
+Use these commands when preparing or reproducing the production UI gate:
+
+| Purpose | Command | Notes |
+| --- | --- | --- |
+| One-command desktop local stack | `pnpm --filter @aurora/tauri-ui tauri dev` | Interactive developer command. It configures threads mode, the loopback Gateway, and the managed Python sidecar automatically. |
+| Desktop local smoke report | `pnpm --filter @aurora/tauri-ui dev:smoke` | Launches `tauri dev`, probes `/api/health`, `/api/registry`, `/api/services`, requires `[tauri]` and `[aurora][...]` logs, then writes `apps/aurora-tauri/reports/tauri-dev-smoke.json`. Use Xvfb on Linux CI. |
+| Linux-safe aggregate UI smoke | `pnpm --filter @aurora/tauri-ui tauri:smoke:linux` | Delegates to `test:ci-regression-gates`, which runs route, assistant, admin, runtime, outcome, dev-bootstrap, native-evidence, and service-boundary gates without requiring a desktop WebView. |
+| Packaged thin desktop smoke | `pnpm --filter @aurora/tauri-ui build:bundle:thin` | Builds an unsigned thin bundle through `prepare:sidecar:thin`. Signing is intentionally excluded. |
+| Android PR preflight | `pnpm --filter @aurora/tauri-ui android:init` then `pnpm --filter @aurora/tauri-ui android:preflight:ci` | Requires the generated Android project but not release signing secrets. |
+| Android release preflight | `pnpm --filter @aurora/tauri-ui android:preflight:strict` | Requires generated Android project and signing inputs. |
+| iOS policy baseline | `pnpm --filter @aurora/tauri-ui ios:policy` | Linux-safe policy and manifest check only. |
+| iOS build/preflight | `pnpm --filter @aurora/tauri-ui tauri ios init`, `pnpm --filter @aurora/tauri-ui tauri ios build`, `pnpm --filter @aurora/tauri-ui ios:preflight` | Requires macOS with Xcode and the generated iOS project. |
+| Docs hygiene | `make check-docs` | Runs `uv run python scripts/check_docs.py`. |
+
 ## Branch protection compatibility
 
 GitHub branch protection can keep expecting old check names after workflow consolidation. `required-check-aliases.yml` is intentionally tiny and should be removed after the required checks are updated in repository settings to the canonical lanes above:
@@ -74,3 +90,19 @@ The repository no longer keeps one-off issue-specific gate generator workflows f
 ## Release and signing policy
 
 Default desktop/mobile CI builds are unsigned and intended for validation only. Android pull-request CI uses `android:preflight:ci` after `android:init`: it requires the generated Android project but does not require keystore secrets. Package signing, notarization, App Store Connect, and Play upload remain explicit release operations requiring platform secrets; Android release readiness uses `android:preflight:strict`.
+
+## Final quality gate structure
+
+The final Tauri/web/mobile UI quality gate is an evidence bundle, not a checklist assertion. Record each item with the exact command, status, log path, and artifact path:
+
+| Gate item | Required evidence |
+| --- | --- |
+| Verification commands | Current output for Python quality/tests, SDK/UI/Tauri tests, route E2E, desktop smoke, Android preflight, and iOS policy/build where platform access exists. |
+| Screenshots and route artifacts | Route screenshots or `apps/aurora-tauri/reports/e2e-outcomes/` artifacts, plus desktop/WebView smoke screenshots when available. |
+| Desktop-local sidecar proof | `apps/aurora-tauri/reports/tauri-dev-smoke.json` or equivalent log proving Gateway readiness and `[tauri]`/`[aurora][...]` output. |
+| Mobile/platform proof | Android preflight/emulator report and iOS policy/build/preflight logs. Mark iOS full build/preflight `pending macOS/Xcode` if it has not run. |
+| ai-slop-cleaner result | Path to the cleanup report and whether it found required changes. Do not infer success if the cleanup workflow did not run. |
+| code-reviewer approval | Path or transcript for independent code-reviewer approval. Mark `pending` if not run. |
+| architect clearance | Path or transcript for architecture invariant clearance. Mark `pending` if not run. |
+
+Do not mark the aggregate production UI ultragoal complete while any required evidence is missing, stale, failed, or only represented by this documentation.

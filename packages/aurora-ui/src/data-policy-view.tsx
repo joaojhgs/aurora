@@ -157,7 +157,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         <div>
           <p className="aui-kicker">Memory data policy</p>
           <h1 id="data-policy-title">Data policy and retention</h1>
-          <p>Review retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit evidence before data leaves Aurora.</p>
+          <p>Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit evidence before data leaves Aurora.</p>
         </div>
         <div className="aui-mesh-badges" aria-label="Data policy evidence">
           <StatusBadge state={dataPolicyStatusState(snapshot.loadState)} />
@@ -265,6 +265,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
             </article>
           ))}
         </div>
+        <a className="aui-action-chip" href="/admin/audit">Open audit log</a>
         <p className="aui-message" role="alert">Policy edits require AdminAction draft/confirm/audit through Config.Set; this route does not mutate retention, raw audio, transcript, fallback, export, delete, or import policy directly.</p>
       </section>
     </section>

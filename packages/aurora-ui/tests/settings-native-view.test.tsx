@@ -10,6 +10,9 @@ import {
 } from '@aurora/client'
 import {
   SettingsPermissionsView,
+  SettingsNativeView,
+  buildNativePlatformEvidenceArtifact,
+  buildNativePlatformEvidenceJson,
   buildSettingsPermissionsModel,
   snapshotFromGraph
 } from '../src/index'
@@ -28,7 +31,7 @@ describe('settings/native route separation', () => {
   it('keeps /settings focused on route, voice, assistant, theme/accessibility/local storage, and AdminAction policy', () => {
     const snapshot = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
     const settingsMarkup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} currentPath="/settings" />)
-    const nativeMarkup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} currentPath="/settings/native" />)
+    const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
     expect(settingsMarkup).toContain('Settings and permissions')
     expect(settingsMarkup).toContain('Privacy defaults')
@@ -125,4 +128,77 @@ describe('settings/native route separation', () => {
     expect(markup).toContain('system assistant ownership is unavailable')
     expect(markup).not.toContain('Request permission')
   })
+})
+
+it('builds stable JSON evidence for desktop local, web fallback, Android preflight, and iOS preflight without unsupported-available claims', () => {
+  const desktop = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
+  const webGraph = buildCapabilityGraph({
+    catalog: capabilityGraphCatalogFixture,
+    registry: gatewayRegistryFixture,
+    nativeManifest: null,
+    transportKind: 'http'
+  })
+  const web = snapshotFromGraph('http', webGraph, null)
+  const android = snapshotFor(androidNativeCapabilityManifestFixture, 'native-mobile')
+  const ios = snapshotFor(iosNativeCapabilityManifestFixture, 'native-mobile')
+
+  const json = buildNativePlatformEvidenceJson({
+    'desktop-local': desktop,
+    'web-fallback': web,
+    'android-preflight': android,
+    'ios-preflight': ios
+  })
+  const evidence = JSON.parse(json) as {
+    kind: string
+    artifacts: Array<ReturnType<typeof buildNativePlatformEvidenceArtifact>>
+  }
+
+  expect(evidence.kind).toBe('aurora-native-platform-evidence')
+  expect(evidence.artifacts.map((artifact) => artifact.id)).toEqual([
+    'desktop-local',
+    'web-fallback',
+    'android-preflight',
+    'ios-preflight'
+  ])
+  expect(evidence.artifacts.every((artifact) => artifact.unsupportedAvailableClaims.length === 0)).toBe(true)
+  expect(evidence.artifacts.find((artifact) => artifact.id === 'desktop-local')).toEqual(expect.objectContaining({
+    transportKind: 'tauri-local',
+    nativePlatform: 'tauri-desktop',
+    nativeAvailable: true,
+    localPythonRequired: true
+  }))
+  expect(evidence.artifacts.find((artifact) => artifact.id === 'web-fallback')).toEqual(expect.objectContaining({
+    transportKind: 'http',
+    nativeAvailable: false,
+    thinClientUsable: true,
+    localPythonRequired: false
+  }))
+  expect(evidence.artifacts.find((artifact) => artifact.id === 'android-preflight')).toEqual(expect.objectContaining({
+    transportKind: 'native-mobile',
+    nativePlatform: 'android',
+    thinClientUsable: true,
+    localPythonRequired: false
+  }))
+  expect(evidence.artifacts.find((artifact) => artifact.id === 'ios-preflight')).toEqual(expect.objectContaining({
+    transportKind: 'native-mobile',
+    nativePlatform: 'ios',
+    thinClientUsable: true,
+    localPythonRequired: false
+  }))
+})
+
+it('does not expose platform-inapplicable native rows as available capabilities', () => {
+  const desktopModel = buildSettingsPermissionsModel(snapshotFor(nativeCapabilityManifestFixture, 'tauri-local'))
+  const androidModel = buildSettingsPermissionsModel(snapshotFor(androidNativeCapabilityManifestFixture, 'native-mobile'))
+  const iosModel = buildSettingsPermissionsModel(snapshotFor(iosNativeCapabilityManifestFixture, 'native-mobile'))
+
+  expect(desktopModel.nativePermissions.some((permission) => permission.id.toLowerCase().includes('ios'))).toBe(false)
+  expect(desktopModel.nativePermissions.some((permission) => permission.id.toLowerCase().includes('android'))).toBe(false)
+  expect(desktopModel.nativeIntegrations).toEqual([])
+  expect(androidModel.nativePermissions.some((permission) => permission.id.toLowerCase().includes('ios'))).toBe(false)
+  expect(iosModel.nativePermissions.some((permission) => permission.id.toLowerCase().includes('android'))).toBe(false)
+
+  for (const model of [desktopModel, androidModel, iosModel]) {
+    expect(model.nativePermissions.filter((permission) => permission.state === 'unsupported' && (permission.granted || permission.capabilityEnabled || permission.requestEnabled))).toEqual([])
+  }
 })

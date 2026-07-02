@@ -134,6 +134,23 @@ The earlier bootstrap work configured Tauri dev defaults so the command can star
 - Closing Tauri or interrupting the command shuts down the Python child cleanly.
 - No manual sidecar build or extra environment ritual is needed for normal local dev.
 
+## Operator guide alignment for G196-G199
+
+The operator-facing docs now use these exact local commands and boundaries:
+
+| Need | Command or source | What it proves | What it does not prove |
+| --- | --- | --- | --- |
+| One-command desktop local dev | `pnpm --filter @aurora/tauri-ui tauri dev` | Starts the Tauri dev path that auto-configures `.venv/bin/python main.py` or `uv run python main.py`, threads mode, loopback Gateway, managed sidecar defaults, and unified terminal logs. | It is interactive and must be rerun for final desktop evidence; package sidecar staging is separate. |
+| Headless Linux route/UI smoke | `pnpm --filter @aurora/tauri-ui tauri:smoke:linux` | Delegates to `test:ci-regression-gates`, which runs route, assistant, admin, runtime, outcome, dev-bootstrap, native-evidence, and service-boundary gates without launching a desktop WebView. | It is not a substitute for `tauri dev` WebView screenshots or mobile/device evidence. |
+| Desktop WebView smoke | `pnpm --filter @aurora/tauri-ui dev:smoke` | Launches `tauri dev`, probes `/api/health`, `/api/registry`, `/api/services`, requires `[tauri]` and `[aurora][...]` logs, and writes `apps/aurora-tauri/reports/tauri-dev-smoke.json`. | Requires a GUI-capable environment such as Xvfb on Linux CI. |
+| Packaged thin desktop build | `pnpm --filter @aurora/tauri-ui build:bundle:thin` | Stages the `thin` sidecar profile and runs unsigned Tauri packaging through `src-tauri/tauri.release.conf.json`. | It does not sign, notarize, or prove heavyweight local assistant profiles. |
+| Android CI preflight | `pnpm --filter @aurora/tauri-ui android:preflight:ci` after `pnpm --filter @aurora/tauri-ui android:init` | Requires the generated Android project and writes a redacted native/signing/capability report. | It does not require release keystore secrets. |
+| Android release preflight | `pnpm --filter @aurora/tauri-ui android:preflight:strict` | Requires generated Android project and signing inputs. | It still needs real signed AAB/upload evidence for release. |
+| iOS policy baseline on Linux | `pnpm --filter @aurora/tauri-ui ios:policy` | Checks iOS manifest/policy copy and rejects system-assistant replacement claims. | It cannot satisfy iOS build/preflight acceptance. |
+| iOS build/preflight | `pnpm --filter @aurora/tauri-ui tauri ios init`, `pnpm --filter @aurora/tauri-ui tauri ios build`, `pnpm --filter @aurora/tauri-ui ios:preflight` | Requires macOS/Xcode and the generated iOS project; provides simulator/build evidence. | Linux runners cannot provide this evidence. |
+
+Final G199 readiness must be recorded as evidence, not inferred from docs. The final quality gate should include command output, screenshot/artifact paths, ai-slop-cleaner result, code-reviewer approval, and architect invariant clearance. If any of those reviews have not run, the gate must say `pending` rather than claiming approval.
+
 ## Why the old gates missed the broken UI
 
 The original gates proved buildability and route metadata, not product usability. The current route gates now close several of those holes:

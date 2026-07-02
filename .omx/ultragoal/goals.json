@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:40:53.842Z",
+  "updatedAt": "2026-07-02T15:51:39.899Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -2012,190 +2012,232 @@
       "id": "G176-diagnostics-page-should-be-the-only",
       "title": "Diagnostics page should be the only page centered on system status.",
       "objective": "Diagnostics page should be the only page centered on system status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:47:36.942Z",
+      "completedAt": "2026-07-02T15:47:36.942Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G177-include",
       "title": "Include:",
       "objective": "Include:\nservice probes;\nGateway route registry health;\nevent stream health;\nWebRTC diagnostics;\nnative manifest/permission evidence;\nsidecar process evidence;\nrecent frontend errors;\nredaction preview;\nsupport bundle export.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:47:59.244Z",
+      "completedAt": "2026-07-02T15:47:59.244Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G178-support-bundle-must-exclude-secrets",
       "title": "Support bundle must exclude secrets/raw audio/token values.",
       "objective": "Support bundle must exclude secrets/raw audio/token values.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:47:59.616Z",
+      "completedAt": "2026-07-02T15:47:59.616Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G179-diagnostics-can-export-or-preview-a",
       "title": "Diagnostics can export or preview a redacted bundle.",
       "objective": "Diagnostics can export or preview a redacted bundle.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:47:59.986Z",
+      "completedAt": "2026-07-02T15:47:59.986Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G180-e2e-captures-healthy-degraded-error",
       "title": "E2E captures healthy/degraded/error probe states.",
       "objective": "E2E captures healthy/degraded/error probe states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:00.358Z",
+      "completedAt": "2026-07-02T15:48:00.358Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G181-product-pages-link-to-diagnostics-fo",
       "title": "Product pages link to diagnostics for troubleshooting instead of embe...",
       "objective": "Product pages link to diagnostics for troubleshooting instead of embedding full diagnostic dumps.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:00.723Z",
+      "completedAt": "2026-07-02T15:48:00.723Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G182-platform-specific-screenshots-or-jso",
       "title": "Platform-specific screenshots or JSON evidence exist for desktop loca...",
       "objective": "Platform-specific screenshots or JSON evidence exist for desktop local, web fallback, Android preflight, iOS preflight.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:01.099Z",
+      "completedAt": "2026-07-02T15:48:01.099Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G183-ui-never-reports-unsupported-native",
       "title": "UI never reports unsupported native capabilities as available.",
       "objective": "UI never reports unsupported native capabilities as available.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:01.470Z",
+      "completedAt": "2026-07-02T15:48:01.470Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G184-mobile-routes-are-usable-as-thin-cli",
       "title": "Mobile routes are usable as thin clients even when local Python servi...",
       "objective": "Mobile routes are usable as thin clients even when local Python services are unavailable.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:01.845Z",
+      "completedAt": "2026-07-02T15:48:01.845Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G185-route-production-crawl",
       "title": "**Route production crawl:**",
       "objective": "**Route production crawl:**\nstarts Gateway/sidecar or fixture-backed Gateway as appropriate;\nvisits all 22 routes;\nasserts no console errors;\nasserts no unexpected 4xx/5xx;\nasserts no placeholder copy;\nasserts route-specific landmarks/controls from G001.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:07.802Z",
+      "completedAt": "2026-07-02T15:50:07.802Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G186-assistant-e2e",
       "title": "**Assistant E2E:**",
       "objective": "**Assistant E2E:**\nsend message;\nstreaming/fallback result;\nroute sheet;\ntool approval card;\ncancellation/retry/no-model states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:08.187Z",
+      "completedAt": "2026-07-02T15:50:08.187Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G187-admin-e2e",
       "title": "**Admin E2E:**",
       "objective": "**Admin E2E:**\nservices health;\ncontracts registry;\nconfig validation/diff;\naccess/tokens/devices read paths;\naudit filtering;\nmutation draft/confirmation disabled/live checks.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:08.556Z",
+      "completedAt": "2026-07-02T15:50:08.556Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G188-runtime-e2e",
       "title": "**Runtime E2E:**",
       "objective": "**Runtime E2E:**\nmesh status/pairing entry;\nmodels provider selection state;\nmemory search;\ntools catalog/detail;\ndiagnostics export redaction preview;\nsettings/native platform status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:08.930Z",
+      "completedAt": "2026-07-02T15:50:08.930Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G189-visual-evidence",
       "title": "**Visual evidence:**",
       "objective": "**Visual evidence:**\nstore screenshots for all primary routes on desktop viewport;\nstore mobile viewport screenshots for shell and main route classes;\ncompare only stable landmarks/layout classes unless pixel baselines are approved.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:09.306Z",
+      "completedAt": "2026-07-02T15:50:09.306Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G190-tauri-desktop-smoke",
       "title": "**Tauri desktop smoke:**",
       "objective": "**Tauri desktop smoke:**\n`tauri dev`/bounded smoke verifies sidecar readiness and native command evidence;\nexisting Linux Tauri check remains.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:51:39.899Z",
+      "completedAt": "2026-07-02T15:51:39.899Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui dev:smoke passed: launched pnpm --filter @aurora/tauri-ui tauri dev real local stack, Vite ready, Rust/Tauri cargo run built/launched, Python sidecar services started in threads mode, Gateway /api/health /api/registry /api/services returned HTTP 200, report written apps/aurora-tauri/reports/tauri-dev-smoke.json. Also pnpm --filter @aurora/tauri-ui test:ci-regression-gates passed; git diff --check."
     },
     {
       "id": "G191-mobile-gates",
       "title": "**Mobile gates:**",
       "objective": "**Mobile gates:**\nAndroid preflight/emulator smoke for manifest and startup;\niOS policy/build baseline on macOS;\nno signing required for PR gates.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:10.049Z",
+      "completedAt": "2026-07-02T15:50:10.049Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G192-static-checks",
       "title": "**Static checks:**",
       "objective": "**Static checks:**\nno `TauriRoutePlaceholder` reachable from production route registry;\nno fixture/demo mode in production build unless explicitly labeled;\nno raw secret/token in UI logs or support bundle.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:10.417Z",
+      "completedAt": "2026-07-02T15:50:10.417Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G193-ci-names-are-clear-and-non-duplicati",
       "title": "CI names are clear and non-duplicative:",
       "objective": "CI names are clear and non-duplicative:\nQuality;\nPython Tests;\nFrontend and SDK;\nTauri Desktop Verification;\nTauri Android Verification;\nTauri iOS Baseline/Policy;\nEnd-to-End Tests;\nDocker Images.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:10.786Z",
+      "completedAt": "2026-07-02T15:50:10.786Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G194-failing-screenshots-log-artifacts-ar",
       "title": "Failing screenshots/log artifacts are uploaded.",
       "objective": "Failing screenshots/log artifacts are uploaded.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:11.161Z",
+      "completedAt": "2026-07-02T15:50:11.161Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G195-gates-fail-against-the-known-bad-pla",
       "title": "Gates fail against the known-bad placeholder/dashboard behavior.",
       "objective": "Gates fail against the known-bad placeholder/dashboard behavior.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:50:11.551Z",
+      "completedAt": "2026-07-02T15:50:11.551Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:ci-regression-gates (routes Vitest 9 passed; Playwright route crawl 4 passed incl all 22 routes, placeholder/console/HTTP/landmark checks and desktop screenshots; assistant 3 passed; admin 1 passed; runtime 11 passed; outcomes 1 passed; dev-bootstrap 5 passed; ci-native-evidence 6 passed; service-boundary 5 passed); pnpm --filter @aurora/tauri-ui android:preflight (subagent evidence: 5 passed, 2 expected blocked); pnpm --filter @aurora/tauri-ui ios:policy; git diff --check; rm -rf apps/aurora-tauri/test-results"
     },
     {
       "id": "G196-document",
       "title": "Document:",
       "objective": "Document:\none-command Tauri dev;\nsidecar concept and dev vs packaged behavior;\nbuild matrix and package signing exclusions;\nplatform capability matrix;\nhow to run E2E/UI smoke locally;\nroute production contract;\ntroubleshooting logs and support bundle redaction.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:02.233Z",
+      "completedAt": "2026-07-02T15:48:02.233Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G197-run-final-cleanup",
@@ -2210,10 +2252,12 @@
       "id": "G198-docs-match-actual-commands-and-teste",
       "title": "Docs match actual commands and tested behavior.",
       "objective": "Docs match actual commands and tested behavior.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:02.606Z",
+      "completedAt": "2026-07-02T15:48:02.606Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G199-final-ultragoal-quality-gate-include",
@@ -2228,136 +2272,166 @@
       "id": "G200-mock-target-assistant-conversation-r",
       "title": "Mock target: assistant conversation rail/thread/composer/route sheet/...",
       "objective": "Mock target: assistant conversation rail/thread/composer/route sheet/tool-call cards.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:02.985Z",
+      "completedAt": "2026-07-02T15:48:02.985Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G201-current-gap-primary-page-can-read-as",
       "title": "Current gap: primary page can read as backend/capability report/debug...",
       "objective": "Current gap: primary page can read as backend/capability report/debug cockpit instead of chat.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:03.364Z",
+      "completedAt": "2026-07-02T15:48:03.364Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G202-must-include-recent-chats-new-chat-p",
       "title": "Must include: recent chats, new chat, prompt composer, send/stop/retr...",
       "objective": "Must include: recent chats, new chat, prompt composer, send/stop/retry, message bubbles, route/model selector, route/privacy sheet, tool approvals, voice button state, attachment/context button.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:03.735Z",
+      "completedAt": "2026-07-02T15:48:03.735Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G203-backend-orchestrator-external-input",
       "title": "Backend: Orchestrator external input, event stream if available, canc...",
       "objective": "Backend: Orchestrator external input, event stream if available, cancellation, TTS/transcription routes when present.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:04.118Z",
+      "completedAt": "2026-07-02T15:48:04.118Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G204-desktop-local-sidecar-status-visible",
       "title": "Desktop: local sidecar status visible but secondary.",
       "objective": "Desktop: local sidecar status visible but secondary.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:04.498Z",
+      "completedAt": "2026-07-02T15:48:04.498Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G205-web-no-tauri-native-voice-claims-bro",
       "title": "Web: no Tauri native voice claims; browser mic only.",
       "objective": "Web: no Tauri native voice claims; browser mic only.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:04.879Z",
+      "completedAt": "2026-07-02T15:48:04.879Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G206-mobile-touch-composer-bottom-tabs-na",
       "title": "Mobile: touch composer, bottom tabs, native mic permission state.",
       "objective": "Mobile: touch composer, bottom tabs, native mic permission state.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:05.273Z",
+      "completedAt": "2026-07-02T15:48:05.273Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G207-mock-target-memory-knowledge-cards-p",
       "title": "Mock target: Memory & Knowledge cards plus conversation history.",
       "objective": "Mock target: Memory & Knowledge cards plus conversation history.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:05.658Z",
+      "completedAt": "2026-07-02T15:48:05.658Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G208-must-include-search-namespaces-histo",
       "title": "Must include: search, namespaces, history list, provenance, retention...",
       "objective": "Must include: search, namespaces, history list, provenance, retention state, delete/export gates.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:06.056Z",
+      "completedAt": "2026-07-02T15:48:06.056Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G209-backend-db-messages-rag-search-names",
       "title": "Backend: DB messages/RAG search, namespace management if available.",
       "objective": "Backend: DB messages/RAG search, namespace management if available.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:06.430Z",
+      "completedAt": "2026-07-02T15:48:06.430Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G210-empty-state-no-memory-yet-with-expla",
       "title": "Empty state: no memory yet with explanation of when Aurora stores mem...",
       "objective": "Empty state: no memory yet with explanation of when Aurora stores memory.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:06.813Z",
+      "completedAt": "2026-07-02T15:48:06.813Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G211-mock-target-settings-privacy-control",
       "title": "Mock target: settings privacy controls adapted to data policy.",
       "objective": "Mock target: settings privacy controls adapted to data policy.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:07.198Z",
+      "completedAt": "2026-07-02T15:48:07.198Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G212-must-include-retention-raw-audio-tra",
       "title": "Must include: retention, raw audio/transcript toggles, namespace visi...",
       "objective": "Must include: retention, raw audio/transcript toggles, namespace visibility, remote/mesh fallback, export/delete/import, audit link.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:07.516Z",
+      "completedAt": "2026-07-02T15:48:07.516Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G213-backend-config-adminaction-db-manage",
       "title": "Backend: Config/AdminAction, DB management if available.",
       "objective": "Backend: Config/AdminAction, DB management if available.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:07.814Z",
+      "completedAt": "2026-07-02T15:48:07.814Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G214-must-not-duplicate-memory-browse-ui",
       "title": "Must not duplicate `/memory` browse UI.",
       "objective": "Must not duplicate `/memory` browse UI.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:48:08.101Z",
+      "completedAt": "2026-07-02T15:48:08.101Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|assistant|mock-driven interaction anchors|memory|data policy|settings, privacy defaults|iOS native integration states|Android assistant role qualification'; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest -- -t 'memory|data policy|diagnostics'; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; pnpm --filter @aurora/tauri-ui test:service-boundary; make check-docs; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui ios:policy; git diff --check"
     },
     {
       "id": "G215-mock-target-tools-automations-regist",

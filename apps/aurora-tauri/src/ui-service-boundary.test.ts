@@ -162,7 +162,11 @@ describe('UI and Tauri service boundary contract', () => {
   it('keeps tauri smoke coverage tied to the service-boundary gate', () => {
     const packageJson = JSON.parse(readRepo('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 
+    const linuxSmoke = packageJson.scripts['tauri:smoke:linux']
+    const regressionGate = packageJson.scripts['test:ci-regression-gates'] ?? linuxSmoke
+
     expect(packageJson.scripts['test:service-boundary']).toContain('ui-service-boundary.test.ts')
-    expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:service-boundary')
+    expect(linuxSmoke).toContain('test:ci-regression-gates')
+    expect(regressionGate).toContain('test:service-boundary')
   })
 })

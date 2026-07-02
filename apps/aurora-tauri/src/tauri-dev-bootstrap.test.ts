@@ -15,8 +15,12 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
 
     expect(packageJson.scripts.tauri).toBe('node ./scripts/tauri-cli.mjs')
     expect(packageJson.scripts['dev:smoke']).toBe('node ./scripts/tauri-dev-smoke.mjs')
+    const linuxSmoke = packageJson.scripts['tauri:smoke:linux']
+    const regressionGate = packageJson.scripts['test:ci-regression-gates'] ?? linuxSmoke
+
     expect(packageJson.scripts['test:dev-bootstrap']).toContain('tauri-dev-bootstrap.test.ts')
-    expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:dev-bootstrap')
+    expect(linuxSmoke).toContain('test:ci-regression-gates')
+    expect(regressionGate).toContain('test:dev-bootstrap')
   })
 
   it('auto-configures tauri dev as the local Python sidecar stack', () => {

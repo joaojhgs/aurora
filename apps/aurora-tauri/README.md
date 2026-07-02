@@ -59,6 +59,28 @@ pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 
 `dev:smoke` is the desktop/WebView smoke wrapper used by the Linux Tauri workflow under Xvfb. It launches `pnpm --filter @aurora/tauri-ui tauri dev`, fails if the process exits before readiness, fails if `/api/health`, `/api/registry`, or `/api/services` never become reachable, fails if required `[tauri]`/`[aurora][...]` log markers are missing, and writes `apps/aurora-tauri/reports/tauri-dev-smoke.json`.
 
+## Local operator smoke checklist
+
+Use this sequence when preparing a Tauri/UI quality gate from a normal checkout:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @aurora/client build
+pnpm --filter @aurora/ui build
+pnpm --filter @aurora/tauri-ui test
+pnpm --filter @aurora/tauri-ui typecheck
+pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+```
+
+Then run the interactive desktop-local stack or CI smoke wrapper when a GUI environment is available:
+
+```bash
+pnpm --filter @aurora/tauri-ui tauri dev
+pnpm --filter @aurora/tauri-ui dev:smoke
+```
+
+`tauri:smoke:linux` delegates to `test:ci-regression-gates`, a fast policy/outcome gate. `dev:smoke` is the bounded desktop-local evidence command. The final gate should preserve `apps/aurora-tauri/reports/tauri-dev-smoke.json`, `apps/aurora-tauri/reports/e2e-outcomes/`, route screenshots when available, Android/iOS preflight reports, and review/architecture approvals. Mark missing external-platform evidence as pending instead of treating this README or Linux-only tests as approval.
+
 ## Secure storage
 
 `aurora_secure_storage_get`, `aurora_secure_storage_set`, and `aurora_secure_storage_delete` persist only Aurora credential keys in the platform keychain through the Rust shell. Accepted keys are limited to `aurora.session*`, `aurora.auth*`, `aurora.gateway*`, `aurora.mesh*`, and `aurora.admin*` namespaces for session tokens, refresh material, mesh credentials, Gateway tokens, and admin unlock secrets.
@@ -153,6 +175,17 @@ Required QA evidence for IOS-008:
 - Simulator or device share/deep-link flow with backend attachment validation or a policy-blocked result.
 - App Store Connect/TestFlight signing dry run or explicit credential-gated substitute evidence.
 - No raw Apple API key material, provisioning secret, token, local model path, or unredacted payload in logs or screenshots.
+
+## Platform capability matrix
+
+| Platform | Local command / CI lane | Capability evidence | Release limits |
+| --- | --- | --- | --- |
+| Web thin | Web app checks in `frontend-sdk.yml` | HTTP/Gateway SDK transport and browser-supported permissions. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims. |
+| Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev`; `dev:smoke` in `tauri-desktop.yml` | Rust-supervised Python sidecar, loopback Gateway, secure storage/native command status, unified logs. | Dev path does not use packaged sidecar staging. |
+| Desktop packaged | `build:bundle:thin` or explicit `build:bundle:<profile>` | Profile-specific sidecar staged into Tauri external binaries. | Local/CI scripts pass `--no-sign`; signing/notarization are release-only. |
+| Android | `android:init`, `android:preflight:ci`, `android:build:apk:x86_64:debug`, `android:smoke` | Native manifest payloads for assistant role, fallback entrypoints, Keystore, biometric/admin unlock, and device matrix. | Release AAB/signing needs keystore inputs and Play/App Distribution workflow. |
+| iOS policy | `ios:policy` | Manifest and copy policy checks, including no default system-assistant claim. | Linux-safe only; not build evidence. |
+| iOS build/preflight | `tauri ios init`, `tauri ios build`, `ios:preflight` | macOS/Xcode generated project, simulator/build, App Intent/share/deep-link/file evidence when targets exist. | Requires macOS/Xcode; App Store/TestFlight dry run requires Apple credentials. |
 
 ## Commands
 
