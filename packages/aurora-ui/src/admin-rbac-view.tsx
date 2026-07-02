@@ -258,13 +258,48 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
         <Metric label="Audit" value={String(snapshot.audit.length)} detail="redacted Auth events" />
       </div>
 
+      <RbacScopeNav />
+
       <div className="aui-rbac-layout">
         <PrincipalsPanel principals={snapshot.principals} onPreviewAdminAction={onPreviewAdminAction} />
         <RolesPanel roles={snapshot.roles} />
+        <PermissionMatrixPanel principals={snapshot.principals} permissions={snapshot.permissions} />
         <PermissionsPanel permissions={snapshot.permissions} />
         <AuditPanel audit={snapshot.audit} />
       </div>
     </section>
+  )
+}
+
+function RbacScopeNav() {
+  return (
+    <nav className="aui-rbac-tabs" aria-label="RBAC sections">
+      <a href="#rbac-roles-title">
+        <ShieldCheck size={16} aria-hidden />
+        Roles
+        <small>derived from backend principals</small>
+      </a>
+      <a href="#rbac-principals-title">
+        <UserCog size={16} aria-hidden />
+        Principals
+        <small>Auth.ListPrincipals truth</small>
+      </a>
+      <a href="#rbac-matrix-title">
+        <KeyRound size={16} aria-hidden />
+        Permission matrix
+        <small>effective access preview</small>
+      </a>
+      <a href="/admin/tokens">
+        <KeyRound size={16} aria-hidden />
+        API tokens
+        <small>separate one-time secret route</small>
+      </a>
+      <a href="/admin/devices">
+        <UserCog size={16} aria-hidden />
+        Trusted devices
+        <small>separate trust approval route</small>
+      </a>
+    </nav>
   )
 }
 
@@ -457,6 +492,70 @@ function PermissionsPanel({ permissions }: { permissions: AdminRbacPermissionRow
           </article>
         ))}
       </div>
+    </section>
+  )
+}
+
+function PermissionMatrixPanel({
+  principals,
+  permissions
+}: {
+  principals: AdminRbacPrincipalRow[]
+  permissions: AdminRbacPermissionRow[]
+}) {
+  const matrixPermissions = permissions.slice(0, 8)
+  const matrixPrincipals = principals.slice(0, 5)
+  return (
+    <section className="aui-admin-panel aui-rbac-matrix" aria-labelledby="rbac-matrix-title">
+      <div className="aui-panel-heading">
+        <div>
+          <p className="aui-kicker">Matrix</p>
+          <h2 id="rbac-matrix-title">Permission matrix</h2>
+        </div>
+      </div>
+      {matrixPermissions.length === 0 || matrixPrincipals.length === 0 ? (
+        <p className="aui-muted">No permission matrix can be derived until Auth and permission catalog data load.</p>
+      ) : (
+        <div className="aui-table-scroll">
+          <table className="aui-table">
+            <caption className="aui-sr-only">
+              Permission matrix showing effective allow or deny status for principals and backend permissions
+            </caption>
+            <thead>
+              <tr>
+                <th>Permission</th>
+                {matrixPrincipals.map((principal) => (
+                  <th key={principal.id}>{principal.username}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrixPermissions.map((permission) => (
+                <tr key={permission.id}>
+                  <td>
+                    <strong>{permission.label}</strong>
+                    <code>{permission.id}</code>
+                  </td>
+                  {matrixPrincipals.map((principal) => {
+                    const allowed = checkAccess(
+                      principal.effectivePermissions,
+                      [permission.id],
+                      permission.kind as ContractMethodType | null
+                    ).allowed
+                    return (
+                      <td key={principal.id}>
+                        <span className={allowed ? 'aui-matrix-allow' : 'aui-matrix-deny'}>
+                          {allowed ? 'allow' : 'deny'}
+                        </span>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }

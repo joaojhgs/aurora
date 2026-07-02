@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:02:29.382Z",
+  "updatedAt": "2026-07-02T07:05:11.883Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -203,10 +203,13 @@
       "id": "G017-components-aurora-admin-rbac-view-ts",
       "title": "`components/aurora/admin/rbac-view.tsx`: roles, principals, permissio...",
       "objective": "`components/aurora/admin/rbac-view.tsx`: roles, principals, permissions, API tokens, trusted devices.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:05:11.883Z",
+      "startedAt": "2026-07-02T07:02:58.187Z",
+      "completedAt": "2026-07-02T07:05:11.883Z",
+      "evidence": "Admin RBAC/access now includes mock-style scope navigation, principal/role panels, derived permission matrix, and truthful handoffs to API token and trusted-device routes while permission patches remain AdminAction-gated from AuroraClient Auth/capability evidence. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'RBAC'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin."
     },
     {
       "id": "G018-components-aurora-admin-tokens-view",

@@ -755,8 +755,15 @@ button, input, select, textarea { font: inherit; }
 .aui-exposure-internal { color: var(--aui-warning); }
 .aui-backend-http, .aui-backend-gateway-builtin { color: var(--aui-success); }
 .aui-admin-rbac, .aui-admin-audit { display: grid; gap: 1rem; }
+.aui-rbac-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .65rem; }
+.aui-rbac-tabs a { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .15rem .45rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); color: var(--aui-ink); padding: .7rem; text-decoration: none; }
+.aui-rbac-tabs small { grid-column: 2; color: var(--aui-muted); font-size: .75rem; line-height: 1.3; }
 .aui-rbac-layout { display: grid; gap: 1rem; }
 .aui-rbac-principals { grid-column: 1 / -1; }
+.aui-rbac-matrix { grid-column: 1 / -1; }
+.aui-matrix-allow, .aui-matrix-deny { display: inline-flex; border-radius: 999px; padding: .12rem .45rem; font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-matrix-allow { background: color-mix(in srgb, var(--aui-success) 12%, white); color: var(--aui-success); }
+.aui-matrix-deny { background: color-mix(in srgb, var(--aui-muted) 12%, white); color: var(--aui-muted); }
 .aui-rbac-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; padding: .9rem; }
 .aui-rbac-role { display: grid; gap: .55rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem; }
 .aui-rbac-role header { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
