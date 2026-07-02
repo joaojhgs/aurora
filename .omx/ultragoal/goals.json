@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:09:05.035Z",
+  "updatedAt": "2026-07-02T10:12:48.725Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -956,10 +956,12 @@
       "id": "G080-normalize-token-scopes-and-permissio",
       "title": "Normalize token scopes and permissions consistently across Auth list...",
       "objective": "Normalize token scopes and permissions consistently across Auth list APIs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:12:48.725Z",
+      "completedAt": "2026-07-02T10:12:48.725Z",
+      "evidence": "Normalized Auth public permission/scope responses consistently: _api_permission_list now maps legacy all to *, canonicalizes known permission prefixes via validate_permission, deduplicates preserving order, and is used for ListPrincipals/GetPrincipal/CreatePrincipal/UpdatePrincipal permissions plus ListTokens/CreateToken scopes. Added tests/unit/auth/test_auth_service_contracts.py proving Principal/ListTokens/CreateToken outputs normalize legacy JSON scopes, lowercase prefixes, all, and duplicates. Verified: uv run ruff check app/services/auth/service.py tests/unit/auth/test_auth_service_contracts.py; uv run pytest tests/unit/auth/test_auth_service_contracts.py tests/unit/gateway/test_auth_service.py::test_create_token_valid_scopes_succeeds tests/unit/gateway/test_auth_service.py::test_update_token_scopes_valid -q; uv run pytest tests/unit/auth/test_auth_service_contracts.py tests/unit/gateway/test_auth_service.py tests/integration/test_token_management.py -q (37 passed, 9 skipped legacy endpoint tests)."
     },
     {
       "id": "G081-provide-sdk-helpers-for-ui-lanes",

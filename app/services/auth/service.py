@@ -8,12 +8,14 @@ FastAPI routes.
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import Envelope
 from app.services.auth.auth_manager import AuthManager
 from app.shared.auth.audit import audit_event
+from app.shared.auth.permissions import validate_permission
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
     AuditLogResponse,
@@ -127,11 +129,17 @@ def _api_permission_list(value: Any) -> list[str]:
         value = list(value) if isinstance(value, tuple | set) else [value]
 
     normalized: list[str] = []
+    seen: set[str] = set()
     for item in value:
         if item is None:
             continue
-        permission = str(item)
-        normalized.append("*" if permission == "all" else permission)
+        permission = "*" if str(item) == "all" else str(item)
+        with suppress(ValueError):
+            permission = validate_permission(permission)
+        if permission in seen:
+            continue
+        seen.add(permission)
+        normalized.append(permission)
     return normalized
 
 
@@ -513,7 +521,7 @@ class AuthService(BaseService):
                 PrincipalResponse(
                     id=u.id,
                     username=u.username,
-                    permissions=u.permissions or [],
+                    permissions=_api_permission_list(u.permissions),
                     is_admin=u.is_admin,
                     created_at=u.created_at.isoformat() if u.created_at else None,
                 )
@@ -543,7 +551,7 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
@@ -565,7 +573,7 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
@@ -595,7 +603,7 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
@@ -718,7 +726,7 @@ class AuthService(BaseService):
             token=token_str,
             id=token.id,
             prefix=token.prefix or "",
-            scopes=token.scopes or [],
+            scopes=_api_permission_list(token.scopes),
             expires_at=token.expires_at.isoformat() if token.expires_at else None,
         )
 
