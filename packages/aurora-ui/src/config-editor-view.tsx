@@ -94,6 +94,9 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       return [{ key_path, value: parseFieldValue(raw, field.type) }]
     })
   }, [edits, model.fields])
+  const sections = useMemo(() => groupConfigFields(model.fields), [model.fields])
+  const restartCount = model.fields.filter((field) => field.restart_required).length
+  const secretCount = model.fields.filter((field) => field.secret).length
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +114,8 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       setImpact(impactResult.ok ? impactResult.data.impacts : [])
       if (!diffResult.ok) setMessage(`Diff preview failed: ${diffResult.error.message}`)
       else if (!impactResult.ok) setMessage(`Reload impact failed: ${impactResult.error.message}`)
+    }).catch((error) => {
+      if (!cancelled) setMessage(`Diff preview failed: ${errorMessage(error)}`)
     })
     return () => {
       cancelled = true
@@ -193,44 +198,77 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       ) : null}
       {message ? <div className="aui-config-alert" role="status">{message}</div> : null}
 
+      <div className="aui-config-summary" aria-label="Configuration editor summary">
+        <ConfigMetric label="Schema fields" value={String(model.fields.length)} detail={`${sections.length} accordion sections`} />
+        <ConfigMetric label="Secrets" value={String(secretCount)} detail="redacted and disabled" />
+        <ConfigMetric label="Restart" value={String(restartCount)} detail="fields require service restart" />
+        <ConfigMetric label="Staged" value={String(changes.length)} detail="changes awaiting review" />
+      </div>
+
       <form className="aui-config-grid" onSubmit={applyChanges}>
         <div className="aui-config-panel">
           <div className="aui-config-panel-header">
-            <h2>Schema fields</h2>
+            <h2>Schema-backed config accordion</h2>
             <button type="button" className="aui-action-chip" onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
               <RotateCcw size={14} aria-hidden /> Discard
             </button>
           </div>
-          <div className="aui-config-fields">
-            {model.fields.map((field) => {
-              const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
-              const changed = changes.some((change) => change.key_path === field.key_path)
-              return (
-                <label key={field.key_path} className="aui-config-field">
+          <div className="aui-config-accordion">
+            {sections.length === 0 ? <p className="aui-muted">No schema sections are available.</p> : null}
+            {sections.map(([section, fields]) => (
+              <details key={section} className="aui-config-section" open>
+                <summary>
                   <span>
-                    <strong>{field.title ?? field.key_path}</strong>
-                    <code>{field.key_path}</code>
-                    <small>{field.description || 'No schema description provided.'}</small>
+                    <strong>{configSectionTitle(section)}</strong>
+                    <small>Config section: {section}</small>
                   </span>
-                  <input
-                    value={field.secret ? '[REDACTED]' : editedValue}
-                    disabled={!canMutate || field.secret || busy}
-                    aria-invalid={model.validationErrors.some((error) => error.includes(field.key_path))}
-                    data-changed={changed ? 'true' : undefined}
-                    onChange={(event) => setEdits((current) => ({ ...current, [field.key_path]: event.target.value }))}
-                  />
-                  <em>{field.source_layer}; {field.restart_required ? 'restart required' : field.reload_required ? 'reload required' : 'hot update'}</em>
-                </label>
-              )
-            })}
+                  <span className="aui-config-section-badges" aria-label={`${section} section badges`}>
+                    <em>{fields.length} fields</em>
+                    <em>{countChanged(fields, changes)} staged</em>
+                    {fields.some((field) => field.secret) ? <em>secret redacted</em> : null}
+                    {fields.some((field) => field.restart_required) ? <em>restart required</em> : null}
+                  </span>
+                </summary>
+                <div className="aui-config-fields">
+                  {fields.map((field) => {
+                    const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
+                    const changed = changes.some((change) => change.key_path === field.key_path)
+                    return (
+                      <label key={field.key_path} className="aui-config-field">
+                        <span>
+                          <strong>{field.title ?? field.key_path}</strong>
+                          <code>{field.key_path}</code>
+                          <small>{field.description || 'No schema description provided.'}</small>
+                        </span>
+                        <input
+                          value={field.secret ? '[REDACTED]' : editedValue}
+                          disabled={!canMutate || field.secret || busy}
+                          aria-invalid={model.validationErrors.some((error) => error.includes(field.key_path))}
+                          data-changed={changed ? 'true' : undefined}
+                          onChange={(event) => setEdits((current) => ({ ...current, [field.key_path]: event.target.value }))}
+                        />
+                        <em>
+                          {field.source_layer}; {fieldModeLabel(field)}
+                          {field.secret ? '; secret redacted' : ''}
+                          {field.affected_services.length > 0 ? `; affects ${field.affected_services.join(', ')}` : ''}
+                        </em>
+                      </label>
+                    )
+                  })}
+                </div>
+              </details>
+            ))}
           </div>
         </div>
 
         <aside className="aui-config-panel">
           <div className="aui-config-panel-header">
-            <h2>Review</h2>
+            <h2>Staged review</h2>
             <ShieldCheck size={18} aria-hidden />
           </div>
+          <p className="aui-config-review-note">
+            Preview Config.PreviewDiff and Config.PreviewReloadImpact before Config.Set is submitted through AdminAction. Secret values stay redacted.
+          </p>
           <DiffList diff={diff} />
           <ImpactList impact={impact} />
           <label className="aui-config-reason">
@@ -265,6 +303,16 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         </div>
       </section>
     </section>
+  )
+}
+
+function ConfigMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <article>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
   )
 }
 
@@ -349,6 +397,40 @@ function parseFieldValue(value: string, type: string): JsonValue {
 function displayValue(value: JsonValue | undefined): string {
   const text = stringifyValue(value)
   return text.length > 0 ? text : 'empty'
+}
+
+function groupConfigFields(fields: ConfigFieldMetadata[]): Array<[string, ConfigFieldMetadata[]]> {
+  const groups = new Map<string, ConfigFieldMetadata[]>()
+  for (const field of fields) {
+    const section = configSectionName(field.key_path)
+    const current = groups.get(section) ?? []
+    current.push(field)
+    groups.set(section, current)
+  }
+  return Array.from(groups.entries())
+}
+
+function configSectionName(keyPath: string): string {
+  const parts = keyPath.split('.')
+  return parts.length >= 2 ? parts.slice(0, 2).join('.') : parts[0] || 'root'
+}
+
+function configSectionTitle(section: string): string {
+  return section
+    .split('.')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' / ')
+}
+
+function countChanged(fields: ConfigFieldMetadata[], changes: ConfigChange[]): number {
+  const keys = new Set(fields.map((field) => field.key_path))
+  return changes.filter((change) => keys.has(change.key_path)).length
+}
+
+function fieldModeLabel(field: ConfigFieldMetadata): string {
+  if (field.restart_required) return 'restart required'
+  if (field.reload_required) return 'reload required'
+  return 'hot update'
 }
 
 function errorMessage(error: unknown): string {

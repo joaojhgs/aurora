@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:15:44.957Z",
+  "updatedAt": "2026-07-02T07:21:11.646Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -239,10 +239,13 @@
       "id": "G020-components-aurora-admin-config-view",
       "title": "`components/aurora/admin/config-view.tsx`: config accordion, staged d...",
       "objective": "`components/aurora/admin/config-view.tsx`: config accordion, staged diff, secret/restart badges, review/apply flow.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:21:11.646Z",
+      "startedAt": "2026-07-02T07:17:40.464Z",
+      "completedAt": "2026-07-02T07:21:11.646Z",
+      "evidence": "Admin config now uses SDK-backed schema sections as a production config accordion with redacted secret/restart badges, staged Config.PreviewDiff and Config.PreviewReloadImpact review copy, Config.Set AdminAction apply flow, rollback history, and denied-state gating. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'config editor'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G021-components-aurora-admin-audit-view-t",

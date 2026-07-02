@@ -829,10 +829,22 @@ button, input, select, textarea { font: inherit; }
 .aui-config-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-config-header h1 { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
 .aui-config-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
+.aui-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.aui-config-summary article { min-width: 0; border: 1px solid var(--aui-border); border-radius: .55rem; background: var(--aui-surface); padding: .8rem; }
+.aui-config-summary span, .aui-config-summary small { display: block; color: var(--aui-muted); font-size: .76rem; font-weight: 750; text-transform: uppercase; letter-spacing: .02em; }
+.aui-config-summary strong { display: block; margin: .2rem 0; font-size: 1.35rem; overflow-wrap: anywhere; }
+.aui-config-summary small { text-transform: none; letter-spacing: 0; line-height: 1.35; }
 .aui-config-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); gap: .85rem; align-items: start; }
 .aui-config-panel { min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
 .aui-config-panel-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .85rem; }
 .aui-config-panel-header h2, .aui-config-review-block h3 { margin: 0; font-size: 1rem; }
+.aui-config-accordion { display: grid; gap: .7rem; }
+.aui-config-section { min-width: 0; border: 1px solid var(--aui-border); border-radius: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); overflow: hidden; }
+.aui-config-section summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; cursor: pointer; padding: .8rem .9rem; list-style-position: inside; }
+.aui-config-section summary strong, .aui-config-section summary small, .aui-config-section-badges em { display: block; min-width: 0; overflow-wrap: anywhere; }
+.aui-config-section summary small { margin-top: .18rem; color: var(--aui-muted); font-size: .78rem; }
+.aui-config-section-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.aui-config-section-badges em { border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface); color: var(--aui-muted); padding: .18rem .45rem; font-size: .7rem; font-style: normal; font-weight: 800; text-transform: uppercase; }
 .aui-config-fields { display: grid; gap: .65rem; }
 .aui-config-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 22rem); gap: .55rem .85rem; align-items: center; border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); }
 .aui-config-field strong, .aui-config-field code, .aui-config-field small, .aui-config-field em { display: block; min-width: 0; overflow-wrap: anywhere; }
@@ -846,6 +858,7 @@ button, input, select, textarea { font: inherit; }
 .aui-config-review-block { display: grid; gap: .5rem; border-top: 1px solid var(--aui-border); padding-top: .75rem; }
 .aui-config-review-block:first-of-type { border-top: 0; padding-top: 0; }
 .aui-config-review-block p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-config-review-note { margin: 0 0 .8rem; color: var(--aui-muted); font-size: .82rem; line-height: 1.45; }
 .aui-config-diff-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 55%, white); }
 .aui-config-diff-row code, .aui-config-diff-row span { min-width: 0; overflow-wrap: anywhere; }
 .aui-config-diff-row span:nth-child(2) { color: var(--aui-danger); text-decoration: line-through; }
@@ -862,6 +875,7 @@ button, input, select, textarea { font: inherit; }
 
 @media (max-width: 1100px) {
   .aui-config-grid { grid-template-columns: minmax(0, 1fr); }
+  .aui-config-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -875,6 +889,9 @@ button, input, select, textarea { font: inherit; }
 
 @media (max-width: 620px) {
   .aui-config-header { display: grid; }
+  .aui-config-summary { grid-template-columns: minmax(0, 1fr); }
+  .aui-config-section summary { align-items: flex-start; display: grid; }
+  .aui-config-section-badges { justify-content: flex-start; }
   .aui-config-field { grid-template-columns: minmax(0, 1fr); }
   .aui-config-history article { grid-template-columns: minmax(0, 1fr); }
   .aui-admin-metrics { grid-template-columns: minmax(0, 1fr); }
