@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:29:20.265Z",
+  "updatedAt": "2026-07-02T09:29:51.432Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -755,10 +755,13 @@
       "id": "G063-design-md-exists-and-cites-reviewed",
       "title": "`DESIGN.md` exists and cites reviewed mock/code evidence.",
       "objective": "`DESIGN.md` exists and cites reviewed mock/code evidence.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:29:51.432Z",
+      "startedAt": "2026-07-02T09:29:24.965Z",
+      "completedAt": "2026-07-02T09:29:51.432Z",
+      "evidence": "DESIGN.md exists and its Source of truth section cites reviewed mock/code/doc evidence, including modules/ui-mock-reference app shell, assistant, mesh, models, admin, memory/tools, diagnostics/onboarding/settings sources; packages/aurora-ui/src/nav.tsx; production-surface-contracts.ts; apps/aurora-tauri/src/tauri-app.tsx; apps/aurora-tauri/README.md; and current frontend/production/Tauri docs. Verified with a Python evidence-anchor check and uv run python scripts/check_docs.py (58 markdown files scanned, passed)."
     },
     {
       "id": "G064-every-route-has-a-named-production-c",
