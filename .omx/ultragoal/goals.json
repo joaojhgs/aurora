@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:49:18.702Z",
+  "updatedAt": "2026-07-02T09:51:33.210Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -898,10 +898,13 @@
       "id": "G075-sidecar-status-in-ui-is-backed-by-ac",
       "title": "Sidecar status in UI is backed by actual Tauri command evidence, not...",
       "objective": "Sidecar status in UI is backed by actual Tauri command evidence, not browser fallback.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:51:33.210Z",
+      "startedAt": "2026-07-02T09:50:20.150Z",
+      "completedAt": "2026-07-02T09:51:33.210Z",
+      "evidence": "Sidecar status UI is backed by Tauri command evidence. apps/aurora-tauri/src/aurora-client.ts maps desktop-local sidecarStatus/startSidecar/stopSidecar to TauriLocalTransport commands, while browser/mock and desktop-thin runtimes return null. apps/aurora-tauri/src/tauri-app.tsx gates desktop-local readiness with startSidecar() and sidecarStatus(), then diagnostics renders sidecarEvidence from that status instead of browser fallback. Added e2e:runtime regression in apps/aurora-tauri/src/aurora-client.test.tsx proving /diagnostics displays command-backed threads/gateway/running sidecar evidence and does not render 'native sidecar status unavailable in this runtime' or thin-mode copy. Verified pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:service-boundary; pnpm --filter @aurora/tauri-ui test."
     },
     {
       "id": "G076-dev-smoke-fails-if-gateway-is-not-re",

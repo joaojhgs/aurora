@@ -488,4 +488,39 @@ describe('Tauri CI/E2E route gates', () => {
       container.remove()
     }
   })
+
+  it('e2e:runtime renders desktop-local sidecar status from Tauri command evidence', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+    const readySidecar = {
+      running: true,
+      mode: 'threads',
+      pid: 5150,
+      gatewayUrl: 'http://127.0.0.1:8000',
+      lastError: null,
+      details: { healthPath: '/api/health', command: 'aurora_sidecar_status' },
+    }
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport })),
+      mode: 'desktop-local',
+      startSidecar: async () => readySidecar,
+      sidecarStatus: async () => readySidecar,
+    }
+    window.history.replaceState({}, '', '/diagnostics')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Native boundary')
+        expect(container.textContent).toContain('Desktop local shell')
+      })
+      expect(container.textContent).toContain('threads; gateway=http://127.0.0.1:8000; running=true')
+      expect(container.textContent).toContain('Sidecar supervisorrunning')
+      expect(container.textContent).not.toContain('native sidecar status unavailable in this runtime')
+      expect(container.textContent).not.toContain('not used in thin mode')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
 })
