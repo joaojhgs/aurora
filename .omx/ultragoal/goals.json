@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:32:59.431Z",
+  "updatedAt": "2026-07-02T12:34:48.415Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1319,10 +1319,12 @@
       "id": "G113-memory-route-shows-real-data-or-real",
       "title": "Memory route shows real data or real empty state, not generic capabil...",
       "objective": "Memory route shows real data or real empty state, not generic capability report.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:34:48.415Z",
+      "completedAt": "2026-07-02T12:34:48.415Z",
+      "evidence": "G113 /memory real-data/empty-state gate completed: existing MemoryView already renders DB.GetMessages conversations, DB.RAGListNamespaces namespaces, DB.RAGSearchRemote provenance search, and explicit empty states. Added regression test with empty DB.GetMessages and DB.RAGListNamespaces responses proving /memory displays real empty collections/history/search copy and excludes Runtime snapshot/backend/generic capability-report content. Verified: pnpm --filter @aurora/ui test -- -t 'real empty memory state|memory namespaces'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G114-data-policy-route-is-separate-from-m",

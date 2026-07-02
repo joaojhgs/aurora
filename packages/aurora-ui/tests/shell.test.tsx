@@ -3670,6 +3670,29 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Delete record unsupported')
   })
 
+  it('renders a real empty memory state instead of a generic capability report', async () => {
+    const transport = new MockAuroraTransport()
+      .register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
+      .register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
+    const client = new AuroraClient({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const memoryRoute = enabledRoute(route(snapshot, 'memory'))
+    const model = await buildMemoryViewModel(client, memoryRoute)
+    const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
+
+    expect(model.loadState).toBe('ready')
+    expect(model.namespaces).toEqual([])
+    expect(model.conversations).toEqual([])
+    expect(markup).toContain('No collections reported')
+    expect(markup).toContain('DB.RAGListNamespaces returned no memory or RAG namespaces for this route.')
+    expect(markup).toContain('No conversations reported')
+    expect(markup).toContain('History remains empty until DB.GetMessages returns backend rows.')
+    expect(markup).toContain('Search has not run')
+    expect(markup).not.toContain('Runtime snapshot')
+    expect(markup).not.toContain('Backend capability report')
+    expect(markup).not.toContain('Generic capability')
+  })
+
   it('keeps local export/import/delete controls disabled behind AdminAction policy', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
