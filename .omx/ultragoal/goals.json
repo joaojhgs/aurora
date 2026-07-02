@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:32:50.488Z",
+  "updatedAt": "2026-07-02T08:34:40.472Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -491,10 +491,13 @@
       "id": "G041-local-desktop-sidecar-is-a-developme",
       "title": "Local desktop sidecar is a development and packaging runtime boundary...",
       "objective": "Local desktop sidecar is a development and packaging runtime boundary, not a second business-logic implementation.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:34:40.472Z",
+      "startedAt": "2026-07-02T08:33:09.584Z",
+      "completedAt": "2026-07-02T08:34:40.472Z",
+      "evidence": "Extended apps/aurora-tauri/src/ui-service-boundary.test.ts with a Rust sidecar gate proving src-tauri supervises main.py, sets gateway/token/env, proxies Gateway HTTP/SSE, and rejects direct Python app imports, bus/runtime frameworks, or service-specific handlers. Verified pnpm --filter @aurora/tauri-ui test:service-boundary; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui tauri:smoke:linux."
     },
     {
       "id": "G042-admin-mutations-require-explicit-adm",

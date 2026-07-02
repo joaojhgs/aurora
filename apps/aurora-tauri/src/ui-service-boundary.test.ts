@@ -119,6 +119,29 @@ describe('UI and Tauri service boundary contract', () => {
     }
   })
 
+  it('keeps the desktop sidecar as process supervisor and Gateway proxy, not app business logic', () => {
+    const rust = readRepo('apps/aurora-tauri/src-tauri/src/lib.rs')
+
+    expect(rust).toContain('fn spawn_sidecar(')
+    expect(rust).toContain('Command::new(&launch.program)')
+    expect(rust).toContain('command.env("AURORA_ARCHITECTURE_MODE", "threads")')
+    expect(rust).toContain('command.env("AURORA_GATEWAY_URL", gateway.to_string())')
+    expect(rust).toContain('command.env("AURORA_TAURI_SIDECAR_TOKEN", token)')
+    expect(rust).toContain('fn stop_sidecar(')
+    expect(rust).toContain('fn check_gateway_health(')
+    expect(rust).toContain('fn gateway_request_url(')
+    expect(rust).toContain('.request(method, url)')
+    expect(rust).toContain('run_gateway_event_stream(')
+
+    expect(rust, 'Rust sidecar must not embed Python service imports').not.toMatch(/^\s*(?:use|mod)\s+app(?:::|\b)/m)
+    expect(rust, 'Rust sidecar must not embed Python or bus runtime frameworks').not.toMatch(
+      /\b(?:pyo3|PyModule|LocalBus|BullMQBus|MeshBus|ConfigManager|BaseService|method_contract|get_bus)\b/
+    )
+    expect(rust, 'Rust sidecar must not implement service-specific command handlers').not.toMatch(
+      /fn\s+aurora_(?:auth|orchestrator|tooling|db|scheduler|tts|stt|config)_[a-z0-9_]*\s*\(/i
+    )
+  })
+
   it('documents the allowed live bridges as AuroraClient, Gateway transport, and Tauri invoke/listen only', () => {
     const runtimeBridge = readRepo('apps/aurora-tauri/src/aurora-client.ts')
     const tauriApp = readRepo('apps/aurora-tauri/src/tauri-app.tsx')
