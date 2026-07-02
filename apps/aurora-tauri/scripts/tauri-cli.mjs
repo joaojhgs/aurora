@@ -27,6 +27,11 @@ const child = spawn(process.execPath, [tauriCli, ...args], {
   stdio: 'inherit'
 })
 
+let shuttingDown = false
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => forwardShutdownSignal(signal))
+}
+
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
@@ -39,6 +44,19 @@ child.on('error', (error) => {
   console.error(`[tauri] Failed to launch Tauri CLI: ${error.message}`)
   process.exit(1)
 })
+
+function forwardShutdownSignal(signal) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.error(`[tauri] received ${signal}; forwarding shutdown to Tauri child process`)
+  if (!child.killed) child.kill(signal)
+  const exitCode = signal === 'SIGINT' ? 130 : 143
+  const timer = setTimeout(() => process.exit(exitCode), 5000)
+  child.once('exit', () => {
+    clearTimeout(timer)
+    process.exit(exitCode)
+  })
+}
 
 function applyDevSidecarDefaults(env) {
   env.AURORA_ARCHITECTURE_MODE ??= 'threads'
