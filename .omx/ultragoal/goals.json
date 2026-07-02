@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:21:49.713Z",
+  "updatedAt": "2026-07-02T10:29:20.450Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -978,10 +978,12 @@
       "id": "G082-fix-missing-incorrect-route-metadata",
       "title": "Fix missing/incorrect route metadata for read-only admin diagnostics...",
       "objective": "Fix missing/incorrect route metadata for read-only admin diagnostics endpoints.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:29:20.450Z",
+      "completedAt": "2026-07-02T10:29:20.450Z",
+      "evidence": "Updated Gateway read-only diagnostics/query route metadata to method_type=use and Gateway.use while preserving AdminAction/support-bundle/event export manage gates; aligned SDK fixtures, conformance/client tests, backend inventory tests, capability catalog tests, mesh observability tests, and /diagnostics nav metadata. Verified: git diff --check; uv run ruff check app/services/gateway/service.py tests/unit/gateway/test_mesh_observability.py tests/unit/gateway/test_capability_catalog.py tests/unit/gateway/test_backend_inventory.py; uv run pytest tests/unit/gateway/test_backend_inventory.py tests/unit/gateway/test_mesh_observability.py tests/unit/gateway/test_capability_catalog.py -q; pnpm --filter @aurora/client typecheck; pnpm --filter @aurora/client test; pnpm --filter @aurora/client build; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'diagnostics|route|permission|privacy'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G083-route-matrix-in-desktop-local-mode-d",

@@ -608,8 +608,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=GetRegistryResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_registry(self, data: EmptyInput) -> GetRegistryResponse:
         """Return the current Gateway registry export."""
@@ -622,8 +622,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=GetServicesResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_services(self, data: EmptyInput) -> GetServicesResponse:
         """Return known services from the Gateway registry aggregator."""
@@ -637,8 +637,8 @@ class GatewayService(BaseService):
         input_model=GetServiceHealthRequest,
         output_model=GetServiceHealthResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_service_health(
         self,
@@ -664,8 +664,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=DeploymentTopologyResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_deployment_topology(
         self,
@@ -710,8 +710,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=GetMeshStatusResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_mesh_status(self, data: EmptyInput) -> GetMeshStatusResponse:
         """Return a redacted diagnostic snapshot of mesh state and routing."""
@@ -792,8 +792,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=WebRTCDiagnosticsResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_webrtc_diagnostics(self, data: EmptyInput) -> WebRTCDiagnosticsResponse:
         """Return a redacted diagnostic snapshot of WebRTC transport state."""
@@ -819,8 +819,8 @@ class GatewayService(BaseService):
         input_model=EmptyInput,
         output_model=CapabilityGraph,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_capability_graph(self, data: EmptyInput) -> CapabilityGraph:
         """Return a first-class capability graph without credential-bearing fields."""
@@ -845,8 +845,8 @@ class GatewayService(BaseService):
         input_model=CapabilityCatalogRequest,
         output_model=CapabilityCatalogResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def get_capability_catalog(
         self,
@@ -875,8 +875,8 @@ class GatewayService(BaseService):
         input_model=RouteExplainRequest,
         output_model=RouteExplainResponse,
         exposure="external",
-        method_type="manage",
-        required_perms=["Gateway.manage"],
+        method_type="use",
+        required_perms=["Gateway.use"],
     )
     async def explain_route(self, data: RouteExplainRequest) -> RouteExplainResponse:
         """Return selected target, candidates, and route blockers for a selector."""

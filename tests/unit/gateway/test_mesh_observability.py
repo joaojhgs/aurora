@@ -54,10 +54,10 @@ def test_gateway_observability_contracts_are_registered():
     assert methods[GatewayMethods.LIST_EVENTS].exposure == "external"
     assert methods[GatewayMethods.LIST_EVENTS].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE].method_type == "manage"
-    assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
-    assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "manage"
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.manage"]
+    assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.use"]
+    assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.use"]
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "use"
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.use"]
     clear_registry()
 
 

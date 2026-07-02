@@ -66,13 +66,13 @@ describe('AuroraClient', () => {
         expect.objectContaining({
           busTopic: 'Gateway.GetDeploymentTopology',
           routePath: '/api/Gateway/GetDeploymentTopology',
-          requiredPermissions: ['Gateway.manage'],
+          requiredPermissions: ['Gateway.use'],
           availableOverHttp: true
         }),
         expect.objectContaining({
           busTopic: 'Gateway.GetWebRTCDiagnostics',
           routePath: '/api/Gateway/GetWebRTCDiagnostics',
-          requiredPermissions: ['Gateway.manage'],
+          requiredPermissions: ['Gateway.use'],
           availableOverHttp: true
         }),
         expect.objectContaining({
@@ -979,9 +979,9 @@ describe('AuroraClient', () => {
           input_schema: null,
           output_schema: null,
           policy: {
-            required_permissions: ['Gateway.manage'],
+            required_permissions: ['Gateway.use'],
             trust_tier: 'local',
-            safety_class: 'admin',
+            safety_class: 'public',
             explicit_selector_required: false,
             consent_required: false,
             privacy_indicator_required: false,

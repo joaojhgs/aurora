@@ -55,13 +55,17 @@ def test_backend_inventory_supports_admin_overview_manifest_contract():
         GatewayMethods.GET_CAPABILITY_CATALOG,
         GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
         GatewayMethods.EXPLAIN_ROUTE,
-        GatewayMethods.GET_SUPPORT_BUNDLE,
     ):
         assert topic in methods
         assert methods[topic]["exposure"] == "external"
-        assert methods[topic]["method_type"] == "manage"
-        assert methods[topic]["required_perms"] == ["Gateway.manage"]
+        assert methods[topic]["method_type"] == "use"
+        assert methods[topic]["required_perms"] == ["Gateway.use"]
         assert methods[topic]["routePath"] == f"/api/Gateway/{topic.split('.', 1)[1]}"
+
+    assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["exposure"] == "external"
+    assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["method_type"] == "manage"
+    assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["required_perms"] == ["Gateway.manage"]
+    assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["routePath"] == "/api/Gateway/GetSupportBundle"
 
     assert builtins["/api/health"]["method_type"] == "gateway"
     assert builtins["/api/registry"]["route_kind"] == "gateway_builtin"

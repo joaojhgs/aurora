@@ -137,13 +137,13 @@ describe('SDK transport conformance', () => {
           expect.objectContaining({
             busTopic: 'Gateway.GetDeploymentTopology',
             routePath: '/api/Gateway/GetDeploymentTopology',
-            requiredPermissions: ['Gateway.manage'],
+            requiredPermissions: ['Gateway.use'],
             availableOverHttp: true
           }),
           expect.objectContaining({
             busTopic: 'Gateway.GetWebRTCDiagnostics',
             routePath: '/api/Gateway/GetWebRTCDiagnostics',
-            requiredPermissions: ['Gateway.manage'],
+            requiredPermissions: ['Gateway.use'],
             availableOverHttp: true
           }),
           expect.objectContaining({

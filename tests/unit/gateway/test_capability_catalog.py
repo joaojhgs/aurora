@@ -519,9 +519,9 @@ def test_gateway_service_registers_capability_catalog_and_explain_contracts():
     assert AudioSessionMethods.PREPARE in audio_methods
     assert AudioSessionMethods.LIST_EVENTS in audio_methods
     assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].exposure == "external"
-    assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].method_type == "manage"
+    assert methods[GatewayMethods.GET_CAPABILITY_CATALOG].method_type == "use"
     assert audio_methods[AudioSessionMethods.PREPARE].required_perms == ["AudioSession.manage"]
-    assert methods[GatewayMethods.EXPLAIN_ROUTE].required_perms == ["Gateway.manage"]
+    assert methods[GatewayMethods.EXPLAIN_ROUTE].required_perms == ["Gateway.use"]
     clear_registry()
 
 

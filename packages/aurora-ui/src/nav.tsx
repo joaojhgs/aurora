@@ -74,7 +74,7 @@ export const auroraNavSections: AuroraNavSection[] = [
     label: 'Runtime',
     items: [
       item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'UIA-007'),
-      item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetCapabilityCatalog', 'use', 'sensitive', 'available-local', 'ADM-009'),
+      item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetWebRTCDiagnostics', 'use', 'sensitive', 'available-local', 'ADM-009'),
       item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'UI-003'),
       item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'UI-004'),
       item('data', 'Data Policy', '/memory/policy', Database, 'DB', 'RAGSearch', 'use', 'sensitive', 'privacy-blocked', 'BE-017'),
