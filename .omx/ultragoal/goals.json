@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:06:53.193Z",
+  "updatedAt": "2026-07-02T10:09:05.035Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -945,10 +945,12 @@
       "id": "G079-ensure-remote-personal-sensitive-rou",
       "title": "Ensure remote/personal/sensitive routes that require consent remain b...",
       "objective": "Ensure remote/personal/sensitive routes that require consent remain blocked until consent/action.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:09:05.035Z",
+      "completedAt": "2026-07-02T10:09:05.035Z",
+      "evidence": "Added SDK route policy regression proving remote sensitive/personal DB.RAGSearch stays privacy-blocked without consent, remains blocked without privacy-indicator/action evidence after consent, and becomes allowed/available-remote only when consentGranted and privacyIndicatorShown are both true. Existing UI voice regression keeps remote STT consent-gated and disabled until Grant session consent. Verified: pnpm --filter @aurora/client test -- -t 'remote sensitive routes|selector, consent|local selector preference'; pnpm --filter @aurora/ui test -- -t 'remote STT consent-gated|RouteSheet selector'; pnpm --filter @aurora/client build; pnpm --filter @aurora/client test; pnpm --filter @aurora/ui typecheck."
     },
     {
       "id": "G080-normalize-token-scopes-and-permissio",

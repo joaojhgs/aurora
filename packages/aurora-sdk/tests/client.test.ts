@@ -1476,6 +1476,133 @@ describe('AuroraClient', () => {
     ]))
   })
 
+  it('keeps remote sensitive routes blocked until consent and privacy action evidence exist', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const provider = cloneFixture(catalog.providers[0]!)
+    provider.provider_id = 'mesh:personal-rag'
+    provider.provider_kind = 'remote'
+    provider.peer_id = 'peer-personal'
+    provider.service_instance_id = 'rag-personal-remote'
+    provider.module = 'DB'
+    provider.eligible = true
+    provider.reason_code = 'eligible'
+    provider.reason = 'Remote personal RAG route is eligible after consent and privacy indicator evidence.'
+
+    const action = cloneFixture(catalog.actions[0]!)
+    action.action_id = 'db-remote-personal-rag'
+    action.provider_id = provider.provider_id
+    action.provider_kind = provider.provider_kind
+    action.peer_id = provider.peer_id
+    action.service_instance_id = provider.service_instance_id
+    action.topic = 'DB.RAGSearch'
+    action.module = 'DB'
+    action.method = 'RAGSearch'
+    action.bindability = 'available'
+    action.route_blockers = []
+    action.policy = {
+      ...action.policy,
+      explicit_selector_required: false,
+      selector_required: false,
+      consent_required: true,
+      privacy_indicator_required: true,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'sensitive',
+      resource_scope: 'personal'
+    }
+    catalog.providers = [provider]
+    catalog.actions = [action]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.topic = 'DB.RAGSearch'
+    route.module = 'DB'
+    route.selected_target = 'remote'
+    route.selected_provider_id = provider.provider_id
+    route.selected_peer_id = provider.peer_id
+    route.selected_service_instance_id = provider.service_instance_id
+    route.selector_valid = true
+    route.selector_validation_code = ''
+    route.selector_validation_message = ''
+    route.fallback_behavior = 'none'
+    route.blockers = []
+    route.security_privacy_blockers = []
+    route.candidates = [
+      {
+        provider_id: provider.provider_id,
+        peer_id: provider.peer_id!,
+        provider_kind: 'remote',
+        service_instance_id: provider.service_instance_id,
+        module: provider.module,
+        version: provider.version,
+        included: true,
+        selected: true,
+        reason_code: 'eligible',
+        reason: provider.reason,
+        latency_ms: 24,
+        active_calls: 0,
+        max_concurrent: 2,
+        available_capacity: 2,
+        blockers: []
+      }
+    ]
+
+    const withoutConsent = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: false,
+      privacyIndicatorShown: false,
+      transportKind: 'mock'
+    })
+    expect(withoutConsent).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      availability: 'privacy-blocked',
+      reasonCode: 'consent_required',
+      repairPath: 'satisfy the route privacy policy before execution'
+    }))
+    expect(withoutConsent.blockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining([
+      'consent_required',
+      'privacy_indicator_required'
+    ]))
+
+    const withoutPrivacyAction = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: true,
+      privacyIndicatorShown: false,
+      transportKind: 'mock'
+    })
+    expect(withoutPrivacyAction).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      reasonCode: 'privacy_indicator_required'
+    }))
+
+    const withConsentAndPrivacyAction = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: true,
+      privacyIndicatorShown: true,
+      transportKind: 'mock'
+    })
+    expect(withConsentAndPrivacyAction).toEqual(expect.objectContaining({
+      allowed: true,
+      decision: 'allowed',
+      availability: 'available-remote',
+      reasonCode: 'allowed'
+    }))
+  })
+
   it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
     const route = {
       topic: 'Tooling.ExecuteTool',
