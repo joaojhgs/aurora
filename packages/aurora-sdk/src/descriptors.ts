@@ -12,6 +12,7 @@ import type {
 } from './types.js'
 
 export const GATEWAY_METHODS = {
+  health: 'Gateway.Health',
   getRegistry: 'Gateway.GetRegistry',
   getServices: 'Gateway.GetServices',
   getServiceHealth: 'Gateway.GetServiceHealth',

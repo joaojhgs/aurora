@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:39:48.969Z",
+  "updatedAt": "2026-07-02T09:46:00.977Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -850,10 +850,13 @@
       "id": "G071-add-readiness-probes-before-showing",
       "title": "Add readiness probes before showing the UI as local-ready:",
       "objective": "Add readiness probes before showing the UI as local-ready:\n`/api/health`;\n`/api/registry` or equivalent;\ncore read-only endpoint sample;\nsidecar status command.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:46:00.977Z",
+      "startedAt": "2026-07-02T09:40:09.206Z",
+      "completedAt": "2026-07-02T09:46:00.977Z",
+      "evidence": "Desktop-local readiness is now gated by runtime.startSidecar(), runtime.sidecarStatus(), Gateway.Health via /api/health, Gateway.GetRegistry via /api/registry, and Gateway.GetServices via /api/services before the ready shell snapshot is set. Added e2e:runtime coverage proving the sidecar start/status path and required Gateway probe set execute. Documented the same local-ready contract in apps/aurora-tauri/README.md and docs/TAURI_DESKTOP_BUILD.md. Verified pnpm --filter @aurora/client build; pnpm --filter @aurora/client test; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:dev-bootstrap; uv run python scripts/check_docs.py."
     },
     {
       "id": "G072-keep-packaged-build-sidecar-staging",

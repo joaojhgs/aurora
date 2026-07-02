@@ -20,7 +20,7 @@ The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/
 - **Dev** runs Python directly for fast iteration and clear service logs.
 - **Package/build** stages a profiled sidecar executable for Tauri bundling.
 
-Do not run `prepare:sidecar` or set `AURORA_TAURI_SIDECAR_SOURCE` just to use `tauri dev`. Those are package/release inputs. During development, Vite, Rust/Tauri, and Python service logs should appear in the same terminal; log prefixes are `[vite]` for frontend bundler output when separated by the dev server, `[tauri]` for wrapper/Rust shell output, `[aurora][stdout]`/`[aurora][stderr]` for Python service output, and `[gateway]` for explicit Gateway readiness probes when a smoke harness separates them.
+Do not run `prepare:sidecar` or set `AURORA_TAURI_SIDECAR_SOURCE` just to use `tauri dev`. Those are package/release inputs. During development, Vite, Rust/Tauri, and Python service logs should appear in the same terminal; log prefixes are `[vite]` for frontend bundler output when separated by the dev server, `[tauri]` for wrapper/Rust shell output, `[aurora][stdout]`/`[aurora][stderr]` for Python service output, and `[gateway]` for explicit Gateway readiness probes when a smoke harness separates them. Desktop-local is not shown as ready until the Tauri sidecar status command succeeds and the SDK can read `/api/health`, `/api/registry`, and a core read-only `/api/services` sample through the Gateway boundary.
 Ctrl-C forwards shutdown to the Tauri child process; closing the Tauri window stops the supervised Python sidecar.
 
 ## Sidecar profiles

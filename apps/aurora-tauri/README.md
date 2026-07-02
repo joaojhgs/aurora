@@ -24,6 +24,7 @@ Dev logging is intentionally unified in the same terminal:
 - Rust/Tauri wrapper and shell logs use the `[tauri]` prefix.
 - Python Aurora service logs are piped by the Rust sidecar supervisor with `[aurora][stdout]` and `[aurora][stderr]` prefixes.
 - Explicit Gateway readiness probes use `[gateway]` when a dev smoke harness separates API health output.
+- Desktop-local is not shown as ready until the Tauri sidecar status command succeeds and the SDK can read `/api/health`, `/api/registry`, and a core read-only `/api/services` sample through the Gateway boundary.
 - Ctrl-C forwards shutdown to the Tauri child process; closing the Tauri window stops the supervised Python sidecar.
 
 Packaged desktop builds still use the profiled sidecar staging flow described below; the direct Python sidecar path is for local development and diagnostics.

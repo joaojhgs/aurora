@@ -26,6 +26,7 @@ import {
   ToolApprovalPanel,
   auroraNavSections,
   buildShellSnapshot,
+  errorShellSnapshot,
   loadingShellSnapshot,
   navItemSnapshot,
   redactDiagnosticText,
@@ -33,9 +34,11 @@ import {
   type AuroraShellSnapshot,
   type RouteAvailability,
 } from "@aurora/ui";
+import { GATEWAY_METHODS } from "@aurora/client";
 import type {
   AdminOverviewManifest,
   AndroidLocalLightInferenceStatus,
+  AuroraClient,
   TauriAndroidBaselineStatus,
   TauriIosInvocationStatus,
   TauriNativeFeatureStatus,
@@ -123,65 +126,63 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const localSidecar =
-        runtime.mode === "desktop-local"
-          ? await runtime.startSidecar().catch((error: unknown) => ({
-              running: false,
-              mode: "desktop-local-start-failed",
-              lastError: error instanceof Error ? error.message : String(error),
-              details: {},
-            }))
-          : null;
-      const [
-        nextSnapshot,
-        nextSidecar,
-        nextNativePermissions,
-        tray,
-        notifications,
-        iosVoice,
-        iosInvocation,
-        iosLocalLight,
-        iosBackground,
-        dialogs,
-        audio,
-        iosKeychain,
-        iosBiometrics,
-        android,
-      ] = await Promise.all([
-        buildShellSnapshot(runtime.client),
-        localSidecar
-          ? Promise.resolve(localSidecar)
-          : runtime.sidecarStatus().catch(() => null),
-        runtime.nativePermissionStatus().catch(() => null),
-        runtime.trayStatus().catch(() => null),
-        runtime.notificationStatus().catch(() => null),
-        runtime.iosVoiceStatus().catch(() => null),
-        runtime.iosInvocationStatus().catch(() => null),
-        runtime.iosLocalLightInferenceStatus().catch(() => null),
-        runtime.iosBackgroundStatus().catch(() => null),
-        runtime.dialogStatus().catch(() => null),
-        runtime.audioBridgeStatus().catch(() => null),
-        runtime.iosSecureStorageStatus().catch(() => null),
-        runtime.iosBiometricStatus().catch(() => null),
-        runtime.androidBaselineStatus().catch(() => null),
-      ]);
-      if (!cancelled) {
-        setSnapshot(nextSnapshot);
-        setSidecar(nextSidecar);
-        setNativePermissions(nextNativePermissions);
-        setNativeFeatures({
+      let readySidecar: TauriSidecarStatus | null = null;
+      try {
+        readySidecar = await runRuntimeReadinessProbes(runtime);
+        const [
+          nextSnapshot,
+          nextSidecar,
+          nextNativePermissions,
           tray,
           notifications,
           iosVoice,
+          iosInvocation,
+          iosLocalLight,
           iosBackground,
           dialogs,
           audio,
           iosKeychain,
           iosBiometrics,
-        });
-        setIosInvocationStatus(iosInvocation);
-        setIosLocalLightStatus(iosLocalLight);
-        setAndroidBaseline(android);
+          android,
+        ] = await Promise.all([
+          buildShellSnapshot(runtime.client),
+          readySidecar ? Promise.resolve(readySidecar) : runtime.sidecarStatus().catch(() => null),
+          runtime.nativePermissionStatus().catch(() => null),
+          runtime.trayStatus().catch(() => null),
+          runtime.notificationStatus().catch(() => null),
+          runtime.iosVoiceStatus().catch(() => null),
+          runtime.iosInvocationStatus().catch(() => null),
+          runtime.iosLocalLightInferenceStatus().catch(() => null),
+          runtime.iosBackgroundStatus().catch(() => null),
+          runtime.dialogStatus().catch(() => null),
+          runtime.audioBridgeStatus().catch(() => null),
+          runtime.iosSecureStorageStatus().catch(() => null),
+          runtime.iosBiometricStatus().catch(() => null),
+          runtime.androidBaselineStatus().catch(() => null),
+        ]);
+        if (!cancelled) {
+          setSnapshot(nextSnapshot);
+          setSidecar(nextSidecar);
+          setNativePermissions(nextNativePermissions);
+          setNativeFeatures({
+            tray,
+            notifications,
+            iosVoice,
+            iosBackground,
+            dialogs,
+            audio,
+            iosKeychain,
+            iosBiometrics,
+          });
+          setIosInvocationStatus(iosInvocation);
+          setIosLocalLightStatus(iosLocalLight);
+          setAndroidBaseline(android);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSnapshot(errorShellSnapshot(runtime.client.transport.kind, error));
+          setSidecar(readySidecar);
+        }
       }
     }
     void load();
@@ -239,6 +240,38 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
       />
     </AppShell>
   );
+}
+
+async function runRuntimeReadinessProbes(runtime: AuroraTauriRuntime): Promise<TauriSidecarStatus | null> {
+  if (runtime.mode !== "desktop-local") return null;
+
+  const startedSidecar = await runtime.startSidecar();
+  const statusSidecar = await runtime.sidecarStatus();
+  const readySidecar = statusSidecar ?? startedSidecar;
+  if (!readySidecar) {
+    throw new Error("Tauri local sidecar status command did not return readiness evidence");
+  }
+  assertReadySidecar(readySidecar);
+
+  await probeGatewayReadiness(runtime.client);
+  return readySidecar;
+}
+
+function assertReadySidecar(sidecar: TauriSidecarStatus): void {
+  if (sidecar.running && !sidecar.lastError) return;
+  throw new Error(
+    `Tauri local sidecar is not ready: ${sidecar.lastError ?? "sidecar status command reported not running"}`,
+  );
+}
+
+async function probeGatewayReadiness(client: AuroraClient): Promise<void> {
+  await client.request<Record<string, unknown>>(GATEWAY_METHODS.health, undefined, {
+    path: "/api/health",
+    httpMethod: "GET",
+    timeoutMs: 5_000,
+  });
+  await client.registry.getRegistry();
+  await client.registry.listServices();
 }
 
 interface NativeContext {

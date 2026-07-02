@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, MockAuroraTransport, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -442,6 +442,50 @@ describe('Tauri CI/E2E route gates', () => {
     } finally {
       await act(async () => failure.root.unmount())
       failure.container.remove()
+    }
+  })
+
+  it('e2e:runtime probes local Gateway readiness before rendering desktop-local as ready', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+    const sidecarCalls: string[] = []
+    const readySidecar = {
+      running: true,
+      mode: 'threads',
+      pid: 4242,
+      gatewayUrl: 'http://127.0.0.1:8000',
+      lastError: null,
+      details: { healthPath: '/api/health' },
+    }
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport })),
+      mode: 'desktop-local',
+      startSidecar: async () => {
+        sidecarCalls.push('start')
+        return readySidecar
+      },
+      sidecarStatus: async () => {
+        sidecarCalls.push('status')
+        return readySidecar
+      },
+    }
+    window.history.replaceState({}, '', '/')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Prompt')
+      })
+      expect(sidecarCalls).toEqual(['start', 'status'])
+      const methods = requestMethods(transport)
+      const firstCapabilityCatalog = methods.indexOf(GATEWAY_METHODS.getCapabilityCatalog)
+      expect(methods.indexOf(GATEWAY_METHODS.health)).toBeGreaterThanOrEqual(0)
+      expect(methods.indexOf(GATEWAY_METHODS.getRegistry)).toBeGreaterThanOrEqual(0)
+      expect(methods.indexOf(GATEWAY_METHODS.getServices)).toBeGreaterThanOrEqual(0)
+      expect(firstCapabilityCatalog).toBeGreaterThanOrEqual(0)
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
     }
   })
 })
