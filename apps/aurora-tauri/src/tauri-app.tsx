@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AdminAuditResource,
+  AdminOverviewContent,
   AdminDevicesResource,
   AdminPluginsView,
   AdminRbacResource,
@@ -53,7 +54,7 @@ type TauriRouteRenderer = (input: {
   shutdown: () => Promise<void>
   assistantNativePermissions: Array<{ name: string; granted: boolean }>
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
-}) => JSX.Element
+}) => ReactNode
 
 export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   assistant: ({ route, snapshot, client, assistantNativePermissions, assistantNativeCapabilities }) => (
@@ -71,7 +72,7 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   memory: ({ route, client }) => <MemoryView client={client} route={route} />,
   tools: ({ route, client }) => <ToolApprovalPanel client={client} route={route} />,
   mesh: ({ route, client }) => <MeshPeersResource client={client} route={route} />,
-  admin: ({ client }) => <AdminOverviewResource client={client} />,
+  admin: ({ client }) => <TauriAdminOverviewPage client={client} />,
   services: ({ client }) => <AdminServicesResource client={client} />,
   access: ({ client }) => <AdminRbacResource client={client} />,
   tokens: ({ client }) => <AdminRbacResource client={client} />,
@@ -307,68 +308,20 @@ function TauriRouteContent({
     [client.admin]
   )
 
-  switch (route.item.id) {
-    case 'assistant':
-      return (
-        <AssistantView
-          client={client}
-          route={route}
-          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
-          voiceRoutes={snapshot.assistantVoiceRoutes}
-          nativePlatform={snapshot.nativePlatform}
-          nativeAvailable={snapshot.nativeAvailable}
-          nativePermissions={assistantNativePermissions}
-          nativeCapabilities={assistantNativeCapabilities}
-        />
-      )
-    case 'memory':
-    case 'data':
-      return <MemoryView client={client} route={route} />
-    case 'tools':
-      return <ToolApprovalPanel client={client} route={route} />
-    case 'mesh':
-      return <MeshPeersResource client={client} route={route} />
-    case 'services':
-    case 'contracts':
-      return (
-        <TauriAdminActionPage status={adminActionStatus}>
-          <AdminServicesResource client={client} onPreviewAdminAction={runAdminAction} />
-        </TauriAdminActionPage>
-      )
-    case 'access':
-      return (
-        <TauriAdminActionPage status={adminActionStatus}>
-          <AdminRbacResource client={client} onPreviewAdminAction={runAdminAction} />
-        </TauriAdminActionPage>
-      )
-    case 'devices':
-      return <AdminDevicesResource client={client} />
-    case 'config':
-      return <ConfigEditorView client={client} route={route} />
-    case 'plugins':
-      return <AdminPluginsView client={client} route={route} />
-    case 'pairing':
-      return <PairingQueueView client={client} route={route} />
-    case 'backups':
-      return <BackupRestoreView client={client} route={route} />
-    case 'scheduler':
-      return <AdminSchedulerView client={client} route={route} />
-    case 'audit':
-      return <AdminAuditResource client={client} />
-    case 'settings':
-    case 'native':
-      return <SettingsPermissionsView snapshot={snapshot} />
-    case 'onboarding':
-      return <OnboardingView client={client} snapshot={snapshot} />
-    case 'diagnostics':
-      return <TauriDiagnosticsPage snapshot={snapshot} nativeContext={nativeContext} shutdown={shutdown} />
-    case 'route-policy':
-      return <RoutePolicyResource client={client} route={route} />
-    case 'mesh-diagnostics':
-      return <MeshDiagnosticsResource client={client} route={route} />
-    default:
-      return <TauriRoutePlaceholder route={route} snapshot={snapshot} />
+  if (!renderRoute) {
+    return <MissingTauriRoute route={route} />
   }
+
+  return renderRoute({
+    route,
+    snapshot,
+    nativeContext,
+    client,
+    shutdown,
+    assistantNativePermissions,
+    assistantNativeCapabilities
+  })
+
 }
 
 function TauriAdminOverviewPage({
@@ -436,11 +389,11 @@ function TauriDiagnosticsPage({
         <dl className="ata-facts">
           <div>
             <dt>Runtime mode</dt>
-            <dd>{nativeContext.runtimeMode}</dd>
+            <dd>{runtimeModeLabel(nativeContext.runtimeMode)}</dd>
           </div>
           <div>
             <dt>SDK transport</dt>
-            <dd>{snapshot.transportKind}</dd>
+            <dd>{transportKindLabel(snapshot.transportKind, nativeContext.runtimeMode)}</dd>
           </div>
           <div>
             <dt>Sidecar supervisor</dt>
@@ -615,6 +568,21 @@ function normalizePath(path: string): string {
   return withoutHash.endsWith("/") && withoutHash !== "/"
     ? withoutHash.slice(0, -1)
     : withoutHash;
+}
+
+
+function runtimeModeLabel(mode: string): string {
+  if (mode === 'mock') return 'mock (degraded development fixture only)'
+  if (mode === 'desktop-local') return 'desktop-local (Tauri sidecar supervised local stack)'
+  if (mode === 'desktop-thin') return 'desktop-thin (remote Gateway, no local sidecar)'
+  return mode
+}
+
+function transportKindLabel(transportKind: string, runtimeMode: string): string {
+  if (runtimeMode === 'mock') return 'mock (SDK fixture transport; development fallback only)'
+  if (transportKind === 'pending' && runtimeMode === 'desktop-local') return 'tauri (pending local Gateway readiness)'
+  if (transportKind === 'pending' && runtimeMode === 'desktop-thin') return 'http (pending remote Gateway readiness)'
+  return transportKind
 }
 
 function nativeFeatureLabel(

@@ -1,5 +1,4 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { auroraNavSections } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { auroraNavSections } from '@aurora/ui'
 import { createAuroraTauriRuntime } from './aurora-client'
