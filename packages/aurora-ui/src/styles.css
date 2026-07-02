@@ -143,6 +143,11 @@ button, input, select, textarea { font: inherit; }
 .aui-assistant-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-assistant-header h1 { margin: .15rem 0 0; font-size: clamp(1.65rem, 3vw, 2.45rem); line-height: 1.08; }
 .aui-assistant-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; max-width: 42rem; }
+.aui-assistant-runtime-strip { border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-primary) 5%, var(--aui-surface)); padding: .65rem .75rem; }
+.aui-assistant-runtime-strip dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.aui-assistant-runtime-strip div { min-width: 0; }
+.aui-assistant-runtime-strip dt { color: var(--aui-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.aui-assistant-runtime-strip dd { margin: .15rem 0 0; overflow-wrap: anywhere; font-size: .86rem; font-weight: 750; }
 .aui-stream-banner { display: flex; align-items: center; gap: .6rem; min-width: 0; border: 1px solid color-mix(in srgb, var(--aui-warning) 36%, var(--aui-border)); border-radius: .5rem; padding: .65rem .75rem; background: color-mix(in srgb, var(--aui-warning) 8%, var(--aui-surface)); color: var(--aui-ink); }
 .aui-stream-banner span { min-width: 0; overflow-wrap: anywhere; }
 .aui-stream-banner button { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .45rem .6rem; background: var(--aui-surface); color: var(--aui-ink); font-weight: 750; }
@@ -153,6 +158,11 @@ button, input, select, textarea { font: inherit; }
 .aui-conversation-rail header { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; }
 .aui-conversation-rail h2 { margin: .15rem 0 0; font-size: 1rem; }
 .aui-conversation-rail header button { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .45rem .55rem; background: var(--aui-surface-2); color: var(--aui-ink); font-weight: 800; }
+.aui-conversation-search { display: grid; gap: .35rem; color: var(--aui-muted); font-size: .78rem; font-weight: 800; }
+.aui-conversation-search input { min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .5rem .55rem; background: var(--aui-surface); color: var(--aui-ink); }
+.aui-conversation-route-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.aui-route-mode-chip { display: inline-flex; align-items: center; gap: .32rem; max-width: 100%; border: 1px solid var(--aui-border); border-radius: 999px; padding: .22rem .42rem; background: var(--aui-surface-2); color: var(--aui-muted); font-size: .72rem; font-weight: 750; }
+.aui-route-mode-chip > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .aui-conversation-rail ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
 .aui-conversation-rail li.empty { border: 1px dashed var(--aui-border); border-radius: .45rem; padding: .65rem; color: var(--aui-muted); font-size: .84rem; }
 .aui-conversation-rail li button { width: 100%; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); color: var(--aui-muted); text-align: left; }
@@ -181,6 +191,7 @@ button, input, select, textarea { font: inherit; }
 .aui-chat-bubble { max-width: min(44rem, 88%); border: 1px solid var(--aui-border); border-radius: .5rem; padding: .75rem; background: var(--aui-surface-2); }
 .aui-chat-assistant { align-self: flex-start; }
 .aui-chat-user { align-self: flex-end; border-color: color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); background: color-mix(in srgb, var(--aui-primary) 9%, white); }
+.aui-chat-system, .aui-chat-tool { align-self: center; max-width: min(42rem, 96%); border-style: dashed; background: color-mix(in srgb, var(--aui-info) 7%, var(--aui-surface)); }
 .aui-chat-failed { border-color: color-mix(in srgb, var(--aui-danger) 35%, var(--aui-border)); background: color-mix(in srgb, var(--aui-danger) 8%, white); }
 .aui-chat-sending { border-color: color-mix(in srgb, var(--aui-warning) 40%, var(--aui-border)); }
 .aui-chat-bubble header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .4rem; color: var(--aui-muted); font-size: .75rem; text-transform: uppercase; }

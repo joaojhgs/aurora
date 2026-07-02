@@ -33,6 +33,14 @@ export interface AssistantViewProps {
   recentVoiceEvents?: VoiceRuntimeEvent[] | undefined
   storageKey?: string
   initialSession?: AssistantSessionSnapshot | undefined
+  runtimeHealth?: AssistantRuntimeHealth | undefined
+}
+
+export interface AssistantRuntimeHealth {
+  selectedModel: string | null
+  routeLabel: string
+  sidecarHealth: string
+  gatewayHealth: string
 }
 
 export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'failed' | 'cancelled'
@@ -51,7 +59,7 @@ export interface AssistantToolCallCard {
 
 export interface AssistantUiMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   text: string
   createdAt: string
   status: AssistantUiMessageStatus
@@ -175,7 +183,8 @@ export function AssistantView({
   nativeCapabilities = emptyNativeCapabilityList,
   recentVoiceEvents = emptyVoiceEventList,
   storageKey = defaultStorageKey,
-  initialSession
+  initialSession,
+  runtimeHealth
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? emptyAssistantSession())
   const [text, setText] = useState('')
@@ -208,6 +217,10 @@ export function AssistantView({
     attachment.status === 'staged' || attachment.status === 'error'
   )
   const contextSummary = summarizeAttachments(attachments)
+  const runtimeStrip = useMemo(
+    () => buildAssistantRuntimeStrip(runtimeHealth, modelLabel, route, client.transport.kind),
+    [runtimeHealth, modelLabel, route, client.transport.kind]
+  )
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
       client,
@@ -664,6 +677,8 @@ export function AssistantView({
         </div>
       </header>
 
+      <AssistantRuntimeStrip health={runtimeStrip} />
+
       {streamState.status === 'lost' || streamState.status === 'fallback' ? (
         <div className="aui-stream-banner" role="status" aria-live="polite">
           <WifiOff size={17} aria-hidden />
@@ -881,6 +896,63 @@ export function AssistantView({
       </form>
     </section>
   )
+}
+
+function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
+  return (
+    <section className="aui-assistant-runtime-strip" aria-label="Assistant runtime strip">
+      <dl>
+        <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
+        <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
+        <div><dt>Sidecar</dt><dd>{health.sidecarHealth}</dd></div>
+        <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>
+      </dl>
+    </section>
+  )
+}
+
+export function buildAssistantRuntimeStrip(
+  runtimeHealth: AssistantRuntimeHealth | undefined,
+  modelLabel: string | null,
+  route: RouteAvailability,
+  transportKind: string
+): AssistantRuntimeHealth {
+  return {
+    selectedModel: runtimeHealth?.selectedModel ?? modelLabel,
+    routeLabel: runtimeHealth?.routeLabel ?? `${route.providerLabel} / ${route.state}`,
+    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'demo fixture only' : 'not reported by this shell'),
+    gatewayHealth: runtimeHealth?.gatewayHealth ?? `${transportKind} transport`
+  }
+}
+
+function assistantRouteChips(route: RouteAvailability): Array<{ id: string; label: string; state: RouteAvailability['state'] }> {
+  const localCandidate = route.candidateProviders.find((candidate) => /local/i.test(`${candidate.id} ${candidate.label}`))
+  const remoteCandidate = route.candidateProviders.find((candidate) => /remote|cloud|http/i.test(`${candidate.id} ${candidate.label} ${candidate.reason}`))
+  const meshCandidate = route.candidateProviders.find((candidate) => /mesh|peer/i.test(`${candidate.id} ${candidate.label} ${candidate.reason}`))
+  return [
+    {
+      id: 'local',
+      label: localCandidate ? `Local ${localCandidate.label}` : `Local ${route.providerLabel}`,
+      state: localCandidate?.state ?? (route.providerLabel.toLowerCase().includes('local') ? route.state : 'pending')
+    },
+    {
+      id: 'remote',
+      label: remoteCandidate ? `Remote ${remoteCandidate.label}` : 'Remote route pending',
+      state: remoteCandidate?.state ?? 'pending'
+    },
+    {
+      id: 'mesh',
+      label: meshCandidate ? `Mesh ${meshCandidate.label}` : 'Mesh route pending',
+      state: meshCandidate?.state ?? 'pending'
+    }
+  ]
+}
+
+function messageRoleLabel(role: AssistantUiMessage['role']): string {
+  if (role === 'user') return 'You'
+  if (role === 'assistant') return 'Aurora'
+  if (role === 'system') return 'System'
+  return 'Tool'
 }
 
 function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard {
@@ -1674,7 +1746,16 @@ function ConversationRail({
   transportKind: string
   onNewConversation: () => void
 }) {
-  const recentMessages = session.messages.slice(-4).reverse()
+  const [search, setSearch] = useState('')
+  const normalizedSearch = search.trim().toLowerCase()
+  const recentMessages = session.messages
+    .slice(-6)
+    .reverse()
+    .filter((message) =>
+      normalizedSearch.length === 0 ||
+      `${message.role} ${message.status} ${message.text}`.toLowerCase().includes(normalizedSearch)
+    )
+  const routeChips = assistantRouteChips(route)
   return (
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
       <header>
@@ -1687,6 +1768,18 @@ function ConversationRail({
           <span>New</span>
         </button>
       </header>
+      <label className="aui-conversation-search">
+        <span>Search recent conversations</span>
+        <input value={search} onChange={(event) => setSearch(event.currentTarget.value)} placeholder="Search chats" />
+      </label>
+      <div className="aui-conversation-route-chips" aria-label="Assistant local remote mesh route chips">
+        {routeChips.map((chip) => (
+          <span key={chip.id} className="aui-route-mode-chip">
+            <StatusBadge state={chip.state} />
+            <span>{chip.label}</span>
+          </span>
+        ))}
+      </div>
       <ul aria-label="Assistant conversation list">
         <li className="active">
           <button type="button" aria-current="true">
@@ -1699,7 +1792,7 @@ function ConversationRail({
         ) : recentMessages.map((message) => (
           <li key={message.id}>
             <button type="button">
-              <strong>{message.role === 'user' ? 'You' : 'Aurora'} · {message.status}</strong>
+              <strong>{messageRoleLabel(message.role)} · {message.status}</strong>
               <span>{message.text.slice(0, 84) || 'Tool call update'}</span>
             </button>
           </li>
@@ -1718,7 +1811,7 @@ function ChatBubble({ message }: { message: AssistantUiMessage }) {
   return (
     <article className={`aui-chat-bubble aui-chat-${message.role} aui-chat-${message.status}`}>
       <header>
-        <strong>{message.role === 'user' ? 'You' : 'Aurora'}</strong>
+        <strong>{messageRoleLabel(message.role)}</strong>
         <span>{message.status}</span>
       </header>
       <p>{message.text}</p>
@@ -1753,6 +1846,7 @@ function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
       <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
         <a href="/tools" className="aui-action-chip">Approve in Tools</a>
         <a href="/tools" className="aui-action-chip">Deny in Tools</a>
+        <a href="/tools" className="aui-action-chip">Edit scope in Tools</a>
       </div>
     </section>
   )
@@ -1816,7 +1910,7 @@ function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
   const message = value as Partial<AssistantUiMessage>
   return (
     typeof message.id === 'string' &&
-    (message.role === 'user' || message.role === 'assistant') &&
+    (message.role === 'user' || message.role === 'assistant' || message.role === 'system' || message.role === 'tool') &&
     typeof message.text === 'string' &&
     typeof message.createdAt === 'string' &&
     (message.toolCalls === undefined || (Array.isArray(message.toolCalls) && message.toolCalls.every(isAssistantToolCallCard))) &&

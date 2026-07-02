@@ -1138,6 +1138,20 @@ describe('Aurora production shell', () => {
           sessionId: 'assistant-session-tool-card',
           messages: [
             {
+              id: 'assistant-system-message',
+              role: 'system',
+              text: 'System routing policy loaded from Gateway health.',
+              createdAt: '2026-06-19T00:00:00Z',
+              status: 'sent'
+            },
+            {
+              id: 'assistant-user-message',
+              role: 'user',
+              text: 'Summarize the local Gateway service health.',
+              createdAt: '2026-06-19T00:00:01Z',
+              status: 'sent'
+            },
+            {
               id: 'assistant-tool-call-message',
               role: 'assistant',
               text: 'I need a tool approval before continuing.',
@@ -1156,8 +1170,21 @@ describe('Aurora production shell', () => {
                   payloadPreview: { service: 'Gateway', token: '[redacted]' }
                 }
               ]
+            },
+            {
+              id: 'assistant-tool-message',
+              role: 'tool',
+              text: 'Gateway.GetServices returned a redacted service summary.',
+              createdAt: '2026-06-19T00:00:03Z',
+              status: 'sent'
             }
           ]
+        }}
+        runtimeHealth={{
+          selectedModel: 'local-qwen2.5',
+          routeLabel: 'local / Orchestrator.ExternalUserInput',
+          sidecarHealth: 'running',
+          gatewayHealth: 'Gateway http://127.0.0.1:8000 healthy'
         }}
       />
     )
@@ -1166,14 +1193,31 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Recent chats')
     expect(markup).toContain('Conversation rail')
     expect(markup).toContain('New conversation')
+    expect(markup).toContain('Search recent conversations')
+    expect(markup).toContain('Assistant local remote mesh route chips')
+    expect(markup).toContain('Local local / Orchestrator.ExternalUserInput')
+    expect(markup).toContain('Remote route pending')
+    expect(markup).toContain('Mesh route pending')
     expect(markup).toContain('Assistant conversation list')
+    expect(markup).toContain('System routing policy loaded from Gateway health.')
+    expect(markup).toContain('Summarize the local Gateway service health.')
+    expect(markup).toContain('Gateway.GetServices returned a redacted service summary.')
+    expect(markup).toContain('System')
+    expect(markup).toContain('Tool')
     expect(markup).toContain('Orchestrator.ExternalUserInput')
+    expect(markup).toContain('Assistant runtime strip')
+    expect(markup).toContain('Selected model')
+    expect(markup).toContain('local-qwen2.5')
+    expect(markup).toContain('Sidecar')
+    expect(markup).toContain('running')
+    expect(markup).toContain('Gateway http://127.0.0.1:8000 healthy')
     expect(markup).toContain('Assistant tool call cards')
     expect(markup).toContain('Gateway.GetServices')
     expect(markup).toContain('Payload preview')
     expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
     expect(markup).toContain('Approve in Tools')
     expect(markup).toContain('Deny in Tools')
+    expect(markup).toContain('Edit scope in Tools')
     expect(markup).toContain('corr-tool-call-001')
     expect(markup).toContain('Voice modes')
     expect(markup).toContain('Browser capture')

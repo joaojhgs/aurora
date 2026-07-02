@@ -88,7 +88,7 @@ const tauriRouteIds = [
 type TauriRouteId = typeof tauriRouteIds[number]
 
 export const tauriRouteRegistry = {
-  assistant: ({ route, snapshot, client, assistantNativePermissions, assistantNativeCapabilities }) => (
+  assistant: ({ route, snapshot, nativeContext, client, assistantNativePermissions, assistantNativeCapabilities }) => (
     <AssistantView
       client={client}
       route={route}
@@ -98,6 +98,18 @@ export const tauriRouteRegistry = {
       nativeAvailable={snapshot.nativeAvailable}
       nativePermissions={assistantNativePermissions}
       nativeCapabilities={assistantNativeCapabilities}
+      runtimeHealth={{
+        selectedModel: null,
+        routeLabel: `${route.providerLabel} / ${route.state}`,
+        sidecarHealth: nativeContext.sidecar?.running
+          ? 'running'
+          : nativeContext.localMode
+            ? 'pending sidecar readiness'
+            : 'not used in thin/mock mode',
+        gatewayHealth: nativeContext.sidecar?.gatewayUrl
+          ? `Gateway ${nativeContext.sidecar.gatewayUrl}`
+          : `${snapshot.transportKind} transport`
+      }}
     />
   ),
   memory: ({ route, client }) => <MemoryView client={client} route={route} />,

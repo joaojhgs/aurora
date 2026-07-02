@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:33:40.627Z",
+  "updatedAt": "2026-07-02T11:40:03.286Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1209,10 +1209,12 @@
       "id": "G103-page-structure",
       "title": "Page structure:",
       "objective": "Page structure:\nconversation rail with recent conversations, local/remote/mesh route chips, search/new chat;\nmain message thread with user/assistant/system/tool messages;\ncomposer with multiline input, send, stop, retry, attach/context, voice push-to-talk;\nroute/privacy sheet with candidates, selected provider, evidence, policy warnings;\ntool call cards with approve/deny/edit scope;\ncompact runtime strip showing selected model, route, sidecar/Gateway health.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:40:03.286Z",
+      "completedAt": "2026-07-02T11:40:03.286Z",
+      "evidence": "Implemented and verified assistant page structure for G103. AssistantView now has conversation search plus local/remote/mesh route chips, system/user/assistant/tool message rendering, a compact runtime strip with selected model/route/sidecar/Gateway health, and tool-call edit-scope action alongside approve/deny. Tauri route passes runtime health into AssistantView. Regression coverage in packages/aurora-ui/tests/shell.test.tsx proves conversation rail, search/new chat, route chips, message roles, composer, attach/context controls, push-to-talk voice controls, route/privacy sheet, tool cards approve/deny/edit scope, and runtime strip. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'assistant text chat'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G104-integration",
