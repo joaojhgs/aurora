@@ -44,6 +44,7 @@ import {
 import {
   AdminOverviewContent,
   AdminOverviewView,
+  buildAdminOverviewSnapshot,
   AdminPluginsView,
   AdminServicesView,
   AdminRbacView,
@@ -2628,8 +2629,10 @@ describe('Aurora production shell', () => {
   })
 
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const manifest = await buildAdminOverviewSnapshot(client)
     const markup = renderToStaticMarkup(
-      await AdminOverviewView({ client: new AuroraClient({ transport: new MockAuroraTransport() }) })
+      <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} />
     )
 
     expect(markup).toContain('Admin overview')
@@ -2732,15 +2735,25 @@ describe('Aurora production shell', () => {
   })
 
   it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
+    const client = new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
+    await expect(buildAdminOverviewSnapshot(client)).rejects.toThrow(/registry offline/)
+
     const markup = renderToStaticMarkup(
-      await AdminOverviewView({
-        client: new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
-      })
+      <AdminOverviewContent manifest={null} transportKind={client.transport.kind} error={new Error('registry offline')} />
     )
 
     expect(markup).toContain('Service overview unavailable')
     expect(markup).toContain('registry offline')
     expect(markup).toContain('Open diagnostics')
+    expect(markup).toContain('AuroraClient could not load')
+  })
+
+  it('renders admin overview as a synchronous client resource loader before hydration', () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const markup = renderToStaticMarkup(<AdminOverviewView client={client} />)
+
+    expect(markup).toContain('Service overview unavailable')
+    expect(markup).toContain('Loading admin overview manifest from AuroraClient')
     expect(markup).toContain('AuroraClient could not load')
   })
 

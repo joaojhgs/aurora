@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from 'react'
 import type {
   AdminOverviewManifest,
   AdminOverviewServiceSummary,
@@ -26,13 +29,38 @@ interface ActivityItem {
   detail: string
 }
 
-export async function AdminOverviewView({ client }: AdminOverviewViewProps) {
-  try {
-    const manifest = await client.adminOverview.getManifest()
-    return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} />
-  } catch (error) {
-    return <AdminOverviewContent manifest={null} transportKind={client.transport.kind} error={error} />
-  }
+export function AdminOverviewView({ client }: AdminOverviewViewProps) {
+  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
+  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from AuroraClient.'))
+
+  useEffect(() => {
+    let cancelled = false
+    setManifest(null)
+    setError(new Error('Loading admin overview manifest from AuroraClient.'))
+    void buildAdminOverviewSnapshot(client).then(
+      (next) => {
+        if (!cancelled) {
+          setManifest(next)
+          setError(undefined)
+        }
+      },
+      (nextError: unknown) => {
+        if (!cancelled) {
+          setManifest(null)
+          setError(nextError)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+}
+
+export async function buildAdminOverviewSnapshot(client: AuroraClient): Promise<AdminOverviewManifest> {
+  return client.adminOverview.getManifest()
 }
 
 export function AdminOverviewContent({ manifest, transportKind, error }: AdminOverviewContentProps) {
