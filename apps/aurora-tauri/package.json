@@ -50,8 +50,9 @@
     "test:e2e:assistant": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:assistant\"",
     "test:e2e:admin": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:admin\"",
     "test:e2e:runtime": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:runtime\"",
-    "tauri:smoke:linux": "pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime && pnpm test:ci-native-evidence",
-    "test:ci-native-evidence": "vitest run --environment node src/ci-native-evidence.test.ts"
+    "tauri:smoke:linux": "pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime && pnpm test:dev-bootstrap && pnpm test:ci-native-evidence",
+    "test:ci-native-evidence": "vitest run --environment node src/ci-native-evidence.test.ts",
+    "test:dev-bootstrap": "vitest run --environment node src/tauri-dev-bootstrap.test.ts"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
