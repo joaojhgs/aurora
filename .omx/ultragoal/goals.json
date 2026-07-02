@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:14:48.192Z",
+  "updatedAt": "2026-07-02T09:16:58.002Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -635,10 +635,13 @@
       "id": "G053-lane-f-e2e-visual-ci-docs-release-re",
       "title": "**Lane F — E2E, visual, CI, docs, release readiness**",
       "objective": "**Lane F — E2E, visual, CI, docs, release readiness**\nOwner role: test-engineer + verifier\nScope: Playwright/Tauri/mobile smoke, CI gates, visual evidence, docs, final production readiness audit.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:16:58.002Z",
+      "startedAt": "2026-07-02T09:15:04.643Z",
+      "completedAt": "2026-07-02T09:16:58.002Z",
+      "evidence": "Lane F E2E/visual/CI/docs/release readiness evidence: Tauri Linux smoke passed routes, assistant, admin, runtime, outcome artifacts, dev-bootstrap, native-evidence, and service-boundary gates. Shared UI typecheck, accessibility/responsive/visual tests, and route/placeholder/landmark/mock/privacy/AdminAction gates passed. SDK build/test/resilience passed. Docs check and ruff passed. Tauri app typecheck/full vitest suite passed. Rust cargo check passed with warnings only. Android preflight generated reports/android-preflight.json with 5 passed and 2 non-strict blocked readiness items; iOS policy-only preflight passed, while full ios:preflight remains macOS/Xcode-only per docs/CI. Static placeholder grep found only the defensive unreachable MissingTauriRoute fallback copy in apps/aurora-tauri/src/tauri-app.tsx, and route crawl verifies primary routes do not reach it. Verified pnpm --filter @aurora/tauri-ui tauri:smoke:linux; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test:accessibility; pnpm --filter @aurora/ui test -- -t 'route|placeholder|landmark|visual|screenshot|mock reference|privacy|AdminAction'; pnpm --filter @aurora/client build; pnpm --filter @aurora/client test; pnpm --filter @aurora/client test:resilience; uv run python scripts/check_docs.py; uv run ruff check app packages scripts tests; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test; cargo check --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml; pnpm --filter @aurora/tauri-ui android:preflight; node apps/aurora-tauri/scripts/ios-preflight.mjs --policy-only; rg placeholder/debug-dashboard patterns over production UI/Tauri source."
     },
     {
       "id": "G054-lane-b-publishes-sdk-backend-contrac",
