@@ -3437,6 +3437,85 @@ mod tests {
     }
 
     #[test]
+    fn log_serialization_redacts_tokens_secrets_and_raw_audio_payloads() {
+        let payload = json!({
+            "authorization": "Bearer auth-secret",
+            "nested": {
+                "sessionToken": "session-secret",
+                "api_key": "api-secret",
+                "rawAudio": "base64-audio-samples",
+                "audioBytes": [1, 2, 3, 4],
+                "privacyClass": "raw-audio"
+            },
+            "message": "Authorization: Bearer inline-secret token=inline-token raw_audio=pcm-secret"
+        });
+
+        let serialized = serialize_redacted_value(&payload);
+
+        for forbidden in [
+            "auth-secret",
+            "session-secret",
+            "api-secret",
+            "base64-audio-samples",
+            "inline-secret",
+            "inline-token",
+            "pcm-secret",
+        ] {
+            assert!(!serialized.contains(forbidden), "{forbidden}");
+        }
+        assert!(serialized.contains("[redacted]"));
+        assert!(serialized.contains("raw-audio"));
+    }
+
+    #[test]
+    fn freeform_sidecar_log_redaction_removes_secret_like_fields() {
+        let line = "started Authorization: Bearer gateway-token token=sidecar-token secret=mesh-secret audio_bytes=pcm-secret ok";
+        let redacted = redact_sensitive_text(line);
+
+        for forbidden in [
+            "gateway-token",
+            "sidecar-token",
+            "mesh-secret",
+            "pcm-secret",
+        ] {
+            assert!(!redacted.contains(forbidden), "{forbidden}");
+        }
+        assert!(redacted.contains("[redacted]"));
+        assert!(redacted.ends_with(" ok"));
+    }
+
+    #[test]
+    fn command_error_serialization_redacts_gateway_payloads() {
+        let error = AuroraCommandError::Gateway(
+            "HTTP 500: {\"token\":\"gateway-token\",\"rawAudio\":\"pcm-secret\"}".to_string(),
+        );
+        let serialized = serde_json::to_string(&error).unwrap();
+
+        assert!(!serialized.contains("gateway-token"));
+        assert!(!serialized.contains("pcm-secret"));
+        assert!(serialized.contains("[redacted]"));
+        assert!(serialized.contains("secrets_redacted"));
+    }
+
+    #[test]
+    fn log_tail_result_reports_redaction_boundary() {
+        let result = LogTailResult {
+            available: false,
+            source: "aurora-sidecar".to_string(),
+            lines: Vec::new(),
+            truncated: false,
+            reason: Some("deferred".to_string()),
+            max_lines: 100,
+            secrets_redacted: true,
+            redacted_fields: sensitive_log_redacted_fields(),
+        };
+
+        assert!(result.secrets_redacted);
+        assert!(result.redacted_fields.contains(&"token".to_string()));
+        assert!(result.redacted_fields.contains(&"raw_audio".to_string()));
+    }
+
+    #[test]
     fn ios_native_plugin_surface_is_registered_and_permissioned() {
         let ios_capability = include_str!("../capabilities/aurora-ios-baseline.json");
         assert!(ios_capability.contains("\"aurora-ios-native-plugin\""));
