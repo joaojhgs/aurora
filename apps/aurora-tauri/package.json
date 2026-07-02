@@ -41,7 +41,7 @@
     "prepare:sidecar:full": "node ./scripts/prepare-sidecar.mjs --profile full",
     "eventstream:smoke": "node ./scripts/eventstream-smoke.mjs",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment jsdom",
+    "test": "vitest run --environment jsdom src",
     "tauri": "node ./scripts/tauri-cli.mjs",
     "build:bundle:linux-rpm:thin": "node ./scripts/prepare-sidecar.mjs --profile thin && pnpm tauri build --config src-tauri/tauri.release.conf.json --no-sign --bundles rpm",
     "ios:preflight": "node ./scripts/ios-preflight.mjs --require-macos --require-ios-project",

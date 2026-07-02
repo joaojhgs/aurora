@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:58:39.027Z",
+  "updatedAt": "2026-07-02T13:11:35.050Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1418,10 +1418,12 @@
       "id": "G122-e2e-covers-catalog-load-search-detai",
       "title": "E2E covers catalog load, search, detail drawer, parameter validation,...",
       "objective": "E2E covers catalog load, search, detail drawer, parameter validation, approval-required path, execution/error path.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T13:11:35.050Z",
+      "completedAt": "2026-07-02T13:11:35.050Z",
+      "evidence": "G122 E2E coverage added for Tools route catalog load/search/detail drawer/parameter validation/approval-required path/execution error path. Verified: pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'tool approval|filters the tool catalog|safe local tool|sensitive tool'; git diff --check. Playwright test-results removed."
     },
     {
       "id": "G123-page-structure",

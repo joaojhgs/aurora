@@ -409,6 +409,9 @@ function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel }) {
       </dl>
       <form className="aui-tool-param-form" aria-label="Generated parameter form">
         <strong>Generated parameter form</strong>
+        <p>
+          Parameter validation is schema-derived from Tooling.GetToolCatalog; backend validation remains authoritative before Tooling.ExecuteTool.
+        </p>
         {fields.length > 0 ? fields.map((field) => (
           <label key={field.name}>
             <span>{field.name}{field.required ? ' *' : ''}</span>

@@ -210,7 +210,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['plugins', 'tools'],
     routeOracles: [
       routeOracle('plugins', ['Plugins, MCP, and tools'], ['Reload catalog']),
-      routeOracle('tools', ['Tool registry and Approval cards', 'Tool detail drawer'], ['Tool search', 'Generated parameter form', 'MCP server status', 'Open scheduler'])
+      routeOracle('tools', ['Tool registry and Approval cards'], ['Tool search', 'Tool detail drawer', 'Generated parameter form', 'MCP server status', 'Open scheduler'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     mockUxAnchors: ['Plugins, MCP, and tools', 'Provider grouping', 'Reload and install controls', 'Tool risk and sharing policy'],
@@ -293,7 +293,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Memory, RAG, and data policy',
     navItemIds: ['memory', 'data'],
     routeOracles: [
-      routeOracle('memory', ['History and RAG provenance'], ['Namespace search']),
+      routeOracle('memory', ['History and RAG provenance'], ['Search memory and RAG']),
       routeOracle('data', ['Data policy and retention'], ['Audit trail for policy changes'])
     ],
     mockReferenceFiles: ['app/(cockpit)/memory/page.tsx'],

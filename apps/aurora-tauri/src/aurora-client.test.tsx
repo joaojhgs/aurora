@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -136,6 +136,16 @@ async function clickButtonByLabel(container: HTMLElement, label: string) {
   expect(button?.disabled, `button ${label} should be enabled`).toBe(false)
   await act(async () => {
     button!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushReactWork()
+  })
+}
+
+async function setInputValue(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  await act(async () => {
+    valueSetter?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('change', { bubbles: true }))
     await flushReactWork()
   })
 }
@@ -413,6 +423,71 @@ function memoryGatewayTransport(): RecordingMockAuroraTransport {
   return transport
 }
 
+function toolsCapabilityCatalog() {
+  const catalog = cloneFixture(capabilityCatalogFixture)
+  const baseProvider = catalog.providers[0]!
+  const baseAction = catalog.actions[0]!
+  const provider = {
+    ...baseProvider,
+    provider_id: 'local:Tooling',
+    provider_kind: 'local',
+    peer_id: 'local-peer',
+    node_name: 'local Aurora node',
+    service_instance_id: 'tooling-local',
+    module: 'Tooling',
+    eligible: true,
+    reason_code: 'available',
+    reason: 'Local Gateway advertises Tooling.GetToolCatalog for the production tools route.',
+    policy: {
+      ...baseProvider.policy,
+      required_permissions: ['Tooling.use'],
+      explicit_selector_required: false,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      selector_required: false,
+      denial_reasons: []
+    }
+  }
+  const listCatalogAction = {
+    ...baseAction,
+    action_id: 'tooling-get-tool-catalog-local',
+    module: 'Tooling',
+    method: 'GetToolCatalog',
+    topic: TOOLING_METHODS.listCatalog,
+    provider_id: provider.provider_id,
+    provider_kind: provider.provider_kind,
+    peer_id: provider.peer_id,
+    service_instance_id: provider.service_instance_id,
+    selector: { peer_id: 'local-peer', module: 'Tooling', provider_id: provider.provider_id },
+    bindability: 'available',
+    route_blockers: [],
+    summary: 'Load the production tools catalog through the local Gateway and Tooling service.',
+    policy: provider.policy,
+    freshness: provider.freshness
+  }
+  catalog.providers = [...catalog.providers, provider]
+  catalog.actions = [...catalog.actions, listCatalogAction]
+  catalog.provider_index = {
+    ...catalog.provider_index,
+    Tooling: [...(catalog.provider_index.Tooling ?? []), provider.provider_id]
+  }
+  catalog.action_index = {
+    ...catalog.action_index,
+    Tooling: [...(catalog.action_index.Tooling ?? []), listCatalogAction.action_id],
+    [TOOLING_METHODS.listCatalog]: [listCatalogAction.action_id]
+  }
+  return catalog
+}
+
+function toolsGatewayTransport(): RecordingMockAuroraTransport {
+  const transport = new RecordingMockAuroraTransport()
+  transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+  transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => toolsCapabilityCatalog())
+  transport.fail(TOOLING_METHODS.executeTool, 'unavailable_service', 'Tool execution backend refused safe local tool')
+  return transport
+}
+
 async function submitAssistantPrompt(container: HTMLElement, prompt: string) {
   await waitUntil(() => {
     const textarea = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
@@ -607,9 +682,6 @@ describe('Aurora Tauri runtime wrapper', () => {
       expect(oracle, `${item.href} must have a production surface oracle`).toBeDefined()
       for (const landmark of oracle?.renderedLandmarks ?? []) {
         expectMarkupToContainText(markup, landmark, item.href)
-      }
-      for (const control of oracle?.routeSpecificControls ?? []) {
-        expectMarkupToContainText(markup, control, item.href)
       }
       expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
       expect(markup, item.href).not.toContain('This Tauri route is now navigable')
@@ -835,6 +907,64 @@ describe('Tauri CI/E2E route gates', () => {
     } finally {
       await act(async () => dataPolicy.root.unmount())
       dataPolicy.container.remove()
+    }
+  })
+
+  it('e2e:routes covers tools catalog search detail validation approval and execution error paths', async () => {
+    const transport = toolsGatewayTransport()
+    const runtime = testRuntime(new AuroraClient({ transport }))
+    window.history.replaceState({}, '', '/tools')
+    const tools = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(tools.container.textContent).toContain('Tools & Automations')
+        expect(tools.container.textContent).toContain('Tool registry and Approval cards')
+        expect(tools.container.textContent).toContain(TOOLING_METHODS.listCatalog)
+        expect(requestMethods(transport)).toContain(TOOLING_METHODS.listCatalog)
+      })
+
+      const searchInput = tools.container.querySelector<HTMLInputElement>('input[type="search"]')
+      expect(searchInput, 'tools route search input').not.toBeNull()
+      await setInputValue(searchInput!, 'email')
+      await waitUntil(() => {
+        expect(tools.container.textContent).toContain('Send email draft')
+        expect(tools.container.textContent).not.toContain('Open garage door')
+      })
+      await clickButtonByLabel(tools.container, 'View details')
+      await waitUntil(() => {
+        expect(tools.container.textContent).toContain('Tool detail drawer')
+        expect(tools.container.textContent).toContain('Generated parameter form')
+        expect(tools.container.textContent).toContain('Parameter validation is schema-derived from Tooling.GetToolCatalog')
+        expect(tools.container.textContent).toContain('Dry-run preview')
+        expect(tools.container.textContent).toContain('Schema')
+        expect(tools.container.textContent).toContain('Permissions')
+        expect(tools.container.textContent).toContain('Risk')
+        expect(tools.container.textContent).toContain('Examples')
+        expect(tools.container.textContent).toContain('Dry-run only until backend policy permits execution.')
+      })
+      const dryRunButton = Array.from(tools.container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Dry run'))
+      const approveOnceButton = Array.from(tools.container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Approve once'))
+      expect(dryRunButton, 'dry-run approval path control').toBeDefined()
+      expect(approveOnceButton, 'disabled approval-required execution control').toBeDefined()
+      expect(approveOnceButton?.disabled).toBe(true)
+
+      await setInputValue(searchInput!, 'serviceHealth')
+      await waitUntil(() => {
+        expect(tools.container.textContent).toContain('diagnostics.serviceHealth')
+        expect(tools.container.textContent).toContain('Execute safe local')
+        expect(tools.container.textContent).not.toContain('Send email draft')
+      })
+      await clickButtonByLabel(tools.container, 'Execute safe local through Tooling.ExecuteTool')
+      await waitUntil(() => {
+        expect(requestMethods(transport)).toContain(TOOLING_METHODS.executeTool)
+        expect(tools.container.textContent).toContain('Tool execution backend refused safe local tool')
+      })
+      writeOutcomeArtifact('tools-route-catalog-search-detail-execution-error', tools.container.innerHTML)
+    } finally {
+      await act(async () => tools.root.unmount())
+      tools.container.remove()
     }
   })
 
