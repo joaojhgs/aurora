@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:39:28.929Z",
+  "updatedAt": "2026-07-02T06:40:19.178Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -131,10 +131,13 @@
       "id": "G011-components-aurora-assistant-route-sh",
       "title": "`components/aurora/assistant/route-sheet.tsx`: route candidates, priv...",
       "objective": "`components/aurora/assistant/route-sheet.tsx`: route candidates, privacy evidence, policy controls, selected route confirmation.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:40:19.178Z",
+      "startedAt": "2026-07-02T06:39:46.175Z",
+      "completedAt": "2026-07-02T06:40:19.178Z",
+      "evidence": "Verified route sheet already satisfies modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx contract with SDK-backed route candidates, redacted payload preview, privacy evidence, scope controls, AdminAction blocking, and selected route confirmation. Files inspected: packages/aurora-ui/src/route-sheet.tsx and packages/aurora-ui/tests/shell.test.tsx. Verification: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t RouteSheet (4 passed, 91 skipped by filter); pnpm --filter @aurora/tauri-ui test:e2e:assistant (1 passed, 11 skipped by filter)."
     },
     {
       "id": "G012-components-aurora-assistant-tool-cal",
