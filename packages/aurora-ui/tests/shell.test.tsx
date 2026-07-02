@@ -2177,6 +2177,7 @@ describe('Aurora production shell', () => {
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
     expect(markup).toContain('Preview requires AdminAction draft/confirm/audit')
     expect(markup).toContain('Supervisor control contract is not present in the service registry')
+    expect(markup).toContain('Supervisor.StopService is internal-only and not available to this SDK transport')
   })
 
   it('renders admin service loading, empty, denied, degraded, and unavailable states', async () => {
@@ -2956,7 +2957,22 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         trustState: 'pending',
         connectionStatus: 'connected',
+        pendingPairing: expect.objectContaining({
+          remote_peer_id: 'peer-kitchen',
+          code: 'mesh-pairing-secret'
+        }),
+        approveAction: expect.objectContaining({
+          methodId: 'Auth.MeshApprovePeer',
+          path: '/api/Auth/MeshApprovePeer'
+        }),
         lastEvidenceSource: expect.stringContaining('Auth.MeshListPeers')
+      })
+    )
+    expect(snapshot.liveSessions.find((session) => session.stablePeerId === 'stable-peer')?.evidenceSource).toBe('Gateway.GetWebRTCDiagnostics')
+    expect(snapshot.devices.find((device) => device.name === 'Studio Mac')).toEqual(
+      expect.objectContaining({
+        trustLabel: 'trusted Auth device',
+        evidenceSource: 'Auth.ListDevices'
       })
     )
     expect(snapshot.peers.find((peer) => peer.peerId === 'peer-den')?.compatibility).toContain('incompatible')
@@ -2995,6 +3011,13 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Stale peer requires manifest/heartbeat review before cleanup')
     expect(markup).toContain('Removed peer trust record should be reviewed for cleanup')
     expect(markup).toContain('AdminAction remove available in peer table')
+    expect(markup).toContain('Peer table')
+    expect(markup).toContain('Persisted Auth trust, Gateway route quality, and WebRTC diagnostics are cross-referenced without treating live sessions as stable peer trust.')
+    expect(markup).toContain('<th scope="col">Peer</th>')
+    expect(markup).toContain('<th scope="col">Permissions</th>')
+    expect(markup).toContain('<th scope="col">Latency</th>')
+    expect(markup).toContain('<th scope="col">Trust</th>')
+    expect(markup).toContain('<th scope="col">Action</th>')
     expect(markup).toContain('Active WebRTC sessions')
     expect(markup).toContain('Auth device records')
     expect(markup).toContain('Kitchen node')
@@ -3009,6 +3032,45 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('secrets redacted')
     expect(markup).toContain('Gateway.GetMeshStatus')
     expect(markup).not.toContain('mesh-pairing-secret')
+  })
+
+  it('builds mesh peer AdminAction payloads without raw confirmation shortcuts', () => {
+    const approve = buildMeshPeerAdminAction(
+      { peerId: 'peer-kitchen', nodeName: 'Kitchen node' },
+      'approve',
+      { reason: 'Fingerprint verified out of band', permissions: 'Gateway.use, TTS.use' }
+    )
+    const deny = buildMeshPeerAdminAction(
+      { peerId: 'peer-cabin', nodeName: 'Cabin node' },
+      'deny',
+      { reason: 'Fingerprint mismatch' }
+    )
+    const remove = buildMeshPeerAdminAction(
+      { peerId: 'peer-lab', nodeName: 'Lab node' },
+      'remove',
+      { reason: 'Retire test peer', revokeToken: false }
+    )
+
+    expect(approve).toEqual(expect.objectContaining({
+      methodId: 'Auth.MeshApprovePeer',
+      payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] },
+      reason: 'Fingerprint verified out of band',
+      reauthConfirmed: true,
+      affectedResources: ['mesh-peer:peer-kitchen', 'peer:Kitchen node'],
+      path: '/api/Auth/MeshApprovePeer'
+    }))
+    expect(deny).toEqual(expect.objectContaining({
+      methodId: 'Auth.MeshDenyPeer',
+      payload: { peer_id: 'peer-cabin' },
+      path: '/api/Auth/MeshDenyPeer'
+    }))
+    expect(remove).toEqual(expect.objectContaining({
+      methodId: 'Auth.MeshRemovePeer',
+      payload: { peer_id: 'peer-lab', revoke_token: false },
+      path: '/api/Auth/MeshRemovePeer'
+    }))
+    expect(JSON.stringify([approve, deny, remove])).not.toContain('"confirmed":true')
+    expect(parseMeshPermissionList('Gateway.use, TTS.use\nScheduler.use')).toEqual(['Gateway.use', 'TTS.use', 'Scheduler.use'])
   })
 
   it('maps mesh disabled, denied, degraded, and loading states without faking backend truth', async () => {

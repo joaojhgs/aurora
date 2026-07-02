@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock, RotateCw, Search, Square } from 'lucide-react'
+import { Activity, FileCode2, Lock, RefreshCw, RotateCw, Search, Square } from 'lucide-react'
 import {
   AuroraError,
   summarizeCapabilities,
@@ -37,7 +37,7 @@ export interface AdminServiceControlAction {
 }
 
 export interface AdminServiceControlPreview {
-  verb: 'restart' | 'stop'
+  verb: 'restart' | 'stop' | 'reload'
   methodId: string
   state: AvailabilityState
   available: boolean
@@ -322,6 +322,7 @@ function ServiceTableRow({
               <div><dt>Route evidence</dt><dd>{service.routeReason}</dd></div>
               <div><dt>Capabilities</dt><dd>{service.capabilities.length}</dd></div>
               <div><dt>Control posture</dt><dd>{controlPosture(service.controls)}</dd></div>
+              <div><dt>Errors/logs</dt><dd>{serviceLogsAndErrorsLabel(service)}</dd></div>
             </dl>
             <MethodList methods={service.methods} />
           </div>
@@ -365,15 +366,25 @@ function ServiceTableRow({
             >
               {control.verb === 'restart'
                 ? <RotateCw size={16} aria-hidden />
-                : control.available
-                  ? <Square size={16} aria-hidden />
-                  : <Lock size={16} aria-hidden />}
+                : control.verb === 'reload'
+                  ? <RefreshCw size={16} aria-hidden />
+                  : control.available
+                    ? <Square size={16} aria-hidden />
+                    : <Lock size={16} aria-hidden />}
             </button>
           ))}
         </div>
       </td>
     </tr>
   )
+}
+
+
+function serviceLogsAndErrorsLabel(service: AdminServiceRow): string {
+  if (service.healthState === 'available-local' || service.healthState === 'available-remote') {
+    return 'No active errors reported by the service registry; detailed logs require diagnostics export.'
+  }
+  return `${service.status || service.healthState}; inspect diagnostics export for service logs.`
 }
 
 function controlPosture(controls: AdminServiceControlPreview[]): string {
@@ -681,8 +692,8 @@ function buildServiceRows(
       routeReason: primary ? routeReason(primary) : 'Capability catalog does not advertise this service as executable.',
       privacyClass: primary?.privacyClass ?? 'public',
       methods: serviceMethods,
-      controls: ['restart', 'stop'].map((verb) =>
-        serviceControl(service, verb as 'restart' | 'stop', serviceMethods, capabilities)
+      controls: ['restart', 'reload', 'stop'].map((verb) =>
+        serviceControl(service, verb as 'restart' | 'reload' | 'stop', serviceMethods, capabilities)
       )
     }
   })
@@ -756,11 +767,11 @@ function schemaEvidence(method: MethodDescriptor, capability: CapabilitySummary 
 
 function serviceControl(
   service: ServiceInfo,
-  verb: 'restart' | 'stop',
+  verb: 'restart' | 'reload' | 'stop',
   methods: MethodDescriptor[],
   capabilities: CapabilitySummary[]
 ): AdminServiceControlPreview {
-  const methodId = `Supervisor.${verb === 'restart' ? 'RestartService' : 'StopService'}`
+  const methodId = serviceControlMethodId(verb)
   const descriptor = methods.find((method) => method.busTopic === methodId)
   const capability = capabilities.find((candidate) => candidate.busTopic === methodId)
   const state = capability?.availability ?? (descriptor ? methodAvailability(descriptor) : 'unsupported')
@@ -781,7 +792,7 @@ function serviceControl(
     reason,
     action: available
       ? {
-          title: `${verb === 'restart' ? 'Restart' : 'Stop'} ${service.module}`,
+          title: `${serviceControlLabel(verb)} ${service.module}`,
           description: `Aurora will ${verb} ${service.module} only through the AdminAction draft/confirm/audit controller.`,
           methodId,
           severity: verb === 'stop' ? 'critical' : 'high',
@@ -791,6 +802,19 @@ function serviceControl(
         }
       : null
   }
+}
+
+
+function serviceControlMethodId(verb: AdminServiceControlPreview['verb']): string {
+  if (verb === 'restart') return 'Supervisor.RestartService'
+  if (verb === 'reload') return 'Config.ReloadService'
+  return 'Supervisor.StopService'
+}
+
+function serviceControlLabel(verb: AdminServiceControlPreview['verb']): string {
+  if (verb === 'restart') return 'Restart'
+  if (verb === 'reload') return 'Reload'
+  return 'Stop'
 }
 
 function serviceTotals(services: AdminServiceRow[]) {
@@ -870,8 +894,8 @@ function controlReason(
   requiresAdminAction: boolean
 ): string {
   if (!descriptor) return 'Supervisor control contract is not present in the service registry.'
-  if (!descriptor.availableOverHttp) return 'Supervisor control is internal-only and not available to this SDK transport.'
-  if (!requiresAdminAction) return 'Supervisor control is not marked manage/admin-critical; UI will not execute it.'
+  if (!descriptor.availableOverHttp) return `${descriptor.busTopic} is internal-only and not available to this SDK transport.`
+  if (!requiresAdminAction) return `${descriptor.busTopic} is not marked manage/admin-critical; UI will not execute it.`
   if (!capability) return 'Capability catalog does not advertise this control as executable.'
   if (!['available-local', 'available-remote', 'degraded'].includes(capability.availability)) {
     return routeReason(capability)

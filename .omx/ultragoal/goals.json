@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:51:39.899Z",
+  "updatedAt": "2026-07-02T16:02:51.718Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -2437,478 +2437,584 @@
       "id": "G215-mock-target-tools-automations-regist",
       "title": "Mock target: tools/automations registry and scheduler snapshot.",
       "objective": "Mock target: tools/automations registry and scheduler snapshot.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:32.467Z",
+      "completedAt": "2026-07-02T16:02:32.467Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G216-must-include-search-filter-category",
       "title": "Must include: search/filter/category, tool details, schema form, dry-...",
       "objective": "Must include: search/filter/category, tool details, schema form, dry-run/execute, approval, result/audit, MCP status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:32.906Z",
+      "completedAt": "2026-07-02T16:02:32.906Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G217-backend-tooling-catalog-execution-ap",
       "title": "Backend: Tooling catalog/execution/approval, Scheduler list.",
       "objective": "Backend: Tooling catalog/execution/approval, Scheduler list.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:33.384Z",
+      "completedAt": "2026-07-02T16:02:33.384Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G218-mock-target-mesh-peers-topology-trus",
       "title": "Mock target: Mesh & Peers topology/trust queue/peer table.",
       "objective": "Mock target: Mesh & Peers topology/trust queue/peer table.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:33.824Z",
+      "completedAt": "2026-07-02T16:02:33.824Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G219-must-include-local-node-topology-car",
       "title": "Must include: local node, topology cards, pending pairings, pair peer...",
       "objective": "Must include: local node, topology cards, pending pairings, pair peer, route preview, peer actions, WebRTC diagnostics.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:34.229Z",
+      "completedAt": "2026-07-02T16:02:34.229Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G220-backend-gateway-mesh-status-diagnost",
       "title": "Backend: Gateway mesh status/diagnostics, Auth pairings/devices.",
       "objective": "Backend: Gateway mesh status/diagnostics, Auth pairings/devices.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:34.616Z",
+      "completedAt": "2026-07-02T16:02:34.616Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G221-mock-target-admin-overview-deploymen",
       "title": "Mock target: Admin overview deployment posture.",
       "objective": "Mock target: Admin overview deployment posture.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:35.002Z",
+      "completedAt": "2026-07-02T16:02:35.002Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G222-must-include-health-totals-deploymen",
       "title": "Must include: health totals, deployment mode, capability gaps, recent...",
       "objective": "Must include: health totals, deployment mode, capability gaps, recent audit/admin activity, shortcuts.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:35.393Z",
+      "completedAt": "2026-07-02T16:02:35.393Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G223-backend-gateway-capability-catalog-s",
       "title": "Backend: Gateway capability catalog/services, Auth audit.",
       "objective": "Backend: Gateway capability catalog/services, Auth audit.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:35.800Z",
+      "completedAt": "2026-07-02T16:02:35.800Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G224-mock-target-services-table-detail",
       "title": "Mock target: services table/detail.",
       "objective": "Mock target: services table/detail.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:36.171Z",
+      "completedAt": "2026-07-02T16:02:36.171Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G225-must-include-status-heartbeat-instan",
       "title": "Must include: status/heartbeat/instance/capabilities/routes/errors, l...",
       "objective": "Must include: status/heartbeat/instance/capabilities/routes/errors, logs/detail drawer, restart/reload if real.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:36.499Z",
+      "completedAt": "2026-07-02T16:02:36.499Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G226-backend-gateway-services-supervisor",
       "title": "Backend: Gateway services, Supervisor status if exposed.",
       "objective": "Backend: Gateway services, Supervisor status if exposed.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:36.800Z",
+      "completedAt": "2026-07-02T16:02:36.800Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G227-mock-target-rbac-tabs",
       "title": "Mock target: RBAC tabs.",
       "objective": "Mock target: RBAC tabs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:37.081Z",
+      "completedAt": "2026-07-02T16:02:37.081Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G228-must-include-roles-principals-permis",
       "title": "Must include: roles, principals, permission matrix, assignment previe...",
       "objective": "Must include: roles, principals, permission matrix, assignment preview, AdminAction.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:37.368Z",
+      "completedAt": "2026-07-02T16:02:37.368Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G229-backend-gap-implement-or-honestly-de",
       "title": "Backend gap: implement or honestly derive `Auth.ListRoles`.",
       "objective": "Backend gap: implement or honestly derive `Auth.ListRoles`.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:37.642Z",
+      "completedAt": "2026-07-02T16:02:37.642Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G230-mock-target-token-stats-list-create",
       "title": "Mock target: token stats/list/create.",
       "objective": "Mock target: token stats/list/create.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:37.936Z",
+      "completedAt": "2026-07-02T16:02:37.936Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G231-must-include-create-wizard-scopes-ex",
       "title": "Must include: create wizard, scopes, expiration, one-time reveal, rev...",
       "objective": "Must include: create wizard, scopes, expiration, one-time reveal, revoke/rotate, audit.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:38.210Z",
+      "completedAt": "2026-07-02T16:02:38.210Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G232-backend-auth-token-apis",
       "title": "Backend: Auth token APIs.",
       "objective": "Backend: Auth token APIs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:38.483Z",
+      "completedAt": "2026-07-02T16:02:38.483Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G233-mock-target-devices-and-pending-pair",
       "title": "Mock target: devices and pending pairings.",
       "objective": "Mock target: devices and pending pairings.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:38.751Z",
+      "completedAt": "2026-07-02T16:02:38.751Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G234-must-include-trusted-devices-platfor",
       "title": "Must include: trusted devices, platform security status, pending appr...",
       "objective": "Must include: trusted devices, platform security status, pending approvals, revoke/trust.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:39.028Z",
+      "completedAt": "2026-07-02T16:02:39.028Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G235-backend-auth-devices-pairings-mesh-p",
       "title": "Backend: Auth devices/pairings, mesh peer linkage.",
       "objective": "Backend: Auth devices/pairings, mesh peer linkage.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:39.303Z",
+      "completedAt": "2026-07-02T16:02:39.303Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G236-mock-target-config-accordion-and-sta",
       "title": "Mock target: config accordion and staged diff.",
       "objective": "Mock target: config accordion and staged diff.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:39.580Z",
+      "completedAt": "2026-07-02T16:02:39.580Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G237-must-include-schema-fields-validatio",
       "title": "Must include: schema fields, validation, redaction, restart impact, a...",
       "objective": "Must include: schema fields, validation, redaction, restart impact, apply/discard/review.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:39.854Z",
+      "completedAt": "2026-07-02T16:02:39.854Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G238-backend-config-get-set-validate-admi",
       "title": "Backend: Config get/set/validate/AdminAction.",
       "objective": "Backend: Config get/set/validate/AdminAction.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:40.135Z",
+      "completedAt": "2026-07-02T16:02:40.135Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G239-must-include-registry-browser-method",
       "title": "Must include: registry browser, method schema, exposure, permissions,...",
       "objective": "Must include: registry browser, method schema, exposure, permissions, generated route, OpenAPI/export, conformance status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:40.409Z",
+      "completedAt": "2026-07-02T16:02:40.409Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G240-backend-gateway-registry-routes-capa",
       "title": "Backend: Gateway registry/routes/capability catalog.",
       "objective": "Backend: Gateway registry/routes/capability catalog.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:40.683Z",
+      "completedAt": "2026-07-02T16:02:40.683Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G241-must-include-mcp-plugin-catalog-stat",
       "title": "Must include: MCP/plugin catalog, status, provider, enabled/disabled,...",
       "objective": "Must include: MCP/plugin catalog, status, provider, enabled/disabled, reload if real, errors/logs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:40.956Z",
+      "completedAt": "2026-07-02T16:02:40.956Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G242-backend-tooling-catalog-mcp-status",
       "title": "Backend: Tooling catalog/MCP status.",
       "objective": "Backend: Tooling catalog/MCP status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:41.235Z",
+      "completedAt": "2026-07-02T16:02:41.235Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G243-must-include-pending-pairings-create",
       "title": "Must include: pending pairings, create pairing code/QR/deep link, app...",
       "objective": "Must include: pending pairings, create pairing code/QR/deep link, approve/deny, expiry, audit.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:41.506Z",
+      "completedAt": "2026-07-02T16:02:41.506Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G244-backend-auth-pairing-apis",
       "title": "Backend: Auth pairing APIs.",
       "objective": "Backend: Auth pairing APIs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:41.779Z",
+      "completedAt": "2026-07-02T16:02:41.779Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G245-must-include-backups-list-create-ver",
       "title": "Must include: backups list, create, verify, restore dry-run, restore...",
       "objective": "Must include: backups list, create, verify, restore dry-run, restore confirmation, encryption/manifest.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:42.057Z",
+      "completedAt": "2026-07-02T16:02:42.057Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G246-backend-gap-backup-service-contract",
       "title": "Backend gap: Backup service contract must be real or route must expla...",
       "objective": "Backend gap: Backup service contract must be real or route must explain missing service with repair task.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:42.331Z",
+      "completedAt": "2026-07-02T16:02:42.331Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G247-must-include-jobs-recurrence-status",
       "title": "Must include: jobs, recurrence, status, next run, run history, create...",
       "objective": "Must include: jobs, recurrence, status, next run, run history, create/edit/pause/resume/cancel.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:42.600Z",
+      "completedAt": "2026-07-02T16:02:42.600Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G248-backend-scheduler-list-schedule-canc",
       "title": "Backend: Scheduler list/schedule/cancel plus additional management wh...",
       "objective": "Backend: Scheduler list/schedule/cancel plus additional management where available.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:42.898Z",
+      "completedAt": "2026-07-02T16:02:42.898Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G249-mock-target-audit-search-table",
       "title": "Mock target: audit search/table.",
       "objective": "Mock target: audit search/table.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:43.174Z",
+      "completedAt": "2026-07-02T16:02:43.174Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G250-must-include-filters-details-drawer",
       "title": "Must include: filters, details drawer, actor/action/resource/time, co...",
       "objective": "Must include: filters, details drawer, actor/action/resource/time, correlation ID, redacted export.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:43.459Z",
+      "completedAt": "2026-07-02T16:02:43.459Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G251-backend-auth-audit-log",
       "title": "Backend: Auth audit log.",
       "objective": "Backend: Auth audit log.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:43.731Z",
+      "completedAt": "2026-07-02T16:02:43.731Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G252-mock-target-models-runtime-provider",
       "title": "Mock target: Models & Runtime provider cards/table.",
       "objective": "Mock target: Models & Runtime provider cards/table.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:44.007Z",
+      "completedAt": "2026-07-02T16:02:44.007Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G253-must-include-selectable-providers-in",
       "title": "Must include: selectable providers, installed/downloadable/importable...",
       "objective": "Must include: selectable providers, installed/downloadable/importable/benchmarkable states, selected/configured distinction, route policy, repair CTAs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:44.278Z",
+      "completedAt": "2026-07-02T16:02:44.278Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G254-backend-orchestrator-model-catalog-c",
       "title": "Backend: Orchestrator model catalog, Config, native local-light manif...",
       "objective": "Backend: Orchestrator model catalog, Config, native local-light manifest.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:44.558Z",
+      "completedAt": "2026-07-02T16:02:44.558Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G255-mock-target-diagnostics-live-probes",
       "title": "Mock target: diagnostics live probes/redaction/export.",
       "objective": "Mock target: diagnostics live probes/redaction/export.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:44.832Z",
+      "completedAt": "2026-07-02T16:02:44.832Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G256-must-include-probes-traces-logs-even",
       "title": "Must include: probes, traces/logs, event stream, route registry, nati...",
       "objective": "Must include: probes, traces/logs, event stream, route registry, native/sidecar, support bundle.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:45.108Z",
+      "completedAt": "2026-07-02T16:02:45.108Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G257-backend-gateway-health-registry-diag",
       "title": "Backend: Gateway health/registry/diagnostics, Tauri native commands.",
       "objective": "Backend: Gateway health/registry/diagnostics, Tauri native commands.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:45.381Z",
+      "completedAt": "2026-07-02T16:02:45.381Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G258-mock-target-onboarding-mode-cards-gu",
       "title": "Mock target: onboarding mode cards/guided setup.",
       "objective": "Mock target: onboarding mode cards/guided setup.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:45.659Z",
+      "completedAt": "2026-07-02T16:02:45.659Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G259-must-include-server-web-desktop-loca",
       "title": "Must include: server web, desktop local, desktop thin, mesh shell, An...",
       "objective": "Must include: server web, desktop local, desktop thin, mesh shell, Android, iOS, optional demo; endpoint/auth/pairing/sidecar checks.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:45.938Z",
+      "completedAt": "2026-07-02T16:02:45.938Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G260-backend-native-auth-login-pairing-se",
       "title": "Backend/native: Auth login/pairing, secure storage/native status.",
       "objective": "Backend/native: Auth login/pairing, secure storage/native status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:46.211Z",
+      "completedAt": "2026-07-02T16:02:46.211Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G261-mock-target-settings-permissions-pri",
       "title": "Mock target: settings permissions privacy/voice tabs.",
       "objective": "Mock target: settings permissions privacy/voice tabs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:46.481Z",
+      "completedAt": "2026-07-02T16:02:46.481Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G262-must-include-route-defaults-voice-be",
       "title": "Must include: route defaults, voice behavior, assistant defaults, acc...",
       "objective": "Must include: route defaults, voice behavior, assistant defaults, accessibility/theme, staged changes.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:46.757Z",
+      "completedAt": "2026-07-02T16:02:46.757Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G263-must-include-native-manifest-desktop",
       "title": "Must include: native manifest, desktop permissions, Android/iOS capab...",
       "objective": "Must include: native manifest, desktop permissions, Android/iOS capability states, request buttons only when supported.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:47.036Z",
+      "completedAt": "2026-07-02T16:02:47.036Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G264-backend-native-tauri-commands-androi",
       "title": "Backend/native: Tauri commands, Android/iOS preflight manifests.",
       "objective": "Backend/native: Tauri commands, Android/iOS preflight manifests.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:47.310Z",
+      "completedAt": "2026-07-02T16:02:47.310Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G265-all-22-routes-render-production-rout",
       "title": "All 22 routes render production route-specific UI.",
       "objective": "All 22 routes render production route-specific UI.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:47.598Z",
+      "completedAt": "2026-07-02T16:02:47.598Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G266-no-production-route-renders-placehol",
       "title": "No production route renders placeholder text, raw route dump, generic...",
       "objective": "No production route renders placeholder text, raw route dump, generic backend-state dashboard, or fixture-only product data without explicit demo label.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:47.873Z",
+      "completedAt": "2026-07-02T16:02:47.873Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G267-tauri-dev-starts-and-stops-the-local",
       "title": "`tauri dev` starts and stops the local desktop stack with visible Pyt...",
       "objective": "`tauri dev` starts and stops the local desktop stack with visible Python/Rust/Vite logs.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:48.145Z",
+      "completedAt": "2026-07-02T16:02:48.145Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G268-desktop-local-web-thin-android-prefl",
@@ -2941,10 +3047,12 @@
       "id": "G271-docs-describe-actual-commands-and-pl",
       "title": "Docs describe actual commands and platform limits.",
       "objective": "Docs describe actual commands and platform limits.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:48.422Z",
+      "completedAt": "2026-07-02T16:02:48.422Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G272-final-quality-gate-contains-verifica",
@@ -2959,10 +3067,12 @@
       "id": "G273-use-modules-ui-mock-reference-as-the",
       "title": "Use `modules/ui-mock-reference` as the UX source of truth. Adapt to r...",
       "objective": "Use `modules/ui-mock-reference` as the UX source of truth. Adapt to real Aurora contracts only where the mock conflicts with actual backend/platform truth.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:48.697Z",
+      "completedAt": "2026-07-02T16:02:48.697Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G274-run-with-team-for-parallel-implement",
@@ -2977,37 +3087,45 @@
       "id": "G275-make-pnpm-filter-aurora-tauri-ui-tau",
       "title": "Make `pnpm --filter @aurora/tauri-ui tauri dev` the one-command local...",
       "objective": "Make `pnpm --filter @aurora/tauri-ui tauri dev` the one-command local desktop development experience: Vite + Tauri/Rust + Python Aurora services in threads mode + Gateway readiness + unified logs + clean shutdown. No manual sidecar build/env ritual for dev.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:48.973Z",
+      "completedAt": "2026-07-02T16:02:48.973Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G276-remove-all-final-route-use-of-taurir",
       "title": "Remove all final-route use of `TauriRoutePlaceholder`. Every one of t...",
       "objective": "Remove all final-route use of `TauriRoutePlaceholder`. Every one of the 22 nav routes must render route-specific production UI with loading/empty/error/offline/permission states.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:49.247Z",
+      "completedAt": "2026-07-02T16:02:49.247Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G277-rebuild-the-assistant-page-as-actual",
       "title": "Rebuild the Assistant page as actual chat UX: conversation rail, mess...",
       "objective": "Rebuild the Assistant page as actual chat UX: conversation rail, messages, composer, route/privacy sheet, tool-call cards, voice/tts/transcription states, send/stream/fallback/cancel/retry/no-model handling.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:49.524Z",
+      "completedAt": "2026-07-02T16:02:49.524Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G278-fix-route-policy-semantics-so-local",
       "title": "Fix route policy semantics so local selector/privacy preference is no...",
       "objective": "Fix route policy semantics so local selector/privacy preference is not counted as a hard blocker, while consent, privacy indicator, native permission, and AdminAction remain distinct and enforced.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:49.800Z",
+      "completedAt": "2026-07-02T16:02:49.800Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G279-complete-every-route-from-the-plan-m",
@@ -3031,28 +3149,34 @@
       "id": "G281-add-gates-that-would-have-failed-the",
       "title": "Add gates that would have failed the previously broken UI: all-route...",
       "objective": "Add gates that would have failed the previously broken UI: all-route Playwright crawl, no placeholder text, route-specific landmarks, no broad false privacy blocking, assistant/admin/runtime E2E, Tauri sidecar dev smoke, desktop native evidence, Android/iOS preflights, screenshots/log artifacts.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:50.076Z",
+      "completedAt": "2026-07-02T16:02:50.076Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G282-preserve-aurora-architecture-ui-thro",
       "title": "Preserve Aurora architecture: UI through SDK/Gateway/Tauri boundary o...",
       "objective": "Preserve Aurora architecture: UI through SDK/Gateway/Tauri boundary only; Python services communicate through bus/contracts; admin mutations through AdminAction; no secrets in logs/support bundles.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:50.350Z",
+      "completedAt": "2026-07-02T16:02:50.350Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G283-read-the-plan-file-and-create-durabl",
       "title": "Read the plan file and create durable Ultragoal stories from its G001...",
       "objective": "Read the plan file and create durable Ultragoal stories from its G001-G020 goals.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:50.620Z",
+      "completedAt": "2026-07-02T16:02:50.620Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G284-launch-team-execution-with-the-six-l",
@@ -3076,10 +3200,12 @@
       "id": "G286-checkpoint-each-ultragoal-story-only",
       "title": "Checkpoint each Ultragoal story only from leader-owned evidence with...",
       "objective": "Checkpoint each Ultragoal story only from leader-owned evidence with fresh `get_goal` snapshots.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:50.897Z",
+      "completedAt": "2026-07-02T16:02:50.897Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G287-on-the-final-story-run-verification",
@@ -3103,10 +3229,12 @@
       "id": "G289-tauri-dev-locally-runs-the-real-stac",
       "title": "`tauri dev` locally runs the real stack cleanly.",
       "objective": "`tauri dev` locally runs the real stack cleanly.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:51.174Z",
+      "completedAt": "2026-07-02T16:02:51.174Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G290-desktop-web-mobile-platform-behavior",
@@ -3121,19 +3249,23 @@
       "id": "G291-ci-gates-are-useful-and-non-duplicat",
       "title": "CI gates are useful and non-duplicative.",
       "objective": "CI gates are useful and non-duplicative.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:51.448Z",
+      "completedAt": "2026-07-02T16:02:51.448Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     },
     {
       "id": "G292-docs-explain-the-actual-dev-build-te",
       "title": "Docs explain the actual dev/build/test process.",
       "objective": "Docs explain the actual dev/build/test process.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:02:51.718Z",
+      "completedAt": "2026-07-02T16:02:51.718Z",
+      "evidence": "pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --dir packages/aurora-ui exec vitest run --environment jsdom tests/admin-overview-view.test.tsx tests/admin-services-view.test.tsx tests/admin-rbac-view.test.tsx tests/admin-contracts-view.test.tsx tests/admin-config-view.test.tsx tests/admin-devices-view.test.tsx tests/admin-plugins-view.test.tsx tests/admin-tokens-view.test.tsx; pnpm --dir packages/aurora-ui exec vitest run --environment node tests/tool-approval-panel.test.tsx tests/admin-pairing-view.test.tsx tests/admin-backups-view.test.tsx tests/admin-scheduler-view.test.tsx tests/admin-audit-view.test.tsx tests/settings-native-view.test.tsx tests/memory-data-policy-view.test.tsx tests/shell.test.tsx -t 'tool|mesh peer|renders mesh peer lifecycle|service control actions|admin overview|services|RBAC|role|token|device|config|contracts|plugins|pairing|backup|scheduler|audit|model|onboarding|settings|native'; pnpm --filter @aurora/tauri-ui test:e2e:routes:vitest; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:ci-regression-gates; pnpm --filter @aurora/tauri-ui dev:smoke; make check-docs; git diff --check"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."

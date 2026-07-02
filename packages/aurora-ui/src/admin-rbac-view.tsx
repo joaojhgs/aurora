@@ -238,7 +238,7 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-rbac-title">Access and RBAC</h1>
           <p>
-            Principals, role summaries, effective permission previews, and audit evidence are loaded through AuroraClient.
+            Principals, derived role summaries, effective permission previews, and audit evidence are loaded through AuroraClient; Auth.ListRoles is shown as a backend gap when absent.
           </p>
         </div>
         <div className="aui-admin-badges" aria-label="RBAC backend evidence">
@@ -253,12 +253,14 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
 
       <div className="aui-admin-metrics" aria-label="RBAC coverage summary">
         <Metric label="Principals" value={String(snapshot.principals.length)} detail={`${totals.admins} admin/system`} />
-        <Metric label="Roles" value={String(snapshot.roles.length)} detail="derived from backend permissions" />
+        <Metric label="Roles" value={String(snapshot.roles.length)} detail="derived; Auth.ListRoles gap" />
         <Metric label="Permissions" value={String(snapshot.permissions.length)} detail={`${totals.managePermissions} manage/admin`} />
         <Metric label="Audit" value={String(snapshot.audit.length)} detail="redacted Auth events" />
       </div>
 
       <RbacScopeNav />
+
+      <AuthListRolesGapNotice />
 
       <div className="aui-rbac-layout">
         <PrincipalsPanel principals={snapshot.principals} onPreviewAdminAction={onPreviewAdminAction} />
@@ -268,6 +270,19 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
         <AuditPanel audit={snapshot.audit} />
       </div>
     </section>
+  )
+}
+
+
+function AuthListRolesGapNotice() {
+  return (
+    <div className="aui-admin-notice" role="status">
+      <Lock size={18} aria-hidden />
+      <span>
+        Auth.ListRoles is not advertised by the SDK/contracts in this checkout, so role rows are honestly derived from
+        Auth.ListPrincipals permissions and cannot claim standalone role CRUD.
+      </span>
+    </div>
   )
 }
 

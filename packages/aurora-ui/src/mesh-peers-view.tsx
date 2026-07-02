@@ -434,6 +434,16 @@ export function MeshPeersView({
       <MeshPairingEntrypoint route={route} />
       <MeshRoutePreviewPanel route={route} snapshot={snapshot} />
       <MeshCleanupPanel peers={snapshot.peers} />
+      <MeshPeerTablePanel
+        peers={snapshot.peers}
+        mutationDisabled={mutationDisabled}
+        pendingPeerId={pendingPeerId}
+        optimisticPeerId={optimisticPeerId}
+        fixtureOnly={snapshot.fixtureOnly}
+        onApprovePeer={onApprovePeer}
+        onDenyPeer={onDenyPeer}
+        onRemovePeer={onRemovePeer}
+      />
 
       <section className="aui-mesh-controls" aria-label="Mesh peer controls">
         <label>
@@ -554,6 +564,87 @@ export function MeshPeersView({
           )
         })}
       </section>
+    </section>
+  )
+}
+
+function MeshPeerTablePanel({
+  peers,
+  mutationDisabled,
+  pendingPeerId,
+  optimisticPeerId,
+  fixtureOnly,
+  onApprovePeer,
+  onDenyPeer,
+  onRemovePeer
+}: {
+  peers: MeshPeerRow[]
+  mutationDisabled: boolean
+  pendingPeerId: string | null
+  optimisticPeerId: string | null
+  fixtureOnly: boolean
+  onApprovePeer: ((peer: MeshPeerRow) => void) | undefined
+  onDenyPeer: ((peer: MeshPeerRow) => void) | undefined
+  onRemovePeer: ((peer: MeshPeerRow) => void) | undefined
+}) {
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-peer-table-title">
+      <div className="aui-mesh-panel-title">
+        <span><Signal size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-peer-table-title">Peer table</h2>
+          <p>Persisted Auth trust, Gateway route quality, and WebRTC diagnostics are cross-referenced without treating live sessions as stable peer trust.</p>
+        </div>
+      </div>
+      {peers.length === 0 ? <p className="aui-message">No peer rows were reported by Auth.MeshListPeers, Gateway.GetMeshStatus, or pairing evidence.</p> : (
+        <div className="aui-table-scroll">
+          <table className="aui-table">
+            <thead>
+              <tr>
+                <th scope="col">Peer</th>
+                <th scope="col">Permissions</th>
+                <th scope="col">Latency</th>
+                <th scope="col">Trust</th>
+                <th scope="col">Evidence</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {peers.map((peer) => {
+                const pending = pendingPeerId === peer.peerId
+                const optimistic = optimisticPeerId === peer.peerId
+                return (
+                  <tr key={`table-${peer.peerId}`} data-state={optimistic ? 'optimistic' : undefined}>
+                    <th scope="row">
+                      <span>{peer.nodeName}</span>
+                      <code>{peer.peerId}</code>
+                    </th>
+                    <td>{peer.permissions.join(', ') || 'no outbound scopes'}</td>
+                    <td>{peer.latencyMs === null ? 'not reported' : `${peer.latencyMs} ms`}</td>
+                    <td>
+                      <StatusBadge state={optimistic ? 'pending' : peer.trustState} /> {peer.trustLabel}
+                    </td>
+                    <td>{fixtureOnly ? fixtureEvidence(peer.lastEvidenceSource) : peer.lastEvidenceSource}</td>
+                    <td>
+                      <div className="aui-mesh-actions">
+                        <button type="button" disabled={mutationDisabled || !peer.approveAction || pending} onClick={() => onApprovePeer?.(peer)}>
+                          {pending ? 'Submitting AdminAction' : 'Approve'}
+                        </button>
+                        <button type="button" disabled={mutationDisabled || !peer.denyAction || pending} onClick={() => onDenyPeer?.(peer)}>
+                          {pending ? 'Submitting AdminAction' : 'Deny'}
+                        </button>
+                        <button type="button" disabled={mutationDisabled || !peer.removeAction || pending} onClick={() => onRemovePeer?.(peer)}>
+                          {pending ? 'Submitting AdminAction' : 'Remove'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
