@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactElement } from 'react'
 import {
   AdminAuditResource,
   AdminOverviewContent,
@@ -54,7 +55,7 @@ type TauriRouteRenderer = (input: {
   shutdown: () => Promise<void>
   assistantNativePermissions: Array<{ name: string; granted: boolean }>
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
-}) => ReactNode
+}) => ReactElement
 
 export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   assistant: ({ route, snapshot, client, assistantNativePermissions, assistantNativeCapabilities }) => (
@@ -71,8 +72,13 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   ),
   memory: ({ route, client }) => <MemoryView client={client} route={route} />,
   tools: ({ route, client }) => <ToolApprovalPanel client={client} route={route} />,
-  mesh: ({ route, client }) => <MeshPeersResource client={client} route={route} />,
-  admin: ({ client }) => <TauriAdminOverviewPage client={client} />,
+  mesh: ({ route, client }) => (
+    <div className="ata-page-stack">
+      <MeshPeersResource client={client} route={route} />
+      <RoutePolicyResource client={client} route={route} />
+    </div>
+  ),
+  admin: ({ client }) => <AdminOverviewResource client={client} />,
   services: ({ client }) => <AdminServicesResource client={client} />,
   access: ({ client }) => <AdminRbacResource client={client} />,
   tokens: ({ client }) => <AdminRbacResource client={client} />,
@@ -85,7 +91,9 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
   scheduler: ({ route, client }) => <AdminSchedulerView client={client} route={route} />,
   audit: ({ client }) => <AdminAuditResource client={client} />,
   models: ({ client }) => <ModelsView client={client} />,
-  diagnostics: ({ snapshot, nativeContext, shutdown }) => <TauriDiagnosticsPage snapshot={snapshot} nativeContext={nativeContext} shutdown={shutdown} />,
+  diagnostics: ({ route, snapshot, nativeContext, client, shutdown }) => (
+    <TauriDiagnosticsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
+  ),
   onboarding: ({ snapshot, client }) => <OnboardingView client={client} snapshot={snapshot} />,
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} />,
   data: ({ route, client }) => <MemoryView client={client} route={route} />,
@@ -357,13 +365,17 @@ function TauriAdminOverviewPage({
 }
 
 function TauriDiagnosticsPage({
+  route,
   snapshot,
   nativeContext,
-  shutdown,
+  client,
+  shutdown
 }: {
-  snapshot: AuroraShellSnapshot;
-  nativeContext: NativeContext;
-  shutdown: () => Promise<void>;
+  route: RouteAvailability
+  snapshot: AuroraShellSnapshot
+  nativeContext: NativeContext
+  client: AuroraTauriClient
+  shutdown: () => Promise<void>
 }) {
   return (
     <div className="ata-page-stack">
@@ -488,6 +500,7 @@ function TauriDiagnosticsPage({
         </button>
       </section>
       <RouteMatrix routes={snapshot.routes} />
+      <MeshDiagnosticsResource client={client} route={route} />
     </div>
   );
 }
