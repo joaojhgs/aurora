@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:57:33.094Z",
+  "updatedAt": "2026-07-02T11:01:28.520Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1099,10 +1099,12 @@
       "id": "G093-playwright-route-crawl-fails-if-any",
       "title": "Playwright route crawl fails if any route contains the placeholder ph...",
       "objective": "Playwright route crawl fails if any route contains the placeholder phrase or generic “full product page still needs to be mounted” copy.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:01:28.520Z",
+      "completedAt": "2026-07-02T11:01:28.520Z",
+      "evidence": "Added apps/aurora-tauri/playwright.config.ts and tests/playwright/route-crawl.spec.ts. The Playwright crawl opens all 22 auroraNavSections routes in a real Chromium browser via the Vite dev server and fails if any body text contains placeholder/debug/generic 'full product page still needs to be mounted' copy or route-registry-error copy. Wired apps/aurora-tauri package script test:e2e:routes to run both Vitest route assertions and Playwright route crawl. Verified: pnpm --filter @aurora/tauri-ui test:e2e:routes (Vitest 3 route tests + Playwright 1 browser crawl passed); pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G094-tauri-and-web-route-registries-use-t",
