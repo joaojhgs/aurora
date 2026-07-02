@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:54:05.977Z",
+  "updatedAt": "2026-07-02T12:56:54.490Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1396,10 +1396,12 @@
       "id": "G120-at-least-one-safe-local-tool-path-is",
       "title": "At least one safe local tool path is executable or honestly disabled...",
       "objective": "At least one safe local tool path is executable or honestly disabled with backend repair task.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:56:54.490Z",
+      "completedAt": "2026-07-02T12:56:54.490Z",
+      "evidence": "Tools route now exposes an explicit safe local execution path: read-only local tools with no approval/AdminAction/mutation/data-egress and ready state render Execute safe local with Tooling.ExecuteTool evidence, while no-approval tools no longer show approval buttons. Existing unsafe/admin/unavailable paths remain gated. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'safe local tool|tool approval|filters the tool catalog'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G121-sensitive-tool-path-shows-approval-u",

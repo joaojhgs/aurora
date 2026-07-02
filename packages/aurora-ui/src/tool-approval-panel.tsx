@@ -173,6 +173,36 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }
   }
 
+  async function executeSafe(tool: ToolApprovalCardModel) {
+    setState((current) => ({
+      ...current,
+      decisionMessages: {
+        ...current.decisionMessages,
+        [tool.id]: 'Executing safe local tool through Tooling.ExecuteTool...'
+      }
+    }))
+    try {
+      await client.tools.execute({
+        global_tool_id: tool.id,
+        provider_peer_id: tool.providerPeerId,
+        provider_service_instance_id: tool.serviceInstanceId,
+        args: tool.argsPreview ?? {}
+      })
+      setState((current) => ({
+        ...current,
+        decisionMessages: {
+          ...current.decisionMessages,
+          [tool.id]: 'Executed safe local tool through Tooling.ExecuteTool.'
+        }
+      }))
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        decisionMessages: { ...current.decisionMessages, [tool.id]: errorMessage(error) }
+      }))
+    }
+  }
+
   function selectProvider(tool: ToolApprovalCardModel, providerId: string) {
     setState((current) => ({
       ...current,
@@ -262,6 +292,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
               onSelectProvider={(providerId) => selectProvider(tool, providerId)}
               onApprove={(scope, dryRun) => approve(tool, scope, dryRun)}
               onDeny={() => deny(tool)}
+              onExecuteSafe={() => executeSafe(tool)}
             />
           ))}
         </section>
@@ -281,6 +312,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
             <div><dt>Backend truth</dt><dd>Tooling.GetToolCatalog via AuroraClient</dd></div>
             <div><dt>Approval controller</dt><dd>client.approvals request/confirm</dd></div>
             <div><dt>Admin mutation</dt><dd>AdminAction when method_type manage/admin-critical</dd></div>
+            <div><dt>Safe local path</dt><dd>Read-only local tools without approval/AdminAction use Tooling.ExecuteTool; otherwise show backend repair state.</dd></div>
             <div><dt>Result evidence</dt><dd>provider, route path, audit receipt, correlation ID</dd></div>
             <div><dt>Route state</dt><dd>{route.state}</dd></div>
           </dl>
@@ -398,7 +430,8 @@ function ToolApprovalCard({
   onSelect,
   onSelectProvider,
   onApprove,
-  onDeny
+  onDeny,
+  onExecuteSafe
 }: {
   tool: ToolApprovalCardModel
   selectedProviderId?: string | undefined
@@ -409,6 +442,7 @@ function ToolApprovalCard({
   onSelectProvider: (providerId: string) => void
   onApprove: (scope: ToolApprovalScope, dryRun?: boolean) => void
   onDeny: () => void
+  onExecuteSafe: () => void
 }) {
   const selectedProvider = tool.providers.find((provider) => provider.id === selectedProviderId)
     ?? tool.providers.find((provider) => provider.selectable)
@@ -419,6 +453,7 @@ function ToolApprovalCard({
   const approveDisabled = blocked || selectorMissing || adminActionPending || tool.state === 'dry-run-only'
   const dryRunDisabled = blocked || selectorMissing || !tool.dryRunSupported
   const denyDisabled = blocked || selectorMissing
+  const executeSafeEnabled = safeLocalExecutable(tool) && !routeDisabled
   const adminLabel = tool.requiresAdminAction ? 'AdminAction required' : 'tool approval'
 
   return (
@@ -489,7 +524,13 @@ function ToolApprovalCard({
           <X size={15} aria-hidden />
           Deny
         </button>
-        {tool.approvalScopes.map((scope) => (
+        {executeSafeEnabled ? (
+          <button type="button" className="aui-primary-action" aria-label="Execute safe local through Tooling.ExecuteTool" onClick={onExecuteSafe}>
+            <Play size={15} aria-hidden />
+            Execute safe local
+          </button>
+        ) : null}
+        {tool.approvalRequired ? tool.approvalScopes.map((scope) => (
           <button
             key={scope}
             type="button"
@@ -500,7 +541,7 @@ function ToolApprovalCard({
             <Check size={15} aria-hidden />
             {scopeLabel(scope)}
           </button>
-        ))}
+        )) : null}
       </div>
 
       {decisionMessage ? <p className="aui-tool-message" role="status">{decisionMessage}</p> : null}
@@ -588,6 +629,20 @@ function toolSearchHaystack(tool: ToolApprovalCardModel) {
     tool.requiredPermissions.join(' '),
     tool.providers.map((provider) => `${provider.label} ${provider.providerKind} ${provider.transport ?? ''}`).join(' ')
   ].join(' ').toLowerCase()
+}
+
+function safeLocalExecutable(tool: ToolApprovalCardModel) {
+  const localProvider = tool.providerKind === 'local'
+    || tool.providerPeerId === null
+    || tool.providerPeerId === 'local-peer'
+    || tool.transport === 'local-bus'
+  return localProvider
+    && tool.state === 'ready'
+    && !tool.approvalRequired
+    && !tool.requiresAdminAction
+    && !tool.mutating
+    && !tool.dataEgress
+    && !tool.providerSelectorRequired
 }
 
 function providerStatusSummary(tools: ToolApprovalCardModel[]) {

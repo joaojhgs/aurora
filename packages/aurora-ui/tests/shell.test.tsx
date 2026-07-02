@@ -3346,6 +3346,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Generated parameter form')
     expect(markup).toContain('MCP server status')
     expect(markup).toContain('Reload catalog')
+    expect(markup).toContain('Safe local path')
+    expect(markup).toContain('Execute safe local')
     expect(markup).toContain('Scheduled jobs')
     expect(markup).toContain('Scheduler.ListJobs')
     expect(markup).toContain('Open scheduler')
@@ -3370,6 +3372,21 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('audit-receipt-tool-result')
     expect(markup).toContain('corr-tool-result')
     expect(markup).toContain('local-peer -&gt; tooling-local')
+  })
+
+  it('exposes one safe local tool execution path without pretending approval is required', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const toolsRoute = enabledRoute(route(snapshot, 'tools'))
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
+    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+    const safeLocalCard = markup.slice(markup.indexOf('diagnostics.serviceHealth'), markup.indexOf('Write local config file'))
+
+    expect(safeLocalCard).toContain('No approval required by current backend policy.')
+    expect(safeLocalCard).toContain('Execute safe local')
+    expect(safeLocalCard).toContain('Tooling.ExecuteTool')
+    expect(safeLocalCard).not.toContain('Approve once')
+    expect(safeLocalCard).not.toContain('AdminAction confirmation required')
   })
 
   it('filters the tool catalog by category and search text', () => {
