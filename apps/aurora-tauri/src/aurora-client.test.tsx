@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -1661,6 +1661,114 @@ describe('Tauri CI/E2E route gates', () => {
     } finally {
       await act(async () => root.unmount())
       container.remove()
+    }
+  })
+
+  it('e2e:runtime covers desktop native settings evidence and browser fallback unsupported evidence', async () => {
+    const desktopTransport = new RecordingMockAuroraTransport()
+    desktopTransport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+      .register('Native.GetCapabilityManifest', () => cloneFixture(nativeCapabilityManifestFixture))
+    const desktopRuntime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport: desktopTransport })),
+      mode: 'desktop-local',
+      sidecarStatus: async () => ({
+        running: true,
+        mode: 'threads',
+        pid: 5150,
+        gatewayUrl: 'http://127.0.0.1:8000',
+        lastError: null,
+        details: { healthPath: '/api/health', command: 'aurora_sidecar_status' },
+      }),
+      startSidecar: async () => ({
+        running: true,
+        mode: 'threads',
+        pid: 5150,
+        gatewayUrl: 'http://127.0.0.1:8000',
+        lastError: null,
+        details: { healthPath: '/api/health', command: 'aurora_sidecar_start' },
+      }),
+      nativePermissionStatus: async () => ({
+        platform: 'tauri-desktop',
+        permissions: { 'aurora.nativeCapabilityManifest': true },
+        capabilities: { 'native.notifications': true },
+        deniedByDefault: [],
+        privacyClasses: ['system'],
+        evidenceSource: 'tauri-capability-manifest',
+        secretsRedacted: true,
+      }),
+      trayStatus: async () => ({
+        available: true,
+        permission: 'aurora.trayStatus',
+        capability: 'desktop.tray',
+        source: 'aurora_tray_status',
+      }),
+      notificationStatus: async () => ({
+        available: true,
+        permission: 'aurora.notificationsStatus',
+        capability: 'native.notifications',
+        source: 'aurora_notification_status',
+      }),
+      dialogStatus: async () => ({
+        available: true,
+        permission: 'aurora.dialogStatus',
+        capability: 'native.dialogs',
+        source: 'aurora_dialog_status',
+      }),
+      audioBridgeStatus: async () => ({
+        available: true,
+        permission: 'aurora.audioBridgeStatus',
+        capability: 'native.audio',
+        source: 'aurora_audio_bridge_status',
+      }),
+    }
+    window.history.replaceState({}, '', '/settings/native')
+
+    const desktop = await mountOutcomeApp(desktopRuntime)
+    try {
+      await waitUntil(() => {
+        expect(desktop.container.textContent).toContain('Native platform settings')
+        expect(desktop.container.textContent).toContain('Tauri native manifest')
+        expect(desktop.container.textContent).toContain('Tauri tray status')
+        expect(desktop.container.textContent).toContain('Tauri notifications status')
+        expect(desktop.container.textContent).toContain('Tauri dialog open')
+        expect(desktop.container.textContent).toContain('Tauri audio capture')
+        expect(desktop.container.textContent).toContain('Tauri local file read')
+        expect(desktop.container.textContent).toContain('Tauri updater')
+        expect(desktop.container.textContent).toContain('Desktop Tauri command evidence')
+        expect(desktop.container.textContent).toContain('aurora_native_permission_status')
+        expect(desktop.container.textContent).toContain('aurora_tray_status')
+        expect(desktop.container.textContent).toContain('aurora_notification_status')
+        expect(desktop.container.textContent).toContain('aurora_dialog_status')
+        expect(desktop.container.textContent).toContain('aurora_audio_bridge_status')
+      })
+      expect(desktop.container.textContent).not.toContain('No native permission manifest is available')
+    } finally {
+      await act(async () => desktop.root.unmount())
+      desktop.container.remove()
+    }
+
+    const browserTransport = new MockAuroraTransport().lose('Native.GetCapabilityManifest')
+    const browserRuntime: AuroraTauriRuntime = {
+      ...testRuntime(new AuroraClient({ transport: browserTransport })),
+      mode: 'desktop-thin',
+      sidecarStatus: async () => null,
+      startSidecar: async () => null,
+    }
+    window.history.replaceState({}, '', '/settings/native')
+
+    const browser = await mountOutcomeApp(browserRuntime)
+    try {
+      await waitUntil(() => {
+        expect(browser.container.textContent).toContain('Native platform settings')
+        expect(browser.container.textContent).toContain('native unsupported')
+        expect(browser.container.textContent).toContain('No native permission manifest is available for this deployment mode.')
+        expect(browser.container.textContent).toContain('unavailable outside desktop-local Tauri runtime')
+      })
+      expect(browser.container.textContent).not.toContain('Tauri tray status')
+      expect(browser.container.textContent).not.toContain('Request permission')
+    } finally {
+      await act(async () => browser.root.unmount())
+      browser.container.remove()
     }
   })
 })

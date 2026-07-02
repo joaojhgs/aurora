@@ -142,7 +142,7 @@ export const tauriRouteRegistry = {
   onboarding: ({ snapshot, client, modePreferenceStore }) => <OnboardingView client={client} snapshot={snapshot} modePreferenceStore={modePreferenceStore} />,
   settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} surface="settings" currentPath="/settings" />,
   data: ({ route, client }) => <DataPolicyResource client={client} route={route} />,
-  native: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
+  native: ({ snapshot, nativeContext }) => <TauriNativeSettingsPage snapshot={snapshot} nativeContext={nativeContext} />
 } satisfies Record<TauriRouteId, TauriRouteRenderer>
 
 const tauriRouteIdSet = new Set<string>(tauriRouteIds)
@@ -371,6 +371,36 @@ function TauriRouteContent({
     assistantNativePermissions,
     assistantNativeCapabilities
   })
+}
+
+function TauriNativeSettingsPage({
+  snapshot,
+  nativeContext,
+}: {
+  snapshot: AuroraShellSnapshot
+  nativeContext: NativeContext
+}) {
+  const rows = nativeCommandEvidenceRows(nativeContext)
+  return (
+    <div className="ata-page-stack">
+      <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
+      <section className="ata-panel" aria-labelledby="tauri-native-command-evidence-title">
+        <h2 id="tauri-native-command-evidence-title">Desktop Tauri command evidence</h2>
+        <p>
+          Desktop-local native status is shown only from Tauri command probes. Thin/browser runtimes report unavailable
+          evidence instead of pretending native permission state exists.
+        </p>
+        <dl className="ata-facts">
+          {rows.map((row) => (
+            <div key={row.command}>
+              <dt>{row.label}</dt>
+              <dd><code>{row.command}</code> · {row.status} · {row.source}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    </div>
+  )
 }
 
 function routeRendererFor(routeId: string): TauriRouteRenderer | undefined {
@@ -650,6 +680,44 @@ function normalizePath(path: string): string {
     : withoutHash;
 }
 
+function nativeCommandEvidenceRows(nativeContext: NativeContext): Array<{ label: string; command: string; status: string; source: string }> {
+  return [
+    {
+      label: 'Native permissions',
+      command: 'aurora_native_permission_status',
+      status: nativeContext.nativePermissions ? `${nativeContext.nativePermissions.platform}; denied=${nativeContext.nativePermissions.deniedByDefault.length}` : 'not available',
+      source: nativeContext.nativePermissions?.evidenceSource ?? commandUnavailableSource(nativeContext),
+    },
+    nativeFeatureEvidenceRow('Tray', 'aurora_tray_status', nativeContext.nativeFeatures.tray, nativeContext),
+    nativeFeatureEvidenceRow('Notifications', 'aurora_notification_status', nativeContext.nativeFeatures.notifications, nativeContext),
+    nativeFeatureEvidenceRow('Dialogs', 'aurora_dialog_status', nativeContext.nativeFeatures.dialogs, nativeContext),
+    nativeFeatureEvidenceRow('Audio bridge', 'aurora_audio_bridge_status', nativeContext.nativeFeatures.audio, nativeContext),
+    {
+      label: 'Sidecar',
+      command: 'aurora_sidecar_status',
+      status: nativeContext.sidecar ? `running=${String(nativeContext.sidecar.running)}; mode=${nativeContext.sidecar.mode ?? 'unknown'}` : 'not available',
+      source: nativeContext.sidecar ? 'aurora-sidecar-status' : commandUnavailableSource(nativeContext),
+    },
+  ]
+}
+
+function nativeFeatureEvidenceRow(
+  label: string,
+  command: string,
+  feature: TauriNativeFeatureStatus | null | undefined,
+  nativeContext: NativeContext,
+): { label: string; command: string; status: string; source: string } {
+  return {
+    label,
+    command,
+    status: nativeFeatureLabel(feature),
+    source: feature?.source ?? commandUnavailableSource(nativeContext),
+  }
+}
+
+function commandUnavailableSource(nativeContext: NativeContext): string {
+  return nativeContext.localMode ? 'Tauri command returned no evidence' : 'unavailable outside desktop-local Tauri runtime'
+}
 
 function runtimeModeLabel(mode: string): string {
   if (mode === 'mock') return 'mock (degraded development fixture only)'
