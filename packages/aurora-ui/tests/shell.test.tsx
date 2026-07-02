@@ -380,6 +380,7 @@ describe('Aurora production shell', () => {
     expect(shellSource).toContain('Mobile navigation')
     expect(shellSource).toContain('MobileBottomTabs')
     expect(shellSource).toContain('MobileSheetRouteSummary')
+    expect(shellSource).toContain('Toggle activity rail')
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
     expect(shellSource).toContain('Health')
@@ -449,6 +450,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('data-mobile-tab="admin"')
     expect(markup).toContain('data-mobile-tab="diagnostics"')
     expect(markup).toContain('data-mobile-tab="settings"')
+    expect(markup).toContain('Toggle activity rail')
+    expect(markup).toContain('aui-activity-drawer-panel')
     expect(markup).toContain('aria-current="page"')
     expect(markup).toContain('aria-label="Quick diagnostics"')
     expect(markup).toContain('aui-quick-diagnostics')
@@ -481,6 +484,15 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Current mobile route')
     expect(markup).toContain('Mesh')
     expect(markup).toContain('Capability gated · Demo fixture')
+  })
+
+  it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/styles.css'), 'utf8')
+
+    expect(css).toContain('.aui-content > * { width: min(100%, 96rem); margin-inline: auto; }')
+    expect(css).toContain('.aui-activity-drawer { display: block; }')
+    expect(css).toContain('.aui-activity-drawer-panel')
+    expect(css).toContain('.aui-content :where(button, .aui-button, .aui-action-chip, input, select, textarea, summary) { min-height: 2.6rem; }')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {

@@ -63,8 +63,14 @@ button, input, select, textarea { font: inherit; }
 .aui-shell-status { display: inline-flex; align-items: center; gap: .3rem; }
 .aui-shell-status strong { color: var(--aui-muted); font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .aui-topbar-icon { color: var(--aui-muted); }
+.aui-activity-drawer { display: none; position: relative; }
+.aui-activity-drawer summary { display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border: 1px solid var(--aui-border); border-radius: .45rem; color: var(--aui-muted); cursor: pointer; list-style: none; }
+.aui-activity-drawer summary::-webkit-details-marker { display: none; }
+.aui-activity-drawer-panel { position: fixed; top: 3.85rem; right: .75rem; z-index: 25; width: min(22rem, calc(100vw - 1.5rem)); max-height: min(34rem, calc(100dvh - 5rem)); overflow: auto; border: 1px solid var(--aui-border); border-radius: .6rem; background: var(--aui-surface); box-shadow: 0 1rem 3rem rgb(0 0 0 / .16); }
+.aui-activity-drawer-panel .aui-activity { display: block; border-left: 0; }
 .aui-content-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) 20rem; }
 .aui-content { min-width: 0; overflow: auto; padding: clamp(1rem, 2.5vw, 2rem); }
+.aui-content > * { width: min(100%, 96rem); margin-inline: auto; }
 .aui-activity { border-left: 1px solid var(--aui-border); background: var(--aui-surface); padding: 1rem; overflow: auto; }
 .aui-activity h2 { margin: .2rem 0 1rem; font-size: 1rem; }
 .aui-activity dl { display: grid; gap: .75rem; }
@@ -440,6 +446,7 @@ button, input, select, textarea { font: inherit; }
 @media (max-width: 1100px) {
   .aui-content-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-activity { display: none; }
+  .aui-activity-drawer { display: block; }
   .aui-assistant-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-route-panel { order: -1; }
   .aui-backup-grid { grid-template-columns: minmax(0, 1fr); }
@@ -464,6 +471,8 @@ button, input, select, textarea { font: inherit; }
   .aui-mobile-tabs a > span:not(.aui-mobile-tab-state) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .aui-mobile-tab-state { display: block; min-height: .85rem; max-width: min(5.4rem, 100%); overflow: hidden; }
   .aui-mobile-tab-state .aui-badge { min-height: .8rem; max-width: 100%; padding: 0 .28rem; font-size: .56rem; line-height: .9rem; overflow: hidden; text-overflow: ellipsis; }
+  .aui-content :where(button, .aui-button, .aui-action-chip, input, select, textarea, summary) { min-height: 2.6rem; }
+  .aui-content { padding: .85rem .75rem 1rem; }
   .aui-topbar { padding-inline: .75rem; }
   .aui-assistant-header { display: grid; }
   .aui-assistant-badges { justify-content: flex-start; }

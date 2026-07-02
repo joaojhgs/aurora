@@ -53,7 +53,12 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
             <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
             <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native deferred'} />
           </div>
-          <PanelRight className="aui-topbar-icon" aria-hidden />
+          <details className="aui-activity-drawer">
+            <summary aria-label="Toggle activity rail"><PanelRight size={20} /></summary>
+            <div className="aui-activity-drawer-panel">
+              <ActivityRail snapshot={snapshot} />
+            </div>
+          </details>
         </header>
         <div className="aui-content-grid">
           <main className="aui-content" id="content">{children}</main>
