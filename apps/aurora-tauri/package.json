@@ -54,7 +54,8 @@
     "test:ci-native-evidence": "vitest run --environment node src/ci-native-evidence.test.ts",
     "test:dev-bootstrap": "vitest run --environment node src/tauri-dev-bootstrap.test.ts",
     "test:service-boundary": "vitest run --environment node src/ui-service-boundary.test.ts",
-    "test:e2e:outcomes": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:outcomes\""
+    "test:e2e:outcomes": "vitest run --environment jsdom src/aurora-client.test.tsx -t \"e2e:outcomes\"",
+    "dev:smoke": "node ./scripts/tauri-dev-smoke.mjs"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",

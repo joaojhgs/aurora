@@ -145,7 +145,7 @@ Packaged desktop-local builds should use path 2. Desktop thin mode never starts 
 
 Relevant workflows:
 
-- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, builds the lean Linux AppImage+deb Tauri bundle with `thin`, and runs a sidecar profile staging matrix across `thin`, local CPU, accelerator, and legacy full profiles.
+- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, builds the lean Linux AppImage+deb Tauri bundle with `thin`, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `thin`, local CPU, accelerator, and legacy full profiles.
 - `.github/workflows/tauri-android.yml` builds Android APK/native plugin evidence.
 - `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS.
 - `.github/workflows/frontend-sdk.yml` runs shared UI and SDK package checks.

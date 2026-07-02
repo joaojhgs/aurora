@@ -90,15 +90,14 @@ jobs:
         run: pnpm --filter @aurora/tauri-ui build:bundle:thin
 
       - name: Smoke launch Tauri shell
-        run: |
-          set +e
-          xvfb-run -a timeout 180s pnpm --filter @aurora/tauri-ui tauri dev
-          status=$?
-          if [ "$status" -eq 124 ]; then
-            echo "Tauri shell stayed running until the smoke timeout."
-            exit 0
-          fi
-          exit "$status"
+        run: xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke
+
+      - name: Upload Tauri dev smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-dev-smoke-report
+          path: apps/aurora-tauri/reports/tauri-dev-smoke.json
 
       - name: Smoke Tauri EventStream bridge
         run: xvfb-run -a pnpm --filter @aurora/tauri-ui eventstream:smoke

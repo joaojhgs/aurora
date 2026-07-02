@@ -14,6 +14,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 
     expect(packageJson.scripts.tauri).toBe('node ./scripts/tauri-cli.mjs')
+    expect(packageJson.scripts['dev:smoke']).toBe('node ./scripts/tauri-dev-smoke.mjs')
     expect(packageJson.scripts['test:dev-bootstrap']).toContain('tauri-dev-bootstrap.test.ts')
     expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:dev-bootstrap')
   })
@@ -73,5 +74,21 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(docs).toContain('`[vite]` for frontend bundler output')
     expect(docs).toContain('`[tauri]` for wrapper/Rust shell output')
     expect(docs).toContain('`[aurora][stdout]`')
+  })
+
+  it('fails the desktop dev smoke when Gateway, process, or log evidence is missing', () => {
+    const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+    const smoke = repoText('apps/aurora-tauri/scripts/tauri-dev-smoke.mjs')
+    const workflow = repoText('.github/workflows/tauri-desktop.yml')
+
+    expect(packageJson.scripts['dev:smoke']).toBe('node ./scripts/tauri-dev-smoke.mjs')
+    expect(smoke).toContain("requiredGatewayPaths = ['/api/health', '/api/registry', '/api/services']")
+    expect(smoke).toContain("AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS ?? '[tauri],[aurora]['")
+    expect(smoke).toContain('tauri dev exited before Gateway/log readiness')
+    expect(smoke).toContain('timed out waiting for Gateway/log readiness')
+    expect(smoke).toContain('writeFileSync(reportPath')
+    expect(smoke).toContain('lastGatewayError')
+    expect(workflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
+    expect(workflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
   })
 })

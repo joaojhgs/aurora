@@ -57,6 +57,8 @@ pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 
 `tauri:smoke:linux` is a deterministic headless aggregate of the route gates above. It does not launch a desktop webview and does not replace `pnpm --filter @aurora/tauri-ui tauri dev` or the platform-specific Android/iOS/native smoke checks.
 
+`dev:smoke` is the desktop/WebView smoke wrapper used by the Linux Tauri workflow under Xvfb. It launches `pnpm --filter @aurora/tauri-ui tauri dev`, fails if the process exits before readiness, fails if `/api/health`, `/api/registry`, or `/api/services` never become reachable, fails if required `[tauri]`/`[aurora][...]` log markers are missing, and writes `apps/aurora-tauri/reports/tauri-dev-smoke.json`.
+
 ## Secure storage
 
 `aurora_secure_storage_get`, `aurora_secure_storage_set`, and `aurora_secure_storage_delete` persist only Aurora credential keys in the platform keychain through the Rust shell. Accepted keys are limited to `aurora.session*`, `aurora.auth*`, `aurora.gateway*`, `aurora.mesh*`, and `aurora.admin*` namespaces for session tokens, refresh material, mesh credentials, Gateway tokens, and admin unlock secrets.

@@ -27,7 +27,8 @@ describe('Tauri CI native evidence contract', () => {
 
     expect(frontendWorkflow).toContain('pnpm --filter @aurora/tauri-ui tauri:smoke:linux')
     expect(desktopWorkflow).toContain('cargo check')
-    expect(desktopWorkflow).toContain('xvfb-run -a timeout 180s pnpm --filter @aurora/tauri-ui tauri dev')
+    expect(desktopWorkflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
+    expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui eventstream:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/eventstream-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
