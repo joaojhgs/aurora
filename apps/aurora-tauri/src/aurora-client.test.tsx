@@ -151,6 +151,24 @@ function expectNoPlaceholderOrDebugUi(markup: string, routeId: string) {
   }
 }
 
+function assertNoRouteReachesPlaceholderCopyForTests() {
+  const failures: string[] = []
+
+  for (const item of primaryNavItems) {
+    const markup = renderTauriRoute(item.href)
+    for (const marker of [...PLACEHOLDER_MARKERS, 'This Tauri route is now navigable', 'route is unregistered']) {
+      if (markup.includes(marker)) {
+        failures.push(`${item.id} (${item.href}) rendered ${marker}`)
+      }
+    }
+    if (markup.includes(`${item.label} route registry error`)) {
+      failures.push(`${item.id} (${item.href}) rendered route registry error`)
+    }
+  }
+
+  expect(failures).toEqual([])
+}
+
 function routesByGroup(routeIds: Set<string>) {
   return auroraNavSections
     .flatMap((section) => section.items)
@@ -289,6 +307,10 @@ describe('Aurora Tauri runtime wrapper', () => {
       expect(markup, item.href).not.toContain('This Tauri route is now navigable')
       expect(markup, item.href).not.toContain('route is unregistered')
     }
+  })
+
+  it('e2e:routes test-only assert: no route reaches placeholder copy', () => {
+    assertNoRouteReachesPlaceholderCopyForTests()
   })
 
   it('keeps credentials and raw-audio payloads out of rendered diagnostics and route output', () => {
