@@ -234,8 +234,8 @@ function TauriDiagnosticsPage({
       <section className="ata-panel">
         <h2>Native boundary</h2>
         <dl className="ata-facts">
-          <div><dt>Runtime mode</dt><dd>{nativeContext.runtimeMode}</dd></div>
-          <div><dt>SDK transport</dt><dd>{snapshot.transportKind}</dd></div>
+          <div><dt>Runtime mode</dt><dd>{runtimeModeLabel(nativeContext.runtimeMode)}</dd></div>
+          <div><dt>SDK transport</dt><dd>{transportKindLabel(snapshot.transportKind)}</dd></div>
           <div><dt>Sidecar supervisor</dt><dd>{nativeContext.sidecar?.running ? 'running' : nativeContext.localMode ? 'stopped or unavailable' : 'not used in thin mode'}</dd></div>
           <div><dt>Native manifest</dt><dd>{snapshot.nativeAvailable ? snapshot.nativePlatform : 'unavailable'}</dd></div>
           <div><dt>Tray</dt><dd>{nativeFeatureLabel(nativeContext.nativeFeatures.tray)}</dd></div>
@@ -326,6 +326,20 @@ function normalizePath(path: string): string {
   if (!path || path === '') return '/'
   const withoutHash = path.split('#')[0] || '/'
   return withoutHash.endsWith('/') && withoutHash !== '/' ? withoutHash.slice(0, -1) : withoutHash
+}
+
+function runtimeModeLabel(mode: string): string {
+  if (mode === 'mock') return 'mock (degraded development fixture only)'
+  if (mode === 'desktop-local') return 'desktop-local (real local Tauri sidecar stack)'
+  if (mode === 'desktop-thin') return 'desktop-thin (Gateway-backed, no local sidecar)'
+  return mode
+}
+
+function transportKindLabel(kind: string): string {
+  if (kind === 'mock') return 'mock (SDK fixture transport; development fallback only)'
+  if (kind === 'tauri-local') return 'tauri-local (Tauri command bridge)'
+  if (kind === 'http') return 'http (Aurora Gateway transport)'
+  return kind
 }
 
 function nativeFeatureLabel(feature: TauriNativeFeatureStatus | null | undefined): string {
