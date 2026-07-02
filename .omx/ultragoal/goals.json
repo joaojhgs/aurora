@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T16:30:37.091Z",
+  "updatedAt": "2026-07-02T16:53:07.230Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -2243,10 +2243,12 @@
       "id": "G197-run-final-cleanup",
       "title": "Run final cleanup:",
       "objective": "Run final cleanup:\nanti-slop pass on changed UI/backend/test files;\nindependent code review;\narchitecture invariant audit;\nfinal verification commands.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:23.801Z",
+      "completedAt": "2026-07-02T16:50:23.801Z",
+      "evidence": "G197 complete: .omx/ultragoal final cleanup reviewed on HEAD ab01fc8. Anti-slop native subagent 019f23ac-bb56-7673-aa40-c6bb5f6a1ea3 gave no-op approval with no blockers; final gate .omx/reports/final-ultrawork/final-quality-gate.md records clean reruns for pnpm --filter @aurora/tauri-ui tauri:smoke:linux and make unit plus git diff --check."
     },
     {
       "id": "G198-docs-match-actual-commands-and-teste",
@@ -2263,10 +2265,12 @@
       "id": "G199-final-ultragoal-quality-gate-include",
       "title": "Final Ultragoal quality gate includes verification command output, sc...",
       "objective": "Final Ultragoal quality gate includes verification command output, screenshots/artifacts, ai-slop-cleaner result, code-reviewer approval, architect invariant clearance.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:24.241Z",
+      "completedAt": "2026-07-02T16:50:24.241Z",
+      "evidence": "G199 complete: final Ultragoal quality gate stored at .omx/reports/final-ultrawork/final-quality-gate.md and .json includes verification command output references, screenshots/log artifacts, anti-slop no-op, code-review approval, architect clearance, and truthful Android/iOS external-platform caveats; .omx/ultragoal ledger updated from active Codex goal snapshot."
     },
     {
       "id": "G200-mock-target-assistant-conversation-r",
@@ -3020,10 +3024,12 @@
       "id": "G268-desktop-local-web-thin-android-prefl",
       "title": "Desktop local, web thin, Android preflight, and iOS preflight have pl...",
       "objective": "Desktop local, web thin, Android preflight, and iOS preflight have platform evidence.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:24.619Z",
+      "completedAt": "2026-07-02T16:50:24.619Z",
+      "evidence": "G268 complete with truthful platform caveats: desktop local evidence apps/aurora-tauri/reports/tauri-dev-smoke.json ok=true for pnpm --filter @aurora/tauri-ui tauri dev Gateway readiness; web thin passed typecheck/test/build; android preflight report apps/aurora-tauri/reports/android-preflight.json has 5 passed and explicit generated-project/signing blockers; iOS policy artifact apps/aurora-tauri/src-tauri/ios/preflight.json plus strict preflight log states macOS/Xcode required."
     },
     {
       "id": "G269-assistant-admin-mesh-memory-tools-mo",
@@ -3062,10 +3068,12 @@
       "id": "G272-final-quality-gate-contains-verifica",
       "title": "Final quality gate contains verification evidence, screenshots/logs,...",
       "objective": "Final quality gate contains verification evidence, screenshots/logs, ai-slop-cleaner/no-op evidence, code-reviewer approval, architect clearance.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:24.996Z",
+      "completedAt": "2026-07-02T16:50:24.996Z",
+      "evidence": "G272 complete: .omx/reports/final-ultrawork/final-quality-gate.md/.json contains verification evidence, route screenshots/log artifact paths, anti-slop no-op evidence, code-review APPROVE from 019f23b0-6c77-7450-ad05-2a1e7ea3b09c, architect CLEAR from 019f23ac-c77b-7c22-a438-6a58151f64b8, and final rerun evidence resolving initial tauri:smoke:linux/make unit failures."
     },
     {
       "id": "G273-use-modules-ui-mock-reference-as-the",
@@ -3082,10 +3090,12 @@
       "id": "G274-run-with-team-for-parallel-implement",
       "title": "Run with `$team` for parallel implementation, max six lanes: Shell/de...",
       "objective": "Run with `$team` for parallel implementation, max six lanes: Shell/design/route mounting; SDK+sidecar+Gateway contracts; Assistant+voice+tools+memory; Mesh+models+onboarding+settings/native; Admin suite; E2E/CI/docs/verification.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:25.366Z",
+      "completedAt": "2026-07-02T16:50:25.366Z",
+      "evidence": "G274 complete as superseded by explicit user override: original .omx/ultragoal story requested $team, but user instructed to use $ultrawork instead because team was unreliable. Execution proceeded with ultrawork/native subagent lanes; final gate documents this mode switch and evidence. No false claim of successful tmux team relaunch."
     },
     {
       "id": "G275-make-pnpm-filter-aurora-tauri-ui-tau",
@@ -3190,10 +3200,12 @@
       "id": "G284-launch-team-execution-with-the-six-l",
       "title": "Launch Team execution with the six lanes above and explicit file owne...",
       "objective": "Launch Team execution with the six lanes above and explicit file ownership to avoid conflicts.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:25.731Z",
+      "completedAt": "2026-07-02T16:50:25.731Z",
+      "evidence": "G284 complete as superseded by explicit user override: six-lane team requirement was replaced by user-directed $ultrawork/native-subagent parallel execution. Native lanes covered anti-slop, architect, verifier, and code-review while local lane ran full verification. .omx/ultragoal checkpoint is honest about team runtime supersession."
     },
     {
       "id": "G285-write-failing-tests-gates-before-or",
@@ -3221,10 +3233,12 @@
       "id": "G287-on-the-final-story-run-verification",
       "title": "On the final story, run verification, ai-slop-cleaner on changed file...",
       "objective": "On the final story, run verification, ai-slop-cleaner on changed files, independent code-reviewer and architect reviews, and an architecture-invariant audit before marking complete.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:50:26.122Z",
+      "completedAt": "2026-07-02T16:50:26.122Z",
+      "evidence": "G287 complete: final story verification ran with full command suite in .omx/reports/final-ultrawork/final-verification-20260702T163305Z.log, reruns for pnpm --filter @aurora/tauri-ui tauri:smoke:linux and make unit passed, anti-slop no-op, code-review APPROVE, architect CLEAR, and final gate artifact present."
     },
     {
       "id": "G288-all-22-routes-are-production-ready-a",
@@ -3252,10 +3266,12 @@
       "id": "G290-desktop-web-mobile-platform-behavior",
       "title": "Desktop/web/mobile platform behavior is truthful and tested.",
       "objective": "Desktop/web/mobile platform behavior is truthful and tested.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T16:53:07.230Z",
+      "evidence": "G290 complete: desktop/web/mobile platform behavior is truthful and tested. Desktop local dev:smoke passed real stack; web thin build/test/typecheck passed fail-closed production client; Android preflight passed non-strict with explicit strict blockers; iOS policy passed and strict preflight truthfully blocked on Linux/macOS-Xcode requirement; no unsupported native capabilities claimed. Final .omx/ultragoal checkpoint uses completed Codex goal snapshot and schema-valid .omx/reports/final-ultrawork/final-quality-gate.json with aiSlopCleaner, verification, codeReview, and architectureInvariantGate evidence.",
+      "completedAt": "2026-07-02T16:53:07.230Z"
     },
     {
       "id": "G291-ci-gates-are-useful-and-non-duplicat",

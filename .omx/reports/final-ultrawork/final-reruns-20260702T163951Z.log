@@ -1,0 +1,140 @@
+Rerun log: .omx/reports/final-ultrawork/final-reruns-20260702T163951Z.log
+
+===== START tauri-smoke-linux-rerun =====
+CMD: pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+
+> @aurora/tauri-ui@0.1.0 tauri:smoke:linux /home/developer/projects/aurora/apps/aurora-tauri
+> pnpm test:ci-regression-gates
+
+
+> @aurora/tauri-ui@0.1.0 test:ci-regression-gates /home/developer/projects/aurora/apps/aurora-tauri
+> pnpm test:e2e:routes && pnpm test:e2e:assistant && pnpm test:e2e:admin && pnpm test:e2e:runtime && pnpm test:e2e:outcomes && pnpm test:dev-bootstrap && pnpm test:ci-native-evidence && pnpm test:service-boundary
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:routes /home/developer/projects/aurora/apps/aurora-tauri
+> pnpm test:e2e:routes:vitest && pnpm test:e2e:routes:playwright
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:routes:vitest /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment jsdom src/aurora-client.test.tsx -t "e2e:routes"
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed | 26 skipped (35)
+   Start at  16:39:54
+   Duration  4.79s (transform 1.32s, setup 0ms, import 1.77s, tests 2.11s, environment 715ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:routes:playwright /home/developer/projects/aurora/apps/aurora-tauri
+> playwright test --config playwright.config.ts tests/playwright/route-crawl.spec.ts
+
+[WebServer] (node:2499752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:2499766) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:2499788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/playwright/route-crawl.spec.ts:117:3 › Aurora Tauri Playwright route crawl › captures desktop and mobile cockpit shell screenshots instead of a raw dashboard (3.5s)
+  ✓  2 tests/playwright/route-crawl.spec.ts:174:3 › Aurora Tauri Playwright route crawl › supports keyboard focus through desktop nav and mobile menu sheet (1.9s)
+  ✓  3 tests/playwright/route-crawl.spec.ts:202:3 › Aurora Tauri Playwright route crawl › production-crawls all primary routes without console, HTTP, placeholder, or landmark regressions (11.4s)
+  ✓  4 tests/playwright/route-crawl.spec.ts:238:3 › Aurora Tauri Playwright route crawl › captures desktop screenshots for every primary route with stable route evidence (20.2s)
+
+  4 passed (39.4s)
+
+> @aurora/tauri-ui@0.1.0 test:e2e:assistant /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment jsdom src/aurora-client.test.tsx -t "e2e:assistant"
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 32 skipped (35)
+   Start at  16:40:41
+   Duration  3.14s (transform 1.02s, setup 0ms, import 1.37s, tests 1.12s, environment 516ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:admin /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment jsdom src/aurora-client.test.tsx -t "e2e:admin"
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 34 skipped (35)
+   Start at  16:40:45
+   Duration  2.32s (transform 1.03s, setup 0ms, import 1.39s, tests 297ms, environment 508ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:runtime /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment jsdom src/aurora-client.test.tsx -t "e2e:runtime"
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  11 passed | 24 skipped (35)
+   Start at  16:40:48
+   Duration  3.96s (transform 1.04s, setup 0ms, import 1.39s, tests 1.92s, environment 527ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:e2e:outcomes /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment jsdom src/aurora-client.test.tsx -t "e2e:outcomes"
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 34 skipped (35)
+   Start at  16:40:53
+   Duration  2.67s (transform 1.05s, setup 0ms, import 1.41s, tests 610ms, environment 523ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:dev-bootstrap /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment node src/tauri-dev-bootstrap.test.ts
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  16:40:56
+   Duration  185ms (transform 33ms, setup 0ms, import 47ms, tests 6ms, environment 0ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:ci-native-evidence /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment node src/ci-native-evidence.test.ts
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  16:40:57
+   Duration  193ms (transform 34ms, setup 0ms, import 48ms, tests 9ms, environment 0ms)
+
+
+> @aurora/tauri-ui@0.1.0 test:service-boundary /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment node src/ui-service-boundary.test.ts
+
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  16:40:58
+   Duration  234ms (transform 35ms, setup 0ms, import 48ms, tests 51ms, environment 0ms)
+
+run: read-only variable: status

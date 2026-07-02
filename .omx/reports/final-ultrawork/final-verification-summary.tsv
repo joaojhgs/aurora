@@ -1,0 +1,27 @@
+ruff	0	2026-07-02T16:33:05Z	2026-07-02T16:33:05Z	uv run ruff check app packages scripts tests
+pytest-unit-corrected	0	2026-07-02T16:33:05Z	2026-07-02T16:33:56Z	uv run pytest tests/unit/gateway tests/unit/auth tests/unit/app/config tests/unit/services/test_config_admin_contracts.py -q
+pytest-integration	0	2026-07-02T16:33:56Z	2026-07-02T16:34:16Z	uv run pytest tests/integration -q
+client-build	0	2026-07-02T16:34:16Z	2026-07-02T16:34:18Z	pnpm --filter @aurora/client build
+client-test	0	2026-07-02T16:34:18Z	2026-07-02T16:34:23Z	pnpm --filter @aurora/client test
+ui-typecheck	0	2026-07-02T16:34:23Z	2026-07-02T16:34:32Z	pnpm --filter @aurora/ui typecheck
+ui-test	0	2026-07-02T16:34:32Z	2026-07-02T16:34:50Z	pnpm --filter @aurora/ui test
+web-typecheck	0	2026-07-02T16:34:50Z	2026-07-02T16:34:57Z	pnpm --filter @aurora/web typecheck
+web-test	0	2026-07-02T16:34:57Z	2026-07-02T16:35:00Z	pnpm --filter @aurora/web test
+web-build	0	2026-07-02T16:35:00Z	2026-07-02T16:35:14Z	pnpm --filter @aurora/web build
+tauri-ui-typecheck	0	2026-07-02T16:35:14Z	2026-07-02T16:35:22Z	pnpm --filter @aurora/tauri-ui typecheck
+tauri-ui-test	0	2026-07-02T16:35:22Z	2026-07-02T16:35:30Z	pnpm --filter @aurora/tauri-ui test
+tauri-e2e-routes	0	2026-07-02T16:35:30Z	2026-07-02T16:36:17Z	pnpm --filter @aurora/tauri-ui test:e2e:routes
+tauri-e2e-assistant	0	2026-07-02T16:36:17Z	2026-07-02T16:36:21Z	pnpm --filter @aurora/tauri-ui test:e2e:assistant
+tauri-e2e-admin	0	2026-07-02T16:36:21Z	2026-07-02T16:36:25Z	pnpm --filter @aurora/tauri-ui test:e2e:admin
+tauri-e2e-runtime	0	2026-07-02T16:36:25Z	2026-07-02T16:36:30Z	pnpm --filter @aurora/tauri-ui test:e2e:runtime
+cargo-check	0	2026-07-02T16:36:30Z	2026-07-02T16:36:31Z	cargo check --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml
+tauri-smoke-linux	1	2026-07-02T16:36:31Z	2026-07-02T16:37:03Z	pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+tauri-dev-smoke	0	2026-07-02T16:37:03Z	2026-07-02T16:37:16Z	pnpm --filter @aurora/tauri-ui dev:smoke
+android-preflight	0	2026-07-02T16:37:16Z	2026-07-02T16:37:17Z	pnpm --filter @aurora/tauri-ui android:preflight
+ios-policy	0	2026-07-02T16:37:17Z	2026-07-02T16:37:18Z	pnpm --filter @aurora/tauri-ui ios:policy
+ios-preflight-strict-expected-linux-blocker	1	2026-07-02T16:37:18Z	2026-07-02T16:37:18Z	pnpm --filter @aurora/tauri-ui ios:preflight
+make-lint	0	2026-07-02T16:37:18Z	2026-07-02T16:37:19Z	make lint
+make-unit	2	2026-07-02T16:37:19Z	2026-07-02T16:38:42Z	make unit
+make-integration	0	2026-07-02T16:38:42Z	2026-07-02T16:39:02Z	make integration
+make-check-docs	0	2026-07-02T16:39:02Z	2026-07-02T16:39:02Z	make check-docs
+git-diff-check	0	2026-07-02T16:39:02Z	2026-07-02T16:39:02Z	git diff --check
