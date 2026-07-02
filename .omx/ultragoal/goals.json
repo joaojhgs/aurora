@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:09:00.785Z",
+  "updatedAt": "2026-07-02T09:12:16.921Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -611,10 +611,13 @@
       "id": "G051-lane-d-mesh-models-onboarding-settin",
       "title": "**Lane D — Mesh, models, onboarding, settings/native**",
       "objective": "**Lane D — Mesh, models, onboarding, settings/native**\nOwner role: executor + designer\nScope: runtime pages and platform-specific UX.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:12:16.921Z",
+      "startedAt": "2026-07-02T09:10:43.861Z",
+      "completedAt": "2026-07-02T09:12:16.921Z",
+      "evidence": "Lane D mesh/models/onboarding/settings/native evidence: focused shared UI tests passed for mesh, models, onboarding, settings, native, platform, and mobile route UX, covering route-specific production surfaces and honest native/mobile state language. SDK focused tests passed for mesh/model/native/capability/provider/onboarding/settings contract paths. Tauri route/runtime/native gates passed for all-route crawl, runtime privacy/native semantics, native evidence requirements, Android preflight report generation, iOS policy-only preflight, and Rust native command compilation. The full pnpm --filter @aurora/tauri-ui ios:preflight command was attempted and failed on this Linux host with the designed blocker 'iOS build/signing gates require macOS with Xcode'; docs and CI already route full iOS build/preflight evidence to macOS/Xcode workflows, while Linux can only provide policy/manifest evidence. Verified pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'mesh|models|onboarding|settings|native|platform|mobile'; pnpm --filter @aurora/client test -- -t 'mesh|model|native|capability|provider|onboarding|settings'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui test:e2e:runtime; pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui android:preflight; node apps/aurora-tauri/scripts/ios-preflight.mjs --policy-only; cargo check --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml; pnpm --filter @aurora/tauri-ui test -- -t 'models|mesh|onboarding|native|settings|mobile|platform'."
     },
     {
       "id": "G052-lane-e-admin-operate-suite",
