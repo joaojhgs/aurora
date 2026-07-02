@@ -106,6 +106,8 @@ import {
   mapContextIngestOutcomesByPendingIndex,
   submitToolDenialAction,
   ToolApprovalPanel,
+  buildToolCategories,
+  filterTools,
   assistantErrorMessage,
   backupErrorMessage,
   buildAssistantVoiceModel,
@@ -3368,6 +3370,28 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('audit-receipt-tool-result')
     expect(markup).toContain('corr-tool-result')
     expect(markup).toContain('local-peer -&gt; tooling-local')
+  })
+
+  it('filters the tool catalog by category and search text', () => {
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: 'mock' })
+    const categories = buildToolCategories(tools)
+
+    expect(categories.map((category) => category.label)).toEqual(expect.arrayContaining([
+      'All',
+      'Read-only',
+      'Mutating',
+      'External',
+      'Admin'
+    ]))
+    expect(filterTools(tools, 'external', 'email').map((tool) => tool.name)).toEqual(['Send email draft'])
+    expect(filterTools(tools, 'admin', 'garage').map((tool) => tool.name)).toEqual(['Open garage door'])
+    expect(filterTools(tools, 'read', 'diagnostics').map((tool) => tool.name)).toEqual(expect.arrayContaining([
+      'diagnostics.serviceHealth',
+      'Collect diagnostics bundle'
+    ]))
+    expect(filterTools(tools, 'mutating', 'Hardware.manage')).toEqual([])
+    expect(filterTools(tools, 'admin', 'Hardware.manage').map((tool) => tool.name)).toEqual(['Open garage door'])
+    expect(filterTools(tools, 'all', 'not-a-real-tool')).toEqual([])
   })
 
   it('covers provider selector, scoped approvals, dry-run-only, denied, expired, replay, and unavailable states', async () => {

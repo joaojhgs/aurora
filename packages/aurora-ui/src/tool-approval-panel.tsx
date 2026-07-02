@@ -547,7 +547,7 @@ function toolCounts(tools: ToolApprovalCardModel[]) {
   }
 }
 
-function buildToolCategories(tools: ToolApprovalCardModel[]) {
+export function buildToolCategories(tools: ToolApprovalCardModel[]) {
   const base = [
     { id: 'all', label: 'All', count: tools.length },
     { id: 'read', label: 'Read-only', count: tools.filter((tool) => toolCategory(tool) === 'read').length },
@@ -555,10 +555,10 @@ function buildToolCategories(tools: ToolApprovalCardModel[]) {
     { id: 'external', label: 'External', count: tools.filter((tool) => toolCategory(tool) === 'external').length },
     { id: 'admin', label: 'Admin', count: tools.filter((tool) => toolCategory(tool) === 'admin').length }
   ]
-  return base.filter((category) => category.id === 'all' || category.count > 0)
+  return base
 }
 
-function filterTools(tools: ToolApprovalCardModel[], category: string, query: string) {
+export function filterTools(tools: ToolApprovalCardModel[], category: string, query: string) {
   const normalizedQuery = query.trim().toLowerCase()
   return tools.filter((tool) => {
     const categoryMatch = category === 'all' || toolCategory(tool) === category
@@ -569,9 +569,10 @@ function filterTools(tools: ToolApprovalCardModel[], category: string, query: st
 }
 
 function toolCategory(tool: ToolApprovalCardModel) {
+  if (tool.riskClass === 'external' || tool.providerKind === 'cloud' || tool.transport === 'mcp') return 'external'
   if (tool.requiresAdminAction || tool.riskClass.includes('admin')) return 'admin'
-  if (tool.dataEgress || tool.riskClass === 'external') return 'external'
-  if (tool.mutating || ['mutating', 'standard'].includes(tool.riskClass)) return 'mutating'
+  if (tool.dataEgress) return 'external'
+  if (tool.mutating || tool.riskClass === 'mutating') return 'mutating'
   return 'read'
 }
 

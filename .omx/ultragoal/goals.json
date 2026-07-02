@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:50:38.708Z",
+  "updatedAt": "2026-07-02T12:54:05.977Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1385,10 +1385,12 @@
       "id": "G119-tool-catalog-can-be-browsed-and-filt",
       "title": "Tool catalog can be browsed and filtered.",
       "objective": "Tool catalog can be browsed and filtered.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:54:05.977Z",
+      "completedAt": "2026-07-02T12:54:05.977Z",
+      "evidence": "Tool catalog browse/filter behavior is now locked with exported filter/category helpers and direct regression coverage. Categories are consistently visible (All, Read-only, Mutating, External, Admin); external MCP/cloud tools remain externally browsable even when AdminAction-gated; standard non-mutating tools remain read-only; search covers name/description/provider/risk/permissions/provider labels. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'filters the tool catalog|tool approval'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G120-at-least-one-safe-local-tool-path-is",
