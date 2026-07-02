@@ -79,6 +79,22 @@ describe('Aurora Tauri runtime wrapper', () => {
     await expect(runtime.shutdown()).resolves.toBeUndefined()
   })
 
+  it('uses HTTP Gateway transport without a sidecar when Tauri runs in desktop-thin mode', async () => {
+    vi.stubEnv('VITE_AURORA_GATEWAY_URL', 'http://gateway.example.test:8000')
+    vi.stubEnv('VITE_AURORA_GATEWAY_TOKEN', 'thin-token')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+
+    const runtime = createAuroraTauriRuntime()
+
+    expect(runtime.mode).toBe('desktop-thin')
+    expect(runtime.client.transport.kind).toBe('http')
+    await expect(runtime.sidecarStatus()).resolves.toBeNull()
+    await expect(runtime.startSidecar()).resolves.toBeNull()
+    await expect(runtime.stopSidecar()).resolves.toBeNull()
+
+    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+  })
+
   it('uses thin HTTP mode for browser previews with an explicit Gateway URL', async () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', 'http://127.0.0.1:8000')
     vi.stubEnv('VITE_AURORA_GATEWAY_TOKEN', 'test-token')

@@ -35,31 +35,61 @@ export interface AuroraTauriRuntime {
 }
 
 export function createAuroraTauriRuntime(): AuroraTauriRuntime {
+  const configuredGatewayUrl = import.meta.env.VITE_AURORA_GATEWAY_URL
+
   if (isTauriRuntime()) {
-    const transport = new TauriLocalTransport({ invoke, listen })
+    const nativeTransport = new TauriLocalTransport({ invoke, listen })
+    if (configuredGatewayUrl) {
+      return {
+        client: new AuroraClient({
+          transport: new HttpGatewayTransport({
+            baseUrl: configuredGatewayUrl,
+            bearerToken: import.meta.env.VITE_AURORA_GATEWAY_TOKEN
+          })
+        }),
+        mode: 'desktop-thin',
+        sidecarStatus: async () => null,
+        startSidecar: async () => null,
+        stopSidecar: async () => null,
+        nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
+        trayStatus: () => nativeTransport.getTrayStatus(),
+        notificationStatus: () => nativeTransport.getNotificationStatus(),
+        iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+        iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+        iosLocalLightInferenceStatus: () => nativeTransport.getIosLocalLightInferenceStatus(),
+        iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+        dialogStatus: () => nativeTransport.getDialogStatus(),
+        audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+        iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
+        iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+        androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+        shutdown: () => invoke<void>('aurora_shutdown')
+      }
+    }
+
     return {
-      client: new AuroraClient({ transport }),
-      mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
-      sidecarStatus: () => transport.getSidecarStatus(),
-      startSidecar: () => transport.startSidecar(),
-      stopSidecar: () => transport.stopSidecar(),
-      nativePermissionStatus: () => transport.getNativePermissionStatus(),
-      trayStatus: () => transport.getTrayStatus(),
-      notificationStatus: () => transport.getNotificationStatus(),
-      iosVoiceStatus: () => transport.getIosVoiceStatus(),
-      iosInvocationStatus: () => transport.getIosInvocationStatus(),
-      iosLocalLightInferenceStatus: () => transport.getIosLocalLightInferenceStatus(),
-      iosBackgroundStatus: () => transport.getIosBackgroundStatus(),
-      dialogStatus: () => transport.getDialogStatus(),
-      audioBridgeStatus: () => transport.getAudioBridgeStatus(),
-      iosSecureStorageStatus: () => transport.getIosSecureStorageStatus(),
-      iosBiometricStatus: () => transport.getIosBiometricStatus(),
-      androidBaselineStatus: () => transport.getAndroidBaselineStatus(),
+      client: new AuroraClient({ transport: nativeTransport }),
+      mode: 'desktop-local',
+      sidecarStatus: () => nativeTransport.getSidecarStatus(),
+      startSidecar: () => nativeTransport.startSidecar(),
+      stopSidecar: () => nativeTransport.stopSidecar(),
+      nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
+      trayStatus: () => nativeTransport.getTrayStatus(),
+      notificationStatus: () => nativeTransport.getNotificationStatus(),
+      iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+      iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+      iosLocalLightInferenceStatus: () => nativeTransport.getIosLocalLightInferenceStatus(),
+      iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+      dialogStatus: () => nativeTransport.getDialogStatus(),
+      audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+      iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
+      iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+      androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
 
-  const gatewayUrl = import.meta.env.VITE_AURORA_GATEWAY_URL ?? devLoopbackGatewayUrl()
+  const gatewayUrl = configuredGatewayUrl ?? devLoopbackGatewayUrl()
   if (gatewayUrl) {
     return {
       client: new AuroraClient({
