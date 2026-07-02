@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:41:21.415Z",
+  "updatedAt": "2026-07-02T14:42:40.908Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1638,10 +1638,12 @@
       "id": "G142-mobile-paths-do-not-claim-unavailabl",
       "title": "Mobile paths do not claim unavailable system-assistant replacement ca...",
       "objective": "Mobile paths do not claim unavailable system-assistant replacement capabilities.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:42:40.908Z",
+      "completedAt": "2026-07-02T14:42:40.908Z",
+      "evidence": "pnpm --dir packages/aurora-ui exec vitest run --environment node tests/shell.test.tsx -t \"renders iOS permission copy|onboarding modes\"; pnpm --filter @aurora/ui typecheck; git diff --check"
     },
     {
       "id": "G143-settings",

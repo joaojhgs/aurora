@@ -1885,13 +1885,16 @@ describe('Aurora production shell', () => {
     const mobileClient = new AuroraClient({ transport: mobileTransport })
     const snapshot = await buildShellSnapshot(mobileClient)
     const settings = buildSettingsPermissionsModel(snapshot)
-    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'mobile-thin' })
+    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-mobile-thin' })
 
     expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
       expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS System Assistant Role Unsupported'])
     )
     expect(settings.nativePermissions.find((permission) => permission.label === 'iOS System Assistant Role Unsupported')?.state).toBe('unsupported')
-    expect(onboarding.modes.find((mode) => mode.id === 'mobile-thin')?.repair).toContain('Siri/Shortcuts/App Intents')
+    const iosMode = onboarding.modes.find((mode) => mode.id === 'ios-mobile-thin')
+    expect(iosMode?.repair).toContain('Siri/Shortcuts/App Intents')
+    expect(iosMode?.description).toContain('does not claim system assistant replacement')
+    expect(iosMode?.description).not.toContain('Siri replacement')
   })
 
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
