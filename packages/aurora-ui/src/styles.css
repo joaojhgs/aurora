@@ -488,6 +488,17 @@ button, input, select, textarea { font: inherit; }
 .aui-onboarding-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(17rem, .75fr); gap: .85rem; align-items: start; }
 .aui-onboarding-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .95rem; }
 .aui-onboarding-panel h2 { margin: 0; font-size: 1rem; }
+.aui-guided-setup h2 { display: flex; align-items: center; gap: .45rem; }
+.aui-setup-steps { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.aui-setup-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: start; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface-2); padding: .65rem; }
+.aui-step-number { display: grid; width: 1.85rem; height: 1.85rem; place-items: center; border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface); color: var(--aui-primary); font-size: .78rem; font-weight: 800; }
+.aui-setup-steps strong, .aui-setup-steps p { min-width: 0; overflow-wrap: anywhere; }
+.aui-setup-progress { height: .45rem; overflow: hidden; border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface); }
+.aui-setup-progress span { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--aui-primary) 82%, white); }
+.aui-mobile-launch-list { display: grid; gap: .65rem; }
+.aui-mobile-launch-list article { display: grid; gap: .4rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface-2); padding: .7rem; }
+.aui-mobile-launch-list header { display: flex; align-items: center; justify-content: space-between; gap: .65rem; }
+.aui-mobile-launch-list small { color: var(--aui-muted); line-height: 1.35; }
 .aui-onboarding-panel p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
 .aui-onboarding-panel label { color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
 .aui-onboarding-panel input { min-height: 2.6rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; padding: .55rem .65rem; background: var(--aui-surface); color: var(--aui-ink); }

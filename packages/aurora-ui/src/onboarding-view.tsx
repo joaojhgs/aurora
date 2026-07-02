@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { KeyRound, Monitor, PlugZap, RadioTower, Server, ShieldCheck, Smartphone } from 'lucide-react'
+import { Compass, KeyRound, Monitor, PlugZap, RadioTower, Rocket, Server, ShieldCheck, Smartphone } from 'lucide-react'
 import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, StatusBadge } from './status-badges'
@@ -15,10 +15,25 @@ export interface DeploymentModeCard {
   id: string
   label: string
   description: string
+  routeLabel: string
   state: AvailabilityState
   disabled: boolean
   evidence: string
   repair: string
+}
+
+export interface OnboardingSetupStep {
+  title: string
+  detail: string
+  state: AvailabilityState
+  progress: number | null
+}
+
+export interface MobileFirstLaunchNote {
+  platform: 'Android' | 'iOS'
+  state: AvailabilityState
+  detail: string
+  evidence: string
 }
 
 export interface OnboardingViewModel {
@@ -31,6 +46,8 @@ export interface OnboardingViewModel {
   authExplanation: string
   pairingState: AvailabilityState
   pairingExplanation: string
+  setupSteps: OnboardingSetupStep[]
+  mobileNotes: MobileFirstLaunchNote[]
   cockpitHref: string
 }
 
@@ -123,8 +140,11 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
         <div>
           <p className="aui-kicker">First run</p>
           <h1 id="onboarding-title">Connect Aurora</h1>
-          <p>Choose a deployment mode, validate the endpoint boundary, then authenticate or pair through SDK-backed Auth methods.</p>
+          <p>Choose server web, desktop local, mesh shell, mobile thin, or explicitly labeled offline demo mode, then authenticate or pair through SDK-backed Auth methods.</p>
         </div>
+        <button className="aui-primary-action" type="button" onClick={() => setMessage('Guided setup starts with mode selection, Auth.Login/Auth.PairingStart, capability graph load, privacy review, and cockpit entry.') }>
+          <Rocket size={15} aria-hidden />Start guided setup
+        </button>
         <div className="aui-assistant-badges" aria-label="Onboarding evidence">
           <StatusBadge state={model.authState} />
           <EvidenceBadge label={client.transport.kind} />
@@ -135,7 +155,7 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
 
       <div className="aui-onboarding-grid">
         <section className="aui-onboarding-panel aui-mode-panel" aria-labelledby="mode-title">
-          <h2 id="mode-title">Deployment mode</h2>
+          <h2 id="mode-title">Setup modes</h2>
           <div className="aui-mode-list" role="radiogroup" aria-label="Deployment mode">
             {model.modes.map((mode) => (
               <button
@@ -150,10 +170,27 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
                 <ModeIcon id={mode.id} />
                 <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
                 <StatusBadge state={mode.state} />
-                <em>{mode.evidence}</em>
+                <em><b>{mode.routeLabel}</b> · {mode.evidence}</em>
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="aui-onboarding-panel aui-guided-setup" aria-labelledby="guided-setup-title">
+          <h2 id="guided-setup-title"><Compass size={18} aria-hidden />Guided setup path</h2>
+          <ol className="aui-setup-steps">
+            {model.setupSteps.map((step, index) => (
+              <li key={step.title}>
+                <span className="aui-step-number">{index + 1}</span>
+                <div>
+                  <strong>{step.title}</strong>
+                  <p>{step.detail}</p>
+                  {step.progress !== null ? <div className="aui-setup-progress" aria-label={`${step.title} ${step.progress}% complete`}><span style={{ width: `${step.progress}%` }} /></div> : null}
+                </div>
+                <StatusBadge state={step.state} />
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section className="aui-onboarding-panel" aria-labelledby="endpoint-title">
@@ -213,6 +250,23 @@ export function OnboardingView({ client, snapshot }: OnboardingViewProps) {
           <StateLine state={model.pairingState} text={model.pairingExplanation} />
         </section>
 
+        <section className="aui-onboarding-panel" aria-labelledby="mobile-first-launch-title">
+          <h2 id="mobile-first-launch-title">Mobile first-launch copy</h2>
+          <div className="aui-mobile-launch-list">
+            {model.mobileNotes.map((note) => (
+              <article key={note.platform}>
+                <header><strong>{note.platform}</strong><StatusBadge state={note.state} /></header>
+                <p>{note.detail}</p>
+                <small>{note.evidence}</small>
+              </article>
+            ))}
+          </div>
+          <div className="aui-assistant-badges" aria-label="Mobile privacy classes">
+            <EvidenceBadge label="audio capture permission" />
+            <EvidenceBadge label="credential storage disabled" />
+          </div>
+        </section>
+
         <section className="aui-onboarding-panel" aria-labelledby="fallback-title">
           <h2 id="fallback-title">Fallbacks</h2>
           <ul className="aui-onboarding-list">
@@ -253,21 +307,38 @@ export function buildOnboardingViewModel({
     authExplanation: authExplanation(session),
     pairingState: pairingAvailability(session, routeById(snapshot, 'mesh')), 
     pairingExplanation: pairingExplanation(session, routeById(snapshot, 'mesh')),
+    setupSteps: setupSteps({ session, snapshot, selectedModeId: selected, authState: authAvailability(session), pairingState: pairingAvailability(session, routeById(snapshot, 'mesh')) }),
+    mobileNotes: mobileFirstLaunchNotes(snapshot),
     cockpitHref: '/'
   }
 }
 
 function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot): DeploymentModeCard[] {
   const meshRoute = routeById(snapshot, 'mesh')
+  const mobile = mobileThinState(snapshot, transportKind)
   return [
-    mode('server-web', 'Server Web', 'Browser connected to an Aurora Gateway.', transportKind === 'http' ? 'available-remote' : transportKind === 'mock' ? 'degraded' : 'unsupported', transportKind === 'http' ? 'HTTP Gateway transport' : transportKind === 'mock' ? 'SDK mock transport fixture' : 'HTTP transport not active', 'Set AURORA_GATEWAY_URL or NEXT_PUBLIC_AURORA_GATEWAY_URL.'),
-    mode('desktop-local', 'Desktop Local', 'Local desktop shell or sidecar node.', transportKind === 'tauri-local' || snapshot.nativeAvailable ? 'available-local' : 'unsupported', snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native manifest missing', 'Requires the future Tauri/native capability manifest.'),
-    mode('mesh-peer', 'Mesh Peer', 'Pair with or reconnect to a mesh node.', meshRoute?.state ?? 'unsupported', meshRoute?.providerLabel ?? 'mesh route not advertised', meshRoute?.explanation ?? 'Mesh pairing waits for Auth/Gateway capability evidence.'),
-    mode('android-thin', 'Android Thin', 'Android client against a remote Gateway.', transportKind === 'native-mobile' && snapshot.nativePlatform.toLowerCase().includes('android') ? 'available-remote' : 'unsupported', snapshot.nativePlatform, 'Android native/local features require native manifest support.'),
-    mode('ios-thin', 'iOS Thin', 'iOS client against a remote Gateway.', transportKind === 'native-mobile' && snapshot.nativePlatform.toLowerCase().includes('ios') ? 'available-remote' : 'unsupported', snapshot.nativePlatform, 'iOS remains app-owned surfaces only through Siri/Shortcuts/App Intents integration.'),
-    mode('ios-local-light', 'iOS Local-Light', 'App Intents, Shortcuts, widgets, share extension, deep links, and file associations.', iosLocalLightState(snapshot), iosLocalLightEvidence(snapshot), 'Requires the iOS native manifest, Xcode-managed extension targets, and backend handoff evidence; system assistant ownership is unavailable on iOS.'),
-    mode('offline-local', 'Offline Local', 'Local degraded mode without Gateway reachability.', transportKind === 'mock' ? 'degraded' : transportKind === 'tauri-local' ? 'available-local' : 'unsupported', transportKind === 'mock' ? 'development fixture only' : clientTransportEvidence(transportKind), 'Offline/local mode must be proven by SDK/native service evidence.')
+    mode('server-web', 'Server Web', 'Remote', 'Browser connected to an Aurora Gateway deployment for assistant and admin operation.', transportKind === 'http' ? 'available-remote' : transportKind === 'mock' ? 'degraded' : 'unsupported', transportKind === 'http' ? 'HTTP Gateway transport' : transportKind === 'mock' ? 'SDK mock transport fixture, not a live server' : 'HTTP transport not active', 'Set AURORA_GATEWAY_URL or NEXT_PUBLIC_AURORA_GATEWAY_URL and validate Auth/Gateway responses.'),
+    mode('desktop-local', 'Desktop Local', 'Local', 'Tauri desktop starts or attaches to the local Aurora Python node through sidecar/loopback/IPC evidence.', transportKind === 'tauri-local' || snapshot.nativeAvailable ? 'available-local' : 'unsupported', snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native manifest missing', 'Requires Tauri desktop local runtime evidence and Gateway readiness before claiming local node control.'),
+    mode('mesh-shell', 'Mesh Shell', 'Mesh Peer', 'Pair with trusted peers and route only through peer capabilities and selector policy.', meshRoute?.state ?? 'unsupported', meshRoute?.providerLabel ?? 'mesh route not advertised', meshRoute?.explanation ?? 'Mesh pairing waits for Auth/Gateway capability evidence.'),
+    mode('mobile-thin', 'Mobile Thin', 'Native Mobile', 'Android/iOS shell that uses native permissions with server or mesh transport first; it does not claim unsupported local daemon or system assistant replacement behavior.', mobile.state, mobile.evidence, mobile.repair),
+    mode('offline-demo', 'Offline Demo', 'Fallback', 'Fixture/demo-only exploration when no real Gateway is reachable; product data is explicitly labeled as mock evidence.', transportKind === 'mock' ? 'degraded' : 'unsupported', transportKind === 'mock' ? 'fixture/demo only via SDK mock transport' : clientTransportEvidence(transportKind), 'Use only for demos and visual review; connect a Gateway for production truth.')
   ]
+}
+
+function mobileThinState(snapshot: AuroraShellSnapshot, transportKind: string): { state: AvailabilityState; evidence: string; repair: string } {
+  if (transportKind === 'native-mobile') {
+    return { state: 'available-remote', evidence: `native-mobile transport on ${snapshot.nativePlatform}`, repair: 'Continue with server or mesh transport; local Python sidecar is not claimed on mobile.' }
+  }
+  if (snapshot.nativePlatform.toLowerCase().includes('android')) {
+    return { state: snapshot.nativeAvailable ? 'degraded' : 'unsupported', evidence: `Android manifest ${snapshot.nativeAvailable ? 'available' : 'missing'}`, repair: 'Assistant role depends on package qualification, OS support, and user/OEM grant; fallbacks stay visible.' }
+  }
+  if (snapshot.nativePlatform.toLowerCase().includes('ios')) {
+    return { state: snapshot.nativeAvailable ? 'degraded' : 'unsupported', evidence: iosLocalLightEvidence(snapshot), repair: 'iOS uses Siri/Shortcuts/App Intents, widgets, share sheet, and deep links in app-owned surfaces; system assistant ownership is unavailable.' }
+  }
+  if (transportKind === 'http') {
+    return { state: 'available-remote', evidence: 'web/thin HTTP transport', repair: 'Use browser permissions for mic/camera and pair/authenticate against the remote Gateway.' }
+  }
+  return { state: 'unsupported', evidence: snapshot.nativePlatform || 'native mobile manifest missing', repair: 'Android/iOS thin mode requires a mobile native manifest or a remote Gateway URL.' }
 }
 
 function iosLocalLightState(snapshot: AuroraShellSnapshot): AvailabilityState {
@@ -293,8 +364,50 @@ function iosLocalLightEvidence(snapshot: AuroraShellSnapshot): string {
   return ids.length > 0 ? `iOS native manifest: ${ids.join(', ')}` : 'iOS native manifest missing'
 }
 
-function mode(id: string, label: string, description: string, state: AvailabilityState, evidence: string, repair: string): DeploymentModeCard {
-  return { id, label, description, state, evidence, repair, disabled: !['available-local', 'available-remote', 'degraded', 'pending'].includes(state) }
+function mode(id: string, label: string, routeLabel: string, description: string, state: AvailabilityState, evidence: string, repair: string): DeploymentModeCard {
+  return { id, label, routeLabel, description, state, evidence, repair, disabled: !['available-local', 'available-remote', 'degraded', 'pending'].includes(state) }
+}
+
+
+function setupSteps(input: {
+  session: AuthSessionSnapshot
+  snapshot: AuroraShellSnapshot
+  selectedModeId: string
+  authState: AvailabilityState
+  pairingState: AvailabilityState
+}): OnboardingSetupStep[] {
+  const selectedMode = input.selectedModeId === 'offline-demo' ? 'degraded' : 'available-local'
+  return [
+    { title: 'Select mode', detail: 'Choose server web, desktop local, mesh shell, mobile thin, or explicitly labeled offline demo.', state: selectedMode, progress: null },
+    { title: 'Authenticate / pair', detail: 'Sign in, restore an in-memory token, enter pairing code, or load local owner identity through Auth SDK calls.', state: input.authState === 'pending' ? input.pairingState : input.authState, progress: input.session.isAuthenticated ? 100 : input.session.state === 'pairing' ? 45 : null },
+    { title: 'Load capability graph', detail: `${input.snapshot.routeCount} routes, ${input.snapshot.availableCount} selectable routes, and native/peer manifests drive every screen.`, state: input.snapshot.loadState === 'ready' ? 'available-local' : input.snapshot.loadState === 'loading' ? 'pending' : 'denied', progress: input.snapshot.routeCount ? Math.min(100, Math.round((input.snapshot.availableCount / Math.max(1, input.snapshot.routeCount)) * 100)) : null },
+    { title: 'Review privacy defaults', detail: 'Confirm local-first routing, remote fallback, mesh selector policy, and native permission states before enabling sensitive actions.', state: input.snapshot.secretsRedacted ? 'available-local' : 'degraded', progress: input.snapshot.secretsRedacted ? 100 : 50 },
+    { title: 'Land in cockpit', detail: 'Assistant and Admin share the same production shell once route, auth, privacy, and platform evidence are loaded.', state: input.session.isAuthenticated || input.snapshot.loadState === 'ready' ? 'available-local' : 'pending', progress: input.session.isAuthenticated ? 100 : null }
+  ]
+}
+
+
+function androidAssistantRoleEvidence(assistant: NonNullable<AuroraShellSnapshot['nativeAssistantRole']>, fallbackCount: number): string {
+  return `${assistant.evidenceSource}; roleAvailable=${String(assistant.roleAvailable)}; roleHeld=${String(assistant.roleHeld)}; requestable=${String(assistant.requestable)}; fallback entrypoints=${fallbackCount}`
+}
+
+function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunchNote[] {
+  const androidState: AvailabilityState = snapshot.nativePlatform === 'android' && snapshot.nativeAvailable ? 'degraded' : 'unsupported'
+  const iosState: AvailabilityState = snapshot.nativePlatform === 'ios' && snapshot.nativeAvailable ? iosLocalLightState(snapshot) : 'unsupported'
+  return [
+    {
+      platform: 'Android',
+      state: androidState,
+      detail: 'Aurora can request Android assistant role only when package qualification, OS availability, and user/OEM grant allow it; fallback entrypoints remain visible.',
+      evidence: snapshot.nativeAssistantRole ? androidAssistantRoleEvidence(snapshot.nativeAssistantRole, snapshot.nativeFallbackEntrypoints.length) : 'Android assistant-role manifest evidence not present in this runtime.'
+    },
+    {
+      platform: 'iOS',
+      state: iosState,
+      detail: 'Aurora integrates through Siri/Shortcuts/App Intents, widgets, share sheet, file associations, and deep links in app-owned surfaces only.',
+      evidence: iosLocalLightEvidence(snapshot)
+    }
+  ]
 }
 
 function endpointState(endpoint: string | undefined, transportKind: string, loadState: string): AvailabilityState {
@@ -359,8 +472,8 @@ function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability
 
 function defaultModeId(transportKind: string): string {
   if (transportKind === 'tauri-local') return 'desktop-local'
-  if (transportKind === 'native-mobile') return 'android-thin'
-  if (transportKind === 'mock') return 'offline-local'
+  if (transportKind === 'native-mobile') return 'mobile-thin'
+  if (transportKind === 'mock') return 'offline-demo'
   return 'server-web'
 }
 
@@ -384,9 +497,9 @@ function ModeIcon({ id }: { id: string }) {
   const props = { size: 18, 'aria-hidden': true as const }
   if (id === 'server-web') return <Server {...props} />
   if (id === 'desktop-local') return <Monitor {...props} />
-  if (id === 'mesh-peer') return <RadioTower {...props} />
-  if (id === 'android-thin' || id === 'ios-thin' || id === 'ios-local-light') return <Smartphone {...props} />
-  if (id === 'offline-local') return <PlugZap {...props} />
+  if (id === 'mesh-shell') return <RadioTower {...props} />
+  if (id === 'mobile-thin') return <Smartphone {...props} />
+  if (id === 'offline-demo') return <PlugZap {...props} />
   if (id === 'auth') return <KeyRound {...props} />
   return <ShieldCheck {...props} />
 }

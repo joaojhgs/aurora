@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:42:20.049Z",
+  "updatedAt": "2026-07-02T07:49:50.826Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -299,10 +299,13 @@
       "id": "G025-components-aurora-onboarding-onboard",
       "title": "`components/aurora/onboarding/onboarding-view.tsx`: server web, deskt...",
       "objective": "`components/aurora/onboarding/onboarding-view.tsx`: server web, desktop local, mesh shell, mobile thin, offline demo setup modes.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:49:50.826Z",
+      "startedAt": "2026-07-02T07:43:21.744Z",
+      "completedAt": "2026-07-02T07:49:50.826Z",
+      "evidence": "Onboarding route now presents the mock-parity five setup modes (Server Web, Desktop Local, Mesh Shell, Mobile Thin, Offline Demo), guided setup path, mobile first-launch copy, SDK/Auth endpoint/pairing truth, no browser token persistence, and typed Android/iOS native evidence without unsupported assistant claims. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'onboarding'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/tauri-ui test; pnpm --filter @aurora/tauri-ui typecheck."
     },
     {
       "id": "G026-components-aurora-settings-settings",
