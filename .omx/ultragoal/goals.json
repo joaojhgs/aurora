@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T14:56:36.738Z",
+  "updatedAt": "2026-07-02T14:56:59.177Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1748,10 +1748,12 @@
       "id": "G152-health-is-live-gateway-service-truth",
       "title": "Health is live Gateway/service truth.",
       "objective": "Health is live Gateway/service truth.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T14:56:59.177Z",
+      "completedAt": "2026-07-02T14:56:59.177Z",
+      "evidence": "pnpm --dir packages/aurora-ui exec vitest run --environment node tests/shell.test.tsx -t \"admin overview|admin services|service control actions\"; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; git diff --check"
     },
     {
       "id": "G153-mutations-are-disabled-or-confirmed",
