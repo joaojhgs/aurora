@@ -1372,6 +1372,21 @@ fn is_sensitive_log_key(key: &str) -> bool {
     .any(|needle| normalized.contains(needle))
 }
 
+fn sensitive_log_redacted_fields() -> Vec<String> {
+    vec![
+        "authorization".to_string(),
+        "token".to_string(),
+        "secret".to_string(),
+        "password".to_string(),
+        "api_key".to_string(),
+        "private_key".to_string(),
+        "raw_audio".to_string(),
+        "audio_bytes".to_string(),
+        "audio_data".to_string(),
+        "pcm16".to_string(),
+    ]
+}
+
 fn chunk_string_for_logcat(value: &str, max_bytes: usize) -> Vec<&str> {
     if value.is_empty() {
         return vec![""];
