@@ -559,15 +559,34 @@ export class RegistryClient {
   }
 }
 
+type TimedReadCacheEntry<T> = {
+  readonly expiresAt: number
+  readonly promise: Promise<T>
+}
+
+const SDK_READ_DEDUPE_TTL_MS = 2_000
+
 export class CapabilityClient {
+  private readonly catalogCache = new Map<string, TimedReadCacheEntry<CapabilityCatalogResponse>>()
+
   constructor(private readonly client: AuroraClient) {}
 
   listCatalog(request: CapabilityCatalogRequest = {}): Promise<CapabilityCatalogResponse> {
-    return this.client.request<CapabilityCatalogResponse, CapabilityCatalogRequest>(
+    const cacheKey = stableRequestKey(request)
+    const cached = freshCacheEntry(this.catalogCache, cacheKey)
+    if (cached) return cached.promise
+
+    const promise = this.client.request<CapabilityCatalogResponse, CapabilityCatalogRequest>(
       GATEWAY_METHODS.getCapabilityCatalog,
       request,
       { path: routePath('Gateway', 'GetCapabilityCatalog') }
     )
+    rememberRead(this.catalogCache, cacheKey, promise)
+    return promise
+  }
+
+  invalidateCache(): void {
+    this.catalogCache.clear()
   }
 
   async listSummaries(request: CapabilityCatalogRequest = {}): Promise<CapabilitySummary[]> {
@@ -595,6 +614,36 @@ export class CapabilityClient {
   explainRoute(route: string | RouteExplainRequest): Promise<RouteExplainResponse> {
     return this.client.routes.explain(routeExplainRequest(route))
   }
+}
+
+function freshCacheEntry<T>(cache: Map<string, TimedReadCacheEntry<T>>, key: string): TimedReadCacheEntry<T> | null {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (entry.expiresAt > Date.now()) return entry
+  cache.delete(key)
+  return null
+}
+
+function rememberRead<T>(cache: Map<string, TimedReadCacheEntry<T>>, key: string, promise: Promise<T>): void {
+  cache.set(key, { expiresAt: Date.now() + SDK_READ_DEDUPE_TTL_MS, promise })
+  promise.catch(() => {
+    if (cache.get(key)?.promise === promise) cache.delete(key)
+  })
+}
+
+function stableRequestKey(value: unknown): string {
+  return JSON.stringify(stableRequestValue(value))
+}
+
+function stableRequestValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableRequestValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stableRequestValue(entry)])
+  )
 }
 
 function routeExplainRequest(route: string | RouteExplainRequest): RouteExplainRequest {
@@ -640,14 +689,26 @@ export class PermissionClient {
 }
 
 export class RouteClient {
+  private readonly explainCache = new Map<string, TimedReadCacheEntry<RouteExplainResponse>>()
+
   constructor(private readonly client: AuroraClient) {}
 
   explain(request: RouteExplainRequest): Promise<RouteExplainResponse> {
-    return this.client.request<RouteExplainResponse, RouteExplainRequest>(
+    const cacheKey = stableRequestKey(request)
+    const cached = freshCacheEntry(this.explainCache, cacheKey)
+    if (cached) return cached.promise
+
+    const promise = this.client.request<RouteExplainResponse, RouteExplainRequest>(
       GATEWAY_METHODS.explainRoute,
       request,
       { path: routePath('Gateway', 'ExplainRoute') }
     )
+    rememberRead(this.explainCache, cacheKey, promise)
+    return promise
+  }
+
+  invalidateCache(): void {
+    this.explainCache.clear()
   }
 
   async evaluatePolicy(input: Omit<RoutePolicyInput, 'route' | 'catalog' | 'transportKind'> & {

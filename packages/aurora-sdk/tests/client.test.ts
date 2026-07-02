@@ -86,6 +86,36 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('deduplicates concurrent capability catalog reads and short-lived route explain reads', async () => {
+    const calls: string[] = []
+    const transport = MockAuroraTransport.empty()
+      .register('Gateway.GetCapabilityCatalog', (request) => {
+        calls.push(`${request.method}:${JSON.stringify(request.payload)}`)
+        return cloneFixture(capabilityGraphCatalogFixture)
+      })
+      .register('Gateway.ExplainRoute', (request) => {
+        calls.push(`${request.method}:${JSON.stringify(request.payload)}`)
+        return cloneFixture(routeExplainFixture)
+      })
+    const client = new AuroraClient({ transport })
+    const catalogRequest = { include_unavailable: true, include_internal: true }
+    const routeRequest = { topic: 'TTS.Synthesize', include_candidates: true }
+
+    await Promise.all([
+      client.capabilities.listCatalog(catalogRequest),
+      client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+    ])
+    await client.capabilities.listCatalog(catalogRequest)
+    await Promise.all([
+      client.routes.explain(routeRequest),
+      client.routes.explain({ include_candidates: true, topic: 'TTS.Synthesize' })
+    ])
+    await client.routes.explain(routeRequest)
+
+    expect(calls.filter((call) => call.startsWith('Gateway.GetCapabilityCatalog'))).toHaveLength(1)
+    expect(calls.filter((call) => call.startsWith('Gateway.ExplainRoute'))).toHaveLength(1)
+  })
+
   it('classifies pending pairing queue as an admin backend descriptor', () => {
     const descriptors = describeBackendInventory(backendInventoryFixture)
 
@@ -2685,7 +2715,6 @@ describe('AuroraClient', () => {
     }
   })
 
-
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
       .register('Tooling.RequestApproval', {
@@ -3009,7 +3038,6 @@ describe('AuroraClient', () => {
     expect(calls[1]?.init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer session-token-after-login' }))
     expect(calls[2]?.init.headers).not.toEqual(expect.objectContaining({ Authorization: expect.any(String) }))
   })
-
 
   it('clears stale bearer tokens after expired HTTP auth so following requests are anonymous', async () => {
     const registryAuthHeaders: Array<string | undefined> = []

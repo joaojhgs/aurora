@@ -40,7 +40,8 @@ import {
   type GetRegistryResponse,
   type GetServicesResponse,
   type PendingPairingEntry,
-  type VoiceRuntimeEvent
+  type VoiceRuntimeEvent,
+  type AuroraTransportRequest
 } from '@aurora/client'
 import {
   AdminOverviewContent,
@@ -145,6 +146,17 @@ import {
   auroraAssistantVoiceItems,
   auroraNavSections
 } from '../src/index'
+
+class RecordingMockAuroraTransport extends MockAuroraTransport {
+  readonly requests: AuroraTransportRequest[] = []
+
+  override async request<TData = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>
+  ) {
+    this.requests.push(request)
+    return super.request<TData, TPayload>(request)
+  }
+}
 
 describe('Aurora production shell', () => {
   it('distinguishes the required availability and policy blocker states', () => {
@@ -257,7 +269,6 @@ describe('Aurora production shell', () => {
     expect(snapshot.routes.every((route) => route.repairActions.length > 0)).toBe(true)
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
   })
-
 
   it('keeps read-only sensitive admin routes routeable without route-level AdminAction while mutations stay gated', async () => {
     const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
@@ -1391,9 +1402,6 @@ describe('Aurora production shell', () => {
     expect(disabledMarkup).toContain('Assistant capability is unavailable')
     expect(disabledMarkup).toContain('Start with a prompt')
   })
-
-
-
 
   it('warns before private remote fallback and keeps raw audio plus tool payloads redacted', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
@@ -2620,7 +2628,6 @@ describe('Aurora production shell', () => {
     expect(degradedMarkup).toContain('partial redacted detail fields')
   })
 
-
   it('wires scoped tokens, one-time reveal rules, and revoke AdminAction evidence from AuroraClient', async () => {
     const snapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminTokensView snapshot={snapshot} />)
@@ -3370,6 +3377,15 @@ describe('Aurora production shell', () => {
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'scheduler_job')?.evaluation?.repairPath).toContain('selector')
     expect(snapshot.policyCapabilityReason).toContain('Gateway.ExplainRoute')
     expect(snapshot.configCapabilityReason).toContain('Config.Set')
+  })
+
+  it('builds the route policy matrix with one shared capability catalog request', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    await buildRoutePolicySnapshot(new AuroraClient({ transport }), meshRoute())
+
+    const methods = transport.requests.map((request) => request.method)
+    expect(methods.filter((method) => method === 'Gateway.GetCapabilityCatalog')).toHaveLength(1)
+    expect(methods.filter((method) => method === 'Gateway.ExplainRoute')).toHaveLength(routePolicyScenarios().length)
   })
 
   it('renders route policy editor and exact explain blockers without local-only success claims', async () => {

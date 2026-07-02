@@ -140,22 +140,25 @@ export function RoutePolicyResource({ client, route }: RoutePolicyResourceProps)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [persistedReceipt, setPersistedReceipt] = useState<string | null>(null)
 
+  const routeKey = routePolicyRouteKey(route)
+  const stableRoute = useMemo(() => route, [routeKey])
+
   const loadPolicy = useCallback(async () => {
     setSnapshot({ ...loadingSnapshot, selectedScenarioId, persistedReceipt })
-    const next = await buildRoutePolicySnapshot(client, route, selectedScenarioId, persistedReceipt)
+    const next = await buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId, persistedReceipt)
     setSnapshot(next)
-  }, [client, route, selectedScenarioId, persistedReceipt])
+  }, [client, stableRoute, selectedScenarioId, persistedReceipt])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot({ ...loadingSnapshot, selectedScenarioId, persistedReceipt })
-    void buildRoutePolicySnapshot(client, route, selectedScenarioId, persistedReceipt).then((next) => {
+    void buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId, persistedReceipt).then((next) => {
       if (!cancelled) setSnapshot(next)
     })
     return () => {
       cancelled = true
     }
-  }, [client, route, selectedScenarioId, persistedReceipt])
+  }, [client, stableRoute, selectedScenarioId, persistedReceipt])
 
   const savePolicy = useCallback(async () => {
     if (!snapshot.canEditPolicy) return
@@ -197,26 +200,17 @@ export async function buildRoutePolicySnapshot(
   persistedReceipt: string | null = null
 ): Promise<RoutePolicySnapshot> {
   const scenarioDefinitions = routePolicyScenarios()
-  const [catalogResult, ...scenarioResults] = await Promise.allSettled([
-    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }),
-    ...scenarioDefinitions.map((scenario) => {
-      const request = {
-        routeRequest: scenario.request,
-        payload: scenario.payload,
-        selector: scenario.selector,
-        privacyClass: scenario.privacyClass,
-        dataClasses: scenario.dataClasses,
-        auditReceiptTarget: 'Auth.StoreAuditEvent'
-      }
-      return client.routes.evaluatePolicy({
-        ...request,
-        ...(scenario.consentGranted === undefined ? {} : { consentGranted: scenario.consentGranted }),
-        ...(scenario.privacyIndicatorShown === undefined ? {} : { privacyIndicatorShown: scenario.privacyIndicatorShown }),
-        ...(scenario.allowCloudFallback === undefined ? {} : { allowCloudFallback: scenario.allowCloudFallback })
-      })
-    })
-  ])
+  const catalogResult = await Promise.allSettled([
+    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })
+  ]).then(([result]) => result!)
   const catalog = settledValue(catalogResult)
+  const scenarioResults = catalog
+    ? await Promise.allSettled(
+        scenarioDefinitions.map((scenario) => evaluateRoutePolicyScenario(client, scenario, catalog))
+      )
+    : await Promise.allSettled(
+        scenarioDefinitions.map((scenario) => explainRoutePolicyScenarioFailure(client, scenario, catalogResult))
+      )
   const scenarios = scenarioDefinitions.map<RoutePolicyScenarioResult>((scenario, index) => {
     const result = scenarioResults[index]
     if (result?.status === 'fulfilled') {
@@ -273,6 +267,53 @@ export async function buildRoutePolicySnapshot(
     warnings: failures,
     evidenceSource: catalog ? 'AuroraClient capability catalog and Gateway.ExplainRoute' : 'AuroraClient route explain results'
   }
+}
+
+async function explainRoutePolicyScenarioFailure(
+  client: AuroraClient,
+  scenario: RoutePolicyScenario,
+  catalogResult: PromiseSettledResult<CapabilityCatalogResponse>
+): Promise<RoutePolicyEvaluation> {
+  try {
+    await client.routes.explain(scenario.request)
+  } catch (error) {
+    throw error
+  }
+  throw catalogResult.status === 'rejected'
+    ? catalogResult.reason
+    : new Error('Capability catalog response was unavailable for route policy evaluation.')
+}
+
+function evaluateRoutePolicyScenario(
+  client: AuroraClient,
+  scenario: RoutePolicyScenario,
+  catalog: CapabilityCatalogResponse
+): Promise<RoutePolicyEvaluation> {
+  const request = {
+    routeRequest: scenario.request,
+    payload: scenario.payload,
+    selector: scenario.selector,
+    privacyClass: scenario.privacyClass,
+    dataClasses: scenario.dataClasses,
+    auditReceiptTarget: 'Auth.StoreAuditEvent',
+    catalog
+  }
+  return client.routes.evaluatePolicy({
+    ...request,
+    ...(scenario.consentGranted === undefined ? {} : { consentGranted: scenario.consentGranted }),
+    ...(scenario.privacyIndicatorShown === undefined ? {} : { privacyIndicatorShown: scenario.privacyIndicatorShown }),
+    ...(scenario.allowCloudFallback === undefined ? {} : { allowCloudFallback: scenario.allowCloudFallback })
+  })
+}
+
+function routePolicyRouteKey(route: RouteAvailability): string {
+  return [
+    route.item.id,
+    route.state,
+    route.disabled ? 'disabled' : 'enabled',
+    route.requiresAdminAction ? 'admin' : 'user',
+    route.explanation
+  ].join('|')
 }
 
 export function RoutePolicyView({
