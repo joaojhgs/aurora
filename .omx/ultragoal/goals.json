@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:44:15.771Z",
+  "updatedAt": "2026-07-02T06:49:13.136Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -155,10 +155,13 @@
       "id": "G013-components-aurora-mesh-mesh-view-tsx",
       "title": "`components/aurora/mesh/mesh-view.tsx`: mesh topology cards, trust qu...",
       "objective": "`components/aurora/mesh/mesh-view.tsx`: mesh topology cards, trust queue, pair new peer, route preview, peer table, approve/deny/remove.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:49:13.136Z",
+      "startedAt": "2026-07-02T06:44:45.656Z",
+      "completedAt": "2026-07-02T06:49:13.136Z",
+      "evidence": "Mesh peers route now includes mock-derived topology cards, trust queue approve/deny affordances, pair-new-peer handoff to Admin pairing, and route-preview cards backed by RouteAvailability/candidate provider evidence while preserving SDK/Auth/Gateway truth. Verified: pnpm --filter @aurora/ui test -- -t 'mesh peer'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G014-components-aurora-models-models-view",

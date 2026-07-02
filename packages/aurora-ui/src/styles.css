@@ -518,6 +518,15 @@ button, input, select, textarea { font: inherit; }
 .aui-mesh-panel-title > span { display: grid; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .45rem; background: var(--aui-surface-2); color: var(--aui-primary); }
 .aui-mesh-panel-title h2 { margin: 0; font-size: 1rem; }
 .aui-mesh-panel-title p { margin: .28rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-topology-grid, .aui-mesh-route-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .75rem; }
+.aui-mesh-topology-card, .aui-mesh-route-card, .aui-mesh-pairing-card { display: grid; gap: .65rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 34%, white); padding: .8rem; }
+.aui-mesh-topology-local, .aui-mesh-trust-queue { border-color: color-mix(in srgb, var(--aui-primary) 24%, var(--aui-border)); }
+.aui-mesh-topology-card > header, .aui-mesh-route-card > header, .aui-mesh-pairing-card { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.aui-mesh-topology-card h3, .aui-mesh-route-card h3, .aui-mesh-pairing-card h2 { margin: .14rem 0 0; font-size: .98rem; overflow-wrap: anywhere; }
+.aui-mesh-topology-card code { display: block; margin-top: .24rem; color: var(--aui-muted); font-size: .76rem; overflow-wrap: anywhere; white-space: normal; }
+.aui-mesh-topology-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin: 0; }
+.aui-mesh-route-card p, .aui-mesh-pairing-card p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-mesh-pairing-card .aui-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.4rem; border: 1px solid color-mix(in srgb, var(--aui-primary) 28%, var(--aui-border)); border-radius: .45rem; padding: .55rem .8rem; color: var(--aui-primary); font-weight: 800; text-decoration: none; white-space: nowrap; }
 .aui-mesh-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; margin: 0; }
 .aui-mesh-warnings { display: grid; gap: .4rem; margin: 0; padding-left: 1.1rem; color: var(--aui-muted); line-height: 1.4; }
 .aui-mesh-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); gap: .85rem; }
@@ -604,7 +613,7 @@ button, input, select, textarea { font: inherit; }
   .aui-onboarding-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-mode-panel { grid-row: auto; }
   .aui-pairing-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta, .aui-mesh-topology-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .aui-route-policy-layout { grid-template-columns: minmax(0, 1fr); }
   .aui-route-policy-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -618,10 +627,10 @@ button, input, select, textarea { font: inherit; }
   .aui-mode-card em { grid-column: 1 / -1; }
   .aui-pairing-controls, .aui-pairing-facts div { grid-template-columns: minmax(0, 1fr); }
   .aui-pairing-card-header { display: grid; }
-  .aui-mesh-header, .aui-mesh-card > header, .aui-mesh-row > header { display: grid; }
+  .aui-mesh-header, .aui-mesh-card > header, .aui-mesh-row > header, .aui-mesh-topology-card > header, .aui-mesh-route-card > header, .aui-mesh-pairing-card { display: grid; }
   .aui-mesh-diagnostics-header { display: grid; }
   .aui-mesh-badges { justify-content: flex-start; }
-  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta { grid-template-columns: minmax(0, 1fr); }
+  .aui-mesh-controls, .aui-mesh-summary, .aui-mesh-meta, .aui-mesh-topology-facts { grid-template-columns: minmax(0, 1fr); }
   .aui-mesh-diagnostics-summary, .aui-mesh-diagnostics-grid { grid-template-columns: minmax(0, 1fr); }
   .aui-route-policy-header, .aui-route-explain-card > header { display: grid; }
   .aui-route-policy-summary, .aui-route-scenarios { grid-template-columns: minmax(0, 1fr); }

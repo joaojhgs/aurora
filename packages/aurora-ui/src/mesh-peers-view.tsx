@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, GitBranch, Network, RadioTower, RefreshCw, ShieldCheck, Signal, Trash2, XCircle } from 'lucide-react'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -409,6 +409,17 @@ export function MeshPeersView({
         <MeshFact label="Devices" value={`${snapshot.deviceCount} Auth device records`} />
       </dl>
 
+      <MeshTopologyPanel snapshot={snapshot} />
+      <MeshTrustQueuePanel
+        peers={snapshot.peers}
+        mutationDisabled={mutationDisabled}
+        pendingPeerId={pendingPeerId}
+        onApprovePeer={onApprovePeer}
+        onDenyPeer={onDenyPeer}
+      />
+      <MeshPairingEntrypoint route={route} />
+      <MeshRoutePreviewPanel route={route} snapshot={snapshot} />
+
       <section className="aui-mesh-controls" aria-label="Mesh peer controls">
         <label>
           <span>AdminAction reason</span>
@@ -523,6 +534,175 @@ export function MeshPeersView({
           )
         })}
       </section>
+    </section>
+  )
+}
+
+function MeshTopologyPanel({ snapshot }: { snapshot: MeshPeersSnapshot }) {
+  const topologyPeers = snapshot.peers.slice(0, 4)
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-topology-title">
+      <div className="aui-mesh-panel-title">
+        <span><Network size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-topology-title">Topology</h2>
+          <p>Local node, runtime peers, and persisted Auth peers are shown from Gateway/Auth evidence only.</p>
+        </div>
+      </div>
+      <div className="aui-mesh-topology-grid">
+        <article className="aui-mesh-topology-card aui-mesh-topology-local">
+          <p className="aui-kicker">local Aurora node</p>
+          <h3>{snapshot.localNodeName}</h3>
+          <code>{snapshot.localPeerId ?? 'local peer not reported'}</code>
+          <dl className="aui-mesh-topology-facts">
+            <MeshFact label="Mesh runtime" value={snapshot.meshStarted ? 'started' : snapshot.meshEnabled ? 'enabled, not started' : 'disabled'} />
+            <MeshFact label="WebRTC" value={snapshot.webrtcStarted ? 'started' : 'not started'} />
+          </dl>
+        </article>
+        {topologyPeers.length === 0 ? (
+          <p className="aui-message">No peer topology cards can be drawn until Gateway.GetMeshStatus or Auth.MeshListPeers returns peer evidence.</p>
+        ) : topologyPeers.map((peer) => (
+          <article className="aui-mesh-topology-card" key={peer.peerId}>
+            <header>
+              <div>
+                <p className="aui-kicker">{peer.roomName || 'mesh room not reported'}</p>
+                <h3>{peer.nodeName}</h3>
+                <code>{peer.peerId}</code>
+              </div>
+              <StatusBadge state={peer.trustState} />
+            </header>
+            <dl className="aui-mesh-topology-facts">
+              <MeshFact label="Connection" value={peer.connectionStatus} />
+              <MeshFact label="Latency" value={peer.latencyMs === null ? 'not reported' : `${peer.latencyMs} ms`} />
+              <MeshFact label="Route quality" value={peer.routeQuality} />
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function MeshTrustQueuePanel({
+  peers,
+  mutationDisabled,
+  pendingPeerId,
+  onApprovePeer,
+  onDenyPeer
+}: {
+  peers: MeshPeerRow[]
+  mutationDisabled: boolean
+  pendingPeerId: string | null
+  onApprovePeer: ((peer: MeshPeerRow) => void) | undefined
+  onDenyPeer: ((peer: MeshPeerRow) => void) | undefined
+}) {
+  const pendingPeers = peers.filter((peer) => peer.trustState === 'pending' || peer.pendingPairing)
+  return (
+    <section className="aui-mesh-panel aui-mesh-trust-queue" aria-labelledby="mesh-trust-queue-title">
+      <div className="aui-mesh-panel-title">
+        <span><ShieldCheck size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-trust-queue-title">Trust queue</h2>
+          <p>Pending peers require out-of-band fingerprint review and AdminAction before route-previewed work can be sent.</p>
+        </div>
+      </div>
+      {pendingPeers.length === 0 ? <p className="aui-message">No pending mesh peer trust decisions were reported by Auth.</p> : (
+        <div className="aui-mesh-row-list">
+          {pendingPeers.map((peer) => {
+            const pending = pendingPeerId === peer.peerId
+            return (
+              <article className="aui-mesh-row" key={peer.peerId}>
+                <header>
+                  <div>
+                    <p className="aui-kicker">fingerprint review required</p>
+                    <h3>{peer.nodeName}</h3>
+                    <code>{peer.fingerprint}</code>
+                  </div>
+                  <StatusBadge state={pending ? 'pending' : peer.trustState} />
+                </header>
+                <dl className="aui-mesh-meta">
+                  <MeshFact label="Peer" value={peer.peerId} />
+                  <MeshFact label="Requested scopes" value={peer.permissions.join(', ') || 'none requested'} />
+                  <MeshFact label="Pairing" value={peer.pendingPairing?.status ?? 'pending peer record'} />
+                  <MeshFact label="Evidence" value={peer.lastEvidenceSource} />
+                </dl>
+                <div className="aui-mesh-actions">
+                  <button type="button" disabled={mutationDisabled || !peer.approveAction || pending} onClick={() => onApprovePeer?.(peer)}>
+                    <CheckCircle2 size={16} aria-hidden="true" />{pending ? 'Submitting AdminAction' : 'Approve peer'}
+                  </button>
+                  <button type="button" disabled={mutationDisabled || !peer.denyAction || pending} onClick={() => onDenyPeer?.(peer)}>
+                    <XCircle size={16} aria-hidden="true" />{pending ? 'Submitting AdminAction' : 'Deny peer'}
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MeshPairingEntrypoint({ route }: { route: RouteAvailability }) {
+  return (
+    <section className="aui-mesh-pairing-card" aria-labelledby="mesh-pair-new-peer-title">
+      <div>
+        <p className="aui-kicker">pairing handoff</p>
+        <h2 id="mesh-pair-new-peer-title">Pair new peer</h2>
+        <p>New peer codes, QR/deep links, and approvals live on the Admin pairing route so secrets and AdminAction receipts stay centralized.</p>
+      </div>
+      <a className="aui-button" href="/admin/pairing" aria-disabled={route.disabled}>
+        <RadioTower size={16} aria-hidden="true" /> Open pairing queue
+      </a>
+    </section>
+  )
+}
+
+function MeshRoutePreviewPanel({ route, snapshot }: { route: RouteAvailability; snapshot: MeshPeersSnapshot }) {
+  const candidates = route.candidateProviders.length > 0
+    ? route.candidateProviders
+    : [{ id: route.providerLabel, label: route.providerLabel, state: route.state, selectable: !route.disabled, reason: route.explanation, requiredAction: route.requiresAdminAction ? 'AdminAction required' : null }]
+  return (
+    <section className="aui-mesh-panel" aria-labelledby="mesh-route-preview-title">
+      <div className="aui-mesh-panel-title">
+        <span><GitBranch size={18} aria-hidden="true" /></span>
+        <div>
+          <h2 id="mesh-route-preview-title">Route preview</h2>
+          <p>Provider candidates and runtime routes are previews only; unavailable or consent-gated paths remain disabled by route policy.</p>
+        </div>
+      </div>
+      <div className="aui-mesh-route-grid">
+        {candidates.map((candidate) => (
+          <article className="aui-mesh-route-card" key={candidate.id}>
+            <header>
+              <div>
+                <p className="aui-kicker">{candidate.selectable ? 'selectable candidate' : 'blocked candidate'}</p>
+                <h3>{candidate.label}</h3>
+              </div>
+              <StatusBadge state={candidate.state} />
+            </header>
+            <p>{candidate.reason}</p>
+            <dl className="aui-mesh-topology-facts">
+              <MeshFact label="Required action" value={candidate.requiredAction ?? 'none'} />
+              <MeshFact label="Route feature" value={route.item.label} />
+            </dl>
+          </article>
+        ))}
+        {snapshot.routeCount === 0 ? (
+          <p className="aui-message">Gateway.GetMeshStatus did not report runtime route decisions yet.</p>
+        ) : (
+          <article className="aui-mesh-route-card">
+            <header>
+              <div>
+                <p className="aui-kicker">runtime route evidence</p>
+                <h3>{snapshot.routeCount} mesh route decisions</h3>
+              </div>
+              <Signal size={18} aria-hidden="true" />
+            </header>
+            <p>{snapshot.statusReason}</p>
+          </article>
+        )}
+      </div>
     </section>
   )
 }
