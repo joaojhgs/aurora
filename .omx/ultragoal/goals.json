@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:14:01.655Z",
+  "updatedAt": "2026-07-02T08:21:22.265Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -431,10 +431,13 @@
       "id": "G036-mock-driven-ux-details-were-replaced",
       "title": "mock-driven UX details were replaced by status text and catalog dumps;",
       "objective": "mock-driven UX details were replaced by status text and catalog dumps;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:21:22.265Z",
+      "startedAt": "2026-07-02T08:15:25.590Z",
+      "completedAt": "2026-07-02T08:21:22.265Z",
+      "evidence": "Added mockUxAnchors to productionSurfaceContracts so every production surface records source-visible mock-derived interaction details; fixed contract component coverage for tokens and resource diagnostics; added shell.test regression gate that fails if surfaces are documented only by generic backend/status/catalog labels or if anchors disappear. Verified: pnpm --filter @aurora/ui test -- -t 'mock-driven interaction anchors|documents every production surface'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G037-web-playwright-could-pass-without-de",

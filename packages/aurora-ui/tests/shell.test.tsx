@@ -228,6 +228,31 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('keeps mock-driven interaction anchors in production component source', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
+    const genericEvidenceOnly = /\b(catalog|status|loading|backend|AuroraClient|SDK|route evidence)\b/i
+
+    for (const surface of productionSurfaceContracts) {
+      const sourceText = surface.componentFiles
+        .map((file) => readFileSync(join(uiSrcRoot, file), 'utf8'))
+        .join('\n')
+
+      expect(surface.mockUxAnchors.length, `${surface.id} mock UX anchors`).toBeGreaterThanOrEqual(3)
+      expect(
+        surface.mockUxAnchors.some((anchor) => !genericEvidenceOnly.test(anchor)),
+        `${surface.id} cannot be documented only by backend/status/catalog labels`
+      ).toBe(true)
+
+      for (const anchor of surface.mockUxAnchors) {
+        expect(
+          sourceText.includes(anchor),
+          `${surface.id} production components must retain mock-derived interaction anchor "${anchor}"`
+        ).toBe(true)
+      }
+    }
+  })
+
   it('keeps production UI screens behind AuroraClient and away from mock fixtures as live truth', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const scannedFiles = [

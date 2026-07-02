@@ -57,6 +57,7 @@ export interface ProductionSurfaceContract {
   navItemIds: string[]
   routeOracles?: ProductionRouteOracle[]
   mockReferenceFiles: string[]
+  mockUxAnchors: string[]
   componentFiles: string[]
   stateCoverage: ProductionRouteState[]
   truthSources: ProductionTruthSource[]
@@ -75,6 +76,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['assistant', 'assistant-cancel', 'voice-transcription', 'voice-wake-process', 'voice-wake-control', 'voice-tts-synthesize', 'voice-tts-stop'],
     routeOracles: [routeOracle('assistant', ['Assistant', 'Prompt'])],
     mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/route-sheet.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
+    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Voice modes', 'Tool call approval card'],
     componentFiles: ['assistant-view.tsx', 'route-sheet.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
@@ -95,6 +97,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['admin'],
     routeOracles: [routeOracle('admin', ['Admin overview'])],
     mockReferenceFiles: ['components/aurora/admin/overview.tsx'],
+    mockUxAnchors: ['AdminAction controller', 'Runtime topology', 'Deployment metrics'],
     componentFiles: ['admin-overview-view.tsx', 'shell-data.ts'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
@@ -117,6 +120,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('contracts', ['Services'])
     ],
     mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
+    mockUxAnchors: ['Services and contracts', 'Services table with health', 'Contracts'],
     componentFiles: ['admin-services-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -139,7 +143,8 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('tokens', ['RBAC'])
     ],
     mockReferenceFiles: ['components/aurora/admin/rbac-view.tsx', 'components/aurora/admin/tokens-view.tsx'],
-    componentFiles: ['admin-rbac-view.tsx'],
+    mockUxAnchors: ['Access and RBAC', 'Permission matrix', 'Scoped token inventory', 'Create-token preview'],
+    componentFiles: ['admin-rbac-view.tsx', 'admin-tokens-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'principal, permission, and token lists', ['Auth.ListPrincipals', 'Auth.ListTokens', 'Auth.AuditLog']),
@@ -158,6 +163,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['audit'],
     routeOracles: [routeOracle('audit', ['Audit log'])],
     mockReferenceFiles: ['components/aurora/admin/audit-view.tsx'],
+    mockUxAnchors: ['Audit log', 'Filters', 'Redacted event details', 'Redacted payload preview'],
     componentFiles: ['admin-audit-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [source('sdk-method', 'redacted audit records', ['Auth.AuditLog'])],
@@ -177,6 +183,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('tools', ['Approval cards'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
+    mockUxAnchors: ['Plugins, MCP, and tools', 'Provider grouping', 'Reload and install controls', 'Tool risk and sharing policy'],
     componentFiles: ['admin-plugins-view.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -196,6 +203,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['devices'],
     routeOracles: [routeOracle('devices', ['Devices'])],
     mockReferenceFiles: ['components/aurora/admin/devices-view.tsx'],
+    mockUxAnchors: ['Devices and sessions', 'Pending pairings', 'Delete device', 'Sessions'],
     componentFiles: ['admin-devices-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -215,6 +223,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['scheduler'],
     routeOracles: [routeOracle('scheduler', ['Scheduler'])],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
+    mockUxAnchors: ['Scheduler jobs', 'Ownership-scoped job table', 'Remote running', 'Scheduler admin change'],
     componentFiles: ['admin-scheduler-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -234,6 +243,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['config'],
     routeOracles: [routeOracle('config', ['Configuration'])],
     mockReferenceFiles: ['components/aurora/admin/config-view.tsx'],
+    mockUxAnchors: ['Configuration', 'Schema-backed config accordion', 'diff preview', 'rollback'],
     componentFiles: ['config-editor-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -256,6 +266,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('data', ['History and RAG provenance'])
     ],
     mockReferenceFiles: ['app/(cockpit)/memory/page.tsx'],
+    mockUxAnchors: ['History and RAG provenance', 'Memory & RAG collections', 'Search results', 'Data controls'],
     componentFiles: ['memory-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
@@ -276,6 +287,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['backups'],
     routeOracles: [routeOracle('backups', ['Backups & Restore'])],
     mockReferenceFiles: ['components/aurora/admin/secondary-surface.tsx'],
+    mockUxAnchors: ['Backups & Restore', 'Create backup', 'Preview restore impact', 'Rollback visibility'],
     componentFiles: ['backup-restore-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -295,6 +307,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['models'],
     routeOracles: [routeOracle('models', ['Models and runtime'])],
     mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
+    mockUxAnchors: ['Models and runtime', 'Runtime evidence', 'Provider route policy', 'Benchmark snapshot'],
     componentFiles: ['models-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
@@ -318,6 +331,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('pairing', ['Pairing queue'])
     ],
     mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
+    mockUxAnchors: ['Mesh peers', 'Topology', 'Trust queue', 'Pairing queue'],
     componentFiles: ['mesh-peers-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -337,6 +351,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['diagnostics', 'mesh'],
     routeOracles: [routeOracle('diagnostics', ['Native boundary'])],
     mockReferenceFiles: ['components/aurora/diagnostics/diagnostics-view.tsx'],
+    mockUxAnchors: ['Diagnostics', 'Live probes', 'Redaction preview', 'Timeline'],
     componentFiles: ['mesh-diagnostics-view.tsx', 'mesh-diagnostics-resource.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
@@ -355,6 +370,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Route policy',
     navItemIds: ['mesh', 'settings'],
     mockReferenceFiles: ['components/aurora/assistant/route-sheet.tsx', 'components/aurora/settings/settings-permissions-view.tsx'],
+    mockUxAnchors: ['Route policy and explain', 'Route explain scenarios', 'Tool call', 'Scheduler delegation'],
     componentFiles: ['route-policy-view.tsx', 'route-sheet.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
@@ -373,7 +389,8 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Resource diagnostics',
     navItemIds: ['diagnostics'],
     mockReferenceFiles: ['components/aurora/diagnostics/diagnostics-view.tsx'],
-    componentFiles: ['mesh-diagnostics-resource.tsx'],
+    mockUxAnchors: ['Diagnostics', 'Live probes', 'Redaction preview', 'Transport'],
+    componentFiles: ['mesh-diagnostics-resource.tsx', 'mesh-diagnostics-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
       source('capability-graph', 'capability resources and provider candidates', ['Gateway.GetCapabilityCatalog']),
@@ -392,6 +409,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['settings'],
     routeOracles: [routeOracle('settings', ['Settings and permissions'])],
     mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
+    mockUxAnchors: ['Settings and permissions', 'Privacy defaults', 'Voice behavior', 'Native permissions'],
     componentFiles: ['settings-permissions-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
@@ -412,6 +430,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['native'],
     routeOracles: [routeOracle('native', ['Settings and permissions'])],
     mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
+    mockUxAnchors: ['Settings and permissions', 'Native integrations', 'Siri/Shortcuts/App Intents integration', 'iOS policy notes'],
     componentFiles: ['settings-permissions-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'native-permission'],
     truthSources: [
@@ -431,6 +450,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['onboarding', 'pairing'],
     routeOracles: [routeOracle('onboarding', ['Connect Aurora'])],
     mockReferenceFiles: ['components/aurora/onboarding/onboarding-view.tsx', 'components/aurora/admin/devices-view.tsx'],
+    mockUxAnchors: ['Connect Aurora', 'Setup modes', 'Guided setup path', 'Pairing queue'],
     componentFiles: ['onboarding-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'native-permission'],
     truthSources: [
