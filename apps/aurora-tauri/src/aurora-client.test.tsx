@@ -303,6 +303,9 @@ describe('Aurora Tauri runtime wrapper', () => {
       for (const landmark of oracle?.renderedLandmarks ?? []) {
         expectMarkupToContainText(markup, landmark, item.href)
       }
+      for (const control of oracle?.routeSpecificControls ?? []) {
+        expectMarkupToContainText(markup, control, item.href)
+      }
       expect(markup, item.href).not.toContain('A full product page still needs to be mounted')
       expect(markup, item.href).not.toContain('This Tauri route is now navigable')
       expect(markup, item.href).not.toContain('route is unregistered')

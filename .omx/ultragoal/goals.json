@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:54:26.618Z",
+  "updatedAt": "2026-07-02T10:57:33.094Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1088,10 +1088,12 @@
       "id": "G092-every-primary-nav-route-renders-a-ro",
       "title": "Every primary nav route renders a route-specific landmark and at leas...",
       "objective": "Every primary nav route renders a route-specific landmark and at least one route-specific control/table/list/composer.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:57:33.094Z",
+      "completedAt": "2026-07-02T10:57:33.094Z",
+      "evidence": "Extended ProductionRouteOracle with routeSpecificControls for every primary nav route and enforced non-empty meaningful control markers in the production surface contract test. Extended the Tauri route crawl to assert each route renders both route-specific landmarks and at least one route-specific control/table/list/composer marker from the oracle. Verified: pnpm --filter @aurora/ui test -- -t 'documents every production surface'; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; git diff --check."
     },
     {
       "id": "G093-playwright-route-crawl-fails-if-any",

@@ -318,9 +318,14 @@ describe('Aurora production shell', () => {
       for (const oracle of surface.routeOracles ?? []) {
         expect(surface.navItemIds, `${surface.id} oracle nav binding`).toContain(oracle.navItemId)
         expect(oracle.renderedLandmarks.length, `${surface.id}/${oracle.navItemId} rendered landmarks`).toBeGreaterThan(0)
+        expect(oracle.routeSpecificControls.length, `${surface.id}/${oracle.navItemId} route-specific controls`).toBeGreaterThan(0)
         expect(
           oracle.renderedLandmarks.every((landmark) => landmark.trim().length > 2),
           `${surface.id}/${oracle.navItemId} meaningful landmarks`
+        ).toBe(true)
+        expect(
+          oracle.routeSpecificControls.every((control) => control.trim().length > 2),
+          `${surface.id}/${oracle.navItemId} meaningful route-specific controls`
         ).toBe(true)
       }
       expect(surface.fixturePolicy, `${surface.id} fixture policy`).toBe('test-only')
