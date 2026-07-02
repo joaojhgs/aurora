@@ -756,7 +756,8 @@ describe('Aurora production shell', () => {
                   target: 'local Gateway',
                   dataLeavesDevice: false,
                   summary: 'Read service health from the local Gateway before answering.',
-                  auditId: 'corr-tool-call-001'
+                  auditId: 'corr-tool-call-001',
+                  payloadPreview: { service: 'Gateway', token: '[redacted]' }
                 }
               ]
             }
@@ -773,7 +774,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Orchestrator.ExternalUserInput')
     expect(markup).toContain('Assistant tool call cards')
     expect(markup).toContain('Gateway.GetServices')
-    expect(markup).toContain('Review in Tools')
+    expect(markup).toContain('Payload preview')
+    expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
+    expect(markup).toContain('Approve in Tools')
+    expect(markup).toContain('Deny in Tools')
     expect(markup).toContain('corr-tool-call-001')
     expect(markup).toContain('Voice modes')
     expect(markup).toContain('Browser capture')
@@ -2390,6 +2394,9 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction required')
     expect(markup).toContain('Data egress')
     expect(markup).toContain('audit.mesh.hardware')
+    expect(markup).toContain('Redacted arguments')
+    expect(markup).toContain('Dry run')
+    expect(markup).toContain('Deny')
     expect(markup).toContain('audit-receipt-tool-result')
     expect(markup).toContain('corr-tool-result')
     expect(markup).toContain('local-peer -&gt; tooling-local')

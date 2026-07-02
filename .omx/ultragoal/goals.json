@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T06:40:19.178Z",
+  "updatedAt": "2026-07-02T06:44:15.771Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -143,10 +143,13 @@
       "id": "G012-components-aurora-assistant-tool-cal",
       "title": "`components/aurora/assistant/tool-call-card.tsx`: tool approval/deny...",
       "objective": "`components/aurora/assistant/tool-call-card.tsx`: tool approval/deny UI with payload preview.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T06:44:15.771Z",
+      "startedAt": "2026-07-02T06:41:13.242Z",
+      "completedAt": "2026-07-02T06:44:15.771Z",
+      "evidence": "Assistant inline tool-call cards now expose redacted payload previews plus explicit approve/deny affordances routed to the Tools approval surface; ToolApprovalPanel coverage asserts redacted arguments, dry-run and deny controls. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'tool approval|assistant text chat'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:assistant."
     },
     {
       "id": "G013-components-aurora-mesh-mesh-view-tsx",

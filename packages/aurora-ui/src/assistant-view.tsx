@@ -46,6 +46,7 @@ export interface AssistantToolCallCard {
   dataLeavesDevice: boolean
   summary: string
   auditId: string | null
+  payloadPreview: Record<string, unknown> | null
 }
 
 export interface AssistantUiMessage {
@@ -893,7 +894,8 @@ function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard
     typeof tool.target === 'string' &&
     typeof tool.dataLeavesDevice === 'boolean' &&
     typeof tool.summary === 'string' &&
-    (tool.auditId === null || typeof tool.auditId === 'string')
+    (tool.auditId === null || typeof tool.auditId === 'string') &&
+    (tool.payloadPreview === null || (typeof tool.payloadPreview === 'object' && !Array.isArray(tool.payloadPreview)))
   )
 }
 
@@ -1744,7 +1746,14 @@ function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
         <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
       </dl>
       <p>{tool.summary}</p>
-      <a href="/tools" className="aui-action-chip">Review in Tools</a>
+      <details className="aui-assistant-tool-payload">
+        <summary>Payload preview</summary>
+        <pre>{tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : 'No redacted tool payload was reported by the backend stream.'}</pre>
+      </details>
+      <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
+        <a href="/tools" className="aui-action-chip">Approve in Tools</a>
+        <a href="/tools" className="aui-action-chip">Deny in Tools</a>
+      </div>
     </section>
   )
 }
@@ -1761,7 +1770,11 @@ function assistantToolCallFromUpdate(update: AssistantStreamUpdate): AssistantTo
     target: metadataStringValue(metadata, 'target') ?? metadataStringValue(metadata, 'provider') ?? 'Aurora tool provider',
     dataLeavesDevice: metadataBooleanValue(metadata, 'data_leaves_device') ?? metadataBooleanValue(metadata, 'dataLeavesDevice') ?? false,
     summary: update.text || metadataStringValue(metadata, 'summary') || 'The assistant stream reported a backend tool event; approve or deny through the Tools approval surface.',
-    auditId: update.audit.correlationId ?? null
+    auditId: update.audit.correlationId ?? null,
+    payloadPreview: metadataObjectValue(metadata, 'payload_preview')
+      ?? metadataObjectValue(metadata, 'payloadPreview')
+      ?? metadataObjectValue(metadata, 'redacted_args_preview')
+      ?? metadataObjectValue(metadata, 'argsPreview')
   }
 }
 
@@ -1791,6 +1804,11 @@ function metadataStringValue(metadata: Record<string, unknown>, key: string): st
 function metadataBooleanValue(metadata: Record<string, unknown>, key: string): boolean | null {
   const value = metadata[key]
   return typeof value === 'boolean' ? value : null
+}
+
+function metadataObjectValue(metadata: Record<string, unknown>, key: string): Record<string, unknown> | null {
+  const value = metadata[key]
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
 function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {

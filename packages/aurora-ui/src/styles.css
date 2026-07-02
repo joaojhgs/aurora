@@ -127,6 +127,10 @@ button, input, select, textarea { font: inherit; }
 .aui-assistant-tool-card dt { color: var(--aui-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
 .aui-assistant-tool-card dd { margin: .1rem 0 0; overflow-wrap: anywhere; }
 .aui-assistant-tool-card p { margin: 0; color: var(--aui-muted); }
+.aui-assistant-tool-payload { display: grid; gap: .45rem; }
+.aui-assistant-tool-payload summary { color: var(--aui-primary); cursor: pointer; font-size: .82rem; font-weight: 800; }
+.aui-assistant-tool-payload pre { max-height: 11rem; margin: 0; overflow: auto; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); padding: .65rem; font-size: .78rem; }
+.aui-assistant-tool-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .aui-chat-panel { display: flex; min-width: 0; flex-direction: column; gap: .65rem; overflow: auto; padding: .9rem; }
 .aui-chat-empty { display: grid; min-height: 16rem; place-content: center; gap: .45rem; color: var(--aui-muted); text-align: center; }
 .aui-chat-empty h2 { margin: 0; color: var(--aui-ink); font-size: 1.05rem; }
