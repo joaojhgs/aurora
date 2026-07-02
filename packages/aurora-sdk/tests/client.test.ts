@@ -657,6 +657,123 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('emits deterministic routeable, selectable, disabledReason, and requiredAction outcomes', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: false },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    for (const node of graph.nodes) {
+      expect(typeof node.routeable, `${node.featureId} routeable`).toBe('boolean')
+      expect(node.routeable, `${node.featureId} routeable mirrors selectable providers`).toBe(
+        node.providers.some((provider) => provider.selectable)
+      )
+      expect(node.disabledReason === null || typeof node.disabledReason === 'string', `${node.featureId} disabledReason`).toBe(true)
+      expect(node.requiredAction === null || typeof node.requiredAction === 'string', `${node.featureId} requiredAction`).toBe(true)
+      for (const provider of node.providers) {
+        expect(typeof provider.selectable, `${provider.id} selectable`).toBe('boolean')
+        expect(Array.isArray(provider.disabledReasons), `${provider.id} disabledReasons`).toBe(true)
+        expect(provider.requiredAction === null || typeof provider.requiredAction === 'string', `${provider.id} requiredAction`).toBe(true)
+      }
+    }
+
+    expect(graph.explain('method:Auth.ListTokens')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      routeable: true,
+      disabledReason: null,
+      nextRepairAction: null,
+      selectedProvider: expect.objectContaining({
+        selectable: true,
+        requiredAction: null,
+        disabledReasons: []
+      })
+    }))
+    expect(graph.explain('tool:tool:garage-door')).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      routeable: false,
+      disabledReason: 'policy_denied',
+      nextRepairAction: 'choose a peer/provider',
+      selectedProvider: null
+    }))
+    expect(graph.explain('tool:tool:camera-snapshot')).toEqual(expect.objectContaining({
+      state: 'stale',
+      routeable: false,
+      disabledReason: 'stale',
+      nextRepairAction: 'refresh peer manifest or reconnect provider',
+      selectedProvider: null
+    }))
+    expect(graph.explain('method:Gateway.InternalOnly')).toEqual(expect.objectContaining({
+      state: 'unsupported',
+      routeable: false,
+      disabledReason: 'internal-only over this transport',
+      nextRepairAction: 'use a local/Tauri transport with bus access or expose a backend contract',
+      selectedProvider: null
+    }))
+    expect(graph.explain('native:android:microphoneCapture')).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      routeable: false,
+      disabledReason: 'native permission missing: microphone',
+      nextRepairAction: 'grant required native permission',
+      selectedProvider: null
+    }))
+
+    const selectorCatalog = cloneFixture(capabilityCatalogFixture)
+    const selectorProvider = cloneFixture(selectorCatalog.providers[0]!)
+    selectorProvider.provider_id = 'local:Scheduler'
+    selectorProvider.provider_kind = 'local'
+    selectorProvider.peer_id = null
+    selectorProvider.module = 'Scheduler'
+    selectorProvider.service_instance_id = 'scheduler-local'
+    selectorProvider.eligible = true
+    const selectorAction = cloneFixture(selectorCatalog.actions[0]!)
+    selectorAction.action_id = 'scheduler-local-selector-preference'
+    selectorAction.provider_id = selectorProvider.provider_id
+    selectorAction.provider_kind = selectorProvider.provider_kind
+    selectorAction.peer_id = null
+    selectorAction.service_instance_id = selectorProvider.service_instance_id
+    selectorAction.topic = 'Scheduler.ListJobs'
+    selectorAction.module = 'Scheduler'
+    selectorAction.method = 'ListJobs'
+    selectorAction.bindability = 'available'
+    selectorAction.route_blockers = []
+    selectorAction.policy = {
+      ...selectorAction.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'standard',
+      resource_scope: 'public'
+    }
+    selectorCatalog.providers = [selectorProvider]
+    selectorCatalog.actions = [selectorAction]
+
+    expect(buildCapabilityGraph({
+      catalog: selectorCatalog,
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    }).explain('method:Scheduler.ListJobs')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      routeable: true,
+      disabledReason: null,
+      nextRepairAction: 'confirm the local provider selection before execution',
+      selectedProvider: expect.objectContaining({
+        selectable: true,
+        requiredAction: 'confirm the local provider selection before execution',
+        disabledReasons: []
+      })
+    }))
+  })
+
   it('keeps Android fallback entrypoints selectable independently from assistant-role and microphone blockers', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,

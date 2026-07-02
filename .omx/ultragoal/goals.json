@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:33:58.958Z",
+  "updatedAt": "2026-07-02T10:37:24.343Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1011,10 +1011,12 @@
       "id": "G085-each-route-has-a-deterministic-route",
       "title": "Each route has a deterministic `routeable`, `selectable`, `disabledRe...",
       "objective": "Each route has a deterministic `routeable`, `selectable`, `disabledReason`, and `actionRequired` outcome.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:37:24.343Z",
+      "completedAt": "2026-07-02T10:37:24.343Z",
+      "evidence": "Added SDK capability graph outcome matrix proving every node/candidate exposes deterministic routeable, selectable, disabledReason, and requiredAction/nextRepairAction fields; pinned available-local, privacy-blocked, stale, unsupported, native-permission, and local selector-preference examples. Verified: pnpm --filter @aurora/client test -- -t 'deterministic routeable|policy, selector, stale'; pnpm --filter @aurora/client build; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G086-replace-taurirouteplaceholder-final",
