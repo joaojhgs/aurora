@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:21:22.265Z",
+  "updatedAt": "2026-07-02T08:24:14.892Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -443,10 +443,13 @@
       "id": "G037-web-playwright-could-pass-without-de",
       "title": "web Playwright could pass without desktop-native Tauri evidence;",
       "objective": "web Playwright could pass without desktop-native Tauri evidence;",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T08:24:14.892Z",
+      "startedAt": "2026-07-02T08:21:53.215Z",
+      "completedAt": "2026-07-02T08:24:14.892Z",
+      "evidence": "Added apps/aurora-tauri/src/ci-native-evidence.test.ts and wired apps/aurora-tauri/package.json tauri:smoke:linux to run test:ci-native-evidence after route/assistant/admin/runtime gates. The contract asserts frontend CI invokes tauri:smoke:linux and desktop-native CI still requires cargo check, xvfb tauri dev, eventstream:smoke, and eventstream artifact output, so a web/jsdom route crawl alone no longer satisfies the Linux Tauri smoke script. Verified: pnpm --filter @aurora/tauri-ui test:ci-native-evidence; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui tauri:smoke:linux."
     },
     {
       "id": "G038-a-sidecar-existed-for-build-packagin",
