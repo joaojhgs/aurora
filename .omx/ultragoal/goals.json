@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:34:49.767Z",
+  "updatedAt": "2026-07-02T09:36:33.939Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -826,10 +826,13 @@
       "id": "G069-prefix-logs-consistently",
       "title": "Prefix logs consistently:",
       "objective": "Prefix logs consistently:\n`[vite]` frontend bundler;\n`[tauri]` Rust shell/native commands;\n`[aurora]` Python service logs;\n`[gateway]` health/API readiness if separated.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:36:33.939Z",
+      "startedAt": "2026-07-02T09:34:54.450Z",
+      "completedAt": "2026-07-02T09:36:33.939Z",
+      "evidence": "Standardized controllable Tauri dev log prefixes: apps/aurora-tauri/scripts/tauri-cli.mjs now emits wrapper/Rust-shell bootstrap lines with [tauri]; apps/aurora-tauri/src-tauri/src/lib.rs forwards Python sidecar stdout/stderr as [aurora][stdout] and [aurora][stderr]; apps/aurora-tauri/README.md and docs/TAURI_DESKTOP_BUILD.md document [vite] frontend bundler, [tauri] shell, [aurora][stdout|stderr] Python, and [gateway] explicit readiness probe prefixes. Updated tauri-dev-bootstrap tests. Verification: initial test run caught a doc assertion mismatch, then pnpm --filter @aurora/tauri-ui test:dev-bootstrap passed (4 tests); pnpm --filter @aurora/tauri-ui typecheck passed; uv run python scripts/check_docs.py passed; cargo check --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml passed with pre-existing warnings only."
     },
     {
       "id": "G070-add-clean-shutdown-closing-tauri-ter",

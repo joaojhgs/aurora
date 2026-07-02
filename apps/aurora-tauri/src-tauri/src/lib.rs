@@ -2671,13 +2671,13 @@ where
                     Ok(line) => {
                         let line = redact_sensitive_text(&line);
                         if stderr {
-                            eprintln!("[aurora:python:{stream}] {line}");
+                            eprintln!("[aurora][{stream}] {line}");
                         } else {
-                            println!("[aurora:python:{stream}] {line}");
+                            println!("[aurora][{stream}] {line}");
                         }
                     }
                     Err(error) => {
-                        eprintln!("[aurora:python:{stream}] log reader failed: {error}");
+                        eprintln!("[aurora][{stream}] log reader failed: {error}");
                         break;
                     }
                 }

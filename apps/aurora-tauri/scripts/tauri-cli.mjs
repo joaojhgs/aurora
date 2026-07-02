@@ -11,7 +11,7 @@ const tauriCli = resolve(appDir, 'node_modules', '@tauri-apps', 'cli', 'tauri.js
 const args = process.argv.slice(2)
 
 if (!existsSync(tauriCli)) {
-  console.error(`[aurora:tauri] Tauri CLI not found at ${tauriCli}. Run pnpm install from the repo root.`)
+  console.error(`[tauri] Tauri CLI not found at ${tauriCli}. Run pnpm install from the repo root.`)
   process.exit(1)
 }
 
@@ -36,7 +36,7 @@ child.on('exit', (code, signal) => {
 })
 
 child.on('error', (error) => {
-  console.error(`[aurora:tauri] Failed to launch Tauri CLI: ${error.message}`)
+  console.error(`[tauri] Failed to launch Tauri CLI: ${error.message}`)
   process.exit(1)
 })
 
@@ -61,11 +61,11 @@ function applyDevSidecarDefaults(env) {
 }
 
 function printDevBanner(env) {
-  console.log('[aurora:tauri] dev bootstrap')
-  console.log('[aurora:tauri] real local stack: enabled (Vite + Tauri + Rust-supervised Python sidecar)')
-  console.log(`[aurora:tauri] sidecar program: ${env.AURORA_TAURI_SIDECAR_PROGRAM}`)
-  console.log(`[aurora:tauri] sidecar args: ${env.AURORA_TAURI_SIDECAR_ARGS}`)
-  console.log(`[aurora:tauri] sidecar cwd: ${env.AURORA_TAURI_SIDECAR_CWD}`)
-  console.log(`[aurora:tauri] architecture mode: ${env.AURORA_ARCHITECTURE_MODE}`)
-  console.log(`[aurora:tauri] gateway: ${env.AURORA_GATEWAY_URL}`)
+  console.log('[tauri] dev bootstrap')
+  console.log('[tauri] real local stack: enabled (Vite + Tauri + Rust-supervised Python sidecar)')
+  console.log(`[tauri] sidecar program: ${env.AURORA_TAURI_SIDECAR_PROGRAM}`)
+  console.log(`[tauri] sidecar args: ${env.AURORA_TAURI_SIDECAR_ARGS}`)
+  console.log(`[tauri] sidecar cwd: ${env.AURORA_TAURI_SIDECAR_CWD}`)
+  console.log(`[tauri] architecture mode: ${env.AURORA_ARCHITECTURE_MODE}`)
+  console.log(`[tauri] gateway: ${env.AURORA_GATEWAY_URL}`)
 }

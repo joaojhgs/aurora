@@ -20,9 +20,10 @@ The package wrapper selects `.venv/bin/python` when it exists; otherwise it fall
 
 Dev logging is intentionally unified in the same terminal:
 
-- Vite logs appear from the Tauri CLI dev server.
-- Rust/Tauri logs appear from the desktop shell process.
-- Python Aurora service logs are piped by the Rust sidecar supervisor with `[aurora:python:stdout]` and `[aurora:python:stderr]` prefixes.
+- Vite logs appear from the Tauri CLI dev server and should be labelled `[vite]` when separated by smoke harnesses.
+- Rust/Tauri wrapper and shell logs use the `[tauri]` prefix.
+- Python Aurora service logs are piped by the Rust sidecar supervisor with `[aurora][stdout]` and `[aurora][stderr]` prefixes.
+- Explicit Gateway readiness probes use `[gateway]` when a dev smoke harness separates API health output.
 
 Packaged desktop builds still use the profiled sidecar staging flow described below; the direct Python sidecar path is for local development and diagnostics.
 
