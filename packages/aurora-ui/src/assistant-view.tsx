@@ -903,6 +903,7 @@ function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
     <section className="aui-assistant-runtime-strip" aria-label="Assistant runtime strip">
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
+        <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model evidence'}</dd></div>
         <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
         <div><dt>Sidecar</dt><dd>{health.sidecarHealth}</dd></div>
         <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>

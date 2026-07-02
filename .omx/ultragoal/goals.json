@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T11:46:40.577Z",
+  "updatedAt": "2026-07-02T11:50:05.104Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1231,10 +1231,12 @@
       "id": "G105-states",
       "title": "States:",
       "objective": "States:\nempty first-run;\nno model configured;\nroute selector required;\nstreaming partial;\ntool approval pending;\ntimeout/retry;\ncancellation;\noffline sidecar;\nremote Gateway auth failure.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T11:50:05.104Z",
+      "completedAt": "2026-07-02T11:50:05.104Z",
+      "evidence": "Added Assistant runtime model-state copy and packages/aurora-ui/tests/shell.test.tsx state-matrix regression covering empty first-run, no model configured, route selector required, streaming partial, tool approval pending, retry/cancel controls, cancellation message, offline sidecar, remote Gateway auth failure, timeout/auth/transport-loss error copy. Verified: pnpm --filter @aurora/ui test -- -t 'assistant state matrix'; pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'assistant state matrix|assistant text chat|assistant backend integration boundaries|assistant voice routes|assistant stop capability|stream deltas|cancelled assistant message|attachment drafts'; pnpm --filter @aurora/client test -- -t 'assistant|context|voice|cancellation|ExternalUserInput|Interrupt|timeout|auth'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:assistant; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check."
     },
     {
       "id": "G106-privacy",

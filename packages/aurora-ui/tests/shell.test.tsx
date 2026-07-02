@@ -1251,6 +1251,94 @@ describe('Aurora production shell', () => {
   })
 
 
+
+  it('renders the assistant state matrix for empty, no-model, selector, stream, tool, retry, cancel, offline, and auth states', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const assistantRoute = enabledRoute(route(snapshot, 'assistant'), {
+      providerLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`,
+      selectorRequired: true,
+      explanation: 'Backend requires an explicit route selector before this prompt leaves the composer.'
+    })
+    if (!snapshot.assistantCancellationRoute) throw new Error('missing assistant cancellation route')
+    const cancellationRoute = enabledRoute(snapshot.assistantCancellationRoute, {
+      providerLabel: `local / ${ORCHESTRATOR_METHODS.interrupt}`
+    })
+
+    const emptyMarkup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={assistantRoute}
+        cancellationRoute={cancellationRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        runtimeHealth={{
+          selectedModel: null,
+          routeLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`,
+          sidecarHealth: 'offline sidecar: Python Aurora node not running',
+          gatewayHealth: 'remote Gateway auth failure: 401 Unauthorized'
+        }}
+      />
+    )
+    expect(emptyMarkup).toContain('Start with a prompt')
+    expect(emptyMarkup).toContain('model pending')
+    expect(emptyMarkup).toContain('no model configured / awaiting backend model evidence')
+    expect(emptyMarkup).toContain('<dt>Selector</dt><dd>required</dd>')
+    expect(emptyMarkup).toContain('offline sidecar: Python Aurora node not running')
+    expect(emptyMarkup).toContain('remote Gateway auth failure: 401 Unauthorized')
+
+    const activeMarkup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={assistantRoute}
+        cancellationRoute={cancellationRoute}
+        voiceRoutes={snapshot.assistantVoiceRoutes}
+        initialSession={{
+          sessionId: 'assistant-state-matrix-session',
+          messages: [
+            {
+              id: 'assistant-state-streaming',
+              role: 'assistant',
+              text: 'Streaming partial backend text...',
+              createdAt: '2026-06-21T00:00:00Z',
+              status: 'streaming',
+              toolCalls: [{
+                id: 'tool-call-pending-state',
+                name: 'Tooling.RequestApproval',
+                status: 'requested',
+                riskClass: 'requires-approval',
+                target: 'local tool registry',
+                dataLeavesDevice: false,
+                summary: 'Tool approval pending until the Tools route returns an AdminAction-backed decision.',
+                auditId: null,
+                payloadPreview: { action: 'preview', secret: '[redacted]' }
+              }]
+            },
+            {
+              id: 'assistant-state-cancelled',
+              role: 'assistant',
+              text: 'Stopped by user.',
+              createdAt: '2026-06-21T00:00:01Z',
+              status: 'cancelled'
+            }
+          ]
+        }}
+      />
+    )
+    expect(activeMarkup).toContain('Streaming partial backend text...')
+    expect(activeMarkup).toContain('Assistant tool call cards')
+    expect(activeMarkup).toContain('Tooling.RequestApproval')
+    expect(activeMarkup).toContain('<dt>Status</dt><dd>requested</dd>')
+    expect(activeMarkup).toContain('pending backend receipt')
+    expect(activeMarkup).toContain('Retry last assistant prompt')
+    expect(activeMarkup).toContain('Stop assistant generation')
+    expect(activeMarkup).toContain('Stopped by user.')
+    expect(activeMarkup).toContain('cancelled')
+
+    expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'timed out' }))).toContain('timed out')
+    expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: '401 Unauthorized' }))).toContain('denied by authentication')
+    expect(assistantErrorMessage(new AuroraError({ code: 'transport_loss', message: 'Gateway offline' }))).toContain('stream disconnected')
+  })
+
   it('locks assistant backend integration boundaries for send, stream fallback, cancellation, voice, and context', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
