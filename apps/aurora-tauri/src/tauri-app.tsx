@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminAuditResource,
   AdminDevicesResource,
-  AdminOverviewContent,
   AdminPluginsView,
   AdminRbacResource,
   AdminSchedulerView,
@@ -17,7 +16,6 @@ import {
   ModelsView,
   OnboardingView,
   PairingQueueView,
-  RoutePolicyResource,
   RouteMatrix,
   RoutePolicyResource,
   SettingsPermissionsView,
@@ -27,6 +25,8 @@ import {
   buildShellSnapshot,
   loadingShellSnapshot,
   navItemSnapshot,
+  type AdminRbacAction,
+  type AdminServiceControlAction,
   type AuroraNavItem,
   type AuroraShellSnapshot,
   type RouteAvailability,
@@ -271,6 +271,38 @@ function TauriRouteContent({
     () => snapshot.nativeCapabilities.map((capability) => ({ name: capability.name, enabled: capability.enabled })),
     [snapshot.nativeCapabilities]
   )
+  const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null)
+  const runAdminAction = useCallback(
+    async (action: AdminRbacAction | AdminServiceControlAction) => {
+      setAdminActionStatus(`Submitting ${action.methodId} through AdminAction draft/confirm/audit.`)
+      try {
+        const result = isRbacAction(action)
+          ? await client.admin.execute({
+              methodId: action.methodId,
+              payload: action.payload,
+              reason: action.auditReason,
+              reauthConfirmed: true,
+              affectedResources: action.affectedResources
+            })
+          : await client.admin.execute({
+              methodId: action.methodId,
+              payload: {
+                service_name: action.serviceModule,
+                reason: action.description
+              },
+              reason: action.description,
+              reauthConfirmed: true,
+              phrase: action.requiresTypedPhrase ?? undefined,
+              affectedResources: [`service:${action.serviceModule}`]
+            })
+        setAdminActionStatus(`AdminAction submitted for ${action.methodId}. Audit receipt: ${result.confirmation.audit_receipt}`)
+      } catch (error) {
+        setAdminActionStatus(`AdminAction failed for ${action.methodId}: ${errorMessage(error)}`)
+      }
+    },
+    [client.admin]
+  )
+
   switch (route.item.id) {
     case 'assistant':
       return (
@@ -292,14 +324,19 @@ function TauriRouteContent({
       return <ToolApprovalPanel client={client} route={route} />
     case 'mesh':
       return <MeshPeersResource client={client} route={route} />
-    case 'admin':
-      return <TauriAdminOverviewPage client={client} />
     case 'services':
     case 'contracts':
-      return <AdminServicesResource client={client} />
+      return (
+        <TauriAdminActionPage status={adminActionStatus}>
+          <AdminServicesResource client={client} onPreviewAdminAction={runAdminAction} />
+        </TauriAdminActionPage>
+      )
     case 'access':
-    case 'tokens':
-      return <AdminRbacResource client={client} />
+      return (
+        <TauriAdminActionPage status={adminActionStatus}>
+          <AdminRbacResource client={client} onPreviewAdminAction={runAdminAction} />
+        </TauriAdminActionPage>
+      )
     case 'devices':
       return <AdminDevicesResource client={client} />
     case 'config':
@@ -314,8 +351,6 @@ function TauriRouteContent({
       return <AdminSchedulerView client={client} route={route} />
     case 'audit':
       return <AdminAuditResource client={client} />
-    case 'models':
-      return <ModelsView client={client} />
     case 'settings':
     case 'native':
       return <SettingsPermissionsView snapshot={snapshot} />
@@ -523,16 +558,23 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   );
 }
 
-function routeForPath(
-  snapshot: AuroraShellSnapshot,
-  path: string,
-): RouteAvailability {
-  const normalized = normalizePath(path);
-  const item = itemForPath(normalized) ?? navItems[0]!;
+function TauriAdminActionPage({ children, status }: { children: React.ReactNode; status: string | null }) {
   return (
-    snapshot.routes.find((route) => route.item.id === item.id) ??
-    fallbackRoute(item)
-  );
+    <div className="ata-page-stack">
+      {status ? <p className="aui-message" role="status">{status}</p> : null}
+      {children}
+    </div>
+  )
+}
+
+function isRbacAction(action: AdminRbacAction | AdminServiceControlAction): action is AdminRbacAction {
+  return 'payload' in action
+}
+
+function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailability {
+  const normalized = normalizePath(path)
+  const item = itemForPath(normalized) ?? navItems[0]!
+  return snapshot.routes.find((route) => route.item.id === item.id) ?? fallbackRoute(item)
 }
 
 function itemForPath(path: string): AuroraNavItem | undefined {
@@ -609,4 +651,9 @@ function assistantRoleProbeLabel(
   return status.assistantRole.probeImplemented
     ? "native probe implemented"
     : `probe deferred; role availability unknown; ${status.assistantRole.reason}`;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
