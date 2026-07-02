@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:56:54.490Z",
+  "updatedAt": "2026-07-02T12:58:39.027Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1407,10 +1407,12 @@
       "id": "G121-sensitive-tool-path-shows-approval-u",
       "title": "Sensitive tool path shows approval UI and does not execute directly.",
       "objective": "Sensitive tool path shows approval UI and does not execute directly.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:58:39.027Z",
+      "completedAt": "2026-07-02T12:58:39.027Z",
+      "evidence": "Sensitive/admin/external tool paths now have targeted regression evidence: local admin-critical and remote admin cards show redacted argument approval UI and disabled approval controls, external email shows dry-run/approval UI, unavailable sensitive camera shows approval/unavailable repair state, and none render the safe direct Execute local action. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'sensitive tool|high-risk tools|safe local tool|tool approval'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G122-e2e-covers-catalog-load-search-detai",
