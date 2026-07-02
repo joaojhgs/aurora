@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:48:36.188Z",
+  "updatedAt": "2026-07-02T09:49:18.702Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -886,10 +886,13 @@
       "id": "G074-logs-from-python-tauri-and-vite-are",
       "title": "Logs from Python, Tauri, and Vite are visible in the same terminal wi...",
       "objective": "Logs from Python, Tauri, and Vite are visible in the same terminal with stable prefixes.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:49:18.702Z",
+      "startedAt": "2026-07-02T09:48:52.575Z",
+      "completedAt": "2026-07-02T09:49:18.702Z",
+      "evidence": "Unified log prefixes are locked in current source and docs. apps/aurora-tauri/scripts/tauri-cli.mjs emits [tauri] wrapper/bootstrap lines; apps/aurora-tauri/src-tauri/src/lib.rs forwards sidecar logs with [aurora][stdout]/[aurora][stderr] formatting; apps/aurora-tauri/README.md and docs/TAURI_DESKTOP_BUILD.md document [vite], [tauri], [aurora][stdout], [aurora][stderr], and [gateway]. Verified pnpm --filter @aurora/tauri-ui test:dev-bootstrap; cargo check --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml (pre-existing Rust warnings only); uv run python scripts/check_docs.py; static unified log prefix assertions passed."
     },
     {
       "id": "G075-sidecar-status-in-ui-is-backed-by-ac",
