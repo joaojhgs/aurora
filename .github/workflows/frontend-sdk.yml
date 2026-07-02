@@ -70,6 +70,7 @@ jobs:
           pnpm --filter @aurora/tauri-ui test:e2e:assistant
           pnpm --filter @aurora/tauri-ui test:e2e:admin
           pnpm --filter @aurora/tauri-ui test:e2e:runtime
+          pnpm --filter @aurora/tauri-ui test:e2e:outcomes
           pnpm --filter @aurora/tauri-ui tauri:smoke:linux
           pnpm --filter @aurora/tauri-ui typecheck
           pnpm --filter @aurora/tauri-ui build

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T08:58:58.070Z",
+  "updatedAt": "2026-07-02T09:04:20.540Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -563,10 +563,13 @@
       "id": "G047-tests-prove-user-outcomes-real-navig",
       "title": "Tests prove user outcomes: real navigation, real calls, real state tr...",
       "objective": "Tests prove user outcomes: real navigation, real calls, real state transitions, real errors, real screenshots, not just TypeScript/Cargo/build success.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:04:20.540Z",
+      "startedAt": "2026-07-02T08:59:18.350Z",
+      "completedAt": "2026-07-02T09:04:20.540Z",
+      "evidence": "Added pnpm --filter @aurora/tauri-ui test:e2e:outcomes as a Linux-safe user-outcome gate. It mounts AuroraTauriApp with an injected AuroraClient runtime, waits for SDK-backed shell state, records Gateway.GetCapabilityCatalog/Gateway.GetRegistry/Auth.MeshListPeers requests, follows the real /mesh shell navigation link, verifies visible Gateway error fallback state, and writes static HTML review artifacts under apps/aurora-tauri/reports/e2e-outcomes/. Wired the gate into tauri:smoke:linux, frontend-sdk CI, apps/aurora-tauri README, and docs/CI_CD with an explicit note that static HTML artifacts are not a substitute for later desktop/WebView screenshot evidence. Verified pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:outcomes; pnpm --filter @aurora/tauri-ui tauri:smoke:linux; uv run python scripts/check_docs.py."
     },
     {
       "id": "G048-lane-a-shell-design-system-route-mou",

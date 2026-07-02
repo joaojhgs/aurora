@@ -1,8 +1,13 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AuroraClient, AuroraError, MockAuroraTransport, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
-import { AuroraTauriApp, tauriRouteRegistryRouteIds } from './tauri-app'
+import { AuroraTauriApp, tauriRouteRegistryRouteIds, type AuroraTauriRuntime } from './tauri-app'
 
 const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 
@@ -37,6 +42,91 @@ const runtimeRouteIds = new Set([
   'data',
   'native',
 ])
+
+class RecordingMockAuroraTransport extends MockAuroraTransport {
+  readonly requests: AuroraTransportRequest[] = []
+
+  override async request<TData = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>,
+  ) {
+    this.requests.push(request)
+    return super.request<TData, TPayload>(request)
+  }
+}
+
+function testRuntime(client: AuroraClient): AuroraTauriRuntime {
+  return {
+    client,
+    mode: 'mock',
+    sidecarStatus: async () => null,
+    startSidecar: async () => null,
+    stopSidecar: async () => null,
+    nativePermissionStatus: async () => null,
+    trayStatus: async () => null,
+    notificationStatus: async () => null,
+    iosVoiceStatus: async () => null,
+    iosInvocationStatus: async () => null,
+    iosLocalLightInferenceStatus: async () => null,
+    iosBackgroundStatus: async () => null,
+    dialogStatus: async () => null,
+    audioBridgeStatus: async () => null,
+    iosSecureStorageStatus: async () => null,
+    iosBiometricStatus: async () => null,
+    androidBaselineStatus: async () => null,
+    shutdown: async () => undefined,
+  }
+}
+
+async function mountOutcomeApp(runtime: AuroraTauriRuntime) {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(<AuroraTauriApp runtimeOverride={runtime} />)
+    await flushReactWork()
+  })
+  return { container, root }
+}
+
+async function flushReactWork() {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+async function waitUntil(assertion: () => void) {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await act(async () => {
+        await flushReactWork()
+      })
+    }
+  }
+  throw lastError
+}
+
+async function navigateByHref(container: HTMLElement, href: string) {
+  const link = Array.from(container.querySelectorAll<HTMLAnchorElement>(`a[href="${href}"]`))[0]
+  expect(link, `navigation link for ${href}`).toBeDefined()
+  await act(async () => {
+    link!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushReactWork()
+  })
+}
+
+function requestMethods(transport: RecordingMockAuroraTransport): string[] {
+  return transport.requests.map((request) => request.method)
+}
+
+function writeOutcomeArtifact(name: string, html: string) {
+  const reportDir = join(process.cwd(), 'reports', 'e2e-outcomes')
+  mkdirSync(reportDir, { recursive: true })
+  writeFileSync(join(reportDir, `${name}.html`), html)
+}
 
 function renderTauriRoute(href: string) {
   vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
@@ -298,6 +388,60 @@ describe('Tauri CI/E2E route gates', () => {
       if (route.id !== 'data') {
         expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
       }
+    }
+  })
+
+  it('e2e:outcomes drives real navigation, SDK calls, visible errors, and render artifacts', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    const runtime = testRuntime(new AuroraClient({ transport }))
+    window.history.replaceState({}, '', '/')
+
+    const { container, root } = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain('Prompt')
+        expect(requestMethods(transport)).toContain('Gateway.GetCapabilityCatalog')
+        expect(requestMethods(transport)).toContain('Gateway.GetRegistry')
+      })
+      expect(container.querySelector('[aria-label="Primary navigation"]')).not.toBeNull()
+      expect(container.querySelector('[aria-label="Aurora shell status"]')?.textContent).toContain('Health')
+      writeOutcomeArtifact('assistant-loaded', container.innerHTML)
+
+      await navigateByHref(container, '/mesh')
+      await waitUntil(() => {
+        expect(window.location.pathname).toBe('/mesh')
+        expect(container.textContent).toContain('Mesh')
+        expect(requestMethods(transport)).toContain('Auth.MeshListPeers')
+      })
+      expect(container.textContent).toContain('trust')
+      writeOutcomeArtifact('mesh-after-navigation', container.innerHTML)
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+
+    const failingTransport = new RecordingMockAuroraTransport()
+    failingTransport.register('Gateway.GetCapabilityCatalog', () => {
+      throw new AuroraError({
+        code: 'transport_loss',
+        message: 'Gateway unavailable for outcome test',
+        method: 'Gateway.GetCapabilityCatalog',
+      })
+    })
+    const failingRuntime = testRuntime(new AuroraClient({ transport: failingTransport }))
+    window.history.replaceState({}, '', '/')
+
+    const failure = await mountOutcomeApp(failingRuntime)
+    try {
+      await waitUntil(() => {
+        expect(failure.container.textContent).toContain('Aurora unavailable')
+        expect(failure.container.textContent).toContain('Capability state could not be loaded from AuroraClient.')
+      })
+      expect(requestMethods(failingTransport)).toContain('Gateway.GetCapabilityCatalog')
+      writeOutcomeArtifact('gateway-error-visible', failure.container.innerHTML)
+    } finally {
+      await act(async () => failure.root.unmount())
+      failure.container.remove()
     }
   })
 })

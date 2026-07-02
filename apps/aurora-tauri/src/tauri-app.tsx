@@ -45,7 +45,7 @@ import type {
 import { createAuroraTauriRuntime } from "./aurora-client";
 
 const navItems = auroraNavSections.flatMap((section) => section.items)
-type AuroraTauriRuntime = ReturnType<typeof createAuroraTauriRuntime>
+export type AuroraTauriRuntime = ReturnType<typeof createAuroraTauriRuntime>
 type AuroraTauriClient = AuroraTauriRuntime['client']
 type TauriRouteRenderer = (input: {
   route: RouteAvailability
@@ -102,8 +102,8 @@ export const tauriRouteRegistry: Record<string, TauriRouteRenderer> = {
 
 export const tauriRouteRegistryRouteIds = Object.freeze(Object.keys(tauriRouteRegistry))
 
-export function AuroraTauriApp() {
-  const runtime = useMemo(() => createAuroraTauriRuntime(), []);
+export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTauriRuntime } = {}) {
+  const runtime = useMemo(() => runtimeOverride ?? createAuroraTauriRuntime(), [runtimeOverride]);
   const [snapshot, setSnapshot] =
     useState<AuroraShellSnapshot>(loadingShellSnapshot);
   const [currentPath, setCurrentPath] = useState(() => currentBrowserPath());

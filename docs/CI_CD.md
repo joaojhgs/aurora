@@ -43,6 +43,7 @@ pnpm --filter @aurora/tauri-ui test:e2e:routes
 pnpm --filter @aurora/tauri-ui test:e2e:assistant
 pnpm --filter @aurora/tauri-ui test:e2e:admin
 pnpm --filter @aurora/tauri-ui test:e2e:runtime
+pnpm --filter @aurora/tauri-ui test:e2e:outcomes
 pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 
 # Tauri desktop profiles
@@ -66,6 +67,7 @@ The repository no longer keeps one-off issue-specific gate generator workflows f
 ## Artifact policy
 
 - Normal test evidence goes under package-local `reports/`, `tests/**/reports/`, or `.artifacts/**`.
+- `@aurora/tauri-ui` outcome E2E writes static route render artifacts under `apps/aurora-tauri/reports/e2e-outcomes/`; these are CI review artifacts, not a substitute for later desktop/WebView screenshot smoke.
 - `.omx/**` is reserved for agent/workflow state, not CI artifacts.
 - CI may upload redacted reports and support bundles; it must not upload raw tokens, Redis URLs, API keys, unredacted mesh credentials, raw audio, or raw RAG records.
 

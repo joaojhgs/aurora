@@ -46,8 +46,11 @@ pnpm --filter @aurora/tauri-ui test:e2e:routes
 pnpm --filter @aurora/tauri-ui test:e2e:assistant
 pnpm --filter @aurora/tauri-ui test:e2e:admin
 pnpm --filter @aurora/tauri-ui test:e2e:runtime
+pnpm --filter @aurora/tauri-ui test:e2e:outcomes
 pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 ```
+
+`test:e2e:outcomes` mounts the Tauri shell in jsdom, waits for AuroraClient-backed state, follows real shell navigation, records invoked backend method names, verifies visible SDK error states, and writes static HTML review artifacts to `apps/aurora-tauri/reports/e2e-outcomes/`. It is a Linux-safe outcome gate, not a replacement for final desktop/WebView screenshot evidence.
 
 `tauri:smoke:linux` is a deterministic headless aggregate of the route gates above. It does not launch a desktop webview and does not replace `pnpm --filter @aurora/tauri-ui tauri dev` or the platform-specific Android/iOS/native smoke checks.
 
