@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AdminAuditResource,
   AdminDevicesResource,
@@ -276,15 +276,18 @@ function TauriRouteContent({
     async (action: AdminRbacAction | AdminServiceControlAction) => {
       setAdminActionStatus(`Submitting ${action.methodId} through AdminAction draft/confirm/audit.`)
       try {
-        const result = isRbacAction(action)
-          ? await client.admin.execute({
-              methodId: action.methodId,
-              payload: action.payload,
-              reason: action.auditReason,
-              reauthConfirmed: true,
-              affectedResources: action.affectedResources
-            })
-          : await client.admin.execute({
+        if (isRbacAction(action)) {
+          const result = await client.admin.execute({
+            methodId: action.methodId,
+            payload: action.payload,
+            reason: action.auditReason,
+            reauthConfirmed: true,
+            affectedResources: action.affectedResources
+          })
+          setAdminActionStatus(`AdminAction submitted for ${action.methodId}. Audit receipt: ${result.confirmation.audit_receipt}`)
+          return
+        }
+        const executeInput: Parameters<typeof client.admin.execute>[0] = {
               methodId: action.methodId,
               payload: {
                 service_name: action.serviceModule,
@@ -292,9 +295,10 @@ function TauriRouteContent({
               },
               reason: action.description,
               reauthConfirmed: true,
-              phrase: action.requiresTypedPhrase ?? undefined,
               affectedResources: [`service:${action.serviceModule}`]
-            })
+        }
+        if (action.requiresTypedPhrase) executeInput.phrase = action.requiresTypedPhrase
+        const result = await client.admin.execute(executeInput)
         setAdminActionStatus(`AdminAction submitted for ${action.methodId}. Audit receipt: ${result.confirmation.audit_receipt}`)
       } catch (error) {
         setAdminActionStatus(`AdminAction failed for ${action.methodId}: ${errorMessage(error)}`)
@@ -558,7 +562,7 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   );
 }
 
-function TauriAdminActionPage({ children, status }: { children: React.ReactNode; status: string | null }) {
+function TauriAdminActionPage({ children, status }: { children: ReactNode; status: string | null }) {
   return (
     <div className="ata-page-stack">
       {status ? <p className="aui-message" role="status">{status}</p> : null}
