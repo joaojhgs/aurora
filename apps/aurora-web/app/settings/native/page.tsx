@@ -3,5 +3,5 @@ import { getShellSnapshot } from '../../shell-state'
 
 export default async function Page() {
   const snapshot = await getShellSnapshot()
-  return <SettingsPermissionsView snapshot={snapshot} />
+  return <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
 }

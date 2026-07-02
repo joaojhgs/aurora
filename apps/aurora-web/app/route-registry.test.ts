@@ -50,7 +50,8 @@ describe('Aurora web route registry', () => {
       { href: '/admin/services', expected: 'AdminServicesClientPage' },
       { href: '/admin/contracts', expected: 'AdminServicesClientPage' },
       { href: '/admin/tokens', expected: 'AdminTokensClientPage' },
-      { href: '/memory/policy', expected: 'DataPolicyClientPage' }
+      { href: '/memory/policy', expected: 'DataPolicyClientPage' },
+      { href: '/settings/native', expected: 'surface="native"' }
     ]
     const forbidden = /will use|will render|follow-up task|downstream UI task wires|placeholder|debug-dashboard|route dump/i
 
