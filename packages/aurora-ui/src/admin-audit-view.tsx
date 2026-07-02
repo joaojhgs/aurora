@@ -29,6 +29,7 @@ export interface AdminAuditFilters {
   peerOrProvider: string
   routePath: string
   approvalMode: string
+  status: string
   toolId: string
   dataNamespace: string
   audioSessionId: string
@@ -96,6 +97,7 @@ const emptyFilters: AdminAuditFilters = {
   peerOrProvider: '',
   routePath: '',
   approvalMode: 'all',
+  status: 'all',
   toolId: '',
   dataNamespace: '',
   audioSessionId: '',
@@ -399,6 +401,21 @@ function AuditFilters({
           <option value="dry_run">Dry-run</option>
         </select>
       </label>
+      <label>
+        <span>Result</span>
+        <select value={filters.status} onChange={(event) => update('status', event.currentTarget.value)}>
+          <option value="all">All results</option>
+          <option value="requested">Requested</option>
+          <option value="approved">Approved</option>
+          <option value="executed">Executed</option>
+          <option value="denied">Denied</option>
+          <option value="failed">Failed</option>
+          <option value="token-expired">Token expired</option>
+          <option value="replay-rejected">Replay rejected</option>
+          <option value="dry-run">Dry-run</option>
+          <option value="recorded">Recorded</option>
+        </select>
+      </label>
       <FilterInput label="Tool ID" value={filters.toolId} onChange={(value) => update('toolId', value)} />
       <FilterInput label="Data namespace" value={filters.dataNamespace} onChange={(value) => update('dataNamespace', value)} />
       <FilterInput label="Audio session" value={filters.audioSessionId} onChange={(value) => update('audioSessionId', value)} />
@@ -555,7 +572,8 @@ function normalizeFilters(filters: Partial<AdminAuditFilters>): AdminAuditFilter
     ...emptyFilters,
     ...filters,
     event: filters.event && filters.event.trim() ? filters.event : 'all',
-    approvalMode: filters.approvalMode && filters.approvalMode.trim() ? filters.approvalMode : 'all'
+    approvalMode: filters.approvalMode && filters.approvalMode.trim() ? filters.approvalMode : 'all',
+    status: filters.status && filters.status.trim() ? filters.status : 'all'
   }
 }
 
@@ -596,6 +614,7 @@ function rowMatchesFilters(row: AdminAuditRow, filters: AdminAuditFilters): bool
   ]
   if (filters.event !== 'all' && !contains(row.event, filters.event)) return false
   if (filters.approvalMode !== 'all' && !contains(row.approvalMode, filters.approvalMode)) return false
+  if (filters.status !== 'all' && row.status !== filters.status) return false
   return checks.every(([needle, haystack]) => !needle.trim() || contains(haystack, needle))
 }
 
@@ -606,6 +625,7 @@ function unsupportedFilterWarnings(filters: AdminAuditFilters, backendFilter: Au
   if (filters.audioSessionId.trim()) warnings.push('Audio session is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.schedulerJobId.trim()) warnings.push('Scheduler job is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.denialReason.trim()) warnings.push('Denial reason is filtered from redacted audit detail fields after Auth.AuditLog returns.')
+  if (filters.status !== 'all') warnings.push('Result is filtered from normalized audit status after Auth.AuditLog returns.')
   if (filters.peerOrProvider.trim()) warnings.push('Peer/provider is filtered from returned audit rows to avoid over-constraining backend peer_id/provider_id filters.')
   return warnings
 }

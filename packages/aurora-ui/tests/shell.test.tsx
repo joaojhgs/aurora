@@ -1599,6 +1599,8 @@ describe('Aurora production shell', () => {
     expect(snapshot.rows.some((row) => row.audioSessionId === 'audio-session-77')).toBe(true)
     expect(snapshot.rows.some((row) => row.schedulerJobId === 'job-nightly-sync')).toBe(true)
     expect(markup).toContain('Audit log')
+    expect(markup).toContain('Result')
+    expect(markup).toContain('Replay rejected')
     expect(markup).toContain('Redacted payload preview')
     expect(markup).toContain('mesh://peer-studio/Tooling.ExecuteTool')
     expect(markup).toContain('receipt-scheduler-001')
@@ -1631,10 +1633,12 @@ describe('Aurora production shell', () => {
 
     const deniedSnapshot = await buildAdminAuditSnapshot(client, {
       toolId: 'tool:studio:shell.exec',
-      denialReason: 'policy_denied'
+      denialReason: 'policy_denied',
+      status: 'denied'
     })
     expect(deniedSnapshot.rows).toHaveLength(1)
     expect(deniedSnapshot.rows[0]?.status).toBe('denied')
+    expect(deniedSnapshot.warnings.join(' ')).toContain('Result is filtered')
     expect(renderToStaticMarkup(<AdminAuditView snapshot={deniedSnapshot} />)).toContain('policy_denied')
   })
 
@@ -3763,6 +3767,7 @@ function auditLoadingSnapshot() {
       peerOrProvider: '',
       routePath: '',
       approvalMode: 'all',
+      status: 'all',
       toolId: '',
       dataNamespace: '',
       audioSessionId: '',
