@@ -414,8 +414,9 @@ function ToolApprovalCard({
     ?? tool.providers.find((provider) => provider.selectable)
     ?? tool.providers[0]
   const selectorMissing = tool.providerSelectorRequired && !selectedProviderId && tool.providers.length > 1
+  const adminActionPending = tool.requiresAdminAction && tool.state !== 'approved' && tool.state !== 'executed'
   const blocked = routeDisabled || tool.state === 'unavailable' || tool.state === 'denied' || tool.state === 'expired' || tool.state === 'replay-rejected'
-  const approveDisabled = blocked || selectorMissing || tool.state === 'dry-run-only'
+  const approveDisabled = blocked || selectorMissing || adminActionPending || tool.state === 'dry-run-only'
   const dryRunDisabled = blocked || selectorMissing || !tool.dryRunSupported
   const denyDisabled = blocked || selectorMissing
   const adminLabel = tool.requiresAdminAction ? 'AdminAction required' : 'tool approval'
@@ -691,6 +692,7 @@ function stateCopy(tool: ToolApprovalCardModel): string {
   if (tool.state === 'replay-rejected') return `Replay rejected: ${tool.denialReason ?? 'backend replay protection blocked it'}.`
   if (tool.state === 'unavailable') return `Unavailable: ${tool.disabledReason ?? 'service unavailable'}.`
   if (tool.state === 'executed') return 'Tool result includes audit and correlation evidence.'
+  if (tool.requiresAdminAction) return 'AdminAction confirmation required before approval or execution.'
   if (tool.approvalRequired) return 'Approval required before execution.'
   return 'No approval required by current backend policy.'
 }

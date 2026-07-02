@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:44:16.494Z",
+  "updatedAt": "2026-07-02T12:47:09.722Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1363,10 +1363,12 @@
       "id": "G117-keep-high-risk-tools-disabled-until",
       "title": "Keep high-risk tools disabled until consent/AdminAction confirmed.",
       "objective": "Keep high-risk tools disabled until consent/AdminAction confirmed.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:47:09.722Z",
+      "completedAt": "2026-07-02T12:47:09.722Z",
+      "evidence": "High-risk/admin tool approval controls now remain disabled until backend/AdminAction confirmation evidence exists, while denial and supported dry-run remain available. UI status copy explicitly says AdminAction confirmation is required before approval or execution. Added regression for local admin-critical config write and remote admin garage door tools. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'high-risk tools|tool approval'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G118-avoid-presenting-unavailable-tooling",

@@ -3385,6 +3385,23 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('disabled=""')
   })
 
+  it('keeps high-risk tools disabled until AdminAction confirmation exists', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const toolsRoute = enabledRoute(route(snapshot, 'tools'))
+    const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
+    const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
+    const localConfigCard = markup.slice(markup.indexOf('Write local config file'), markup.indexOf('Open garage door'))
+    const garageDoorCard = markup.slice(markup.indexOf('Open garage door'), markup.indexOf('Search notes'))
+
+    expect(localConfigCard).toContain('AdminAction confirmation required before approval or execution.')
+    expect(localConfigCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve once/)
+    expect(localConfigCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve session/)
+    expect(garageDoorCard).toContain('AdminAction confirmation required before approval or execution.')
+    expect(garageDoorCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve peer/)
+    expect(markup).toContain('Dry-run only until backend policy permits execution.')
+  })
+
   it('keeps tool approval unavailable when the route is capability-blocked', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
