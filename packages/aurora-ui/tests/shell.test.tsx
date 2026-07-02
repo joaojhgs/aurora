@@ -429,6 +429,46 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Providers')
   })
 
+  it('keeps local selector-required routes clickable with route-selection UX', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => localSelectorRequiredRouteCatalog())
+    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+
+    const scheduler = route(snapshot, 'scheduler')
+    expect(scheduler).toEqual(expect.objectContaining({
+      state: 'available-local',
+      selectorRequired: true,
+      routeable: true,
+      disabled: false
+    }))
+    expect(scheduler.repairActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'configure-route',
+        label: 'Configure route',
+        disabled: false
+      })
+    ]))
+    expect(scheduler.candidateProviders).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        state: 'available-local',
+        selectable: true,
+        requiredAction: 'confirm the local provider selection before execution'
+      })
+    ]))
+
+    const markup = renderToStaticMarkup(
+      <AppShell snapshot={snapshot} currentPath="/admin/scheduler">
+        <RouteMatrix routes={[scheduler]} />
+      </AppShell>
+    )
+    expect(markup).toContain('href="/admin/scheduler"')
+    expect(markup).toContain('aria-current="page"')
+    expect(markup).not.toContain('href="/admin/scheduler" class="active" aria-current="page" aria-disabled="true"')
+    expect(markup).toContain('Selector</dt><dd>required')
+    expect(markup).toContain('Configure route')
+    expect(markup).toContain('confirm the local provider selection before execution')
+  })
+
   it('keeps SDK errors visible as disabled shell state', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
 
@@ -3789,6 +3829,32 @@ function stateMatrixCatalog(): CapabilityCatalogResponse {
       policy: { ...baseAction.policy, required_permissions: ['DB.use'] }
     })
   ]
+  return catalog
+}
+
+function localSelectorRequiredRouteCatalog(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(capabilityGraphCatalogFixture)
+  catalog.actions = catalog.actions.map((entry) => {
+    if (entry.module !== 'Scheduler' || entry.method !== 'ListJobs' || entry.provider_kind !== 'local') {
+      return entry
+    }
+    return {
+      ...entry,
+      action_id: 'scheduler-list-local-selector-required',
+      bindability: 'available',
+      route_blockers: [],
+      policy: {
+        ...entry.policy,
+        explicit_selector_required: true,
+        selector_required: true,
+        consent_required: false,
+        privacy_indicator_required: false,
+        approval_required: false,
+        denial_reasons: []
+      },
+      summary: 'Local scheduler list route requires explicit local provider confirmation, not a hard block.'
+    }
+  })
   return catalog
 }
 

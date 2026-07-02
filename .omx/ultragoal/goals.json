@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T10:02:03.055Z",
+  "updatedAt": "2026-07-02T10:06:53.193Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -934,10 +934,12 @@
       "id": "G078-ensure-local-selector-required-route",
       "title": "Ensure local selector-required routes remain clickable and show route...",
       "objective": "Ensure local selector-required routes remain clickable and show route-selection UX, not hard blocked status.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T10:06:53.193Z",
+      "completedAt": "2026-07-02T10:06:53.193Z",
+      "evidence": "Added shell-level regression for local selector-required route clickability: a mocked local Scheduler.ListJobs capability requires explicit selector but stays available-local, routeable, disabled=false, with Configure route repair action and provider candidate requiredAction 'confirm the local provider selection before execution'. Rendered AppShell/RouteMatrix verifies /admin/scheduler link remains current/clickable without aria-disabled and route-card UX shows Selector required, Configure route, and local provider confirmation copy. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'local selector-required routes|keeps local selector|RouteSheet selector'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:routes."
     },
     {
       "id": "G079-ensure-remote-personal-sensitive-rou",
