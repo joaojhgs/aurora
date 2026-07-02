@@ -45,6 +45,7 @@ import {
   AdminPluginsView,
   AdminServicesView,
   AdminRbacView,
+  AdminTokensView,
   AdminDevicesView,
   AdminAuditView,
   AdminSchedulerView,
@@ -65,12 +66,14 @@ import {
   buildAdminServicesSnapshot,
   buildAdminPluginsSnapshot,
   buildAdminRbacSnapshot,
+  buildAdminTokensSnapshot,
   buildAdminDevicesSnapshot,
   buildAdminAuditSnapshot,
   buildAdminSchedulerSnapshot,
   buildAuditExport,
   buildDeviceDeleteAdminAction,
   buildRbacPermissionPatchAction,
+  buildTokenRevokeAdminAction,
   buildOnboardingViewModel,
   buildPairingAdminActionRequest,
   buildPairingQueueModel,
@@ -1669,6 +1672,84 @@ describe('Aurora production shell', () => {
       />
     )
     expect(degradedMarkup).toContain('partial redacted detail fields')
+  })
+
+
+  it('wires scoped tokens, one-time reveal rules, and revoke AdminAction evidence from AuroraClient', async () => {
+    const snapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(<AdminTokensView snapshot={snapshot} />)
+
+    expect(snapshot.loadState).toBe('ready')
+    expect(snapshot.tokens.map((token) => token.prefix)).toContain('aur_stu')
+    expect(snapshot.tokens.some((token) => token.revokeAction?.methodId === 'Auth.RevokeToken')).toBe(true)
+    expect(markup).toContain('Tokens')
+    expect(markup).toContain('One-time reveal only')
+    expect(markup).toContain('Create token unavailable')
+    expect(markup).toContain('Auth.CreateToken is not exposed')
+    expect(markup).toContain('Scoped token inventory')
+    expect(markup).toContain('prefix only; secret redacted')
+    expect(markup).toContain('AdminAction approval')
+    expect(markup).not.toContain('secret-token')
+    expect(markup).not.toMatch(/aur_[a-z]+[A-Za-z0-9]{12,}/)
+  })
+
+  it('builds token revoke mutations as AdminAction requests without secret payloads', async () => {
+    const snapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const token = snapshot.tokens.find((row) => row.id === 'token-studio-mac-active')
+    expect(token).toBeTruthy()
+
+    const action = buildTokenRevokeAdminAction(token!, 'rotate exposed workstation token')
+    expect(action.methodId).toBe('Auth.RevokeToken')
+    expect(action.payload).toEqual({ token_id: 'token-studio-mac-active' })
+    expect(action.reason).toBe('rotate exposed workstation token')
+    expect(action.requiresAdminAction).toBe(true)
+    expect(JSON.stringify(action)).not.toContain('secret')
+  })
+
+  it('renders token loading, empty, denied, degraded, and unavailable states', async () => {
+    const loadingMarkup = renderToStaticMarkup(<AdminTokensView snapshot={{
+      loadState: 'loading',
+      tokens: [],
+      listState: 'pending',
+      listReason: 'Loading Auth.ListTokens and token capability evidence through AuroraClient.',
+      revokeState: 'pending',
+      revokeReason: 'Loading Auth.RevokeToken capability evidence through AuroraClient.',
+      createState: 'unsupported',
+      createReason: 'Auth.CreateToken is not exposed by the SDK/contracts in this checkout; creation remains a disabled preview.',
+      secretsRedacted: true,
+      warnings: [],
+      error: null,
+      evidenceSource: 'pending AuroraClient SDK calls'
+    }} />)
+    expect(loadingMarkup).toContain('Loading token metadata')
+
+    const emptyTransport = new MockAuroraTransport()
+    emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
+    const emptySnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: emptyTransport }))
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={emptySnapshot} />)).toContain('No scoped tokens')
+
+    const deniedTransport = new MockAuroraTransport()
+    deniedTransport.fail('Auth.ListTokens', 'permission', 'token access denied')
+    const deniedSnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: deniedTransport }))
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={deniedSnapshot} />)).toContain('token access denied')
+
+    const degradedTransport = new MockAuroraTransport()
+    degradedTransport.lose('Gateway.GetCapabilityCatalog', 'token capability catalog unavailable')
+    const degradedSnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: degradedTransport }))
+    expect(degradedSnapshot.loadState).toBe('degraded')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={degradedSnapshot} />)).toContain('token capability catalog unavailable')
+
+    const unavailableSnapshot = await buildAdminTokensSnapshot(
+      new AuroraClient({
+        transport: MockAuroraTransport.empty()
+          .lose('Auth.ListTokens')
+          .lose('Gateway.GetCapabilityCatalog')
+      })
+    )
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={unavailableSnapshot} />)).toContain('Auth token SDK resources are unavailable')
   })
 
   it('wires device/session management from AuroraClient Auth resources', async () => {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:05:11.883Z",
+  "updatedAt": "2026-07-02T07:11:01.506Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -215,10 +215,13 @@
       "id": "G018-components-aurora-admin-tokens-view",
       "title": "`components/aurora/admin/tokens-view.tsx`: scoped tokens, create/revo...",
       "objective": "`components/aurora/admin/tokens-view.tsx`: scoped tokens, create/revoke/copy flows, stats.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:11:01.506Z",
+      "startedAt": "2026-07-02T07:05:40.820Z",
+      "completedAt": "2026-07-02T07:11:01.506Z",
+      "evidence": "Admin tokens now has a dedicated production route mounted at /admin/tokens with SDK-backed Auth.ListTokens metadata, redacted prefix-only inventory, disabled Auth.CreateToken preview, and Auth.RevokeToken AdminAction previews. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'token'; pnpm --filter @aurora/ui test; pnpm --filter @aurora/tauri-ui test:e2e:admin."
     },
     {
       "id": "G019-components-aurora-admin-devices-view",

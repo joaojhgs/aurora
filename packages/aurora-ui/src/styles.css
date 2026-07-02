@@ -700,7 +700,7 @@ button, input, select, textarea { font: inherit; }
   .aui-admin-gap-list .aui-badge { width: fit-content; }
 }
 
-.aui-admin-services, .aui-admin-scheduler { display: grid; gap: 1rem; }
+.aui-admin-services, .aui-admin-scheduler, .aui-admin-tokens { display: grid; gap: 1rem; }
 .aui-admin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .aui-admin-header h1 { margin: .15rem 0 0; font-size: clamp(1.7rem, 3vw, 2.55rem); line-height: 1.08; }
 .aui-admin-header p { max-width: 54rem; margin: .55rem 0 0; color: var(--aui-muted); line-height: 1.55; }
@@ -751,6 +751,12 @@ button, input, select, textarea { font: inherit; }
 .aui-icon-actions { display: flex; justify-content: flex-end; gap: .35rem; }
 .aui-icon-actions button { display: inline-grid; width: 2.2rem; height: 2.2rem; place-items: center; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-primary); }
 .aui-icon-actions button:disabled { cursor: not-allowed; color: var(--aui-muted); opacity: .58; }
+.aui-token-create-preview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; padding: .9rem; }
+.aui-token-create-preview p { margin: .25rem 0 0; color: var(--aui-muted); line-height: 1.4; }
+.aui-token-status { display: inline-flex; border-radius: 999px; padding: .12rem .45rem; font-size: .74rem; font-weight: 750; text-transform: uppercase; }
+.aui-token-active { background: color-mix(in srgb, var(--aui-success) 12%, white); color: var(--aui-success); }
+.aui-token-expiring { background: color-mix(in srgb, var(--aui-warning) 12%, white); color: var(--aui-warning); }
+.aui-token-expired { background: color-mix(in srgb, var(--aui-danger) 12%, white); color: var(--aui-danger); }
 .aui-method-manage, .aui-privacy-admin-critical, .aui-backend-internal-only, .aui-backend-missing-capability { color: var(--aui-danger); }
 .aui-exposure-internal { color: var(--aui-warning); }
 .aui-backend-http, .aui-backend-gateway-builtin { color: var(--aui-success); }
