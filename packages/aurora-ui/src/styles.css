@@ -303,6 +303,13 @@ button, input, select, textarea { font: inherit; }
 .aui-tool-section-heading h2 svg { flex: 0 0 auto; color: var(--aui-primary); }
 .aui-tool-section-heading .aui-kicker { margin: 0; }
 .aui-tool-section-heading .aui-action-chip { flex: 0 0 auto; }
+.aui-tool-filters { display: grid; gap: .65rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: var(--aui-surface); padding: .8rem; }
+.aui-tool-filters label { display: grid; gap: .35rem; color: var(--aui-muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; }
+.aui-tool-filters input { min-height: 2.45rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .45rem; background: var(--aui-surface); color: var(--aui-ink); padding: .5rem .65rem; font-size: .92rem; text-transform: none; }
+.aui-tool-category-tabs { display: flex; flex-wrap: wrap; gap: .45rem; }
+.aui-tool-category-tabs button { display: inline-flex; align-items: center; gap: .35rem; min-height: 2.2rem; border: 1px solid var(--aui-border); border-radius: 999px; background: var(--aui-surface-2); color: var(--aui-muted); padding: .35rem .7rem; font-weight: 800; }
+.aui-tool-category-tabs button[aria-selected="true"] { border-color: color-mix(in srgb, var(--aui-primary) 42%, var(--aui-border)); background: color-mix(in srgb, var(--aui-primary) 9%, white); color: var(--aui-primary); }
+.aui-tool-category-tabs span { border-radius: 999px; background: var(--aui-surface); padding: .04rem .38rem; font-size: .72rem; }
 .aui-tool-scheduler { display: grid; gap: .85rem; min-width: 0; border: 1px solid var(--aui-border); border-radius: .6rem; background: var(--aui-surface); padding: .95rem; }
 .aui-tool-jobs-table td strong { font-weight: 800; }
 .aui-tool-jobs-table td code { white-space: normal; }
@@ -314,11 +321,20 @@ button, input, select, textarea { font: inherit; }
 .aui-tool-summary dt, .aui-tool-meta dt { color: var(--aui-muted); font-size: .74rem; font-weight: 700; text-transform: uppercase; }
 .aui-tool-summary dd, .aui-tool-meta dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .aui-tool-card { display: grid; gap: .85rem; min-width: 0; padding: .95rem; }
+.aui-tool-card.selected { border-color: color-mix(in srgb, var(--aui-primary) 45%, var(--aui-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--aui-primary) 10%, transparent); }
 .aui-tool-state-denied, .aui-tool-state-replay-rejected, .aui-tool-state-unavailable { border-color: color-mix(in srgb, var(--aui-danger) 24%, var(--aui-border)); }
 .aui-tool-state-expired, .aui-tool-state-dry-run-only, .aui-tool-state-provider-selector-required { border-color: color-mix(in srgb, var(--aui-warning) 30%, var(--aui-border)); }
 .aui-tool-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
 .aui-tool-card-header h2 { margin: 0; font-size: 1.05rem; }
 .aui-tool-card-header p { margin: .3rem 0 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-tool-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
+.aui-tool-detail-drawer, .aui-tool-mcp { display: grid; gap: .65rem; border: 1px solid var(--aui-border); border-radius: .5rem; background: color-mix(in srgb, var(--aui-surface-2) 45%, white); padding: .75rem; }
+.aui-tool-detail-drawer p { margin: 0; color: var(--aui-muted); line-height: 1.45; }
+.aui-tool-param-form { display: grid; gap: .5rem; border-top: 1px solid var(--aui-border); padding-top: .65rem; }
+.aui-tool-param-form label { display: grid; gap: .25rem; }
+.aui-tool-param-form span, .aui-tool-param-form strong { color: var(--aui-muted); font-size: .76rem; font-weight: 800; text-transform: uppercase; }
+.aui-tool-param-form input { min-width: 0; border: 1px solid var(--aui-border); border-radius: .4rem; background: var(--aui-surface); color: var(--aui-ink); padding: .45rem .55rem; }
+.aui-tool-param-form small, .aui-tool-param-form p { margin: 0; color: var(--aui-muted); font-size: .78rem; line-height: 1.35; }
 .aui-risk-pill { flex: 0 0 auto; max-width: 11rem; overflow-wrap: anywhere; border: 1px solid var(--aui-border); border-radius: 999px; padding: .18rem .55rem; font-size: .73rem; font-weight: 800; text-transform: uppercase; }
 .aui-risk-read-only, .aui-risk-standard { border-color: color-mix(in srgb, var(--aui-success) 30%, white); color: var(--aui-success); }
 .aui-risk-mutating, .aui-risk-external, .aui-risk-sensitive { border-color: color-mix(in srgb, var(--aui-warning) 35%, white); color: var(--aui-warning); }

@@ -210,7 +210,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['plugins', 'tools'],
     routeOracles: [
       routeOracle('plugins', ['Plugins, MCP, and tools'], ['Reload catalog']),
-      routeOracle('tools', ['Approval cards'], ['Approval controller'])
+      routeOracle('tools', ['Tool registry and Approval cards', 'Tool detail drawer'], ['Tool search', 'Generated parameter form', 'MCP server status', 'Open scheduler'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     mockUxAnchors: ['Plugins, MCP, and tools', 'Provider grouping', 'Reload and install controls', 'Tool risk and sharing policy'],
@@ -218,6 +218,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
       source('sdk-method', 'aggregate tool catalog', ['Tooling.GetToolCatalog']),
+      source('sdk-method', 'scheduler snapshot for automation handoff', ['Scheduler.ListJobs']),
       source('admin-action', 'tool/plugin mutations and approval flow', ['Tooling.PrepareExecution', 'Tooling.RequestApproval', 'Tooling.ConfirmExecution', 'Tooling.ExecuteTool', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
     ],
     highestPrivacyClass: 'admin-critical',

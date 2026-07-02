@@ -95,8 +95,17 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }
   }, [client, initialSchedulerJobs])
 
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(initialTools?.[0]?.id ?? null)
   const counts = useMemo(() => toolCounts(state.tools), [state.tools])
   const jobCounts = useMemo(() => schedulerCounts(state.schedulerJobs), [state.schedulerJobs])
+  const categories = useMemo(() => buildToolCategories(state.tools), [state.tools])
+  const filteredTools = useMemo(() => filterTools(state.tools, category, query), [state.tools, category, query])
+  const selectedTool = useMemo(
+    () => filteredTools.find((tool) => tool.id === selectedToolId) ?? filteredTools[0] ?? state.tools[0] ?? null,
+    [filteredTools, selectedToolId, state.tools]
+  )
 
   async function approve(tool: ToolApprovalCardModel, scope: ToolApprovalScope, dryRun = false) {
     const selectedProviderId = state.selectedProviders[tool.id]
@@ -209,17 +218,47 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
             </div>
             <span className="aui-action-chip"><Plug size={15} aria-hidden />Tooling.GetToolCatalog</span>
           </div>
+          <div className="aui-tool-filters" aria-label="Tool catalog filters">
+            <label>
+              <span>Tool search</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder="Search tools, providers, permissions, or risk"
+              />
+            </label>
+            <div className="aui-tool-category-tabs" role="tablist" aria-label="Tool categories">
+              {categories.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={category === option.id}
+                  onClick={() => setCategory(option.id)}
+                >
+                  {option.label}
+                  <span>{option.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           {state.loading ? <p className="aui-tool-empty">Loading Tooling catalog through AuroraClient...</p> : null}
           {!state.loading && state.tools.length === 0 ? (
             <p className="aui-tool-empty">No tools were returned by the SDK Tooling catalog.</p>
           ) : null}
-          {state.tools.map((tool) => (
+          {!state.loading && state.tools.length > 0 && filteredTools.length === 0 ? (
+            <p className="aui-tool-empty">No tools match the current category or search filter.</p>
+          ) : null}
+          {filteredTools.map((tool) => (
             <ToolApprovalCard
               key={tool.id}
               tool={tool}
               selectedProviderId={state.selectedProviders[tool.id]}
               decisionMessage={state.decisionMessages[tool.id] ?? null}
               routeDisabled={route.disabled}
+              selected={selectedTool?.id === tool.id}
+              onSelect={() => setSelectedToolId(tool.id)}
               onSelectProvider={(providerId) => selectProvider(tool, providerId)}
               onApprove={(scope, dryRun) => approve(tool, scope, dryRun)}
               onDeny={() => deny(tool)}
@@ -228,6 +267,15 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         </section>
 
         <aside className="aui-tool-summary" aria-label="Tool approval summary">
+          {selectedTool ? <ToolDetailDrawer tool={selectedTool} /> : null}
+          <section className="aui-tool-mcp" aria-label="MCP server status">
+            <h2>MCP server status</h2>
+            <dl>
+              <div><dt>Providers</dt><dd>{providerStatusSummary(state.tools)}</dd></div>
+              <div><dt>Reload support</dt><dd>Safe reload requires a backend Tooling reload/AdminAction contract.</dd></div>
+            </dl>
+            <button type="button" className="aui-secondary-action" disabled>Reload catalog</button>
+          </section>
           <h2>Execution boundary</h2>
           <dl>
             <div><dt>Backend truth</dt><dd>Tooling.GetToolCatalog via AuroraClient</dd></div>
@@ -245,6 +293,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
             <p className="aui-kicker">Automations</p>
             <h2 id="tool-scheduler-title"><CalendarClock size={18} aria-hidden />Scheduled jobs</h2>
           </div>
+          <a className="aui-action-chip" href="/admin/scheduler">Open scheduler</a>
           <span className="aui-action-chip">Scheduler.ListJobs</span>
         </div>
         {state.schedulerError ? <div className="aui-tool-alert" role="alert">{state.schedulerError}</div> : null}
@@ -310,11 +359,43 @@ export function submitToolDenialAction({
   )
 }
 
+
+function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel }) {
+  const fields = toolSchemaFields(tool)
+  const selectedProvider = tool.providers.find((provider) => provider.selectable) ?? tool.providers[0]
+  return (
+    <section className="aui-tool-detail-drawer" aria-labelledby="tool-detail-drawer-title">
+      <p className="aui-kicker">Selected tool</p>
+      <h2 id="tool-detail-drawer-title">Tool detail drawer</h2>
+      <p>{tool.name}</p>
+      <dl>
+        <div><dt>Schema</dt><dd>{tool.argsSchema ? 'args_schema from Tooling.GetToolCatalog' : 'No schema reported by backend'}</dd></div>
+        <div><dt>Permissions</dt><dd>{tool.requiredPermissions.join(', ') || 'No explicit permissions reported'}</dd></div>
+        <div><dt>Provider</dt><dd>{selectedProvider?.label ?? tool.providerLabel} ({selectedProvider?.providerKind ?? tool.providerKind})</dd></div>
+        <div><dt>Risk</dt><dd>{tool.riskClass}{tool.requiresAdminAction ? '; AdminAction required' : ''}</dd></div>
+        <div><dt>Examples</dt><dd>{exampleSummary(tool)}</dd></div>
+      </dl>
+      <form className="aui-tool-param-form" aria-label="Generated parameter form">
+        <strong>Generated parameter form</strong>
+        {fields.length > 0 ? fields.map((field) => (
+          <label key={field.name}>
+            <span>{field.name}{field.required ? ' *' : ''}</span>
+            <input readOnly value={field.example} aria-label={`${field.name} ${field.type} parameter`} />
+            <small>{field.type}</small>
+          </label>
+        )) : <p>No writable parameters were reported for this tool.</p>}
+      </form>
+    </section>
+  )
+}
+
 function ToolApprovalCard({
   tool,
   selectedProviderId,
   decisionMessage,
   routeDisabled,
+  selected,
+  onSelect,
   onSelectProvider,
   onApprove,
   onDeny
@@ -323,6 +404,8 @@ function ToolApprovalCard({
   selectedProviderId?: string | undefined
   decisionMessage: string | null
   routeDisabled: boolean
+  selected: boolean
+  onSelect: () => void
   onSelectProvider: (providerId: string) => void
   onApprove: (scope: ToolApprovalScope, dryRun?: boolean) => void
   onDeny: () => void
@@ -338,13 +421,16 @@ function ToolApprovalCard({
   const adminLabel = tool.requiresAdminAction ? 'AdminAction required' : 'tool approval'
 
   return (
-    <article className={`aui-tool-card aui-tool-state-${tool.state}`}>
+    <article className={`aui-tool-card aui-tool-state-${tool.state}${selected ? ' selected' : ''}`}>
       <header className="aui-tool-card-header">
         <div>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
         </div>
-        <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
+        <div className="aui-tool-card-actions">
+          <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
+          <button type="button" className="aui-secondary-action" aria-pressed={selected} onClick={onSelect}>View details</button>
+        </div>
       </header>
 
       <div className="aui-tool-meta" aria-label={`${tool.name} approval metadata`}>
@@ -458,6 +544,122 @@ function toolCounts(tools: ToolApprovalCardModel[]) {
     total: tools.length,
     blocked: tools.filter((tool) => ['denied', 'expired', 'replay-rejected', 'unavailable', 'provider-selector-required', 'dry-run-only'].includes(tool.state)).length
   }
+}
+
+function buildToolCategories(tools: ToolApprovalCardModel[]) {
+  const base = [
+    { id: 'all', label: 'All', count: tools.length },
+    { id: 'read', label: 'Read-only', count: tools.filter((tool) => toolCategory(tool) === 'read').length },
+    { id: 'mutating', label: 'Mutating', count: tools.filter((tool) => toolCategory(tool) === 'mutating').length },
+    { id: 'external', label: 'External', count: tools.filter((tool) => toolCategory(tool) === 'external').length },
+    { id: 'admin', label: 'Admin', count: tools.filter((tool) => toolCategory(tool) === 'admin').length }
+  ]
+  return base.filter((category) => category.id === 'all' || category.count > 0)
+}
+
+function filterTools(tools: ToolApprovalCardModel[], category: string, query: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  return tools.filter((tool) => {
+    const categoryMatch = category === 'all' || toolCategory(tool) === category
+    if (!categoryMatch) return false
+    if (!normalizedQuery) return true
+    return toolSearchHaystack(tool).includes(normalizedQuery)
+  })
+}
+
+function toolCategory(tool: ToolApprovalCardModel) {
+  if (tool.requiresAdminAction || tool.riskClass.includes('admin')) return 'admin'
+  if (tool.dataEgress || tool.riskClass === 'external') return 'external'
+  if (tool.mutating || ['mutating', 'standard'].includes(tool.riskClass)) return 'mutating'
+  return 'read'
+}
+
+function toolSearchHaystack(tool: ToolApprovalCardModel) {
+  return [
+    tool.name,
+    tool.description,
+    tool.providerLabel,
+    tool.providerKind,
+    tool.riskClass,
+    tool.state,
+    tool.routePath.join(' '),
+    tool.requiredPermissions.join(' '),
+    tool.providers.map((provider) => `${provider.label} ${provider.providerKind} ${provider.transport ?? ''}`).join(' ')
+  ].join(' ').toLowerCase()
+}
+
+function providerStatusSummary(tools: ToolApprovalCardModel[]) {
+  const providers = new Set<string>()
+  let mcpLike = 0
+  for (const tool of tools) {
+    const labels = tool.providers.length > 0
+      ? tool.providers.map((provider) => ({ id: provider.id, providerKind: provider.providerKind }))
+      : [{ id: tool.providerLabel, providerKind: tool.providerKind }]
+    for (const provider of labels) {
+      providers.add(provider.id)
+      if (`${provider.providerKind} ${provider.id}`.toLowerCase().includes('mcp')) mcpLike += 1
+    }
+  }
+  if (providers.size === 0) return 'No providers reported by catalog.'
+  return `${providers.size} provider endpoints from catalog; ${mcpLike} MCP-like endpoint${mcpLike === 1 ? '' : 's'} reported.`
+}
+
+function toolSchemaFields(tool: ToolApprovalCardModel) {
+  const required = schemaRequiredFields(tool.argsSchema)
+  const properties = schemaProperties(tool.argsSchema)
+  if (properties) {
+    return Object.entries(properties).map(([name, schema]) => ({
+      name,
+      type: schemaFieldType(schema),
+      required: required.includes(name),
+      example: exampleValue(name, tool)
+    }))
+  }
+  if (tool.argsPreview) {
+    return Object.keys(tool.argsPreview).map((name) => ({
+      name,
+      type: typeof tool.argsPreview?.[name],
+      required: false,
+      example: exampleValue(name, tool)
+    }))
+  }
+  return []
+}
+
+function schemaProperties(schema: object | null) {
+  const properties = recordValue(schema, 'properties')
+  return properties && !Array.isArray(properties) ? properties : null
+}
+
+function schemaRequiredFields(schema: object | null) {
+  const required = schema && 'required' in schema ? (schema as Record<string, unknown>).required : null
+  return Array.isArray(required) ? required.filter((field): field is string => typeof field === 'string') : []
+}
+
+function schemaFieldType(schema: unknown) {
+  const type = recordValue(schema, 'type')
+  if (typeof type === 'string') return type
+  if (Array.isArray(type)) return type.filter((value) => typeof value === 'string').join(' | ') || 'unknown'
+  return 'unknown'
+}
+
+function exampleValue(name: string, tool: ToolApprovalCardModel) {
+  const value = recordValue(tool.argsPreview, name)
+    ?? recordValue(tool.dryRunPreview, name)
+    ?? ''
+  if (value === '') return ''
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+function exampleSummary(tool: ToolApprovalCardModel) {
+  if (tool.dryRunPreview) return `Dry-run preview: ${JSON.stringify(tool.dryRunPreview)}`
+  if (tool.argsPreview) return `Arguments preview: ${JSON.stringify(tool.argsPreview)}`
+  return 'No example payload reported by backend.'
+}
+
+function recordValue(value: unknown, key: string): Record<string, unknown> | unknown | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return (value as Record<string, unknown>)[key] ?? null
 }
 
 function schedulerCounts(jobs: NormalizedSchedulerJob[]) {

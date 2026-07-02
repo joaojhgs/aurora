@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T12:37:56.238Z",
+  "updatedAt": "2026-07-02T12:44:16.494Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1352,10 +1352,12 @@
       "id": "G116-replace-raw-catalog-cards-with",
       "title": "Replace raw catalog cards with:",
       "objective": "Replace raw catalog cards with:\ncategory tabs/search/filter;\ntool detail drawer with schema, permissions, provider, risk, examples;\nparameter form generated from schema;\ndry-run/preview when available;\nexecute flow with approval when sensitive/admin;\nresult/error panel and audit receipt;\nMCP server status and reload if safely supported;\nscheduler job snapshot and link to `/admin/scheduler`.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T12:44:16.494Z",
+      "completedAt": "2026-07-02T12:44:16.494Z",
+      "evidence": "Implemented Tools route category/search/filter controls, selected tool detail drawer with schema/permissions/provider/risk/examples, generated parameter form, approval/dry-run/result evidence retention, MCP provider status with disabled reload until backend contract, and scheduler snapshot link to /admin/scheduler. Verified: pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'tool approval|production surface'; pnpm --filter @aurora/tauri-ui typecheck; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/client test -- -t 'tool|approval|scheduler'; git diff --check. Removed apps/aurora-tauri/test-results after Playwright."
     },
     {
       "id": "G117-keep-high-risk-tools-disabled-until",
