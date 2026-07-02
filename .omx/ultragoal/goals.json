@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T15:37:09.305Z",
+  "updatedAt": "2026-07-02T15:40:53.842Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -1968,19 +1968,23 @@
       "id": "G172-every-route-has-real-live-read-path",
       "title": "Every route has real live read path or explicit unavailable backend r...",
       "objective": "Every route has real live read path or explicit unavailable backend repair state.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:40:40.074Z",
+      "completedAt": "2026-07-02T15:40:40.074Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test -- -t 'route|placeholder|landmark|production surface|mock reference'; rg 'TauriRoutePlaceholder|debug-dashboard|placeholder route|route dump|backend-state dashboard|fixture-only product' apps/aurora-tauri/src packages/aurora-ui/src packages/aurora-ui/tests apps/aurora-tauri/src --glob '!**/*.map' (matches only intentional test guards); rm -rf apps/aurora-tauri/test-results; git diff --check"
     },
     {
       "id": "G173-no-route-is-a-generic-placeholder",
       "title": "No route is a generic placeholder.",
       "objective": "No route is a generic placeholder.",
-      "status": "pending",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T15:40:53.842Z",
+      "completedAt": "2026-07-02T15:40:53.842Z",
+      "evidence": "pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test -- -t 'route|placeholder|landmark|production surface|mock reference'; rg 'TauriRoutePlaceholder|debug-dashboard|placeholder route|route dump|backend-state dashboard|fixture-only product' apps/aurora-tauri/src packages/aurora-ui/src packages/aurora-ui/tests apps/aurora-tauri/src --glob '!**/*.map' (matches only intentional test guards); rm -rf apps/aurora-tauri/test-results; git diff --check"
     },
     {
       "id": "G174-mutations-use-adminaction-or-are-dis",
