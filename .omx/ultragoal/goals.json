@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T07:55:17.464Z",
+  "updatedAt": "2026-07-02T07:56:29.556Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -323,10 +323,13 @@
       "id": "G027-packages-aurora-ui-src-nav-tsx-defin",
       "title": "`packages/aurora-ui/src/nav.tsx` defines 22 primary routes:",
       "objective": "`packages/aurora-ui/src/nav.tsx` defines 22 primary routes:\nAssistant: `/`, `/memory`, `/tools`, `/mesh`\nOperate: `/admin`, `/admin/services`, `/admin/access`, `/admin/tokens`, `/admin/devices`, `/admin/config`, `/admin/contracts`, `/admin/plugins`, `/admin/pairing`, `/admin/backups`, `/admin/scheduler`, `/admin/audit`\nRuntime: `/models`, `/diagnostics`, `/onboarding`, `/settings`, `/memory/policy`, `/settings/native`",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T07:56:29.556Z",
+      "startedAt": "2026-07-02T07:55:42.749Z",
+      "completedAt": "2026-07-02T07:56:29.556Z",
+      "evidence": "packages/aurora-ui/src/nav.tsx defines the required 22 primary routes in the controlling order: /, /memory, /tools, /mesh, /admin, /admin/services, /admin/access, /admin/tokens, /admin/devices, /admin/config, /admin/contracts, /admin/plugins, /admin/pairing, /admin/backups, /admin/scheduler, /admin/audit, /models, /diagnostics, /onboarding, /settings, /memory/policy, /settings/native. Verified: direct nav parse count/order assertion; pnpm --filter @aurora/tauri-ui test:e2e:routes; pnpm --filter @aurora/ui test -- -t 'route availability|production surface'."
     },
     {
       "id": "G028-apps-aurora-tauri-src-tauri-app-tsx",
