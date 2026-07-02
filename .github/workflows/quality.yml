@@ -30,6 +30,9 @@ jobs:
       - name: Check generated config artifacts
         run: uv run make check-config-generated
 
+      - name: Check documentation links and hygiene
+        run: make check-docs
+
       - name: Ruff lint
         run: uv run ruff check app tests scripts
 

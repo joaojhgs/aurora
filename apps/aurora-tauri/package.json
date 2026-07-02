@@ -25,6 +25,7 @@
     "android:smoke": "node ./scripts/android-emulator-smoke.mjs",
     "android:preflight": "node ./scripts/android-preflight.mjs",
     "android:preflight:strict": "node ./scripts/android-preflight.mjs --strict",
+    "android:preflight:ci": "node ./scripts/android-preflight.mjs --require-android-project",
     "ios:policy": "node ./scripts/ios-preflight.mjs --policy-only",
     "ios:build:app-store": "pnpm ios:preflight:signing && pnpm tauri ios build --export-method app-store-connect && node ./scripts/ios-preflight.mjs --require-macos --require-ios-project --require-signing-env --validate-ipa",
     "ios:open-xcode": "pnpm tauri ios build --open",

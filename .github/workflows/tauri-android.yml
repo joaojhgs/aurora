@@ -77,7 +77,7 @@ jobs:
         run: pnpm --filter @aurora/tauri-ui android:init
 
       - name: Run Android preflight
-        run: pnpm --filter @aurora/tauri-ui android:preflight:strict
+        run: pnpm --filter @aurora/tauri-ui android:preflight:ci
 
       - name: Upload Android preflight report
         uses: actions/upload-artifact@v4

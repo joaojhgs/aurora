@@ -22,8 +22,30 @@ wheels/
 
 # Virtual environments
 venv/
+.venv/
 env/
 ENV/
+
+# Node/workspace installs
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Generated local artifacts
+.artifacts/
+coverage.xml
+reports/
+
+
+# Build/cache/index artifacts
+target/
+**/target/
+.next/
+**/.next/
+.gitnexus/
+.omx/logs/
+.mypy_cache/
+.ruff_cache/
 
 # IDE
 .vscode/

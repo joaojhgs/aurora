@@ -5,8 +5,9 @@
 DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 # Match Tiltfile `project_name` so `make docker-process-up` and `tilt up` use the same project/images
 AURORA_COMPOSE_PROJECT ?= aurora-process
+DEP_ANALYSIS_DIR ?= .artifacts/dependency-analysis
 
-.PHONY: help setup lint test format check check-config-generated coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check check-docs check-config-generated coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -15,8 +16,9 @@ help:
 	@echo "make setup       - Set up development environment"
 	@echo "make lint        - Run linting on all files (ruff)"
 	@echo "make format      - Run auto-formatting (ruff)"
-	@echo "make check       - Run all checks (lint + typing)"
+	@echo "make check       - Run all checks (lint + format + docs hygiene)"
 	@echo "make check-config-generated - Verify generated config artifacts are current"
+	@echo "make check-docs   - Validate documentation links and hygiene"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
 	@echo "make integration - Run integration tests only"
@@ -77,7 +79,12 @@ check:
 	@echo "Running all code quality checks..."
 	ruff check app tests scripts
 	ruff format --check app tests scripts
+	$(MAKE) check-docs
 	# mypy --explicit-package-bases app tests scripts
+
+check-docs:
+	@echo "Checking documentation links and hygiene..."
+	@uv run python scripts/check_docs.py
 
 # Run all tests
 test:
@@ -221,7 +228,8 @@ docker-orchestrator-build:
 # Dependency Analysis Commands
 analyze-deps:
 	@echo "Analyzing dependencies across all services..."
-	@python scripts/analyze-dependencies.py --all --output docs/dependency-analysis/service-dependencies.json
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@python scripts/analyze-dependencies.py --all --output $(DEP_ANALYSIS_DIR)/service-dependencies.json
 
 analyze-deps-service:
 	@echo "Usage: make analyze-deps-service SERVICE=<service-name>"
@@ -234,7 +242,8 @@ analyze-deps-service:
 
 analyze-deps-compare:
 	@echo "Comparing actual usage with pyproject.toml..."
-	@python scripts/analyze-dependencies.py --all --compare pyproject.toml --output docs/dependency-analysis/comparison.json
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@python scripts/analyze-dependencies.py --all --compare pyproject.toml --output $(DEP_ANALYSIS_DIR)/comparison.json
 
 install-analysis-tools:
 	@echo "Installing dependency analysis tools..."
@@ -242,14 +251,16 @@ install-analysis-tools:
 
 generate-dependency-tree:
 	@echo "Generating dependency tree..."
-	@pipdeptree --all > docs/dependency-analysis/dependency-tree.txt
-	@pipdeptree --json > docs/dependency-analysis/dependency-tree.json
-	@echo "Dependency tree saved to docs/dependency-analysis/"
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@pipdeptree --all > $(DEP_ANALYSIS_DIR)/dependency-tree.txt
+	@pipdeptree --json > $(DEP_ANALYSIS_DIR)/dependency-tree.json
+	@echo "Dependency tree saved to $(DEP_ANALYSIS_DIR)/"
 
 audit-dependencies:
 	@echo "Auditing dependencies for security issues..."
-	@pip-audit --format json --output docs/dependency-analysis/security-audit.json || true
-	@pip-audit --format text > docs/dependency-analysis/security-audit.txt || true
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@pip-audit --format json --output $(DEP_ANALYSIS_DIR)/security-audit.json || true
+	@pip-audit --format text > $(DEP_ANALYSIS_DIR)/security-audit.txt || true
 
 # Docker Hub configuration
 DOCKER_REGISTRY ?= docker.io

@@ -833,8 +833,8 @@ Gateway components are tested in `tests/unit/app/test_gateway.py`:
 
 ## Related Documentation
 
-- [Architecture Overview](../docs/ARCHITECTURE.md)
-- [Messaging Architecture](../docs/MESSAGING_ARCHITECTURE.md)
-- [Peer Pairing Flow](../docs/PEER_PAIRING_FLOW.md)
-- [Mesh Pairing Fix Plan](../docs/MESH_PAIRING_FIX_PLAN.md)
-- [Service Contracts](../app/shared/contracts/README.md)
+- [Architecture Overview](ARCHITECTURE.md)
+- [Messaging Architecture](MESSAGING_ARCHITECTURE.md)
+- [Peer Pairing Flow](PEER_PAIRING_FLOW.md)
+- [Auth and Permissions](AUTH_AND_PERMISSIONS.md)
+- [API and Contracts](API_AND_CONTRACTS.md)

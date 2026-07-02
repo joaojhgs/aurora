@@ -92,6 +92,16 @@ Generate an HTML coverage report:
 pytest --cov=app --cov-report=html
 ```
 
+## Documentation hygiene
+
+Documentation links and stale workflow/report references are checked separately:
+
+```bash
+uv run python scripts/check_docs.py
+# or
+make check-docs
+```
+
 ## CI/CD Pipeline
 
 Aurora's CI/CD pipeline is configured with durable workflow lanes. See `docs/CI_CD.md` for the full map.

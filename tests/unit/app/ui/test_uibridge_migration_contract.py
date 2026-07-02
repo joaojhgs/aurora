@@ -5,7 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BRIDGE_PATH = REPO_ROOT / "app" / "ui" / "bridge_service.py"
-CONTRACT_PATH = REPO_ROOT / "docs" / "UIBRIDGE_TAURI_MIGRATION.md"
+CONTRACT_PATH = REPO_ROOT / "docs" / "UI_INTEGRATION.md"
 
 EXPECTED_QT_SIGNALS = {
     "message_received",

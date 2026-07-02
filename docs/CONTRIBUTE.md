@@ -1,144 +1,81 @@
-## Testing & Development
+# Contributing to Aurora
 
-### Test Categories
+**Status:** Current source of truth
 
-Aurora has a comprehensive testing suite divided into several categories:
+Aurora is a bus-first Python/TypeScript workspace. Keep changes small, typed, documented, and verified with the narrowest checks that prove the change.
 
-1. **Unit Tests** - Test individual components in isolation
-   - Location: `tests/unit/`
+## Setup
 
-2. **Integration Tests** - Test interactions between components
-   - Location: `tests/integration/`
-
-3. **End-to-End Tests** - Test complete user workflows
-   - Location: `tests/e2e/`
-
-4. **Performance Tests** - Test system performance
-   - Location: `tests/performance/`
-
-### Running Tests
-
-Install test dependencies:
 ```bash
-pip install -e .[test]
+uv sync --extra dev
+pnpm install --frozen-lockfile
 ```
 
-Run all tests (except performance tests):
+Use Python 3.10-3.11. Do not use Conda for this repo.
+
+## Before editing
+
+Read the subsystem guide for the area you are touching:
+
+| Area | Guide |
+| --- | --- |
+| Services/lifecycle | [`../app/services/AGENTS.md`](../app/services/AGENTS.md) |
+| Gateway/mesh/API | [`../app/services/gateway/AGENTS.md`](../app/services/gateway/AGENTS.md) |
+| Auth | [`../app/services/auth/AGENTS.md`](../app/services/auth/AGENTS.md) |
+| Messaging | [`../app/messaging/AGENTS.md`](../app/messaging/AGENTS.md) |
+| Shared code | [`../app/shared/AGENTS.md`](../app/shared/AGENTS.md) |
+| Contracts | [`../app/shared/contracts/AGENTS.md`](../app/shared/contracts/AGENTS.md) |
+| Tests | [`../tests/AGENTS.md`](../tests/AGENTS.md) |
+| Config | [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md) |
+| Docs | [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md) |
+
+## Core rules
+
+- Communicate between services through the message bus, not direct service calls.
+- Use typed topic constants and Pydantic IO models from `app/shared/contracts/models/`.
+- Register service methods with `@method_contract`.
+- Use structured Aurora logging helpers, not ad-hoc loggers.
+- Protect shared mutable state; bus delivery is concurrent.
+- Keep documentation current when behavior, workflows, scripts, or public surfaces change.
+
+## Checks
+
+Python:
+
 ```bash
-pytest
+make format
+make lint
+make check
+make unit
+make integration
+uv run python scripts/check_docs.py
 ```
 
-Generate a test coverage report:
+TypeScript:
+
 ```bash
-pytest --cov=app --cov-report=html
+pnpm --filter @aurora/client build
+pnpm --filter @aurora/client test
+pnpm --filter @aurora/ui test
+pnpm --filter @aurora/tauri-ui test
 ```
 
-For more details, see [Testing Guide](tests/README.md).
+Process mode / Docker:
 
-### CI/CD Pipeline
+```bash
+docker compose -f docker-compose.process.yml config --quiet
+```
 
-Aurora has several GitHub Actions workflows:
+See [`CI_CD.md`](CI_CD.md) and [`../tests/README.md`](../tests/README.md) for the full CI/test map.
 
-1. **Unit and Integration Tests** - Run on every push
-2. **End-to-End Tests** - Run on pull requests
-3. **Performance Tests** - Run on schedule and manually
-4. **Full Test Suite** - Run on releases and manually
-5. **Lint and Static Analysis** - Run on every push
+## Pull request expectations
 
-[![Code Coverage](https://codecov.io/gh/aurora-ai/aurora/branch/main/graph/badge.svg)](https://codecov.io/gh/aurora-ai/aurora)
+A PR should state:
 
-## Contributing
+- what behavior changed;
+- which docs were updated;
+- which tests/checks were run;
+- any known validation gaps;
+- whether any external secrets, package signing, or production deployment steps are intentionally out of scope.
 
-Contributions to Aurora are welcome! Here's how you can contribute:
-
-### Getting Started
-
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/aurora.git
-   cd aurora
-   ```
-3. **Set up the development environment**:
-   ```bash
-   # Run the setup script and choose option 3 (Development)
-   # Linux/macOS:
-   ./setup.sh
-   # Windows:
-   setup.bat
-   
-   # Activate the virtual environment (if not using the run.sh/run.bat scripts)
-   # Linux/macOS:
-   source venv/bin/activate
-   # Windows:
-   venv\Scripts\activate
-   ```
-
-### Development Workflow
-
-1. **Create a branch** for your feature or bugfix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Set up development environment** with pre-commit hooks:
-   ```bash
-   # Run the setup script and choose the "Development" feature level (option 3)
-   # This will install all development dependencies and pre-commit hooks
-   ./setup.sh
-   # or on Windows
-   setup.bat
-   ```
-
-3. **Make your changes** and ensure they follow the project's code style:
-   ```bash
-   # Run auto-formatting (ruff)
-   make format
-   
-   # Run all code quality checks (lint + typing)
-   make check
-   
-   # Or run individual checks:
-   make lint      # Run ruff linting
-   make typing    # Run mypy type checking
-   ```
-
-4. **Write tests** for your changes:
-   - Unit tests for new functionality
-   - Integration tests for component interactions
-   - Update existing tests as needed
-
-4. **Run tests** to verify your changes:
-   ```bash
-   # Run all tests (excluding performance tests)
-   make test
-   
-   # Run specific test types
-   make unit        # Run unit tests only
-   make integration # Run integration tests only
-   
-   # Generate test coverage report
-   make coverage
-   ```
-
-5. **Commit your changes** with a clear message:
-   ```bash
-   git commit -m "Add feature: your feature description"
-   ```
-
-6. **Push your branch** to GitHub:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-7. **Submit a pull request** from your fork to the main repository
-
-### Pull Request Guidelines
-
-- Ensure your code passes all tests and CI checks
-- Include tests for any new functionality
-- Update documentation as needed
-- Follow the existing code style and conventions
-- Keep changes focused on a single issue/feature
-
-The CI pipeline will automatically run tests on your pull request, including unit tests, integration tests, and linting.
+Use durable docs for long-lived guidance. Do not add task-specific handoffs, generated reports, or PER/QA checklists under `docs/`; see [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).

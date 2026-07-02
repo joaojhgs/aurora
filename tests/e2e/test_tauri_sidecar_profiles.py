@@ -96,9 +96,15 @@ def test_prepare_sidecar_autobuild_uses_isolated_uv_environment():
 
 @pytest.mark.e2e
 def test_tauri_platform_bundle_targets_keep_linux_rpm_opt_in():
-    linux = json.loads(Path("apps/aurora-tauri/src-tauri/tauri.linux.conf.json").read_text(encoding="utf-8"))
-    macos = json.loads(Path("apps/aurora-tauri/src-tauri/tauri.macos.conf.json").read_text(encoding="utf-8"))
-    windows = json.loads(Path("apps/aurora-tauri/src-tauri/tauri.windows.conf.json").read_text(encoding="utf-8"))
+    linux = json.loads(
+        Path("apps/aurora-tauri/src-tauri/tauri.linux.conf.json").read_text(encoding="utf-8")
+    )
+    macos = json.loads(
+        Path("apps/aurora-tauri/src-tauri/tauri.macos.conf.json").read_text(encoding="utf-8")
+    )
+    windows = json.loads(
+        Path("apps/aurora-tauri/src-tauri/tauri.windows.conf.json").read_text(encoding="utf-8")
+    )
     package = json.loads(Path("apps/aurora-tauri/package.json").read_text(encoding="utf-8"))
 
     assert linux["bundle"]["targets"] == ["appimage", "deb"]

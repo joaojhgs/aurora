@@ -488,6 +488,7 @@ Notice how UI Bridge and Orchestrator receive the transcription **at the same ti
 
 ## See Also
 
-- [Architecture Migration Plan](../instructions/architecture_migration_plan.md)
-- [Module Contract Registry Plan](../instructions/module_contract_registry_plan.md)
-- [API WebRTC Module Plan](../instructions/api_webrtc_module_plan.md)
+- [Architecture Overview](ARCHITECTURE.md)
+- [API and Contracts](API_AND_CONTRACTS.md)
+- [Gateway API](GATEWAY.md)
+- [Auth and Permissions](AUTH_AND_PERMISSIONS.md)

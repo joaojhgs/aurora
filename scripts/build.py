@@ -218,7 +218,11 @@ def install_python_packages(args: list[str]) -> None:
 def remove_enum34_backport() -> None:
     """Remove enum34 in modern Python envs because PyInstaller refuses it."""
     uv = shutil.which("uv")
-    command = [uv, "pip", "uninstall", "enum34"] if uv else [sys.executable, "-m", "pip", "uninstall", "-y", "enum34"]
+    command = (
+        [uv, "pip", "uninstall", "enum34"]
+        if uv
+        else [sys.executable, "-m", "pip", "uninstall", "-y", "enum34"]
+    )
     result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True)
     if result.returncode == 0:
         click.echo("✅ Removed obsolete enum34 backport for PyInstaller compatibility")
@@ -293,6 +297,7 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
     except subprocess.CalledProcessError as e:
         click.echo(f"⚠️  Wheel installer warning: {e}")
         click.echo("📦 Continuing with installed pyproject dependencies...")
+
 
 def clean_build_dirs():
     """Clean previous build artifacts"""
@@ -617,7 +622,9 @@ def build_executable(
         PyInstaller.__main__.run(args)
 
         # Success message
-        binary_name = f"{executable_name}.exe" if platform.system() == "Windows" else executable_name
+        binary_name = (
+            f"{executable_name}.exe" if platform.system() == "Windows" else executable_name
+        )
         output_dist_dir = sidecar_dist_dir(sidecar_profile) if sidecar_profile else DIST_DIR
         executable_path = output_dist_dir / binary_name
         if not executable_path.is_file():
@@ -802,9 +809,7 @@ def main(target, clean, skip_deps, sidecar, onefile, sidecar_profile, list_sidec
             build_name = "aurora-sidecar" if sidecar else "Aurora"
             binary_name = f"{build_name}.exe" if platform.system() == "Windows" else build_name
             output_dist_dir = (
-                sidecar_dist_dir(resolved_sidecar_profile)
-                if resolved_sidecar_profile
-                else DIST_DIR
+                sidecar_dist_dir(resolved_sidecar_profile) if resolved_sidecar_profile else DIST_DIR
             )
             executable_path = output_dist_dir / binary_name
             if not executable_path.is_file():

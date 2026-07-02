@@ -8,6 +8,15 @@
 
 Detailed guidance lives next to the code it describes. **Always read the relevant sub-guide before working on a subsystem.**
 
+## Repository Exploration Docs
+
+Use the documentation index when orienting yourself before implementation, investigation, or review:
+
+- Start with [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md) to find the canonical current docs and to distinguish current guidance from archived/provenance material.
+- For high-level repo orientation, read [`readme.md`](readme.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
+- For domain-specific work, follow the index to the relevant docs, especially [`docs/API_AND_CONTRACTS.md`](docs/API_AND_CONTRACTS.md), [`docs/AUTH_AND_PERMISSIONS.md`](docs/AUTH_AND_PERMISSIONS.md), [`docs/FRONTEND_AND_UI_ARCHITECTURE.md`](docs/FRONTEND_AND_UI_ARCHITECTURE.md), [`docs/BACKUP_SERVICE.md`](docs/BACKUP_SERVICE.md), and [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+- For documentation changes, follow [`docs/DOC_MAINTENANCE.md`](docs/DOC_MAINTENANCE.md) and run `make check-docs`. Do not treat `docs/archive/` or `.omx/plans/` as current implementation guidance unless you are explicitly doing provenance or plan-history work.
+
 | Working On | Read This |
 |------------|-----------|
 | Any service (lifecycle, startup, adding services/tools) | [`app/services/AGENTS.md`](app/services/AGENTS.md) |

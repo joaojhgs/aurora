@@ -756,3 +756,8 @@ The SDK extracts audit/redaction fields from backend-style payloads (`correlatio
 - `unknown`
 
 Use `client.result(() => operation())` when UI code wants a typed success/failure union instead of exceptions.
+## Canonical docs
+
+- [API and contracts](../../docs/API_AND_CONTRACTS.md)
+- [Frontend and UI architecture](../../docs/FRONTEND_AND_UI_ARCHITECTURE.md)
+- [SDK/backend conformance CI](../../docs/SDK_BACKEND_CONFORMANCE_CI.md)

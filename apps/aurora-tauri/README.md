@@ -48,7 +48,7 @@ pnpm --filter @aurora/tauri-ui build:bundle:thin
 
 `build:bundle` aliases `build:bundle:thin`. Heavier local assistant packages are explicit (`build:bundle:local-cpu`, `build:bundle:local-cuda`, `build:bundle:local-metal`, etc.) so default desktop packaging does not bundle every STT/TTS/local-model dependency. `prepare:sidecar` builds `aurora-sidecar` automatically with `uv run --isolated --no-dev python scripts/build.py --target exe --clean --sidecar --sidecar-profile <profile>` unless `AURORA_TAURI_SIDECAR_SOURCE` points to a trusted prebuilt executable. Profile outputs live under `dist/sidecars/<profile>/aurora-sidecar`, are size-guarded before staging, and are then copied into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. The script also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` and the config-defaults resource for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
 
-## Android Release Gate
+## Android preflight
 
 Android uses the official Tauri mobile project and plugin model. Run `pnpm --filter @aurora/tauri-ui tauri android init` before strict Android release verification so the generated Android project exists under Tauri's `gen/android` path. The native capability manifest is still the UI source of truth: assistant-role availability must come from Android RoleManager/package qualification probes, not from the Tauri shell existing.
 
@@ -58,10 +58,11 @@ Release commands:
 pnpm --filter @aurora/tauri-ui android:build:aab
 pnpm --filter @aurora/tauri-ui android:build:apk
 pnpm --filter @aurora/tauri-ui android:preflight
+pnpm --filter @aurora/tauri-ui android:preflight:ci
 pnpm --filter @aurora/tauri-ui android:preflight:strict
 ```
 
-`android:preflight` writes `apps/aurora-tauri/reports/android-preflight.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. Strict mode fails when the generated Android project or signing inputs are missing.
+`android:preflight` writes `apps/aurora-tauri/reports/android-preflight.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. `android:preflight:ci` requires the generated Android project after `android:init` but does not require release signing, so pull-request APK smoke can build unsigned debug APKs. `android:preflight:strict` remains the release-readiness gate and fails when the generated Android project or signing inputs are missing.
 
 Signing inputs are intentionally environment-only and redacted in reports:
 
@@ -77,7 +78,7 @@ Minimum Android release evidence:
 - Fallback entrypoints such as app launcher, notification action, share sheet, deep link, shortcut/tile, or mesh/server routing remain available when the assistant role is not held.
 - Settings UI shows Android assistant-role and fallback states only from the native manifest payload.
 
-## iOS Release Gate
+## iOS policy and signing preflight
 
 iOS release evidence is tracked by `src-tauri/ios/preflight.json` and exposed through the SDK native manifest shape. The approved user-facing copy is `Siri/Shortcuts/App Intents integration`; UI copy must not claim that Aurora becomes the iOS system assistant.
 
@@ -179,3 +180,8 @@ The real Android build remains gated on Tauri's generated Android project under 
 ## Scope Boundary
 
 The frontend must use `AuroraClient`; screens must not call Tauri `invoke` except through the SDK transport adapter or this package's runtime bootstrap. Secure credential storage is enabled through the narrow Aurora keychain/Keystore command surface only. File access, native audio, event subscription streaming, and broad shell/fs permissions remain disabled or explicitly unsupported until their dedicated follow-up tasks.
+## Canonical docs
+
+- [Frontend and UI architecture](../../docs/FRONTEND_AND_UI_ARCHITECTURE.md)
+- [Tauri desktop build](../../docs/TAURI_DESKTOP_BUILD.md)
+- [Feature matrix](../../docs/FEATURE_MATRIX.md)

@@ -288,6 +288,6 @@ docker-compose -f docker-compose.process.yml exec orchestrator-service /bin/bash
 
 ## Additional Resources
 
-- [Aurora Documentation](../docs/)
-- [Process Mode Architecture](../docs/MESSAGING_ARCHITECTURE.md)
+- [Aurora Documentation](docs/DOCS_INDEX.md)
+- [Messaging Architecture](docs/MESSAGING_ARCHITECTURE.md)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)

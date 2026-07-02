@@ -1,63 +1,64 @@
-## Libraries and Tools
+# Aurora technology stack
 
-Aurora leverages a comprehensive stack of open-source technologies, organized by functionality to provide a complete voice assistant experience while maintaining privacy and local processing capabilities.
+**Status:** Current source of truth
 
-### 🎤 Audio Processing & Voice Recognition
+Aurora combines Python services, a typed message bus, a TypeScript SDK/UI layer, and optional local AI/audio runtimes. Optional dependency groups keep heavy local-model and platform-specific dependencies out of thin profiles.
 
-- **Wake Word Detection**: [OpenWakeWord](https://github.com/dscripka/openWakeWord) - Local, offline wake word detection with low latency
-- **Speech-to-Text**: [RealtimeSTT](https://github.com/KoljaB/RealtimeSTT) - Real-time speech recognition with Whisper integration
-- **STT Engine**: [faster-whisper](https://github.com/guillaumekln/faster-whisper) - Optimized Whisper implementation using CTranslate2
-- **Audio Capture**: [PyAudio](https://pypi.org/project/PyAudio/) - Cross-platform audio I/O library
+## Languages and runtimes
 
-### 🗣️ Text-to-Speech
+| Area | Stack |
+| --- | --- |
+| Backend services | Python 3.10-3.11, asyncio, Pydantic |
+| Message bus | In-process `LocalBus`; Redis-backed `BullMQBus` for process mode |
+| Gateway | FastAPI, Pydantic schemas, generated routes from contracts |
+| Frontend packages | TypeScript, React, Vite/Vitest |
+| Web shell | Next.js app under `apps/aurora-web` |
+| Desktop/mobile shell | Tauri 2, Rust command bridge, platform-native plugin skeletons |
+| Packaging | `uv`, PyInstaller sidecar builds, Tauri bundler, Docker Compose/Tilt |
 
-- **TTS Engine**: [Piper TTS](https://github.com/rhasspy/piper) - Fast, local neural text-to-speech
-- **Real-time TTS**: [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS) - Streaming text-to-speech output
+## AI, speech, and audio
 
-### 🧠 Language Models & AI
+| Capability | Libraries / providers |
+| --- | --- |
+| LLM orchestration | LangGraph, LangChain, OpenAI, HuggingFace endpoint/local pipeline, llama.cpp profiles |
+| STT | faster-whisper / RealtimeSTT paths, service-specific STT packages |
+| Wakeword | OpenWakeWord |
+| TTS | Piper / RealtimeTTS paths |
+| Embeddings/RAG | SQLite, sqlite-vec, OpenAI embeddings, optional local embeddings |
 
-- **LLM Integration**: [LangChain](https://www.langchain.com/) - Framework for LLM application development
-- **Workflow Orchestration**: [LangGraph](https://langchain-ai.github.io/langgraph/) - Graph-based agent workflow management
-- **Local LLM Support**: Custom `ChatLlamaCpp` implementation for local model inference
-- **OpenAI Integration**: [openai](https://github.com/openai/openai-python) - OpenAI API client for cloud models
-- **Model Serving**: [Ollama](https://ollama.ai/) - Local LLM serving platform
-- **Embeddings**: [sentence-transformers](https://www.sbert.net/) - Local semantic embeddings generation
+Heavy local model stacks are optional. See [`DEPENDENCIES.md`](DEPENDENCIES.md) for install profiles and sidecar bundle profiles.
 
-### 💾 Data Storage & Memory
+## UI and client stack
 
-- **Database**: [SQLite](https://www.sqlite.org/) with [aiosqlite](https://aiosqlite.omnilib.dev/) - Async local database
-- **Vector Storage**: [sqlite-vec](https://github.com/asg017/sqlite-vec) - Vector similarity search in SQLite
+| Surface | Path | Notes |
+| --- | --- | --- |
+| SDK | `packages/aurora-sdk` | Transport-independent `AuroraClient`, fixtures, HTTP/Tauri/mock/mesh abstractions. |
+| Shared React UI | `packages/aurora-ui` | Production UI primitives that consume SDK state only. |
+| Web app | `apps/aurora-web` | Web shell around shared UI and SDK transport. |
+| Tauri shell | `apps/aurora-tauri` | Desktop/mobile shell, native commands, sidecar supervision, secure storage posture. |
+| PyQt fallback | `app/ui` | Legacy/local fallback and behavior reference. New production UI work should use SDK-first React/Tauri/web surfaces. |
 
-### 🖥️ User Interface
+See [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md).
 
-- **GUI Framework**: [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) - Modern cross-platform GUI
-- **Real-time Updates**: Threaded UI with live status indicators and message history
-- **Dark/Light Themes**: Adaptive UI theming support
-- **Input Methods**: Both text and voice input with visual feedback
+## Integration and automation stack
 
-### 🔍 Semantic Search & Screen Analysis
+| Capability | Stack |
+| --- | --- |
+| MCP | Model Context Protocol stdio / streamable HTTP / SSE integrations through ToolingService. |
+| Scheduler | Cron-style and one-shot job service. |
+| Mesh | Gateway WebRTC/DataChannel, signaling, peer registry, capability graph, routing table. |
+| Auth/RBAC | AuthService, Gateway ACL, typed permission strings, audit events. |
+| Backup | BackupService manifests and dry-run restore/rollback contracts. |
 
-- **OpenRecall Integration**: [OpenRecall](https://github.com/open-recall/open-recall) - Screenshot indexing and semantic search
-- **OCR Engine**: [python-doctr](https://github.com/mindee/doctr) - Document text recognition
-- **Screen Capture**: [mss](https://github.com/BoboTiG/python-mss) - Multi-monitor screenshot capture
-- **Computer Vision**: [Pillow](https://python-pillow.org/) - Image processing and manipulation
-- **Text Similarity**: [rapidfuzz](https://github.com/maxbachmann/RapidFuzz) - Fast string matching
+## Development and CI tools
 
-### 🌐 Web & API Integration
-
-- **Search Engines**: 
-  - [duckduckgo-search](https://github.com/deedy5/duckduckgo_search) - Privacy-focused search (default)
-  - [Brave Search API](https://brave.com/search/api/) - Brave Search integration (optional)
-
-### 🛠️ Productivity & Business Tools
-
-**Atlassian Integration**:
-- **Jira**: [atlassian-python-api](https://github.com/atlassian-api/atlassian-python-api) - Issue tracking and project management
-
-**Google Workspace**:
-- **Gmail**: [langchain-google-community](https://github.com/langchain-ai/langchain-google) - Email management
-- **Calendar**: Google Calendar API integration for scheduling and event management
-
-**Developer Tools**:
-- **GitHub**: [pygithub](https://github.com/PyGithub/PyGithub) - Repository management and automation
-- **Slack**: [slack-sdk](https://github.com/slackapi/python-slack-sdk) - Team communication and notifications
+| Tool | Purpose |
+| --- | --- |
+| `uv` | Python dependency resolution and command runner. |
+| Ruff | Python lint/format. |
+| Pytest | Python unit/integration/e2e/performance tests. |
+| pnpm | TypeScript workspace management. |
+| Vitest | SDK/UI/Tauri package tests. |
+| Docker Compose | Process-mode service topology. |
+| Tilt | Process-mode development UX. |
+| GitHub Actions | Quality, Python tests, E2E, frontend/SDK, performance, Docker, release, Tauri, SDK conformance. |
