@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-02T05:02:21.577Z",
-  "updatedAt": "2026-07-02T09:12:16.921Z",
+  "updatedAt": "2026-07-02T09:14:48.192Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -623,10 +623,13 @@
       "id": "G052-lane-e-admin-operate-suite",
       "title": "**Lane E — Admin/operate suite**",
       "objective": "**Lane E — Admin/operate suite**\nOwner role: executor + security-minded reviewer\nScope: overview, services, access/RBAC, tokens, devices, config, contracts, plugins, pairing, backups, scheduler, audit.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-02T05:02:21.577Z",
-      "updatedAt": "2026-07-02T05:02:21.577Z"
+      "updatedAt": "2026-07-02T09:14:48.192Z",
+      "startedAt": "2026-07-02T09:12:39.947Z",
+      "completedAt": "2026-07-02T09:14:48.192Z",
+      "evidence": "Lane E admin/operate suite evidence: focused shared UI tests cover admin overview, services, access/RBAC, tokens, devices, config, contracts, plugins, pairing, backups, scheduler, audit, AdminAction, redaction, and secret handling routes/states. SDK focused tests cover admin/Auth/token/device/config/contract/plugin/pairing/backup/scheduler/audit/redaction contract paths. Tauri admin E2E and service-boundary gates passed, proving mounted admin route behavior and preserving UI-through-SDK/Gateway/Tauri boundaries. Backend contract/security suite passed across gateway auth/audit/tokens/routes/ACL/mesh, config admin contracts, scheduler admin contracts, and contract registry. A stale path command using tests/unit/auth failed because that directory does not exist; corrected existing paths passed. Verified pnpm --filter @aurora/ui typecheck; pnpm --filter @aurora/ui test -- -t 'admin|AdminAction|services|access|RBAC|tokens|devices|config|contracts|plugins|pairing|backups|scheduler|audit|redact|secret'; pnpm --filter @aurora/client test -- -t 'admin|AdminAction|Auth|token|device|config|contract|plugin|pairing|backup|scheduler|audit|redact|secret'; pnpm --filter @aurora/tauri-ui test:e2e:admin; pnpm --filter @aurora/tauri-ui test:service-boundary; uv run pytest tests/unit/gateway tests/unit/services/test_config_admin_contracts.py tests/unit/app/scheduler/test_scheduler_admin_contracts.py tests/unit/contracts/test_registry.py -q."
     },
     {
       "id": "G053-lane-f-e2e-visual-ci-docs-release-re",
