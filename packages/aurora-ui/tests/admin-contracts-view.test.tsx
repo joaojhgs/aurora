@@ -41,7 +41,7 @@ describe('admin contracts view', () => {
     expect(markup).toContain('Weather.Forecast')
     expect(markup).toContain('/api/Weather/Forecast')
     expect(markup).toContain('OpenAPI/export state')
-    expect(markup).toContain('Generated Gateway/OpenAPI path /api/Weather/Forecast')
+    expect(markup).toContain('Gateway/OpenAPI path /api/Weather/Forecast')
     expect(markup).toContain('Live-registry status')
     expect(markup).toContain('Contract conformance')
     expect(markup).toContain('WeatherForecastRequest')

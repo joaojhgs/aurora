@@ -14,6 +14,10 @@ export function EvidenceBadge({ label }: { label: string }) {
 
 export function presentableSignal(label: string): string {
   const normalized = label.trim()
+  if (/^mock$/i.test(normalized)) return 'Demo'
+  if (/^demo transport$/i.test(normalized)) return 'Demo mode'
+  if (/service contract pending/i.test(normalized)) return 'Pending'
+  if (/capability_not_advertised/i.test(normalized)) return 'Unavailable'
   if (/^local\s*\//i.test(normalized)) return 'Local'
   if (/^mesh\s*\//i.test(normalized)) return 'Mesh'
   if (/^remote\s*\//i.test(normalized)) return 'Remote'
@@ -21,7 +25,7 @@ export function presentableSignal(label: string): string {
   if (/^native[:/]/i.test(normalized)) return 'Native'
   return label
     .replaceAll('Aurora', 'Aurora')
-    .replaceAll('Demo transport', 'Demo transport')
+    .replaceAll('Demo transport', 'Demo mode')
     .replaceAll('service state', 'service state')
     .replaceAll('Service state', 'Service state')
     .replaceAll('No service state', 'Unavailable')
@@ -29,8 +33,9 @@ export function presentableSignal(label: string): string {
     .replaceAll('Route state', 'Route state')
     .replaceAll('evidence', 'state')
     .replaceAll('Evidence', 'State')
-    .replaceAll('demo only', 'demo only')
-    .replaceAll('demo', 'demo')
+    .replaceAll('mock', 'Demo')
+    .replaceAll('demo only', 'Demo only')
+    .replaceAll('demo', 'Demo')
 }
 
 function statusLabel(state: AvailabilityState): string {

@@ -1017,7 +1017,7 @@ describe('Tauri CI/E2E route gates', () => {
       await clickButtonByLabel(tools.container, 'View details')
       await waitUntil(() => {
         expect(tools.container.textContent).toContain('Tool detail drawer')
-        expect(tools.container.textContent).toContain('Generated parameter form')
+        expect(tools.container.textContent).toContain('Tool parameters')
         expect(tools.container.textContent).toContain('Parameter validation is schema-derived from Tooling.GetToolCatalog')
         expect(tools.container.textContent).toContain('Dry-run preview')
         expect(tools.container.textContent).toContain('Schema')

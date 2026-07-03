@@ -240,7 +240,7 @@ export function ModelsView({
             <aside className="aui-model-summary" aria-label="Runtime summary">
               <h2>Runtime state</h2>
               <dl>
-                <div><dt>Generated</dt><dd>{model.generatedAt ?? 'pending'}</dd></div>
+                <div><dt>Updated</dt><dd>{model.generatedAt ?? 'pending'}</dd></div>
                 <div><dt>Selected provider</dt><dd>{model.selectedProviderId ?? 'not selected'}</dd></div>
                 <div><dt>Mobile local-light</dt><dd><StatusBadge state={model.mobileLocalLightState} /></dd></div>
                 <div><dt>Native state</dt><dd>{model.mobileLocalLightReason}</dd></div>

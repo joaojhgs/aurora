@@ -2451,3 +2451,582 @@ body { font-size: 14px; line-height: 1.45; }
     padding-inline: .55rem;
   }
 }
+
+/* Visual Ralph all-route pass 10: align every production route with the dark mock cockpit. */
+:root {
+  --aui-page-max: 78rem;
+  --aui-card-radius: .72rem;
+  --aui-card-pad: .78rem;
+  --aui-grid-gap: .72rem;
+}
+
+.aui-topbar::after { content: none !important; }
+
+.aui-content:not(:has(.aui-assistant)) {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(20, 184, 166, .09), transparent 28rem),
+    radial-gradient(circle at 82% 8%, rgba(56, 189, 248, .055), transparent 26rem),
+    #07090b;
+}
+
+.aui-content:not(:has(.aui-assistant)) > * {
+  max-width: var(--aui-page-max);
+  margin-inline: auto;
+}
+
+.aui-page-header,
+.aui-tool-header,
+.aui-models-header,
+.aui-settings-header,
+.aui-memory-header,
+.aui-onboarding-header,
+.aui-mesh-header,
+.aui-route-policy-header,
+.aui-mesh-diagnostics-header,
+.aui-admin-header {
+  gap: .8rem;
+  margin-bottom: .1rem;
+}
+
+.aui-page-header > div,
+.aui-tool-header > div,
+.aui-models-header > div,
+.aui-settings-header > div,
+.aui-memory-header > div,
+.aui-onboarding-header > div,
+.aui-mesh-header > div,
+.aui-route-policy-header > div,
+.aui-mesh-diagnostics-header > div,
+.aui-admin-header > div {
+  min-width: 0;
+}
+
+.aui-page-header h1,
+.aui-tool-header h1,
+.aui-models-header h1,
+.aui-settings-header h1,
+.aui-memory-header h1,
+.aui-onboarding-header h1,
+.aui-mesh-header h1,
+.aui-route-policy-header h1,
+.aui-mesh-diagnostics-header h1,
+.aui-admin-header h1 {
+  margin-top: .08rem;
+  max-width: 38rem;
+  color: #f4f7f7;
+  font-size: clamp(1.28rem, 1.9vw, 1.72rem);
+  font-weight: 850;
+  letter-spacing: -.035em;
+  line-height: 1.02;
+}
+
+.aui-page-header p,
+.aui-tool-header p,
+.aui-models-header p,
+.aui-settings-header p,
+.aui-memory-header p,
+.aui-onboarding-header p,
+.aui-mesh-header p,
+.aui-route-policy-header p,
+.aui-mesh-diagnostics-header p,
+.aui-admin-header p {
+  max-width: 42rem;
+  margin-top: .32rem;
+  color: color-mix(in srgb, var(--aui-muted) 94%, #d8fffb);
+  font-size: .78rem;
+  line-height: 1.38;
+}
+
+.aui-kicker {
+  color: var(--aui-primary);
+  font-size: .62rem;
+  letter-spacing: .13em;
+  opacity: .9;
+}
+
+.aui-page-header-badges,
+.aui-model-badges,
+.aui-settings-badges,
+.aui-mesh-badges,
+.aui-admin-badges {
+  gap: .32rem;
+  align-content: start;
+  max-width: 30rem;
+}
+
+.aui-badge,
+.aui-route-badge,
+.aui-action-chip,
+.aui-secondary-action,
+.aui-primary-action,
+.aui-admin-action-button,
+.aui-button {
+  min-height: 1.68rem;
+  border-radius: .42rem;
+  font-size: .68rem;
+  letter-spacing: .005em;
+}
+
+.aui-badge {
+  padding: .22rem .44rem;
+}
+
+.aui-admin-action-button {
+  padding: .36rem .58rem;
+}
+
+.aui-admin-action-button small {
+  display: none;
+}
+
+.aui-card,
+.aui-state-surface,
+.aui-route-notice,
+.aui-tool-filters,
+.aui-tool-scheduler,
+.aui-tool-empty,
+.aui-tool-summary,
+.aui-tool-card,
+.aui-tool-detail-drawer,
+.aui-tool-mcp,
+.aui-tool-result,
+.aui-model-card,
+.aui-model-route-policy,
+.aui-model-categories,
+.aui-model-benchmark,
+.aui-model-setup,
+.aui-model-warnings,
+.aui-model-policy-banner,
+.aui-model-route-card,
+.aui-model-table-wrap,
+.aui-model-summary,
+.aui-settings-panel,
+.aui-settings-control,
+.aui-settings-empty,
+.aui-native-card,
+.aui-memory-collections,
+.aui-memory-collection-card,
+.aui-memory-search,
+.aui-memory-panel,
+.aui-memory-result,
+.aui-conversation-list article,
+.aui-onboarding-panel,
+.aui-mesh-controls,
+.aui-mesh-panel,
+.aui-mesh-summary div,
+.aui-mesh-meta div,
+.aui-mesh-topology-card,
+.aui-mesh-route-card,
+.aui-mesh-pairing-card,
+.aui-mesh-card,
+.aui-mesh-row,
+.aui-route-policy-summary div,
+.aui-route-policy-panel,
+.aui-mesh-diagnostics-summary div,
+.aui-mesh-diagnostics-alert,
+.aui-mesh-diagnostics-table-row,
+.aui-mesh-error-list li,
+.aui-admin-panel,
+.aui-admin-empty,
+.aui-admin-metric,
+.aui-diagnostics-metric-card,
+.aui-diagnostics-probe,
+.aui-diagnostics-export-message,
+.aui-diagnostics-timeline li,
+.aui-config-section,
+.aui-data-policy-card {
+  border-color: rgba(255, 255, 255, .075);
+  border-radius: var(--aui-card-radius);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.008)),
+    #101316;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.aui-tool-section-heading,
+.aui-redacted-preview,
+.aui-tool-status-row,
+.aui-tool-meta div,
+.aui-model-meta div,
+.aui-model-categories dl > div,
+.aui-model-panel-title > span,
+.aui-settings-panel-title > span,
+.aui-settings-control-icon,
+.aui-settings-facts div,
+.aui-memory-result,
+.aui-conversation-list article,
+.aui-mesh-panel-title > span,
+.aui-mesh-error-list li,
+.aui-diagnostics-probe,
+.aui-diagnostics-timeline li {
+  background: #14181c;
+}
+
+.aui-tool-panel,
+.aui-models,
+.aui-settings,
+.aui-memory,
+.aui-onboarding,
+.aui-mesh,
+.aui-route-policy-view,
+.aui-mesh-diagnostics,
+.aui-admin-overview,
+.aui-admin-services,
+.aui-admin-rbac,
+.aui-admin-tokens,
+.aui-admin-devices,
+.aui-admin-config,
+.aui-admin-plugins,
+.aui-admin-pairing,
+.aui-admin-backups,
+.aui-admin-scheduler,
+.aui-admin-audit,
+.aui-data-policy,
+.aui-native-settings {
+  gap: var(--aui-grid-gap);
+}
+
+.aui-tool-layout,
+.aui-model-layout,
+.aui-settings-grid,
+.aui-memory-grid,
+.aui-onboarding-grid,
+.aui-route-policy-layout,
+.aui-mesh-diagnostics-grid,
+.aui-admin-grid {
+  gap: var(--aui-grid-gap);
+}
+
+.aui-admin-metrics,
+.aui-mesh-summary,
+.aui-route-policy-summary,
+.aui-mesh-diagnostics-summary,
+.aui-settings-facts,
+.aui-memory-collection-grid,
+.aui-diagnostics-overview {
+  gap: .55rem;
+}
+
+.aui-admin-panel,
+.aui-admin-empty,
+.aui-admin-metric,
+.aui-tool-filters,
+.aui-tool-scheduler,
+.aui-tool-summary,
+.aui-tool-card,
+.aui-tool-detail-drawer,
+.aui-tool-mcp,
+.aui-tool-result,
+.aui-model-card,
+.aui-model-route-policy,
+.aui-model-categories,
+.aui-model-benchmark,
+.aui-model-setup,
+.aui-model-warnings,
+.aui-model-policy-banner,
+.aui-model-route-card,
+.aui-model-summary,
+.aui-settings-panel,
+.aui-settings-control,
+.aui-native-card,
+.aui-memory-collections,
+.aui-memory-collection-card,
+.aui-memory-search,
+.aui-memory-panel,
+.aui-memory-result,
+.aui-conversation-list article,
+.aui-onboarding-panel,
+.aui-mesh-controls,
+.aui-mesh-panel,
+.aui-mesh-summary div,
+.aui-mesh-meta div,
+.aui-mesh-topology-card,
+.aui-mesh-route-card,
+.aui-mesh-pairing-card,
+.aui-mesh-card,
+.aui-mesh-row,
+.aui-route-policy-summary div,
+.aui-route-policy-panel .aui-panel-heading,
+.aui-route-policy-form,
+.aui-route-policy-actions,
+.aui-mesh-diagnostics-summary div,
+.aui-mesh-diagnostics-table-row,
+.aui-diagnostics-metric-card,
+.aui-diagnostics-probe,
+.aui-diagnostics-export-message,
+.aui-diagnostics-timeline li {
+  padding: var(--aui-card-pad);
+}
+
+.aui-panel-heading,
+.aui-admin-panel-header,
+.aui-tool-card-header,
+.aui-memory-section-heading,
+.aui-mesh-panel-title,
+.aui-model-panel-title,
+.aui-settings-panel-title {
+  gap: .52rem;
+}
+
+.aui-admin-panel h2,
+.aui-admin-empty h2,
+.aui-admin-empty h3,
+.aui-tool-summary h2,
+.aui-tool-card-header h2,
+.aui-model-card h2,
+.aui-model-panel-title h2,
+.aui-settings-panel-title h2,
+.aui-memory-panel h2,
+.aui-memory-section-heading h2,
+.aui-onboarding-panel h2,
+.aui-mesh-panel-title h2,
+.aui-mesh-card h2,
+.aui-route-policy-panel h2,
+.aui-diagnostics-metric-card p {
+  color: #f0f5f5;
+  font-size: .88rem;
+  font-weight: 850;
+  letter-spacing: -.012em;
+}
+
+.aui-admin-metric strong,
+.aui-memory-collection-card p,
+.aui-diagnostics-metric-card strong {
+  color: #f5fbfb;
+  font-size: clamp(1.18rem, 2vw, 1.62rem);
+  font-weight: 850;
+  letter-spacing: -.04em;
+}
+
+.aui-admin-metric span,
+.aui-admin-metric small,
+.aui-tool-summary dt,
+.aui-tool-meta dt,
+.aui-model-meta dt,
+.aui-model-summary dt,
+.aui-settings-facts dt,
+.aui-memory-facts dt,
+.aui-mesh-summary dt,
+.aui-mesh-meta dt,
+.aui-route-policy-summary dt,
+.aui-mesh-diagnostics-summary dt,
+.aui-diagnostics-timeline time,
+.aui-diagnostics-probe small {
+  color: #77848a;
+  font-size: .66rem;
+  letter-spacing: .045em;
+}
+
+.aui-table,
+.aui-admin-table,
+.aui-model-table,
+.aui-model-benchmark-table {
+  font-size: .74rem;
+}
+
+.aui-table th,
+.aui-table td,
+.aui-admin-table th,
+.aui-admin-table td,
+.aui-model-table th,
+.aui-model-table td,
+.aui-model-benchmark-table th,
+.aui-model-benchmark-table td {
+  padding: .48rem .55rem;
+}
+
+.aui-table th,
+.aui-admin-table th,
+.aui-model-table th,
+.aui-model-benchmark-table th {
+  color: #7f8c91;
+  font-size: .63rem;
+  letter-spacing: .055em;
+}
+
+.aui-tool-filters input,
+.aui-tool-filters select,
+.aui-tool-select select,
+.aui-tool-param-form input,
+.aui-memory-search input,
+.aui-memory-search select,
+.aui-mesh-controls input:not([type="checkbox"]),
+.aui-mesh-controls textarea,
+.aui-route-policy-form input,
+.aui-route-policy-form select,
+.aui-route-policy-form textarea,
+.aui-onboarding-panel input {
+  min-height: 2.16rem;
+  border-color: rgba(255,255,255,.075);
+  border-radius: .42rem;
+  background: #0b0e11;
+  font-size: .78rem;
+}
+
+.aui-tool-actions button,
+.aui-secondary-action,
+.aui-primary-action,
+.aui-memory-search button,
+.aui-memory-action,
+.aui-model-actions button,
+.aui-model-repair-link,
+.aui-settings-control button,
+.aui-native-card button,
+.aui-onboarding-form button,
+.aui-mesh-controls button,
+.aui-mesh-actions button,
+.aui-mesh-pairing-card .aui-button {
+  min-height: 2.12rem;
+  border-radius: .42rem;
+  padding: .42rem .62rem;
+  font-size: .74rem;
+}
+
+.aui-tool-alert,
+.aui-memory-alert,
+.aui-settings-alert,
+.aui-mesh-diagnostics-alert,
+.aui-onboarding-message,
+.aui-model-notice,
+.aui-route-notice {
+  padding: .68rem .75rem;
+  border-radius: .62rem;
+  font-size: .76rem;
+}
+
+.aui-technical-detail {
+  display: none;
+}
+
+@media (min-width: 1101px) {
+  .aui-content:not(:has(.aui-assistant)) {
+    padding: .82rem .95rem 1.1rem;
+  }
+
+  .aui-admin-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+
+  .aui-admin-grid {
+    grid-template-columns: minmax(0, 1.38fr) minmax(18rem, .72fr);
+  }
+
+  .aui-memory-grid {
+    grid-template-columns: minmax(13rem, .58fr) minmax(0, 1.35fr) minmax(15rem, .78fr);
+  }
+
+  .aui-tool-layout,
+  .aui-model-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem);
+  }
+
+  .aui-settings-grid,
+  .aui-onboarding-grid,
+  .aui-route-policy-layout {
+    grid-template-columns: minmax(0, 1.18fr) minmax(17rem, .82fr);
+  }
+
+  .aui-mesh-summary,
+  .aui-mesh-diagnostics-summary {
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --aui-card-radius: .58rem;
+    --aui-card-pad: .68rem;
+    --aui-grid-gap: .58rem;
+  }
+
+  .aui-content:not(:has(.aui-assistant)) {
+    padding: .78rem .72rem calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  .aui-page-header,
+  .aui-tool-header,
+  .aui-models-header,
+  .aui-settings-header,
+  .aui-memory-header,
+  .aui-onboarding-header,
+  .aui-mesh-header,
+  .aui-route-policy-header,
+  .aui-mesh-diagnostics-header,
+  .aui-admin-header {
+    display: grid;
+    gap: .5rem;
+  }
+
+  .aui-page-header h1,
+  .aui-tool-header h1,
+  .aui-models-header h1,
+  .aui-settings-header h1,
+  .aui-memory-header h1,
+  .aui-onboarding-header h1,
+  .aui-mesh-header h1,
+  .aui-route-policy-header h1,
+  .aui-mesh-diagnostics-header h1,
+  .aui-admin-header h1 {
+    font-size: clamp(1.28rem, 8vw, 1.72rem);
+  }
+
+  .aui-page-header p,
+  .aui-tool-header p,
+  .aui-models-header p,
+  .aui-settings-header p,
+  .aui-memory-header p,
+  .aui-onboarding-header p,
+  .aui-mesh-header p,
+  .aui-route-policy-header p,
+  .aui-mesh-diagnostics-header p,
+  .aui-admin-header p {
+    font-size: .74rem;
+    line-height: 1.34;
+  }
+
+  .aui-page-header-badges,
+  .aui-model-badges,
+  .aui-settings-badges,
+  .aui-mesh-badges,
+  .aui-admin-badges,
+  .aui-content:not(:has(.aui-assistant)) .aui-assistant-badges[aria-label*="status"],
+  .aui-content:not(:has(.aui-assistant)) .aui-assistant-badges[aria-label*="Status"] {
+    display: none;
+  }
+
+  .aui-badge,
+  .aui-route-badge {
+    white-space: nowrap;
+  }
+
+  .aui-admin-metrics,
+  .aui-mesh-summary,
+  .aui-route-policy-summary,
+  .aui-mesh-diagnostics-summary,
+  .aui-settings-facts,
+  .aui-memory-collection-grid,
+  .aui-diagnostics-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aui-table-wrap,
+  .aui-admin-table-wrap,
+  .aui-model-table-wrap {
+    margin-inline: -.1rem;
+  }
+
+  .aui-tool-card-header,
+  .aui-admin-panel-header,
+  .aui-mesh-card > header,
+  .aui-mesh-row > header,
+  .aui-mesh-topology-card > header,
+  .aui-mesh-route-card > header,
+  .aui-mesh-pairing-card {
+    display: grid;
+  }
+
+  .aui-memory-search,
+  .aui-mesh-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -45,7 +45,7 @@ describe('BackupRestoreView', () => {
       <BackupRestoreView client={client()} route={route} initialList={backupListFixture} />
     )
 
-    expect(markup).toContain('Create is disabled: capability_not_advertised')
+    expect(markup).toContain('Create is disabled: Unavailable')
     expect(markup).toContain('Backup operations are disabled until backend Backup.List capability state')
     expect(markup).toContain('Expose Backup contracts')
     expect(markup).toContain('Backend has not advertised Backup.List or Backup.* AdminAction contracts.')

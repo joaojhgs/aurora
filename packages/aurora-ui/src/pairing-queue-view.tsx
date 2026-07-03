@@ -409,7 +409,7 @@ export function PairingQueueSurface({
         state={model.state}
         description={model.description}
         evidence={model.evidence}
-        actionLabel="AdminAction required for approve/deny; create, exchange, and token revoke also require AdminAction"
+        actionLabel="Admin action required"
       />
 
       <section className="aui-pairing-controls" aria-label="Pairing queue controls">
@@ -609,7 +609,7 @@ export function buildPairingQueueModel({
   if (route.disabled) {
     return {
       state: route.state,
-      description: 'Pairing queue is disabled until the capability catalog reports Auth.ListPendingPairings as routeable.',
+      description: 'Pairing queue is disabled until Aurora reports pending-pairing access as available.',
       evidence: routeEvidence(route),
       entries: [],
       total: 0,
@@ -622,7 +622,7 @@ export function buildPairingQueueModel({
   if (loadState === 'loading') {
     return {
       state: 'loading',
-      description: 'Loading device and peer pairing requests from Auth.ListPendingPairings.',
+      description: 'Loading device and peer pairing requests from Aurora.',
       evidence: routeEvidence(route),
       entries: [],
       total: 0,

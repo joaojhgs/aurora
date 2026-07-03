@@ -1745,7 +1745,7 @@ describe('Aurora production shell', () => {
       <BackupRestoreView client={client} route={{ ...backups, state: 'unsupported', disabled: true, blockers: ['capability_not_advertised'] }} />
     )
     expect(unavailableMarkup).toContain('<dd>unavailable</dd>')
-    expect(unavailableMarkup).toContain('capability_not_advertised')
+    expect(unavailableMarkup).toContain('Unavailable')
 
     expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
     expect(backupErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'missing' }))).toContain('unavailable')
@@ -2074,7 +2074,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Android')
     expect(markup).toContain('iOS')
     expect(markup).toContain('Siri/Shortcuts/App Intents')
-    expect(markup).toContain('demo only')
+    expect(markup).toContain('Demo only')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')
     expect(markup).toContain('Pairing code')
@@ -2159,7 +2159,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.services.map((service) => service.module)).toContain('Gateway')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Gateway.GetServices')
     expect(markup).toContain('Services')
-    expect(markup).toContain('Demo transport')
+    expect(markup).toContain('Demo mode')
     expect(markup).toContain('Gateway.GetServices')
     expect(markup).toContain('Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls')
     expect(markup).toContain('Heartbeat')
@@ -2931,7 +2931,7 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Loading pairing queue')
-    expect(markup).toContain('AdminAction required for approve/deny')
+    expect(markup).toContain('Admin action required')
   })
 
   it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability status', async () => {
@@ -3001,7 +3001,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.fixtureOnly).toBe(true)
     expect(snapshot.evidenceSource).toContain('sample peers are not live truth')
     expect(markup).toContain('Mesh peers')
-    expect(markup).toContain('Demo transport')
+    expect(markup).toContain('Demo mode')
     expect(markup).toContain('sample peers are not live truth')
     expect(markup).toContain('Demo, not live truth')
     expect(markup).toContain('Topology')
@@ -3676,7 +3676,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Provider')
     expect(markup).toContain('Risk')
     expect(markup).toContain('Examples')
-    expect(markup).toContain('Generated parameter form')
+    expect(markup).toContain('Tool parameters')
     expect(markup).toContain('MCP server status')
     expect(markup).toContain('Reload catalog')
     expect(markup).toContain('Safe local path')
@@ -3818,7 +3818,7 @@ describe('Aurora production shell', () => {
     const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
 
     expect(markup).toContain('Tooling is capability-gated')
-    expect(markup).toContain('capability_not_advertised')
+    expect(markup).toContain('Unavailable')
     expect(markup).toContain('Route state')
     expect(markup).toContain('unsupported')
   })

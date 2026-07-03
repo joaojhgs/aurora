@@ -407,8 +407,8 @@ function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel | null }) {
         <div><dt>Risk</dt><dd>{tool ? `${tool.riskClass}${tool.requiresAdminAction ? '; AdminAction required' : ''}` : 'Pending catalog selection'}</dd></div>
         <div><dt>Examples</dt><dd>{tool ? exampleSummary(tool) : 'No tool selected'}</dd></div>
       </dl>
-      <form className="aui-tool-param-form" aria-label="Generated parameter form">
-        <strong>Generated parameter form</strong>
+      <form className="aui-tool-param-form" aria-label="Tool parameters">
+        <strong>Tool parameters</strong>
         <p>
           Parameter validation is schema-derived from Tooling.GetToolCatalog; backend validation remains authoritative before Tooling.ExecuteTool.
         </p>

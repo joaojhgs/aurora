@@ -98,7 +98,7 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     expect(markup).toContain('Tool catalog filters')
     expect(markup).toContain('Tool search')
     expect(markup).toContain('Tool detail drawer')
-    expect(markup).toContain('Generated parameter form')
+    expect(markup).toContain('Tool parameters')
     expect(markup).toContain('Parameter validation is schema-derived from Tooling.GetToolCatalog')
     expect(markup).toContain('Dry-run preview')
     expect(markup).toContain('Execute safe local')

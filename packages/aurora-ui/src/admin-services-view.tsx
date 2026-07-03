@@ -202,7 +202,7 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
         <Metric label="Services" value={String(snapshot.services.length)} detail={`${totals.selectable} selectable`} />
         <Metric label="Methods" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
         <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
-        <Metric label="Generated" value={snapshot.generatedAt ?? 'pending'} detail="capability catalog timestamp" />
+        <Metric label="Updated" value={snapshot.generatedAt ?? 'pending'} detail="catalog timestamp" />
       </div>
 
       <div className="aui-admin-grid">
@@ -238,7 +238,7 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
       <AdminEvidenceHeader
         title="Contracts registry"
         titleId="admin-contracts-title"
-        description="Method exposure, generated Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
+        description="Method exposure, Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
         snapshot={snapshot}
         state={state}
         badgeLabel="Admin contracts service status"
@@ -250,7 +250,7 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
         <Metric label="Contracts" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
         <Metric label="Services" value={String(snapshot.services.length)} detail="registry modules with descriptors" />
         <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
-        <Metric label="Generated" value={snapshot.generatedAt ?? 'pending'} detail="capability catalog timestamp" />
+        <Metric label="Updated" value={snapshot.generatedAt ?? 'pending'} detail="catalog timestamp" />
       </div>
 
       <ContractsPanel contracts={snapshot.contracts} />
@@ -572,7 +572,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
 
           <div className="aui-admin-metrics" aria-label="Contract explorer summary">
             <Metric label="Filtered methods" value={String(filteredContracts.length)} detail={`${modules.length} service modules`} />
-            <Metric label="HTTP routes" value={String(filteredContracts.filter((contract) => contract.availableOverHttp).length)} detail="generated SDK route paths" />
+            <Metric label="HTTP routes" value={String(filteredContracts.filter((contract) => contract.availableOverHttp).length)} detail="SDK route paths" />
             <Metric label="Live registry" value={String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length)} detail="registry + capability catalog" />
             <Metric label="Schemas" value={String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length)} detail="input or output JSON Schema" />
           </div>
@@ -592,7 +592,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                     <th>Type</th>
                     <th>Exposure</th>
                     <th>Backend</th>
-                    <th>Generated route</th>
+                    <th>Gateway route</th>
                     <th>Conformance</th>
                     <th>Permissions</th>
                   </tr>
@@ -706,7 +706,7 @@ function ContractDetail({ contract }: { contract: AdminContractRow }) {
         <div><dt>Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
         <div><dt>Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
         <div><dt>Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
-        <div><dt>Generated route path</dt><dd><code>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</code></dd></div>
+        <div><dt>Gateway route path</dt><dd><code>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</code></dd></div>
         <div><dt>OpenAPI/export state</dt><dd>{contract.openApiState}</dd></div>
         <div><dt>Export state</dt><dd>{contract.exportState}</dd></div>
         <div><dt>Live-registry status</dt><dd>{contract.liveRegistryStatus}</dd></div>
@@ -817,8 +817,8 @@ function contractConformance(method: MethodDescriptor, capability: CapabilitySum
 }
 
 function openApiEvidence(method: MethodDescriptor): string {
-  if (!method.availableOverHttp || !method.routePath) return 'Internal-only contract is intentionally absent from generated OpenAPI HTTP paths.'
-  return `Generated Gateway/OpenAPI path ${method.routePath} from live registry descriptor ${method.module}.${method.name}.`
+  if (!method.availableOverHttp || !method.routePath) return 'Internal-only contract is intentionally absent from OpenAPI HTTP paths.'
+  return `Gateway/OpenAPI path ${method.routePath} from live registry descriptor ${method.module}.${method.name}.`
 }
 
 function exportEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {

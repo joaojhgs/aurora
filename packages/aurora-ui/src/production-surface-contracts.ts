@@ -228,7 +228,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['plugins', 'tools'],
     routeOracles: [
       routeOracle('plugins', ['Plugins, MCP, and tools'], ['Reload catalog']),
-      routeOracle('tools', ['Tool registry and Approval cards'], ['Tool search', 'Tool detail drawer', 'Generated parameter form', 'MCP server status', 'Open scheduler'])
+      routeOracle('tools', ['Tool registry and Approval cards'], ['Tool search', 'Tool detail drawer', 'Tool parameters', 'MCP server status', 'Open scheduler'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     mockUxAnchors: ['Plugins, MCP, and tools', 'Provider grouping', 'Reload and install controls', 'Tool risk and sharing policy'],

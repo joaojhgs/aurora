@@ -375,7 +375,7 @@ export async function buildMeshPeersSnapshot(
     warnings: failures,
     error: denied ? 'Mesh peer lifecycle access was denied by Auth or Gateway.' : null,
     evidenceSource: client.transport.kind === 'mock'
-      ? 'Demo transport; sample peers are not live truth'
+      ? 'Demo mode; sample peers are not live truth'
       : 'Aurora mesh, auth, gateway, device, and capability responses',
     transportKind: client.transport.kind,
     fixtureOnly: client.transport.kind === 'mock'

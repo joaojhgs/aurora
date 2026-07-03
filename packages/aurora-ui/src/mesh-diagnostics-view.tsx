@@ -391,7 +391,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           <Metric label="method" value="Gateway.GetSupportBundle" />
           <Metric label="AdminAction" value="Gateway.AdminActionDraft / Gateway.AdminActionConfirm" />
           <Metric label="state" value={snapshot.supportBundleState} />
-          <Metric label="generated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
+          <Metric label="updated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
           <Metric label="correlation" value={snapshot.supportBundleCorrelationId ?? 'pending'} />
           <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
         </dl>
@@ -615,7 +615,7 @@ function buildLiveProbes(input: {
     {
       name: 'Gateway route registry',
       state: input.catalog ? 'available-local' : 'degraded',
-      latency: input.catalog?.generated_at ? `generated ${input.catalog.generated_at}` : 'not reported',
+      latency: input.catalog?.generated_at ? `updated ${input.catalog.generated_at}` : 'not reported',
       detail: input.catalog ? `${input.catalog.actions.length} actions / ${input.catalog.providers.length} providers advertised.` : 'Gateway.GetCapabilityCatalog did not return route metadata.'
     },
     {
