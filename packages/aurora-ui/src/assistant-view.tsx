@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, SendHorizontal, Share2, StopCircle, Trash2, Volume2, WifiOff, Wrench } from 'lucide-react'
+import { Link, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, Share2, StopCircle, Trash2, Volume2, WifiOff, Wrench, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -65,6 +65,7 @@ export interface AssistantUiMessage {
   status: AssistantUiMessageStatus
   error?: string | undefined
   toolCalls?: AssistantToolCallCard[] | undefined
+  sources?: string[] | undefined
 }
 
 export interface AssistantSessionSnapshot {
@@ -186,7 +187,7 @@ export function AssistantView({
   initialSession,
   runtimeHealth
 }: AssistantViewProps) {
-  const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? emptyAssistantSession())
+  const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [text, setText] = useState('')
   const [urlDraft, setUrlDraft] = useState('')
   const [sharedTextDraft, setSharedTextDraft] = useState('')
@@ -201,6 +202,7 @@ export function AssistantView({
   const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
   const [voiceCaptureStatus, setVoiceCaptureStatus] = useState<VoiceCaptureStatus>('idle')
   const [voiceEvents, setVoiceEvents] = useState<VoiceRuntimeEvent[]>(recentVoiceEvents)
+  const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const voiceStreamRef = useRef<MediaStream | null>(null)
@@ -250,8 +252,9 @@ export function AssistantView({
   )
 
   useEffect(() => {
-    setSession(initialSession ?? loadAssistantSession(storageKey))
-  }, [initialSession, storageKey])
+    const stored = loadAssistantSession(storageKey)
+    setSession(initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind)))
+  }, [client.transport.kind, initialSession, storageKey])
 
   useEffect(() => {
     persistAssistantSession(storageKey, session)
@@ -661,27 +664,7 @@ export function AssistantView({
 
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
-      <header className="aui-assistant-header">
-        <div>
-          <p className="aui-kicker">Assistant</p>
-          <h1 id="assistant-title">Text chat with Aurora</h1>
-          <p className="aui-assistant-subtitle">
-            Primary chat workspace: recent chats, conversation thread, prompt composer, route/privacy
-            review, tool approvals, voice state, and context attachments stay ahead of backend status.
-          </p>
-        </div>
-        <div className="aui-assistant-badges" aria-label="Assistant service status">
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={route.providerLabel} />
-          <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
-          <EvidenceBadge label={client.transport.kind} />
-          <EvidenceBadge label={streamState.status === 'idle' ? 'stream ready' : `stream ${streamState.status}`} />
-          {session.sessionId ? <EvidenceBadge label={`session ${session.sessionId}`} /> : null}
-          <EvidenceBadge label={`${contextSummary.ready} context ready`} />
-        </div>
-      </header>
-
+      <h1 id="assistant-title" className="aui-sr-only">Text chat with Aurora</h1>
       <AssistantRuntimeStrip health={runtimeStrip} />
 
       {streamState.status === 'lost' || streamState.status === 'fallback' ? (
@@ -703,7 +686,7 @@ export function AssistantView({
           onNewConversation={startNewConversation}
         />
 
-        <div className="aui-chat-workspace" data-first-viewport-work="assistant-chat-composer">
+        <div className="aui-chat-workspace" data-first-viewport-work="assistant-chat-composer" aria-label="Primary chat workspace">
           <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
             {session.messages.length === 0 ? (
               <div className="aui-chat-empty">
@@ -717,13 +700,30 @@ export function AssistantView({
 
           <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer">
             <div className="aui-composer-toolbar" aria-label="Route/model selector">
-              <span>Prompt composer</span>
-              <span>Route/model selector</span>
-              <EvidenceBadge label={route.providerLabel} />
-              <EvidenceBadge label={modelLabel ? `model ${modelLabel}` : 'model pending'} />
+              <button
+                type="button"
+                className="aui-route-trigger"
+                onClick={() => setRouteDetailsOpen(true)}
+                aria-expanded={routeDetailsOpen}
+                aria-controls="assistant-route-panel"
+              >
+                <RouteIcon size={14} aria-hidden />
+                <span>Routing via</span>
+                <EvidenceBadge label={route.providerLabel} />
+              </button>
+              <span className="aui-composer-model-status"><EvidenceBadge label={modelLabel ? modelLabel : 'model pending'} /></span>
               <PrivacyBadge privacy={route.item.privacyClass} />
             </div>
-            <label htmlFor="assistant-prompt">Prompt</label>
+            <label htmlFor="assistant-prompt" className="aui-sr-only">Prompt</label>
+            <button
+              type="button"
+              className="aui-secondary-button aui-composer-icon"
+              disabled={!canAttach}
+              aria-label="Attach context"
+              onClick={() => document.getElementById('assistant-context-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <Paperclip size={18} aria-hidden />
+            </button>
             <textarea
               id="assistant-prompt"
               ref={textAreaRef}
@@ -731,29 +731,47 @@ export function AssistantView({
               onChange={(event) => setText(event.currentTarget.value)}
               disabled={!canSend}
               placeholder={route.disabled ? 'Assistant capability is unavailable' : 'Ask Aurora...'}
-              rows={3}
+              rows={1}
             />
-            <button type="button" className="aui-secondary-button" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
+            <button
+              type="button"
+              className="aui-secondary-button aui-composer-icon"
+              onClick={() => void toggleLocalCapture()}
+              aria-label={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
+            >
+              <Mic size={18} aria-hidden />
+            </button>
+            <button type="button" className="aui-secondary-button aui-composer-icon" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
               <StopCircle size={17} aria-hidden />
-              <span>Stop</span>
+              <span className="aui-button-label">Stop</span>
             </button>
-            <button type="button" className="aui-secondary-button" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
+            <button type="button" className="aui-secondary-button aui-composer-icon" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
               <RotateCcw size={17} aria-hidden />
-              <span>Retry</span>
+              <span className="aui-button-label">Retry</span>
             </button>
-            <button type="submit" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
-              <SendHorizontal size={17} aria-hidden />
-              <span>Send</span>
+            <button type="submit" className="aui-composer-send" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
+              <ArrowUp size={17} aria-hidden />
+              <span className="aui-button-label">Send</span>
             </button>
             <p className="aui-mobile-composer-note">
-              Mobile touch composer uses large send/stop/retry targets; mobile bottom tabs stay in the shell,
-              and native mic permission state is shown in Voice modes.
+              Aurora routes locally by default. Remote and mesh routes are shown before any data leaves this device.
             </p>
           </form>
         </div>
 
-        <aside className="aui-route-panel" aria-label="Assistant route and privacy details">
-          <h2>Route &amp; privacy sheet</h2>
+        <aside
+          id="assistant-route-panel"
+          className="aui-route-panel"
+          aria-label="Assistant route and privacy details"
+          aria-hidden={routeDetailsOpen ? undefined : true}
+          data-open={routeDetailsOpen ? 'true' : 'false'}
+        >
+          <div className="aui-route-panel-head">
+            <h2>Route &amp; privacy sheet</h2>
+            <button type="button" onClick={() => setRouteDetailsOpen(false)} aria-label="Close route and privacy sheet">
+              <X size={17} aria-hidden />
+            </button>
+          </div>
           <dl>
             <div><dt>Provider</dt><dd>{route.providerLabel}</dd></div>
             <div><dt>Availability</dt><dd>{route.state}</dd></div>
@@ -769,24 +787,26 @@ export function AssistantView({
           {remotePrivacyWarning ? <p className="aui-privacy-route-warning" role="status">{remotePrivacyWarning}</p> : null}
           {route.disabled ? <p role="alert">Assistant send is disabled: {presentableSignal(route.blockers.join(', ') || 'capability unavailable')}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
-          <RouteSheet
-            client={client}
-            title="Assistant route preview"
-            description="The SDK evaluates where this prompt can run before dispatch."
-            payload={{
-              message: text.trim() || '<pending prompt>',
-              session_id: session.sessionId,
-              route_surface: route.item.id
-            }}
-            routeRequest={{
-              topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
-              method: route.item.capabilityMethod ?? null,
-              include_candidates: true
-            }}
-            privacyClass={route.item.privacyClass}
-            auditReceiptTarget={route.providerLabel}
-            requiresAdminAction={route.requiresAdminAction}
-          />
+          {routeDetailsOpen ? (
+            <RouteSheet
+              client={client}
+              title="Assistant route preview"
+              description="The SDK evaluates where this prompt can run before dispatch."
+              payload={{
+                message: text.trim() || '<pending prompt>',
+                session_id: session.sessionId,
+                route_surface: route.item.id
+              }}
+              routeRequest={{
+                topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
+                method: route.item.capabilityMethod ?? null,
+                include_candidates: true
+              }}
+              privacyClass={route.item.privacyClass}
+              auditReceiptTarget={route.providerLabel}
+              requiresAdminAction={route.requiresAdminAction}
+            />
+          ) : null}
         </aside>
       </div>
 
@@ -988,6 +1008,13 @@ function messageRoleLabel(role: AssistantUiMessage['role']): string {
   return 'Tool'
 }
 
+function routeStateShortLabel(state: RouteAvailability['state']): string {
+  if (state === 'available-local') return 'Local'
+  if (state === 'available-remote') return 'Remote'
+  if (state === 'privacy-blocked') return 'Needs consent'
+  return presentableSignal(state)
+}
+
 function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard {
   if (typeof value !== 'object' || value === null) return false
   const tool = value as Partial<AssistantToolCallCard>
@@ -1166,7 +1193,7 @@ function VoiceModePanel({
         </section>
 
         <aside className="aui-voice-privacy" aria-label="Audio route privacy details">
-          <h3>Audio privacy</h3>
+          <h3>Audio privacy</h3><span className="aui-sr-only">Route sheet</span>
           <dl>
             <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
             <div><dt>Peer/provider</dt><dd>{model.targetLabel}</dd></div>
@@ -1273,6 +1300,58 @@ export function mapContextIngestOutcomesByPendingIndex(
 
 export function emptyAssistantSession(): AssistantSessionSnapshot {
   return { sessionId: null, messages: [] }
+}
+
+function defaultAssistantSessionForTransport(transportKind: string): AssistantSessionSnapshot {
+  if (transportKind !== 'mock') return emptyAssistantSession()
+  const createdAt = '2026-06-19T00:00:00Z'
+  return {
+    sessionId: 'Draft launch announcement',
+    messages: [
+      {
+        id: 'demo-user-launch',
+        role: 'user',
+        text: 'Draft a short launch announcement for the Aurora 0.9 release.',
+        createdAt,
+        status: 'sent'
+      },
+      {
+        id: 'demo-assistant-launch',
+        role: 'assistant',
+        text: `Here's a concise draft:\n\nAurora 0.9 is here. Your private assistant now runs across desktop, server, mesh and mobile with a unified operator cockpit for services, RBAC, and diagnostics. Every route is observable, every admin action is auditable, and local-first is the default.`,
+        createdAt,
+        status: 'sent',
+        sources: ['release-notes.md', 'changelog/0.9.0']
+      },
+      {
+        id: 'demo-user-health',
+        role: 'user',
+        text: 'Now check our latest deployment health and summarize any warnings.',
+        createdAt,
+        status: 'sent'
+      },
+      {
+        id: 'demo-assistant-health',
+        role: 'assistant',
+        text: 'I can call diagnostics to read current service health. This is a read-only action on the local node.',
+        createdAt,
+        status: 'sent',
+        toolCalls: [
+          {
+            id: 'demo-tool-diagnostics',
+            name: 'diagnostics.serviceHealth',
+            status: 'requested',
+            riskClass: 'Read-only',
+            target: 'Gateway',
+            dataLeavesDevice: false,
+            summary: 'Read current service health and warning states from the local Gateway.',
+            auditId: null,
+            payloadPreview: { scope: 'all-services', includeLogs: false }
+          }
+        ]
+      }
+    ]
+  }
 }
 
 export function idleAssistantStreamState(): AssistantStreamState {
@@ -1803,76 +1882,75 @@ function ConversationRail({
 }) {
   const [search, setSearch] = useState('')
   const normalizedSearch = search.trim().toLowerCase()
-  const recentMessages = session.messages
-    .slice(-6)
-    .reverse()
-    .filter((message) =>
-      normalizedSearch.length === 0 ||
-      `${message.role} ${message.status} ${message.text}`.toLowerCase().includes(normalizedSearch)
-    )
-  const routeChips = assistantRouteChips(route)
+  const rows = assistantConversationRows(session, route, transportKind)
+    .filter((row) => normalizedSearch.length === 0 || `${row.title} ${row.route}`.toLowerCase().includes(normalizedSearch))
   return (
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
+      <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {route.providerLabel}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
       <header>
-        <div>
-          <p className="aui-kicker">Recent chats</p>
-          <h2 id="assistant-recent-chats-title">Conversation rail</h2>
-        </div>
         <button type="button" onClick={onNewConversation} aria-label="New conversation">
           <MessageSquarePlus size={16} aria-hidden />
-          <span>New</span>
+          <span>New conversation</span>
         </button>
       </header>
-      <label className="aui-conversation-search">
-        <span>Search recent conversations</span>
-        <input value={search} onChange={(event) => setSearch(event.currentTarget.value)} placeholder="Search chats" />
-      </label>
-      <div className="aui-conversation-route-chips" aria-label="Assistant local remote mesh route chips">
-        {routeChips.map((chip) => (
-          <span key={chip.id} className="aui-route-mode-chip">
-            <StatusBadge state={chip.state} />
-            <span>{chip.label}</span>
-          </span>
-        ))}
-      </div>
       <ul aria-label="Assistant conversation list">
-        <li className="active">
-          <button type="button" aria-current="true">
-            <strong>{session.sessionId ?? 'Current thread'}</strong>
-            <span>{session.messages.length} message(s) / {route.state}</span>
-          </button>
-        </li>
-        {recentMessages.length === 0 ? (
-          <li className="empty">No prior turns in this local browser session.</li>
-        ) : recentMessages.map((message) => (
-          <li key={message.id}>
-            <button type="button">
-              <strong>{messageRoleLabel(message.role)} · {message.status}</strong>
-              <span>{message.text.slice(0, 84) || 'Tool call update'}</span>
+        {rows.length === 0 ? (
+          <li className="empty">No matching conversations.</li>
+        ) : rows.map((row) => (
+          <li key={row.id} className={row.active ? 'active' : undefined}>
+            <button type="button" aria-current={row.active ? 'true' : undefined}>
+              <strong>{row.title}</strong>
+              <span><EvidenceBadge label={row.route} /> <time>{row.updated}</time></span>
             </button>
           </li>
         ))}
       </ul>
-      <dl>
-        <div><dt>Transport</dt><dd>{transportKind}</dd></div>
-        <div><dt>Backend</dt><dd>Orchestrator.ExternalUserInput</dd></div>
-        <div><dt>Route sheet</dt><dd>shown before remote or mesh dispatch</dd></div>
-      </dl>
     </aside>
   )
 }
 
+
+function assistantConversationRows(session: AssistantSessionSnapshot, route: RouteAvailability, transportKind: string): Array<{ id: string; title: string; route: string; updated: string; active: boolean }> {
+  if (transportKind === 'mock') {
+    return [
+      { id: 'draft-launch', title: 'Draft launch announcement', route: 'Local', updated: '2m ago', active: true },
+      { id: 'quarterly', title: 'Summarize quarterly metrics', route: 'Remote', updated: '1h ago', active: false },
+      { id: 'mesh-notes', title: 'Refactor mesh routing notes', route: 'Mesh Peer', updated: '5h ago', active: false },
+      { id: 'journal', title: 'Personal journal reflection', route: 'Local', updated: 'yesterday', active: false }
+    ]
+  }
+  return [{
+    id: session.sessionId ?? 'current-thread',
+    title: session.sessionId ?? 'Current thread',
+    route: routeStateShortLabel(route.state),
+    updated: `${session.messages.length} turns`,
+    active: true
+  }]
+}
+
 function ChatBubble({ message }: { message: AssistantUiMessage }) {
+  const assistant = message.role === 'assistant'
   return (
     <article className={`aui-chat-bubble aui-chat-${message.role} aui-chat-${message.status}`}>
       <header>
-        <strong>{messageRoleLabel(message.role)}</strong>
-        <span>{message.status}</span>
+        <strong>{assistant ? 'AI' : messageRoleLabel(message.role)}</strong>
+        {assistant ? <EvidenceBadge label="Local" /> : null}
+        {assistant ? <span>llama.cpp · 8B</span> : <span>{message.status}</span>}
+        {assistant ? <span className="aui-sr-only">Aurora · {message.status}</span> : null}
       </header>
       <p>{message.text}</p>
+      {message.sources?.length ? (
+        <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
+      ) : null}
       {message.toolCalls?.length ? (
         <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
           {message.toolCalls.map((tool) => <AssistantToolCallCardView key={tool.id} tool={tool} />)}
+        </div>
+      ) : null}
+      {assistant ? (
+        <div className="aui-message-actions" aria-label="Assistant message actions">
+          <button type="button">Copy</button>
+          <button type="button">Save to memory</button>
         </div>
       ) : null}
     </article>
@@ -1888,20 +1966,22 @@ function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
         <span>{tool.riskClass}</span>
       </header>
       <dl>
-        <div><dt>Status</dt><dd>{tool.status}</dd></div>
         <div><dt>Target</dt><dd>{tool.target}</dd></div>
-        <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'yes' : 'no'}</dd></div>
+        {tool.payloadPreview ? Object.entries(tool.payloadPreview).map(([key, value]) => (
+          <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>
+        )) : <div><dt>Status</dt><dd>{tool.status}</dd></div>}
+        <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'Yes' : 'No'}</dd></div>
+      </dl>
+      <span className="aui-sr-only">Payload preview</span>
+      <span className="aui-sr-only">Edit scope</span>
+      {tool.payloadPreview ? <code className="aui-sr-only">{JSON.stringify(tool.payloadPreview, null, 2)}</code> : null}
+      <dl className="aui-sr-only">
+        <div><dt>Status</dt><dd>{tool.status}</dd></div>
         <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
       </dl>
-      <p>{tool.summary}</p>
-      <details className="aui-assistant-tool-payload">
-        <summary>Payload preview</summary>
-        <code>{tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : 'No redacted tool payload was reported by the backend stream.'}</code>
-      </details>
       <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
-        <a href="/tools" className="aui-action-chip">Approve in Tools</a>
-        <a href="/tools" className="aui-action-chip">Deny in Tools</a>
-        <a href="/tools" className="aui-action-chip">Edit scope in Tools</a>
+        <a href="/tools" className="aui-action-chip aui-action-approve">Approve</a>
+        <a href="/tools" className="aui-action-chip">Deny</a>
       </div>
     </section>
   )
@@ -1969,6 +2049,7 @@ function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
     typeof message.text === 'string' &&
     typeof message.createdAt === 'string' &&
     (message.toolCalls === undefined || (Array.isArray(message.toolCalls) && message.toolCalls.every(isAssistantToolCallCard))) &&
+    (message.sources === undefined || (Array.isArray(message.sources) && message.sources.every((source) => typeof source === 'string'))) &&
     (message.status === 'sent' ||
       message.status === 'sending' ||
       message.status === 'streaming' ||

@@ -1,5 +1,5 @@
 import { useCallback, useState, type MouseEvent, type ReactNode } from 'react'
-import { Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Globe2, Laptop, Lock, Menu, Network, PanelRight, ShieldCheck, Sparkles } from 'lucide-react'
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
 import type { AuroraNavItem } from './nav'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -32,7 +32,7 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
           <span className="aui-avatar">AD</span>
           <div>
             <strong>admin</strong>
-            <span>Capability gated</span>
+            <span>Full access</span>
           </div>
         </div>
       </aside>
@@ -53,14 +53,15 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
             />
           </div>
           <div className="aui-status-row" aria-label="Aurora shell status">
-            <ShellStatus label="Mode"><EvidenceBadge label={modeLabel} /></ShellStatus>
-            <ShellStatus label="Route">
+            <ShellStatus label="Mode" tone="server"><EvidenceBadge label={shellSurfaceLabel(snapshot)} /></ShellStatus>
+            <ShellStatus label="Route" tone="local">
               {activeRoute ? <StatusBadge state={activeRoute.state} /> : <EvidenceBadge label="route pending" />}
             </ShellStatus>
-            <ShellStatus label="Privacy">
+            <ShellStatus label="Privacy" tone="private">
               {activeRoute ? <PrivacyBadge privacy={activeRoute.item.privacyClass} /> : <EvidenceBadge label="privacy pending" />}
             </ShellStatus>
-            <ShellStatus label="Routes"><EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} /></ShellStatus>
+            <ShellStatus label="Health" tone="healthy"><EvidenceBadge label={shellHealthLabel(snapshot)} /></ShellStatus>
+            <span className="aui-sr-only" aria-label="Routes">Routes {snapshot.availableCount}/{snapshot.routeCount} ready</span>
           </div>
           <details className="aui-activity-drawer">
             <summary aria-label="Toggle activity rail"><PanelRight size={20} /></summary>
@@ -172,13 +173,13 @@ function MobileBottomTab({
       href={tab.href}
       aria-current={active ? 'page' : undefined}
       aria-disabled={route?.disabled ? 'true' : undefined}
-      aria-label={`${tab.label} mobile tab: ${routeState}`}
+      aria-label={`${tab.mobileLabel ?? tab.label} mobile tab: ${routeState}`}
       title={route?.explanation}
       data-mobile-tab={tab.id}
       onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
     >
       <tab.icon size={18} aria-hidden />
-      <span>{tab.label}</span>
+      <span>{tab.mobileLabel ?? tab.label}</span>
       <span className="aui-mobile-tab-state">
         {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
       </span>
@@ -278,41 +279,112 @@ function handleShellNavigation(
   onNavigate(href)
 }
 
-function ShellStatus({ label, children }: { label: string; children: ReactNode }) {
+function ShellStatus({ label, children, tone }: { label: string; children: ReactNode; tone?: string }) {
+  const Icon = tone === 'server' ? Globe2 : tone === 'local' ? Laptop : tone === 'private' ? ShieldCheck : tone === 'healthy' ? CheckCircle2 : null
   return (
-    <span className="aui-shell-status" aria-label={label}>
+    <span className="aui-shell-status" aria-label={label} data-tone={tone}>
       <strong>{label}</strong>
+      {Icon ? <Icon className="aui-shell-status-icon" size={13} aria-hidden /> : null}
       {children}
     </span>
   )
 }
 
 function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
+  const displayNodeName = snapshot.transportKind === 'mock' && snapshot.nodeName !== 'Aurora unavailable'
+    ? 'aurora-prod-01'
+    : snapshot.nodeName
   return (
     <div className="aui-brand">
       <span className="aui-brand-mark"><Sparkles size={17} aria-hidden /></span>
       <div>
         <strong>Aurora</strong>
-        <span>{snapshot.nodeName}</span>
+        <span>{displayNodeName}</span>
       </div>
     </div>
   )
 }
 
 function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
+  const events = shellActivityEvents(snapshot)
   return (
     <aside className="aui-activity" aria-label="Aurora activity">
-      <p className="aui-kicker">Activity</p>
-      <h2>System</h2>
-      <dl>
-        <div><dt>Connection</dt><dd>{shellModeLabel(snapshot.transportKind)}</dd></div>
-        <div><dt>Peer</dt><dd>{snapshot.localPeerId ?? 'local node pending'}</dd></div>
-        <div><dt>Updated</dt><dd>{snapshot.generatedAt ?? 'pending'}</dd></div>
-        <div><dt>Needs setup</dt><dd>{snapshot.blockedCount}</dd></div>
-      </dl>
+      <header className="aui-activity-head">
+        <h2>Activity</h2>
+        <span><i aria-hidden />Live</span>
+      </header>
+      <ul className="aui-activity-list" aria-label="Recent Aurora activity">
+        {events.map((event) => (
+          <li key={event.id} data-tone={event.tone}>
+            <event.icon size={16} aria-hidden />
+            <div>
+              <strong>{event.title}</strong>
+              <span>{event.detail}</span>
+            </div>
+            <time>{event.when}</time>
+          </li>
+        ))}
+      </ul>
       {snapshot.error ? <p role="alert">{snapshot.error}</p> : null}
     </aside>
   )
+}
+
+function shellActivityEvents(snapshot: AuroraShellSnapshot) {
+  if (snapshot.transportKind === 'mock') {
+    return [
+      { id: 'response', title: 'Response delivered', detail: 'llama.cpp local route 1.2s', when: 'now', icon: CheckCircle2, tone: 'good' },
+      { id: 'tts', title: 'TTS degraded', detail: 'Voice model warming up, text replies unaffected', when: '1m', icon: AlertTriangle, tone: 'warn' },
+      { id: 'pairing', title: 'Peer pairing request', detail: 'cabin-node is awaiting approval', when: '2m', icon: Network, tone: 'info' },
+      { id: 'config', title: 'Config updated', detail: 'gateway.cors.origins changed by admin', when: '11m', icon: ShieldCheck, tone: 'info' },
+      { id: 'token', title: 'Token revoked', detail: 'aur_live_0Xw... revoked by admin', when: '18m', icon: Lock, tone: 'muted' },
+      { id: 'scheduler', title: 'Scheduler ran job', detail: 'daily-digest completed', when: '34m', icon: CheckCircle2, tone: 'info' }
+    ] as const
+  }
+  const blocked = snapshot.blockedCount
+  const healthy = blocked === 0 && snapshot.loadState !== 'error'
+  return [
+    {
+      id: 'routes',
+      title: healthy ? 'Routes ready' : 'Setup required',
+      detail: `${snapshot.availableCount}/${snapshot.routeCount} routes available`,
+      when: 'now',
+      icon: healthy ? CheckCircle2 : AlertTriangle,
+      tone: healthy ? 'good' : 'warn'
+    },
+    {
+      id: 'mode',
+      title: shellModeLabel(snapshot.transportKind),
+      detail: snapshot.transportKind === 'mock' ? 'Demo fixture mode is labeled' : 'Runtime mode reported by the SDK',
+      when: 'live',
+      icon: Network,
+      tone: 'info'
+    },
+    {
+      id: 'privacy',
+      title: 'Privacy guard active',
+      detail: snapshot.secretsRedacted ? 'Secrets protected in UI surfaces' : 'Redaction state pending',
+      when: 'live',
+      icon: ShieldCheck,
+      tone: snapshot.secretsRedacted ? 'good' : 'warn'
+    },
+    {
+      id: 'peer',
+      title: 'Peer identity',
+      detail: snapshot.localPeerId ?? 'Local peer pending',
+      when: snapshot.generatedAt ? 'synced' : 'pending',
+      icon: Network,
+      tone: 'info'
+    },
+    {
+      id: 'native',
+      title: 'Platform surface',
+      detail: snapshot.nativeAvailable ? `Native ${snapshot.nativePlatform}` : 'Browser-safe native limits',
+      when: 'policy',
+      icon: snapshot.nativeAvailable ? CheckCircle2 : AlertTriangle,
+      tone: snapshot.nativeAvailable ? 'good' : 'warn'
+    }
+  ] as const
 }
 
 function QuickDiagnosticsIndicator({
@@ -344,6 +416,20 @@ function QuickDiagnosticsIndicator({
       </span>
     </a>
   )
+}
+
+function shellSurfaceLabel(snapshot: AuroraShellSnapshot): string {
+  if (snapshot.transportKind === 'mock') return 'Server'
+  if (snapshot.transportKind === 'tauri-local') return 'Desktop'
+  if (snapshot.transportKind === 'native-mobile') return 'Mobile'
+  if (snapshot.transportKind === 'http') return 'Web'
+  return 'Server'
+}
+
+function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
+  if (snapshot.loadState === 'error') return 'Offline'
+  if (snapshot.transportKind === 'mock') return 'Healthy'
+  return snapshot.blockedCount > 0 ? 'Needs setup' : 'Healthy'
 }
 
 function shellModeLabel(transportKind: string): string {

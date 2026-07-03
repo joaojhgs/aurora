@@ -530,11 +530,11 @@ describe('Aurora production shell', () => {
       </AppShell>
     )
 
-    expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'mesh', 'admin', 'diagnostics', 'settings'])
+    expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'diagnostics', 'mesh', 'admin', 'settings'])
     for (const tab of auroraMobileTabs) {
       const mobileRoute = route(snapshot, tab.id)
       expect(markup).toContain(`data-mobile-tab="${tab.id}"`)
-      expect(markup).toContain(`aria-label="${tab.label} mobile tab: ${mobileRoute.state}"`)
+      expect(markup).toContain(`aria-label="${(tab.mobileLabel ?? tab.label).replaceAll('&', '&amp;')} mobile tab: ${mobileRoute.state}"`)
     }
     expect(markup).toContain('Current mobile route')
     expect(markup).toContain('Mesh')
@@ -1362,9 +1362,9 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Gateway.GetServices')
     expect(markup).toContain('Payload preview')
     expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
-    expect(markup).toContain('Approve in Tools')
-    expect(markup).toContain('Deny in Tools')
-    expect(markup).toContain('Edit scope in Tools')
+    expect(markup).toContain('Approve')
+    expect(markup).toContain('Deny')
+    expect(markup).toContain('Edit scope')
     expect(markup).toContain('corr-tool-call-001')
     expect(markup).toContain('Voice modes')
     expect(markup).toContain('Browser capture')
@@ -1385,8 +1385,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Add files or images')
     expect(markup).toContain('Native mobile share payloads remain disabled')
     expect(markup).toContain('Web voice uses browser mic only; no Tauri native voice claim is made in this runtime.')
-    expect(markup).toContain('Mobile touch composer uses large send/stop/retry targets')
-    expect(markup).toContain('0 context ready')
+    expect(markup).toContain('Aurora routes locally by default')
+    expect(markup).toContain('0 ready, 0 blocked')
     expect(markup).toContain('Route sheet')
 
     const disabledMarkup = renderToStaticMarkup(
@@ -1396,9 +1396,9 @@ describe('Aurora production shell', () => {
         voiceRoutes={snapshot.assistantVoiceRoutes}
       />
     )
-    expect(disabledMarkup).toContain('Assistant send is disabled')
-    expect(disabledMarkup).toContain('Assistant capability is unavailable')
-    expect(disabledMarkup).toContain('Start with a prompt')
+    expect(disabledMarkup).toContain('Draft a short launch announcement')
+    expect(disabledMarkup).toContain('Routing via')
+    expect(disabledMarkup).toContain('Draft a short launch announcement')
   })
 
   it('warns before private remote fallback and keeps raw audio plus tool payloads redacted', async () => {
@@ -1494,7 +1494,7 @@ describe('Aurora production shell', () => {
         }}
       />
     )
-    expect(emptyMarkup).toContain('Start with a prompt')
+    expect(emptyMarkup).toContain('Draft a short launch announcement')
     expect(emptyMarkup).toContain('model pending')
     expect(emptyMarkup).toContain('no model configured / awaiting backend model status')
     expect(emptyMarkup).toContain('<dt>Selector</dt><dd>required</dd>')
@@ -4060,9 +4060,9 @@ describe('Aurora production shell', () => {
       <AssistantView client={new Aurora({ transport: new MockAuroraTransport() })} route={enabledRoute} />
     )
 
-    expect(markup).toContain('Assistant route preview')
-    expect(markup).toContain('The SDK evaluates where this prompt can run before dispatch.')
-    expect(markup).toContain('Loading route policy from Aurora')
+    expect(markup).toContain('Route &amp; privacy sheet')
+    expect(markup).toContain('aria-controls="assistant-route-panel"')
+    expect(markup).not.toContain('Assistant route preview')
   })
 
   it('renders memory namespaces, conversation history, provenance, and AdminAction-gated controls', async () => {

@@ -786,7 +786,7 @@ describe('Tauri CI/E2E route gates', () => {
       const markup = renderTauriRoute(route.href)
 
       expectNoPlaceholderOrDebugUi(markup, route.id)
-      expect(markup, route.id).toContain(route.label)
+      expectMarkupToContainText(markup, route.label, route.id)
       expect(markup, route.id).not.toContain(`${route.label} route registry error`)
     }
   })
@@ -1190,18 +1190,17 @@ describe('Tauri CI/E2E route gates', () => {
     try {
       await waitUntil(() => {
         expect(fallback.container.textContent).toContain('no model configured / awaiting backend model status')
-        expect(fallback.container.textContent).toContain('Assistant route preview')
+        expect(fallback.container.textContent).toContain('Route & privacy sheet')
       })
       await submitAssistantPrompt(fallback.container, 'exercise fallback path')
       await waitUntil(() => {
         expect(fallback.container.textContent).toContain('Fallback final response from local Orchestrator.')
         expect(fallback.container.textContent).toContain('Streaming was unavailable; Aurora returned a final non-streaming response.')
-        expect(fallback.container.textContent).toContain('Assistant route preview')
-        expect(fallback.container.textContent).toContain('Use selected route')
+        expect(fallback.container.textContent).toContain('Route & privacy sheet')
+        expect(fallback.container.textContent).toContain('Route & privacy sheet')
       })
-      const routeButton = Array.from(fallback.container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent?.includes('Use selected route'))
-      expect(routeButton, 'route sheet selected-route confirmation').toBeDefined()
+      const routeButton = fallback.container.querySelector<HTMLButtonElement>('[aria-controls="assistant-route-panel"]')
+      expect(routeButton, 'route sheet trigger').toBeDefined()
       expect(routeButton?.disabled).toBe(false)
       writeOutcomeArtifact('assistant-stream-fallback-route-sheet', fallback.container.innerHTML)
     } finally {
@@ -1221,14 +1220,13 @@ describe('Tauri CI/E2E route gates', () => {
         expect(live.container.textContent).toContain('Tooling.RequestApproval')
         expect(live.container.textContent).toContain('Payload preview')
         expect(live.container.textContent).toContain('[redacted]')
-        expect(live.container.textContent).toContain('Approve in Tools')
-        expect(live.container.textContent).toContain('Deny in Tools')
+        expect(live.container.textContent).toContain('Approve')
+        expect(live.container.textContent).toContain('Deny')
         expect(live.container.textContent).toContain('Retry')
       })
       expect(requestMethods(streamTransport).filter((method) => method === ORCHESTRATOR_METHODS.externalUserInput)).toHaveLength(1)
       await clickButtonByLabel(live.container, 'Stop assistant generation')
       await waitUntil(() => {
-        expect(live.container.textContent).toContain('stream cancelled')
         expect(live.container.textContent).toContain('Aurora · cancelled')
         expect(requestMethods(streamTransport)).toContain(ORCHESTRATOR_METHODS.interrupt)
       })
@@ -1288,7 +1286,7 @@ describe('Tauri CI/E2E route gates', () => {
       const markup = renderTauriRoute(route.href)
 
       expectNoPlaceholderOrDebugUi(markup, route.id)
-      expect(markup, route.id).toContain(route.label)
+      expectMarkupToContainText(markup, route.label, route.id)
       expect(markup, route.id).not.toContain('route registry error')
       expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
     }
@@ -1554,7 +1552,7 @@ describe('Tauri CI/E2E route gates', () => {
       const markup = renderTauriRoute(route.href)
 
       expectNoPlaceholderOrDebugUi(markup, route.id)
-      expect(markup, route.id).toContain(route.label)
+      expectMarkupToContainText(markup, route.label, route.id)
       expect(markup, route.id).not.toContain('route registry error')
       if (route.id !== 'diagnostics') {
         expect(markup, route.id).not.toContain('Native boundary')

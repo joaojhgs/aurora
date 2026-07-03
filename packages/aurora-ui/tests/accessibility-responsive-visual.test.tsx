@@ -45,19 +45,19 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: 'eb868a89d5a0',
-    tablet: '6415cb65deb1',
-    mobile: 'a276a6c5806a'
+    desktop: '126696ea1a5b',
+    tablet: '35e49db47e7e',
+    mobile: 'aa50541784dc'
   },
   admin: {
-    desktop: '8edc763d9f76',
-    tablet: 'df5b0e9fa5fd',
-    mobile: 'c97b7dc02049'
+    desktop: '2830ddf301e7',
+    tablet: '793656ce9f7a',
+    mobile: '0ef61fca54f2'
   },
   'mobile-settings': {
-    desktop: 'e01ecfaa199f',
-    tablet: '961d217329d0',
-    mobile: '990dab7842d4'
+    desktop: '4ea099fee8df',
+    tablet: '7f18e3890b7d',
+    mobile: 'a0230a1c236c'
   }
 }
 
@@ -158,7 +158,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     })
 
     const stateCoverage = coverageText(renders)
-    expect(stateCoverage).toContain('Start with a prompt')
+    expect(stateCoverage).toContain('Draft a short launch announcement')
     expect(stateCoverage).toContain('privacy-blocked')
     expect(stateCoverage).toContain('degraded')
     expect(stateCoverage).toContain('unsupported')

@@ -359,7 +359,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
                         <span>{schedulerStatusLabel(job)}</span>
                       </div>
                     </td>
-                    <td>{job.next_run ?? '—'}</td>
+                    <td>{job.next_run ?? 'Not scheduled'}</td>
                     <td>
                       <strong>{job.target_peer_id ?? job.owner_peer_id}</strong>
                       <small>{job.target_resource_namespace ?? job.namespace}</small>

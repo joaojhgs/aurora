@@ -32,6 +32,7 @@ export interface AuroraNavItem {
   methodType: ContractMethodType
   privacyClass: PrivacyClass
   fallbackState: AvailabilityState
+  mobileLabel?: string
   adminGated?: boolean
   expectedTask: string
 }
@@ -48,9 +49,9 @@ export const auroraNavSections: AuroraNavSection[] = [
     label: 'Assistant',
     items: [
       item('assistant', 'Assistant', '/', Sparkles, 'Orchestrator', 'ExternalUserInput', 'use', 'personal', 'unsupported', 'service contract'),
-      item('memory', 'Memory', '/memory', MessagesSquare, 'DB', 'RAGSearch', 'use', 'personal', 'stale', 'service contract'),
-      item('tools', 'Tools', '/tools', Wrench, 'Tooling', 'GetToolCatalog', 'use', 'sensitive', 'unsupported', 'service contract'),
-      item('mesh', 'Mesh', '/mesh', Network, 'Gateway', 'GetMeshStatus', 'use', 'personal', 'degraded', 'service contract')
+      item('memory', 'Memory & Knowledge', '/memory', MessagesSquare, 'DB', 'RAGSearch', 'use', 'personal', 'stale', 'service contract'),
+      item('tools', 'Tools & Automations', '/tools', Wrench, 'Tooling', 'GetToolCatalog', 'use', 'sensitive', 'unsupported', 'service contract'),
+      item('mesh', 'Mesh & Peers', '/mesh', Network, 'Gateway', 'GetMeshStatus', 'use', 'personal', 'degraded', 'service contract')
     ]
   },
   {
@@ -58,10 +59,10 @@ export const auroraNavSections: AuroraNavSection[] = [
     items: [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'service contract', true),
-      item('access', 'Access', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
+      item('access', 'Access & RBAC', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
       item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'service contract', true),
       item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
-      item('config', 'Config', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
+      item('config', 'Configuration', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
       item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),
       item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'service contract', true),
       item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'service contract', true),
@@ -73,7 +74,7 @@ export const auroraNavSections: AuroraNavSection[] = [
   {
     label: 'Runtime',
     items: [
-      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
+      item('models', 'Models & Runtime', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
       item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetWebRTCDiagnostics', 'use', 'sensitive', 'available-local', 'service contract'),
       item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'service contract'),
       item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract'),
@@ -85,9 +86,9 @@ export const auroraNavSections: AuroraNavSection[] = [
 
 export const auroraMobileTabs = [
   auroraNavSections[0]!.items[0]!,
+  auroraNavSections[2]!.items[1]!,
   auroraNavSections[0]!.items[3]!,
   auroraNavSections[1]!.items[0]!,
-  auroraNavSections[2]!.items[1]!,
   auroraNavSections[2]!.items[3]!
 ]
 
@@ -204,6 +205,24 @@ function item(
     privacyClass,
     fallbackState,
     adminGated,
-    expectedTask
+    expectedTask,
+    mobileLabel: mobileLabelForNavItem(id, label)
+  }
+}
+
+function mobileLabelForNavItem(id: string, label: string): string {
+  switch (id) {
+    case 'diagnostics':
+      return 'Activity'
+    case 'mesh':
+      return 'Mesh'
+    case 'admin':
+      return 'Admin'
+    case 'settings':
+      return 'Settings'
+    case 'assistant':
+      return 'Assistant'
+    default:
+      return label
   }
 }

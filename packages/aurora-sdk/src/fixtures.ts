@@ -1193,6 +1193,18 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       summary: 'Resume delegated remote scheduler jobs with visible peer/provider context.'
     }),
     action({
+      action_id: 'assistant-local-external-user-input',
+      module: 'Orchestrator',
+      method: 'ExternalUserInput',
+      topic: 'Orchestrator.ExternalUserInput',
+      provider_id: 'local:Orchestrator:llama-cpp',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: 'local:Orchestrator:llama-cpp' },
+      policy: modelRuntimePolicy,
+      summary: 'Local assistant chat route for the UI mock transport.'
+    }),
+    action({
       action_id: 'model-runtime-local-catalog',
       module: 'Orchestrator',
       method: 'GetModelCatalog',
@@ -1407,6 +1419,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'tool-remote-door',
       'tool-stale-camera'
     ],
+    'Orchestrator.ExternalUserInput': ['assistant-local-external-user-input'],
     'Orchestrator.GetModelCatalog': [
       'model-runtime-local-catalog',
       'model-runtime-mesh-catalog',
